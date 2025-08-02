@@ -1,0 +1,701 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+.dashboard-card {
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-2px);
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.trend-indicator {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+}
+
+.trend-positive { background-color: #d4edda; color: #155724; }
+.trend-negative { background-color: #f8d7da; color: #721c24; }
+.trend-neutral { background-color: #e2e3e5; color: #383d41; }
+
+.chart-container {
+    height: 300px;
+    position: relative;
+}
+
+.progress-ring {
+    transform: rotate(-90deg);
+}
+
+.progress-ring-circle {
+    transition: stroke-dasharray 0.35s;
+    transform-origin: 50% 50%;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.table-responsive {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+        
+        <!-- Header del Dashboard -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h2 class="mb-1">📊 Dashboard Estratégico de Compras</h2>
+                        <p class="text-muted mb-0">Análisis integral de cumplimiento y rendimiento</p>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-primary" onclick="exportarReporte()">
+                            <i class="bi bi-download me-1"></i>Exportar
+                        </button>
+                        <button class="btn btn-primary" onclick="actualizarDashboard()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerta de datos de ejemplo -->
+        <div class="alert alert-info alert-dismissible fade show" role="alert" id="alertaDatosEjemplo" style="display: none;">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Nota:</strong> Se están mostrando datos de ejemplo para demostración. Los datos reales aparecerán cuando tengas compras registradas en el sistema.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filter-section">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Año</label>
+                    <select class="form-select" id="filtroAnio">
+                        <option value="2025">2025</option>
+                        <option value="2024">2024</option>
+                        <option value="2023">2023</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Temporada</label>
+                    <select class="form-select" id="filtroTemporada">
+                        <option value="">Todas</option>
+                        <option value="Invierno">Invierno</option>
+                        <option value="Verano">Verano</option>
+                        <option value="Otoño">Otoño</option>
+                        <option value="Primavera">Primavera</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Proveedor</label>
+                    <select class="form-select" id="filtroProveedor">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Responsable</label>
+                    <select class="form-select" id="filtroResponsable">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs Principales -->
+        <div class="kpi-grid">
+            <!-- Cumplimiento General -->
+            <div class="card dashboard-card border-0">
+                <div class="card-body text-center">
+                    <div class="metric-value text-primary" id="cumplimientoGeneral">0%</div>
+                    <div class="metric-label">Cumplimiento General</div>
+                    <div class="trend-indicator trend-positive mt-2" id="trendCumplimiento">
+                        <i class="bi bi-arrow-up"></i> +5.2%
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROI Promedio -->
+            <div class="card dashboard-card border-0">
+                <div class="card-body text-center">
+                    <div class="metric-value text-success" id="roiPromedio">0%</div>
+                    <div class="metric-label">ROI Promedio</div>
+                    <div class="trend-indicator trend-positive mt-2" id="trendROI">
+                        <i class="bi bi-arrow-up"></i> +12.8%
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rotación de Inventario -->
+            <div class="card dashboard-card border-0">
+                <div class="card-body text-center">
+                    <div class="metric-value text-info" id="rotacionInventario">0</div>
+                    <div class="metric-label">Rotación de Inventario</div>
+                    <div class="trend-indicator trend-neutral mt-2" id="trendRotacion">
+                        <i class="bi bi-dash"></i> 0%
+                    </div>
+                </div>
+            </div>
+
+            <!-- Precisión de Pronóstico -->
+            <div class="card dashboard-card border-0">
+                <div class="card-body text-center">
+                    <div class="metric-value text-warning" id="precisionPronostico">0%</div>
+                    <div class="metric-label">Precisión de Pronóstico</div>
+                    <div class="trend-indicator trend-negative mt-2" id="trendPrecision">
+                        <i class="bi bi-arrow-down"></i> -2.1%
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráficos y Análisis -->
+        <div class="row mb-4">
+            <!-- Cumplimiento por Proveedor -->
+            <div class="col-lg-6">
+                <div class="card dashboard-card border-0">
+                    <div class="card-header bg-transparent border-0">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-graph-up me-2"></i>Cumplimiento por Proveedor
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartCumplimientoProveedor"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROI por Temporada -->
+            <div class="col-lg-6">
+                <div class="card dashboard-card border-0">
+                    <div class="card-header bg-transparent border-0">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-pie-chart me-2"></i>ROI por Temporada
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="chartROITemporada"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Rendimiento Detallado -->
+        <div class="card dashboard-card border-0">
+            <div class="card-header bg-transparent border-0">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-table me-2"></i>Rendimiento Detallado por Compra
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tablaRendimiento">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Compra</th>
+                                <th>Proveedor</th>
+                                <th>Temporada</th>
+                                <th>Cumplimiento</th>
+                                <th>ROI</th>
+                                <th>Rotación</th>
+                                <th>Precisión</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyRendimiento">
+                            <!-- Datos dinámicos -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alertas y Recomendaciones -->
+        <div class="row mt-4">
+            <div class="col-lg-6">
+                <div class="card dashboard-card border-0 border-start border-warning border-4">
+                    <div class="card-header bg-transparent border-0">
+                        <h6 class="card-title mb-0 text-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>Alertas
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0" id="listaAlertas">
+                            <!-- Alertas dinámicas -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card dashboard-card border-0 border-start border-info border-4">
+                    <div class="card-header bg-transparent border-0">
+                        <h6 class="card-title mb-0 text-info">
+                            <i class="bi bi-lightbulb me-2"></i>Recomendaciones
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0" id="listaRecomendaciones">
+                            <!-- Recomendaciones dinámicas -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+
+<!-- Footer personalizado sin CKEditor para evitar errores -->
+<footer class="footer">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <script>
+                    document.write(new Date().getFullYear())
+                </script> © <span class="fw-bold" style="font-size: 1.2em;">AllConnected.</span>
+            </div>
+            <div class="col-sm-6">
+                <div class="text-sm-end d-none d-sm-block" style="font-size: 1.2em;">
+                    Diseñado y Desarrollado Por <a href="https://webappsolutions.cl/">Webappsolutions</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- JAVASCRIPT -->
+<script src="{% static 'js/jquery-3.5.1.min.js' %}"></script>
+<script src="{% static 'js/JsBarcode.all.min.js' %}"></script>
+<script src="{% static 'libs/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'libs/simplebar/simplebar.min.js' %}"></script>
+<script src="{% static 'libs/node-waves/waves.min.js' %}"></script>
+<script src="{% static 'libs/feather-icons/feather.min.js' %}"></script>
+<script src="{% static 'js/pages/plugins/lord-icon-2.1.0.js' %}"></script>
+<script src="{% static 'libs/apexcharts/apexcharts.min.js' %}"></script>
+<script src="{% static 'libs/jsvectormap/js/jsvectormap.min.js' %}"></script>
+<script src="{% static 'libs/choices.js/public/assets/scripts/choices.min.js' %}"></script>
+<script src="{% static 'libs/flatpickr/flatpickr.min.js' %}"></script>
+<script src="{% static 'libs/swiper/swiper-bundle.min.js' %}"></script>
+<script src="{% static 'js/pages/form-validation.init.js' %}"></script>
+<script src="{% static 'js/app.js' %}"></script>
+<script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
+<script src="{% static 'libs/dropzone/dropzone-min.js' %}"></script>
+<script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.2.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.print.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.html5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-renderer@0.3.1/dist/xlsx-renderer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'myFiles/myjs.js' %}"></script>
+<script src="{% static 'libs/chart.js/chart.min.js' %}"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Variables globales
+let dashboardData = {};
+let charts = {};
+
+// Inicialización
+$(document).ready(function() {
+    cargarFiltros();
+    actualizarDashboard();
+    
+    // Eventos de filtros
+    $('#filtroAnio, #filtroTemporada, #filtroProveedor, #filtroResponsable').on('change', function() {
+        actualizarDashboard();
+    });
+});
+
+// Cargar opciones de filtros
+function cargarFiltros() {
+    // Cargar proveedores
+    $.get('/app/empresas_proveedoras/', function(data) {
+        const select = $('#filtroProveedor');
+        select.empty().append('<option value="">Todos</option>');
+        if (data && data.length > 0) {
+            data.forEach(function(empresa) {
+                select.append(`<option value="${empresa.id}">${empresa.nombre}</option>`);
+            });
+        } else {
+            // Datos de ejemplo para filtros
+            const proveedoresEjemplo = ['Nike Chile', 'Adidas Chile', 'Puma Chile'];
+            proveedoresEjemplo.forEach(function(proveedor, index) {
+                select.append(`<option value="${index + 1}">${proveedor}</option>`);
+            });
+        }
+    }).fail(function() {
+        // Si falla, usar datos de ejemplo
+        const select = $('#filtroProveedor');
+        select.empty().append('<option value="">Todos</option>');
+        const proveedoresEjemplo = ['Nike Chile', 'Adidas Chile', 'Puma Chile'];
+        proveedoresEjemplo.forEach(function(proveedor, index) {
+            select.append(`<option value="${index + 1}">${proveedor}</option>`);
+        });
+    });
+    
+    // Cargar responsables
+    $.get('/app/obtener_compras/', { anio: $('#filtroAnio').val() }, function(data) {
+        const select = $('#filtroResponsable');
+        select.empty().append('<option value="">Todos</option>');
+        if (data && data.compras && data.compras.length > 0) {
+            const responsables = [...new Set(data.compras.map(c => c.responsable))];
+            responsables.forEach(function(responsable) {
+                select.append(`<option value="${responsable}">${responsable}</option>`);
+            });
+        } else {
+            // Datos de ejemplo para responsables
+            const responsablesEjemplo = ['Juan Pérez', 'María González', 'Carlos López'];
+            responsablesEjemplo.forEach(function(responsable) {
+                select.append(`<option value="${responsable}">${responsable}</option>`);
+            });
+        }
+    }).fail(function() {
+        // Si falla, usar datos de ejemplo
+        const select = $('#filtroResponsable');
+        select.empty().append('<option value="">Todos</option>');
+        const responsablesEjemplo = ['Juan Pérez', 'María González', 'Carlos López'];
+        responsablesEjemplo.forEach(function(responsable) {
+            select.append(`<option value="${responsable}">${responsable}</option>`);
+        });
+    });
+}
+
+// Actualizar dashboard completo
+function actualizarDashboard() {
+    const filtros = {
+        anio: $('#filtroAnio').val(),
+        temporada: $('#filtroTemporada').val(),
+        proveedor: $('#filtroProveedor').val(),
+        responsable: $('#filtroResponsable').val()
+    };
+    
+    // Mostrar loader
+    showGlobalLoader();
+    
+    // Cargar datos del dashboard
+    $.ajax({
+        url: '/app/dashboard_compras_estrategico/',
+        method: 'GET',
+        data: filtros,
+        success: function(data) {
+            dashboardData = data;
+            actualizarKPIs();
+            actualizarGraficos();
+            actualizarTabla();
+            actualizarAlertas();
+            actualizarRecomendaciones();
+            
+            // Mostrar alerta si hay datos de ejemplo
+            if (data.rendimiento_detallado && data.rendimiento_detallado.length > 0) {
+                const primerItem = data.rendimiento_detallado[0];
+                if (primerItem.nombre && primerItem.nombre.includes('Compra Invierno 2025')) {
+                    $('#alertaDatosEjemplo').show();
+                }
+            }
+            
+            hideGlobalLoader();
+        },
+        error: function(xhr, status, error) {
+            hideGlobalLoader();
+            console.error('Error:', xhr.responseText);
+            Swal.fire('Error', 'No se pudo cargar el dashboard: ' + error, 'error');
+        }
+    });
+}
+
+// Actualizar KPIs principales
+function actualizarKPIs() {
+    const data = dashboardData;
+    
+    $('#cumplimientoGeneral').text(data.cumplimiento_general + '%');
+    $('#roiPromedio').text(data.roi_promedio + '%');
+    $('#rotacionInventario').text(data.rotacion_inventario);
+    $('#precisionPronostico').text(data.precision_pronostico + '%');
+    
+    // Actualizar tendencias
+    actualizarTendencia('trendCumplimiento', data.trend_cumplimiento);
+    actualizarTendencia('trendROI', data.trend_roi);
+    actualizarTendencia('trendRotacion', data.trend_rotacion);
+    actualizarTendencia('trendPrecision', data.trend_precision);
+}
+
+// Actualizar indicador de tendencia
+function actualizarTendencia(elementId, trend) {
+    const element = $('#' + elementId);
+    element.removeClass('trend-positive trend-negative trend-neutral');
+    
+    if (trend > 0) {
+        element.addClass('trend-positive').html(`<i class="bi bi-arrow-up"></i> +${trend}%`);
+    } else if (trend < 0) {
+        element.addClass('trend-negative').html(`<i class="bi bi-arrow-down"></i> ${trend}%`);
+    } else {
+        element.addClass('trend-neutral').html(`<i class="bi bi-dash"></i> 0%`);
+    }
+}
+
+// Actualizar gráficos
+function actualizarGraficos() {
+    actualizarGraficoCumplimiento();
+    actualizarGraficoROI();
+}
+
+// Gráfico de cumplimiento por proveedor
+function actualizarGraficoCumplimiento() {
+    const ctx = document.getElementById('chartCumplimientoProveedor').getContext('2d');
+    
+    if (charts.cumplimiento) {
+        charts.cumplimiento.destroy();
+    }
+    
+    charts.cumplimiento = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dashboardData.cumplimiento_proveedores.map(p => p.proveedor),
+            datasets: [{
+                label: 'Cumplimiento (%)',
+                data: dashboardData.cumplimiento_proveedores.map(p => p.cumplimiento),
+                backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de ROI por temporada
+function actualizarGraficoROI() {
+    const ctx = document.getElementById('chartROITemporada').getContext('2d');
+    
+    if (charts.roi) {
+        charts.roi.destroy();
+    }
+    
+    charts.roi = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: dashboardData.roi_temporadas.map(t => t.temporada),
+            datasets: [{
+                data: dashboardData.roi_temporadas.map(t => t.roi),
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 205, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+// Actualizar tabla de rendimiento
+function actualizarTabla() {
+    const tbody = $('#tbodyRendimiento');
+    tbody.empty();
+    
+    dashboardData.rendimiento_detallado.forEach(function(item) {
+        const fila = `
+            <tr>
+                <td>${item.nombre}</td>
+                <td>${item.proveedor}</td>
+                <td>${item.temporada}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                            <div class="progress-bar ${getProgressBarClass(item.cumplimiento)}" 
+                                 style="width: ${item.cumplimiento}%"></div>
+                        </div>
+                        <span class="small">${item.cumplimiento}%</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge ${getROIBadgeClass(item.roi)}">${item.roi}%</span>
+                </td>
+                <td>${item.rotacion}</td>
+                <td>${item.precision}%</td>
+                <td>
+                    <span class="badge ${getEstadoBadgeClass(item.estado)}">${item.estado}</span>
+                </td>
+            </tr>
+        `;
+        tbody.append(fila);
+    });
+}
+
+// Clases CSS para elementos visuales
+function getProgressBarClass(porcentaje) {
+    if (porcentaje >= 80) return 'bg-success';
+    if (porcentaje >= 60) return 'bg-warning';
+    return 'bg-danger';
+}
+
+function getROIBadgeClass(roi) {
+    if (roi >= 20) return 'bg-success';
+    if (roi >= 10) return 'bg-warning';
+    return 'bg-danger';
+}
+
+function getEstadoBadgeClass(estado) {
+    switch(estado) {
+        case 'Completado': return 'bg-success';
+        case 'Pendiente': return 'bg-warning';
+        case 'Retrasado': return 'bg-danger';
+        default: return 'bg-secondary';
+    }
+}
+
+// Actualizar alertas
+function actualizarAlertas() {
+    const lista = $('#listaAlertas');
+    lista.empty();
+    
+    dashboardData.alertas.forEach(function(alerta) {
+        const item = `
+            <li class="mb-2">
+                <i class="bi bi-exclamation-circle text-warning me-2"></i>
+                ${alerta.mensaje}
+            </li>
+        `;
+        lista.append(item);
+    });
+}
+
+// Actualizar recomendaciones
+function actualizarRecomendaciones() {
+    const lista = $('#listaRecomendaciones');
+    lista.empty();
+    
+    dashboardData.recomendaciones.forEach(function(recomendacion) {
+        const item = `
+            <li class="mb-2">
+                <i class="bi bi-check-circle text-info me-2"></i>
+                ${recomendacion.mensaje}
+            </li>
+        `;
+        lista.append(item);
+    });
+}
+
+// Exportar reporte
+function exportarReporte() {
+    const filtros = {
+        anio: $('#filtroAnio').val(),
+        temporada: $('#filtroTemporada').val(),
+        proveedor: $('#filtroProveedor').val(),
+        responsable: $('#filtroResponsable').val()
+    };
+    
+    // Crear URL para descarga
+    const params = new URLSearchParams(filtros);
+    window.open(`/app/exportar_dashboard_compras/?${params}`, '_blank');
+}
+
+// Funciones de utilidad
+function showGlobalLoader() {
+    $('#fullscreenLoader').fadeIn(100);
+}
+
+function hideGlobalLoader() {
+    $('#fullscreenLoader').fadeOut(100);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+
+<!-- Loader global -->
+<div id="fullscreenLoader" style="
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    text-align: center;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-3 fw-bold">Cargando información, por favor espera...</p>
+    </div>
+</div>
+
+</body>
+</html> 

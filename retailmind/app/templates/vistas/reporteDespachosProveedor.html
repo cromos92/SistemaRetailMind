@@ -1,0 +1,554 @@
+{% load static %}
+{% include '../layout/header.html' %}
+{% include '../layout/menu.html' %}
+
+<style>
+    .reporte-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .stats-card {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 15px;
+    }
+    
+    .stats-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    
+    .stats-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .filtros-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .table-reporte th {
+        background: #667eea;
+        color: white;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-size: 0.85rem;
+    }
+    
+    .badge-saldo {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    .export-btn {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 25px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .export-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+    
+    /* Ocultar placeholder de inputs de fecha */
+    input[type="date"]::-webkit-input-placeholder { 
+        color: transparent !important; 
+    }
+    input[type="date"]::-moz-placeholder { 
+        color: transparent !important; 
+    }
+    input[type="date"]:-ms-input-placeholder { 
+        color: transparent !important; 
+    }
+    input[type="date"]::placeholder { 
+        color: transparent !important; 
+    }
+    
+    /* Clase para ocultar el texto de fecha */
+    .fecha-vacia::-webkit-datetime-edit {
+        color: transparent !important;
+    }
+    .fecha-vacia::-webkit-datetime-edit-fields-wrapper {
+        color: transparent !important;
+    }
+    .fecha-vacia::-webkit-datetime-edit-text {
+        color: transparent !important;
+    }
+    .fecha-vacia::-webkit-datetime-edit-month-field {
+        color: transparent !important;
+    }
+    .fecha-vacia::-webkit-datetime-edit-day-field {
+        color: transparent !important;
+    }
+    .fecha-vacia::-webkit-datetime-edit-year-field {
+        color: transparent !important;
+    }
+    
+    /* Para Firefox */
+    .fecha-vacia {
+        color: transparent !important;
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Header del Reporte -->
+        <div class="reporte-card">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2 class="mb-2">
+                        <i class="bi bi-graph-up me-2"></i>
+                        Reporte de Despachos por Proveedor
+                    </h2>
+                    <p class="mb-0 opacity-75">
+                        Análisis detallado de ingresos, despachos y saldos por proveedor y DTE
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn export-btn" id="btnExportarReporte">
+                        <i class="bi bi-file-earmark-excel me-2"></i>
+                        Exportar Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Estadísticas Generales -->
+        <div class="row mb-4" id="estadisticasGenerales">
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="totalProveedores">-</div>
+                    <div class="stats-label">Proveedores</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="totalDtes">-</div>
+                    <div class="stats-label">DTEs</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="totalIngresado">-</div>
+                    <div class="stats-label">Total Ingresado</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center">
+                    <div class="stats-number" id="totalDespachado">-</div>
+                    <div class="stats-label">Total Despachado</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Filtros -->
+        <div class="filtros-section">
+            <h5 class="mb-3">
+                <i class="bi bi-funnel me-2"></i>
+                Filtros del Reporte
+            </h5>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Proveedor</label>
+                    <select class="form-select" id="filtroProveedorReporte" style="width:100%">
+                        <option value=""></option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Fecha Inicio</label>
+                    <input type="date" class="form-control fecha-vacia" id="filtroFechaInicioReporte">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Fecha Fin</label>
+                    <input type="date" class="form-control fecha-vacia" id="filtroFechaFinReporte">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Número DTE</label>
+                    <input type="text" class="form-control" id="filtroDteReporte" placeholder="Buscar DTE">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">&nbsp;</label>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" id="btnBuscarReporte">
+                            <i class="bi bi-search me-1"></i> Buscar
+                        </button>
+                        <button class="btn btn-outline-secondary" id="btnLimpiarFiltrosReporte">
+                            <i class="bi bi-x-circle me-1"></i> Limpiar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tabla del Reporte -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-reporte" id="tablaReporteProveedor">
+                        <thead class="text-center">
+                            <tr>
+                                <th>Proveedor</th>
+                                <th>DTE</th>
+                                <th>Fecha</th>
+                                <th>Total Ingresado</th>
+                                <th>Total Despachado</th>
+                                <th>Saldo Restante</th>
+                                <th>Monto Ingresado</th>
+                                <th>Monto Despachado</th>
+                                <th>Monto Restante</th>
+                                <th>Estado DTE</th>
+                                <th>Estado Pago</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-center"></tbody>
+                    </table>
+                </div>
+                
+                <!-- Paginación -->
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center">
+                            <label class="me-2 fw-bold">Mostrar:</label>
+                            <select class="form-select form-select-sm" id="pageSizeReporte" style="width: auto;">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                            <span class="ms-2">elementos por página</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <nav aria-label="Paginación del reporte">
+                            <ul class="pagination justify-content-end mb-0">
+                                <li class="page-item" id="btnPrevPageReporte">
+                                    <a class="page-link" href="#" aria-label="Anterior">
+                                        <span aria-hidden="true">&laquo;</span>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <span class="page-link fw-bold" id="pageInfoReporte">Página 1 de 1</span>
+                                </li>
+                                <li class="page-item" id="btnNextPageReporte">
+                                    <a class="page-link" href="#" aria-label="Siguiente">
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+{% include '../layout/footer.html' %}
+
+<script>
+// === VARIABLES PARA PAGINACIÓN DEL REPORTE ===
+let currentPageReporte = 1;
+let pageSizeReporte = 25;
+let totalPagesReporte = 1;
+let totalRecordsReporte = 0;
+
+// === FUNCIONES PARA EL REPORTE DE PROVEEDOR ===
+function cargarProveedoresReporte() {
+    $.get('/app/obtener_proveedores_para_reporte/', function(data) {
+        const select = $('#filtroProveedorReporte');
+        select.empty().append('<option value="">Todos los proveedores</option>');
+        data.forEach(function(proveedor) {
+            select.append(`<option value="${proveedor.id}">${proveedor.nombre} (${proveedor.rut})</option>`);
+        });
+    });
+}
+
+function cargarReporteProveedor(page = 1) {
+    const filtros = {
+        proveedor_id: $('#filtroProveedorReporte').val(),
+        fecha_inicio: $('#filtroFechaInicioReporte').val(),
+        fecha_fin: $('#filtroFechaFinReporte').val(),
+        dte_numero: $('#filtroDteReporte').val().trim(),
+        page: page,
+        page_size: pageSizeReporte
+    };
+    
+    // Solo incluir filtros que tengan valor
+    const filtrosActivos = {};
+    Object.keys(filtros).forEach(key => {
+        if (filtros[key]) {
+            filtrosActivos[key] = filtros[key];
+        }
+    });
+    
+    $.get('/app/reporte_despachos_por_proveedor/', filtrosActivos, function(response) {
+        console.log('🔍 Respuesta completa del servidor:', response);
+        
+        if (response.success) {
+            console.log('✅ Datos del reporte:', response.data);
+            mostrarReporteProveedor(response.data, response.pagination);
+            actualizarEstadisticas(response.data);
+        } else {
+            console.error('❌ Error en la respuesta:', response);
+            showErrorAlert('Error', 'No se pudo cargar el reporte');
+        }
+    }).fail(function(xhr, status, error) {
+        console.error('❌ Error AJAX:', {xhr, status, error});
+        showErrorAlert('Error', 'Error al cargar el reporte');
+    });
+}
+
+function mostrarReporteProveedor(data, pagination) {
+    const tbody = $('#tablaReporteProveedor tbody');
+    tbody.empty();
+    
+    if (data.length === 0) {
+        tbody.append(`<tr><td colspan="11" class="text-center py-4">
+                     <i class="bi bi-inbox text-muted me-2"></i>
+                     No hay datos para mostrar con los filtros seleccionados
+                   </td></tr>`);
+        return;
+    }
+    
+    data.forEach(function(item) {
+        const fila = `
+            <tr>
+                <td class="text-start">
+                    <strong>${item.proveedor_nombre}</strong><br>
+                    <small class="text-muted">${item.proveedor_rut}</small>
+                </td>
+                <td>
+                    <strong>${item.dte_numero}</strong><br>
+                    <small class="text-muted">${item.dte_tipo}</small>
+                </td>
+                <td>${item.fecha_emision}</td>
+                <td>
+                    <span class="badge bg-primary badge-saldo">
+                        ${item.total_ingresado}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge bg-info badge-saldo">
+                        ${item.total_despachado}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge ${item.saldo_restante > 0 ? 'bg-success' : 'bg-secondary'} badge-saldo">
+                        ${item.saldo_restante}
+                    </span>
+                </td>
+                <td>
+                    <strong>$${item.monto_ingresado.toLocaleString()}</strong>
+                </td>
+                <td>
+                    <strong>$${item.monto_despachado.toLocaleString()}</strong>
+                </td>
+                <td>
+                    <span class="badge ${item.monto_restante > 0 ? 'bg-success' : 'bg-secondary'} badge-saldo">
+                        $${item.monto_restante.toLocaleString()}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge ${item.estado_dte === 'ACEPTADO' ? 'bg-success' : 'bg-warning'} badge-saldo">
+                        ${item.estado_dte}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge ${item.estado_pago === 'PAGADO' ? 'bg-success' : 'bg-warning'} badge-saldo">
+                        ${item.estado_pago}
+                    </span>
+                </td>
+            </tr>`;
+        tbody.append(fila);
+    });
+    
+    // Actualizar paginación
+    actualizarPaginacionReporte(pagination);
+}
+
+function actualizarPaginacionReporte(pagination) {
+    currentPageReporte = pagination.current_page;
+    totalPagesReporte = pagination.total_pages;
+    totalRecordsReporte = pagination.total_records;
+    
+    $('#pageInfoReporte').text(`Página ${currentPageReporte} de ${totalPagesReporte}`);
+    $('#btnPrevPageReporte').toggleClass('disabled', currentPageReporte <= 1);
+    $('#btnNextPageReporte').toggleClass('disabled', currentPageReporte >= totalPagesReporte);
+}
+
+function actualizarEstadisticas(data) {
+    console.log('📊 Datos recibidos para estadísticas:', data);
+    
+    if (data.length === 0) {
+        $('#totalProveedores').text('0');
+        $('#totalDtes').text('0');
+        $('#totalIngresado').text('0');
+        $('#totalDespachado').text('0');
+        return;
+    }
+    
+    // Calcular estadísticas
+    const proveedoresUnicos = new Set(data.map(item => item.proveedor_id)).size;
+    const dtesUnicos = new Set(data.map(item => item.dte_id)).size;
+    
+    // Convertir a números y sumar
+    const totalIngresado = data.reduce((sum, item) => {
+        const valor = parseFloat(item.total_ingresado) || 0;
+        console.log(`📦 Item ${item.dte_numero}: total_ingresado = ${item.total_ingresado} (convertido a ${valor})`);
+        return sum + valor;
+    }, 0);
+    
+    const totalDespachado = data.reduce((sum, item) => {
+        const valor = parseFloat(item.total_despachado) || 0;
+        return sum + valor;
+    }, 0);
+    
+    console.log('📈 Estadísticas calculadas:', {
+        proveedoresUnicos,
+        dtesUnicos,
+        totalIngresado,
+        totalDespachado
+    });
+    
+    $('#totalProveedores').text(proveedoresUnicos);
+    $('#totalDtes').text(dtesUnicos);
+    $('#totalIngresado').text(totalIngresado.toLocaleString());
+    $('#totalDespachado').text(totalDespachado.toLocaleString());
+}
+
+// === EVENTOS PARA EL REPORTE ===
+$(document).ready(function() {
+    // Inicializar select2 en el filtro de proveedor
+    $('#filtroProveedorReporte').select2({
+        placeholder: 'Buscar proveedor...',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('.filtros-section'),
+        language: {
+            noResults: function() { return "Sin resultados"; }
+        }
+    });
+    
+    // Limpiar el select al cargar
+    $('#filtroProveedorReporte').val('').trigger('change');
+    
+    // Forzar que los campos de fecha estén completamente vacíos
+    $('#filtroFechaInicioReporte').val('').removeAttr('value');
+    $('#filtroFechaFinReporte').val('').removeAttr('value');
+    
+    // Función para manejar la visibilidad de los inputs de fecha
+    function manejarVisibilidadFecha(input) {
+        if (input.val()) {
+            input.removeClass('fecha-vacia');
+        } else {
+            input.addClass('fecha-vacia');
+        }
+    }
+    
+    // Eventos para los inputs de fecha
+    $('#filtroFechaInicioReporte, #filtroFechaFinReporte').on('change', function() {
+        manejarVisibilidadFecha($(this));
+    });
+    
+    $('#filtroFechaInicioReporte, #filtroFechaFinReporte').on('focus', function() {
+        $(this).removeClass('fecha-vacia');
+    });
+    
+    $('#filtroFechaInicioReporte, #filtroFechaFinReporte').on('blur', function() {
+        manejarVisibilidadFecha($(this));
+    });
+    
+    // Aplicar clase inicial
+    $('#filtroFechaInicioReporte, #filtroFechaFinReporte').addClass('fecha-vacia');
+    
+    // Cargar proveedores al iniciar
+    cargarProveedoresReporte();
+    
+    // Cargar reporte inicial
+    cargarReporteProveedor();
+    
+    // Eventos de filtros
+    $('#btnBuscarReporte').on('click', function() {
+        cargarReporteProveedor(1);
+    });
+    
+    $('#btnLimpiarFiltrosReporte').on('click', function() {
+        $('#filtroProveedorReporte').val('').trigger('change');
+        $('#filtroFechaInicioReporte').val('').addClass('fecha-vacia');
+        $('#filtroFechaFinReporte').val('').addClass('fecha-vacia');
+        $('#filtroDteReporte').val('');
+        cargarReporteProveedor(1);
+    });
+    
+    // Paginación
+    $('#btnPrevPageReporte').on('click', function() {
+        if (currentPageReporte > 1) {
+            cargarReporteProveedor(currentPageReporte - 1);
+        }
+    });
+    
+    $('#btnNextPageReporte').on('click', function() {
+        if (currentPageReporte < totalPagesReporte) {
+            cargarReporteProveedor(currentPageReporte + 1);
+        }
+    });
+    
+    // Cambiar tamaño de página
+    $('#pageSizeReporte').on('change', function() {
+        pageSizeReporte = parseInt($(this).val());
+        cargarReporteProveedor(1);
+    });
+    
+    // Exportar a Excel (placeholder)
+    $('#btnExportarReporte').on('click', function() {
+        showInfoAlert('Función en desarrollo', 'La exportación a Excel estará disponible próximamente');
+    });
+    
+    // Buscar al presionar Enter en filtros
+    $('#filtroDteReporte').on('keypress', function(e) {
+        if (e.which === 13) {
+            cargarReporteProveedor(1);
+        }
+    });
+});
+
+// Función para mostrar alertas
+function showErrorAlert(title, message) {
+    Swal.fire({
+        icon: 'error',
+        title: title,
+        text: message,
+        confirmButtonText: 'Aceptar'
+    });
+}
+
+function showInfoAlert(title, message) {
+    Swal.fire({
+        icon: 'info',
+        title: title,
+        text: message,
+        confirmButtonText: 'Aceptar'
+    });
+}
+</script> 

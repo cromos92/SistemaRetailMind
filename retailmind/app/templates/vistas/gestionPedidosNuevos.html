@@ -1,0 +1,1283 @@
+{% load static %}
+
+<!-- /.modal -->
+
+{% include '../layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include '../layout/menu.html' %}
+
+<style>
+    /* Aumentar el tamaño de la fuente en el DataTable */
+    #orderTable.dataTable tbody td {
+        font-size: 15px;
+        /* Ajusta el tamaño de fuente de las celdas */
+    }
+
+    #orderTable.dataTable thead th {
+        font-size: 15px;
+        /* Ajusta el tamaño de fuente del encabezado */
+    }
+
+    /* Ajustar el tamaño de los íconos de substatus */
+    .substatus-icons i {
+        margin-right: 5px;
+        /* Espaciado entre íconos */
+    }
+
+    .badge-mkp {
+        font-size: 1.2em;
+        /* Aumenta el tamaño de fuente */
+        padding: 0.5em 1em;
+        /* Aumenta el tamaño del padding */
+        border-radius: 5px;
+        /* Redondeo para un aspecto más destacado */
+        margin-bottom: 0.5em;
+    }
+
+    .badge-falabella {
+        background-color: #28a745;
+        color: white;
+    }
+
+    /* Verde */
+    .badge-ripley {
+        background-color: #6f42c1;
+        color: white;
+    }
+
+    /* Morado */
+    .badge-paris {
+        background-color: #007bff;
+        color: white;
+    }
+
+    /* Azul */
+    .badge-mercadolibre {
+        background-color: #ffc107;
+        color: black;
+        color: white;
+    }
+
+    /* Amarillo */
+    .badge-shopify {
+        background-color: #1d473d;
+        color: white;
+    }
+
+    .badge-secondary {
+        background-color: #999999;
+        color: white;
+    }
+
+    /* Verde oscuro */
+</style>
+
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="col-lg-12">
+            <div class="card" id="orderList">
+                <div class="card-header border-0">
+                    <div class="row align-items-center gy-3">
+                        <div class="col-xxl-3 col-sm-4">
+                            <div class="input-light">
+                                <label for="canalOrigen" class="label">Seleccionar Canal Origen</label>
+                                <select name="canalOrigen" id="canalOrigen" class="form-control">
+                                    <option value="Ninguno">Ninguno</option>
+                                    {% for elemento in canales %}
+                                    <option value="{{ elemento.id }}">{{ elemento.plataforma }} - {{ elemento.url }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+
+
+                            </div>
+                        </div>
+
+                        <!--end col-->
+                        <div class="col-xxl-2 col-sm-4 mt-5">
+
+                            <button type="button" class="btn btn-primary w-100" id="btnBusquedaCanal">
+                                <i class="ri-equalizer-fill me-1 align-bottom"></i> Ver Pedidos
+                            </button>
+
+                        </div>
+
+                    </div>
+                    <div class="row justify-content-end">
+                        <div class="col-sm-auto text-start">
+                            <br><br>
+                            <div class="d-flex gap-1 flex-wrap">
+                                <select name="market" id="marketPlaceSincronizar">
+                                    <option value="0">Seleccionar MarketPlace</option>
+                                </select>
+                                <button class="btn btn-info" id="sincronizarPedidos"
+                                    onclick="VerModalImportarPedido()">Sincronizar Pedidos</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="card-body border border-dashed border-end-0 border-start-0">
+                    <form>
+                        <div class="row g-3">
+                            <div class="col-xxl-5 col-sm-6">
+                                <div class="search-box">
+                                    <input type="text" class="form-control search" id="searchInput"
+                                        placeholder="Search for order ID, customer, order status or something...">
+                                    <i class="ri-search-line search-icon"></i>
+                                </div>
+                            </div>
+                            <!--end col-->
+                            <div class="col-xxl-2 col-sm-6">
+                                <div>
+                                    <input type="text" class="form-control flatpickr-input" data-provider="flatpickr"
+                                        data-date-format="d M, Y" data-range-date="true" id="demo-datepicker"
+                                        placeholder="Select date" readonly="readonly">
+                                </div>
+                            </div>
+                            <!--end col-->
+                            <div class="col-xxl-2 col-sm-4">
+                                <select class="form-control" name="status" id="statusOrden">
+                                    <option value="All">Seleccionar Status</option>
+                                    <option value="processing">Procesando</option>
+                                    <option value="completed">Completado</option>
+                                    <option value="cancelled">Cancelados</option>
+                                    <option value="pending">Pendientes</option>
+                                </select>
+                            </div>
+                            <!--end col-->
+
+                            <div class="col-xxl-1 col-sm-4">
+                                <div>
+                                    <button type="button" class="btn btn-primary w-100" id="btnSearch"
+                                        onclick="SearchData();"> <i class="ri-equalizer-fill me-1 align-bottom"></i>
+                                        Filtrar
+                                    </button>
+                                </div>
+                            </div>
+                            <!--end col-->
+                        </div>
+                        <!--end row-->
+                    </form>
+                </div>
+
+                <div class="card-body pt-0">
+                    <div id="marketplaceProcessingCounters"
+                        class="d-flex justify-content-center align-items-center mb-3 flex-wrap"></div>
+
+                    <div>
+                        <ul class="nav nav-tabs nav-tabs-custom nav-success mb-3" role="tablist">
+                            <li onclick="verPedidosPorEstado('All')" class="nav-item" role="presentation">
+                                <a class="nav-link active All py-3" data-bs-toggle="tab" id="All" href="#home1"
+                                    role="tab" aria-selected="true">
+                                    <i class="ri-store-2-fill me-1 align-bottom"></i> All Orders<span
+                                        style="font-size: 1em;" class="badge bg-danger align-middle ms-1"
+                                        id="allCount">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item" onclick="verPedidosPorEstado('processing')" role="presentation">
+                                <a class="nav-link py-3 Delivered" data-bs-toggle="tab" id="Delivered" href="#delivered"
+                                    role="tab" aria-selected="false" tabindex="-1">
+                                    <i class="ri-checkbox-circle-line me-1 align-bottom"></i> Procesando <span
+                                        style="font-size: 1em;" class="badge bg-danger align-middle ms-1"
+                                        id="processingCount">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item" onclick="verPedidosPorEstado('completed')" role="presentation">
+                                <a class="nav-link py-3 Pickups" data-bs-toggle="tab" id="Pickups" href="#pickups"
+                                    role="tab" aria-selected="false" tabindex="-1">
+                                    <i class="ri-truck-line me-1 align-bottom"></i> Completadas <span
+                                        style="font-size: 1em;" class="badge bg-danger align-middle ms-1"
+                                        id="completeCount">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item" onclick="verPedidosPorEstado('pending')" role="presentation">
+                                <a class="nav-link py-3 Returns" data-bs-toggle="tab" id="Returns" href="#returns"
+                                    role="tab" aria-selected="false" tabindex="-1">
+                                    <i class="ri-arrow-left-right-fill me-1 align-bottom"></i> Pendientes<span
+                                        style="font-size: 1em;" class="badge bg-danger align-middle ms-1"
+                                        id="pendingCount">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item" onclick="verPedidosPorEstado('cancelled')" role="presentation">
+                                <a class="nav-link py-3 Cancelled" data-bs-toggle="tab" id="Cancelled" href="#cancelled"
+                                    role="tab" aria-selected="false" tabindex="-1">
+                                    <i class="ri-close-circle-line me-1 align-bottom"></i> Cancelled<span
+                                        style="font-size: 1em;" class="badge bg-danger align-middle ms-1"
+                                        id="cancelCount">0</span>
+                                </a>
+                            </li>
+                        </ul>
+
+                        <div class="table-responsive table-card mb-1">
+                            <div class="row m-2">
+                                <div class="col-md-3"> <select class="form-select" id="opcionPorLote"
+                                        aria-label=".form-select-sm example">
+                                        <option selected="">Accion Por Lotes</option>
+                                        <option value="PedidosProcesandoImprimir">-->Imprimir Pedido</option>
+
+                                        <option value="PedidosSincronizar">Sincronizar Estados Pedidos</option>
+                                       
+
+
+
+
+                                    </select></div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-success" id="accionPorLote">Ejecutar</button>
+                                </div>
+                                <div class="col-md-3">
+                                    <span id="elementosCheckeados">0 Elementos Seleccionados</span>
+                                </div>
+
+
+                            </div>
+
+                            <table class="table table-nowrap align-middle" id="orderTable">
+                                <thead class="text-muted table-light">
+                                    <tr class="text-uppercase">
+                                        <th>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" value=""
+                                                    name="multipleCheck" id="cardtableCheck001">
+                                                <label class="form-check-label" for="cardtableCheck001"></label>
+
+                                            </div>
+                                        </th>
+                                        <th class="sort" data-sort="id">ID Pedido</th>
+                                        <th class="sort" data-sort="correlativo">Corre.</th>
+                                        <th class="sort" data-sort="cliente">Cliente</th>
+                                        <th class="sort" data-sort="cliente">Fecha</th>
+                                        <th class="sort" data-sort="status">Status</th>
+                                        <th class="sort" data-sort="status">Total</th>
+                                        <th class="sort" data-sort="status">SubStatus</th>
+
+                                        <th class="sort" data-sort="origen">MarketPlace</th>
+                                        <th class="sort" data-sort="origen">Accion</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="list form-check-all">
+
+                                </tbody>
+                            </table>
+
+                        </div>
+
+                    </div>
+                    <div class="modal fade" id="modalImportarPedido" tabindex="-1" aria-labelledby="exampleModalLabel"
+                        aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header bg-light p-3">
+                                    <h5 class="modal-title" id="exampleModalLabel">&nbsp;</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                                        id="close-modal"></button>
+                                </div>
+                                <form class="tablelist-form" id="formImportarPedido" autocomplete="off">
+                                    <div class="modal-body">
+                                        <input type="hidden" id="id-field">
+
+                                        <div class="mb-3" id="modal-id">
+                                            <label for="orderId" class="form-label">IDpedido</label>
+                                            <input type="text" id="orderId" class="form-control"
+                                                placeholder="Ingresar ID Pedido">
+                                        </div>
+
+
+                                    </div>
+                                    <div class="modal-footer">
+                                        <div class="hstack gap-2 justify-content-end">
+                                            <button type="button" class="btn btn-light"
+                                                data-bs-dismiss="modal">Close</button>
+                                            <button type="submit" class="btn btn-success"
+                                                id="btnSincronizarOrden">Sincronizar Orden</button>
+                                            <!-- <button type="button" class="btn btn-success" id="edit-btn">Update</button> -->
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <!-- Modal -->
+                <div class="modal fade flip" id="modalPDF" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-body p-5 text-center">
+                                <div class="mt-4 text-center">
+
+                                    <div id="visorPDF"></div>
+                                    <button class="btn btn-link link-success fw-medium text-decoration-none"
+                                        id="deleteRecord-close2" data-bs-dismiss="modal"><i
+                                            class="ri-close-line me-1 align-middle"></i> Close</button>
+
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal fade flip" id="modalVerPedido" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-lg"> <!-- Aumenta el tamaño del modal -->
+                        <div class="modal-content">
+                            <div class="modal-body p-5 text-center">
+                                <div class="row">
+                                    <!-- Detalles del primer pedido -->
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+
+                                                <div class="card-header">
+                                                    <h5 class="card-title mb-0"><i
+                                                            class=" ri-map-pin-user-line  align-bottom me-1 text-muted"></i>
+                                                        Cliente
+                                                    </h5>
+
+                                                </div>
+
+                                            </div>
+                                            <div class="card-body">
+                                                <ul class="list-unstyled mb-0 vstack gap-3">
+
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <div class="flex-shrink-0">
+                                                            <p class="text-muted mb-0">Cliente:</p>
+                                                        </div>
+                                                        <div class="flex-grow-1 ms-2">
+                                                            <h6 class="mb-0" id="clientePedido">0</h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <div class="flex-shrink-0">
+                                                            <p class="text-muted mb-0">Email:</p>
+                                                        </div>
+                                                        <div class="flex-grow-1 ms-2">
+                                                            <h6 class="mb-0" id="emailPedido">0</h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <div class="flex-shrink-0">
+                                                            <p class="text-muted mb-0">Telefono:</p>
+                                                        </div>
+                                                        <div class="flex-grow-1 ms-2">
+                                                            <h6 class="mb-0" id="emailtelefono">0</h6>
+                                                        </div>
+                                                    </div>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <div class="card-header">
+                                                    <h5 class="card-title mb-0"><i
+                                                            class=" ri-map-pin-user-line  align-bottom me-1 text-muted"></i>
+                                                        MarketPlace
+                                                    </h5>
+
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                <ul class="list-unstyled mb-0 vstack gap-3">
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <div class="flex-shrink-0">
+                                                            <p class="text-muted mb-0">ID Pedido:</p>
+                                                        </div>
+                                                        <div class="flex-grow-1 ms-2">
+                                                            <h6 class="mb-0" id="idPedidoPedido"></h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <div class="flex-shrink-0">
+                                                            <p class="text-muted mb-0">Marketplace:</p>
+                                                        </div>
+                                                        <div class="flex-grow-1 ms-2">
+                                                            <h6 class="mb-0" id="mkpPedido"></h6>
+                                                        </div>
+                                                    </div>
+                                                    <div class="d-flex align-items-center mb-2">
+                                                        <div class="flex-shrink-0">
+                                                            <p class="text-muted mb-0">ID MKP:</p>
+                                                        </div>
+                                                        <div class="flex-grow-1 ms-2">
+                                                            <h6 class="mb-0" id="idMkpPedido"></h6>
+                                                        </div>
+                                                    </div>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+
+
+
+                                </div>
+
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5 class="card-title mb-0"><i
+                                                class=" ri-shopping-cart-line align-bottom me-1 text-muted"></i>
+                                            Descripcion Productos</h5>
+
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="tableVerPedido" class="table-responsive table-card">
+                                            <table class="table table-nowrap align-middle table-borderless mb-0">
+                                                <thead class="table-light text-muted">
+                                                    <tr>
+                                                        <th scope="col">Product Details</th>
+                                                        <th scope="col">Item Price</th>
+                                                        <th scope="col">Quantity</th>
+
+                                                        <th scope="col" class="text-end">Total Amount</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+
+
+                                                </tbody>
+                                            </table>
+                                            </td>
+                                            </tr>
+                                            </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button class="btn btn-link link-success fw-medium text-decoration-none"
+                                    id="deleteRecord-close2" data-bs-dismiss="modal">
+                                    <i class="ri-close-line me-1 align-middle"></i> Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal fade" id="modalBitacoraPedido" tabindex="-1"
+                    aria-labelledby="modalBitacoraPedidoLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="modalBitacoraPedidoLabel">Bitácora del Pedido</h5>
+                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <strong>ID Pedido:</strong> <span id="modalPedidoId"></span>
+                                </div>
+                                <input type="hidden" id="inputHiddenPedidoId" name="pedidoId">
+
+                                <!-- Tabla de Bitácora con scroll -->
+                                <div
+                                    style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
+                                    <table class="table table-striped mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Estado</th>
+                                                <th>Comentario</th>
+                                                <th>Fecha</th>
+                                                <th>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="bitacoraContent">
+                                            <!-- Aquí se cargarán las entradas de la bitácora -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Formulario para agregar un nuevo comentario -->
+                                <div class="mt-4">
+                                    <h6>Agregar nuevo comentario a la bitácora</h6>
+                                    <form id="formAgregarBitacora">
+                                        <div class="form-group">
+                                            <label for="estado">Estado</label>
+                                            <select id="estado" name="estado" class="form-control">
+                                                <option value="Cliente Contactado">Cliente Contactado</option>
+                                                <option value="Problemas Inventario">Problemas Inventario</option>
+                                                <option value="Producto Mal Subido">Producto Mal Subido</option>
+                                                <option value="Producto Con Falla">Producto Con Falla</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label for="comentario">Comentario</label>
+                                            <textarea id="comentario" name="comentario" class="form-control" rows="4"
+                                                style="resize: vertical;"></textarea>
+                                        </div>
+                                        <br>
+                                        <button type="button" class="btn btn-primary btn-lg btn-block"
+                                            onclick="agregarComentarioBitacora()">
+                                            Agregar Comentario
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+
+    </div>
+
+</div>
+<!-- container-fluid -->
+</div>
+{% include '../layout/footer.html' %}
+<script>
+    $(document).ready(function () {
+        $('#orderTable').DataTable({
+            paging: true,  // Activa la paginación
+            searching: true,  // Activa la barra de búsqueda
+            ordering: true,  // Activa el ordenamiento de columnas
+            order: [[3, 'desc']],  // Ordena por la columna de fecha (índice 3) en orden descendente
+            columnDefs: [
+                { orderable: false, targets: 0 }  // Deshabilita la ordenación en la primera columna
+            ],
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/Spanish.json'  // Soporte en español (opcional)
+            }
+        });
+    });
+    function obtenerPedidosSistema() {
+        var estadoSeleccionado = $("#statusOrden").val();
+        var rangoFechas = $("#demo-datepicker").val();
+
+        var fechas = rangoFechas.split(' to ');
+        var fechaInicio = fechas[0] ? new Date(fechas[0]).toISOString() : null;
+        var fechaFin = fechas[1] ? new Date(fechas[1]).toISOString() : null;
+        var searchInput = $("#searchInput").val();
+
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'obtenerPedidosPorCanalOrigen' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "idCanal1": $("#canalOrigen").val(),
+                "estado": estadoSeleccionado,
+                "fecha_inicio": fechaInicio,
+                "fecha_fin": fechaFin,
+                "searchInput": searchInput
+            },
+            success: function (response) {
+                var table = $('#orderTable').DataTable();
+                table.clear();
+                $.each(response.pedidos, function (index, pedido) {
+                    // Convertir es_administrador a booleano si es necesario
+                    var isAdmin = pedido.es_administrador === true || response.es_administrador === "true";
+                    console.log("Es administrador:", response.es_administrador);
+
+                    // Generar el menú del dropdown con restricciones para usuarios no administradores
+                    var dropdownMenu = `
+                            <div class="dropdown">
+                                <button class="btn btn-secondary dropdown-toggle" type="button" id="dropdownMenuButton${index}" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Acción
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton${index}">
+                                    <!-- Opción visible para todos -->
+                                    <li class="py-2"><a class="dropdown-item" href="#" onclick="verInformacionPedido('${pedido.id}')">Ver Pedido</a></li>
+                                    
+                                    <!-- Opciones solo para administradores o bloqueadas -->
+                                    <li class="py-2">
+                                        <a class="dropdown-item ${isAdmin ? '' : 'disabled'}" href="#" 
+                                        ${isAdmin ? `onclick="verBitacoraPedidos('${pedido.id}', '${pedido.idPedido}')"` : ''}>
+                                        Ver Bitácora ${isAdmin ? '' : '(bloqueado)'}
+                                        </a>
+                                    </li>
+                                    <li class="py-2">
+                                        <a class="dropdown-item ${isAdmin ? '' : 'disabled'}" href="#" 
+                                        ${isAdmin ? `onclick="cancelarPedidoSeller('${pedido.id}')"` : ''}>
+                                        Cancelar Pedido por Seller ${isAdmin ? '' : '(bloqueado)'}
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        `;
+
+
+                    var montoFormateado = pedido.monto ? pedido.monto.toLocaleString('es-CL') : 'N/A';
+
+                    // Verificar los estados de la bitácora para actualizar iconos
+                    var iconoPhone = pedido.iconos['Cliente Contactado'] === 'bg-success' ? 'bg-success' : 'text-dark';
+                    var iconoEmpaquetado = pedido.iconos['Empaquetado'] === 'bg-success' ? 'bg-success' : 'text-dark';
+                    var iconoChequeoInterno = pedido.iconos['Chequeo Interno'] === 'bg-success' ? 'bg-success' : 'text-dark';
+                    var iconoCanceladoSeller = pedido.iconos['Cancelado Por MKP'] === 'bg-success' ? 'bg-danger' : 'text-dark';
+                    var tieneProblemas = ['Problemas Inventario', 'Producto Mal Subido', 'Producto Con Falla'].some(
+                        (estado) => pedido.iconos[estado] === 'bg-success'
+                    );
+
+                    var iconoEnPreparacion = tieneProblemas ? 'bg-danger' : (pedido.iconos['En Preparacion'] === 'bg-success' ? 'bg-success' : 'text-dark');
+
+                    var iconosSubstatus = `
+        <div class="substatus-icons">
+            <i class="las la-ban la-2x rounded ${iconoCanceladoSeller}"></i>
+            <i class="las la-sync la-2x rounded ${iconoEnPreparacion}"></i>
+            <i class="las la-phone-volume la-2x rounded ${iconoPhone}"></i>
+            <i class="las la-barcode la-2x rounded ${iconoEmpaquetado}"></i>
+            <i class="las la-user-circle la-2x rounded ${iconoChequeoInterno}"></i>
+        </div>
+    `;
+
+                    var marketplaceBadge = '';
+                    switch (pedido.canal_Origen__plataforma.toLowerCase()) {
+                        case 'falabella':
+                            marketplaceBadge = '<span class="badge badge-label bg-success"><i class="mdi mdi-circle-medium"></i> Falabella</span>';
+                            break;
+                        case 'ripley':
+                            marketplaceBadge = '<span class="badge badge-label bg-primary"><i class="mdi mdi-circle-medium"></i> Ripley</span>';
+                            break;
+                        case 'mercado libre':
+                            marketplaceBadge = '<span class="badge badge-label bg-warning"><i class="mdi mdi-circle-medium"></i> Mercado Libre</span>';
+                            break;
+                        case 'paris':
+                            marketplaceBadge = '<span class="badge badge-label bg-secondary"><i class="mdi mdi-circle-medium"></i> Paris</span>';
+                            break;
+                        case 'shopify':
+                           marketplaceBadge = '<span class="badge badge-label bg-dark" style="background-color: darkgreen; color: white;"><i class="mdi mdi-circle-medium"></i> Shopify</span>';
+
+                            break;
+                        default:
+                            marketplaceBadge = '<span class="badge badge-label bg-secondary"><i class="mdi mdi-circle-medium"></i> Desconocido</span>';
+                    }
+
+                    table.row.add([
+                        `<div class="form-check">
+            <input class="form-check-input pedido-checkbox" type="checkbox" value="${pedido.id}" name="multipleCheck">
+            <label class="form-check-label"></label>
+        </div>`,
+                        pedido.idPedido,
+                           pedido.correlativo,
+                        pedido.cliente || 'N/A',
+                        pedido.fechaPedido || 'N/A',
+                        generarEtiquetaEstado(pedido.status),
+                        montoFormateado,
+                        iconosSubstatus,
+                        marketplaceBadge,
+                        dropdownMenu
+                    ]);
+                });
+
+               
+                table.draw(false);
+                hideLoadingBtn('btnBusquedaCanal', '<i class="ri-equalizer-fill me-1 align-bottom"></i> Ver Pedidos', false);
+                $("#canalOrigen").prop('disabled', true);
+                hideLoadingBtn('btnSearch', '<i class="ri-equalizer-fill me-1 align-bottom"></i> Ejecutar', true);
+                manejarSeleccionCheckboxes();
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+            }
+        });
+
+        obtenerEstadisticasOrdenes($("#canalOrigen").val());
+    }
+
+      function cancelarPedidoSeller(pedidoId) {
+        Swal.fire({
+            title: '¿Estás seguro?',
+            text: "¿Quieres cancelar este pedido por el seller?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Sí, cancelar',
+            cancelButtonText: 'No, volver'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    method: 'POST',
+                    url: "{% url 'agregarComentarioBitacora' %}",
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    data: {
+                        "pedidoId": pedidoId,
+                        "estado": 'Cancelado Por MKP',
+                        "comentario": '',
+                    },
+                    success: function (response) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Pedido Cancelado',
+                            text: 'El pedido ha sido cancelado exitosamente.',
+                        }) ;
+                        obtenerPedidosSistema()
+                    },
+                    error: function (xhr, errmsg, err) {
+                        console.log(xhr.status + ": " + xhr.responseText);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Hubo un problema al agregar el comentario. Inténtalo nuevamente.',
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+    function verBitacoraPedidos(pedidoId, numeroPedido) {
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'obtenerBitacoraPedido' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "pedidoId": pedidoId,
+            },
+            success: function (response) {
+                console.log('Bitácora del pedido:', response);
+                $("#modalPedidoId").text(numeroPedido)
+                mostrarModalBitacora(response, pedidoId); // Pasar pedidoId a mostrarModalBitacora
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+            }
+        });
+    }
+
+    // Función para mostrar las entradas de la bitácora en el modal
+    function mostrarModalBitacora(response, pedidoId) {
+        $("#inputHiddenPedidoId").val(pedidoId);
+        $('#bitacoraContent').empty(); // Limpiar el contenido actual
+        response.bitacora.forEach(function (entry) {
+            $('#bitacoraContent').append(`
+            <tr>
+                <td>${entry.estado}</td>
+                <td>${entry.comentario}</td>
+                <td>${new Date(entry.fecha).toLocaleString()}</td>
+                <td>
+                    <button class="btn btn-danger btn-sm" onclick="eliminarEntradaBitacora(${entry.id}, ${pedidoId})">Eliminar</button>
+                </td>
+            </tr>
+        `);
+        });
+        $('#modalBitacoraPedido').modal('show'); // Mostrar el modal
+    }
+
+    // Función para agregar un nuevo comentario a la bitácora
+    function agregarComentarioBitacora(pedidoId) {
+        var estado = $('#estado').val();
+        var comentario = $('#comentario').val();
+
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'agregarComentarioBitacora' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "pedidoId": $("#inputHiddenPedidoId").val(),
+                "estado": estado,
+                "comentario": comentario,
+            },
+            success: function (response) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Comentario Agregado',
+                    text: 'El comentario ha sido agregado exitosamente a la bitácora.',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+                verBitacoraPedidos(pedidoId); // Actualizar bitácora
+                $('#formAgregarBitacora').trigger("reset"); // Limpiar el formulario
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Hubo un problema al agregar el comentario. Inténtalo nuevamente.',
+                });
+            }
+        });
+    }
+
+    // Función para eliminar una entrada de la bitácora
+    function eliminarEntradaBitacora(bitacoraId, pedidoId) {
+        console.log(bitacoraId, pedidoId)
+        Swal.fire({
+            title: '¿Estás seguro?',
+            text: "Esta acción eliminará permanentemente la entrada de la bitácora.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    method: 'POST',
+                    url: "{% url 'eliminarEntradaBitacora' %}",
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    data: {
+                        "bitacoraId": bitacoraId
+                    },
+                    success: function (response) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Entrada eliminada',
+                            text: 'La entrada de la bitácora ha sido eliminada exitosamente.',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                        verBitacoraPedidos(pedidoId); // Actualizar bitácora
+                    },
+                    error: function (xhr, errmsg, err) {
+                        console.log(xhr.status + ": " + xhr.responseText);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'No se pudo eliminar la entrada. Inténtalo nuevamente.',
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+
+
+    function manejarSeleccionCheckboxes() {
+        // Seleccionar todos los checkboxes cuando se hace clic en el primero
+        $('#cardtableCheck001').on('change', function () {
+            var isChecked = $(this).is(':checked');
+            $('.pedido-checkbox').prop('checked', isChecked);
+            actualizarConteoSeleccionados();
+        });
+
+        // Actualizar el conteo de elementos seleccionados
+        $('.pedido-checkbox').on('change', function () {
+            actualizarConteoSeleccionados();
+        });
+    }
+
+    function actualizarConteoSeleccionados() {
+        var totalSeleccionados = $('.pedido-checkbox:checked').length;
+        $('#elementosCheckeados').text(totalSeleccionados + ' Elementos Seleccionados');
+    }
+
+    function verInformacionPedido(idPedido) {
+
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'verInfoPedidosPorIDDestino' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "idPedido": idPedido
+            },
+            success: function (response) {
+                $("#modalVerPedido").modal('show');
+                console.log(response);
+                // Mostrar la información del pedido
+                $("#clientePedido").text(response.nombre);
+                $("#idPedidoPedido").text(response.id);
+                // Verificar y establecer el email
+                if (response.email === '') {
+                    $("#emailPedido").text('N/A');
+                } else {
+                    $("#emailPedido").text(response.email);
+                }
+
+                // Verificar y establecer el teléfono
+                if (response.telefono === '') {
+                    $("#emailtelefono").text('N/A');
+                } else {
+                    $("#emailtelefono").text(response.telefono);
+                }
+
+                $("#mkpPedido").text(response.marketplace);
+                $("#idMkpPedido").text(response.idMarketplace2);
+                $("#subtotalPedido").text(formatNumber(response.subTotal));
+                $("#descuentoPedido").text(formatNumber(response.descuento));
+                $("#envioPedido").text(formatNumber(response.envio));
+                $("#totalPedido").text(formatNumber(response.total));
+
+                $("#tableVerPedido tbody").empty();
+                response.productos.forEach(function (producto) {
+                    // Crear la fila de producto con imagen
+                    var productoHTML = `
+    <tr>
+        <td style="max-width: 300px; overflow: hidden;">
+            <div class="d-flex align-items-start">
+                <div class="flex-shrink-0 avatar-md bg-light rounded p-1" style="width: 100px; height: 100px;">
+                    <img src="${producto.Image}" alt="${producto.Name}" class="img-fluid d-block" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <div class="flex-grow-1 ms-3" style="max-width: calc(100% - 110px);">
+                    <h5 class="fs-15 mb-1" style="white-space: normal; word-break: break-word;">
+                        <a href="#" class="link-primary">${producto.Name}</a>
+                    </h5>
+                    <p class="text-muted mb-0" style="white-space: normal; word-break: break-word;">SKU: <span class="fw-medium">${producto.Sku}</span></p>
+                    <p class="text-muted mb-0" style="white-space: normal; word-break: break-word;">Size: <span class="fw-medium">${producto.Size}</span></p>
+                </div>
+            </div>
+        </td>
+        <td>${formatNumber(producto.ItemPrice)}</td>
+        <td>${formatNumber(producto.quantity)}</td>
+        <td class="fw-medium text-end">${formatNumber(producto.PaidPrice)}</td>
+    </tr>`;
+
+                    // Agregar la fila a la tabla
+                    $("#tableVerPedido tbody").append(productoHTML);
+                });
+
+                var totalesHTML = `
+                <tr class="border-top border-top-dashed">
+                    <td colspan="3"></td>
+                    <td colspan="2" class="fw-medium p-0">
+                        <table class="table table-borderless mb-0">
+                            <tbody>
+                                <tr>
+                                    <td>Sub Total :</td>
+                                    <td class="text-end" id="subtotalPedido">${formatNumber(response.subTotal)}</td>
+                                </tr>
+                                <tr>
+                                    <td>Descuento :</td>
+                                    <td class="text-end" id="descuentoPedido">${formatNumber(response.descuento)}</td>
+                                </tr>
+                                <tr>
+                                    <td>Cargo por Envío :</td>
+                                    <td class="text-end" id="envioPedido">${formatNumber(response.envio)}</td>
+                                </tr>
+                                <tr class="border-top border-top-dashed">
+                                    <th scope="row">Total (CLP) :</th>
+                                    <th class="text-end" id="totalPedido">${formatNumber(response.total)}</th>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>`;
+                $("#tableVerPedido tbody").append(totalesHTML);
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+            }
+        });
+    }
+
+    function generarEtiquetaEstado(estado) {
+        // Verificar si estado es nulo, undefined, vacío o no es un string
+        if (!estado || typeof estado !== 'string' || estado.trim() === '') {
+            return '<span class="badge text-bg-secondary">Desconocido</span>';
+        }
+
+        // Convertir estado a minúsculas y generar la etiqueta correspondiente
+        switch (estado.toLowerCase()) {
+            case 'processing':
+                return '<span class="badge text-bg-success">Procesando</span>';
+            case 'on hold':
+                return '<span class="badge text-bg-warning">En Espera</span>';
+            case 'orden creada':
+                return '<span class="badge text-bg-warning">Orden Creada</span>';
+
+            case 'canceled':
+                return '<span class="badge text-bg-danger">Cancelado</span>';
+            case 'cancelled':
+                return '<span class="badge text-bg-danger">Cancelado</span>';
+            default:
+                return '<span class="badge text-bg-primary">' + estado + '</span>';
+        }
+    }
+
+    function VerModalImportarPedido() {
+
+        $('#modalImportarPedido').modal('show');
+        $("#orderId").val('')
+    }
+    $('#formImportarPedido').submit(function (event) {
+        // Evitar que se recargue la página
+        event.preventDefault();
+        mostrarLoadingBtn("btnSincronizarOrden");
+        // Obtener los datos del formulario
+        var formData = $(this).serialize();
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'importarPedidosPorParametrosNuevo' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                idCanal: $("#marketPlaceSincronizar").val(),
+                idPedido: $("#orderId").val(),
+                canalOrigen: $("#canalOrigen").val()
+            },
+            success: function (response) {
+                console.log(response);
+                Swal.fire(response)
+                hideLoadingBtn("btnSincronizarOrden", " Sincronizar Orden ", true);
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+                hideLoadingBtn("btnSincronizarOrden", " Sincronizar Orden ", true);
+            }
+        });
+        // Enviar los datos mediante AJAX
+    });
+
+    function ImprimirEtiquetasPedido() {
+        console.log($("#canalOrigen").val())
+        mostrarLoadingBtn("btnPrintAllOrders");
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'GenerarReporteEtiquetasPedidos' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                idCanal: $("#canalOrigen").val()
+            },
+            success: function (data) {
+
+                $("#visorPDF").html('<embed src="data:application/pdf;base64,' + data.pdf_base64 + '" type="application/pdf" width="100%" height="600px"/>');
+                $("#modalPDF").modal('show');
+                Swal.fire({
+                    "icon": "success",
+                    "title": "Etiquetas Creadas Correctamente",
+                    "text": "Operación Correcta"
+                })
+                hideLoadingBtn("btnPrintAllOrders", "<i class=' ri-printer-line align-bottom me-1 '></i> Pedidos Procesando ", true);
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+            }
+        });
+
+    }
+
+    function SearchData() {
+        mostrarLoadingBtn("btnSearch");
+        obtenerPedidosSistema();
+
+    }
+
+    function obtenerCanalesParaSincronizar() {
+        console.log('obtenerCanales')
+        canalOrigen = $("#canalOrigen").val();
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'obtenerCanalesAsociadosACanalOrigen' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "canalOrigen": canalOrigen,
+
+            },
+            success: function (response) {
+                console.log(response)
+                var select = $('#marketPlaceSincronizar');
+                $.each(response, function (index, canal) {
+                    select.append('<option value="' + canal.id + '">' + canal.plataforma + " - " + canal.url + '</option>');
+                });
+
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+            }
+        });
+
+    }
+    // Ajuste para obtener lista de IDs de pedidos seleccionados en el frontend
+    $('#accionPorLote').on('click', function () {
+        var elementosChequeados = $('#orderTable tbody input[type="checkbox"]:checked');
+        mostrarLoadingBtn("accionPorLote");
+
+        let listaIDsPedido = [];
+
+        // Recorrer los checkboxes seleccionados y obtener el ID del pedido
+        elementosChequeados.each(function () {
+            var valorCheckbox = $(this).val();  // Obtener el valor del checkbox (ID del pedido)
+            listaIDsPedido.push(valorCheckbox);
+        });
+
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'actualizarEstadoPedidosNuevo' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "idCanalWoo": $("#canalOrigen").val(),
+                "listaIDs": listaIDsPedido,  // Enviar la lista de IDs de pedidos seleccionados
+                "statusLote": $("#opcionPorLote").val()
+            },
+            success: function (response) {
+                obtenerPedidosSistema();
+                hideLoadingBtn('accionPorLote', 'Ejecutar', true);
+
+
+                if (response.status) {
+                    Swal.fire({
+                        title: response.title,
+                        text: response.text,
+                        icon: response.icon,
+                    });
+
+                    // Mostrar PDF si está presente
+                    if (response.pdf) {
+                        $("#visorPDF").html('<embed src="data:application/pdf;base64,' + response.pdf_base64 + '" type="application/pdf" width="100%" height="600px"/>');
+                        $("#modalPDF").modal('show');
+                    }
+                } else {
+                    Swal.fire({
+                        title: response.title,
+                        text: response.text,
+                        icon: response.icon,
+                    });
+                }
+            },
+            error: function (xhr, errmsg, err) {
+                hideLoadingBtn('accionPorLote', 'Ejecutar', true);
+                Swal.fire({
+                    title: "Error",
+                    text: "Ocurrió un error al actualizar los pedidos.",
+                    icon: "error",
+                });
+            }
+        });
+    });
+
+    $('#btnBusquedaCanal').on('click', function () {
+        mostrarLoadingBtn("btnBusquedaCanal");
+        obtenerPedidosSistema();
+        obtenerCanalesParaSincronizar();
+
+    });
+
+
+
+
+    function verPedidosPorEstado(status) {
+        $("#statusOrden").val(status);
+        obtenerPedidosSistema();
+    }
+    function obtenerEstadisticasOrdenes(idCanal1) {
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'obtenerEstadisticasPedidosManual' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "idCanal1": idCanal1,
+            },
+            success: function (response) {
+                console.log('Estadísticas de pedidos:', response);
+
+                // Actualizar contadores de estado de pedidos
+                var totalPedidos = (
+                    (response.pedidosPorEstado.processing || 0) +
+                    (response.pedidosPorEstado.completed || 0) +
+                    (response.pedidosPorEstado.pending || 0) +
+                    (response.pedidosPorEstado.canceled || 0) +
+                    (response.pedidosPorEstado.null || 0)
+                );
+
+                $("#allCount").text(totalPedidos);
+                $("#processingCount").text(response.pedidosPorEstado.processing || 0);
+                $("#completeCount").text(response.pedidosPorEstado.completed || 0);
+                $("#pendingCount").text(response.pedidosPorEstado.pending || 0);
+                $("#cancelCount").text(response.pedidosPorEstado.canceled || 0);
+                $("#nullCount").text(response.pedidosPorEstado.null || 0);
+
+                // Limpiar el contenedor de contadores de marketplace antes de agregar los nuevos
+                $("#marketplaceProcessingCounters").empty();
+
+                // Mostrar la cantidad de pedidos en estado 'processing' por marketplace y calcular el total
+                var procesandoPorMkp = response.procesandoPorMkp;
+                var totalProcesando = 0;
+
+                for (var marketplace in procesandoPorMkp) {
+                    if (procesandoPorMkp.hasOwnProperty(marketplace)) {
+                        totalProcesando += procesandoPorMkp[marketplace];
+
+                        // Asignar la clase específica según el nombre del marketplace
+                        var badgeClass = '';
+                        switch (marketplace.toLowerCase()) {
+                            case 'falabella':
+                                badgeClass = 'badge-falabella';
+                                break;
+                            case 'ripley':
+                                badgeClass = 'badge-ripley';
+                                break;
+                            case 'paris':
+                                badgeClass = 'badge-paris';
+                                break;
+                            case 'mercado libre':
+                                badgeClass = 'badge-mercadolibre';
+                                break;
+                            case 'shopify':
+                                badgeClass = 'badge-shopify';
+                                break;
+                            default:
+                                badgeClass = 'badge-secondary';
+                        }
+
+                        // Crear el span para cada marketplace con la clase de color asignada
+                        var marketplaceSpan = `<span class="badge badge-mkp ${badgeClass} me-2">${marketplace}: ${procesandoPorMkp[marketplace]}</span>`;
+                        $("#marketplaceProcessingCounters").append(marketplaceSpan);
+                    }
+                }
+
+                // Agregar un badge separado en gris con el total de todos los marketplaces
+                var totalBadge = `<span class="badge badge-mkp badge-secondary me-2">Total Procesando: ${totalProcesando}</span>`;
+                $("#marketplaceProcessingCounters").append(totalBadge);
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+            }
+        });
+    }
+
+
+    function formatNumber(num) {
+        // Convertir a número flotante si es una cadena
+        let number = parseFloat(num);
+
+        // Verificar si el número es válido
+        if (isNaN(number)) {
+            return '0';  // Devolver '0' si no es un número válido
+        }
+
+        // Formatear el número con separadores de miles
+        return number.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+
+
+
+    function borrarEtiquetaInterna(idCanal1, idPedidoOrigen) {
+        $.ajax({
+            method: 'POST',
+            url: "{% url 'borrarEtiquetadoInterno' %}",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: {
+                "idCanalOrigen": idCanal1,
+                "idPedidoOrigen": idPedidoOrigen
+            },
+            success: function (response) {
+                console.log(response)
+                Swal.fire(response);
+                obtenerPedidosSistema();
+            },
+            error: function (xhr, errmsg, err) {
+                console.log(xhr.status + ": " + xhr.responseText);
+            }
+        });
+    }
+</script>

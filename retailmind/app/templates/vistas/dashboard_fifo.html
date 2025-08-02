@@ -1,0 +1,667 @@
+{% load static %}
+{% load humanize %}
+
+<!-- /.modal -->
+{% include 'layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include 'layout/menu.html' %}
+{% include 'layout/footer.html' %}
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+        
+        <!-- ========== HEADER Y TÍTULO ========== -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-1">
+                            <i class="bi bi-graph-up text-primary me-2"></i>
+                            Dashboard FIFO
+                        </h4>
+                        <p class="text-muted mb-0">Análisis completo del inventario usando metodología FIFO</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-success" onclick="exportarReporteFIFO()">
+                            <i class="bi bi-download"></i> Exportar
+                        </button>
+                        <a href="{% url 'verGestionProducto' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-back"></i> Volver
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- ========== MÉTRICAS PRINCIPALES ========== -->
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="card border-left-primary shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    Valor Total FIFO
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="valorTotalFIFO">
+                                    <i class="bi bi-hourglass-split"></i> Cargando...
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="bi bi-currency-dollar fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="card border-left-info shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    Productos con Lotes
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalProductos">
+                                    <i class="bi bi-hourglass-split"></i> Cargando...
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="bi bi-boxes fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="card border-left-warning shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    Con Diferencias
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="productosConDiferencia">
+                                    <i class="bi bi-hourglass-split"></i> Cargando...
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="bi bi-exclamation-triangle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="card border-left-{% if diferencia_total > 0 %}success{% else %}danger{% endif %} shadow h-100">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-{% if diferencia_total > 0 %}success{% else %}danger{% endif %} text-uppercase mb-1">
+                                    Diferencia Total
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="diferenciaTotal">
+                                    <i class="bi bi-hourglass-split"></i> Cargando...
+                                </div>
+                                <div class="text-xs text-muted" id="porcentajeDiferencia">
+                                    <i class="bi bi-hourglass-split"></i> Cargando...
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="bi bi-graph-up fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== ANÁLISIS FIFO DETALLADO ========== -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="bi bi-bar-chart me-2"></i>Análisis FIFO Detallado
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Distribución de Diferencias -->
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-3">
+                                    <i class="bi bi-pie-chart me-1"></i>Distribución de Diferencias
+                                </h6>
+                                <div class="row text-center">
+                                    <div class="col-4">
+                                        <div class="border-end">
+                                            <h4 class="text-success mb-1" id="diferenciasPositivas">0</h4>
+                                            <small class="text-muted">Positivas ↗</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="border-end">
+                                            <h4 class="text-danger mb-1" id="diferenciasNegativas">0</h4>
+                                            <small class="text-muted">Negativas ↘</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div>
+                                            <h4 class="text-secondary mb-1" id="sinDiferencias">0</h4>
+                                            <small class="text-muted">Sin Diferencia</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Análisis de Stock -->
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-3">
+                                    <i class="bi bi-boxes me-1"></i>Análisis de Stock
+                                </h6>
+                                <div class="row text-center">
+                                    <div class="col-3">
+                                        <div class="border-end">
+                                            <h4 class="text-danger mb-1" id="stockBajo">0</h4>
+                                            <small class="text-muted">Bajo</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="border-end">
+                                            <h4 class="text-warning mb-1" id="stockMedio">0</h4>
+                                            <small class="text-muted">Medio</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="border-end">
+                                            <h4 class="text-success mb-1" id="stockAlto">0</h4>
+                                            <small class="text-muted">Alto</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div>
+                                            <h4 class="text-secondary mb-1" id="sinStock">0</h4>
+                                            <small class="text-muted">Sin Stock</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Alertas y Recomendaciones -->
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>Alertas y Recomendaciones
+                                </h6>
+                                <div id="alertasFIFO">
+                                    <!-- Se llenará dinámicamente -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- ========== BUSCADORES AVANZADOS ========== -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 bg-light">
+                    <div class="card-header bg-transparent">
+                        <h6 class="mb-0">
+                            <i class="bi bi-search me-2"></i>Buscadores y Filtros Avanzados
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Búsqueda por Producto -->
+                            <div class="col-md-3">
+                                <label class="form-label small text-muted">
+                                    <i class="bi bi-box me-1"></i>Producto
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="filtroProducto" placeholder="Buscar por artículo...">
+                            </div>
+                            
+                            <!-- Búsqueda por Talla -->
+                            <div class="col-md-2">
+                                <label class="form-label small text-muted">
+                                    <i class="bi bi-rulers me-1"></i>Talla
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="filtroTalla" placeholder="Filtrar talla...">
+                            </div>
+                            
+                            <!-- Filtro por Diferencia -->
+                            <div class="col-md-2">
+                                <label class="form-label small text-muted">
+                                    <i class="bi bi-graph-up me-1"></i>Diferencia
+                                </label>
+                                <select class="form-select form-select-sm" id="filtroDiferencia">
+                                    <option value="">Todas las diferencias</option>
+                                    <option value="positiva">Solo Positivas ↗</option>
+                                    <option value="negativa">Solo Negativas ↘</option>
+                                    <option value="cero">Sin Diferencia</option>
+                                    <option value="alta">Diferencia Alta (>10%)</option>
+                                    <option value="baja">Diferencia Baja (<5%)</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Filtro por Stock -->
+                            <div class="col-md-2">
+                                <label class="form-label small text-muted">
+                                    <i class="bi bi-boxes me-1"></i>Stock
+                                </label>
+                                <select class="form-select form-select-sm" id="filtroStock">
+                                    <option value="">Todos</option>
+                                    <option value="bajo">Stock Bajo (<10)</option>
+                                    <option value="medio">Stock Medio (10-50)</option>
+                                    <option value="alto">Stock Alto (>50)</option>
+                                    <option value="agotado">Sin Stock</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Ordenamiento -->
+                            <div class="col-md-3">
+                                <label class="form-label small text-muted">
+                                    <i class="bi bi-sort-down me-1"></i>Ordenar por
+                                </label>
+                                <select class="form-select form-select-sm" id="ordenarPor">
+                                    <option value="diferencia">Diferencia (Mayor)</option>
+                                    <option value="producto">Producto (A-Z)</option>
+                                    <option value="valor_fifo">Valor FIFO (Mayor)</option>
+                                    <option value="stock">Stock (Mayor)</option>
+                                    <option value="porcentaje">% Diferencia (Mayor)</option>
+                                    <option value="reciente">Más Recientes</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Botones de Acción -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-primary btn-sm" id="btnAplicarFiltros">
+                                        <i class="bi bi-search me-1"></i>Aplicar Filtros
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" id="btnLimpiarFiltros">
+                                        <i class="bi bi-x-circle me-1"></i>Limpiar Todo
+                                    </button>
+                                    <button class="btn btn-outline-info btn-sm" id="btnExportarFiltrado">
+                                        <i class="bi bi-download me-1"></i>Exportar Filtrado
+                                    </button>
+                                    <div class="form-check form-switch ms-3">
+                                        <input class="form-check-input" type="checkbox" id="mostrarSoloDiferencias">
+                                        <label class="form-check-label small" for="mostrarSoloDiferencias">
+                                            Solo con diferencias
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- ========== TABLA PRINCIPAL ========== -->
+    <div class="card shadow">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="bi bi-table me-2"></i>Análisis FIFO por Producto
+            </h6>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary" id="contadorProductos">
+                    <i class="bi bi-hourglass-split"></i> Cargando...
+                </span>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="mostrarSoloDiferencias">
+                    <label class="form-check-label small" for="mostrarSoloDiferencias">
+                        Solo con diferencias
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped" id="tablaFIFO">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Producto</th>
+                            <th>Talla</th>
+                            <th>Stock Sistema</th>
+                            <th>Valor FIFO</th>
+                            <th>Costo Promedio FIFO</th>
+                            <th>Costo Sistema</th>
+                            <th>Diferencia</th>
+                            <th>% Diferencia</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
+                                <h6 class="text-muted mt-3">Cargando datos del dashboard FIFO...</h6>
+                                <p class="text-muted small">Los datos se cargarán automáticamente</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
+</div>
+<!-- main-content -->
+
+<!-- ========== SCRIPTS ========== -->
+<script>
+// Funciones de utilidad para alertas
+function showErrorAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+
+function showWarningAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'warning',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+
+function showInfoAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'info',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+
+// Función para cargar datos iniciales
+function cargarDatosDashboard() {
+    filtrarTabla();
+}
+
+// Función para actualizar métricas
+function actualizarMetricas() {
+    $.ajax({
+        url: '/app/obtener_metricas_fifo/',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                actualizarMetricas(response.metricas);
+            }
+        }
+    });
+}
+
+// Inicializar cuando jQuery esté disponible
+$(document).ready(function() {
+    console.log('🚀 Inicializando Dashboard FIFO...');
+    
+    // Cargar datos iniciales
+    cargarDatosDashboard();
+    
+    // Eventos de filtros
+    $('#filtroProducto, #filtroTalla, #filtroDiferencia, #filtroStock, #mostrarSoloDiferencias').on('change keyup', function() {
+        filtrarTabla();
+    });
+    
+    // Evento para limpiar filtros
+    $('#btnLimpiarFiltros').on('click', function() {
+        limpiarFiltros();
+    });
+    
+    // Evento para ordenar
+    $('#ordenarPor').on('change', function() {
+        ordenarTabla($(this).val());
+    });
+    
+    // Evento para exportar filtrado
+    $('#btnExportarFiltrado').on('click', function() {
+        exportarFiltrado();
+    });
+    
+    // Actualizar métricas cada 30 segundos
+    setInterval(function() {
+        actualizarMetricas();
+    }, 30000);
+    
+    // Hacer funciones disponibles globalmente
+    window.verLotesFIFO = verLotesFIFO;
+    window.verMovimientosProducto = verMovimientosProducto;
+    window.exportarReporteFIFO = exportarReporteFIFO;
+    window.exportarFiltrado = exportarFiltrado;
+    window.limpiarFiltros = limpiarFiltros;
+    window.ordenarTabla = ordenarTabla;
+    window.filtrarTabla = filtrarTabla;
+    
+    console.log('✅ Dashboard FIFO inicializado');
+});
+
+
+
+function filtrarTabla() {
+    const filtroProducto = $('#filtroProducto').val();
+    const filtroTalla = $('#filtroTalla').val();
+    const filtroDiferencia = $('#filtroDiferencia').val();
+    const filtroStock = $('#filtroStock').val();
+    const ordenarPor = $('#ordenarPor').val();
+    const mostrarSoloDiferencias = $('#mostrarSoloDiferencias').is(':checked');
+    
+    // Mostrar loading
+    $('#tablaFIFO tbody').html('<tr><td colspan="8" class="text-center"><i class="bi bi-hourglass-split"></i> Cargando datos...</td></tr>');
+    
+    // Realizar petición AJAX
+    $.ajax({
+        url: '/app/obtener_datos_dashboard_fifo/',
+        method: 'GET',
+        data: {
+            filtro_producto: filtroProducto,
+            filtro_talla: filtroTalla,
+            filtro_diferencia: filtroDiferencia,
+            filtro_stock: filtroStock,
+            ordenar_por: ordenarPor,
+            mostrar_solo_diferencias: mostrarSoloDiferencias
+        },
+        success: function(response) {
+            if (response.success) {
+                actualizarTablaConDatos(response.productos);
+                actualizarMetricas(response);
+                actualizarAnalisis(response.analisis);
+                mostrarAlertas(response.alertas);
+            } else {
+                showErrorAlert('Error', response.error || 'Error al cargar datos');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al cargar datos');
+        }
+    });
+}
+
+function limpiarFiltros() {
+    $('#filtroProducto').val('');
+    $('#filtroTalla').val('');
+    $('#filtroDiferencia').val('');
+    $('#filtroStock').val('');
+    $('#mostrarSoloDiferencias').prop('checked', false);
+    filtrarTabla();
+}
+
+function ordenarTabla(criterio) {
+    const tbody = $('#tablaFIFO tbody');
+    const filas = tbody.find('tr.producto-fila').get();
+    
+    filas.sort(function(a, b) {
+        const $a = $(a);
+        const $b = $(b);
+        
+        switch(criterio) {
+            case 'producto':
+                return $a.data('producto').localeCompare($b.data('producto'));
+            case 'valor_fifo':
+                return parseFloat($a.find('td:eq(3)').text().replace(/[$,]/g, '')) - 
+                       parseFloat($b.find('td:eq(3)').text().replace(/[$,]/g, ''));
+            case 'stock':
+                return parseInt($a.find('td:eq(2)').text()) - parseInt($b.find('td:eq(2)').text());
+            case 'diferencia':
+            default:
+                return Math.abs($b.data('diferencia')) - Math.abs($a.data('diferencia'));
+        }
+    });
+    
+    tbody.empty().append(filas);
+}
+
+function verLotesFIFO(producto_talla_id) {
+    window.open(`/app/lotes_producto/${producto_talla_id}/`, '_blank');
+}
+
+function verMovimientosProducto(producto_talla_id) {
+    window.open(`/app/verMovimientosProducto/?producto_talla_id=${producto_talla_id}`, '_blank');
+}
+
+function exportarReporteFIFO() {
+    // Implementar exportación a Excel/PDF
+    showInfoAlert('Exportar', 'Función de exportación en desarrollo');
+}
+
+function exportarFiltrado() {
+    const filtroProducto = $('#filtroProducto').val();
+    const filtroTalla = $('#filtroTalla').val();
+    const filtroDiferencia = $('#filtroDiferencia').val();
+    const filtroStock = $('#filtroStock').val();
+    
+    if (!filtroProducto && !filtroTalla && !filtroDiferencia && !filtroStock) {
+        showWarningAlert('Exportar', 'Aplica filtros antes de exportar');
+        return;
+    }
+    
+    // Crear URL de exportación con filtros
+    const url = `/app/exportar_dashboard_fifo/?filtro_producto=${encodeURIComponent(filtroProducto)}&filtro_talla=${encodeURIComponent(filtroTalla)}&filtro_diferencia=${encodeURIComponent(filtroDiferencia)}&filtro_stock=${encodeURIComponent(filtroStock)}`;
+    
+    // Descargar archivo
+    window.open(url, '_blank');
+}
+
+function actualizarTablaConDatos(productos) {
+    const tbody = $('#tablaFIFO tbody');
+    tbody.empty();
+    
+    if (productos.length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron productos</td></tr>');
+        return;
+    }
+    
+    productos.forEach(function(producto) {
+        const claseDiferencia = producto.diferencia_valor > 0 ? 'text-success' : producto.diferencia_valor < 0 ? 'text-danger' : 'text-secondary';
+        const iconoDiferencia = producto.diferencia_valor > 0 ? '↗' : producto.diferencia_valor < 0 ? '↘' : '→';
+        
+        const fila = `
+            <tr class="producto-fila" data-producto="${producto.articulo}" data-talla="${producto.talla}" data-diferencia="${producto.diferencia_valor}">
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="me-2">
+                            <strong>${producto.articulo}</strong>
+                            <br><small class="text-muted">SKU: ${producto.sku}</small>
+                        </div>
+                    </div>
+                </td>
+                <td class="text-center">${producto.talla}</td>
+                <td class="text-center">
+                    <span class="badge bg-${producto.stock_sistema === 0 ? 'danger' : producto.stock_sistema < 10 ? 'warning' : 'success'}">
+                        ${producto.stock_sistema}
+                    </span>
+                </td>
+                <td class="text-end">$${producto.valor_inventario_fifo.toLocaleString()}</td>
+                <td class="text-end">$${producto.costo_promedio_fifo.toLocaleString()}</td>
+                <td class="text-end ${claseDiferencia}">
+                    ${iconoDiferencia} $${Math.abs(producto.diferencia_valor).toLocaleString()}
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-${Math.abs(producto.porcentaje_diferencia) > 20 ? 'danger' : Math.abs(producto.porcentaje_diferencia) > 10 ? 'warning' : 'success'}">
+                        ${producto.porcentaje_diferencia.toFixed(1)}%
+                    </span>
+                </td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="verLotesFIFO(${producto.producto_talla_id})" title="Ver Lotes">
+                            <i class="bi bi-boxes"></i>
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="verMovimientosProducto(${producto.producto_talla_id})" title="Ver Movimientos">
+                            <i class="bi bi-arrow-left-right"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        tbody.append(fila);
+    });
+    
+    $('#contadorProductos').text(productos.length + ' productos');
+}
+
+function actualizarMetricas(data) {
+    $('#valorTotalFIFO').text('$' + data.valor_total_inventario.toLocaleString());
+    $('#totalProductos').text(data.total_productos);
+    $('#productosConDiferencia').text(data.productos_con_diferencia);
+    $('#diferenciaTotal').text('$' + data.diferencia_total.toLocaleString());
+    $('#porcentajeDiferencia').text(data.porcentaje_diferencia.toFixed(1) + '%');
+}
+
+function actualizarAnalisis(analisis) {
+    $('#diferenciasPositivas').text(analisis.diferencias_positivas);
+    $('#diferenciasNegativas').text(analisis.diferencias_negativas);
+    $('#sinDiferencias').text(analisis.sin_diferencias);
+    $('#stockBajo').text(analisis.stock_bajo);
+    $('#stockMedio').text(analisis.stock_medio);
+    $('#stockAlto').text(analisis.stock_alto);
+    $('#sinStock').text(analisis.sin_stock);
+}
+
+function mostrarAlertas(alertas) {
+    const alertasContainer = $('#alertasFIFO');
+    alertasContainer.empty();
+    
+    if (alertas.length === 0) {
+        alertasContainer.html('<div class="text-muted">No hay alertas pendientes</div>');
+        return;
+    }
+    
+    alertas.forEach(function(alerta) {
+        const alertaHTML = `
+            <div class="alert alert-${alerta.tipo} alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                ${alerta.mensaje}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+        alertasContainer.append(alertaHTML);
+    });
+}
+
+
+</script> 

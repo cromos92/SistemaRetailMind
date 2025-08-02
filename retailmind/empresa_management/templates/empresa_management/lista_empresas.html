@@ -1,0 +1,959 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+
+<!-- CSRF Token para AJAX -->
+{% csrf_token %}
+{% include 'layout/menu.html' %}
+{% include 'layout/footer.html' %}
+
+<style>
+.empresa-card {
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+}
+
+.empresa-card:hover {
+    transform: translateY(-2px);
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-activo { background-color: #d4edda; color: #155724; }
+.status-inactivo { background-color: #f8d7da; color: #721c24; }
+
+.tipo-badge {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.table-responsive {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.modal-xl .modal-dialog {
+    max-width: 900px;
+}
+
+.form-floating > .form-control {
+    height: calc(3.5rem + 2px);
+    line-height: 1.25;
+}
+
+.form-floating > .form-control:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.btn-action {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+}
+
+.avatar-placeholder {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.pagination-info {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-controls .form-select {
+    width: auto;
+    min-width: 80px;
+}
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+            
+            <!-- ========== HEADER Y TÍTULO ========== -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-1">
+                                <i class="bi bi-building-fill text-primary me-2"></i>
+                                Gestión de Empresas
+                            </h2>
+                            <p class="text-muted mb-0">Administra las empresas y sus sucursales</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success" onclick="exportarEmpresas()">
+                                <i class="bi bi-download me-1"></i>Exportar
+                            </button>
+                            <button class="btn btn-primary" onclick="abrirModalCrear()">
+                                <i class="bi bi-plus-circle me-1"></i>Nueva Empresa
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== MÉTRICAS RÁPIDAS ========== -->
+            <div class="row mb-4">
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card empresa-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-primary mb-1" id="totalEmpresas">0</div>
+                            <div class="text-muted">Total Empresas</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card empresa-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-success mb-1" id="empresasActivas">0</div>
+                            <div class="text-muted">Empresas Activas</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card empresa-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-info mb-1" id="totalSucursales">0</div>
+                            <div class="text-muted">Total Sucursales</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card empresa-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-warning mb-1" id="totalContactos">0</div>
+                            <div class="text-muted">Total Contactos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== FILTROS ========== -->
+            <div class="filter-section">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Buscar</label>
+                        <input type="text" class="form-control" id="filtroBusqueda" placeholder="Nombre, RUT o razón social...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" id="filtroEstado">
+                            <option value="">Todos</option>
+                            <option value="activo">Activas</option>
+                            <option value="inactivo">Inactivas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tipo</label>
+                        <select class="form-select" id="filtroTipo">
+                            <option value="">Todos</option>
+                            <option value="cliente">Cliente</option>
+                            <option value="proveedor">Proveedor</option>
+                            <option value="ambos">Ambos</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Ordenar por</label>
+                        <select class="form-select" id="ordenarPor">
+                            <option value="nombre">Nombre</option>
+                            <option value="rut">RUT</option>
+                            <option value="fecha">Fecha</option>
+                            <option value="sucursales">Sucursales</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="bi bi-search me-1"></i>Filtrar
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="bi bi-x-circle me-1"></i>Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== TABLA PRINCIPAL ========== -->
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="bi bi-table me-2"></i>Lista de Empresas
+                    </h6>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary" id="contadorEmpresas">0 empresas</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped" id="tablaEmpresas">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Empresa</th>
+                                    <th>RUT</th>
+                                    <th>Razón Social</th>
+                                    <th>Tipo</th>
+                                    <th>Sucursales</th>
+                                    <th>Contactos</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="text-center py-5">
+                                        <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
+                                        <h6 class="text-muted mt-3">Cargando empresas...</h6>
+                                        <p class="text-muted small">Los datos se cargarán automáticamente</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- ========== PAGINACIÓN ========== -->
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="pagination-info">
+                            Mostrando <span id="inicioPagina">0</span> a <span id="finPagina">0</span> de <span id="totalRegistros">0</span> empresas
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarPagina('anterior')" id="btnAnterior" disabled>
+                                <i class="bi bi-chevron-left"></i> Anterior
+                            </button>
+                            <span class="mx-2">Página <span id="paginaActual">1</span> de <span id="totalPaginas">1</span></span>
+                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarPagina('siguiente')" id="btnSiguiente">
+                                Siguiente <i class="bi bi-chevron-right"></i>
+                            </button>
+                            <select class="form-select form-select-sm" id="registrosPorPagina" onchange="cambiarRegistrosPorPagina()">
+                                <option value="10">10</option>
+                                <option value="25" selected>25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
+</div>
+<!-- main-content -->
+
+<!-- ========== MODAL CREAR/EDITAR EMPRESA ========== -->
+<div class="modal fade" id="modalEmpresa" tabindex="-1" aria-labelledby="modalEmpresaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEmpresaLabel">
+                    <i class="bi bi-building me-2"></i>Nueva Empresa
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEmpresa">
+                    <input type="hidden" id="empresaId" name="empresa_id">
+                    
+                    <div class="row g-3">
+                        <!-- Información Básica -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="rutEmpresa" name="rut" placeholder="RUT" required>
+                                <label for="rutEmpresa">RUT *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="razonSocial" name="razon_social" placeholder="Razón Social" required>
+                                <label for="razonSocial">Razón Social *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="nombreFantasia" name="nombre_fantasia" placeholder="Nombre de Fantasía">
+                                <label for="nombreFantasia">Nombre de Fantasía</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Tipo de Empresa -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" id="tipoEmpresa" name="tipo" required>
+                                    <option value="">Seleccionar tipo</option>
+                                    <option value="cliente">Cliente</option>
+                                    <option value="proveedor">Proveedor</option>
+                                    <option value="ambos">Cliente y Proveedor</option>
+                                </select>
+                                <label for="tipoEmpresa">Tipo de Empresa *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="giroComercial" name="giro_comercial" placeholder="Giro Comercial">
+                                <label for="giroComercial">Giro Comercial</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Contacto -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" id="emailEmpresa" name="email" placeholder="Email">
+                                <label for="emailEmpresa">Email</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="tel" class="form-control" id="telefonoEmpresa" name="telefono" placeholder="Teléfono">
+                                <label for="telefonoEmpresa">Teléfono</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Dirección -->
+                        <div class="col-md-12">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="direccionEmpresa" name="direccion" placeholder="Dirección">
+                                <label for="direccionEmpresa">Dirección</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="ciudadEmpresa" name="ciudad" placeholder="Ciudad">
+                                <label for="ciudadEmpresa">Ciudad</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="regionEmpresa" name="region" placeholder="Región">
+                                <label for="regionEmpresa">Región</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="codigoPostal" name="codigo_postal" placeholder="Código Postal">
+                                <label for="codigoPostal">Código Postal</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Información Adicional -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="sitioWeb" name="sitio_web" placeholder="Sitio Web">
+                                <label for="sitioWeb">Sitio Web</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="representanteLegal" name="representante_legal" placeholder="Representante Legal">
+                                <label for="representanteLegal">Representante Legal</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Validaciones -->
+                    <div id="erroresFormulario" class="alert alert-danger mt-3" style="display: none;">
+                        <ul id="listaErrores" class="mb-0"></ul>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="guardarEmpresa()">
+                    <i class="bi bi-check-circle me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL DETALLE EMPRESA ========== -->
+<div class="modal fade" id="modalDetalleEmpresa" tabindex="-1" aria-labelledby="modalDetalleEmpresaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetalleEmpresaLabel">
+                    <i class="bi bi-info-circle me-2"></i>Detalle de Empresa
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="contenidoDetalleEmpresa">
+                    <!-- El contenido se cargará dinámicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL CONFIRMAR ELIMINACIÓN ========== -->
+<div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirmar Eliminación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar la empresa <strong id="nombreEmpresaEliminar"></strong>?</p>
+                <p class="text-muted small">Esta acción no se puede deshacer y eliminará también todas las sucursales y contactos asociados.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmarEliminar()">
+                    <i class="bi bi-trash me-1"></i>Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== SCRIPTS ========== -->
+<script>
+// Variables globales
+let empresas = [];
+let empresaSeleccionada = null;
+let modoEdicion = false;
+let paginaActual = 1;
+let registrosPorPagina = 25;
+let totalRegistros = 0;
+let totalPaginas = 1;
+
+// Inicializar cuando jQuery esté disponible
+$(document).ready(function() {
+    console.log('🚀 Inicializando Gestión de Empresas...');
+    
+    // Cargar datos iniciales
+    cargarEmpresas();
+    cargarMetricas();
+    
+    // Eventos de filtros
+    $('#filtroBusqueda').on('keyup', function() {
+        aplicarFiltros();
+    });
+    
+    $('#filtroEstado, #filtroTipo, #ordenarPor').on('change', function() {
+        aplicarFiltros();
+    });
+    
+    // Hacer funciones disponibles globalmente
+    window.abrirModalCrear = abrirModalCrear;
+    window.editarEmpresa = editarEmpresa;
+    window.eliminarEmpresa = eliminarEmpresa;
+    window.verDetalleEmpresa = verDetalleEmpresa;
+    window.guardarEmpresa = guardarEmpresa;
+    window.exportarEmpresas = exportarEmpresas;
+    window.aplicarFiltros = aplicarFiltros;
+    window.limpiarFiltros = limpiarFiltros;
+    window.cambiarPagina = cambiarPagina;
+    window.cambiarRegistrosPorPagina = cambiarRegistrosPorPagina;
+    
+    console.log('✅ Gestión de Empresas inicializada');
+});
+
+// Función para cargar empresas
+function cargarEmpresas() {
+    const params = new URLSearchParams({
+        page: paginaActual,
+        page_size: registrosPorPagina
+    });
+    
+    $.ajax({
+        url: `/empresa_management/lista_empresas/?${params}`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                empresas = response.empresas;
+                totalRegistros = response.total_registros;
+                totalPaginas = response.total_paginas;
+                actualizarTabla(empresas);
+                actualizarPaginacion();
+            } else {
+                showErrorAlert('Error', response.error || 'Error al cargar empresas');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al cargar empresas');
+        }
+    });
+}
+
+// Función para cargar métricas
+function cargarMetricas() {
+    $.ajax({
+        url: '/empresa_management/dashboard/',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                actualizarMetricas(response.metricas);
+            }
+        }
+    });
+}
+
+// Función para actualizar tabla
+function actualizarTabla(empresas) {
+    const tbody = $('#tablaEmpresas tbody');
+    tbody.empty();
+    
+    if (empresas.length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron empresas</td></tr>');
+        return;
+    }
+    
+    empresas.forEach(function(empresa) {
+        const fila = `
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-placeholder me-3">
+                            ${empresa.razon_social ? empresa.razon_social.charAt(0).toUpperCase() : 'E'}
+                        </div>
+                        <div>
+                            <strong>${empresa.razon_social || 'Sin razón social'}</strong>
+                            <br><small class="text-muted">${empresa.nombre_fantasia || ''}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>${empresa.rut || 'Sin RUT'}</td>
+                <td>${empresa.razon_social || 'Sin razón social'}</td>
+                <td>
+                    <span class="tipo-badge">${empresa.get_tipo_display || empresa.tipo}</span>
+                </td>
+                <td>
+                    <span class="badge bg-info">${empresa.num_sucursales || 0}</span>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${empresa.num_contactos || 0}</span>
+                </td>
+                <td>
+                    <span class="status-badge ${empresa.activo ? 'status-activo' : 'status-inactivo'}">
+                        ${empresa.activo ? 'Activa' : 'Inactiva'}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-info btn-action" onclick="verDetalleEmpresa(${empresa.id})" title="Ver Detalle">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-primary btn-action" onclick="editarEmpresa(${empresa.id})" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-action" onclick="eliminarEmpresa(${empresa.id}, '${empresa.razon_social}')" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        tbody.append(fila);
+    });
+    
+    $('#contadorEmpresas').text(empresas.length + ' empresas');
+}
+
+// Función para actualizar métricas
+function actualizarMetricas(metricas) {
+    $('#totalEmpresas').text(metricas.total_empresas || 0);
+    $('#empresasActivas').text(metricas.empresas_activas || 0);
+    $('#totalSucursales').text(metricas.total_sucursales || 0);
+    $('#totalContactos').text(metricas.total_contactos || 0);
+}
+
+// Función para actualizar paginación
+function actualizarPaginacion() {
+    const inicio = ((paginaActual - 1) * registrosPorPagina) + 1;
+    const fin = Math.min(paginaActual * registrosPorPagina, totalRegistros);
+    
+    $('#inicioPagina').text(inicio);
+    $('#finPagina').text(fin);
+    $('#totalRegistros').text(totalRegistros);
+    $('#paginaActual').text(paginaActual);
+    $('#totalPaginas').text(totalPaginas);
+    
+    $('#btnAnterior').prop('disabled', paginaActual === 1);
+    $('#btnSiguiente').prop('disabled', paginaActual === totalPaginas);
+}
+
+// Función para cambiar página
+function cambiarPagina(direccion) {
+    if (direccion === 'anterior' && paginaActual > 1) {
+        paginaActual--;
+    } else if (direccion === 'siguiente' && paginaActual < totalPaginas) {
+        paginaActual++;
+    }
+    cargarEmpresas();
+}
+
+// Función para cambiar registros por página
+function cambiarRegistrosPorPagina() {
+    registrosPorPagina = parseInt($('#registrosPorPagina').val());
+    paginaActual = 1;
+    cargarEmpresas();
+}
+
+// Función para abrir modal de creación
+function abrirModalCrear() {
+    modoEdicion = false;
+    $('#modalEmpresaLabel').html('<i class="bi bi-building me-2"></i>Nueva Empresa');
+    $('#formEmpresa')[0].reset();
+    $('#empresaId').val('');
+    $('#erroresFormulario').hide();
+    $('#modalEmpresa').modal('show');
+}
+
+// Función para editar empresa
+function editarEmpresa(empresaId) {
+    $.ajax({
+        url: `/empresa_management/obtener_empresa/${empresaId}/`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const empresa = response.empresa;
+                modoEdicion = true;
+                empresaSeleccionada = empresa;
+                
+                $('#modalEmpresaLabel').html('<i class="bi bi-pencil me-2"></i>Editar Empresa');
+                $('#empresaId').val(empresa.id);
+                $('#rutEmpresa').val(empresa.rut);
+                $('#razonSocial').val(empresa.razon_social);
+                $('#nombreFantasia').val(empresa.nombre_fantasia);
+                $('#tipoEmpresa').val(empresa.tipo);
+                $('#giroComercial').val(empresa.giro_comercial);
+                $('#emailEmpresa').val(empresa.email);
+                $('#telefonoEmpresa').val(empresa.telefono);
+                $('#direccionEmpresa').val(empresa.direccion);
+                $('#ciudadEmpresa').val(empresa.ciudad);
+                $('#regionEmpresa').val(empresa.region);
+                $('#codigoPostal').val(empresa.codigo_postal);
+                $('#sitioWeb').val(empresa.sitio_web);
+                $('#representanteLegal').val(empresa.representante_legal);
+                $('#erroresFormulario').hide();
+                
+                $('#modalEmpresa').modal('show');
+            } else {
+                showErrorAlert('Error', response.error || 'Error al cargar empresa');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al cargar empresa');
+        }
+    });
+}
+
+// Función para ver detalle de empresa
+function verDetalleEmpresa(empresaId) {
+    $.ajax({
+        url: `/empresa_management/obtener_empresa/${empresaId}/`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const empresa = response.empresa;
+                const contenido = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-primary">Información Básica</h6>
+                            <table class="table table-sm">
+                                <tr><td><strong>RUT:</strong></td><td>${empresa.rut || 'No especificado'}</td></tr>
+                                <tr><td><strong>Razón Social:</strong></td><td>${empresa.razon_social || 'No especificada'}</td></tr>
+                                <tr><td><strong>Nombre Fantasía:</strong></td><td>${empresa.nombre_fantasia || 'No especificado'}</td></tr>
+                                <tr><td><strong>Tipo:</strong></td><td><span class="tipo-badge">${empresa.get_tipo_display || empresa.tipo}</span></td></tr>
+                                <tr><td><strong>Giro Comercial:</strong></td><td>${empresa.giro_comercial || 'No especificado'}</td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-primary">Información de Contacto</h6>
+                            <table class="table table-sm">
+                                <tr><td><strong>Email:</strong></td><td>${empresa.email || 'No especificado'}</td></tr>
+                                <tr><td><strong>Teléfono:</strong></td><td>${empresa.telefono || 'No especificado'}</td></tr>
+                                <tr><td><strong>Sitio Web:</strong></td><td>${empresa.sitio_web || 'No especificado'}</td></tr>
+                                <tr><td><strong>Representante Legal:</strong></td><td>${empresa.representante_legal || 'No especificado'}</td></tr>
+                                <tr><td><strong>Estado:</strong></td><td><span class="status-badge ${empresa.activo ? 'status-activo' : 'status-inactivo'}">${empresa.activo ? 'Activa' : 'Inactiva'}</span></td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6 class="text-primary">Dirección</h6>
+                            <p>${empresa.direccion || 'No especificada'}, ${empresa.ciudad || ''} ${empresa.region || ''} ${empresa.codigo_postal || ''}</p>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6 class="text-primary">Estadísticas</h6>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h4 text-primary">${empresa.num_sucursales || 0}</div>
+                                        <small class="text-muted">Sucursales</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h4 text-success">${empresa.num_contactos || 0}</div>
+                                        <small class="text-muted">Contactos</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h4 text-info">${empresa.fecha_creacion ? new Date(empresa.fecha_creacion).toLocaleDateString() : 'N/A'}</div>
+                                        <small class="text-muted">Fecha Creación</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <div class="h4 text-warning">${empresa.fecha_actualizacion ? new Date(empresa.fecha_actualizacion).toLocaleDateString() : 'N/A'}</div>
+                                        <small class="text-muted">Última Actualización</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#contenidoDetalleEmpresa').html(contenido);
+                $('#modalDetalleEmpresa').modal('show');
+            } else {
+                showErrorAlert('Error', response.error || 'Error al cargar detalle de empresa');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al cargar detalle de empresa');
+        }
+    });
+}
+
+// Función para obtener token CSRF
+function getCSRFToken() {
+    const name = 'csrftoken';
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Función para guardar empresa
+function guardarEmpresa() {
+    const formData = new FormData($('#formEmpresa')[0]);
+    const data = Object.fromEntries(formData);
+    
+    // Validaciones básicas
+    const errores = [];
+    if (!data.rut) errores.push('El RUT es obligatorio');
+    if (!data.razon_social) errores.push('La razón social es obligatoria');
+    if (!data.tipo) errores.push('El tipo de empresa es obligatorio');
+    
+    if (errores.length > 0) {
+        mostrarErrores(errores);
+        return;
+    }
+    
+    const url = modoEdicion ? '/empresa_management/editar_empresa/' : '/empresa_management/crear_empresa/';
+    const method = modoEdicion ? 'PUT' : 'POST';
+    
+    $.ajax({
+        url: url,
+        method: method,
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert(
+                    modoEdicion ? 'Empresa Actualizada' : 'Empresa Creada',
+                    response.message
+                );
+                $('#modalEmpresa').modal('hide');
+                cargarEmpresas();
+            } else {
+                mostrarErrores(response.errors || [response.error]);
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al guardar empresa');
+        }
+    });
+}
+
+// Función para eliminar empresa
+function eliminarEmpresa(empresaId, nombre) {
+    empresaSeleccionada = empresaId;
+    $('#nombreEmpresaEliminar').text(nombre);
+    $('#modalConfirmarEliminar').modal('show');
+}
+
+// Función para confirmar eliminación
+function confirmarEliminar() {
+    $.ajax({
+        url: `/empresa_management/eliminar_empresa/${empresaSeleccionada}/`,
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert('Empresa Eliminada', response.message);
+                $('#modalConfirmarEliminar').modal('hide');
+                cargarEmpresas();
+            } else {
+                showErrorAlert('Error', response.error);
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al eliminar empresa');
+        }
+    });
+}
+
+// Función para aplicar filtros
+function aplicarFiltros() {
+    const busqueda = $('#filtroBusqueda').val();
+    const estado = $('#filtroEstado').val();
+    const tipo = $('#filtroTipo').val();
+    const ordenar = $('#ordenarPor').val();
+    
+    const params = new URLSearchParams({
+        page: 1,
+        page_size: registrosPorPagina,
+        search: busqueda,
+        estado: estado,
+        tipo: tipo,
+        ordenar: ordenar
+    });
+    
+    $.ajax({
+        url: `/empresa_management/lista_empresas/?${params}`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                empresas = response.empresas;
+                totalRegistros = response.total_registros;
+                totalPaginas = response.total_paginas;
+                paginaActual = 1;
+                actualizarTabla(empresas);
+                actualizarPaginacion();
+            } else {
+                showErrorAlert('Error', response.error || 'Error al aplicar filtros');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al aplicar filtros');
+        }
+    });
+}
+
+// Función para limpiar filtros
+function limpiarFiltros() {
+    $('#filtroBusqueda').val('');
+    $('#filtroEstado').val('');
+    $('#filtroTipo').val('');
+    $('#ordenarPor').val('nombre');
+    paginaActual = 1;
+    cargarEmpresas();
+}
+
+// Función para exportar empresas
+function exportarEmpresas() {
+    const busqueda = $('#filtroBusqueda').val();
+    const estado = $('#filtroEstado').val();
+    const tipo = $('#filtroTipo').val();
+    
+    const params = new URLSearchParams({
+        search: busqueda,
+        estado: estado,
+        tipo: tipo
+    });
+    
+    window.open(`/empresa_management/exportar_empresas/?${params}`, '_blank');
+}
+
+// Función para mostrar errores
+function mostrarErrores(errores) {
+    const lista = $('#listaErrores');
+    lista.empty();
+    
+    errores.forEach(function(error) {
+        lista.append(`<li>${error}</li>`);
+    });
+    
+    $('#erroresFormulario').show();
+}
+
+// Funciones de utilidad para alertas
+function showSuccessAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+
+function showErrorAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+</script> 

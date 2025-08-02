@@ -1,0 +1,324 @@
+{% extends 'layout/header.html' %}
+
+{% block title %}Lotes FIFO - {{ producto_talla.producto.articulo }} - {{ producto_talla.talla }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">📦 Lotes FIFO</h2>
+                    <p class="text-muted mb-0">
+                        {{ producto_talla.producto.articulo }} - Talla {{ producto_talla.talla }}
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="crearLoteManual()">
+                        <i class="bx bx-plus"></i> Crear Lote Manual
+                    </button>
+                    <a href="{% url 'verGestionProducto' %}" class="btn btn-secondary">
+                        <i class="bx bx-arrow-back"></i> Volver
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas FIFO -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Stock Sistema</h5>
+                    <h3 class="mb-0">{{ stock_sistema }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Stock FIFO</h5>
+                    <h3 class="mb-0">{{ stock_fifo }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Valor Inventario FIFO</h5>
+                    <h3 class="mb-0">${{ valor_inventario_fifo|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Costo Promedio FIFO</h5>
+                    <h3 class="mb-0">${{ costo_promedio_fifo|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Lotes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">📋 Lotes del Producto</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="tablaLotes">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Fecha Ingreso</th>
+                                    <th>N° Lote</th>
+                                    <th>Cantidad Inicial</th>
+                                    <th>Disponible</th>
+                                    <th>% Consumido</th>
+                                    <th>Costo Unit.</th>
+                                    <th>Precio Venta</th>
+                                    <th>Valor Disponible</th>
+                                    <th>Estado</th>
+                                    <th>DTE Origen</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for lote in lotes %}
+                                <tr class="{% if lote.agotado %}table-secondary{% elif not lote.activo %}table-warning{% endif %}">
+                                    <td>{{ lote.id }}</td>
+                                    <td>{{ lote.fecha_ingreso|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ lote.numero_lote|default:"-" }}</td>
+                                    <td>{{ lote.cantidad_inicial }}</td>
+                                    <td>
+                                        <span class="badge {% if lote.cantidad_disponible > 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                            {{ lote.cantidad_disponible }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar {% if lote.porcentaje_consumido > 80 %}bg-danger{% elif lote.porcentaje_consumido > 50 %}bg-warning{% else %}bg-success{% endif %}" 
+                                                 style="width: {{ lote.porcentaje_consumido }}%">
+                                                {{ lote.porcentaje_consumido|floatformat:1 }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>${{ lote.costo_unitario|floatformat:0 }}</td>
+                                    <td>${{ lote.precio_venta_unitario|floatformat:0 }}</td>
+                                    <td>${{ lote.valor_disponible|floatformat:0 }}</td>
+                                    <td>
+                                        {% if lote.agotado %}
+                                            <span class="badge bg-danger">Agotado</span>
+                                        {% elif not lote.activo %}
+                                            <span class="badge bg-warning">Inactivo</span>
+                                        {% else %}
+                                            <span class="badge bg-success">Activo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ lote.dte.numero_documento|default:"-" }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" onclick="ajustarLote({{ lote.id }})">
+                                                <i class="bx bx-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info" onclick="verDetalleLote({{ lote.id }})">
+                                                <i class="bx bx-info-circle"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="12" class="text-center text-muted">
+                                        <i class="bx bx-package" style="font-size: 3rem;"></i>
+                                        <p class="mt-2">No hay lotes registrados para este producto</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crear Lote Manual -->
+<div class="modal fade" id="modalCrearLote" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Crear Lote Manual</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formCrearLote">
+                <div class="modal-body">
+                    <input type="hidden" name="producto_talla_id" value="{{ producto_talla.id }}">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" name="cantidad" class="form-control" required min="1">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Costo Unitario</label>
+                        <input type="number" name="costo_unitario" class="form-control" required min="0">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Sobreprecio Unitario</label>
+                        <input type="number" name="sobreprecio_unitario" class="form-control" value="0" min="0">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Precio Venta Unitario</label>
+                        <input type="number" name="precio_venta_unitario" class="form-control" required min="0">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Número de Lote (opcional)</label>
+                        <input type="text" name="numero_lote" class="form-control">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Vencimiento (opcional)</label>
+                        <input type="date" name="fecha_vencimiento" class="form-control">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones</label>
+                        <textarea name="observaciones" class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Lote</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ajustar Lote -->
+<div class="modal fade" id="modalAjustarLote" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ajustar Lote</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formAjustarLote">
+                <div class="modal-body">
+                    <input type="hidden" name="lote_id" id="loteIdAjustar">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Cantidad Disponible</label>
+                        <input type="number" name="cantidad_disponible" id="cantidadDisponible" class="form-control" required min="0">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones del Ajuste</label>
+                        <textarea name="observaciones" class="form-control" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">Ajustar Lote</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function crearLoteManual() {
+    $('#modalCrearLote').modal('show');
+}
+
+function ajustarLote(loteId) {
+    // Obtener datos del lote para pre-llenar el formulario
+    $.get(`/app/obtener_lotes_producto/{{ producto_talla.id }}/`, function(data) {
+        if (data.success) {
+            const lote = data.lotes.find(l => l.id === loteId);
+            if (lote) {
+                $('#loteIdAjustar').val(loteId);
+                $('#cantidadDisponible').val(lote.cantidad_disponible);
+                $('#modalAjustarLote').modal('show');
+            }
+        }
+    });
+}
+
+function verDetalleLote(loteId) {
+    // Implementar vista detallada del lote
+    alert('Función en desarrollo');
+}
+
+// Formulario crear lote
+$('#formCrearLote').on('submit', function(e) {
+    e.preventDefault();
+    
+    $.ajax({
+        url: '/app/crear_lote_manual/',
+        type: 'POST',
+        data: $(this).serialize(),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert('Lote Creado', response.mensaje);
+                $('#modalCrearLote').modal('hide');
+                location.reload();
+            } else {
+                showErrorAlert('Error', response.error);
+            }
+        },
+        error: function(xhr) {
+            showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado');
+        }
+    });
+});
+
+// Formulario ajustar lote
+$('#formAjustarLote').on('submit', function(e) {
+    e.preventDefault();
+    
+    const loteId = $('#loteIdAjustar').val();
+    
+    $.ajax({
+        url: `/app/ajustar_lote/${loteId}/`,
+        type: 'POST',
+        data: $(this).serialize(),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert('Lote Ajustado', response.mensaje);
+                $('#modalAjustarLote').modal('hide');
+                location.reload();
+            } else {
+                showErrorAlert('Error', response.error);
+            }
+        },
+        error: function(xhr) {
+            showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado');
+        }
+    });
+});
+
+// Inicializar DataTable
+$(document).ready(function() {
+    $('#tablaLotes').DataTable({
+        language: {
+            url: '/static/lang/es.json'
+        },
+        order: [[1, 'desc']], // Ordenar por fecha de ingreso descendente
+        pageLength: 25
+    });
+});
+</script>
+{% endblock %} 

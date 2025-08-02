@@ -1,0 +1,1382 @@
+{% load static %}
+<!-- /.modal -->
+{% include '../layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include '../layout/menu.html' %}
+
+<style>
+/* Estilos para controles de paginación y búsqueda */
+.pagination-controls {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #dee2e6;
+}
+
+.search-highlight {
+    background-color: #fff3cd;
+    font-weight: bold;
+}
+
+.page-info {
+    min-width: 120px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Mejorar la tabla de recepción */
+#tablaRecepcionProductos {
+    font-size: 0.9rem;
+}
+
+#tablaRecepcionProductos th {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Responsive para controles */
+@media (max-width: 768px) {
+    .pagination-controls .row > div {
+        margin-bottom: 10px;
+    }
+    
+    .pagination-controls .btn-group {
+        width: 100%;
+    }
+    
+    .pagination-controls .btn-group .btn {
+        flex: 1;
+    }
+}
+</style>
+
+<!-- Eliminado overlay custom y CSS -->
+<div id="fullscreenLoader" style="
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    text-align: center;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-3 fw-bold">Cargando información, por favor espera...</p>
+    </div>
+</div>
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="card">
+            <div class="card-header border-0">
+                <div class="row align-items-center gy-3">
+                    <div class="col-xxl-2 col-sm-4">
+                        <div class="input-light">
+                            <label for="anioSeleccionado" class="label">Año</label>
+                            <input type="number" name="anioSeleccionado" id="anioSeleccionado" class="form-control"
+                                placeholder="Ej: 2025" min="2000" max="2100">
+                        </div>
+                    </div>
+
+                    <!--end col-->
+                    <div class="col-xxl-2 col-sm-4 mt-5">
+
+                        <button type="button" class="btn btn-primary w-100" id="btnBusquedaCompra">
+                            <i class="ri-equalizer-fill me-1 align-bottom"></i> Ver Compra
+                        </button>
+
+                    </div>
+                    <!-- Botones a la derecha -->
+                    <div class="col text-end">
+                        <a href="{% url 'verDiagnosticoCompras' %}" class="btn btn-warning me-2" data-bs-toggle="tooltip" title="Diagnóstico de Datos">
+                            <i class="bi bi-search me-1"></i> <span class="d-none d-md-inline">Diagnóstico</span>
+                        </a>
+                        <a href="{% url 'verDashboardCompras' %}" class="btn btn-info me-2" data-bs-toggle="tooltip" title="Dashboard Estratégico">
+                            <i class="bi bi-graph-up me-1"></i> <span class="d-none d-md-inline">Dashboard</span>
+                        </a>
+                        <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalCrearCompra">
+                            <i class="bi bi-plus-lg me-1"></i> Crear Compra
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btnDescargarFormatoCSV" data-bs-toggle="tooltip" title="Descargar formato CSV compra">
+                            <i class="bi bi-download"></i> <span class="d-none d-md-inline">Formato CSV</span>
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="card-body">
+
+                <div class="d-flex justify-content-start mb-3 p-2">
+                    <!-- Eliminar el botón 'Crear Compra' de la sección de acciones -->
+                </div>
+                
+                <!-- Controles de búsqueda y paginación para tabla principal -->
+                <div class="row mb-3 pagination-controls">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchCompras" placeholder="Buscar por nombre, proveedor, responsable, temporada...">
+                            <button class="btn btn-outline-secondary" type="button" id="btnSearchCompras">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary pagination-btn" id="btnPrevPageCompras">
+                                <i class="bi bi-chevron-left"></i> Anterior
+                            </button>
+                            <span class="btn btn-outline-secondary page-info" id="pageInfoCompras">Página 1</span>
+                            <button type="button" class="btn btn-outline-primary pagination-btn" id="btnNextPageCompras">
+                                Siguiente <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive table-card mb-1"
+                    style="min-height: 300px; max-height: 500px; overflow-y: auto;">
+
+                    <table class="table table-nowrap align-middle" id="tablaCompras">
+                        <thead class="text-muted table-light">
+                            <tr class="text-uppercase">
+
+                                <th class="sort" data-sort="id">ID</th>
+                                <th class="sort" data-sort="proveedor">Proveedor</th>
+                                <th class="sort" data-sort="nombre">Nombre</th>
+                                <th class="sort" data-sort="temporada">Temporada</th>
+
+                                <th class="sort" data-sort="fechaIngreso">fechaRecepcion</th>
+                                <th class="sort" data-sort="status">Costo Total</th>
+                                <th class="sort" data-sort="status">Unidades</th>
+                                <th class="sort" data-sort="status">Recepcionado</th>
+                                <th class="sort" data-sort="origen">Responsable</th>
+                                <th class="sort" data-sort="origen">Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody class="list form-check-all" id="tbodyCompras">
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+
+        </div>
+        <!-- Modal Bootstrap -->
+        <div class="modal fade" id="modalCrearCompra" tabindex="-1" aria-labelledby="modalCrearCompraLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <form method="POST" action="{% url 'crear_compra' %}" id="formCrearCompra">
+
+                        {% csrf_token %}
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalCrearCompraLabel">Crear Nueva Compra</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                aria-label="Cerrar"></button>
+                        </div>
+                        <div class="modal-body">
+
+                            <!-- Empresa -->
+                            <div class="mb-3">
+                                <label for="empresa" class="form-label">Empresa</label>
+                                <select class="form-select select2" id="empresa" name="empresa" required>
+                                    <option selected disabled>Seleccione una empresa</option>
+                                    {% for empresa in empresas %}
+                                    <option value="{{ empresa.id }}">{{ empresa.nombre }} - {{ empresa.rut }}</option>
+                                    {% endfor %}
+                                </select>
+
+                            </div>
+
+                            <!-- Nombre -->
+                            <div class="mb-3">
+                                <label for="nombre" class="form-label">Nombre de la Compra</label>
+                                <input type="text" class="form-control" id="nombre" name="nombre"
+                                    placeholder="Ej: Compra Materiales" required>
+                            </div>
+
+                            <!-- Fecha Inicio Temporada -->
+                            <div class="mb-3">
+                                <label for="fechaInicioTemporada" class="form-label">Fecha Inicio Temporada</label>
+                                <input type="date" class="form-control" id="fechaInicioTemporada"
+                                    name="fechaInicioTemporada" required>
+                            </div>
+
+                            <!-- Fecha Término Temporada -->
+                            <div class="mb-3">
+                                <label for="fechaTerminoTemporada" class="form-label">Fecha Término Temporada</label>
+                                <input type="date" class="form-control" id="fechaTerminoTemporada"
+                                    name="fechaTerminoTemporada" required>
+                            </div>
+
+                            <!-- Temporada -->
+                            <div class="mb-3">
+                                <label for="temporada" class="form-label">Temporada</label>
+                                <input type="text" class="form-control" id="temporada" name="temporada"
+                                    placeholder="Ej: Invierno 2025" required>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="submit" class="btn btn-success">Guardar Compra</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal CSV -->
+        <div class="modal fade" id="modalImportarCSV" tabindex="-1" aria-labelledby="modalImportarCSVLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title text-white" id="modalImportarCSVLabel">
+                            Importar Compra mediante CSV
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <input type="hidden" id="globalIDCompra">
+                        <!-- Input de archivo -->
+                        <div class="mb-4">
+                            <label for="archivoCSV" class="form-label fw-bold">
+                                <i class="bi bi-file-earmark-arrow-up me-1"></i>Seleccionar archivo CSV
+                            </label>
+                            <input type="file" class="form-control" id="archivoCSV" accept=".csv,.xlsx">
+                        </div>
+
+                        <div class="d-flex justify-content-end mb-3">
+                            <button class="btn btn-outline-info" id="btnCargarCSV">
+                                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Cargar archivo
+                            </button>
+                        </div>
+
+                        <div class="table-responsive border rounded p-2" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover align-middle mb-0" id="tablaCSVPreview" style="position: relative;">
+                                <thead class="table-light text-center" style="position: sticky; top: 0; z-index: 2;">
+                                    <tr>
+                                        <th>Nombre (Artículo)</th>
+                                        <th>Descripcion</th>
+                                        <th>Atributo 1 (Marca)</th>
+                                        <th>Atributo 2 (Color)</th>
+                                        <th>Atributo 3 (Género)</th>
+                                        <th>Costo C/U</th>
+                                        <th>Precio Sug.</th>
+                                        <th>Stock</th>
+                                        <th>Talla</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-center"></tbody>
+                                <tfoot class="table-secondary fw-bold text-end"
+                                    style="position: sticky; bottom: 0; background-color: #f1f1f1; z-index: 2;">
+                                    <tr>
+                                        <td colspan="7" class="text-end">Totales:</td>
+                                        <td id="totalPares" class="text-center">0</td>
+                                        <td id="totalCosto" class="text-end">
+                                            <i class="bi bi-calculator"></i>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-outline-danger" data-bs-dismiss="modal">
+                            <i class="bi bi-x-circle me-1"></i>Cancelar
+                        </button>
+                        <button type="button" class="btn btn-success" id="btnImportarCSV">
+                            <i class="bi bi-cloud-arrow-up me-1"></i>Importar Datos
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modalRecepcionProductos" tabindex="-1" aria-labelledby="modalRecepcionLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title text-white" id="modalRecepcionLabel">
+                            Recepción de Productos
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                            aria-label="Cerrar"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <input type="hidden" id="globalIDCompraRecepcion">
+                        
+                        <!-- Indicador de carga -->
+                        <div id="recepcionLoader" class="text-center py-3" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Cargando productos...</p>
+                        </div>
+                        
+                        <!-- Controles de búsqueda y paginación -->
+                        <div class="row mb-3 pagination-controls">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="searchRecepcion" placeholder="Buscar por nombre, marca, color, talla...">
+                                    <button class="btn btn-outline-secondary" type="button" id="btnSearchRecepcion">
+                                        <i class="bi bi-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-outline-primary pagination-btn" id="btnPrevPage">
+                                        <i class="bi bi-chevron-left"></i> Anterior
+                                    </button>
+                                    <span class="btn btn-outline-secondary page-info" id="pageInfo">Página 1</span>
+                                    <button type="button" class="btn btn-outline-primary pagination-btn" id="btnNextPage">
+                                        Siguiente <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive border rounded p-2" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-hover align-middle mb-0" id="tablaRecepcionProductos">
+                                <thead class="table-light text-center">
+                                    <tr>
+                                        <th>Artículo</th>
+                                        <th>Descripción</th>
+                                        <th>Marca</th>
+                                        <th>Color</th>
+                                        <th>Género</th>
+                                        <th>Costo</th>
+                                        <th>Precio</th>
+                                        <th>Stock</th>
+                                        <th>Talla</th>
+                                        <th>Recepcionado</th>
+                                        <th>Factura</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-center"></tbody>
+                                <tfoot class="table-secondary fw-bold text-end"
+                                    style="position: sticky; bottom: 0; background-color: #f1f1f1; z-index: 2;">
+                                    <tr>
+                                        <td colspan="8" class="text-end">Totales:</td>
+                                        <td id="totalParesRecepcionados" class="text-center">0</td>
+                                        <td id="totalCostoRecepcionado" class="text-center">$0</td>
+                                    </tr>
+                                </tfoot>
+
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-outline-danger" data-bs-dismiss="modal">
+                            <i class="bi bi-x-circle me-1"></i>Cancelar
+                        </button>
+                        <button type="button" class="btn btn-success" id="btnGuardarRecepcion">
+                            <i class="bi bi-check2-circle me-1"></i>Guardar Recepción
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<div class="modal fade" id="modalProductoManual" tabindex="-1" aria-labelledby="modalProductoManualLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalProductoManualLabel">Agregar Producto Manual</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formProductoManual">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">DTE (Factura/Guía de Compra)</label>
+                            <select class="form-select select2" id="selectDteManual" name="dte_id" required>
+                                <option value="">Seleccione un DTE</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Proveedor</label>
+                            <input type="text" class="form-control" id="proveedorManual" name="proveedor" readonly>
+                        </div>
+                    </div>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" class="form-control" name="nombre" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Descripción</label>
+                            <input type="text" class="form-control" name="descripcion">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Marca</label>
+                            <input type="text" class="form-control" name="atributo1" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Color</label>
+                            <input type="text" class="form-control" name="atributo2" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Género</label>
+                            <input type="text" class="form-control" name="atributo3" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Atributo Extra</label>
+                            <input type="text" class="form-control" name="atributo4">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Costo</label>
+                            <input type="number" class="form-control" name="costo" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Precio sugerido</label>
+                            <input type="number" class="form-control" name="precioSugerido" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Stock</label>
+                            <input type="number" class="form-control" name="stock" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Talla</label>
+                            <input type="text" class="form-control" name="talla" required>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-outline-danger" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-success" form="formProductoManual">Agregar Producto</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+    </div>
+
+</div>
+
+</div>
+<!-- container-fluid -->
+</div>
+{% include '../layout/footer.html' %}
+<script>
+function showGlobalLoader() {
+    $('#fullscreenLoader').fadeIn(100);
+}
+function hideGlobalLoader() {
+    $('#fullscreenLoader').fadeOut(100);
+}
+// Encapsular toda la lógica en un módulo para evitar variables globales
+const GestionCompras = (function() {
+    let compraIdActual = null;
+    let anioActual = new Date().getFullYear();
+    const urls = {
+        crearCompra: '{% url "crear_compra" %}',
+        obtenerCompras: '{% url "obtener_compras" %}',
+        eliminarCompra: '/app/eliminar_compra/',
+        importarCSV: '/app/importar_csv_compra/',
+        agregarProductoManual: '/app/agregar_producto_manual/',
+        guardarRecepcion: '/app/guardar_recepcion/',
+        recepcionarCompra: '/app/compra/recepcionar/'
+    };
+    // Centralizar AJAX POST
+    function ajaxPost(url, data, success, error) {
+        $.ajax({
+            url: url,
+            method: 'POST',
+            data: data,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: success,
+            error: error || function() {
+                Swal.fire('Error', 'Ocurrió un error inesperado', 'error');
+            }
+        });
+    }
+    // Centralizar AJAX fetch (JSON)
+    function ajaxFetch(url, payload, success, error) {
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(success)
+        .catch(error || function() {
+            Swal.fire('Error', 'Ocurrió un error inesperado', 'error');
+        });
+    }
+    // Inicializar todos los select2
+    function initSelect2() {
+        $('.select2').select2({
+            width: '100%',
+            dropdownParent: $('.modal:visible').length ? $('.modal:visible') : $(document.body),
+            placeholder: 'Seleccionar...',
+            allowClear: true,
+            language: { noResults: function() { return "Sin resultados"; } }
+        });
+    }
+    // Unificar feedback
+    function showSuccess(msg) {
+        Swal.fire({ icon: 'success', title: msg, showConfirmButton: false, timer: 2000 });
+    }
+    function showError(msg) {
+        Swal.fire({ icon: 'error', title: 'Error', text: msg });
+    }
+    function showInfo(msg) {
+        Swal.fire({ icon: 'info', title: msg });
+    }
+    // Mostrar overlay
+    function showLoading() { $('#fullscreenLoader').fadeIn(100); }
+    function hideLoading() { $('#fullscreenLoader').fadeOut(100); }
+    // Validar y mostrar errores de CSV
+    function validarCSV(lines) {
+        const errores = [];
+        const datos = [];
+        lines.slice(1).forEach((line, idx) => {
+            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = line.split(',').map(v => v.trim());
+            if (!nombre || !descripcion || !marca || !color || !genero || isNaN(costoStr) || isNaN(precioStr) || isNaN(stockStr) || !talla) {
+                errores.push(`Fila ${idx+2}: Datos incompletos o inválidos.`);
+                return;
+            }
+            datos.push({ nombre, descripcion, marca, color, genero, costo: parseFloat(costoStr), precio: parseFloat(precioStr), stock: parseInt(stockStr), talla });
+        });
+        return { errores, datos };
+    }
+    // Tooltips
+    function initTooltips() {
+        $('[data-bs-toggle="tooltip"]').tooltip();
+    }
+    // Cargar año actual por defecto
+    $(document).ready(function() {
+        $('#anioSeleccionado').val(anioActual);
+        
+        // Cargar automáticamente las compras del año actual
+        cargarComprasPorAnio(anioActual, 1, '');
+
+        // Cargar DTEs disponibles al abrir el modal de producto manual
+        $('#modalProductoManual').on('show.bs.modal', function() {
+            cargarDtesDisponiblesManual();
+            $('#proveedorManual').val('');
+            $('#selectDteManual').val('').trigger('change');
+        });
+
+        // Al seleccionar un DTE, mostrar el proveedor asociado
+        $('#selectDteManual').on('change', function() {
+            const dteId = $(this).val();
+            if (!dteId) {
+                $('#proveedorManual').val('');
+                return;
+            }
+            // Buscar proveedor del DTE seleccionado
+            const option = $(this).find('option:selected');
+            const proveedor = option.data('proveedor') || '';
+            $('#proveedorManual').val(proveedor);
+        });
+    });
+    // ... (el resto de la lógica de eventos y funciones, reemplazando alert() por showError/showSuccess/showInfo, usando showLoading/hideLoading, y encapsulando variables y funciones dentro de GestionCompras) ...
+    // Inicializar select2 y tooltips en cada modal abierto
+    $(document).on('shown.bs.modal', '.modal', function() {
+        initSelect2();
+        initTooltips();
+    });
+    // Exportar funciones si necesitas usarlas fuera
+    return {
+        showLoading, hideLoading, showSuccess, showError, showInfo, initSelect2, initTooltips, urls
+    };
+})();
+
+    $(document).on('click', '.agregar-producto-manual', function () {
+        // El modal ahora funciona independientemente de compras
+    });
+
+    // Variables para paginación y búsqueda
+    let currentPage = 1;
+    let currentSearch = '';
+    let currentCompraId = null;
+    let paginationInfo = null;
+
+    // Variables para paginación de tabla principal
+    let currentPageCompras = 1;
+    let currentSearchCompras = '';
+    let paginationInfoCompras = null;
+
+    let currentProveedorId = null;
+
+    $(document).on('click', '.gestionar-compra', function (e) {
+        e.preventDefault();
+
+        const compraId = $(this).data('id');
+        currentCompraId = compraId;
+        currentPage = 1;
+        currentSearch = '';
+        
+        $('#globalIDCompraRecepcion').val(compraId);
+        $('#searchRecepcion').val('');
+        $('#modalRecepcionProductos').modal('show');
+        $('#tablaRecepcionProductos tbody').empty();
+        
+        cargarDatosRecepcion(compraId, 1, '');
+    });
+
+    function cargarDatosRecepcion(compraId, page, search) {
+        $('#recepcionLoader').show();
+        $('.pagination-controls').hide();
+        $('#tablaRecepcionProductos').hide();
+        
+        $.ajax({
+            url: GestionCompras.urls.recepcionarCompra,
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: JSON.stringify({ 
+                compra_id: compraId,
+                page: page,
+                page_size: 50,
+                search: search
+            }),
+            success: function (data) {
+                console.log('Respuesta del servidor:', data);
+                const tbody = $('#tablaRecepcionProductos tbody');
+                let totalRecepcionados = 0;
+                
+                // Guardar proveedor_id global para el select2
+                currentProveedorId = data.proveedor_id;
+                
+                // Actualizar información de paginación
+                paginationInfo = data.pagination;
+                currentPage = data.pagination.page;
+                currentSearch = data.search || '';
+                
+                // Actualizar controles de paginación
+                $('#pageInfo').text(`Página ${data.pagination.page} de ${data.pagination.total_pages}`);
+                $('#btnPrevPage').prop('disabled', !data.pagination.has_previous);
+                $('#btnNextPage').prop('disabled', !data.pagination.has_next);
+                
+                // Limpiar tabla
+                tbody.empty();
+                
+                if (data.items.length === 0) {
+                    tbody.append('<tr><td colspan="11" class="text-center text-muted">No hay productos para recepcionar</td></tr>');
+                } else {
+                    data.items.forEach(item => {
+                        // Generar opciones de factura para datalist
+                        const datalistId = `facturas-list-${item.compra_producto_talla_id || ''}`;
+                        const facturaOptions = (item.facturas || []).map(f => 
+                            `<option value="${f.numero}" data-id="${f.id}"></option>`
+                        ).join('');
+                        let selectedFacturaValue = '';
+                        if (item.factura_id) {
+                            // Busca el número de la factura asociada
+                            const asociada = (item.facturas || []).find(f => f.id === item.factura_id);
+                            selectedFacturaValue = asociada ? asociada.numero : `Factura asociada: ${item.factura_id}`;
+                        }
+                        const fila = `
+<tr>
+    <td>${resaltarBusqueda(item.nombre || '-', search)}</td>
+    <td>${resaltarBusqueda(item.descripcion || '-', search)}</td>
+    <td>${resaltarBusqueda(item.marca || '-', search)}</td>
+    <td>${resaltarBusqueda(item.color || '-', search)}</td>
+    <td>${resaltarBusqueda(item.genero || '-', search)}</td>
+    <td>$${(item.costo || 0).toLocaleString()}</td>
+    <td>$${(item.precio || 0).toLocaleString()}</td>
+    <td>${item.stock || 0}</td>
+    <td>${resaltarBusqueda(item.talla || '-', search)}</td>
+    <td>
+        <input type="number" class="form-control form-control-sm recepcionado-input"
+               data-id="${item.compra_producto_talla_id || ''}"
+               value="${item.recepcionado || ''}">
+    </td>
+    <td>
+        <input type="text" class="form-control form-control-sm factura-datalist-input" 
+               list="${datalistId}" 
+               data-id="${item.compra_producto_talla_id || ''}" 
+               value="${selectedFacturaValue}">
+        <datalist id="${datalistId}">
+            ${facturaOptions}
+        </datalist>
+        <div class="mt-1 small text-start">
+            ${(item.facturas_asociadas || []).map(f => `
+                <span class="badge bg-secondary">${f.numero} / ${f.total}</span>
+            `).join(' ')}
+        </div>
+    </td>
+</tr>`;
+                        tbody.append(fila);
+                        if (item.recepcionado) totalRecepcionados += parseInt(item.recepcionado) || 0;
+                    });
+                }
+
+                $('#totalParesRecepcionados').text(totalRecepcionados);
+
+                // Eliminar toda la inicialización de select2
+                // $('.factura-select').each(function() { ... });
+
+                // Mostrar contenido
+                $('#recepcionLoader').hide();
+                $('.pagination-controls').show();
+                $('#tablaRecepcionProductos').show();
+            },
+            error: function (xhr) {
+                console.error('Error en la petición:', xhr);
+                $('#recepcionLoader').hide();
+                $('.pagination-controls').show();
+                $('#tablaRecepcionProductos').show();
+                showError('Error al cargar los productos para recepción. Revisa la consola para más detalles.');
+            }
+        });
+    }
+
+    // Función para resaltar términos de búsqueda
+    function resaltarBusqueda(texto, busqueda) {
+        if (!busqueda || !texto) return texto;
+        
+        const regex = new RegExp(`(${busqueda.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return texto.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    // Eventos para paginación
+    $('#btnPrevPage').on('click', function() {
+        if (paginationInfo && paginationInfo.has_previous) {
+            cargarDatosRecepcion(currentCompraId, currentPage - 1, currentSearch);
+        }
+    });
+
+    $('#btnNextPage').on('click', function() {
+        if (paginationInfo && paginationInfo.has_next) {
+            cargarDatosRecepcion(currentCompraId, currentPage + 1, currentSearch);
+        }
+    });
+
+    // Evento para búsqueda
+    $('#btnSearchRecepcion').on('click', function() {
+        const search = $('#searchRecepcion').val().trim();
+        currentSearch = search;
+        currentPage = 1;
+        cargarDatosRecepcion(currentCompraId, 1, search);
+    });
+
+    // Búsqueda al presionar Enter
+    $('#searchRecepcion').on('keypress', function(e) {
+        if (e.which === 13) {
+            $('#btnSearchRecepcion').click();
+        }
+    });
+
+// Variable global para todos los registros cargados
+let todosLosRegistrosCSV = [];
+$('#btnCargarCSV').on('click', function () {
+    const archivo = document.getElementById('archivoCSV').files[0];
+    if (!archivo) return showError('Seleccioná un archivo Excel o CSV.');
+
+    const tbody = $('#tablaCSVPreview tbody');
+    tbody.empty();
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        let data, rows = [];
+        try {
+            if (archivo.name.endsWith('.xlsx')) {
+                if (typeof XLSX === 'undefined') {
+                    showError('No se encontró la librería XLSX. Asegúrate de que está cargada.');
+                    return;
+                }
+                console.log('Leyendo archivo Excel:', archivo.name);
+                const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                console.log('Datos leídos:', data);
+                rows = data.slice(1); // Omitir encabezado
+            } else {
+                data = e.target.result.trim().split('\n').map(line => line.split(','));
+                rows = data.slice(1);
+            }
+        } catch (err) {
+            showError('Error al leer el archivo: ' + err.message);
+            return;
+        }
+        // Guardar todos los registros en variable global
+        todosLosRegistrosCSV = rows.filter(cols => cols.length >= 9);
+
+        // Calcular totales sobre todos los registros
+        let totalPares = 0;
+        let totalCosto = 0;
+        todosLosRegistrosCSV.forEach((cols) => {
+            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+            const costo = parseFloat((costoStr || '').toString().replace(/\./g, '').replace(',', '.'));
+            const stock = parseInt((stockStr || '').toString().replace(/\./g, ''));
+            const precio = parseFloat((precioStr || '').toString().replace(/\./g, '').replace(',', '.'));
+            if (!nombre || !descripcion || !marca || !color || !genero || isNaN(costo) || isNaN(precio) || isNaN(stock) || !talla) return;
+            totalPares += stock;
+            totalCosto += costo * stock;
+        });
+        $('#totalPares').text(totalPares);
+        $('#totalCosto').html(`$${totalCosto.toLocaleString()} <i class='bi bi-calculator'></i>`);
+
+        // Mostrar solo la vista previa
+        const MAX_PREVIEW = 500;
+        todosLosRegistrosCSV.slice(0, MAX_PREVIEW).forEach((cols) => {
+            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+            const costo = parseFloat(costoStr.replace(/\./g, '').replace(',', '.'));
+            const stock = parseInt(stockStr.replace(/\./g, ''));
+            const row = `
+                <tr>
+                    <td>${nombre}</td>
+                    <td>${descripcion}</td>
+                    <td>${marca}</td>
+                    <td>${color}</td>
+                    <td>${genero}</td>
+                    <td>$${costo.toLocaleString()}</td>
+                    <td>$${parseFloat(precioStr.replace(/\./g, '').replace(',', '.')).toLocaleString()}</td>
+                    <td>${stock}</td>
+                    <td>${talla}</td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+        if (todosLosRegistrosCSV.length > MAX_PREVIEW) {
+            tbody.append(`<tr><td colspan="9" class="text-center text-danger fw-bold">Mostrando solo las primeras ${MAX_PREVIEW} filas de ${todosLosRegistrosCSV.length}. El archivo completo será procesado al importar.</td></tr>`);
+        }
+    };
+    if (archivo.name.endsWith('.xlsx')) {
+        reader.readAsArrayBuffer(archivo);
+    } else {
+        reader.readAsText(archivo);
+    }
+});
+
+
+        $('#formCrearCompra').on('submit', function (e) {
+            e.preventDefault(); // Evita que se envíe normalmente
+
+            const form = $(this);
+            const url = form.attr('action');
+            const data = form.serialize();
+
+            const fechaInicio = $('#fechaInicioTemporada').val();
+            const fechaTermino = $('#fechaTerminoTemporada').val();
+
+            if (!fechaInicio || !fechaTermino || new Date(fechaInicio) > new Date(fechaTermino)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Fechas inválidas',
+                    text: 'La fecha de inicio debe ser anterior a la de término.'
+                });
+                return;
+            }
+
+            ajaxPost(url, data, function (response) {
+                showSuccess('Compra creada correctamente');
+
+                $('#modalCrearCompra').modal('hide');
+                form[0].reset();
+                // cargarComprasPorAnio(anioActual); // si lo querés refrescar
+            }, function (xhr) {
+                showError('No se pudo crear la compra. Revisa los datos.');
+            });
+        });
+
+   
+
+
+    function cargarComprasPorAnio(anio, page = 1, search = '') {
+        const startTime = performance.now();
+        showGlobalLoader();
+        
+        // Mostrar mensaje de carga específico
+        $('#tbodyCompras').html('<tr><td colspan="10" class="text-center"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando compras del año ' + anio + '...</td></tr>');
+        
+        $.ajax({
+            url: '{% url "obtener_compras" %}',
+            method: 'GET',
+            data: { 
+                anio: anio,
+                page: page,
+                page_size: 20,
+                search: search
+            },
+            success: function (response) {
+                const endTime = performance.now();
+                const loadTime = ((endTime - startTime) / 1000).toFixed(2);
+                
+                const tbody = $('#tbodyCompras');
+                tbody.empty(); // Limpiar la tabla
+
+                if (response.success) {
+                    // Actualizar información de paginación
+                    paginationInfoCompras = response.pagination;
+                    currentPageCompras = response.pagination.page;
+                    currentSearchCompras = response.search || '';
+                    
+                    // Actualizar controles de paginación
+                    $('#pageInfoCompras').text(`Página ${response.pagination.page} de ${response.pagination.total_pages}`);
+                    $('#btnPrevPageCompras').prop('disabled', !response.pagination.has_previous);
+                    $('#btnNextPageCompras').prop('disabled', !response.pagination.has_next);
+                    
+                    if (response.compras.length === 0) {
+                        tbody.append('<tr><td colspan="10" class="text-center text-muted">No hay compras para el año ' + anio + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
+                    } else {
+                        // Mostrar información de rendimiento
+                        console.log(`✅ Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
+                        
+                        response.compras.forEach(function (compra) {
+                            const fila = `
+<tr>
+    <td class="text-nowrap">${compra.id}</td>
+    <td class="text-nowrap">${resaltarBusquedaCompras(compra.proveedor ?? '-', search)}</td>
+    <td class="text-nowrap">${resaltarBusquedaCompras(compra.nombre, search)}</td>
+   <td class="text-nowrap">
+    ${resaltarBusquedaCompras(compra.temporada, search)}
+    <br>
+    <span class="badge ${compra.dias_temporada > 30 ? 'bg-success' : (compra.dias_temporada > 0 ? 'bg-warning text-dark' : 'bg-danger')}">
+        ${compra.dias_temporada > 0 ? compra.dias_temporada + ' días restantes' : 'Finalizada'}
+    </span>
+</td>
+
+    <td class="text-nowrap">${compra.fecha}</td>
+    <td class="text-nowrap">$${compra.costo_total.toLocaleString()}</td>
+    <td class="text-nowrap">${compra.unidades}</td>
+    <td class="text-nowrap">
+        ${compra.recepcionado}
+        ${compra.unidades == 0 ? '<span class="badge bg-danger ms-1">Falta Compra</span>' : (compra.recepcionado >= compra.unidades ? '<span class="badge bg-success ms-1">Completado</span>' : '<span class="badge bg-warning text-dark ms-1">Pendiente</span>')}
+    </td>
+    <td class="text-nowrap">${resaltarBusquedaCompras(compra.responsable, search)}</td>
+   <td class="text-nowrap">
+    <div class="dropdown">
+        <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false">
+            Acciones
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+                <a class="dropdown-item text-primary" href="#" data-bs-toggle="modal" data-bs-target="#modalImportarCSV" data-id="${compra.id}">
+                    <i class="bi bi-upload me-1"></i> Cargar CSV
+                </a>
+            </li>
+              <li>
+                <a class="dropdown-item text-info agregar-producto-manual" href="#" data-id="${compra.id}" data-bs-toggle="modal" data-bs-target="#modalProductoManual">
+                    <i class="bi bi-plus-square me-1"></i> Agregar Producto Manual
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item text-success gestionar-compra" href="#" data-id="${compra.id}">
+                    <i class="bi bi-pencil-square me-1"></i> Gestionar Compra
+                </a>
+            </li>
+          
+            <li>
+                <a class="dropdown-item text-danger eliminar-compra" href="#" data-id="${compra.id}">
+                    <i class="bi bi-trash me-1"></i> Eliminar
+                </a>
+            </li>
+        </ul>
+    </div>
+</td>
+
+</tr>`;
+                            tbody.append(fila);
+                        });
+                        
+                        // Mostrar notificación de éxito con tiempo de carga
+                        if (loadTime > 2) {
+                            showInfo(`Compras cargadas en ${loadTime}s - ${response.compras.length} de ${response.pagination.total_count} compras encontradas`);
+                        }
+                    }
+                } else {
+                    showError('Error: ' + response.error);
+                }
+                hideGlobalLoader();
+            },
+            error: function (xhr, status, error) {
+                const endTime = performance.now();
+                const loadTime = ((endTime - startTime) / 1000).toFixed(2);
+                
+                hideGlobalLoader();
+                console.error(`❌ Error al cargar compras en ${loadTime}s:`, xhr.responseText);
+                showError('Error al cargar las compras. Revisa la consola para más detalles.');
+            }
+        });
+    }
+
+    // Función para resaltar términos de búsqueda en tabla principal
+    function resaltarBusquedaCompras(texto, busqueda) {
+        if (!busqueda || !texto) return texto;
+        
+        const regex = new RegExp(`(${busqueda.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return texto.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    $('#btnBusquedaCompra').on('click', function () {
+        const anioSeleccionado = $('#anioSeleccionado').val();
+
+        if (!anioSeleccionado || isNaN(anioSeleccionado)) {
+            showError('Por favor, ingresá un año válido.');
+            return;
+        }
+
+        // Resetear paginación y búsqueda al cambiar año
+        currentPageCompras = 1;
+        currentSearchCompras = '';
+        $('#searchCompras').val('');
+        
+        cargarComprasPorAnio(anioSeleccionado, 1, '');
+    });
+
+    // Eventos para paginación de tabla principal
+    $('#btnPrevPageCompras').on('click', function() {
+        if (paginationInfoCompras && paginationInfoCompras.has_previous) {
+            const anioSeleccionado = $('#anioSeleccionado').val();
+            cargarComprasPorAnio(anioSeleccionado, currentPageCompras - 1, currentSearchCompras);
+        }
+    });
+
+    $('#btnNextPageCompras').on('click', function() {
+        if (paginationInfoCompras && paginationInfoCompras.has_next) {
+            const anioSeleccionado = $('#anioSeleccionado').val();
+            cargarComprasPorAnio(anioSeleccionado, currentPageCompras + 1, currentSearchCompras);
+        }
+    });
+
+    // Evento para búsqueda en tabla principal
+    $('#btnSearchCompras').on('click', function() {
+        const search = $('#searchCompras').val().trim();
+        const anioSeleccionado = $('#anioSeleccionado').val();
+        
+        if (!anioSeleccionado || isNaN(anioSeleccionado)) {
+            showError('Por favor, ingresá un año válido.');
+            return;
+        }
+        
+        currentSearchCompras = search;
+        currentPageCompras = 1;
+        cargarComprasPorAnio(anioSeleccionado, 1, search);
+    });
+
+    // Búsqueda al presionar Enter en tabla principal
+    $('#searchCompras').on('keypress', function(e) {
+        if (e.which === 13) {
+            $('#btnSearchCompras').click();
+        }
+    });
+
+    $(document).on('click', '.eliminar-compra', function (e) {
+        e.preventDefault();
+        const compraId = $(this).data('id');
+
+        Swal.fire({
+            title: '¿Estás seguro?',
+            text: "Esta acción no se puede deshacer.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: GestionCompras.urls.eliminarCompra,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ compra_id: compraId }),
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    success: function(data) {
+                        if (data.success) {
+                            Swal.fire('Eliminada', 'La compra fue eliminada correctamente.', 'success');
+                            cargarComprasPorAnio(anioActual);
+                        } else {
+                            Swal.fire('Error', 'No se pudo eliminar la compra.', 'error');
+                        }
+                    },
+                    error: function(xhr) {
+                        Swal.fire('Error', 'Algo salió mal.', 'error');
+                    }
+                });
+            }
+        });
+    });
+
+    let compraIdActual = null;
+
+    // Captura el ID de la compra cuando se abre el modal
+    $('#modalImportarCSV').on('show.bs.modal', function (event) {
+        const button = $(event.relatedTarget);
+        compraIdActual = button.data('id');
+
+        $('#globalIDCompra').val(compraIdActual);
+        $('#archivoCSV').val('');
+        $('#tablaCSVPreview tbody').empty();
+        $('#totalPares').text('0');
+        $('#totalCosto').text('$0');
+    });
+
+
+    // Accionar la importación (lógica de backend pendiente)
+
+    $('#btnImportarCSV').on('click', function () {
+        showGlobalLoader();
+        const filas = todosLosRegistrosCSV.map(cols => {
+            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+            return {
+                nombre,
+                descripcion,
+                atributo1: marca,
+                atributo2: color,
+                atributo3: genero,
+                costo: parseFloat((costoStr || '').toString().replace(/\./g, '').replace(',', '.')),
+                precioSugerido: parseFloat((precioStr || '').toString().replace(/\./g, '').replace(',', '.')),
+                stock: parseInt((stockStr || '').toString().replace(/\./g, '')),
+                talla
+            };
+        });
+
+        if (filas.length === 0) {
+            showError('No hay datos para importar.');
+            return;
+        }
+
+        $.ajax({
+            url: GestionCompras.urls.importarCSV || '/app/importar_csv_compra/',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ compra_id: $("#globalIDCompra").val(), filas: filas }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(data) {
+                if (data.success) {
+                    hideGlobalLoader();
+                    showSuccess('Importación exitosa.');
+                    cargarComprasPorAnio(anioActual);
+                    $('#modalImportarCSV').modal('hide');
+                } else {
+                    showError('Error al importar: ' + (data.error || 'Error desconocido.'));
+                }
+            },
+            error: function(xhr) {
+                console.error(xhr);
+                showError('Error en la petición.');
+            }
+        });
+    });
+
+
+    function recalcularTotalesRecepcion() {
+        let totalUnidades = 0;
+        let totalCosto = 0;
+
+        $('#tablaRecepcionProductos tbody tr').each(function () {
+            const $row = $(this);
+            const unidades = parseInt($row.find('.recepcionado-input').val()) || 0;
+            const costo = parseFloat($row.find('td').eq(5).text().replace(/[^\d.-]/g, '')) || 0;
+
+            totalUnidades += unidades;
+            totalCosto += unidades * costo;
+        });
+
+        $('#totalParesRecepcionados').text(totalUnidades);
+        $('#totalCostoRecepcionado').text(`$${totalCosto.toLocaleString()}`);
+    }
+    $(document).on('input', '.recepcionado-input', function () {
+        recalcularTotalesRecepcion();
+    });
+
+    $('#btnGuardarRecepcion').on('click', function () {
+        const datos = [];
+        let errorFactura = false;
+
+        $('#tablaRecepcionProductos tbody tr').each(function () {
+            const $row = $(this);
+            const cantidad = parseInt($row.find('.recepcionado-input').val()) || 0;
+            const compraTallaId = $row.find('.recepcionado-input').data('id');
+            const facturaInput = $row.find('.factura-datalist-input');
+            const facturaNumero = (facturaInput.val() || '').trim();
+            let facturaId = null;
+            if (facturaNumero) {
+                const datalistId = facturaInput.attr('list');
+                const $datalist = $('#' + datalistId);
+                // Buscar opción ignorando espacios y mayúsculas
+                $datalist.find('option').each(function () {
+                    if (
+                        ($(this).val() || '').replace(/\s+/g, '').toLowerCase() === facturaNumero.replace(/\s+/g, '').toLowerCase()
+                    ) {
+                        facturaId = $(this).data('id') || null;
+                    }
+                });
+                if (!facturaId) {
+                    errorFactura = true;
+                    facturaInput.addClass('is-invalid');
+                } else {
+                    facturaInput.removeClass('is-invalid');
+                }
+            } else {
+                facturaInput.removeClass('is-invalid');
+            }
+            if (cantidad > 0) {
+                datos.push({
+                    compra_producto_talla_id: compraTallaId,
+                    recepcionado: cantidad,
+                    factura_id: facturaId
+                });
+            }
+        });
+        if (errorFactura) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Factura inválida',
+                text: 'Debes seleccionar una factura válida de la lista para cada producto.'
+            });
+            return;
+        }
+
+            showGlobalLoader();
+
+            $.ajax({
+                url: GestionCompras.urls.guardarRecepcion,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ compra_id: $('#globalIDCompraRecepcion').val(), recepciones: datos }),
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(data) {
+                    hideGlobalLoader();
+                    if (data.success) {
+                        Swal.fire('Recepción guardada', '', 'success');
+                        $('#modalRecepcionProductos').modal('hide');
+                        cargarComprasPorAnio(anioActual);
+                    } else {
+                        Swal.fire('Error', data.error || 'No se pudo guardar.', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    hideGlobalLoader();
+                    Swal.fire('Error', 'Error inesperado', 'error');
+                    console.error(xhr);
+                }
+            });
+        });
+    $('#formProductoManual').on('submit', function (e) {
+        e.preventDefault();
+
+        const form = $(this);
+        const data = form.serialize();
+
+        ajaxPost(GestionCompras.urls.agregarProductoManual, data, function (res) {
+            if (res.success) {
+                showSuccess('Producto ingresado correctamente');
+                $('#modalProductoManual').modal('hide');
+                form[0].reset();
+                // O refrescar tabla si querés
+            } else {
+                showError(res.error || 'No se pudo guardar.');
+            }
+        }, function (err) {
+            showError('Algo salió mal en el servidor');
+        });
+    });
+
+    // Validar DTE obligatorio al guardar producto manual
+    $('#formProductoManual').on('submit', function(e) {
+        if (!$('#selectDteManual').val()) {
+            e.preventDefault();
+            Swal.fire({
+                icon: 'error',
+                title: 'Campos incompletos',
+                text: 'Debes seleccionar un DTE para asociar el producto.'
+            });
+            return false;
+        }
+    });
+
+    // Descargar formato CSV de compra
+    $(document).on('click', '#btnDescargarFormatoCSV', function() {
+        // Generar el contenido del Excel de ejemplo
+        const wb = XLSX.utils.book_new();
+        const ws_data = [
+            [
+                'Nombre (Artículo)',
+                'Descripcion',
+                'Atributo 1 (Marca)',
+                'Atributo 2 (Color)',
+                'Atributo 3 (Género)',
+                'Costo C/U',
+                'Precio Sug.',
+                'Stock',
+                'Talla'
+            ],
+            [
+                'Ejemplo Producto',
+                'Descripción ejemplo',
+                'MarcaX',
+                'Rojo',
+                'Hombre',
+                10000,
+                12000,
+                5,
+                42
+            ]
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        XLSX.utils.book_append_sheet(wb, ws, 'FormatoCompra');
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'formato_compra.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    function cargarDtesDisponiblesManual() {
+        $.get('/app/facturas_pendientes/', function(data) {
+            const select = $('#selectDteManual');
+            select.empty().append('<option value="">Seleccione un DTE</option>');
+            data.forEach(function(dte) {
+                // dte ahora tiene: id, text, proveedor_nombre
+                const texto = dte.proveedor_nombre ? 
+                    `${dte.text} - ${dte.proveedor_nombre}` : 
+                    dte.text;
+                select.append(`<option value="${dte.id}" data-proveedor="${dte.proveedor_nombre || ''}">${texto}</option>`);
+            });
+            select.trigger('change.select2');
+        });
+    }
+
+</script>

@@ -1,0 +1,27 @@
+Bienvenido a Olagreetings - Tus Credenciales de Acceso
+
+Hola {{ usuario.first_name }} {{ usuario.last_name }},
+
+Te damos la bienvenida a Olagreetings. Tu cuenta ha sido creada exitosamente y aquí tienes tus credenciales de acceso:
+
+URL del Sistema: {{ request.scheme }}://{{ request.get_host }}
+Nombre de Usuario: {{ usuario.username }}
+Contraseña Temporal: {{ password }}
+
+⚠️ IMPORTANTE: Esta es una contraseña temporal. Te recomendamos cambiarla inmediatamente después de tu primer acceso por motivos de seguridad.
+
+🔒 Consejos de Seguridad:
+- Cambia tu contraseña en tu primer acceso
+- Usa una contraseña fuerte (mínimo 8 caracteres, incluyendo mayúsculas, minúsculas, números y símbolos)
+- No compartas tus credenciales con nadie
+- Cierra sesión cuando termines de usar el sistema
+- Si sospechas que tu cuenta ha sido comprometida, contacta inmediatamente al administrador
+
+Si tienes alguna pregunta o necesitas ayuda, no dudes en contactar al equipo de soporte.
+
+¡Bienvenido a Olagreetings!
+
+Fecha de creación: {{ fecha }}
+Este es un correo automático, por favor no respondas a este mensaje.
+
+© {{ fecha|slice:":4" }} Olagreetings. Todos los derechos reservados. 

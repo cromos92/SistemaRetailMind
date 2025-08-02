@@ -1,0 +1,816 @@
+{% load static %}
+{% load humanize %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+{% include 'layout/footer.html' %}
+
+<style>
+.dashboard-card {
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-2px);
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.trend-indicator {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+}
+
+.trend-positive { background-color: #d4edda; color: #155724; }
+.trend-negative { background-color: #f8d7da; color: #721c24; }
+.trend-neutral { background-color: #e2e3e5; color: #383d41; }
+
+.chart-container {
+    height: 300px;
+    position: relative;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.table-responsive {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.product-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-active { background-color: #d4edda; color: #155724; }
+.status-inactive { background-color: #f8d7da; color: #721c24; }
+.status-pending { background-color: #fff3cd; color: #856404; }
+
+.stock-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.stock-high { background-color: #d4edda; color: #155724; }
+.stock-medium { background-color: #fff3cd; color: #856404; }
+.stock-low { background-color: #f8d7da; color: #721c24; }
+.stock-out { background-color: #e2e3e5; color: #6c757d; }
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+            
+            <!-- ========== HEADER Y TÍTULO ========== -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-1">
+                                <i class="bi bi-box-seam text-primary me-2"></i>
+                                Dashboard de Productos
+                            </h2>
+                            <p class="text-muted mb-0">Análisis completo del catálogo de productos y rendimiento</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success" onclick="exportarReporteProductos()">
+                                <i class="bi bi-download me-1"></i>Exportar
+                            </button>
+                            <button class="btn btn-primary" onclick="actualizarDashboard()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                            </button>
+                            <a href="{% url 'verGestionProducto' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-back me-1"></i>Gestión Productos
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== MÉTRICAS PRINCIPALES ========== -->
+            <div class="kpi-grid">
+                <!-- Total de Productos -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-primary" id="totalProductos">0</div>
+                        <div class="metric-label">Total de Productos</div>
+                        <div class="trend-indicator trend-positive mt-2" id="trendTotal">
+                            <i class="bi bi-arrow-up"></i> +12.5%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Productos Activos -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-success" id="productosActivos">0</div>
+                        <div class="metric-label">Productos Activos</div>
+                        <div class="trend-indicator trend-positive mt-2" id="trendActivos">
+                            <i class="bi bi-arrow-up"></i> +8.3%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Productos con Stock -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-info" id="productosConStock">0</div>
+                        <div class="metric-label">Con Stock Disponible</div>
+                        <div class="trend-indicator trend-neutral mt-2" id="trendStock">
+                            <i class="bi bi-dash"></i> 0%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Productos Agotados -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-warning" id="productosAgotados">0</div>
+                        <div class="metric-label">Productos Agotados</div>
+                        <div class="trend-indicator trend-negative mt-2" id="trendAgotados">
+                            <i class="bi bi-arrow-down"></i> -5.2%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Valor Total Inventario -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-primary" id="valorTotalInventario">$0</div>
+                        <div class="metric-label">Valor Total Inventario</div>
+                        <div class="trend-indicator trend-positive mt-2" id="trendValor">
+                            <i class="bi bi-arrow-up"></i> +15.7%
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Productos Nuevos (30 días) -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-success" id="productosNuevos">0</div>
+                        <div class="metric-label">Nuevos (30 días)</div>
+                        <div class="trend-indicator trend-positive mt-2" id="trendNuevos">
+                            <i class="bi bi-arrow-up"></i> +22.1%
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== FILTROS AVANZADOS ========== -->
+            <div class="filter-section">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Categoría</label>
+                        <select class="form-select" id="filtroCategoria">
+                            <option value="">Todas las categorías</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" id="filtroEstado">
+                            <option value="">Todos los estados</option>
+                            <option value="activo">Activo</option>
+                            <option value="inactivo">Inactivo</option>
+                            <option value="pendiente">Pendiente</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Stock</label>
+                        <select class="form-select" id="filtroStock">
+                            <option value="">Todos</option>
+                            <option value="alto">Stock Alto (>50)</option>
+                            <option value="medio">Stock Medio (10-50)</option>
+                            <option value="bajo">Stock Bajo (<10)</option>
+                            <option value="agotado">Sin Stock</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Ordenar por</label>
+                        <select class="form-select" id="ordenarPor">
+                            <option value="nombre">Nombre (A-Z)</option>
+                            <option value="stock">Stock (Mayor)</option>
+                            <option value="valor">Valor (Mayor)</option>
+                            <option value="fecha">Fecha (Reciente)</option>
+                            <option value="categoria">Categoría</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="btn btn-primary btn-sm" id="btnAplicarFiltros">
+                                <i class="bi bi-search me-1"></i>Aplicar Filtros
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" id="btnLimpiarFiltros">
+                                <i class="bi bi-x-circle me-1"></i>Limpiar Todo
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" id="btnExportarFiltrado">
+                                <i class="bi bi-download me-1"></i>Exportar Filtrado
+                            </button>
+                            <div class="form-check form-switch ms-3">
+                                <input class="form-check-input" type="checkbox" id="mostrarSoloActivos">
+                                <label class="form-check-label small" for="mostrarSoloActivos">
+                                    Solo productos activos
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== GRÁFICOS Y ANÁLISIS ========== -->
+            <div class="row mb-4">
+                <!-- Distribución por Categoría -->
+                <div class="col-lg-6">
+                    <div class="card dashboard-card border-0">
+                        <div class="card-header bg-transparent border-0">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-pie-chart me-2"></i>Distribución por Categoría
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="chartCategoria"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estado del Stock -->
+                <div class="col-lg-6">
+                    <div class="card dashboard-card border-0">
+                        <div class="card-header bg-transparent border-0">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-boxes me-2"></i>Estado del Stock
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="chartStock"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== ANÁLISIS DETALLADO ========== -->
+            <div class="row mb-4">
+                <!-- Productos con Bajo Stock -->
+                <div class="col-lg-6">
+                    <div class="card dashboard-card border-0">
+                        <div class="card-header bg-transparent border-0">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-exclamation-triangle me-2"></i>Productos con Bajo Stock
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="listaBajoStock">
+                                <!-- Se llenará dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Productos Más Vendidos -->
+                <div class="col-lg-6">
+                    <div class="card dashboard-card border-0">
+                        <div class="card-header bg-transparent border-0">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-trophy me-2"></i>Productos Más Vendidos
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="listaMasVendidos">
+                                <!-- Se llenará dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== TABLA PRINCIPAL ========== -->
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="bi bi-table me-2"></i>Catálogo de Productos
+                    </h6>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary" id="contadorProductos">
+                            <i class="bi bi-hourglass-split"></i> Cargando...
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped" id="tablaProductos">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th>Stock</th>
+                                    <th>Valor Unitario</th>
+                                    <th>Valor Total</th>
+                                    <th>Estado</th>
+                                    <th>Última Actualización</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="text-center py-5">
+                                        <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
+                                        <h6 class="text-muted mt-3">Cargando datos del dashboard...</h6>
+                                        <p class="text-muted small">Los datos se cargarán automáticamente</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
+</div>
+<!-- main-content -->
+
+<!-- ========== SCRIPTS ========== -->
+<script>
+// Variables globales
+let dashboardData = {
+    productos: [],
+    metricas: {},
+    categorias: [],
+    stock_estado: {},
+    bajo_stock: [],
+    mas_vendidos: []
+};
+
+let charts = {};
+
+// Inicializar cuando jQuery esté disponible
+$(document).ready(function() {
+    console.log('🚀 Inicializando Dashboard de Productos...');
+    
+    // Cargar datos iniciales
+    cargarDatosDashboard();
+    
+    // Eventos de filtros
+    $('#filtroCategoria, #filtroEstado, #filtroStock, #mostrarSoloActivos').on('change', function() {
+        filtrarProductos();
+    });
+    
+    // Evento para limpiar filtros
+    $('#btnLimpiarFiltros').on('click', function() {
+        limpiarFiltros();
+    });
+    
+    // Evento para ordenar
+    $('#ordenarPor').on('change', function() {
+        ordenarProductos($(this).val());
+    });
+    
+    // Evento para exportar filtrado
+    $('#btnExportarFiltrado').on('click', function() {
+        exportarFiltrado();
+    });
+    
+    // Actualizar datos cada 60 segundos
+    setInterval(function() {
+        actualizarDatos();
+    }, 60000);
+    
+    // Hacer funciones disponibles globalmente
+    window.exportarReporteProductos = exportarReporteProductos;
+    window.actualizarDashboard = actualizarDashboard;
+    window.verDetalleProducto = verDetalleProducto;
+    window.editarProducto = editarProducto;
+    
+    console.log('✅ Dashboard de Productos inicializado');
+});
+
+// Función para cargar datos del dashboard
+function cargarDatosDashboard() {
+    showGlobalLoader();
+    
+    $.ajax({
+        url: '/app/obtener_datos_dashboard_productos/',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                dashboardData = response.data;
+                actualizarMetricas(response.metricas);
+                actualizarGraficos();
+                actualizarTabla(response.productos);
+                actualizarListas();
+            } else {
+                showErrorAlert('Error', response.error || 'Error al cargar datos');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al cargar datos');
+        },
+        complete: function() {
+            hideGlobalLoader();
+        }
+    });
+}
+
+// Función para actualizar métricas
+function actualizarMetricas(metricas) {
+    $('#totalProductos').text(metricas.total_productos);
+    $('#productosActivos').text(metricas.productos_activos);
+    $('#productosConStock').text(metricas.productos_con_stock);
+    $('#productosAgotados').text(metricas.productos_agotados);
+    $('#valorTotalInventario').text('$' + metricas.valor_total_inventario.toLocaleString());
+    $('#productosNuevos').text(metricas.productos_nuevos);
+    
+    // Actualizar tendencias
+    actualizarTendencia('#trendTotal', metricas.trend_total);
+    actualizarTendencia('#trendActivos', metricas.trend_activos);
+    actualizarTendencia('#trendStock', metricas.trend_stock);
+    actualizarTendencia('#trendAgotados', metricas.trend_agotados);
+    actualizarTendencia('#trendValor', metricas.trend_valor);
+    actualizarTendencia('#trendNuevos', metricas.trend_nuevos);
+}
+
+// Función para actualizar tendencias
+function actualizarTendencia(selector, trend) {
+    const element = $(selector);
+    element.removeClass('trend-positive trend-negative trend-neutral');
+    
+    if (trend > 0) {
+        element.addClass('trend-positive').html(`<i class="bi bi-arrow-up"></i> +${trend}%`);
+    } else if (trend < 0) {
+        element.addClass('trend-negative').html(`<i class="bi bi-arrow-down"></i> ${trend}%`);
+    } else {
+        element.addClass('trend-neutral').html(`<i class="bi bi-dash"></i> 0%`);
+    }
+}
+
+// Función para actualizar gráficos
+function actualizarGraficos() {
+    actualizarGraficoCategoria();
+    actualizarGraficoStock();
+}
+
+// Gráfico de distribución por categoría
+function actualizarGraficoCategoria() {
+    const ctx = document.getElementById('chartCategoria').getContext('2d');
+    
+    if (charts.categoria) {
+        charts.categoria.destroy();
+    }
+    
+    charts.categoria = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: dashboardData.categorias.map(c => c.nombre),
+            datasets: [{
+                data: dashboardData.categorias.map(c => c.cantidad),
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 205, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)',
+                    'rgba(255, 159, 64, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de estado del stock
+function actualizarGraficoStock() {
+    const ctx = document.getElementById('chartStock').getContext('2d');
+    
+    if (charts.stock) {
+        charts.stock.destroy();
+    }
+    
+    charts.stock = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Alto', 'Medio', 'Bajo', 'Agotado'],
+            datasets: [{
+                label: 'Cantidad de Productos',
+                data: [
+                    dashboardData.stock_estado.alto || 0,
+                    dashboardData.stock_estado.medio || 0,
+                    dashboardData.stock_estado.bajo || 0,
+                    dashboardData.stock_estado.agotado || 0
+                ],
+                backgroundColor: [
+                    'rgba(40, 167, 69, 0.8)',
+                    'rgba(255, 193, 7, 0.8)',
+                    'rgba(220, 53, 69, 0.8)',
+                    'rgba(108, 117, 125, 0.8)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+// Función para actualizar tabla
+function actualizarTabla(productos) {
+    const tbody = $('#tablaProductos tbody');
+    tbody.empty();
+    
+    if (productos.length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron productos</td></tr>');
+        return;
+    }
+    
+    productos.forEach(function(producto) {
+        const fila = `
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="me-2">
+                            <strong>${producto.nombre}</strong>
+                            <br><small class="text-muted">SKU: ${producto.sku}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${producto.categoria}</span>
+                </td>
+                <td>
+                    <div class="stock-indicator ${getStockClass(producto.stock)}">
+                        <i class="bi bi-box"></i>
+                        ${producto.stock}
+                    </div>
+                </td>
+                <td class="text-end">$${producto.valor_unitario.toLocaleString()}</td>
+                <td class="text-end">$${producto.valor_total.toLocaleString()}</td>
+                <td>
+                    <span class="product-status ${getEstadoClass(producto.estado)}">
+                        ${producto.estado}
+                    </span>
+                </td>
+                <td>
+                    <small class="text-muted">${producto.ultima_actualizacion}</small>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="verDetalleProducto(${producto.id})" title="Ver Detalle">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="editarProducto(${producto.id})" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        tbody.append(fila);
+    });
+    
+    $('#contadorProductos').text(productos.length + ' productos');
+}
+
+// Función para actualizar listas
+function actualizarListas() {
+    actualizarListaBajoStock();
+    actualizarListaMasVendidos();
+}
+
+// Función para actualizar lista de bajo stock
+function actualizarListaBajoStock() {
+    const container = $('#listaBajoStock');
+    container.empty();
+    
+    if (dashboardData.bajo_stock.length === 0) {
+        container.html('<p class="text-muted text-center">No hay productos con bajo stock</p>');
+        return;
+    }
+    
+    dashboardData.bajo_stock.forEach(function(producto) {
+        const item = `
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
+                <div>
+                    <strong>${producto.nombre}</strong>
+                    <br><small class="text-muted">${producto.categoria}</small>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-danger">${producto.stock}</span>
+                    <br><small class="text-muted">Stock</small>
+                </div>
+            </div>
+        `;
+        container.append(item);
+    });
+}
+
+// Función para actualizar lista de más vendidos
+function actualizarListaMasVendidos() {
+    const container = $('#listaMasVendidos');
+    container.empty();
+    
+    if (dashboardData.mas_vendidos.length === 0) {
+        container.html('<p class="text-muted text-center">No hay datos de ventas disponibles</p>');
+        return;
+    }
+    
+    dashboardData.mas_vendidos.forEach(function(producto, index) {
+        const item = `
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-primary me-2">#${index + 1}</span>
+                    <div>
+                        <strong>${producto.nombre}</strong>
+                        <br><small class="text-muted">${producto.categoria}</small>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-success">${producto.ventas}</span>
+                    <br><small class="text-muted">Ventas</small>
+                </div>
+            </div>
+        `;
+        container.append(item);
+    });
+}
+
+// Funciones de filtrado
+function filtrarProductos() {
+    const filtros = {
+        categoria: $('#filtroCategoria').val(),
+        estado: $('#filtroEstado').val(),
+        stock: $('#filtroStock').val(),
+        solo_activos: $('#mostrarSoloActivos').is(':checked')
+    };
+    
+    $.ajax({
+        url: '/app/filtrar_productos_dashboard/',
+        method: 'GET',
+        data: filtros,
+        success: function(response) {
+            if (response.success) {
+                actualizarTabla(response.productos);
+            }
+        }
+    });
+}
+
+function limpiarFiltros() {
+    $('#filtroCategoria').val('');
+    $('#filtroEstado').val('');
+    $('#filtroStock').val('');
+    $('#mostrarSoloActivos').prop('checked', false);
+    filtrarProductos();
+}
+
+function ordenarProductos(criterio) {
+    const tbody = $('#tablaProductos tbody');
+    const filas = tbody.find('tr').get();
+    
+    filas.sort(function(a, b) {
+        const $a = $(a);
+        const $b = $(b);
+        
+        switch(criterio) {
+            case 'nombre':
+                return $a.find('td:eq(0) strong').text().localeCompare($b.find('td:eq(0) strong').text());
+            case 'stock':
+                return parseInt($a.find('td:eq(2) .stock-indicator').text().trim()) - 
+                       parseInt($b.find('td:eq(2) .stock-indicator').text().trim());
+            case 'valor':
+                return parseFloat($a.find('td:eq(4)').text().replace(/[$,]/g, '')) - 
+                       parseFloat($b.find('td:eq(4)').text().replace(/[$,]/g, ''));
+            default:
+                return 0;
+        }
+    });
+    
+    tbody.empty().append(filas);
+}
+
+// Funciones de exportación
+function exportarReporteProductos() {
+    window.open('/app/exportar_dashboard_productos/', '_blank');
+}
+
+function exportarFiltrado() {
+    const filtros = {
+        categoria: $('#filtroCategoria').val(),
+        estado: $('#filtroEstado').val(),
+        stock: $('#filtroStock').val(),
+        solo_activos: $('#mostrarSoloActivos').is(':checked')
+    };
+    
+    const params = new URLSearchParams(filtros);
+    window.open(`/app/exportar_productos_filtrado/?${params}`, '_blank');
+}
+
+// Funciones de acciones
+function verDetalleProducto(productoId) {
+    window.open(`/app/ver_detalle_producto/${productoId}/`, '_blank');
+}
+
+function editarProducto(productoId) {
+    window.open(`/app/editar_producto/${productoId}/`, '_blank');
+}
+
+// Funciones de utilidad
+function getStockClass(stock) {
+    if (stock === 0) return 'stock-out';
+    if (stock < 10) return 'stock-low';
+    if (stock < 50) return 'stock-medium';
+    return 'stock-high';
+}
+
+function getEstadoClass(estado) {
+    switch(estado.toLowerCase()) {
+        case 'activo': return 'status-active';
+        case 'inactivo': return 'status-inactive';
+        case 'pendiente': return 'status-pending';
+        default: return 'status-pending';
+    }
+}
+
+function actualizarDatos() {
+    cargarDatosDashboard();
+}
+
+function actualizarDashboard() {
+    cargarDatosDashboard();
+}
+
+// Funciones de utilidad para alertas
+function showErrorAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+
+function showGlobalLoader() {
+    $('#fullscreenLoader').fadeIn(100);
+}
+
+function hideGlobalLoader() {
+    $('#fullscreenLoader').fadeOut(100);
+}
+</script> 

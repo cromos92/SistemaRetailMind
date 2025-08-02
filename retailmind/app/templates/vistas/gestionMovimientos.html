@@ -1,0 +1,565 @@
+{% load static %}
+{% include '../layout/header.html' %}
+{% include '../layout/menu.html' %}
+
+<style>
+.pagination-controls {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #dee2e6;
+}
+.search-highlight {
+    background-color: #fff3cd;
+    font-weight: bold;
+}
+.page-info {
+    min-width: 120px;
+    text-align: center;
+    font-weight: 500;
+}
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+#tablaMovimientos {
+    font-size: 0.9rem;
+}
+#tablaMovimientos th {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+@media (max-width: 768px) {
+    .pagination-controls .row > div {
+        margin-bottom: 10px;
+    }
+    .pagination-controls .btn-group {
+        width: 100%;
+    }
+    .pagination-controls .btn-group .btn {
+        flex: 1;
+    }
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- === TABS DE NAVEGACIÓN === -->
+        <ul class="nav nav-tabs mb-3" id="movimientosTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="movimientos-tab" data-bs-toggle="tab" data-bs-target="#movimientos" type="button" role="tab">
+                    <i class="bi bi-list-ul me-1"></i> Movimientos
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="kardex-tab" data-bs-toggle="tab" data-bs-target="#kardex" type="button" role="tab">
+                    <i class="bi bi-file-text me-1"></i> Kardex
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="movimientosTabsContent">
+            
+            <!-- === TAB MOVIMIENTOS === -->
+            <div class="tab-pane fade show active" id="movimientos" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-list-ul me-2"></i>Movimientos de Productos</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Filtros -->
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <label class="form-label">Fecha Inicio</label>
+                                <input type="date" class="form-control" id="filtroFechaInicio">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Fecha Fin</label>
+                                <input type="date" class="form-control" id="filtroFechaFin">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Tipo</label>
+                                <select class="form-select" id="filtroTipo">
+                                    <option value="">Todos</option>
+                                    <option value="INGRESO">Ingreso</option>
+                                    <option value="EGRESO">Egreso</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Concepto</label>
+                                <input type="text" class="form-control" id="filtroConcepto" placeholder="Buscar concepto...">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Artículo</label>
+                                <input type="text" class="form-control" id="filtroArticulo" placeholder="Buscar artículo...">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Responsable</label>
+                                <input type="text" class="form-control" id="filtroResponsable" placeholder="Buscar responsable...">
+                            </div>
+                        </div>
+                        
+                        <!-- Tabla de movimientos -->
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="tablaMovimientos">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Hora</th>
+                                        <th>Artículo</th>
+                                        <th>Descripción</th>
+                                        <th>Marca</th>
+                                        <th>Color</th>
+                                        <th>Género</th>
+                                        <th>Talla</th>
+                                        <th>SKU</th>
+                                        <th>Cantidad</th>
+                                        <th>Tipo</th>
+                                        <th>Concepto</th>
+                                        <th>Responsable</th>
+                                        <th>Referencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyMovimientos"></tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Paginación -->
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center">
+                                    <label class="me-2">Mostrar:</label>
+                                    <select class="form-select form-select-sm" id="pageSizeMovimientos" style="width: auto;">
+                                        <option value="25">25</option>
+                                        <option value="50" selected>50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                    <span class="ms-2">elementos por página</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <nav aria-label="Paginación de movimientos">
+                                    <ul class="pagination justify-content-end mb-0">
+                                        <li class="page-item" id="btnPrevPageMovimientos">
+                                            <a class="page-link" href="#" aria-label="Anterior">
+                                                <span aria-hidden="true">&laquo;</span>
+                                            </a>
+                                        </li>
+                                        <li class="page-item">
+                                            <span class="page-link" id="pageInfoMovimientos">Página 1 de 1</span>
+                                        </li>
+                                        <li class="page-item" id="btnNextPageMovimientos">
+                                            <a class="page-link" href="#" aria-label="Siguiente">
+                                                <span aria-hidden="true">&raquo;</span>
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === TAB KARDEX === -->
+            <div class="tab-pane fade" id="kardex" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-file-text me-2"></i>Kardex de Producto</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Filtros para kardex -->
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Producto</label>
+                                <select class="form-select" id="selectProductoKardex">
+                                    <option value="">Seleccionar producto...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Fecha Inicio</label>
+                                <input type="date" class="form-control" id="filtroFechaInicioKardex">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Fecha Fin</label>
+                                <input type="date" class="form-control" id="filtroFechaFinKardex">
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-primary w-100" id="btnGenerarKardex">
+                                    <i class="bi bi-search me-1"></i> Generar Kardex
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Información del producto -->
+                        <div id="infoProductoKardex" class="mb-3" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <strong>Artículo:</strong> <span id="articuloKardex"></span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Talla:</strong> <span id="tallaKardex"></span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>SKU:</strong> <span id="skuKardex"></span>
+                                </div>
+                                <div class="col-md-3">
+                                    <strong>Stock Actual:</strong> <span id="stockActualKardex"></span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabla de kardex -->
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Hora</th>
+                                        <th>Concepto</th>
+                                        <th>Entrada</th>
+                                        <th>Salida</th>
+                                        <th>Saldo</th>
+                                        <th>Responsable</th>
+                                        <th>Referencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyKardex"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tempus Dominus CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@eonasdan/tempus-dominus@6.10.1/dist/css/tempus-dominus.min.css" />
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+{% include '../layout/footer.html' %}
+
+<!-- Tempus Dominus JS y dependencias -->
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@eonasdan/tempus-dominus@6.10.1/dist/js/tempus-dominus.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@eonasdan/tempus-dominus@6.10.1/dist/js/locales/es.js"></script>
+<script>
+// Variables globales
+let currentPageMovimientos = 1;
+let pageSizeMovimientos = 50;
+
+// === FUNCIONES PARA MOVIMIENTOS ===
+
+function cargarMovimientos(page = 1) {
+    const fecha_inicio = $('#filtroFechaInicio').val();
+    const fecha_fin = $('#filtroFechaFin').val();
+    const tipo = $('#filtroTipo').val();
+    const concepto = $('#filtroConcepto').val();
+    const articulo = $('#filtroArticulo').val();
+    const responsable = $('#filtroResponsable').val();
+    
+    $.ajax({
+        url: '/app/obtener_movimientos_producto/',
+        method: 'GET',
+        data: {
+            page: page,
+            page_size: pageSizeMovimientos,
+            fecha_inicio: fecha_inicio,
+            fecha_fin: fecha_fin,
+            tipo: tipo,
+            concepto: concepto,
+            articulo: articulo,
+            responsable: responsable
+        },
+        success: function (response) {
+            if (!response.success) {
+                Swal.fire('Error', response.error || 'No se pudieron cargar los movimientos', 'error');
+                return;
+            }
+            
+            const tbody = $('#tbodyMovimientos');
+            tbody.empty();
+            
+            if (response.items.length === 0) {
+                tbody.append('<tr><td colspan="14" class="text-center text-muted">No hay movimientos para los filtros seleccionados</td></tr>');
+            } else {
+                response.items.forEach(function (mov) {
+                    const cantidadClass = mov.cantidad > 0 ? 'text-success' : 'text-danger';
+                    const cantidadSign = mov.cantidad > 0 ? '+' : '';
+                    // Formatear fecha a dd/mm/aaaa
+                    const fechaParts = mov.fecha.split('-');
+                    const fechaFormateada = fechaParts.length === 3 ? `${fechaParts[2]}/${fechaParts[1]}/${fechaParts[0]}` : mov.fecha;
+                    const fila = `
+                        <tr>
+                            <td>${fechaFormateada}</td>
+                            <td>${mov.hora}</td>
+                            <td>${mov.articulo}</td>
+                            <td>${mov.descripcion}</td>
+                            <td>${mov.marca}</td>
+                            <td>${mov.color}</td>
+                            <td>${mov.genero}</td>
+                            <td>${mov.talla}</td>
+                            <td>${mov.sku}</td>
+                            <td class="${cantidadClass}">${cantidadSign}${mov.cantidad}</td>
+                            <td><span class="badge bg-${getTipoColor(mov.tipo_movimiento)}">${mov.tipo_movimiento}</span></td>
+                            <td>${mov.concepto}</td>
+                            <td>${mov.responsable}</td>
+                            <td>${mov.referencia_externa || '-'}</td>
+                        </tr>`;
+                    tbody.append(fila);
+                });
+            }
+            
+            // Actualizar paginación
+            updatePaginationMovimientos(response.pagination);
+        },
+        error: function () {
+            Swal.fire('Error', 'Error al cargar los movimientos', 'error');
+        }
+    });
+}
+
+function getTipoColor(tipo) {
+    const colores = {
+        'INGRESO': 'success',
+        'EGRESO': 'danger',
+        'TRASPASO': 'primary',
+        'AJUSTE': 'warning'
+    };
+    return colores[tipo] || 'secondary';
+}
+
+function updatePaginationMovimientos(pagination) {
+    currentPageMovimientos = pagination.page;
+    $('#pageInfoMovimientos').text(`Página ${pagination.page} de ${pagination.total_pages}`);
+    $('#btnPrevPageMovimientos').toggleClass('disabled', !pagination.has_previous);
+    $('#btnNextPageMovimientos').toggleClass('disabled', !pagination.has_next);
+}
+
+// === FUNCIONES PARA KARDEX ===
+
+function cargarProductosKardex() {
+    $('#selectProductoKardex').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Buscar producto...',
+        minimumInputLength: 2,
+        ajax: {
+            url: '/app/obtener_productos/',
+            dataType: 'json',
+            delay: 250,
+            data: function (params) {
+                return {
+                    q: params.term,
+                    page: params.page || 1,
+                    page_size: 20
+                };
+            },
+            processResults: function (data, params) {
+                params.page = params.page || 1;
+                return {
+                    results: data.results,
+                    pagination: {
+                        more: data.pagination.more
+                    }
+                };
+            },
+            cache: true
+        },
+        templateResult: function (item) {
+            return item.text;
+        },
+        templateSelection: function (item) {
+            return item.text || item.id;
+        },
+        width: '100%'
+    });
+}
+
+function toIsoDate(fecha) {
+    // Convierte dd/mm/yyyy a yyyy-mm-dd
+    if (!fecha) return '';
+    const parts = fecha.split('/');
+    if (parts.length === 3) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return fecha;
+}
+
+function cargarKardex(page = 1) {
+    const producto_talla_id = $('#selectProductoKardex').val();
+    const fecha_inicio = toIsoDate($('#filtroFechaInicioKardex').val());
+    const fecha_fin = toIsoDate($('#filtroFechaFinKardex').val());
+    if (!producto_talla_id) {
+        $('#tbodyKardex').html('<tr><td colspan="8" class="text-center text-muted">Selecciona un producto</td></tr>');
+        return;
+    }
+    $.ajax({
+        url: '/app/reporte_movimientos_kardex/',
+        method: 'GET',
+        data: {
+            producto_talla_id: producto_talla_id,
+            fecha_inicio: fecha_inicio,
+            fecha_fin: fecha_fin,
+            page: page,
+            page_size: 50
+        },
+        success: function (response) {
+            if (!response.success) {
+                Swal.fire('Error', response.error || 'No se pudo cargar el Kardex', 'error');
+                return;
+            }
+            const tbody = $('#tbodyKardex');
+            tbody.empty();
+            if (!response.items.length) {
+                tbody.append('<tr><td colspan="8" class="text-center text-muted">No hay movimientos para este producto</td></tr>');
+            } else {
+                response.items.forEach(function (mov) {
+                    const fila = `
+                        <tr>
+                            <td>${formatearFecha(mov.fecha)}</td>
+                            <td>${mov.hora}</td>
+                            <td>${mov.concepto}</td>
+                            <td>${mov.entrada}</td>
+                            <td>${mov.salida}</td>
+                            <td>${mov.saldo}</td>
+                            <td>${mov.responsable}</td>
+                            <td>${mov.referencia}</td>
+                        </tr>`;
+                    tbody.append(fila);
+                });
+            }
+            // Paginación
+            updatePaginationKardex(response.pagination);
+        },
+        error: function () {
+            Swal.fire('Error', 'Error al cargar el Kardex', 'error');
+        }
+    });
+}
+
+function formatearFecha(fecha) {
+    if (!fecha) return '';
+    const parts = fecha.split('-');
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : fecha;
+}
+
+function updatePaginationKardex(pagination) {
+    $('#pageInfoKardex').text(`Página ${pagination.page} de ${pagination.total_pages}`);
+    $('#btnPrevPageKardex').toggleClass('disabled', !pagination.has_previous);
+    $('#btnNextPageKardex').toggleClass('disabled', !pagination.has_next);
+    $('#btnPrevPageKardex').data('page', pagination.page - 1);
+    $('#btnNextPageKardex').data('page', pagination.page + 1);
+}
+
+// === EVENTOS ===
+
+$(document).ready(function() {
+    // Cambiar los inputs de fecha a type="text" para compatibilidad visual
+    $('#filtroFechaInicio, #filtroFechaFin, #filtroFechaInicioKardex, #filtroFechaFinKardex').attr('type', 'text');
+    // Inicializar Tempus Dominus en los inputs de fecha
+    const options = {
+        display: {
+            components: {
+                calendar: true,
+                date: true,
+                month: true,
+                year: true,
+                decades: true,
+                clock: false
+            },
+            buttons: {
+                today: true,
+                clear: true,
+                close: true
+            },
+            theme: 'auto',
+            icons: {
+                time: 'bi bi-clock',
+                date: 'bi bi-calendar',
+                up: 'bi bi-chevron-up',
+                down: 'bi bi-chevron-down',
+                previous: 'bi bi-chevron-left',
+                next: 'bi bi-chevron-right',
+                today: 'bi bi-calendar-check',
+                clear: 'bi bi-trash',
+                close: 'bi bi-x-lg'
+            }
+        },
+        localization: {
+            locale: 'es',
+            format: 'dd/MM/yyyy',
+            startOfTheWeek: 1
+        }
+    };
+    new tempusDominus.TempusDominus(document.getElementById('filtroFechaInicio'), options);
+    new tempusDominus.TempusDominus(document.getElementById('filtroFechaFin'), options);
+    new tempusDominus.TempusDominus(document.getElementById('filtroFechaInicioKardex'), options);
+    new tempusDominus.TempusDominus(document.getElementById('filtroFechaFinKardex'), options);
+    // Cargar datos iniciales
+    cargarMovimientos();
+    cargarProductosKardex();
+    
+    // Eventos de filtros para movimientos
+    $('#filtroFechaInicio, #filtroFechaFin, #filtroTipo').on('change', function() {
+        currentPageMovimientos = 1;
+        cargarMovimientos();
+    });
+    
+    $('#filtroConcepto, #filtroArticulo, #filtroResponsable').on('input', function() {
+        clearTimeout(window.timeoutFiltros);
+        window.timeoutFiltros = setTimeout(() => {
+            currentPageMovimientos = 1;
+            cargarMovimientos();
+        }, 500);
+    });
+    
+    // Eventos de paginación para movimientos
+    $('#btnPrevPageMovimientos').on('click', function(e) {
+        e.preventDefault();
+        if (currentPageMovimientos > 1) {
+            currentPageMovimientos--;
+            cargarMovimientos(currentPageMovimientos);
+        }
+    });
+    
+    $('#btnNextPageMovimientos').on('click', function(e) {
+        e.preventDefault();
+        currentPageMovimientos++;
+        cargarMovimientos(currentPageMovimientos);
+    });
+    
+    $('#pageSizeMovimientos').on('change', function() {
+        pageSizeMovimientos = parseInt($(this).val());
+        currentPageMovimientos = 1;
+        cargarMovimientos();
+    });
+    
+    // Eventos para kardex
+    $('#btnGenerarKardex').on('click', function() {
+        cargarKardex(1);
+    });
+    // Eventos para filtros y generación de Kardex
+    $('#selectProductoKardex, #filtroFechaInicioKardex, #filtroFechaFinKardex').on('change', function() {
+        cargarKardex(1);
+    });
+    // Paginación Kardex
+    $('#btnPrevPageKardex').on('click', function(e) {
+        e.preventDefault();
+        if (!$(this).hasClass('disabled')) {
+            cargarKardex($(this).data('page'));
+        }
+    });
+    $('#btnNextPageKardex').on('click', function(e) {
+        e.preventDefault();
+        if (!$(this).hasClass('disabled')) {
+            cargarKardex($(this).data('page'));
+        }
+    });
+});
+</script> 

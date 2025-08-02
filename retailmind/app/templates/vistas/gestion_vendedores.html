@@ -1,0 +1,711 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+
+<!-- CSRF Token para AJAX -->
+{% csrf_token %}
+{% include 'layout/menu.html' %}
+{% include 'layout/footer.html' %}
+
+<style>
+.vendedor-card {
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+}
+
+.vendedor-card:hover {
+    transform: translateY(-2px);
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-activo { background-color: #d4edda; color: #155724; }
+.status-inactivo { background-color: #f8d7da; color: #721c24; }
+
+.comision-badge {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.table-responsive {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.filter-section {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.modal-xl .modal-dialog {
+    max-width: 800px;
+}
+
+.form-floating > .form-control {
+    height: calc(3.5rem + 2px);
+    line-height: 1.25;
+}
+
+.form-floating > .form-control:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.btn-action {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+}
+
+.avatar-placeholder {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+            
+            <!-- ========== HEADER Y TÍTULO ========== -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-1">
+                                <i class="bi bi-people-fill text-primary me-2"></i>
+                                Gestión de Vendedores
+                            </h2>
+                            <p class="text-muted mb-0">Administra el equipo de ventas y sus comisiones</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success" onclick="exportarVendedores()">
+                                <i class="bi bi-download me-1"></i>Exportar
+                            </button>
+                            <button class="btn btn-primary" onclick="abrirModalCrear()">
+                                <i class="bi bi-plus-circle me-1"></i>Nuevo Vendedor
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== MÉTRICAS RÁPIDAS ========== -->
+            <div class="row mb-4">
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card vendedor-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-primary mb-1" id="totalVendedores">0</div>
+                            <div class="text-muted">Total Vendedores</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card vendedor-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-success mb-1" id="vendedoresActivos">0</div>
+                            <div class="text-muted">Vendedores Activos</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card vendedor-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-info mb-1" id="comisionPromedio">0%</div>
+                            <div class="text-muted">Comisión Promedio</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card vendedor-card border-0">
+                        <div class="card-body text-center">
+                            <div class="h2 text-warning mb-1" id="ventasMes">0</div>
+                            <div class="text-muted">Ventas del Mes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== FILTROS ========== -->
+            <div class="filter-section">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Buscar</label>
+                        <input type="text" class="form-control" id="filtroBusqueda" placeholder="Nombre, RUT o código...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" id="filtroEstado">
+                            <option value="">Todos</option>
+                            <option value="activo">Activos</option>
+                            <option value="inactivo">Inactivos</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Comisión</label>
+                        <select class="form-select" id="filtroComision">
+                            <option value="">Todas</option>
+                            <option value="baja">Baja (<5%)</option>
+                            <option value="media">Media (5-10%)</option>
+                            <option value="alta">Alta (>10%)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Ordenar por</label>
+                        <select class="form-select" id="ordenarPor">
+                            <option value="nombre">Nombre</option>
+                            <option value="comision">Comisión</option>
+                            <option value="fecha">Fecha</option>
+                            <option value="ventas">Ventas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" onclick="aplicarFiltros()">
+                                <i class="bi bi-search me-1"></i>Filtrar
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="bi bi-x-circle me-1"></i>Limpiar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== TABLA PRINCIPAL ========== -->
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="bi bi-table me-2"></i>Lista de Vendedores
+                    </h6>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary" id="contadorVendedores">0 vendedores</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped" id="tablaVendedores">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Vendedor</th>
+                                    <th>Código</th>
+                                    <th>RUT</th>
+                                    <th>Comisión</th>
+                                    <th>Fecha Nacimiento</th>
+                                    <th>Correo</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="text-center py-5">
+                                        <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
+                                        <h6 class="text-muted mt-3">Cargando vendedores...</h6>
+                                        <p class="text-muted small">Los datos se cargarán automáticamente</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
+</div>
+<!-- main-content -->
+
+<!-- ========== MODAL CREAR/EDITAR VENDEDOR ========== -->
+<div class="modal fade" id="modalVendedor" tabindex="-1" aria-labelledby="modalVendedorLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVendedorLabel">
+                    <i class="bi bi-person-plus me-2"></i>Nuevo Vendedor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formVendedor">
+                    <input type="hidden" id="vendedorId" name="vendedor_id">
+                    
+                    <div class="row g-3">
+                        <!-- Información Básica -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="codigoVendedor" name="codigo_vendedor" placeholder="Código" required>
+                                <label for="codigoVendedor">Código del Vendedor *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="rutVendedor" name="rut" placeholder="RUT" required>
+                                <label for="rutVendedor">RUT *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="nombreVendedor" name="nombre" placeholder="Nombre Completo" required>
+                                <label for="nombreVendedor">Nombre Completo *</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Comisión y Fecha -->
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="number" class="form-control" id="comisionVendedor" name="comision" placeholder="Comisión" min="0" max="100" step="0.01" required>
+                                <label for="comisionVendedor">Comisión (%) *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="date" class="form-control" id="fechaNacimiento" name="fecha_nacimiento" placeholder="Fecha de Nacimiento">
+                                <label for="fechaNacimiento">Fecha de Nacimiento</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Contacto -->
+                        <div class="col-md-12">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" id="correoVendedor" name="correo" placeholder="Correo Electrónico">
+                                <label for="correoVendedor">Correo Electrónico</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Validaciones -->
+                    <div id="erroresFormulario" class="alert alert-danger mt-3" style="display: none;">
+                        <ul id="listaErrores" class="mb-0"></ul>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="guardarVendedor()">
+                    <i class="bi bi-check-circle me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL CONFIRMAR ELIMINACIÓN ========== -->
+<div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirmar Eliminación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar al vendedor <strong id="nombreVendedorEliminar"></strong>?</p>
+                <p class="text-muted small">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmarEliminar()">
+                    <i class="bi bi-trash me-1"></i>Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== SCRIPTS ========== -->
+<script>
+// Variables globales
+let vendedores = [];
+let vendedorSeleccionado = null;
+let modoEdicion = false;
+
+// Inicializar cuando jQuery esté disponible
+$(document).ready(function() {
+    console.log('🚀 Inicializando Gestión de Vendedores...');
+    
+    // Cargar datos iniciales
+    cargarVendedores();
+    cargarMetricas();
+    
+    // Eventos de filtros
+    $('#filtroBusqueda').on('keyup', function() {
+        aplicarFiltros();
+    });
+    
+    $('#filtroEstado, #filtroComision, #ordenarPor').on('change', function() {
+        aplicarFiltros();
+    });
+    
+    // Evento para limpiar filtros
+    $('#btnLimpiarFiltros').on('click', function() {
+        limpiarFiltros();
+    });
+    
+    // Hacer funciones disponibles globalmente
+    window.abrirModalCrear = abrirModalCrear;
+    window.editarVendedor = editarVendedor;
+    window.eliminarVendedor = eliminarVendedor;
+    window.guardarVendedor = guardarVendedor;
+    window.exportarVendedores = exportarVendedores;
+    window.aplicarFiltros = aplicarFiltros;
+    window.limpiarFiltros = limpiarFiltros;
+    
+    console.log('✅ Gestión de Vendedores inicializada');
+});
+
+// Función para cargar vendedores
+function cargarVendedores() {
+    $.ajax({
+        url: '/app/obtener_vendedores/',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                vendedores = response.vendedores;
+                actualizarTabla(vendedores);
+                actualizarMetricas(response.metricas);
+            } else {
+                showErrorAlert('Error', response.error || 'Error al cargar vendedores');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al cargar vendedores');
+        }
+    });
+}
+
+// Función para cargar métricas
+function cargarMetricas() {
+    $.ajax({
+        url: '/app/obtener_metricas_vendedores/',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                actualizarMetricas(response.metricas);
+            }
+        }
+    });
+}
+
+// Función para actualizar tabla
+function actualizarTabla(vendedores) {
+    const tbody = $('#tablaVendedores tbody');
+    tbody.empty();
+    
+    if (vendedores.length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron vendedores</td></tr>');
+        return;
+    }
+    
+    vendedores.forEach(function(vendedor) {
+        const fila = `
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-placeholder me-3">
+                            ${vendedor.nombre ? vendedor.nombre.charAt(0).toUpperCase() : 'V'}
+                        </div>
+                        <div>
+                            <strong>${vendedor.nombre || 'Sin nombre'}</strong>
+                            <br><small class="text-muted">ID: ${vendedor.id}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${vendedor.codigo_vendedor}</span>
+                </td>
+                <td>${vendedor.rut || 'Sin RUT'}</td>
+                <td>
+                    <span class="comision-badge">${vendedor.comision}%</span>
+                </td>
+                <td>${vendedor.fecha_nacimiento || 'No especificada'}</td>
+                <td>${vendedor.correo || 'Sin correo'}</td>
+                <td>
+                    <span class="status-badge ${vendedor.activo ? 'status-activo' : 'status-inactivo'}">
+                        ${vendedor.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary btn-action" onclick="editarVendedor(${vendedor.id})" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-action" onclick="eliminarVendedor(${vendedor.id}, '${vendedor.nombre}')" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        tbody.append(fila);
+    });
+    
+    $('#contadorVendedores').text(vendedores.length + ' vendedores');
+}
+
+// Función para actualizar métricas
+function actualizarMetricas(metricas) {
+    $('#totalVendedores').text(metricas.total_vendedores || 0);
+    $('#vendedoresActivos').text(metricas.vendedores_activos || 0);
+    $('#comisionPromedio').text((metricas.comision_promedio || 0) + '%');
+    $('#ventasMes').text(metricas.ventas_mes || 0);
+}
+
+// Función para abrir modal de creación
+function abrirModalCrear() {
+    modoEdicion = false;
+    $('#modalVendedorLabel').html('<i class="bi bi-person-plus me-2"></i>Nuevo Vendedor');
+    $('#formVendedor')[0].reset();
+    $('#vendedorId').val('');
+    $('#erroresFormulario').hide();
+    $('#modalVendedor').modal('show');
+}
+
+// Función para editar vendedor
+function editarVendedor(vendedorId) {
+    const vendedor = vendedores.find(v => v.id === vendedorId);
+    if (!vendedor) {
+        showErrorAlert('Error', 'Vendedor no encontrado');
+        return;
+    }
+    
+    modoEdicion = true;
+    vendedorSeleccionado = vendedor;
+    
+    $('#modalVendedorLabel').html('<i class="bi bi-pencil me-2"></i>Editar Vendedor');
+    $('#vendedorId').val(vendedor.id);
+    $('#codigoVendedor').val(vendedor.codigo_vendedor);
+    $('#rutVendedor').val(vendedor.rut);
+    $('#nombreVendedor').val(vendedor.nombre);
+    $('#comisionVendedor').val(vendedor.comision);
+    $('#fechaNacimiento').val(vendedor.fecha_nacimiento);
+    $('#correoVendedor').val(vendedor.correo);
+    $('#erroresFormulario').hide();
+    
+    $('#modalVendedor').modal('show');
+}
+
+// Función para obtener token CSRF
+function getCSRFToken() {
+    const name = 'csrftoken';
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Función para guardar vendedor
+function guardarVendedor() {
+    const formData = new FormData($('#formVendedor')[0]);
+    const data = Object.fromEntries(formData);
+    
+    // Validaciones básicas
+    const errores = [];
+    if (!data.codigo_vendedor) errores.push('El código del vendedor es obligatorio');
+    if (!data.nombre) errores.push('El nombre es obligatorio');
+    if (!data.comision) errores.push('La comisión es obligatoria');
+    if (data.comision && (data.comision < 0 || data.comision > 100)) {
+        errores.push('La comisión debe estar entre 0% y 100%');
+    }
+    
+    if (errores.length > 0) {
+        mostrarErrores(errores);
+        return;
+    }
+    
+    const url = modoEdicion ? '/app/editar_vendedor/' : '/app/crear_vendedor/';
+    const method = modoEdicion ? 'PUT' : 'POST';
+    
+    $.ajax({
+        url: url,
+        method: method,
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert(
+                    modoEdicion ? 'Vendedor Actualizado' : 'Vendedor Creado',
+                    response.message
+                );
+                $('#modalVendedor').modal('hide');
+                cargarVendedores();
+            } else {
+                mostrarErrores(response.errors || [response.error]);
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al guardar vendedor');
+        }
+    });
+}
+
+// Función para eliminar vendedor
+function eliminarVendedor(vendedorId, nombre) {
+    vendedorSeleccionado = vendedorId;
+    $('#nombreVendedorEliminar').text(nombre);
+    $('#modalConfirmarEliminar').modal('show');
+}
+
+// Función para confirmar eliminación
+function confirmarEliminar() {
+    $.ajax({
+        url: `/app/eliminar_vendedor/${vendedorSeleccionado}/`,
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert('Vendedor Eliminado', response.message);
+                $('#modalConfirmarEliminar').modal('hide');
+                cargarVendedores();
+            } else {
+                showErrorAlert('Error', response.error);
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al eliminar vendedor');
+        }
+    });
+}
+
+// Función para aplicar filtros
+function aplicarFiltros() {
+    const busqueda = $('#filtroBusqueda').val().toLowerCase();
+    const estado = $('#filtroEstado').val();
+    const comision = $('#filtroComision').val();
+    const ordenar = $('#ordenarPor').val();
+    
+    let vendedoresFiltrados = vendedores.filter(function(vendedor) {
+        // Filtro de búsqueda
+        if (busqueda) {
+            const texto = `${vendedor.nombre} ${vendedor.rut} ${vendedor.codigo_vendedor}`.toLowerCase();
+            if (!texto.includes(busqueda)) return false;
+        }
+        
+        // Filtro de estado
+        if (estado) {
+            const esActivo = vendedor.activo;
+            if (estado === 'activo' && !esActivo) return false;
+            if (estado === 'inactivo' && esActivo) return false;
+        }
+        
+        // Filtro de comisión
+        if (comision) {
+            const comisionNum = parseFloat(vendedor.comision);
+            if (comision === 'baja' && comisionNum >= 5) return false;
+            if (comision === 'media' && (comisionNum < 5 || comisionNum > 10)) return false;
+            if (comision === 'alta' && comisionNum <= 10) return false;
+        }
+        
+        return true;
+    });
+    
+    // Ordenar
+    vendedoresFiltrados.sort(function(a, b) {
+        switch(ordenar) {
+            case 'nombre':
+                return (a.nombre || '').localeCompare(b.nombre || '');
+                    case 'comision':
+            return parseFloat(a.comision) - parseFloat(b.comision);
+            case 'fecha':
+                return new Date(b.fecha_creacion) - new Date(a.fecha_creacion);
+            case 'ventas':
+                return (b.ventas_mes || 0) - (a.ventas_mes || 0);
+            default:
+                return 0;
+        }
+    });
+    
+    actualizarTabla(vendedoresFiltrados);
+}
+
+// Función para limpiar filtros
+function limpiarFiltros() {
+    $('#filtroBusqueda').val('');
+    $('#filtroEstado').val('');
+    $('#filtroComision').val('');
+    $('#ordenarPor').val('nombre');
+    aplicarFiltros();
+}
+
+// Función para exportar vendedores
+function exportarVendedores() {
+    window.open('/app/exportar_vendedores/', '_blank');
+}
+
+// Función para mostrar errores
+function mostrarErrores(errores) {
+    const lista = $('#listaErrores');
+    lista.empty();
+    
+    errores.forEach(function(error) {
+        lista.append(`<li>${error}</li>`);
+    });
+    
+    $('#erroresFormulario').show();
+}
+
+// Funciones de utilidad para alertas
+function showSuccessAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+
+function showErrorAlert(title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: title,
+            text: message
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
+}
+</script> 
