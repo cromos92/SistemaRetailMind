@@ -1443,6 +1443,7 @@ class ConfiguracionPOS(models.Model):
         choices=[
             ('CONECTADO', 'Conectado'),
             ('DESCONECTADO', 'Desconectado'),
+            ('DETECTADO', 'Detectado Automáticamente'),
             ('ERROR', 'Error'),
             ('NO_PROBADO', 'No Probado'),
         ],

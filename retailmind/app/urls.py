@@ -30,6 +30,7 @@ from .views_modulo_ventas import (
     obtener_arqueo_detalle,
     # Funciones POS Transbank
     gestion_pos_transbank,
+    detectar_terminales_pos,
     obtener_configuraciones_pos,
     crear_configuracion_pos,
     probar_conexion_pos,
@@ -296,6 +297,7 @@ urlpatterns = [
     path('pos/transbank/', gestion_pos_transbank, name='gestion_pos_transbank'),
     
     # APIs de configuración
+    path('pos/detectar-terminales/', detectar_terminales_pos, name='detectar_terminales_pos'),
     path('pos/configuraciones/', obtener_configuraciones_pos, name='obtener_configuraciones_pos'),
     path('pos/configuraciones/crear/', crear_configuracion_pos, name='crear_configuracion_pos'),
     path('pos/probar-conexion/', probar_conexion_pos, name='probar_conexion_pos'),

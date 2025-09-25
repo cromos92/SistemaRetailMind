@@ -3007,6 +3007,100 @@ def gestion_pos_transbank(request):
 
 
 @login_required
+@require_POST
+@csrf_exempt
+def detectar_terminales_pos(request):
+    """Detectar y guardar terminales POS automáticamente"""
+    try:
+        data = json.loads(request.body)
+        puertos_detectados = data.get('puertos_detectados', [])
+        
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa'
+            })
+        
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        terminales_creados = []
+        terminales_existentes = []
+        
+        for puerto in puertos_detectados:
+            # Verificar si ya existe una configuración para este puerto
+            config_existente = ConfiguracionPOS.objects.filter(
+                sucursal=sucursal,
+                puerto_conexion=puerto
+            ).first()
+            
+            if config_existente:
+                # Actualizar estado de conexión
+                config_existente.estado_conexion = 'DETECTADO'
+                config_existente.ultima_conexion = timezone.now()
+                config_existente.save()
+                terminales_existentes.append({
+                    'id': config_existente.id,
+                    'nombre': config_existente.nombre,
+                    'puerto': puerto,
+                    'estado': 'existente'
+                })
+            else:
+                # Crear nueva configuración automática
+                nombre_auto = f"Terminal Auto {puerto}"
+                tipo_pos = 'VERIFONE_520'  # Tipo por defecto, se puede detectar después
+                
+                nueva_config = ConfiguracionPOS.objects.create(
+                    sucursal=sucursal,
+                    nombre=nombre_auto,
+                    tipo_pos=tipo_pos,
+                    puerto_conexion=puerto,
+                    velocidad_conexion=115200,  # Velocidad estándar
+                    timeout_conexion=30,
+                    estado_conexion='DETECTADO',
+                    ultima_conexion=timezone.now(),
+                    activo=True,
+                    es_principal=len(terminales_creados) == 0,  # El primero es principal
+                    observaciones=f'Terminal detectado automáticamente en puerto {puerto}'
+                )
+                
+                terminales_creados.append({
+                    'id': nueva_config.id,
+                    'nombre': nueva_config.nombre,
+                    'puerto': puerto,
+                    'estado': 'nuevo'
+                })
+        
+        # Marcar como desconectados los terminales que no fueron detectados
+        ConfiguracionPOS.objects.filter(
+            sucursal=sucursal,
+            activo=True
+        ).exclude(
+            puerto_conexion__in=puertos_detectados
+        ).update(
+            estado_conexion='DESCONECTADO'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Detección completada: {len(terminales_creados)} nuevos, {len(terminales_existentes)} existentes',
+            'terminales_creados': terminales_creados,
+            'terminales_existentes': terminales_existentes,
+            'total_detectados': len(puertos_detectados)
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error en detección automática: {str(e)}'
+        })
+
+
+@login_required
 @require_GET
 def obtener_configuraciones_pos(request):
     """API para obtener configuraciones POS de la sucursal actual"""

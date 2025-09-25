@@ -139,11 +139,19 @@
                             </button>
                         </div>
                         <div class="btn-group-vertical d-inline-block">
+                            <button id="btn-auto-detect" class="btn btn-success btn-pos">
+                                <i class="fas fa-search mr-2"></i>Auto-Detectar Terminales
+                            </button>
                             <button id="btn-load-keys" class="btn btn-warning btn-pos" disabled>
                                 <i class="fas fa-key mr-2"></i>Cargar Llaves
                             </button>
+                        </div>
+                        <div class="btn-group-vertical d-inline-block">
                             <button id="btn-poll" class="btn btn-info btn-pos" disabled>
                                 <i class="fas fa-heartbeat mr-2"></i>Verificar Conexión
+                            </button>
+                            <button id="btn-refresh-terminals" class="btn btn-outline-info btn-pos">
+                                <i class="fas fa-sync mr-2"></i>Actualizar Lista
                             </button>
                         </div>
                     </div>
@@ -595,6 +603,145 @@
             };
         }
 
+        // Auto-detectar terminales POS
+        async autoDetectTerminals() {
+            try {
+                this.log('🔍 Iniciando auto-detección de terminales...', 'info');
+                this.updateOperationStatus('Detectando terminales POS...', 'info');
+                
+                // Verificar que el SDK esté disponible
+                if (typeof Transbank === 'undefined') {
+                    throw new Error('SDK de Transbank no está cargado. Verifique la conexión a internet.');
+                }
+                
+                if (!Transbank.POS) {
+                    throw new Error('Módulo POS no está disponible en el SDK de Transbank');
+                }
+                
+                // 1. Conectar al agente POS
+                this.log('🔗 Conectando al agente POS...');
+                await Transbank.POS.connect();
+                this.log('✅ Conectado al agente POS Transbank');
+                
+                // 2. Verificar que getPorts existe
+                if (typeof Transbank.POS.getPorts !== 'function') {
+                    throw new Error('Método getPorts() no está disponible en esta versión del SDK');
+                }
+                
+                // 3. Obtener puertos disponibles con timeout
+                this.log('🔍 Obteniendo lista de puertos...');
+                const portsPromise = Transbank.POS.getPorts();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout: getPorts() tardó más de 10 segundos')), 10000)
+                );
+                
+                const ports = await Promise.race([portsPromise, timeoutPromise]);
+                
+                this.log(`📋 Respuesta de getPorts(): ${JSON.stringify(ports)}`);
+                
+                if (!ports) {
+                    throw new Error('getPorts() devolvió null/undefined. Verifique que el agente POS esté ejecutándose.');
+                }
+                
+                if (!Array.isArray(ports)) {
+                    throw new Error(`getPorts() devolvió un tipo inesperado: ${typeof ports}. Se esperaba un array.`);
+                }
+                
+                this.log(`🔌 Puertos detectados: [${ports.join(', ')}]`);
+                
+                if (ports.length === 0) {
+                    throw new Error('No se detectaron terminales POS conectados. Verifique las conexiones físicas.');
+                }
+                
+                // 3. Guardar terminales detectados en Django
+                const response = await fetch('/app/pos/detectar-terminales/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.csrfToken
+                    },
+                    body: JSON.stringify({
+                        puertos_detectados: ports
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.log(`✅ Detección completada: ${data.total_detectados} terminales`, 'success');
+                    this.updateOperationStatus(data.message, 'success');
+                    
+                    // 4. Actualizar selector de terminales
+                    await this.refreshTerminalSelector();
+                    
+                    // 5. Mostrar resultado
+                    this.showResult({
+                        success: true,
+                        message: `Auto-detección exitosa: ${data.total_detectados} terminales encontrados`,
+                        terminals: ports
+                    });
+                    
+                    return {
+                        success: true,
+                        terminals: ports,
+                        data: data
+                    };
+                } else {
+                    throw new Error(data.error);
+                }
+                
+            } catch (error) {
+                this.log(`❌ Error en auto-detección: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en auto-detección', 'error');
+                this.showResult({ 
+                    success: false, 
+                    error: error.message,
+                    suggestion: 'Verifique que el agente POS esté ejecutándose y los terminales estén conectados'
+                });
+                return { success: false, error: error.message };
+            }
+        }
+
+        // Actualizar selector de terminales
+        async refreshTerminalSelector() {
+            try {
+                const response = await fetch('/app/pos/configuraciones/', {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': this.csrfToken
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const selector = document.getElementById('terminal-select');
+                    if (selector) {
+                        // Limpiar opciones existentes
+                        selector.innerHTML = '<option value="">Seleccionar terminal...</option>';
+                        
+                        // Agregar terminales detectados
+                        data.configuraciones.forEach(config => {
+                            const option = document.createElement('option');
+                            option.value = config.id;
+                            option.textContent = `${config.nombre} - ${config.tipo_pos_display} (${config.puerto_conexion})`;
+                            
+                            // Marcar terminales detectados automáticamente
+                            if (config.estado_conexion === 'DETECTADO') {
+                                option.textContent += ' 🔍 Auto-detectado';
+                            }
+                            
+                            selector.appendChild(option);
+                        });
+                        
+                        this.log(`🔄 Selector actualizado con ${data.configuraciones.length} terminales`);
+                    }
+                }
+            } catch (error) {
+                this.log(`❌ Error actualizando selector: ${error.message}`, 'error');
+            }
+        }
+
         // Activar modo demostración
         activateDemoMode() {
             this.log('🎭 Activando modo demostración...', 'info');
@@ -648,13 +795,50 @@
         // Generar ticket ID inicial
         document.getElementById('ticket-id').value = posManager.generateTicketId();
 
-        // Botones de conexión
+        // Botones de conexión y detección
         document.getElementById('btn-connect').addEventListener('click', () => {
             posManager.connect();
         });
 
         document.getElementById('btn-disconnect').addEventListener('click', () => {
             posManager.disconnect();
+        });
+
+        // Auto-detección de terminales
+        document.getElementById('btn-auto-detect').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-auto-detect');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Detectando...';
+                btn.disabled = true;
+                
+                await posManager.autoDetectTerminals();
+            } catch (error) {
+                posManager.log(`Error en detección: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Actualizar lista de terminales
+        document.getElementById('btn-refresh-terminals').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-refresh-terminals');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Actualizando...';
+                btn.disabled = true;
+                
+                await posManager.refreshTerminalSelector();
+                posManager.log('Lista de terminales actualizada', 'success');
+            } catch (error) {
+                posManager.log(`Error actualizando lista: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         });
 
         // Operaciones básicas
@@ -736,7 +920,17 @@
             posManager.activateDemoMode();
         });
 
-        posManager.log('Sistema de POS iniciado. Seleccione un terminal y haga clic en "Conectar Terminal".', 'info');
+        posManager.log('Sistema de POS iniciado. Use "Auto-Detectar Terminales" para buscar terminales conectados.', 'info');
+        
+        // Auto-detectar terminales al cargar la página (opcional)
+        setTimeout(async () => {
+            try {
+                posManager.log('🔍 Iniciando auto-detección automática...', 'info');
+                await posManager.autoDetectTerminals();
+            } catch (error) {
+                posManager.log('ℹ️ Auto-detección automática falló. Use el botón "Auto-Detectar Terminales" manualmente.', 'info');
+            }
+        }, 2000); // Esperar 2 segundos después de cargar
     });
 </script>
 
