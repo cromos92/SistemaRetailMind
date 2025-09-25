@@ -30,13 +30,18 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u6k00%6(jlc5r(j2l34j7
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# ALLOWED_HOSTS configuration
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # Railway specific
 if 'RAILWAY_ENVIRONMENT' in os.environ:
     ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PUBLIC_DOMAIN', ''))
     ALLOWED_HOSTS.append('*.railway.app')
     ALLOWED_HOSTS.append('*.up.railway.app')
+
+# Para desarrollo/testing - permite todos los hosts
+if ALLOWED_HOSTS == ['*']:
+    ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -101,17 +106,25 @@ if 'DATABASE_URL' in os.environ:
         )
     }
 else:
-    # Local development
+    # Local development - usar SQLite por defecto
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql_psycopg2',
-            'NAME': os.environ.get("PGDATABASE", "retailmind"),
-            'USER': os.environ.get("PGUSER", "postgres"),
-            'PASSWORD': os.environ.get("PGPASSWORD", "admin"),
-            'HOST': os.environ.get("PGHOST", "localhost"),
-            'PORT': os.environ.get("PGPORT", "5432"),
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+    
+    # Si tienes PostgreSQL local configurado, descomenta esto:
+    # DATABASES = {
+    #     'default': {
+    #         'ENGINE': 'django.db.backends.postgresql_psycopg2',
+    #         'NAME': os.environ.get("PGDATABASE", "retailmind"),
+    #         'USER': os.environ.get("PGUSER", "postgres"),
+    #         'PASSWORD': os.environ.get("PGPASSWORD", "admin"),
+    #         'HOST': os.environ.get("PGHOST", "localhost"),
+    #         'PORT': os.environ.get("PGPORT", "5432"),
+    #     }
+    # }
 
  
 
