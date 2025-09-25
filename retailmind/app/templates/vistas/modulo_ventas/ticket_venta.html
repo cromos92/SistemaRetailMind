@@ -1,0 +1,1330 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+.vendedor-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.vendedor-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.style_vendedores {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.title {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.gap-2 > * {
+    margin-right: 0.5rem;
+}
+
+.gap-2 > *:last-child {
+    margin-right: 0;
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+            
+            <!-- start page title -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                        <h4 class="mb-sm-0">
+                            <i class="ri-receipt-line text-primary me-2"></i>
+                            Ticket de Venta
+                        </h4>
+                        <div class="page-title-right">
+                            <ol class="breadcrumb m-0">
+                                <li class="breadcrumb-item"><a href="javascript: void(0);">Ventas</a></li>
+                                <li class="breadcrumb-item active">Ticket de Venta</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- end page title -->
+
+
+            <!-- Vendedores -->
+            <div class="row" id="seccionVendedores">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0 text-center">
+                                <i class="ri-user-star-line text-primary me-2"></i>
+                                Listado de Vendedores en Sistema
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% if vendedores %}
+                                    {% for vendedor in vendedores %}
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card bg-secondary text-white vendedor-card" 
+                                             data-vendedor-id="{{ vendedor.id }}"
+                                             data-vendedor-codigo="{{ vendedor.codigo_vendedor }}"
+                                             data-vendedor-nombre="{{ vendedor.nombre }}"
+                                             style="cursor: pointer; transition: all 0.3s;">
+                                            <div class="card-body text-center">
+                                                <div class="style_vendedores mb-2">
+                                                    <strong>{{ vendedor.nombre|default:"Sin nombre" }}</strong>
+                                                </div>
+                                                <div class="style_vendedores">
+                                                    <span>Código: {{ vendedor.codigo_vendedor }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="col-12">
+                                        <div class="text-center py-4">
+                                            <i class="ri-user-line text-muted" style="font-size: 3rem;"></i>
+                                            <h6 class="mt-3 text-muted">No hay vendedores registrados</h6>
+                                            <p class="text-muted">Contacta al administrador para registrar vendedores.</p>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Controles inferiores -->
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <div class="d-flex justify-content-end align-items-center gap-2">
+                                        <button type="button" class="btn btn-info" 
+                                                onclick="window.open('http://localhost:8000/app/productos-sucursal/', '_blank')">
+                                            <i class="ri-external-link-line me-1"></i>
+                                            Buscar En Otra Sucursal
+                                        </button>
+                                        <input type="text" placeholder="Ingresar Codigo Vendedor" 
+                                               class="form-control" style="max-width: 250px;" 
+                                               id="codigoVendedor" autofocus>
+                                        <button type="button" class="btn btn-success" id="btnBuscarVendedor">
+                                            OK
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección Crear Ticket (oculta inicialmente) -->
+            <div class="row mt-4" id="seccionCrearTicket" style="display: none;">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="card-title mb-0 text-center">
+                                <i class="ri-receipt-line me-2"></i>
+                                Crear Ticket de Venta
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- Información del Ticket -->
+                            <div class="row mb-4">
+                                <div class="col-md-3">
+                                    <label class="form-control bg-dark text-white">
+                                        <b>Vendedor</b>
+                                        <h6 id="ticketVendedor">-</h6>
+                                    </label>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-control bg-dark text-white">
+                                        <b>Código</b>
+                                        <h6 id="ticketCodigo">-</h6>
+                                    </label>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-control bg-dark text-white">
+                                        <b>Sucursal</b>
+                                        <h6 id="ticketSucursal">{{ sucursal_actual.alias|default:"Sin sucursal" }}</h6>
+                                    </label>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-control bg-dark text-white">
+                                        <b>Fecha</b>
+                                        <h6 id="ticketFecha">{{ "now"|date:"Y-m-d" }}</h6>
+                                    </label>
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="button" class="btn btn-warning btn-sm w-100" id="btnCambiarVendedor">
+                                        <i class="ri-arrow-left-line me-1"></i>
+                                        Cambiar Vendedor
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <!-- Formulario de Producto -->
+                            <div class="row mb-4">
+                                <div class="col-md-2">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>SKU</b></label>
+                                        <input type="number" class="form-control text-center" id="skuProducto" placeholder="SKU" autofocus>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>Artículo</b></label>
+                                        <input type="text" class="form-control text-center" id="articuloProducto" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>Descripción</b></label>
+                                        <input type="text" class="form-control text-center" id="descripcionProducto" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>Marca</b></label>
+                                        <input type="text" class="form-control text-center" id="marcaProducto" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>Talla</b></label>
+                                        <input type="text" class="form-control text-center" id="tallaProducto" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>Precio</b></label>
+                                        <input type="number" class="form-control text-center" id="precioProducto">
+                                        <input type="hidden" id="precioOriginal">
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>Cantidad</b></label>
+                                        <input type="number" class="form-control text-center" id="cantidadProducto" value="1" min="1">
+                                    </div>
+                                </div>
+                                <div class="col-md-1">
+                                    <div class="form-control p-1">
+                                        <label class="text-center d-block"><b>Stock</b></label>
+                                        <input type="number" class="form-control text-center" id="stockProducto" disabled>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Botones de Acción -->
+                            <div class="row mb-4">
+                                <div class="col-12 d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-info" id="btnBuscarArticulo">
+                                        <i class="ri-search-line me-1"></i>
+                                        Buscar Artículo
+                                    </button>
+                                    <button type="button" class="btn btn-success" id="btnAgregarProducto">
+                                        <i class="ri-add-line me-1"></i>
+                                        Agregar al Ticket
+                                    </button>
+                                    <button type="button" class="btn btn-warning" id="btnLimpiarFormulario">
+                                        <i class="ri-eraser-line me-1"></i>
+                                        Limpiar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Lista de Productos del Ticket -->
+                            <div class="row">
+                                <div class="col-12">
+                                    <h5 class="text-center mb-3">
+                                        <b>Lista de Productos a Vender</b>
+                                    </h5>
+                                    <hr>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-bordered">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    <th>SKU</th>
+                                                    <th>Artículo</th>
+                                                    <th>Descripción</th>
+                                                    <th>Marca</th>
+                                                    <th>Talla</th>
+                                                    <th>Stock</th>
+                                                    <th>Precio</th>
+                                                    <th>Cantidad</th>
+                                                    <th>Subtotal</th>
+                                                    <th>Acción</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="tbodyTicket">
+                                                <!-- Los productos se agregarán aquí -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <!-- Totales -->
+                                    <div class="row mt-3">
+                                        <div class="col-md-8"></div>
+                                        <div class="col-md-2">
+                                            <label class="text-center d-block">
+                                                <b>Total Items</b>
+                                                <input type="number" id="totalItems" class="form-control text-center" value="0" disabled>
+                                            </label>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label class="text-center d-block">
+                                                <b>Total Ticket</b>
+                                                <input type="number" id="totalTicket" class="form-control text-center" value="0" disabled>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Botón Imprimir -->
+                                    <div class="row mt-4">
+                                        <div class="col-12">
+                                            <button type="button" class="btn btn-success btn-lg w-100" id="btnImprimirTicket">
+                                                <i class="ri-printer-line me-2"></i>
+                                                Imprimir Ticket
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
+</div>
+
+<!-- Modal Información Vendedor -->
+
+<!-- Modal Búsqueda de Productos -->
+<div class="modal fade" id="modalBusquedaProductos" tabindex="-1" aria-labelledby="modalBusquedaProductosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalBusquedaProductosLabel">
+                    <i class="ri-search-eye-line me-2"></i>
+                    Buscar artículos en sucursal
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label mb-1"><small>Artículo</small></label>
+                        <input type="text" class="form-control form-control-sm" id="filtroArticulo" placeholder="Ej: Polera">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label mb-1"><small>Descripción</small></label>
+                        <input type="text" class="form-control form-control-sm" id="filtroDescripcion" placeholder="Ej: Hombre">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label mb-1"><small>Marca</small></label>
+                        <input type="text" class="form-control form-control-sm" id="filtroMarca" placeholder="Ej: Nike">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label mb-1"><small>SKU</small></label>
+                        <input type="text" class="form-control form-control-sm" id="filtroSku" placeholder="Ej: 123456">
+                    </div>
+                    <div class="col-12 text-end">
+                        <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="btnLimpiarFiltros">
+                            <i class="ri-refresh-line me-1"></i>
+                            Limpiar filtros
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary" id="btnBuscarProductos">
+                            <i class="ri-search-line me-1"></i>
+                            Buscar productos
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-responsive border rounded">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light text-center">
+                            <tr>
+                                <th>SKU</th>
+                                <th>Artículo</th>
+                                <th>Descripción</th>
+                                <th>Marca</th>
+                                <th>Talla</th>
+                                <th>Stock</th>
+                                <th>Precio</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyBusquedaProductos">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    <i class="ri-filter-line" style="font-size: 2rem;"></i>
+                                    <br>
+                                    Ingresa un criterio de búsqueda y presiona "Buscar productos".
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer flex-column flex-sm-row justify-content-sm-between align-items-sm-center">
+                <small class="text-muted" id="infoPaginacion"></small>
+                <nav aria-label="Paginación productos">
+                    <ul class="pagination pagination-sm mb-0" id="paginacionProductos"></ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="ticketPOSForm">
+<script>
+$(document).ready(function() {
+    let vendedorSeleccionado = null;
+    const MENSAJE_BUSQUEDA_DEFAULT = `
+        <tr>
+            <td colspan="8" class="text-center text-muted py-4">
+                <i class="ri-filter-line" style="font-size: 2rem;"></i>
+                <br>
+                Ingresa un criterio de búsqueda y presiona "Buscar productos".
+            </td>
+        </tr>
+    `;
+
+    // Enfocar automáticamente el input de código al cargar la página
+    $('#codigoVendedor').focus();
+
+    // Manejar Enter en el input de código
+    $('#codigoVendedor').on('keypress', function(e) {
+        if (e.which === 13) { // Enter key
+            buscarVendedorPorCodigo();
+        }
+    });
+
+    // Manejar click en botón Enter
+    $('#btnBuscarVendedor').on('click', function() {
+        buscarVendedorPorCodigo();
+    });
+
+    // Manejar click en tarjetas de vendedores
+    $('.vendedor-card').on('click', function() {
+        const vendedorId = $(this).data('vendedor-id');
+        const vendedorCodigo = $(this).data('vendedor-codigo');
+        const vendedorNombre = $(this).data('vendedor-nombre');
+        
+        // Llenar input con el código
+        $('#codigoVendedor').val(vendedorCodigo);
+        
+        // Resaltar tarjeta seleccionada
+        $('.vendedor-card').removeClass('bg-success').addClass('bg-secondary');
+        $(this).removeClass('bg-secondary').addClass('bg-success');
+        
+        // Buscar información completa del vendedor
+        buscarVendedorPorCodigo();
+    });
+
+    // Efecto hover en tarjetas
+    $('.vendedor-card').hover(
+        function() {
+            if (!$(this).hasClass('bg-success')) {
+                $(this).removeClass('bg-secondary').addClass('bg-primary');
+            }
+        },
+        function() {
+            if (!$(this).hasClass('bg-success')) {
+                $(this).removeClass('bg-primary').addClass('bg-secondary');
+            }
+        }
+    );
+
+    // Función para buscar vendedor por código
+    function buscarVendedorPorCodigo() {
+        const codigo = $('#codigoVendedor').val().trim();
+        
+        if (!codigo) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Código requerido',
+                text: 'Por favor ingresa un código de vendedor'
+            });
+            return;
+        }
+
+        // Mostrar loading
+        Swal.fire({
+            title: 'Buscando vendedor...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        // Realizar petición AJAX
+        $.ajax({
+            url: '{% url "buscar_vendedor_por_codigo" %}',
+            type: 'GET',
+            data: { codigo: codigo },
+            success: function(response) {
+                Swal.close();
+                
+                if (response.success) {
+                    mostrarInfoVendedor(response.vendedor);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Vendedor no encontrado',
+                        text: response.error
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                Swal.close();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo conectar con el servidor'
+                });
+            }
+        });
+    }
+
+    // Función para mostrar información del vendedor
+    function mostrarInfoVendedor(vendedor) {
+        $('#modalVendedorCodigo').text(vendedor.codigo || '-');
+        $('#modalVendedorNombre').text(vendedor.nombre || 'Sin nombre');
+        $('#modalVendedorRut').text(vendedor.rut || '-');
+        $('#modalVendedorCorreo').text(vendedor.correo || '-');
+
+        seleccionarVendedor(vendedor);
+    }
+
+    // Variables globales para el ticket
+    let productosTicket = [];
+    let contadorProductos = 0;
+    let paginaActual = 1;
+    let totalPaginas = 1;
+
+    // Función para seleccionar vendedor
+    function seleccionarVendedor(vendedor) {
+        vendedorSeleccionado = vendedor;
+        
+        // Actualizar información del ticket
+        $('#ticketVendedor').text(vendedor.nombre);
+        $('#ticketCodigo').text(vendedor.codigo);
+        
+        // Ocultar sección de vendedores y mostrar sección de crear ticket
+        $('#seccionVendedores').hide();
+        $('#seccionCrearTicket').show();
+        
+        // Enfocar en el campo SKU
+        setTimeout(() => {
+            $('#skuProducto').focus();
+        }, 100);
+
+        // Limpiar input de búsqueda
+        $('#codigoVendedor').val('');
+
+        console.log('Vendedor seleccionado:', vendedor);
+    }
+
+    // Función adicional para resaltar tarjeta por código
+    function resaltarTarjetaPorCodigo(codigo) {
+        $('.vendedor-card').each(function() {
+            if ($(this).data('vendedor-codigo') == codigo) {
+                $('.vendedor-card').removeClass('bg-success').addClass('bg-secondary');
+                $(this).removeClass('bg-secondary').addClass('bg-success');
+            }
+        });
+    }
+
+    // ==================== FUNCIONES DEL TICKET ====================
+
+    // Cambiar vendedor (volver a la selección)
+    $('#btnCambiarVendedor').click(function() {
+        // Confirmar cambio de vendedor
+        Swal.fire({
+            title: '¿Cambiar vendedor?',
+            text: 'Se perderán todos los productos agregados al ticket actual',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, cambiar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#d33'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Ocultar sección de crear ticket y mostrar sección de vendedores
+                $('#seccionCrearTicket').hide();
+                $('#seccionVendedores').show();
+                
+                // Limpiar datos
+                vendedorSeleccionado = null;
+                productosTicket = [];
+                contadorProductos = 0;
+                limpiarFormularioProducto();
+                actualizarTotales();
+                $('#tbodyTicket').empty();
+                
+                // Limpiar selección de tarjetas
+                $('.vendedor-card').removeClass('bg-success').addClass('bg-secondary');
+                
+                // Enfocar en el input de código
+                setTimeout(() => {
+                    $('#codigoVendedor').focus();
+                }, 100);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Vendedor cambiado',
+                    text: 'Selecciona un nuevo vendedor',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            }
+        });
+    });
+
+    // Buscar producto por SKU
+    $('#skuProducto').on('keypress', function(e) {
+        if (e.which === 13) { // Enter
+            buscarProductoPorSku();
+        }
+    });
+
+    function buscarProductoPorSku() {
+        const sku = $('#skuProducto').val().trim();
+        if (!sku) {
+            Swal.fire('Error', 'Ingresa un SKU válido', 'error');
+            return;
+        }
+
+        $.ajax({
+            url: '{% url "buscar_producto_por_sku" %}',
+            method: 'GET',
+            data: { sku: sku },
+            success: function(response) {
+                if (response.success) {
+                    const producto = response.producto;
+                    $('#articuloProducto').val(producto.articulo);
+                    $('#descripcionProducto').val(producto.descripcion);
+                    $('#marcaProducto').val(producto.marca || '-');
+                    $('#tallaProducto').val(producto.talla);
+                    $('#precioProducto').val(producto.precio_venta);
+                    $('#precioOriginal').val(producto.precio_venta);
+                    $('#stockProducto').val(producto.stock);
+                    $('#cantidadProducto').val(1).focus();
+                } else {
+                    Swal.fire('Producto no encontrado', response.message, 'warning');
+                    limpiarFormularioProducto();
+                }
+            },
+            error: function() {
+                Swal.fire('Error', 'Error al buscar el producto', 'error');
+            }
+        });
+    }
+
+    // Agregar producto al ticket
+    $('#btnAgregarProducto').click(function() {
+        agregarProductoAlTicket();
+    });
+
+    function agregarProductoAlTicket() {
+        const sku = $('#skuProducto').val().trim();
+        const articulo = $('#articuloProducto').val();
+        const descripcion = $('#descripcionProducto').val();
+        const marca = $('#marcaProducto').val();
+        const talla = $('#tallaProducto').val();
+        const precio = parseFloat($('#precioProducto').val()) || 0;
+        const cantidad = parseInt($('#cantidadProducto').val()) || 1;
+        const stock = parseInt($('#stockProducto').val()) || 0;
+
+        // Validaciones
+        if (!sku || !articulo) {
+            Swal.fire('Error', 'Busca un producto válido primero', 'error');
+            return;
+        }
+
+        if (cantidad <= 0) {
+            Swal.fire('Error', 'La cantidad debe ser mayor a 0', 'error');
+            return;
+        }
+
+        if (cantidad > stock) {
+            Swal.fire('Error', `Stock insuficiente. Disponible: ${stock}`, 'error');
+            return;
+        }
+
+        // Verificar si el producto ya está en el ticket
+        const productoExistente = productosTicket.find(p => p.sku === sku);
+        if (productoExistente) {
+            const nuevaCantidad = productoExistente.cantidad + cantidad;
+            if (nuevaCantidad > stock) {
+                Swal.fire('Error', `Stock insuficiente. Ya tienes ${productoExistente.cantidad} en el ticket. Máximo disponible: ${stock}`, 'error');
+                return;
+            }
+            productoExistente.cantidad = nuevaCantidad;
+            productoExistente.subtotal = productoExistente.cantidad * productoExistente.precio;
+        } else {
+            // Agregar nuevo producto
+            contadorProductos++;
+            const nuevoProducto = {
+                id: contadorProductos,
+                sku: sku,
+                articulo: articulo,
+                descripcion: descripcion,
+                marca: marca,
+                talla: talla,
+                precio: precio,
+                cantidad: cantidad,
+                stock: stock,
+                subtotal: precio * cantidad
+            };
+            productosTicket.push(nuevoProducto);
+        }
+
+        actualizarTablaTicket();
+        actualizarTotales();
+        limpiarFormularioProducto();
+        $('#skuProducto').focus();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Producto agregado',
+            text: `${articulo} agregado al ticket`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+    }
+
+    // Agregar producto al ticket al presionar Enter en cantidad
+    $('#cantidadProducto').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            agregarProductoAlTicket();
+        }
+    });
+
+    // Actualizar tabla del ticket
+    function actualizarTablaTicket() {
+        const tbody = $('#tbodyTicket');
+        tbody.empty();
+
+        productosTicket.forEach(producto => {
+            const fila = `
+                <tr>
+                    <td>${producto.sku}</td>
+                    <td>${producto.articulo}</td>
+                    <td>${producto.descripcion}</td>
+                    <td>${producto.marca}</td>
+                    <td>${producto.talla}</td>
+                    <td>${producto.stock}</td>
+                    <td>$${producto.precio.toLocaleString()}</td>
+                    <td>
+                        <input type="number" class="form-control text-center cantidad-producto" 
+                               data-id="${producto.id}" value="${producto.cantidad}" min="1" max="${producto.stock}">
+                    </td>
+                    <td>$${producto.subtotal.toLocaleString()}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm eliminar-producto" data-id="${producto.id}">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+            tbody.append(fila);
+        });
+    }
+
+    // Cambiar cantidad de producto
+    $(document).on('change', '.cantidad-producto', function() {
+        const id = $(this).data('id');
+        const nuevaCantidad = parseInt($(this).val()) || 1;
+        const producto = productosTicket.find(p => p.id === id);
+        
+        if (producto) {
+            if (nuevaCantidad > producto.stock) {
+                Swal.fire('Error', `Stock insuficiente. Máximo: ${producto.stock}`, 'error');
+                $(this).val(producto.cantidad);
+                return;
+            }
+            
+            producto.cantidad = nuevaCantidad;
+            producto.subtotal = producto.precio * nuevaCantidad;
+            actualizarTablaTicket();
+            actualizarTotales();
+        }
+    });
+
+    // Eliminar producto del ticket
+    $(document).on('click', '.eliminar-producto', function() {
+        const id = $(this).data('id');
+        productosTicket = productosTicket.filter(p => p.id !== id);
+        actualizarTablaTicket();
+        actualizarTotales();
+    });
+
+    // Actualizar totales
+    function actualizarTotales() {
+        const totalItems = productosTicket.reduce((sum, p) => sum + p.cantidad, 0);
+        const totalTicket = productosTicket.reduce((sum, p) => sum + p.subtotal, 0);
+        
+        $('#totalItems').val(totalItems);
+        $('#totalTicket').val(totalTicket);
+    }
+
+    // Limpiar formulario de producto
+    function limpiarFormularioProducto() {
+        $('#skuProducto').val('');
+        $('#articuloProducto').val('');
+        $('#descripcionProducto').val('');
+        $('#marcaProducto').val('');
+        $('#tallaProducto').val('');
+        $('#precioProducto').val('');
+        $('#precioOriginal').val('');
+        $('#cantidadProducto').val(1);
+        $('#stockProducto').val('');
+    }
+
+    // Botón limpiar formulario
+    $('#btnLimpiarFormulario').click(function() {
+        limpiarFormularioProducto();
+        $('#skuProducto').focus();
+    });
+
+    // ==================== MODAL BÚSQUEDA DE PRODUCTOS ====================
+
+    // Abrir modal de búsqueda
+    $('#btnBuscarArticulo').click(function() {
+        $('#modalBusquedaProductos').modal('show');
+        setTimeout(() => {
+            $('#filtroArticulo').focus();
+        }, 300);
+
+        resetearBusquedaModal();
+    });
+
+    $('#btnLimpiarFiltros').click(function() {
+        limpiarFiltrosModal();
+        resetearBusquedaModal();
+    });
+
+    // Buscar productos en el modal
+    $('#btnBuscarProductos').click(function() {
+        buscarProductosModal(1);
+    });
+
+    // Buscar con Enter en los filtros
+    $('#filtroArticulo, #filtroDescripcion, #filtroMarca, #filtroSku').on('keypress', function(e) {
+        if (e.which === 13) {
+            buscarProductosModal(1);
+        }
+    });
+
+    function resetearBusquedaModal() {
+        $('#tbodyBusquedaProductos').html(MENSAJE_BUSQUEDA_DEFAULT);
+        $('#infoPaginacion').text('');
+        $('#paginacionProductos').empty();
+    }
+
+    function limpiarFiltrosModal() {
+        $('#filtroArticulo, #filtroDescripcion, #filtroMarca, #filtroSku').val('');
+        $('#filtroArticulo').focus();
+    }
+
+    function buscarProductosModal(pagina = 1) {
+        const filtroArticulo = ($('#filtroArticulo').val() || '').trim();
+        const filtroDescripcion = ($('#filtroDescripcion').val() || '').trim();
+        const filtroMarca = ($('#filtroMarca').val() || '').trim();
+        const filtroSku = ($('#filtroSku').val() || '').trim();
+
+        const filtros = {
+            articulo: filtroArticulo,
+            descripcion: filtroDescripcion,
+            marca: filtroMarca,
+            sku: filtroSku,
+            page: pagina
+        };
+
+        // Validar que al menos un filtro tenga contenido
+        if (!filtroArticulo && !filtroDescripcion && !filtroMarca && !filtroSku) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Filtros requeridos',
+                text: 'Ingrese al menos un criterio de búsqueda'
+            }).then(() => {
+                $('#filtroArticulo').focus();
+            });
+            return;
+        }
+
+        // Mostrar loading en la tabla
+        $('#tbodyBusquedaProductos').html(`
+            <tr>
+                <td colspan="8" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <br><br>
+                    Buscando productos...
+                </td>
+            </tr>
+        `);
+
+        $.ajax({
+            url: '{% url "obtener_productos_sucursal" %}',
+            method: 'GET',
+            data: filtros,
+            success: function(response) {
+                if (response.success) {
+                    mostrarResultadosBusqueda(response.productos, response.pagination);
+                } else {
+                    $('#tbodyBusquedaProductos').html(`
+                        <tr>
+                            <td colspan="8" class="text-center text-danger py-4">
+                                <i class="ri-error-warning-line" style="font-size: 2rem;"></i>
+                                <br>
+                                ${response.error || 'Error al buscar productos'}
+                            </td>
+                        </tr>
+                    `);
+                }
+            },
+            error: function() {
+                $('#tbodyBusquedaProductos').html(`
+                    <tr>
+                        <td colspan="8" class="text-center text-danger py-4">
+                            <i class="ri-wifi-off-line" style="font-size: 2rem;"></i>
+                            <br>
+                            Error de conexión
+                        </td>
+                    </tr>
+                `);
+            }
+        });
+    }
+
+    function mostrarResultadosBusqueda(productos, pagination) {
+        const tbody = $('#tbodyBusquedaProductos');
+        tbody.empty();
+
+        if (productos.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                        <br>
+                        No se encontraron productos con los criterios especificados
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        // Crear filas por cada combinación Producto/Talla
+        productos.forEach(producto => {
+            const marcaCompleta = producto.atributo1 || '';
+            const marca = marcaCompleta.includes(':') ? marcaCompleta.split(':').pop().trim() : (marcaCompleta || '-');
+            const precioFormateado = producto.precio_venta ? parseInt(producto.precio_venta).toLocaleString() : '0';
+            
+            if (producto.tallas_stock && producto.tallas_stock.length > 0) {
+                producto.tallas_stock.forEach(tallaStock => {
+                    const fila = `
+                        <tr>
+                            <td><strong>${tallaStock.sku || ''}</strong></td>
+                            <td>${producto.articulo || ''}</td>
+                            <td>${producto.descripcion || ''}</td>
+                            <td>${marca}</td>
+                            <td><span class="badge bg-info">${tallaStock.talla || '-'}</span></td>
+                            <td>
+                                <span class="badge ${(tallaStock.stock || 0) > 0 ? 'bg-success' : 'bg-danger'}">
+                                    ${tallaStock.stock || 0}
+                                </span>
+                            </td>
+                            <td><strong>$${precioFormateado}</strong></td>
+                            <td>
+                                <button class="btn btn-sm btn-primary seleccionar-producto" 
+                                        data-sku="${tallaStock.sku || ''}"
+                                        data-articulo="${producto.articulo || ''}"
+                                        data-descripcion="${producto.descripcion || ''}"
+                                        data-marca="${marca}"
+                                        data-talla="${tallaStock.talla || ''}"
+                                        data-precio="${producto.precio_venta || 0}"
+                                        data-stock="${tallaStock.stock || 0}"
+                                        ${!tallaStock.stock ? 'disabled' : ''}>
+                                    <i class="ri-add-line"></i>
+                                    Seleccionar
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(fila);
+                });
+            } else {
+                const fila = `
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                            <br>
+                            El producto ${producto.articulo || ''} no tiene tallas asociadas en esta sucursal
+                        </td>
+                    </tr>
+                `;
+                tbody.append(fila);
+            }
+        });
+
+        // Actualizar información de paginación
+        actualizarPaginacionModal(pagination);
+    }
+
+    function actualizarPaginacionModal(pagination) {
+        paginaActual = pagination.current_page;
+        totalPaginas = pagination.total_pages;
+
+        // Información de paginación
+        const inicio = ((paginaActual - 1) * pagination.page_size) + 1;
+        const fin = Math.min(paginaActual * pagination.page_size, pagination.total_items);
+        
+        $('#infoPaginacion').text(
+            `Mostrando ${inicio} a ${fin} de ${pagination.total_items} productos`
+        );
+
+        // Generar botones de paginación
+        const paginacion = $('#paginacionProductos');
+        paginacion.empty();
+
+        if (totalPaginas > 1) {
+            // Botón anterior
+            paginacion.append(`
+                <li class="page-item ${paginaActual <= 1 ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${paginaActual - 1}">
+                        <i class="ri-arrow-left-line"></i>
+                    </a>
+                </li>
+            `);
+
+            // Páginas
+            const inicio = Math.max(1, paginaActual - 2);
+            const fin = Math.min(totalPaginas, paginaActual + 2);
+
+            for (let i = inicio; i <= fin; i++) {
+                paginacion.append(`
+                    <li class="page-item ${i === paginaActual ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>
+                `);
+            }
+
+            // Botón siguiente
+            paginacion.append(`
+                <li class="page-item ${paginaActual >= totalPaginas ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${paginaActual + 1}">
+                        <i class="ri-arrow-right-line"></i>
+                    </a>
+                </li>
+            `);
+        }
+    }
+
+    // Manejar clicks en paginación
+    $(document).on('click', '#paginacionProductos .page-link', function(e) {
+        e.preventDefault();
+        const pagina = $(this).data('page');
+        if (pagina && pagina !== paginaActual) {
+            buscarProductosModal(pagina);
+        }
+    });
+
+    // Seleccionar producto del modal
+    $(document).on('click', '.seleccionar-producto', function() {
+        const producto = {
+            sku: $(this).data('sku'),
+            articulo: $(this).data('articulo'),
+            descripcion: $(this).data('descripcion'),
+            marca: $(this).data('marca'),
+            talla: $(this).data('talla'),
+            precio: $(this).data('precio'),
+            stock: $(this).data('stock')
+        };
+
+        // Llenar formulario
+        $('#skuProducto').val(producto.sku || '');
+        $('#articuloProducto').val(producto.articulo || '');
+        $('#descripcionProducto').val(producto.descripcion || '');
+        $('#marcaProducto').val(producto.marca || '-');
+        $('#tallaProducto').val(producto.talla || '');
+        $('#precioProducto').val(producto.precio || 0);
+        $('#precioOriginal').val(producto.precio || 0);
+        $('#stockProducto').val(producto.stock || 0);
+        $('#cantidadProducto').val(1).focus();
+
+        // Cerrar modal
+        // $('#modalBusquedaProductos').modal('hide'); // No es necesario cerrar el modal
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Producto seleccionado',
+            text: `${producto.articulo} - ${producto.talla}`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+    });
+
+    // Imprimir ticket
+    $('#btnImprimirTicket').click(function() {
+        if (productosTicket.length === 0) {
+            Swal.fire('Error', 'Agrega al menos un producto al ticket', 'error');
+            return;
+        }
+
+        if (!vendedorSeleccionado) {
+            Swal.fire('Error', 'Selecciona un vendedor primero', 'error');
+            return;
+        }
+
+        // Confirmar impresión
+        Swal.fire({
+            title: '¿Imprimir ticket?',
+            text: `Total: $${$('#totalTicket').val()} - Items: ${$('#totalItems').val()}`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, imprimir',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                procesarTicket();
+            }
+        });
+    });
+
+    // Procesar e imprimir ticket
+    function procesarTicket() {
+        const ticketData = {
+            vendedor_id: vendedorSeleccionado.id,
+            productos: productosTicket.map(p => ({
+                sku: p.sku,
+                cantidad: p.cantidad,
+                precio: p.precio
+            })),
+            total: parseInt($('#totalTicket').val(), 10),
+            total_items: parseInt($('#totalItems').val(), 10)
+        };
+
+        fetch('{% url "crear_ticket" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            body: JSON.stringify(ticketData)
+        })
+        .then(response => response.json())
+        .then(response => {
+            if (response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Ticket creado!',
+                    text: `Ticket #${response.ticket_id} creado exitosamente`,
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    resetearVistaTicket();
+
+                    if (response.ticket_data) {
+                        imprimirTicketTermico(response.ticket_data);
+                    } else if (response.ticket_html) {
+                        const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+                        ventanaImpresion.document.write(response.ticket_html);
+                        ventanaImpresion.document.close();
+                        ventanaImpresion.print();
+                        ventanaImpresion.close();
+                    }
+                });
+            } else {
+                Swal.fire('Error', response.message || 'No se pudo crear el ticket', 'error');
+            }
+        })
+        .catch(() => {
+            Swal.fire('Error', 'Error al crear el ticket', 'error');
+        });
+    }
+
+    function resetearVistaTicket() {
+        $('#seccionCrearTicket').hide();
+        $('#seccionVendedores').show();
+        vendedorSeleccionado = null;
+        productosTicket = [];
+        contadorProductos = 0;
+        limpiarFormularioProducto();
+        actualizarTotales();
+        $('#tbodyTicket').empty();
+        $('.vendedor-card').removeClass('bg-success').addClass('bg-secondary');
+        setTimeout(() => {
+            $('#codigoVendedor').focus();
+        }, 100);
+    }
+
+    // Función para imprimir en impresora térmica
+    function imprimirTicketTermico(ticketData) {
+        const ticketHtml = generarHtmlTicket(ticketData);
+        const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+        ventanaImpresion.document.write(ticketHtml);
+        ventanaImpresion.document.close();
+
+        ventanaImpresion.onload = function() {
+            ventanaImpresion.print();
+            ventanaImpresion.close();
+        };
+    }
+
+    function generarHtmlTicket(ticketData) {
+        const productos = ticketData.productos || [];
+        const sucursal = ticketData.sucursal || {};
+        const vendedor = ticketData.vendedor || {};
+        const cliente = ticketData.cliente || {};
+        const totales = ticketData.totales || {};
+
+        const formatearMoneda = (valor) => {
+            const numero = parseInt(valor, 10) || 0;
+            return numero.toLocaleString('es-CL');
+        };
+
+        const productosHtml = productos.map((producto) => `
+            <tr>
+                <td style="text-align:center;">${producto.cantidad || 0}</td>
+                <td style="padding:2px 4px;">
+                    ${producto.articulo || ''}<br>
+                    <small>${producto.descripcion || ''}</small><br>
+                    <small>SKU: ${producto.sku || ''} | Talla: ${producto.talla || ''}</small>
+                </td>
+                <td style="text-align:right;">$${formatearMoneda(producto.subtotal)}</td>
+            </tr>
+        `).join('');
+
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Ticket de Venta</title>
+                <style>
+                    body {
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        margin: 0;
+                        padding: 10px;
+                        width: 280px;
+                        background: #fff;
+                    }
+                    .header, .footer {
+                        text-align: center;
+                        margin-bottom: 10px;
+                    }
+                    .header {
+                        border-bottom: 1px dashed #000;
+                        padding-bottom: 10px;
+                    }
+                    .footer {
+                        border-top: 1px dashed #000;
+                        padding-top: 10px;
+                        font-size: 10px;
+                    }
+                    .info {
+                        font-size: 11px;
+                        margin-bottom: 10px;
+                    }
+                    .info div {
+                        margin: 2px 0;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 10px 0;
+                    }
+                    th, td {
+                        padding: 2px;
+                        font-size: 10px;
+                    }
+                    th {
+                        border-bottom: 1px dashed #000;
+                    }
+                    .totales {
+                        border-top: 1px dashed #000;
+                        padding-top: 10px;
+                        margin-top: 10px;
+                        font-size: 11px;
+                    }
+                    .totales div {
+                        display: flex;
+                        justify-content: space-between;
+                        margin: 3px 0;
+                    }
+                    .totales div span:last-child {
+                        font-weight: bold;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <strong>${sucursal.empresa || 'SUCURSAL'}</strong><br>
+                    ${sucursal.alias || ''}<br>
+                    ${sucursal.direccion || ''}<br>
+                    ${sucursal.rut_empresa ? `RUT: ${sucursal.rut_empresa}` : ''}
+                </div>
+
+                <div class="info">
+                    <div><strong>Documento:</strong> ${ticketData.tipo_documento || 'TICKET'}</div>
+                    <div><strong>Ticket N°:</strong> ${ticketData.ticket_id || ''}</div>
+                    <div><strong>Fecha:</strong> ${ticketData.fecha || ''} ${ticketData.hora || ''}</div>
+                    <div><strong>Vendedor:</strong> ${vendedor.nombre || ''} (${vendedor.codigo || ''})</div>
+                    ${cliente.nombre || cliente.rut ? `<div><strong>Cliente:</strong> ${cliente.nombre || ''} ${cliente.rut ? `- ${cliente.rut}` : ''}</div>` : ''}
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:15%; text-align:center;">Cant</th>
+                            <th>Detalle</th>
+                            <th style="width:25%; text-align:right;">Precio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${productosHtml || '<tr><td colspan="3" style="text-align:center;">Sin productos</td></tr>'}
+                    </tbody>
+                </table>
+
+                <div class="totales">
+                    <div><span>Items</span><span>${totales.items || 0}</span></div>
+                    <div><span>Subtotal</span><span>$${formatearMoneda(totales.subtotal)}</span></div>
+                    ${totales.descuento ? `<div><span>Descuento</span><span>-$${formatearMoneda(totales.descuento)}</span></div>` : ''}
+                    <div><span>Total</span><span>$${formatearMoneda(totales.total)}</span></div>
+                </div>
+
+                <div class="footer">
+                    <div>¡GRACIAS POR SU COMPRA!</div>
+                    <div>CAMBIOS HASTA 15 DÍAS</div>
+                    <div>*NO SE REALIZA DEVOLUCIÓN DE DINERO</div>
+                    <br>
+                    <div>Sistema RetailMind</div>
+                </div>
+            </body>
+            </html>
+        `;
+    }
+
+});
+</script>
+
+{% include '../../layout/footer.html' %}

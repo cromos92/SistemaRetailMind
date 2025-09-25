@@ -1,0 +1,1341 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include 'layout/menu.html' %} {% include 'layout/footer.html' %}
+{% csrf_token %}
+<link href="{% static 'libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
+<link href="{% static 'libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
+<link href="{% static 'libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
+<link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
+<link href="{% static 'libs/flatpickr/flatpickr.min.css' %}" rel="stylesheet" type="text/css" />
+<style>
+    .estado-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+    }
+    .estado-pendiente { background-color: #fef3c7; color: #92400e; }
+    .estado-aprobado { background-color: #d1fae5; color: #065f46; }
+    .estado-activo { background-color: #dbeafe; color: #1e40af; }
+    .estado-pagado { background-color: #dcfce7; color: #166534; }
+    .estado-vencido { background-color: #fee2e2; color: #991b1b; }
+    .estado-rechazado { background-color: #fecaca; color: #991b1b; }
+    .estado-cancelado { background-color: #f3f4f6; color: #374151; }
+    
+    .progress-credito {
+        height: 8px;
+        border-radius: 4px;
+    }
+    
+    .firma-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+    }
+    
+    .firma-completada { color: #059669; }
+    .firma-pendiente { color: #d97706; }
+    
+    .card-credito {
+        border-left: 4px solid #e5e7eb;
+        transition: all 0.2s;
+    }
+    
+    .card-credito:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-credito.vencido {
+        border-left-color: #ef4444;
+        background-color: #fef2f2;
+    }
+    
+    .card-credito.activo {
+        border-left-color: #3b82f6;
+    }
+    
+    .card-credito.pagado {
+        border-left-color: #10b981;
+    }
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+    <!-- Header -->
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0 font-size-18">Gestión de Créditos a Trabajadores</h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                        <li class="breadcrumb-item active">Créditos</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas Resumen -->
+    <div class="row" id="estadisticas-resumen">
+        <div class="col-xl-3 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex">
+                        <div class="flex-1">
+                            <p class="text-truncate font-size-14 mb-2">Total Créditos</p>
+                            <h4 class="mb-2" id="total-creditos">0</h4>
+                            <p class="text-muted mb-0">
+                                <span class="text-success fw-bold font-size-12 me-2" id="creditos-activos">0 activos</span>
+                            </p>
+                        </div>
+                        <div class="avatar-sm">
+                            <span class="avatar-title bg-light text-primary rounded-3">
+                                <i class="ri-bank-card-line font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex">
+                        <div class="flex-1">
+                            <p class="text-truncate font-size-14 mb-2">Monto Total Aprobado</p>
+                            <h4 class="mb-2" id="monto-aprobado">$0</h4>
+                            <p class="text-muted mb-0">
+                                <span class="text-info fw-bold font-size-12 me-2" id="total-monto-solicitado">$0 solicitado</span>
+                            </p>
+                        </div>
+                        <div class="avatar-sm">
+                            <span class="avatar-title bg-light text-success rounded-3">
+                                <i class="ri-money-dollar-circle-line font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex">
+                        <div class="flex-1">
+                            <p class="text-truncate font-size-14 mb-2">Monto Pagado</p>
+                            <h4 class="mb-2" id="monto-pagado">$0</h4>
+                            <p class="text-muted mb-0">
+                                <span class="text-warning fw-bold font-size-12 me-2" id="saldo-pendiente">$0 pendiente</span>
+                            </p>
+                        </div>
+                        <div class="avatar-sm">
+                            <span class="avatar-title bg-light text-warning rounded-3">
+                                <i class="ri-wallet-3-line font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex">
+                        <div class="flex-1">
+                            <p class="text-truncate font-size-14 mb-2">Créditos Vencidos</p>
+                            <h4 class="mb-2 text-danger" id="creditos-vencidos">0</h4>
+                            <p class="text-muted mb-0">
+                                <span class="text-danger fw-bold font-size-12 me-2" id="monto-vencido">$0</span>
+                            </p>
+                        </div>
+                        <div class="avatar-sm">
+                            <span class="avatar-title bg-light text-danger rounded-3">
+                                <i class="ri-alarm-warning-line font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros y Acciones -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="row align-items-center">
+                        <div class="col">
+                            <h4 class="card-title">Filtros de Búsqueda</h4>
+                        </div>
+                        <div class="col-auto">
+                            <button type="button" class="btn btn-primary" id="btn-nuevo-credito">
+                                <i class="ri-add-line align-bottom me-1"></i> Nuevo Crédito
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form id="form-filtros">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha Desde</label>
+                                <input type="text" class="form-control" id="fecha-inicio" placeholder="dd/mm/yyyy">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fecha Hasta</label>
+                                <input type="text" class="form-control" id="fecha-fin" placeholder="dd/mm/yyyy">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Estado</label>
+                                <select class="form-select" id="filtro-estado">
+                                    <option value="">Todos</option>
+                                    <option value="PENDIENTE">Pendiente</option>
+                                    <option value="APROBADO">Aprobado</option>
+                                    <option value="ACTIVO">Activo</option>
+                                    <option value="PAGADO">Pagado</option>
+                                    <option value="VENCIDO">Vencido</option>
+                                    <option value="RECHAZADO">Rechazado</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Trabajador</label>
+                                <select class="form-select" id="filtro-trabajador">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Tipo</label>
+                                <select class="form-select" id="filtro-tipo">
+                                    <option value="">Todos</option>
+                                    <option value="ANTICIPO_SUELDO">Anticipo Sueldo</option>
+                                    <option value="PRESTAMO_EMPRESA">Préstamo Empresa</option>
+                                    <option value="CREDITO_COMPRA">Crédito Compra</option>
+                                    <option value="EMERGENCIA">Emergencia</option>
+                                    <option value="OTRO">Otro</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-3">
+                                <input type="text" class="form-control" id="filtro-numero" placeholder="Número de crédito">
+                            </div>
+                            <div class="col-md-9">
+                                <button type="button" class="btn btn-primary" id="btn-buscar">
+                                    <i class="ri-search-line"></i> Buscar
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="btn-limpiar">
+                                    <i class="ri-refresh-line"></i> Limpiar
+                                </button>
+                                <button type="button" class="btn btn-success" id="btn-exportar">
+                                    <i class="ri-file-excel-line"></i> Exportar
+                                </button>
+                                <button type="button" class="btn btn-info" id="btn-reporte">
+                                    <i class="ri-bar-chart-line"></i> Reporte
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Créditos -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title">Lista de Créditos</h4>
+                    <div class="card-title-desc">
+                        <span id="total-registros">0 registros encontrados</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="loading-creditos" class="text-center py-4" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Cargando...</span>
+                        </div>
+                        <p class="mt-2">Cargando créditos...</p>
+                    </div>
+                    
+                    <div id="contenedor-creditos">
+                        <!-- Los créditos se cargarán aquí dinámicamente -->
+                    </div>
+                    
+                    <!-- Paginación -->
+                    <div class="row mt-4">
+                        <div class="col-sm-12 col-md-5">
+                            <div class="dataTables_info">
+                                Mostrando <span id="info-desde">0</span> a <span id="info-hasta">0</span> de <span id="info-total">0</span> registros
+                            </div>
+                        </div>
+                        <div class="col-sm-12 col-md-7">
+                            <div class="dataTables_paginate">
+                                <ul class="pagination justify-content-end" id="paginacion">
+                                    <!-- Paginación se genera dinámicamente -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo/Editar Crédito -->
+<div class="modal fade" id="modal-credito" tabindex="-1" aria-labelledby="modal-credito-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-credito-label">Nuevo Crédito</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="form-credito">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Trabajador/Vendedor <span class="text-danger">*</span></label>
+                            <select class="form-select" id="trabajador-id" required>
+                                <option value="">Seleccionar trabajador...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de Crédito <span class="text-danger">*</span></label>
+                            <select class="form-select" id="tipo-credito" required>
+                                <option value="PRESTAMO_EMPRESA">Préstamo de Empresa</option>
+                                <option value="ANTICIPO_SUELDO">Anticipo de Sueldo</option>
+                                <option value="CREDITO_COMPRA">Crédito para Compra</option>
+                                <option value="EMERGENCIA">Crédito de Emergencia</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Monto Solicitado <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="monto-solicitado" min="1" step="1" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Mes de Vencimiento <span class="text-danger">*</span></label>
+                            <div class="row">
+                                <div class="col-6">
+                                    <select class="form-select" id="mes-vencimiento" required>
+                                        <option value="">Mes</option>
+                                        <option value="01">Enero</option>
+                                        <option value="02">Febrero</option>
+                                        <option value="03">Marzo</option>
+                                        <option value="04">Abril</option>
+                                        <option value="05">Mayo</option>
+                                        <option value="06">Junio</option>
+                                        <option value="07">Julio</option>
+                                        <option value="08">Agosto</option>
+                                        <option value="09">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select" id="año-vencimiento" required>
+                                        <option value="">Año</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-text">Se calcula automáticamente: Primer pago + Cuotas</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tasa de Interés (%)</label>
+                            <input type="number" class="form-control" id="tasa-interes" min="0" max="999.99" step="0.01" value="0">
+                            <div class="form-text">Máximo 999.99%</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Número de Cuotas</label>
+                            <input type="number" class="form-control" id="numero-cuotas" min="1" value="1">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Mes Primer Pago</label>
+                            <div class="row">
+                                <div class="col-6">
+                                    <select class="form-select" id="mes-primer-pago">
+                                        <option value="">Mes</option>
+                                        <option value="01">Enero</option>
+                                        <option value="02">Febrero</option>
+                                        <option value="03">Marzo</option>
+                                        <option value="04">Abril</option>
+                                        <option value="05">Mayo</option>
+                                        <option value="06">Junio</option>
+                                        <option value="07">Julio</option>
+                                        <option value="08">Agosto</option>
+                                        <option value="09">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <select class="form-select" id="año-primer-pago">
+                                        <option value="">Año</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Motivo/Justificación <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="motivo-solicitud" rows="3" required></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observaciones-solicitud" rows="2"></textarea>
+                        </div>
+                        
+                        <!-- Sección Aval -->
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="requiere-aval">
+                                <label class="form-check-label" for="requiere-aval">
+                                    Requiere Aval
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="seccion-aval" style="display: none;">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Nombre del Aval</label>
+                                    <input type="text" class="form-control" id="aval-nombre">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">RUT del Aval</label>
+                                    <input type="text" class="form-control" id="aval-rut">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Teléfono del Aval</label>
+                                    <input type="text" class="form-control" id="aval-telefono">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="ri-save-line align-bottom me-1"></i> Guardar Crédito
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalle Crédito -->
+<div class="modal fade" id="modal-detalle-credito" tabindex="-1" aria-labelledby="modal-detalle-label" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-detalle-label">Detalle del Crédito</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="contenido-detalle-credito">
+                <!-- El contenido se carga dinámicamente -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Registrar Pago -->
+<div class="modal fade" id="modal-pago" tabindex="-1" aria-labelledby="modal-pago-label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-pago-label">Registrar Pago</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="form-pago">
+                <div class="modal-body">
+                    <input type="hidden" id="pago-credito-id">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Monto del Pago <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="pago-monto" min="1" step="1" required>
+                            <div class="form-text">Saldo pendiente: $<span id="pago-saldo-pendiente">0</span></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fecha del Pago <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="pago-fecha" placeholder="dd/mm/yyyy" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Método de Pago</label>
+                            <select class="form-select" id="pago-metodo">
+                                <option value="EFECTIVO">Efectivo</option>
+                                <option value="TRANSFERENCIA">Transferencia</option>
+                                <option value="CHEQUE">Cheque</option>
+                                <option value="TARJETA_DEBITO">Tarjeta Débito</option>
+                                <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Número de Cuota</label>
+                            <input type="number" class="form-control" id="pago-numero-cuota" min="1">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Referencia/Voucher</label>
+                            <input type="text" class="form-control" id="pago-referencia">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="pago-observaciones" rows="2"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="pago-total">
+                                <label class="form-check-label" for="pago-total">
+                                    Es pago total del crédito
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="ri-money-dollar-circle-line align-bottom me-1"></i> Registrar Pago
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- Scripts de librerías ya incluidos más abajo -->
+
+<script>
+$(document).ready(function() {
+    // Configurar CSRF token para todas las peticiones AJAX
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    const csrftoken = getCookie('csrftoken') || $('[name=csrfmiddlewaretoken]').val();
+    
+    // Configurar CSRF token para todas las peticiones AJAX
+    $.ajaxSetup({
+        beforeSend: function(xhr, settings) {
+            if (!(/^http:.*/.test(settings.url) || /^https:.*/.test(settings.url))) {
+                // Only send the token to relative URLs i.e. locally.
+                xhr.setRequestHeader("X-CSRFToken", csrftoken);
+            }
+        }
+    });
+    
+    // Variables globales
+    let currentPage = 1;
+    let totalPages = 1;
+    let creditosData = [];
+    
+    // Inicializar componentes
+    initializeDatePickers();
+    loadTrabajadores();
+    loadEstadisticas();
+    loadCreditos();
+    
+    // Event listeners
+    $('#btn-nuevo-credito').click(function() {
+        openNuevoCreditoModal();
+    });
+    
+    // Event listeners para cálculo automático de vencimiento
+    $('#mes-primer-pago, #año-primer-pago, #numero-cuotas').on('change', function() {
+        calculateVencimiento();
+    });
+    
+    $('#btn-buscar').click(function() {
+        currentPage = 1;
+        loadCreditos();
+    });
+    
+    $('#btn-limpiar').click(function() {
+        limpiarFiltros();
+    });
+    
+    $('#form-credito').submit(function(e) {
+        e.preventDefault();
+        guardarCredito();
+    });
+    
+    $('#form-pago').submit(function(e) {
+        e.preventDefault();
+        registrarPago();
+    });
+    
+    $('#requiere-aval').change(function() {
+        if ($(this).is(':checked')) {
+            $('#seccion-aval').show();
+        } else {
+            $('#seccion-aval').hide();
+        }
+    });
+    
+    // Funciones principales
+    function initializeDatePickers() {
+        const config = {
+            dateFormat: "d/m/Y",
+            locale: "es",
+            allowInput: true
+        };
+        
+        flatpickr("#fecha-inicio", config);
+        flatpickr("#fecha-fin", config);
+        flatpickr("#pago-fecha", config);
+        
+        // Inicializar selectores de año
+        initializeYearSelectors();
+    }
+    
+    function initializeYearSelectors() {
+        const currentYear = new Date().getFullYear();
+        const years = [];
+        
+        // Agregar años desde el actual hasta 5 años en el futuro
+        for (let i = 0; i <= 5; i++) {
+            years.push(currentYear + i);
+        }
+        
+        // Poblar selectores de año
+        const yearSelectors = ['#año-vencimiento', '#año-primer-pago'];
+        yearSelectors.forEach(selector => {
+            const select = $(selector);
+            select.empty().append('<option value="">Año</option>');
+            years.forEach(year => {
+                select.append(`<option value="${year}">${year}</option>`);
+            });
+        });
+    }
+    
+    function calculateVencimiento() {
+        const mesPrimerPago = parseInt($('#mes-primer-pago').val());
+        const añoPrimerPago = parseInt($('#año-primer-pago').val());
+        const numeroCuotas = parseInt($('#numero-cuotas').val()) || 1;
+        
+        if (!mesPrimerPago || !añoPrimerPago) return;
+        
+        // Calcular el mes de vencimiento (primer pago + cuotas - 1)
+        let mesVencimiento = mesPrimerPago + numeroCuotas - 1;
+        let añoVencimiento = añoPrimerPago;
+        
+        // Ajustar si el mes excede 12
+        while (mesVencimiento > 12) {
+            mesVencimiento -= 12;
+            añoVencimiento += 1;
+        }
+        
+        // Actualizar los selectores de vencimiento
+        $('#mes-vencimiento').val(String(mesVencimiento).padStart(2, '0'));
+        $('#año-vencimiento').val(añoVencimiento);
+    }
+    
+    function setCurrentDateAsPrimerPago() {
+        const now = new Date();
+        const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+        const currentYear = now.getFullYear();
+        
+        $('#mes-primer-pago').val(currentMonth);
+        $('#año-primer-pago').val(currentYear);
+        
+        // Calcular vencimiento después de establecer primer pago
+        calculateVencimiento();
+    }
+    
+    function buildDateFromSelectors(mesSelector, añoSelector) {
+        const mes = $(mesSelector).val();
+        const año = $(añoSelector).val();
+        
+        if (!mes || !año) return '';
+        
+        // Construir fecha como último día del mes seleccionado
+        const fecha = new Date(parseInt(año), parseInt(mes), 0); // día 0 = último día del mes anterior
+        const year = fecha.getFullYear();
+        const month = String(fecha.getMonth() + 1).padStart(2, '0');
+        const day = String(fecha.getDate()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}`;
+    }
+    
+    function loadTrabajadores() {
+        $.get('/app/api/creditos/trabajadores/')
+            .done(function(response) {
+                if (response.success) {
+                    const trabajadores = response.trabajadores;
+                    let options = '<option value="">Seleccionar trabajador...</option>';
+                    let filterOptions = '<option value="">Todos</option>';
+                    
+                    trabajadores.forEach(function(trabajador) {
+                        options += `<option value="${trabajador.id}">${trabajador.nombre} (${trabajador.codigo_vendedor})</option>`;
+                        filterOptions += `<option value="${trabajador.id}">${trabajador.nombre}</option>`;
+                    });
+                    
+                    $('#trabajador-id').html(options);
+                    $('#filtro-trabajador').html(filterOptions);
+                }
+            })
+            .fail(function() {
+                showError('Error al cargar trabajadores');
+            });
+    }
+    
+    function loadEstadisticas() {
+        $.get('/app/api/creditos/reporte/')
+            .done(function(response) {
+                if (response.success) {
+                    const resumen = response.reporte.resumen;
+                    const stats = response.reporte.estadisticas_por_estado;
+                    
+                    $('#total-creditos').text(resumen.total_creditos);
+                    $('#creditos-activos').text(`${stats.ACTIVO?.count || 0} activos`);
+                    $('#monto-aprobado').text(formatCurrency(resumen.total_monto_aprobado));
+                    $('#total-monto-solicitado').text(`${formatCurrency(resumen.total_monto_solicitado)} solicitado`);
+                    $('#monto-pagado').text(formatCurrency(resumen.total_monto_pagado));
+                    $('#saldo-pendiente').text(`${formatCurrency(resumen.saldo_pendiente_total)} pendiente`);
+                    $('#creditos-vencidos').text(response.reporte.creditos_vencidos.length);
+                    
+                    let montoVencido = 0;
+                    response.reporte.creditos_vencidos.forEach(function(credito) {
+                        montoVencido += credito.monto_pendiente;
+                    });
+                    $('#monto-vencido').text(formatCurrency(montoVencido));
+                }
+            })
+            .fail(function() {
+                console.error('Error al cargar estadísticas');
+            });
+    }
+    
+    function loadCreditos() {
+        $('#loading-creditos').show();
+        $('#contenedor-creditos').hide();
+        
+        const filtros = {
+            page: currentPage,
+            per_page: 10,
+            fecha_inicio: $('#fecha-inicio').val(),
+            fecha_fin: $('#fecha-fin').val(),
+            estado: $('#filtro-estado').val(),
+            trabajador_id: $('#filtro-trabajador').val(),
+            tipo_credito: $('#filtro-tipo').val(),
+            numero_credito: $('#filtro-numero').val()
+        };
+        
+        $.ajax({
+            url: '/app/api/creditos/cargar/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(filtros),
+            success: function(response) {
+                if (response.success) {
+                    creditosData = response.creditos;
+                    renderCreditos(response.creditos);
+                    renderPagination(response.pagination);
+                    $('#total-registros').text(`${response.pagination.total_items} registros encontrados`);
+                } else {
+                    showError(response.error);
+                }
+            },
+            error: function() {
+                showError('Error al cargar créditos');
+            }
+        })
+            .always(function() {
+                $('#loading-creditos').hide();
+                $('#contenedor-creditos').show();
+            });
+    }
+    
+    function renderCreditos(creditos) {
+        let html = '';
+        
+        if (creditos.length === 0) {
+            html = `
+                <div class="text-center py-5">
+                    <i class="ri-file-list-line font-size-48 text-muted"></i>
+                    <h5 class="mt-3">No se encontraron créditos</h5>
+                    <p class="text-muted">Intenta ajustar los filtros de búsqueda</p>
+                </div>
+            `;
+        } else {
+            creditos.forEach(function(credito) {
+                html += renderCreditoCard(credito);
+            });
+        }
+        
+        $('#contenedor-creditos').html(html);
+    }
+    
+    function renderCreditoCard(credito) {
+        const estadoClass = `estado-${credito.estado.toLowerCase()}`;
+        const cardClass = credito.esta_vencido ? 'card-credito vencido' : 
+                         credito.estado === 'ACTIVO' ? 'card-credito activo' : 
+                         credito.estado === 'PAGADO' ? 'card-credito pagado' : 'card-credito';
+        
+        const porcentajePagado = credito.porcentaje_pagado || 0;
+        const progressClass = porcentajePagado >= 100 ? 'bg-success' : 
+                             porcentajePagado >= 50 ? 'bg-warning' : 'bg-danger';
+        
+        return `
+            <div class="card ${cardClass} mb-3">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-3">
+                            <h6 class="mb-1">${credito.numero_credito}</h6>
+                            <p class="text-muted mb-1">${credito.trabajador.nombre}</p>
+                            <small class="text-muted">${credito.trabajador.codigo_vendedor}</small>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="estado-badge ${estadoClass}">${credito.estado_display}</span>
+                            <p class="text-muted mb-0 mt-1">${credito.tipo_credito_display}</p>
+                        </div>
+                        <div class="col-md-2">
+                            <p class="mb-1"><strong>${formatCurrency(credito.monto_aprobado || credito.monto_solicitado)}</strong></p>
+                            <small class="text-muted">Pagado: ${formatCurrency(credito.monto_pagado)}</small>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="progress progress-credito mb-1">
+                                <div class="progress-bar ${progressClass}" style="width: ${porcentajePagado}%"></div>
+                            </div>
+                            <small class="text-muted">${porcentajePagado.toFixed(1)}% pagado</small>
+                        </div>
+                        <div class="col-md-2">
+                            <p class="mb-1">Vence: ${credito.fecha_vencimiento}</p>
+                            ${credito.esta_vencido ? 
+                                `<small class="text-danger"><i class="ri-alarm-warning-line"></i> Vencido</small>` :
+                                `<small class="text-muted">${credito.dias_para_vencimiento} días</small>`
+                            }
+                        </div>
+                        <div class="col-md-1">
+                            <div class="dropdown">
+                                <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i class="ri-more-2-line"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="verDetalle(${credito.id})">
+                                        <i class="ri-eye-line me-2"></i>Ver Detalle
+                                    </a></li>
+                                    ${credito.estado === 'PENDIENTE' ? `
+                                        <li><a class="dropdown-item text-success" href="#" onclick="aprobarCredito(${credito.id})">
+                                            <i class="ri-check-line me-2"></i>Aprobar
+                                        </a></li>
+                                        <li><a class="dropdown-item text-danger" href="#" onclick="rechazarCredito(${credito.id})">
+                                            <i class="ri-close-line me-2"></i>Rechazar
+                                        </a></li>
+                                    ` : ''}
+                                    ${credito.estado === 'APROBADO' ? `
+                                        <li><a class="dropdown-item text-primary" href="#" onclick="activarCredito(${credito.id})">
+                                            <i class="ri-play-line me-2"></i>Activar
+                                        </a></li>
+                                    ` : ''}
+                                    ${(credito.estado === 'ACTIVO' || credito.estado === 'APROBADO') && credito.saldo_pendiente > 0 ? `
+                                        <li><a class="dropdown-item text-warning" href="#" onclick="registrarPagoModal(${credito.id})">
+                                            <i class="ri-money-dollar-circle-line me-2"></i>Registrar Pago
+                                        </a></li>
+                                    ` : ''}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderPagination(pagination) {
+        totalPages = pagination.total_pages;
+        currentPage = pagination.current_page;
+        
+        let html = '';
+        
+        // Botón anterior
+        html += `
+            <li class="page-item ${!pagination.has_previous ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Anterior</a>
+            </li>
+        `;
+        
+        // Números de página
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            html += `
+                <li class="page-item ${i === currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                </li>
+            `;
+        }
+        
+        // Botón siguiente
+        html += `
+            <li class="page-item ${!pagination.has_next ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Siguiente</a>
+            </li>
+        `;
+        
+        $('#paginacion').html(html);
+        
+        // Actualizar info
+        const desde = (currentPage - 1) * 10 + 1;
+        const hasta = Math.min(currentPage * 10, pagination.total_items);
+        $('#info-desde').text(desde);
+        $('#info-hasta').text(hasta);
+        $('#info-total').text(pagination.total_items);
+    }
+    
+    function openNuevoCreditoModal() {
+        $('#form-credito')[0].reset();
+        $('#seccion-aval').hide();
+        $('#modal-credito-label').text('Nuevo Crédito');
+        
+        // Establecer fecha actual como primer pago
+        setCurrentDateAsPrimerPago();
+        
+        $('#modal-credito').modal('show');
+    }
+    
+    function guardarCredito() {
+        // Validar campos requeridos
+        const trabajadorId = $('#trabajador-id').val();
+        let montoSolicitado = $('#monto-solicitado').val();
+        const mesVencimiento = $('#mes-vencimiento').val();
+        const añoVencimiento = $('#año-vencimiento').val();
+        const motivoSolicitud = $('#motivo-solicitud').val();
+        
+        // Limpiar el monto de posibles caracteres no numéricos (excepto punto y coma)
+        if (montoSolicitado) {
+            montoSolicitado = montoSolicitado.toString().replace(/[^\d.,]/g, '').replace(',', '.');
+        }
+        
+        if (!trabajadorId) {
+            showError('Debe seleccionar un trabajador');
+            return;
+        }
+        
+        if (!montoSolicitado) {
+            showError('Debe ingresar el monto solicitado');
+            return;
+        }
+        
+        const montoNumerico = parseFloat(montoSolicitado);
+        if (isNaN(montoNumerico) || montoNumerico <= 0) {
+            showError(`Debe ingresar un monto válido mayor a 0. Valor ingresado: "${montoSolicitado}"`);
+            return;
+        }
+        
+        if (!mesVencimiento || !añoVencimiento) {
+            showError('Debe seleccionar el mes y año de vencimiento');
+            return;
+        }
+        
+        if (!motivoSolicitud.trim()) {
+            showError('Debe ingresar el motivo de la solicitud');
+            return;
+        }
+        
+        // Validar tasa de interés
+        const tasaInteres = parseFloat($('#tasa-interes').val()) || 0;
+        if (tasaInteres < 0 || tasaInteres > 999.99) {
+            showError('La tasa de interés debe estar entre 0% y 999.99%');
+            return;
+        }
+        
+        const fechaVencimiento = buildDateFromSelectors('#mes-vencimiento', '#año-vencimiento');
+        const fechaPrimerPago = buildDateFromSelectors('#mes-primer-pago', '#año-primer-pago');
+        
+        const formData = {
+            trabajador_id: trabajadorId,
+            tipo_credito: $('#tipo-credito').val(),
+            monto_solicitado: montoNumerico,
+            fecha_vencimiento: fechaVencimiento,
+            tasa_interes: tasaInteres,
+            numero_cuotas: parseInt($('#numero-cuotas').val()) || 1,
+            fecha_primer_pago: fechaPrimerPago,
+            motivo_solicitud: motivoSolicitud.trim(),
+            observaciones_solicitud: $('#observaciones-solicitud').val(),
+            requiere_aval: $('#requiere-aval').is(':checked'),
+            aval_nombre: $('#aval-nombre').val(),
+            aval_rut: $('#aval-rut').val(),
+            aval_telefono: $('#aval-telefono').val()
+        };
+        
+        $.ajax({
+            url: '/app/api/creditos/crear/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                if (response.success) {
+                    $('#modal-credito').modal('hide');
+                    showSuccess('Crédito creado exitosamente');
+                    loadCreditos();
+                    loadEstadisticas();
+                } else {
+                    showError(response.error);
+                }
+            },
+            error: function() {
+                showError('Error al crear crédito');
+            }
+        });
+    }
+    
+    function registrarPagoModal(creditoId) {
+        const credito = creditosData.find(c => c.id === creditoId);
+        if (!credito) return;
+        
+        $('#pago-credito-id').val(creditoId);
+        $('#pago-saldo-pendiente').text(formatNumber(credito.saldo_pendiente));
+        $('#pago-monto').attr('max', credito.saldo_pendiente);
+        $('#form-pago')[0].reset();
+        $('#pago-fecha').val(new Date().toLocaleDateString('es-CL'));
+        $('#modal-pago').modal('show');
+    }
+    
+    function registrarPago() {
+        const formData = {
+            credito_id: $('#pago-credito-id').val(),
+            monto_pago: $('#pago-monto').val(),
+            fecha_pago: $('#pago-fecha').val(),
+            metodo_pago: $('#pago-metodo').val(),
+            numero_cuota: $('#pago-numero-cuota').val(),
+            es_pago_total: $('#pago-total').is(':checked'),
+            referencia_pago: $('#pago-referencia').val(),
+            observaciones: $('#pago-observaciones').val()
+        };
+        
+        $.ajax({
+            url: '/app/api/creditos/pago/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            success: function(response) {
+                if (response.success) {
+                    $('#modal-pago').modal('hide');
+                    showSuccess('Pago registrado exitosamente');
+                    loadCreditos();
+                    loadEstadisticas();
+                } else {
+                    showError(response.error);
+                }
+            },
+            error: function() {
+                showError('Error al registrar pago');
+            }
+        });
+    }
+    
+    function limpiarFiltros() {
+        $('#form-filtros')[0].reset();
+        currentPage = 1;
+        loadCreditos();
+    }
+    
+    // Funciones globales (llamadas desde HTML)
+    window.changePage = function(page) {
+        if (page >= 1 && page <= totalPages) {
+            currentPage = page;
+            loadCreditos();
+        }
+    };
+    
+    window.verDetalle = function(creditoId) {
+        $.get(`/app/api/creditos/${creditoId}/`)
+            .done(function(response) {
+                if (response.success) {
+                    renderDetalleCredito(response.credito);
+                    $('#modal-detalle-credito').modal('show');
+                } else {
+                    showError(response.error);
+                }
+            })
+            .fail(function() {
+                showError('Error al cargar detalle');
+            });
+    };
+    
+    window.aprobarCredito = function(creditoId) {
+        Swal.fire({
+            title: 'Aprobar Crédito',
+            html: `
+                <div class="mb-3">
+                    <label class="form-label">Monto a Aprobar</label>
+                    <input type="number" id="monto-aprobar" class="form-control" min="1" step="1">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="obs-aprobar" class="form-control" rows="3"></textarea>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Aprobar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const monto = document.getElementById('monto-aprobar').value;
+                const obs = document.getElementById('obs-aprobar').value;
+                
+                if (!monto || monto <= 0) {
+                    Swal.showValidationMessage('Ingrese un monto válido');
+                    return false;
+                }
+                
+                return { monto_aprobado: monto, observaciones: obs };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const data = { 
+                    credito_id: creditoId,
+                    ...result.value
+                };
+                
+                $.ajax({
+                    url: '/app/api/creditos/aprobar/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: function(response) {
+                        if (response.success) {
+                            showSuccess('Crédito aprobado exitosamente');
+                            loadCreditos();
+                            loadEstadisticas();
+                        } else {
+                            showError(response.error);
+                        }
+                    },
+                    error: function() {
+                        showError('Error al aprobar crédito');
+                    }
+                });
+            }
+        });
+    };
+    
+    window.rechazarCredito = function(creditoId) {
+        Swal.fire({
+            title: 'Rechazar Crédito',
+            html: `
+                <div class="mb-3">
+                    <label class="form-label">Motivo del Rechazo</label>
+                    <textarea id="motivo-rechazo" class="form-control" rows="3" required></textarea>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Rechazar',
+            confirmButtonColor: '#dc3545',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const motivo = document.getElementById('motivo-rechazo').value;
+                
+                if (!motivo.trim()) {
+                    Swal.showValidationMessage('Ingrese el motivo del rechazo');
+                    return false;
+                }
+                
+                return { motivo_rechazo: motivo };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const data = { 
+                    credito_id: creditoId,
+                    ...result.value
+                };
+                
+                $.ajax({
+                    url: '/app/api/creditos/rechazar/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data),
+                    success: function(response) {
+                        if (response.success) {
+                            showSuccess('Crédito rechazado');
+                            loadCreditos();
+                            loadEstadisticas();
+                        } else {
+                            showError(response.error);
+                        }
+                    },
+                    error: function() {
+                        showError('Error al rechazar crédito');
+                    }
+                });
+            }
+        });
+    };
+    
+    window.activarCredito = function(creditoId) {
+        Swal.fire({
+            title: '¿Activar Crédito?',
+            text: 'Esto indica que el dinero ha sido entregado al trabajador',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, Activar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: '/app/api/creditos/activar/',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ credito_id: creditoId }),
+                    success: function(response) {
+                        if (response.success) {
+                            showSuccess('Crédito activado exitosamente');
+                            loadCreditos();
+                            loadEstadisticas();
+                        } else {
+                            showError(response.error);
+                        }
+                    },
+                    error: function() {
+                        showError('Error al activar crédito');
+                    }
+                });
+            }
+        });
+    };
+    
+    function renderDetalleCredito(credito) {
+        const html = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Información del Crédito</h6>
+                    <table class="table table-borderless table-sm">
+                        <tr><td><strong>Número:</strong></td><td>${credito.numero_credito}</td></tr>
+                        <tr><td><strong>Trabajador:</strong></td><td>${credito.trabajador.nombre}</td></tr>
+                        <tr><td><strong>RUT:</strong></td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
+                        <tr><td><strong>Tipo:</strong></td><td>${credito.tipo_credito_display}</td></tr>
+                        <tr><td><strong>Estado:</strong></td><td><span class="estado-badge estado-${credito.estado.toLowerCase()}">${credito.estado_display}</span></td></tr>
+                        <tr><td><strong>Fecha Solicitud:</strong></td><td>${credito.fecha_solicitud}</td></tr>
+                        <tr><td><strong>Fecha Vencimiento:</strong></td><td>${credito.fecha_vencimiento}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>Información Financiera</h6>
+                    <table class="table table-borderless table-sm">
+                        <tr><td><strong>Monto Solicitado:</strong></td><td>${formatCurrency(credito.monto_solicitado)}</td></tr>
+                        <tr><td><strong>Monto Aprobado:</strong></td><td>${formatCurrency(credito.monto_aprobado || 0)}</td></tr>
+                        <tr><td><strong>Monto Pagado:</strong></td><td>${formatCurrency(credito.monto_pagado)}</td></tr>
+                        <tr><td><strong>Saldo Pendiente:</strong></td><td><strong class="text-danger">${formatCurrency(credito.saldo_pendiente)}</strong></td></tr>
+                        <tr><td><strong>Tasa Interés:</strong></td><td>${credito.tasa_interes}%</td></tr>
+                        <tr><td><strong>Número Cuotas:</strong></td><td>${credito.numero_cuotas}</td></tr>
+                        <tr><td><strong>Valor Cuota:</strong></td><td>${formatCurrency(credito.valor_cuota || 0)}</td></tr>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h6>Motivo de la Solicitud</h6>
+                    <p class="text-muted">${credito.motivo_solicitud}</p>
+                </div>
+            </div>
+            
+            ${credito.pagos && credito.pagos.length > 0 ? `
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6>Historial de Pagos</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Número</th>
+                                        <th>Fecha</th>
+                                        <th>Monto</th>
+                                        <th>Método</th>
+                                        <th>Cuota</th>
+                                        <th>Registrado por</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${credito.pagos.map(pago => `
+                                        <tr>
+                                            <td>${pago.numero_pago}</td>
+                                            <td>${pago.fecha_pago}</td>
+                                            <td>${formatCurrency(pago.monto_pago)}</td>
+                                            <td>${pago.metodo_pago_display}</td>
+                                            <td>${pago.numero_cuota || 'N/A'}</td>
+                                            <td>${pago.registrado_por}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+        `;
+        
+        $('#contenido-detalle-credito').html(html);
+    }
+    
+    // Funciones de utilidad
+    function formatCurrency(amount) {
+        return new Intl.NumberFormat('es-CL', {
+            style: 'currency',
+            currency: 'CLP',
+            minimumFractionDigits: 0
+        }).format(amount || 0);
+    }
+    
+    function formatNumber(number) {
+        return new Intl.NumberFormat('es-CL').format(number || 0);
+    }
+    
+    function showSuccess(message) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Éxito',
+            text: message,
+            timer: 3000,
+            showConfirmButton: false
+        });
+    }
+    
+    function showError(message) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: message
+        });
+    }
+});
+</script>
+
+<!-- Scripts adicionales -->
+<script src="{% static 'libs/datatables.net/js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'libs/datatables.net-bs5/js/dataTables.bootstrap5.min.js' %}"></script>
+<script src="{% static 'libs/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
+<script src="{% static 'libs/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js' %}"></script>
+<script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
+<script src="{% static 'libs/flatpickr/flatpickr.min.js' %}"></script>
+<script src="{% static 'libs/flatpickr/l10n/es.js' %}"></script>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- End Page-content -->
+</div>
+<!-- end main content-->

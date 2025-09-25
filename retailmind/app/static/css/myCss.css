@@ -33,3 +33,357 @@
         transform: translate(-50%, -50%) rotate(360deg);
     }
 }
+
+
+
+.user-info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(102, 126, 234, 0.3);
+}
+
+.user-info-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 1;
+    gap: 16px;
+}
+
+.user-avatar-initial {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    color: white;
+    margin-right: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.user-info-card:hover .user-avatar-initial {
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.user-details {
+    flex: 1;
+}
+
+.user-name {
+    color: white;
+    font-weight: 600;
+    font-size: 16px;
+    margin-bottom: 4px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    text-transform: capitalize;
+}
+
+.user-role {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+}
+
+.user-role i {
+    font-size: 14px;
+}
+
+.company-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    padding: 4px 0;
+}
+
+.info-item:last-child {
+    margin-bottom: 0;
+}
+
+.info-item i {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    width: 16px;
+    text-align: center;
+}
+
+.info-item:hover {
+    color: white;
+    transform: translateX(2px);
+}
+
+.info-item:hover i {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Responsive para la tarjeta de usuario */
+@media (max-width: 1799.98px) {
+    .user-info-card {
+        min-width: 420px;
+        max-width: 520px;
+        padding: 18px 26px;
+    }
+    
+    .user-avatar-initial {
+        width: 46px;
+        height: 46px;
+        font-size: 17px;
+    }
+    
+    .user-name {
+        font-size: 16px;
+    }
+    
+    .info-item {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 1599.98px) {
+    .user-info-card {
+        min-width: 400px;
+        max-width: 480px;
+        padding: 16px 24px;
+    }
+    
+    .user-avatar-initial {
+        width: 44px;
+        height: 44px;
+        font-size: 16px;
+    }
+    
+    .user-name {
+        font-size: 15px;
+    }
+    
+    .info-item {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 1399.98px) {
+    .user-info-card {
+        min-width: 380px;
+        max-width: 440px;
+        padding: 14px 22px;
+    }
+    
+    .user-avatar-initial {
+        width: 42px;
+        height: 42px;
+        font-size: 15px;
+    }
+    
+    .user-name {
+        font-size: 14px;
+    }
+    
+    .info-item {
+        font-size: 11px;
+        gap: 10px;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .user-info-card {
+        display: none !important;
+    }
+}
+
+/* Animación de entrada */
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.user-info-card {
+    animation: slideInRight 0.5s ease-out;
+}
+
+/* Variante oscura para modo nocturno */
+@media (prefers-color-scheme: dark) {
+    .user-info-card {
+        background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+        border-color: rgba(255, 255, 255, 0.05);
+    }
+}
+
+/* ========== VARIANTES DE TEMA ALTERNATIVAS ========== */
+
+/* Tema profesional minimalista */
+.user-info-card.theme-minimal {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.user-info-card.theme-minimal .user-avatar-initial {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+.user-info-card.theme-minimal .user-name {
+    color: #2d3748;
+    text-shadow: none;
+}
+
+.user-info-card.theme-minimal .user-role {
+    color: #718096;
+}
+
+.user-info-card.theme-minimal .info-item {
+    color: #4a5568;
+}
+
+.user-info-card.theme-minimal .info-item i {
+    color: #667eea;
+}
+
+/* Tema corporativo */
+.user-info-card.theme-corporate {
+    background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-info-card.theme-corporate .user-avatar-initial {
+    background: #3182ce;
+    border-color: rgba(49, 130, 206, 0.3);
+}
+
+/* Tema success/verde */
+.user-info-card.theme-success {
+    background: linear-gradient(135deg, #38a169 0%, #48bb78 100%);
+}
+
+.user-info-card.theme-success .user-avatar-initial {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Micro-interacciones mejoradas */
+.user-info-card .info-item {
+    cursor: pointer;
+}
+
+.user-info-card .info-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 2px 6px;
+    margin: 2px -6px;
+}
+
+/* Indicador de estado online */
+.user-avatar-initial::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    background: #48bb78;
+    border: 2px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(72, 187, 120, 0.3);
+    animation: pulse 2s infinite;
+}
+
+/* ========== AJUSTES PARA CONTENEDOR DEL NAVBAR ========== */
+
+/* Expandir el layout-width cuando hay tarjeta de usuario */
+.layout-width {
+    transition: max-width 0.3s ease;
+}
+
+/* Ajustes específicos para acomodar la tarjeta de usuario */
+@media (min-width: 1200px) {
+    .layout-width:has(.user-info-card) {
+        max-width: 98% !important;
+    }
+}
+
+@media (min-width: 1400px) {
+    .layout-width:has(.user-info-card) {
+        max-width: 96% !important;
+    }
+}
+
+@media (min-width: 1600px) {
+    .layout-width:has(.user-info-card) {
+        max-width: 94% !important;
+    }
+}
+
+/* Fallback para navegadores que no soportan :has() */
+.navbar-header {
+    flex-wrap: nowrap;
+    overflow: visible;
+}
+
+.navbar-header .d-flex:last-child {
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+/* Asegurar que el contenedor del usuario no se comprima */
+.ms-3.d-none.d-xl-block {
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+/* ========== ESTILOS PARA INFORMACIÓN DE EMPRESA EN DROPDOWN ========== */
+
+.dropdown-item-text {
+    padding: 0.5rem 1rem;
+}
+
+.dropdown-item-text small {
+    display: block;
+    line-height: 1.4;
+}
+
+/* Ajustes para el texto del usuario en el botón */
+.user-name-sub-text {
+    color: var(--vz-gray-600) !important;
+    font-weight: 400 !important;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(72, 187, 120, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 8px rgba(72, 187, 120, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(72, 187, 120, 0);
+    }
+}

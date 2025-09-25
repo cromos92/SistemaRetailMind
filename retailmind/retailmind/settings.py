@@ -10,7 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+import dj_database_url
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde archivo .env
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +25,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-u6k00%6(jlc5r(j2l34j7d=1mn8&_xaam4^t_*c3=oa7%_e-_7'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u6k00%6(jlc5r(j2l34j7d=1mn8&_xaam4^t_*c3=oa7%_e-_7')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+# Railway specific
+if 'RAILWAY_ENVIRONMENT' in os.environ:
+    ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PUBLIC_DOMAIN', ''))
+    ALLOWED_HOSTS.append('*.railway.app')
+    ALLOWED_HOSTS.append('*.up.railway.app')
 
 
 # Application definition
@@ -38,12 +49,14 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+    'users',  # Nueva aplicación de usuarios
     'app',
     'empresa_management'
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -74,16 +87,31 @@ WSGI_APPLICATION = 'retailmind.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': os.environ.get("PGDATABASE", "test"),
-        'USER': os.environ.get("PGUSER", "postgres"),
-        'PASSWORD': os.environ.get("PGPASSWORD", "admin"),
-        'HOST': os.environ.get("PGHOST", "localhost"),
-        'PORT': os.environ.get("PGPORT", "5432"),
+# Configuración del modelo de usuario personalizado
+AUTH_USER_MODEL = 'users.Usuario'
+
+# Database configuration
+if 'DATABASE_URL' in os.environ:
+    # Railway PostgreSQL
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.environ.get('DATABASE_URL'),
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    # Local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql_psycopg2',
+            'NAME': os.environ.get("PGDATABASE", "retailmind"),
+            'USER': os.environ.get("PGUSER", "postgres"),
+            'PASSWORD': os.environ.get("PGPASSWORD", "admin"),
+            'HOST': os.environ.get("PGHOST", "localhost"),
+            'PORT': os.environ.get("PGPORT", "5432"),
+        }
+    }
 
  
 
@@ -123,7 +151,7 @@ USE_TZ = True  # (esto usualmente ya está activado)
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -136,9 +164,55 @@ SESSION_COOKIE_DOMAIN = None  # o simplemente no lo pongas
  
 
 STATICFILES_DIRS = [
-    BASE_DIR / 'retailmind' / 'static',  # o BASE_DIR / 'static' si está en la raíz del proyecto
+    BASE_DIR / 'retailmind' / 'static',
 ]
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
-LOGIN_URL = 'login'  # URL a la que se redirige si se intenta acceder a una vista protegida sin autenticación
-LOGIN_REDIRECT_URL = 'home/'  # URL a la que se redirige después de iniciar sesión con éxito
+
+# Whitenoise configuration for static files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Security settings for production
+if not DEBUG:
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 86400
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # CSRF settings
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+    
+    # Railway specific CSRF settings
+    if 'RAILWAY_ENVIRONMENT' in os.environ:
+        CSRF_TRUSTED_ORIGINS = [
+            f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')}",
+            "https://*.railway.app",
+            "https://*.up.railway.app"
+        ]
+
+# Configuración de autenticación
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'app:verHome'
+LOGOUT_REDIRECT_URL = 'login'
+
+# Configuración de correo electrónico
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = f'RetailMind <{EMAIL_HOST_USER}>'
+
+# Configuración de seguridad
+PASSWORD_RESET_TIMEOUT = 86400  # 24 horas
+SESSION_COOKIE_AGE = 3600  # 1 hora
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_SAVE_EVERY_REQUEST = True
+
+# Configuración de archivos de medios
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'

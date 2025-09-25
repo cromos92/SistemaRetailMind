@@ -1,0 +1,331 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include '../../layout/menu.html' %} {% include '../../layout/footer.html' %}
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+
+            <!-- start page title -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                        <div>
+                            <h4 class="mb-sm-0">Centros de Trabajo</h4>
+                            <p class="text-muted mb-0">Selecciona la empresa y sucursal con la que quieres trabajar.</p>
+                        </div>
+                        <div class="page-title-right text-end">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary-subtle text-primary">Empresas: {{ total_empresas }}</span>
+                                <span class="badge bg-success-subtle text-success">Sucursales: {{ total_sucursales }}</span>
+                                <button class="btn btn-soft-primary" data-bs-toggle="modal" data-bs-target="#modalCambioEmpresa">
+                                    <i class="ri-exchange-line me-1"></i>Cambiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- end page title -->
+
+            <div class="row g-4">
+                <div class="col-12">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-body">
+                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-sm flex-shrink-0">
+                                        <span class="avatar-title bg-primary-subtle text-primary rounded">
+                                            <i class="ri-building-4-line fs-4"></i>
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <small class="text-uppercase text-muted">Configuración actual</small>
+                                        <h5 class="mb-1">{{ request.session.nombreEmpresaActual|default:"Sin empresa" }}</h5>
+                                        <p class="text-muted mb-0">
+                                            <i class="ri-map-pin-2-line me-1 text-primary"></i>
+                                            {{ request.session.alias|default:"Sin sucursal" }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="text-md-end">
+                                    <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#modalCambioEmpresa">
+                                        <i class="ri-refresh-line me-1"></i>Seleccionar otro centro
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if empresas_data %}
+                <div class="col-12">
+                    <div class="row g-4">
+                        {% for empresa_id, data in empresas_data.items %}
+                        <div class="col-xl-4 col-lg-6">
+                            <div class="card card-hover border-0 shadow-sm h-100 {% if data.is_current %}border-success border-2{% endif %}">
+                                <div class="card-header border-0 bg-primary-subtle text-primary">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span class="badge bg-primary text-white mb-2">Empresa</span>
+                                            <h5 class="mb-0">
+                                                <i class="ri-building-2-line me-1"></i>{{ data.empresa.nombre }}
+                                            </h5>
+                                            <small class="text-muted">RUT: {{ data.empresa.rut }}</small>
+                                        </div>
+                                        {% if data.is_current %}
+                                            <span class="badge bg-success"><i class="ri-check-fill me-1"></i>Actual</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <h6 class="text-muted text-uppercase mb-3">Sucursales asignadas</h6>
+                                    <div class="list-group list-group-flush">
+                                        {% for sucursal_data in data.sucursales %}
+                                        <div class="list-group-item px-0 pb-3">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div>
+                                                    <h6 class="mb-1 d-flex align-items-center gap-2">
+                                                        <i class="ri-store-2-line text-primary"></i>{{ sucursal_data.sucursal.alias }}
+                                                        {% if sucursal_data.is_current %}
+                                                            <span class="badge bg-success-subtle text-success">Actual</span>
+                                                        {% endif %}
+                                                    </h6>
+                                                    {% if sucursal_data.sucursal.direccion %}
+                                                        <p class="text-muted small mb-1">
+                                                            <i class="ri-map-pin-fill text-warning align-middle me-1"></i>{{ sucursal_data.sucursal.direccion }}
+                                                        </p>
+                                                    {% endif %}
+                                                    {% if sucursal_data.sucursal.telefono %}
+                                                        <p class="text-muted small mb-0">
+                                                            <i class="ri-phone-line text-info align-middle me-1"></i>{{ sucursal_data.sucursal.telefono }}
+                                                        </p>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="text-nowrap">
+                                                    {% if sucursal_data.is_current %}
+                                                        <button class="btn btn-sm btn-soft-success" disabled>
+                                                            <i class="ri-check-line me-1"></i>Seleccionado
+                                                        </button>
+                                                    {% else %}
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-primary btn-cambiar"
+                                                                data-empresa-user-id="{{ sucursal_data.empresa_user.id }}"
+                                                                data-empresa-nombre="{{ data.empresa.nombre }}"
+                                                                data-sucursal-alias="{{ sucursal_data.sucursal.alias }}">
+                                                            <i class="ri-exchange-fill me-1"></i>Usar
+                                                        </button>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm text-center py-5">
+                        <div class="card-body">
+                            <div class="avatar-lg mx-auto mb-4">
+                                <span class="avatar-title bg-warning-subtle text-warning rounded-circle fs-1">
+                                    <i class="ri-building-line"></i>
+                                </span>
+                            </div>
+                            <h5 class="text-muted">No tienes empresas con sucursales asignadas</h5>
+                            <p class="text-muted mb-0">Contacta al administrador para solicitar acceso.</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2 mb-0">Cambiando empresa/sucursal...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de selección -->
+<div class="modal fade" id="modalCambioEmpresa" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="ri-building-3-line me-1 text-primary"></i>Elegir empresa y sucursal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% if empresas_data %}
+                <div class="accordion" id="accordionEmpresas">
+                    {% for empresa_id, data in empresas_data.items %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading{{ forloop.counter }}">
+                            <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapse{{ forloop.counter }}">
+                                <div class="d-flex flex-column">
+                                    <span class="fw-semibold">{{ data.empresa.nombre }}</span>
+                                    <small class="text-muted">RUT: {{ data.empresa.rut }} · {{ data.sucursales|length }} sucursal(es)</small>
+                                </div>
+                            </button>
+                        </h2>
+                        <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#accordionEmpresas">
+                            <div class="accordion-body">
+                                <div class="row g-3">
+                                    {% for sucursal_data in data.sucursales %}
+                                    <div class="col-md-6">
+                                        <div class="border rounded p-3 h-100">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 class="mb-1">{{ sucursal_data.sucursal.alias }}</h6>
+                                                    {% if sucursal_data.sucursal.direccion %}
+                                                    <p class="text-muted small mb-1">
+                                                        <i class="ri-map-pin-line text-warning me-1"></i>{{ sucursal_data.sucursal.direccion }}
+                                                    </p>
+                                                    {% endif %}
+                                                    {% if sucursal_data.sucursal.telefono %}
+                                                    <p class="text-muted small mb-0">
+                                                        <i class="ri-phone-line text-info me-1"></i>{{ sucursal_data.sucursal.telefono }}
+                                                    </p>
+                                                    {% endif %}
+                                                </div>
+                                                {% if sucursal_data.is_current %}
+                                                    <span class="badge bg-success-subtle text-success">
+                                                        <i class="ri-check-line me-1"></i>Actual
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="mt-3 d-grid">
+                                                {% if sucursal_data.is_current %}
+                                                <button class="btn btn-soft-success" disabled>
+                                                    <i class="ri-checkbox-circle-line me-1"></i>Seleccionado
+                                                </button>
+                                                {% else %}
+                                                <button type="button" class="btn btn-primary btn-cambiar"
+                                                        data-empresa-user-id="{{ sucursal_data.empresa_user.id }}"
+                                                        data-empresa-nombre="{{ data.empresa.nombre }}"
+                                                        data-sucursal-alias="{{ sucursal_data.sucursal.alias }}">
+                                                    <i class="ri-exchange-line me-1"></i> Cambiar a esta sucursal
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="ri-building-line text-muted" style="font-size: 3rem;"></i>
+                    <h6 class="mt-3">No hay empresas disponibles</h6>
+                    <p class="text-muted mb-0">Solicita acceso al administrador.</p>
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div class="text-muted small">
+                    Seleccionar una sucursal actualizará tu sesión automáticamente.
+                </div>
+                <button type="button" class="btn btn-link text-muted" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    const modalCambioEl = document.getElementById('modalCambioEmpresa');
+    const modalCambio = (typeof bootstrap !== 'undefined' && modalCambioEl)
+        ? new bootstrap.Modal(modalCambioEl)
+        : null;
+
+    {% if abrir_modal %}
+        if (modalCambio) {
+            modalCambio.show();
+        }
+    {% endif %}
+
+    // Manejar click en botones de cambiar
+    $('.btn-cambiar').on('click', function() {
+        const empresaUserId = $(this).data('empresa-user-id');
+        const empresaNombre = $(this).data('empresa-nombre');
+        const sucursalAlias = $(this).data('sucursal-alias');
+        
+        // Mostrar modal de loading
+        $('#loadingModal').modal('show');
+        $('.btn-cambiar').prop('disabled', true);
+        
+        // Realizar petición AJAX
+        $.ajax({
+            url: '{% url "seleccionar_empresa_sucursal" %}',
+            type: 'POST',
+            data: {
+                'empresa_user_id': empresaUserId,
+                'csrfmiddlewaretoken': '{{ csrf_token }}'
+            },
+            success: function(response) {
+                $('#loadingModal').modal('hide');
+                
+                if (response.success) {
+                    // Mostrar mensaje de éxito
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Cambio exitoso!',
+                        text: response.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    if (modalCambio) {
+                        modalCambio.hide();
+                    }
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1200);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: response.error || 'Error al cambiar empresa/sucursal'
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#loadingModal').modal('hide');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo conectar con el servidor. Inténtalo de nuevo.'
+                });
+                $('.btn-cambiar').prop('disabled', false);
+            }
+        });
+    });
+    
+    if (modalCambioEl) {
+        modalCambioEl.addEventListener('hidden.bs.modal', function() {
+            $('.btn-cambiar').prop('disabled', false);
+        });
+    }
+});
+</script>

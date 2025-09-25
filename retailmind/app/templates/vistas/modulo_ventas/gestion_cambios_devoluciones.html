@@ -1,0 +1,1480 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Gestión de Cambios y Devoluciones{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'assets/plugins/datatables.net-bs5/css/dataTables.bootstrap5.min.css' %}">
+<link rel="stylesheet" href="{% static 'assets/plugins/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css' %}">
+<style>
+    .card-stats {
+        background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    
+    .status-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .status-solicitado { background-color: #ffc107; color: #000; }
+    .status-aprobado { background-color: #17a2b8; color: #fff; }
+    .status-completado { background-color: #28a745; color: #fff; }
+    .status-rechazado { background-color: #dc3545; color: #fff; }
+    .status-cancelado { background-color: #6c757d; color: #fff; }
+    
+    .tipo-badge {
+        padding: 4px 8px;
+        border-radius: 15px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+    
+    .tipo-cambio-simple { background-color: #e3f2fd; color: #1976d2; }
+    .tipo-cambio-diferencia { background-color: #fff3e0; color: #f57c00; }
+    .tipo-devolucion-total { background-color: #fce4ec; color: #c2185b; }
+    .tipo-devolucion-parcial { background-color: #f3e5f5; color: #7b1fa2; }
+    
+    .search-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .ticket-info {
+        background: #fff;
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .productos-section {
+        background: #fff;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .total-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+        margin: 10px 0;
+    }
+    
+    .diferencia-positiva { color: #dc3545; font-weight: bold; }
+    .diferencia-negativa { color: #28a745; font-weight: bold; }
+    .diferencia-cero { color: #6c757d; font-weight: bold; }
+    
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -19px;
+        top: 5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #007bff;
+    }
+    
+    .btn-action {
+        margin: 2px;
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">🔄 Gestión de Cambios y Devoluciones</h1>
+                    <p class="text-muted">Sucursal: <strong>{{ sucursal_actual.alias }}</strong></p>
+                </div>
+                <div>
+                    <button class="btn btn-primary" onclick="mostrarFormularioNuevoCambio()">
+                        <i class="fas fa-plus"></i> Nuevo Cambio/Devolución
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="row mb-4" id="estadisticas-cards">
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="card-category">Total Cambios</p>
+                            <h3 class="card-title" id="stat-total">0</h3>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-exchange-alt fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="card-category">Pendientes</p>
+                            <h3 class="card-title" id="stat-pendientes">0</h3>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-clock fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="card-category">Completados</p>
+                            <h3 class="card-title" id="stat-completados">0</h3>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <p class="card-category">Diferencia Total</p>
+                            <h3 class="card-title" id="stat-diferencia">$0</h3>
+                        </div>
+                        <div class="card-icon">
+                            <i class="fas fa-dollar-sign fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body search-section">
+            <div class="row">
+                <div class="col-md-2">
+                    <label class="form-label">Fecha Desde</label>
+                    <input type="date" class="form-control" id="filtro-fecha-desde">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Fecha Hasta</label>
+                    <input type="date" class="form-control" id="filtro-fecha-hasta">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Tipo Operación</label>
+                    <select class="form-control" id="filtro-tipo-operacion">
+                        <option value="">Todos</option>
+                        {% for value, display in tipo_operacion_choices %}
+                        <option value="{{ value }}">{{ display }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estado</label>
+                    <select class="form-control" id="filtro-estado">
+                        <option value="">Todos</option>
+                        {% for value, display in estado_choices %}
+                        <option value="{{ value }}">{{ display }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Buscar</label>
+                    <input type="text" class="form-control" id="filtro-buscar" placeholder="Nº Operación, Ticket, Cliente...">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-info btn-block" onclick="aplicarFiltros()">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Cambios -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="tabla-cambios">
+                    <thead>
+                        <tr>
+                            <th>Nº Operación</th>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Estado</th>
+                            <th>Ticket Original</th>
+                            <th>Cliente</th>
+                            <th>Diferencia</th>
+                            <th>Solicitado por</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-cambios">
+                        <!-- Datos cargados dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginación -->
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div>
+                    <span id="info-paginacion">Mostrando 0 de 0 registros</span>
+                </div>
+                <nav>
+                    <ul class="pagination" id="paginacion">
+                        <!-- Paginación dinámica -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Nuevo Cambio/Devolución -->
+<div class="modal fade" id="modalNuevoCambio" tabindex="-1" data-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔄 Nuevo Cambio/Devolución</h5>
+                <button type="button" class="btn-close" data-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Paso 1: Buscar Ticket -->
+                <div id="paso-buscar-ticket">
+                    <h6 class="mb-3">📋 Paso 1: Buscar Ticket Original</h6>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Número de Ticket</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="input-ticket-correlativo" placeholder="Ingrese número de ticket">
+                                <button class="btn btn-primary" onclick="buscarTicketParaCambio()">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Información del Ticket -->
+                    <div id="info-ticket" class="ticket-info" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-2">
+                                <strong>Ticket #:</strong>
+                                <div id="ticket-correlativo">-</div>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>Fecha:</strong>
+                                <div id="ticket-fecha">-</div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Cliente:</strong>
+                                <div id="ticket-cliente">-</div>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>Total:</strong>
+                                <div id="ticket-total">$0</div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Vendedor:</strong>
+                                <div id="ticket-vendedor">-</div>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-3">
+                                <strong>Días transcurridos:</strong>
+                                <div id="ticket-dias">0</div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Fecha límite:</strong>
+                                <div id="ticket-fecha-limite">-</div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Estado:</strong>
+                                <div id="ticket-estado-plazo">-</div>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Cambios anteriores:</strong>
+                                <div id="ticket-cambios-anteriores">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paso 2: Seleccionar Productos -->
+                <div id="paso-seleccionar-productos" style="display: none;">
+                    <h6 class="mb-3">📦 Paso 2: Seleccionar Productos a Cambiar/Devolver</h6>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo de Operación</label>
+                            <select class="form-control" id="select-tipo-operacion" onchange="cambiarTipoOperacion()">
+                                <option value="">Seleccionar...</option>
+                                {% for value, display in tipo_operacion_choices %}
+                                <option value="{{ value }}">{{ display }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Motivo Principal</label>
+                            <select class="form-control" id="select-motivo-principal">
+                                <option value="">Seleccionar...</option>
+                                {% for value, display in motivo_choices %}
+                                <option value="{{ value }}">{{ display }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Productos del Ticket Original -->
+                    <div class="productos-section">
+                        <h6>Productos Disponibles para Cambio</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Seleccionar</th>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Talla</th>
+                                        <th>Cant. Original</th>
+                                        <th>Cant. Disponible</th>
+                                        <th>Precio Unit.</th>
+                                        <th>Cantidad a Cambiar</th>
+                                        <th>Condición</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-productos-originales">
+                                    <!-- Productos cargados dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Productos Nuevos (solo para cambios) -->
+                    <div id="seccion-productos-nuevos" class="productos-section" style="display: none;">
+                        <h6>Productos Nuevos</h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="input-buscar-producto" placeholder="Buscar producto por SKU, artículo...">
+                                    <button class="btn btn-secondary" onclick="buscarProductosParaCambio()">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Marca</th>
+                                        <th>Talla</th>
+                                        <th>Stock</th>
+                                        <th>Precio</th>
+                                        <th>Cantidad</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-productos-nuevos">
+                                    <!-- Productos nuevos seleccionados -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Observaciones -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Observaciones del Cliente</label>
+                            <textarea class="form-control" id="textarea-obs-cliente" rows="3"></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Observaciones del Vendedor</label>
+                            <textarea class="form-control" id="textarea-obs-vendedor" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paso 3: Resumen -->
+                <div id="paso-resumen" style="display: none;">
+                    <h6 class="mb-3">📊 Paso 3: Resumen de la Operación</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="total-section">
+                                <h6>Monto Original</h6>
+                                <h4 id="resumen-monto-original">$0</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="total-section">
+                                <h6>Monto Nuevo</h6>
+                                <h4 id="resumen-monto-nuevo">$0</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="total-section">
+                                <h6>Diferencia</h6>
+                                <h4 id="resumen-diferencia">$0</h4>
+                                <small id="resumen-diferencia-texto">-</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <h6>Productos Involucrados:</h6>
+                        <div id="resumen-productos">
+                            <!-- Resumen de productos -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-siguiente" onclick="siguientePaso()" style="display: none;">
+                    Siguiente
+                </button>
+                <button type="button" class="btn btn-success" id="btn-crear-cambio" onclick="crearCambioDevolucion()" style="display: none;">
+                    Crear Solicitud
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Detalle de Cambio -->
+<div class="modal fade" id="modalDetalleCambio" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📋 Detalle de Cambio/Devolución</h5>
+                <button type="button" class="btn-close" data-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Información General -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Información General</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Nº Operación:</strong></td><td id="detalle-numero-operacion">-</td></tr>
+                                    <tr><td><strong>Tipo:</strong></td><td id="detalle-tipo-operacion">-</td></tr>
+                                    <tr><td><strong>Estado:</strong></td><td id="detalle-estado">-</td></tr>
+                                    <tr><td><strong>Fecha Solicitud:</strong></td><td id="detalle-fecha-solicitud">-</td></tr>
+                                    <tr><td><strong>Motivo:</strong></td><td id="detalle-motivo">-</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Montos</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Monto Original:</strong></td><td id="detalle-monto-original">$0</td></tr>
+                                    <tr><td><strong>Monto Nuevo:</strong></td><td id="detalle-monto-nuevo">$0</td></tr>
+                                    <tr><td><strong>Diferencia:</strong></td><td id="detalle-diferencia">$0</td></tr>
+                                    <tr><td><strong>Estado Plazo:</strong></td><td id="detalle-plazo">-</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Productos -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h6 class="card-title">Productos Involucrados</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th colspan="4" class="text-center bg-light">Producto Original</th>
+                                        <th colspan="4" class="text-center bg-light">Producto Nuevo</th>
+                                        <th rowspan="2" class="text-center">Diferencia</th>
+                                        <th rowspan="2" class="text-center">Condición</th>
+                                    </tr>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Cant.</th>
+                                        <th>Precio</th>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Cant.</th>
+                                        <th>Precio</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detalle-productos">
+                                    <!-- Productos cargados dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historial -->
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">Historial de Acciones</h6>
+                        <div class="timeline" id="detalle-historial">
+                            <!-- Historial cargado dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                <div id="acciones-cambio">
+                    <!-- Botones de acción según el estado -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Aprobar/Rechazar -->
+<div class="modal fade" id="modalAprobarRechazar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="titulo-aprobar-rechazar">Aprobar Cambio</h5>
+                <button type="button" class="btn-close" data-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Observaciones</label>
+                    <textarea class="form-control" id="textarea-observaciones-decision" rows="4" placeholder="Ingrese observaciones..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btn-confirmar-decision" onclick="confirmarDecision()">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Completar Cambio -->
+<div class="modal fade" id="modalCompletarCambio" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">✅ Completar Cambio/Devolución</h5>
+                <button type="button" class="btn-close" data-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>¡Atención!</strong> Esta acción completará el cambio/devolución y realizará los movimientos de inventario correspondientes.
+                </div>
+                
+                <div id="seccion-pago-diferencia" style="display: none;">
+                    <h6>Procesar Pago de Diferencia</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Método de Pago</label>
+                            <select class="form-control" id="select-metodo-pago-diferencia">
+                                {% for value, display in metodo_pago_choices %}
+                                <option value="{{ value }}">{{ display }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Monto</label>
+                            <input type="number" class="form-control" id="input-monto-diferencia" readonly>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Referencia/Voucher</label>
+                            <input type="text" class="form-control" id="input-referencia-pago">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Nº Autorización</label>
+                            <input type="text" class="form-control" id="input-autorizacion-pago">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="seccion-devolucion-dinero" style="display: none;">
+                    <h6>Procesar Devolución de Dinero</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Método de Devolución</label>
+                            <select class="form-control" id="select-metodo-devolucion">
+                                <option value="DEVOLUCION_EFECTIVO">Efectivo</option>
+                                <option value="DEVOLUCION_TARJETA">Devolución a Tarjeta</option>
+                                <option value="CREDITO_TIENDA">Crédito en Tienda</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Monto a Devolver</label>
+                            <input type="number" class="form-control" id="input-monto-devolucion" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="completarCambioDevolucion()">
+                    <i class="fas fa-check"></i> Completar Cambio
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Loading -->
+<div class="modal fade" id="modalLoading" tabindex="-1" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only">Cargando...</span>
+                </div>
+                <p class="mt-2" id="loading-message">Procesando...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'assets/plugins/datatables.net/js/jquery.dataTables.min.js' %}"></script>
+<script src="{% static 'assets/plugins/datatables.net-bs5/js/dataTables.bootstrap5.min.js' %}"></script>
+<script src="{% static 'assets/plugins/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
+<script src="{% static 'assets/plugins/datatables.net-responsive-bs5/js/responsive.bootstrap5.min.js' %}"></script>
+
+<script>
+// Variables globales
+let cambiosData = [];
+let ticketActual = null;
+let productosOriginales = [];
+let productosNuevos = [];
+let pasoActual = 1;
+let cambioActual = null;
+let accionActual = '';
+
+// Inicialización
+$(document).ready(function() {
+    cargarCambiosDevoluciones();
+    configurarEventos();
+    
+    // Establecer fecha actual por defecto
+    const hoy = new Date().toISOString().split('T')[0];
+    $('#filtro-fecha-desde').val(hoy);
+    $('#filtro-fecha-hasta').val(hoy);
+});
+
+// Configurar eventos
+function configurarEventos() {
+    // Filtros en tiempo real
+    $('#filtro-buscar').on('input', debounce(aplicarFiltros, 500));
+    
+    // Enter en búsqueda de ticket
+    $('#input-ticket-correlativo').on('keypress', function(e) {
+        if (e.which === 13) {
+            buscarTicketParaCambio();
+        }
+    });
+    
+    // Enter en búsqueda de productos
+    $('#input-buscar-producto').on('keypress', function(e) {
+        if (e.which === 13) {
+            buscarProductosParaCambio();
+        }
+    });
+}
+
+// Función debounce para optimizar búsquedas
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// ========== CARGA DE DATOS ==========
+
+function cargarCambiosDevoluciones(page = 1) {
+    const filtros = {
+        fecha_desde: $('#filtro-fecha-desde').val(),
+        fecha_hasta: $('#filtro-fecha-hasta').val(),
+        tipo_operacion: $('#filtro-tipo-operacion').val(),
+        estado: $('#filtro-estado').val(),
+        buscar: $('#filtro-buscar').val(),
+        page: page,
+        per_page: 20
+    };
+    
+    $.get('/ventas/api/cambios-devoluciones/', filtros)
+        .done(function(response) {
+            if (response.success) {
+                cambiosData = response.cambios;
+                actualizarTablaCambios(response.cambios);
+                actualizarPaginacion(response.pagination);
+                actualizarEstadisticas(response.estadisticas);
+            } else {
+                mostrarError('Error al cargar cambios: ' + response.error);
+            }
+        })
+        .fail(function() {
+            mostrarError('Error de conexión al cargar cambios');
+        });
+}
+
+function actualizarTablaCambios(cambios) {
+    const tbody = $('#tbody-cambios');
+    tbody.empty();
+    
+    if (cambios.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="9" class="text-center text-muted">
+                    No se encontraron cambios/devoluciones
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    cambios.forEach(cambio => {
+        const estadoBadge = `<span class="status-badge status-${cambio.estado.toLowerCase()}">${cambio.estado_display}</span>`;
+        const tipoBadge = `<span class="tipo-badge tipo-${cambio.tipo_operacion.toLowerCase().replace('_', '-')}">${cambio.tipo_operacion_display}</span>`;
+        
+        let diferenciaMonto = '';
+        if (cambio.diferencia_monto > 0) {
+            diferenciaMonto = `<span class="diferencia-positiva">+$${formatearNumero(cambio.diferencia_monto)}</span>`;
+        } else if (cambio.diferencia_monto < 0) {
+            diferenciaMonto = `<span class="diferencia-negativa">-$${formatearNumero(Math.abs(cambio.diferencia_monto))}</span>`;
+        } else {
+            diferenciaMonto = `<span class="diferencia-cero">$0</span>`;
+        }
+        
+        tbody.append(`
+            <tr>
+                <td><strong>${cambio.numero_operacion}</strong></td>
+                <td>${cambio.fecha_solicitud}</td>
+                <td>${tipoBadge}</td>
+                <td>${estadoBadge}</td>
+                <td>#${cambio.ticket_original}</td>
+                <td>
+                    <div><strong>${cambio.cliente_nombre}</strong></div>
+                    <small class="text-muted">${cambio.cliente_rut}</small>
+                </td>
+                <td>${diferenciaMonto}</td>
+                <td>${cambio.solicitado_por}</td>
+                <td>
+                    <button class="btn btn-sm btn-info btn-action" onclick="verDetalleCambio(${cambio.id})" title="Ver Detalle">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${generarBotonesAccion(cambio)}
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function generarBotonesAccion(cambio) {
+    let botones = '';
+    
+    if (cambio.estado === 'SOLICITADO') {
+        botones += `
+            <button class="btn btn-sm btn-success btn-action" onclick="aprobarCambio(${cambio.id})" title="Aprobar">
+                <i class="fas fa-check"></i>
+            </button>
+            <button class="btn btn-sm btn-danger btn-action" onclick="rechazarCambio(${cambio.id})" title="Rechazar">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+    }
+    
+    if (cambio.estado === 'APROBADO' && cambio.puede_completar) {
+        botones += `
+            <button class="btn btn-sm btn-primary btn-action" onclick="completarCambio(${cambio.id})" title="Completar">
+                <i class="fas fa-check-circle"></i>
+            </button>
+        `;
+    }
+    
+    return botones;
+}
+
+function actualizarPaginacion(pagination) {
+    const paginacionEl = $('#paginacion');
+    paginacionEl.empty();
+    
+    // Botón anterior
+    if (pagination.has_previous) {
+        paginacionEl.append(`
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="cargarCambiosDevoluciones(${pagination.current_page - 1})">Anterior</a>
+            </li>
+        `);
+    }
+    
+    // Números de página
+    const startPage = Math.max(1, pagination.current_page - 2);
+    const endPage = Math.min(pagination.total_pages, pagination.current_page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const activeClass = i === pagination.current_page ? 'active' : '';
+        paginacionEl.append(`
+            <li class="page-item ${activeClass}">
+                <a class="page-link" href="#" onclick="cargarCambiosDevoluciones(${i})">${i}</a>
+            </li>
+        `);
+    }
+    
+    // Botón siguiente
+    if (pagination.has_next) {
+        paginacionEl.append(`
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="cargarCambiosDevoluciones(${pagination.current_page + 1})">Siguiente</a>
+            </li>
+        `);
+    }
+    
+    // Información de paginación
+    $('#info-paginacion').text(
+        `Mostrando ${((pagination.current_page - 1) * 20) + 1} a ${Math.min(pagination.current_page * 20, pagination.total_items)} de ${pagination.total_items} registros`
+    );
+}
+
+function actualizarEstadisticas(stats) {
+    $('#stat-total').text(formatearNumero(stats.total_cambios));
+    $('#stat-pendientes').text(formatearNumero(stats.cambios_pendientes));
+    $('#stat-completados').text(formatearNumero(stats.cambios_completados));
+    $('#stat-diferencia').text('$' + formatearNumero(stats.total_diferencia));
+}
+
+// ========== FILTROS ==========
+
+function aplicarFiltros() {
+    cargarCambiosDevoluciones(1);
+}
+
+// ========== NUEVO CAMBIO/DEVOLUCIÓN ==========
+
+function mostrarFormularioNuevoCambio() {
+    resetearFormularioNuevoCambio();
+    $('#modalNuevoCambio').modal('show');
+}
+
+function resetearFormularioNuevoCambio() {
+    pasoActual = 1;
+    ticketActual = null;
+    productosOriginales = [];
+    productosNuevos = [];
+    
+    // Resetear formulario
+    $('#input-ticket-correlativo').val('');
+    $('#info-ticket').hide();
+    $('#paso-seleccionar-productos').hide();
+    $('#paso-resumen').hide();
+    $('#btn-siguiente').hide();
+    $('#btn-crear-cambio').hide();
+    
+    // Limpiar selects
+    $('#select-tipo-operacion').val('');
+    $('#select-motivo-principal').val('');
+    $('#textarea-obs-cliente').val('');
+    $('#textarea-obs-vendedor').val('');
+}
+
+function buscarTicketParaCambio() {
+    const correlativo = $('#input-ticket-correlativo').val();
+    
+    if (!correlativo) {
+        mostrarError('Ingrese el número de ticket');
+        return;
+    }
+    
+    mostrarLoading('Buscando ticket...');
+    
+    $.get('/ventas/api/buscar-ticket-cambio/', { correlativo: correlativo })
+        .done(function(response) {
+            ocultarLoading();
+            
+            if (response.success) {
+                ticketActual = response.ticket;
+                mostrarInformacionTicket(response.ticket);
+                
+                if (response.ticket.puede_cambiar) {
+                    $('#btn-siguiente').show();
+                } else {
+                    mostrarError('Este ticket no puede ser cambiado. Verifique el plazo y estado.');
+                }
+            } else {
+                mostrarError(response.error);
+            }
+        })
+        .fail(function() {
+            ocultarLoading();
+            mostrarError('Error de conexión al buscar ticket');
+        });
+}
+
+function mostrarInformacionTicket(ticket) {
+    $('#ticket-correlativo').text('#' + ticket.correlativo);
+    $('#ticket-fecha').text(ticket.fecha);
+    $('#ticket-cliente').text(ticket.cliente_nombre || 'Sin nombre');
+    $('#ticket-total').text('$' + formatearNumero(ticket.total));
+    $('#ticket-vendedor').text(ticket.vendedor);
+    $('#ticket-dias').text(ticket.dias_transcurridos);
+    $('#ticket-fecha-limite').text(ticket.fecha_limite_cambio);
+    $('#ticket-estado-plazo').html(
+        ticket.dentro_del_plazo 
+            ? '<span class="text-success">Dentro del plazo</span>' 
+            : '<span class="text-danger">Fuera de plazo</span>'
+    );
+    $('#ticket-cambios-anteriores').text(ticket.cambios_anteriores.length);
+    
+    $('#info-ticket').show();
+}
+
+function siguientePaso() {
+    if (pasoActual === 1) {
+        // Ir al paso 2
+        pasoActual = 2;
+        $('#paso-seleccionar-productos').show();
+        cargarProductosOriginales();
+        $('#btn-siguiente').text('Continuar al Resumen');
+    } else if (pasoActual === 2) {
+        // Validar selección
+        if (!validarSeleccionProductos()) {
+            return;
+        }
+        
+        // Ir al paso 3
+        pasoActual = 3;
+        $('#paso-resumen').show();
+        generarResumen();
+        $('#btn-siguiente').hide();
+        $('#btn-crear-cambio').show();
+    }
+}
+
+function cargarProductosOriginales() {
+    const tbody = $('#tbody-productos-originales');
+    tbody.empty();
+    
+    if (!ticketActual || !ticketActual.productos) {
+        return;
+    }
+    
+    ticketActual.productos.forEach((producto, index) => {
+        tbody.append(`
+            <tr>
+                <td>
+                    <input type="checkbox" class="form-check-input" id="check-producto-${index}" 
+                           onchange="toggleProductoOriginal(${index})">
+                </td>
+                <td>${producto.sku}</td>
+                <td>${producto.articulo}</td>
+                <td>${producto.talla}</td>
+                <td>${producto.cantidad_original}</td>
+                <td>${producto.cantidad_disponible}</td>
+                <td>$${formatearNumero(producto.precio_unitario)}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" 
+                           id="cantidad-${index}" min="1" max="${producto.cantidad_disponible}" 
+                           value="1" disabled>
+                </td>
+                <td>
+                    <select class="form-control form-control-sm" id="condicion-${index}" disabled>
+                        {% for value, display in condicion_producto_choices %}
+                        <option value="{{ value }}">{{ display }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function toggleProductoOriginal(index) {
+    const checked = $(`#check-producto-${index}`).is(':checked');
+    $(`#cantidad-${index}`).prop('disabled', !checked);
+    $(`#condicion-${index}`).prop('disabled', !checked);
+}
+
+function cambiarTipoOperacion() {
+    const tipo = $('#select-tipo-operacion').val();
+    
+    if (tipo === 'CAMBIO_SIMPLE' || tipo === 'CAMBIO_CON_DIFERENCIA') {
+        $('#seccion-productos-nuevos').show();
+    } else {
+        $('#seccion-productos-nuevos').hide();
+    }
+}
+
+function buscarProductosParaCambio() {
+    const termino = $('#input-buscar-producto').val();
+    
+    if (!termino) {
+        mostrarError('Ingrese un término de búsqueda');
+        return;
+    }
+    
+    $.get('/ventas/api/buscar-productos-cambio/', { termino: termino })
+        .done(function(response) {
+            if (response.success) {
+                mostrarResultadosBusquedaProductos(response.productos);
+            } else {
+                mostrarError(response.error);
+            }
+        })
+        .fail(function() {
+            mostrarError('Error al buscar productos');
+        });
+}
+
+function mostrarResultadosBusquedaProductos(productos) {
+    // Implementar modal de búsqueda de productos
+    // Similar al modal existente en el HTML de ejemplo
+}
+
+function validarSeleccionProductos() {
+    const tipoOperacion = $('#select-tipo-operacion').val();
+    const motivoPrincipal = $('#select-motivo-principal').val();
+    
+    if (!tipoOperacion) {
+        mostrarError('Seleccione el tipo de operación');
+        return false;
+    }
+    
+    if (!motivoPrincipal) {
+        mostrarError('Seleccione el motivo principal');
+        return false;
+    }
+    
+    // Validar que al menos un producto esté seleccionado
+    let productosSeleccionados = 0;
+    ticketActual.productos.forEach((producto, index) => {
+        if ($(`#check-producto-${index}`).is(':checked')) {
+            productosSeleccionados++;
+        }
+    });
+    
+    if (productosSeleccionados === 0) {
+        mostrarError('Debe seleccionar al menos un producto');
+        return false;
+    }
+    
+    return true;
+}
+
+function generarResumen() {
+    // Calcular montos
+    let montoOriginal = 0;
+    let montoNuevo = 0;
+    
+    // Implementar cálculos de resumen
+    // ...
+    
+    const diferencia = montoNuevo - montoOriginal;
+    
+    $('#resumen-monto-original').text('$' + formatearNumero(montoOriginal));
+    $('#resumen-monto-nuevo').text('$' + formatearNumero(montoNuevo));
+    $('#resumen-diferencia').text('$' + formatearNumero(Math.abs(diferencia)));
+    
+    if (diferencia > 0) {
+        $('#resumen-diferencia').addClass('diferencia-positiva');
+        $('#resumen-diferencia-texto').text('Cliente debe pagar');
+    } else if (diferencia < 0) {
+        $('#resumen-diferencia').addClass('diferencia-negativa');
+        $('#resumen-diferencia-texto').text('Se devuelve al cliente');
+    } else {
+        $('#resumen-diferencia').addClass('diferencia-cero');
+        $('#resumen-diferencia-texto').text('Sin diferencia');
+    }
+}
+
+function crearCambioDevolucion() {
+    // Recopilar datos del formulario
+    const datos = {
+        ticket_correlativo: ticketActual.correlativo,
+        tipo_operacion: $('#select-tipo-operacion').val(),
+        motivo_principal: $('#select-motivo-principal').val(),
+        observaciones_cliente: $('#textarea-obs-cliente').val(),
+        observaciones_vendedor: $('#textarea-obs-vendedor').val(),
+        productos: []
+    };
+    
+    // Recopilar productos seleccionados
+    ticketActual.productos.forEach((producto, index) => {
+        if ($(`#check-producto-${index}`).is(':checked')) {
+            datos.productos.push({
+                ticket_producto_id: producto.id,
+                cantidad: parseInt($(`#cantidad-${index}`).val()),
+                condicion_producto: $(`#condicion-${index}`).val(),
+                apto_para_venta: $(`#condicion-${index}`).val() !== 'NO_APTO',
+                // Agregar productos nuevos si aplica
+            });
+        }
+    });
+    
+    mostrarLoading('Creando solicitud...');
+    
+    $.ajax({
+        url: '/ventas/api/crear-cambio-devolucion/',
+        method: 'POST',
+        data: JSON.stringify(datos),
+        contentType: 'application/json',
+        success: function(response) {
+            ocultarLoading();
+            
+            if (response.success) {
+                mostrarExito('Solicitud creada exitosamente: ' + response.numero_operacion);
+                $('#modalNuevoCambio').modal('hide');
+                cargarCambiosDevoluciones();
+            } else {
+                mostrarError(response.error);
+            }
+        },
+        error: function() {
+            ocultarLoading();
+            mostrarError('Error de conexión al crear solicitud');
+        }
+    });
+}
+
+// ========== ACCIONES DE CAMBIOS ==========
+
+function verDetalleCambio(cambioId) {
+    mostrarLoading('Cargando detalle...');
+    
+    $.get(`/ventas/api/cambio-detalle/${cambioId}/`)
+        .done(function(response) {
+            ocultarLoading();
+            
+            if (response.success) {
+                mostrarDetalleCambio(response);
+            } else {
+                mostrarError(response.error);
+            }
+        })
+        .fail(function() {
+            ocultarLoading();
+            mostrarError('Error al cargar detalle');
+        });
+}
+
+function mostrarDetalleCambio(data) {
+    const cambio = data.cambio;
+    
+    // Llenar información general
+    $('#detalle-numero-operacion').text(cambio.numero_operacion);
+    $('#detalle-tipo-operacion').text(cambio.tipo_operacion_display);
+    $('#detalle-estado').html(`<span class="status-badge status-${cambio.estado.toLowerCase()}">${cambio.estado_display}</span>`);
+    $('#detalle-fecha-solicitud').text(cambio.fecha_solicitud);
+    $('#detalle-motivo').text(cambio.motivo_principal_display);
+    
+    // Llenar montos
+    $('#detalle-monto-original').text('$' + formatearNumero(cambio.monto_original));
+    $('#detalle-monto-nuevo').text('$' + formatearNumero(cambio.monto_nuevo));
+    $('#detalle-diferencia').text('$' + formatearNumero(Math.abs(cambio.diferencia_monto)));
+    $('#detalle-plazo').html(
+        cambio.dentro_del_plazo 
+            ? '<span class="text-success">Dentro del plazo</span>' 
+            : '<span class="text-danger">Fuera de plazo</span>'
+    );
+    
+    // Llenar productos
+    const tbodyProductos = $('#detalle-productos');
+    tbodyProductos.empty();
+    
+    data.productos.forEach(producto => {
+        tbodyProductos.append(`
+            <tr>
+                <td>${producto.producto_original.sku}</td>
+                <td>${producto.producto_original.articulo}</td>
+                <td>${producto.cantidad_cambio}</td>
+                <td>$${formatearNumero(producto.precio_original_unitario)}</td>
+                <td>${producto.producto_nuevo ? producto.producto_nuevo.sku : '-'}</td>
+                <td>${producto.producto_nuevo ? producto.producto_nuevo.articulo : '-'}</td>
+                <td>${producto.cantidad_nueva || '-'}</td>
+                <td>${producto.producto_nuevo ? '$' + formatearNumero(producto.producto_nuevo.precio_unitario) : '-'}</td>
+                <td>$${formatearNumero(producto.diferencia_total)}</td>
+                <td>
+                    <span class="badge bg-${producto.apto_para_venta ? 'success' : 'warning'}">
+                        ${producto.condicion_producto_display}
+                    </span>
+                </td>
+            </tr>
+        `);
+    });
+    
+    // Llenar historial
+    const historialEl = $('#detalle-historial');
+    historialEl.empty();
+    
+    data.historial.forEach(item => {
+        historialEl.append(`
+            <div class="timeline-item">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">${item.accion_display}</h6>
+                        <p class="card-text">${item.descripcion}</p>
+                        <small class="text-muted">
+                            ${item.usuario} - ${item.timestamp}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `);
+    });
+    
+    // Generar botones de acción
+    const accionesEl = $('#acciones-cambio');
+    accionesEl.empty();
+    
+    if (cambio.estado === 'SOLICITADO') {
+        accionesEl.append(`
+            <button class="btn btn-success" onclick="aprobarCambio(${cambio.id})">
+                <i class="fas fa-check"></i> Aprobar
+            </button>
+            <button class="btn btn-danger" onclick="rechazarCambio(${cambio.id})">
+                <i class="fas fa-times"></i> Rechazar
+            </button>
+        `);
+    }
+    
+    if (cambio.estado === 'APROBADO' && cambio.puede_completar) {
+        accionesEl.append(`
+            <button class="btn btn-primary" onclick="completarCambio(${cambio.id})">
+                <i class="fas fa-check-circle"></i> Completar
+            </button>
+        `);
+    }
+    
+    cambioActual = cambio;
+    $('#modalDetalleCambio').modal('show');
+}
+
+function aprobarCambio(cambioId) {
+    accionActual = 'aprobar';
+    cambioActual = { id: cambioId };
+    $('#titulo-aprobar-rechazar').text('Aprobar Cambio');
+    $('#btn-confirmar-decision').removeClass('btn-danger').addClass('btn-success').text('Aprobar');
+    $('#textarea-observaciones-decision').attr('placeholder', 'Observaciones de aprobación (opcional)');
+    $('#modalAprobarRechazar').modal('show');
+}
+
+function rechazarCambio(cambioId) {
+    accionActual = 'rechazar';
+    cambioActual = { id: cambioId };
+    $('#titulo-aprobar-rechazar').text('Rechazar Cambio');
+    $('#btn-confirmar-decision').removeClass('btn-success').addClass('btn-danger').text('Rechazar');
+    $('#textarea-observaciones-decision').attr('placeholder', 'Motivo del rechazo (requerido)');
+    $('#modalAprobarRechazar').modal('show');
+}
+
+function confirmarDecision() {
+    const observaciones = $('#textarea-observaciones-decision').val();
+    
+    if (accionActual === 'rechazar' && !observaciones.trim()) {
+        mostrarError('Debe proporcionar un motivo para el rechazo');
+        return;
+    }
+    
+    const datos = {
+        cambio_id: cambioActual.id,
+        accion: accionActual,
+        observaciones: observaciones
+    };
+    
+    mostrarLoading('Procesando...');
+    
+    $.ajax({
+        url: '/ventas/api/aprobar-cambio-devolucion/',
+        method: 'POST',
+        data: JSON.stringify(datos),
+        contentType: 'application/json',
+        success: function(response) {
+            ocultarLoading();
+            
+            if (response.success) {
+                mostrarExito(response.message);
+                $('#modalAprobarRechazar').modal('hide');
+                $('#modalDetalleCambio').modal('hide');
+                cargarCambiosDevoluciones();
+            } else {
+                mostrarError(response.error);
+            }
+        },
+        error: function() {
+            ocultarLoading();
+            mostrarError('Error de conexión');
+        }
+    });
+}
+
+function completarCambio(cambioId) {
+    // Obtener datos del cambio para determinar si requiere pago
+    const cambio = cambiosData.find(c => c.id === cambioId);
+    
+    if (cambio.requiere_pago_adicional) {
+        $('#seccion-pago-diferencia').show();
+        $('#input-monto-diferencia').val(cambio.diferencia_monto);
+    } else {
+        $('#seccion-pago-diferencia').hide();
+    }
+    
+    if (cambio.genera_devolucion) {
+        $('#seccion-devolucion-dinero').show();
+        $('#input-monto-devolucion').val(Math.abs(cambio.diferencia_monto));
+    } else {
+        $('#seccion-devolucion-dinero').hide();
+    }
+    
+    cambioActual = cambio;
+    $('#modalCompletarCambio').modal('show');
+}
+
+function completarCambioDevolucion() {
+    const datos = {
+        cambio_id: cambioActual.id,
+        pagos: []
+    };
+    
+    // Agregar datos de pago si aplica
+    if (cambioActual.requiere_pago_adicional) {
+        datos.pagos.push({
+            tipo_pago: 'PAGO_DIFERENCIA',
+            metodo_pago: $('#select-metodo-pago-diferencia').val(),
+            monto: $('#input-monto-diferencia').val(),
+            referencia_pago: $('#input-referencia-pago').val(),
+            numero_autorizacion: $('#input-autorizacion-pago').val()
+        });
+    }
+    
+    if (cambioActual.genera_devolucion) {
+        datos.pagos.push({
+            tipo_pago: $('#select-metodo-devolucion').val(),
+            metodo_pago: $('#select-metodo-devolucion').val(),
+            monto: $('#input-monto-devolucion').val()
+        });
+    }
+    
+    mostrarLoading('Completando cambio...');
+    
+    $.ajax({
+        url: '/ventas/api/completar-cambio-devolucion/',
+        method: 'POST',
+        data: JSON.stringify(datos),
+        contentType: 'application/json',
+        success: function(response) {
+            ocultarLoading();
+            
+            if (response.success) {
+                mostrarExito(response.message);
+                if (response.ticket_nuevo) {
+                    mostrarExito('Nuevo ticket generado: #' + response.ticket_nuevo);
+                }
+                $('#modalCompletarCambio').modal('hide');
+                $('#modalDetalleCambio').modal('hide');
+                cargarCambiosDevoluciones();
+            } else {
+                mostrarError(response.error);
+            }
+        },
+        error: function() {
+            ocultarLoading();
+            mostrarError('Error de conexión');
+        }
+    });
+}
+
+// ========== UTILIDADES ==========
+
+function formatearNumero(numero) {
+    return new Intl.NumberFormat('es-CL').format(numero);
+}
+
+function mostrarLoading(mensaje = 'Cargando...') {
+    $('#loading-message').text(mensaje);
+    $('#modalLoading').modal('show');
+}
+
+function ocultarLoading() {
+    $('#modalLoading').modal('hide');
+}
+
+function mostrarExito(mensaje) {
+    // Implementar notificación de éxito
+    alert('✅ ' + mensaje);
+}
+
+function mostrarError(mensaje) {
+    // Implementar notificación de error
+    alert('❌ ' + mensaje);
+}
+
+function mostrarInfo(mensaje) {
+    // Implementar notificación de información
+    alert('ℹ️ ' + mensaje);
+}
+</script>
+{% endblock %}

@@ -20,19 +20,32 @@ def login_view(request):
             login(request, user)
 
             try:
-                empresa_user = EmpresaUser.objects.get(user=user, active=True)
-                request.session['idEmpresaActual'] = empresa_user.empresa.id
-                request.session['idSucursalActual'] = empresa_user.sucursal.id
-                request.session['idDireccionSucursalActual'] = empresa_user.sucursal.direccion
-                request.session['alias'] = empresa_user.sucursal.alias
-                request.session['nombreEmpresaActual'] = empresa_user.empresa.nombre
-                request.session['rutEmpresaActual'] = empresa_user.empresa.rut
-            except EmpresaUser.DoesNotExist:
-                messages.warning(request, 'No tienes una empresa activa asignada.')
-                # Podés redirigir a una vista de selección de empresa o logout
-                return redirect('seleccionar_empresa')  # o mostrar un mensaje, etc.
-
-            return redirect('/app/home')
+                # Buscar todas las empresas activas del usuario
+                empresas_activas = EmpresaUser.objects.filter(user=user, active=True)
+                
+                if empresas_activas.exists():
+                    # Si hay múltiples empresas activas, tomar la primera (puedes cambiar esta lógica)
+                    # Alternativa: ordenar por fecha de creación o permitir al usuario elegir
+                    empresa_user = empresas_activas.first()
+                    
+                    request.session['idEmpresaActual'] = empresa_user.empresa.id
+                    request.session['idSucursalActual'] = empresa_user.sucursal.id if empresa_user.sucursal else None
+                    request.session['idDireccionSucursalActual'] = empresa_user.sucursal.direccion if empresa_user.sucursal else ''
+                    request.session['alias'] = empresa_user.sucursal.alias if empresa_user.sucursal else ''
+                    request.session['nombreEmpresaActual'] = empresa_user.empresa.nombre
+                    request.session['rutEmpresaActual'] = empresa_user.empresa.rut
+                    
+                    # Si hay múltiples empresas, mostrar mensaje informativo
+                    if empresas_activas.count() > 1:
+                        messages.info(request, f'Tienes acceso a {empresas_activas.count()} empresas. Actualmente trabajando con: {empresa_user.empresa.nombre}')
+                    
+                    return redirect('verHome')
+                else:
+                    messages.warning(request, 'No tienes una empresa activa asignada. Contacta al administrador.')
+                    return redirect('verHome')
+            except Exception as e:
+                messages.error(request, f'Error al acceder a la empresa: {str(e)}')
+                return redirect('verHome')
         else:
             messages.error(request, 'Credenciales incorrectas. Por favor, inténtalo de nuevo.')
 

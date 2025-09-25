@@ -13,10 +13,19 @@ import json
 import csv
 from datetime import datetime, timedelta
 
-from .models import (
-    Empresa, Sucursal, ContactoEmpresa, Cliente, 
-    Proveedor, LogEmpresa, LogCliente
-)
+# Importar modelos de app (donde están las empresas reales)
+from app.models import Empresa, Sucursal
+
+# Importar modelos locales si existen
+try:
+    from .models import ContactoEmpresa, Cliente, Proveedor, LogEmpresa, LogCliente
+except ImportError:
+    # Si no existen estos modelos, crear clases vacías para evitar errores
+    ContactoEmpresa = None
+    Cliente = None
+    Proveedor = None
+    LogEmpresa = None
+    LogCliente = None
 
 # ========== VISTAS PARA EMPRESAS ==========
 
@@ -26,9 +35,10 @@ def lista_empresas(request):
     
     # Obtener parámetros de filtro
     search = request.GET.get('search', '')
-    tipo_empresa = request.GET.get('tipo_empresa', '')
-    activo = request.GET.get('activo', '')
-    orden = request.GET.get('orden', 'nombre')
+    tipo_empresa = request.GET.get('tipo', '')  # Cambiar para coincidir con el JS
+    estado = request.GET.get('estado', '')  # Cambiar para coincidir con el JS
+    orden = request.GET.get('ordenar', 'nombre')  # Cambiar para coincidir con el JS
+    page_size = int(request.GET.get('page_size', 25))
     
     # Query base
     empresas = Empresa.objects.all()
@@ -43,45 +53,316 @@ def lista_empresas(request):
             Q(giro__icontains=search)
         )
     
-    if tipo_empresa:
-        empresas = empresas.filter(tipo_empresa=tipo_empresa)
+    # Filtro por tipo (usando esProveedor)
+    if tipo_empresa == 'proveedor':
+        empresas = empresas.filter(esProveedor=True)
+    elif tipo_empresa == 'cliente':
+        empresas = empresas.filter(esProveedor=False)
     
-    if activo != '':
-        empresas = empresas.filter(activo=activo == 'true')
+    # El modelo app.Empresa no tiene campo activo, así que ignoramos este filtro por ahora
     
     # Aplicar ordenamiento
     if orden == 'nombre':
         empresas = empresas.order_by('nombre')
     elif orden == 'rut':
         empresas = empresas.order_by('rut')
-    elif orden == 'fecha_creacion':
-        empresas = empresas.order_by('-fecha_creacion')
-    elif orden == 'tipo':
-        empresas = empresas.order_by('tipo_empresa', 'nombre')
+    elif orden == 'fecha':
+        empresas = empresas.order_by('id')  # Usar ID como proxy de fecha de creación
+    elif orden == 'sucursales':
+        empresas = empresas.annotate(num_sucursales=Count('sucursal_set')).order_by('-num_sucursales')
     
     # Paginación
-    paginator = Paginator(empresas, 20)
-    page_number = request.GET.get('page')
+    paginator = Paginator(empresas, page_size)
+    page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
-    # Estadísticas
-    total_empresas = empresas.count()
-    empresas_activas = empresas.filter(activo=True).count()
-    empresas_inactivas = empresas.filter(activo=False).count()
+    # Si es una request AJAX, devolver JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+        empresas_data = []
+        for empresa in page_obj:
+            # Contar sucursales relacionadas
+            try:
+                num_sucursales = empresa.sucursal_set.count()
+            except:
+                num_sucursales = 0
+            
+            # Para contactos, usar 0 por ahora ya que no existe en app.models
+            num_contactos = 0
+            
+            # Determinar tipo basado en esProveedor
+            if empresa.esProveedor:
+                tipo_display = 'Proveedor'
+                tipo = 'proveedor'
+            else:
+                tipo_display = 'Cliente'
+                tipo = 'cliente'
+            
+            empresas_data.append({
+                'id': empresa.id,
+                'rut': empresa.rut or '',
+                'razon_social': empresa.razon_social or '',
+                'nombre_fantasia': empresa.nombre_fantasia or '',
+                'nombre': empresa.nombre or '',
+                'tipo': tipo,
+                'get_tipo_display': tipo_display,
+                'giro_comercial': empresa.giro or '',
+                'email': '',  # No existe en app.models
+                'telefono': '',  # No existe en app.models
+                'direccion': empresa.direccion or '',
+                'ciudad': empresa.ciudad or '',
+                'region': '',  # No existe en app.models
+                'codigo_postal': '',  # No existe en app.models
+                'sitio_web': '',  # No existe en app.models
+                'activo': True,  # Asumir que todas están activas
+                'fecha_creacion': None,  # No existe en app.models
+                'fecha_actualizacion': None,  # No existe en app.models
+                'num_sucursales': num_sucursales,
+                'num_contactos': num_contactos,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'empresas': empresas_data,
+            'total_registros': paginator.count,
+            'total_paginas': paginator.num_pages,
+            'pagina_actual': page_obj.number,
+        })
     
+    # Para requests normales, devolver el template
     context = {
         'page_obj': page_obj,
         'search': search,
         'tipo_empresa': tipo_empresa,
-        'activo': activo,
+        'estado': estado,
         'orden': orden,
-        'total_empresas': total_empresas,
-        'empresas_activas': empresas_activas,
-        'empresas_inactivas': empresas_inactivas,
-        'tipos_empresa': Empresa.TIPO_EMPRESA_CHOICES,
+        'tipos_empresa': [
+            ('cliente', 'Cliente'),
+            ('proveedor', 'Proveedor'),
+        ],
     }
     
-    return render(request, 'vistas/lista_empresas.html', context)
+    return render(request, 'empresa_management/lista_empresas.html', context)
+
+# ========== VISTAS PARA SUCURSALES ==========
+
+@login_required
+def listar_sucursales(request, empresa_id):
+    """Listar sucursales de una empresa específica"""
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    sucursales = Sucursal.objects.filter(empresa=empresa)
+    
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        sucursales_data = []
+        for sucursal in sucursales:
+            sucursales_data.append({
+                'id': sucursal.id,
+                'alias': sucursal.alias,
+                'direccion': sucursal.direccion,
+                'empresa_id': sucursal.empresa.id,
+                'empresa_nombre': sucursal.empresa.nombre,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'sucursales': sucursales_data,
+            'empresa': {
+                'id': empresa.id,
+                'nombre': empresa.nombre,
+                'razon_social': empresa.razon_social,
+            }
+        })
+    
+    context = {
+        'empresa': empresa,
+        'sucursales': sucursales,
+    }
+    return render(request, 'empresa_management/sucursales_empresa.html', context)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def crear_sucursal(request, empresa_id):
+    """Crear nueva sucursal para una empresa"""
+    print(f"🚀 INICIO crear_sucursal - empresa_id: {empresa_id}")
+    try:
+        print(f"📋 Buscando empresa con ID: {empresa_id}")
+        empresa = get_object_or_404(Empresa, id=empresa_id)
+        print(f"✅ Empresa encontrada: {empresa.nombre}")
+        
+        # Debug: imprimir información de la request
+        print(f"📡 Content-Type: {request.content_type}")
+        print(f"📡 Request body: {request.body}")
+        
+        print(f"🔄 Parseando JSON...")
+        data = json.loads(request.body)
+        print(f"✅ JSON parseado: {data}")
+        
+        # Validaciones
+        alias = data.get('alias', '').strip()
+        direccion = data.get('direccion', '').strip()
+        
+        if not alias:
+            return JsonResponse({
+                'success': False,
+                'error': 'El alias de la sucursal es obligatorio'
+            })
+        
+        if not direccion:
+            return JsonResponse({
+                'success': False,
+                'error': 'La dirección de la sucursal es obligatoria'
+            })
+        
+        # Verificar que no exista otra sucursal con el mismo alias en la empresa
+        if Sucursal.objects.filter(empresa=empresa, alias=alias).exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'Ya existe una sucursal con el alias "{alias}" en esta empresa'
+            })
+        
+        # Validar longitud de campos
+        if len(alias) > 100:
+            return JsonResponse({
+                'success': False,
+                'error': 'El alias no puede tener más de 100 caracteres'
+            })
+        
+        if len(direccion) > 100:
+            return JsonResponse({
+                'success': False,
+                'error': 'La dirección no puede tener más de 100 caracteres'
+            })
+        
+        # Crear la sucursal
+        sucursal = Sucursal.objects.create(
+            empresa=empresa,
+            alias=alias,
+            direccion=direccion
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sucursal "{alias}" creada exitosamente',
+            'sucursal': {
+                'id': sucursal.id,
+                'alias': sucursal.alias,
+                'direccion': sucursal.direccion,
+                'empresa_id': sucursal.empresa.id,
+                'empresa_nombre': sucursal.empresa.nombre,
+            }
+        })
+        
+    except json.JSONDecodeError as e:
+        print(f"Error JSON: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Datos JSON inválidos: {str(e)}'
+        })
+    except Exception as e:
+        print(f"Error general: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al crear sucursal: {str(e)}'
+        })
+
+@login_required
+@csrf_exempt
+@require_http_methods(["PUT"])
+def editar_sucursal(request, sucursal_id):
+    """Editar una sucursal existente"""
+    sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Validaciones
+        alias = data.get('alias', '').strip()
+        direccion = data.get('direccion', '').strip()
+        
+        if not alias:
+            return JsonResponse({
+                'success': False,
+                'error': 'El alias de la sucursal es obligatorio'
+            })
+        
+        if not direccion:
+            return JsonResponse({
+                'success': False,
+                'error': 'La dirección de la sucursal es obligatoria'
+            })
+        
+        # Validar longitud de campos
+        if len(alias) > 100:
+            return JsonResponse({
+                'success': False,
+                'error': 'El alias no puede tener más de 100 caracteres'
+            })
+        
+        if len(direccion) > 100:
+            return JsonResponse({
+                'success': False,
+                'error': 'La dirección no puede tener más de 100 caracteres'
+            })
+        
+        # Verificar que no exista otra sucursal con el mismo alias en la empresa (excluyendo la actual)
+        if Sucursal.objects.filter(empresa=sucursal.empresa, alias=alias).exclude(id=sucursal.id).exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'Ya existe otra sucursal con el alias "{alias}" en esta empresa'
+            })
+        
+        # Actualizar la sucursal
+        sucursal.alias = alias
+        sucursal.direccion = direccion
+        sucursal.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sucursal "{alias}" actualizada exitosamente',
+            'sucursal': {
+                'id': sucursal.id,
+                'alias': sucursal.alias,
+                'direccion': sucursal.direccion,
+                'empresa_id': sucursal.empresa.id,
+                'empresa_nombre': sucursal.empresa.nombre,
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al actualizar sucursal: {str(e)}'
+        })
+
+@login_required
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def eliminar_sucursal(request, sucursal_id):
+    """Eliminar una sucursal"""
+    sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+    
+    try:
+        alias = sucursal.alias
+        empresa_nombre = sucursal.empresa.nombre
+        sucursal.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sucursal "{alias}" de {empresa_nombre} eliminada exitosamente'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al eliminar sucursal: {str(e)}'
+        })
 
 @login_required
 @csrf_exempt
@@ -92,66 +373,56 @@ def crear_empresa(request):
     try:
         data = json.loads(request.body)
         
-        with transaction.atomic():
-            # Crear empresa
-            empresa = Empresa(
-                nombre=data['nombre'],
-                rut=data['rut'],
-                nombre_fantasia=data.get('nombre_fantasia', ''),
-                razon_social=data.get('razon_social', ''),
-                giro=data.get('giro', ''),
-                direccion=data.get('direccion', ''),
-                comuna=data.get('comuna', ''),
-                ciudad=data.get('ciudad', ''),
-                region=data.get('region', ''),
-                codigo_postal=data.get('codigo_postal', ''),
-                telefono=data.get('telefono', ''),
-                email=data.get('email', ''),
-                sitio_web=data.get('sitio_web', ''),
-                tipo_empresa=data.get('tipo_empresa', 'CLIENTE'),
-                esProveedor=data.get('esProveedor', False),
-                correoVendedor=data.get('correoVendedor', ''),
-                correoIntercambio=data.get('correoIntercambio', ''),
-                correoAdministrador=data.get('correoAdministrador', ''),
-                observaciones=data.get('observaciones', ''),
-                created_by=request.user
-            )
-            empresa.full_clean()
-            empresa.save()
-            
-            # Crear log
-            LogEmpresa.objects.create(
-                empresa=empresa,
-                usuario=request.user,
-                accion='CREAR',
-                descripcion=f'Empresa "{empresa.nombre}" creada',
-                datos_nuevos={
-                    'nombre': empresa.nombre,
-                    'rut': empresa.rut,
-                    'tipo_empresa': empresa.tipo_empresa,
-                },
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
-            )
-            
+        # Validaciones básicas
+        if not data.get('rut'):
             return JsonResponse({
-                'success': True,
-                'message': f'Empresa "{empresa.nombre}" creada exitosamente',
-                'empresa': {
-                    'id': empresa.id,
-                    'nombre': empresa.nombre,
-                    'rut': empresa.rut,
-                    'tipo_empresa': empresa.get_tipo_empresa_display(),
-                    'activo': empresa.activo,
-                }
-            })
-            
-    except ValidationError as e:
+                'success': False,
+                'message': 'El RUT es obligatorio'
+            }, status=400)
+        
+        if not data.get('razon_social'):
+            return JsonResponse({
+                'success': False,
+                'message': 'La razón social es obligatoria'
+            }, status=400)
+        
+        # Determinar si es proveedor basado en el tipo
+        tipo = data.get('tipo', 'cliente')
+        es_proveedor = tipo == 'proveedor'
+        
+        # Crear empresa usando solo los campos que existen en app.models.Empresa
+        empresa = Empresa(
+            nombre=data.get('razon_social', ''),  # Usar razon_social como nombre
+            rut=data.get('rut', ''),
+            nombre_fantasia=data.get('nombre_fantasia', ''),
+            razon_social=data.get('razon_social', ''),
+            giro=data.get('giro_comercial', ''),
+            direccion=data.get('direccion', ''),
+            comuna=data.get('ciudad', ''),  # Usar ciudad como comuna
+            ciudad=data.get('ciudad', ''),
+            esProveedor=es_proveedor,
+            correoVendedor=data.get('email', ''),  # Usar email como correoVendedor
+            correoIntercambio=data.get('correoIntercambio', ''),
+            correoAdministrador=data.get('correoAdministrador', ''),
+        )
+        
+        empresa.save()
+        
+        # Determinar tipo para la respuesta
+        tipo_display = 'Proveedor' if es_proveedor else 'Cliente'
+        
         return JsonResponse({
-            'success': False,
-            'message': 'Error de validación',
-            'errors': e.message_dict
-        }, status=400)
+            'success': True,
+            'message': f'Empresa "{empresa.razon_social}" creada exitosamente',
+            'empresa': {
+                'id': empresa.id,
+                'nombre': empresa.nombre,
+                'rut': empresa.rut,
+                'razon_social': empresa.razon_social,
+                'tipo_display': tipo_display,
+                'esProveedor': empresa.esProveedor,
+            }
+        })
         
     except Exception as e:
         return JsonResponse({
@@ -161,83 +432,70 @@ def crear_empresa(request):
 
 @login_required
 @csrf_exempt
-@require_http_methods(["POST"])
-def editar_empresa(request, empresa_id):
+@require_http_methods(["PUT"])
+def editar_empresa(request):
     """Editar empresa existente via AJAX"""
     
     try:
-        empresa = get_object_or_404(Empresa, id=empresa_id)
         data = json.loads(request.body)
+        empresa_id = data.get('empresa_id')
         
-        # Guardar datos anteriores para el log
-        datos_anteriores = {
-            'nombre': empresa.nombre,
-            'rut': empresa.rut,
-            'tipo_empresa': empresa.tipo_empresa,
-            'activo': empresa.activo,
-        }
-        
-        with transaction.atomic():
-            # Actualizar campos
-            empresa.nombre = data['nombre']
-            empresa.rut = data['rut']
-            empresa.nombre_fantasia = data.get('nombre_fantasia', '')
-            empresa.razon_social = data.get('razon_social', '')
-            empresa.giro = data.get('giro', '')
-            empresa.direccion = data.get('direccion', '')
-            empresa.comuna = data.get('comuna', '')
-            empresa.ciudad = data.get('ciudad', '')
-            empresa.region = data.get('region', '')
-            empresa.codigo_postal = data.get('codigo_postal', '')
-            empresa.telefono = data.get('telefono', '')
-            empresa.email = data.get('email', '')
-            empresa.sitio_web = data.get('sitio_web', '')
-            empresa.tipo_empresa = data.get('tipo_empresa', 'CLIENTE')
-            empresa.esProveedor = data.get('esProveedor', False)
-            empresa.correoVendedor = data.get('correoVendedor', '')
-            empresa.correoIntercambio = data.get('correoIntercambio', '')
-            empresa.correoAdministrador = data.get('correoAdministrador', '')
-            empresa.observaciones = data.get('observaciones', '')
-            empresa.updated_by = request.user
-            
-            empresa.full_clean()
-            empresa.save()
-            
-            # Crear log
-            LogEmpresa.objects.create(
-                empresa=empresa,
-                usuario=request.user,
-                accion='EDITAR',
-                descripcion=f'Empresa "{empresa.nombre}" modificada',
-                datos_anteriores=datos_anteriores,
-                datos_nuevos={
-                    'nombre': empresa.nombre,
-                    'rut': empresa.rut,
-                    'tipo_empresa': empresa.tipo_empresa,
-                    'activo': empresa.activo,
-                },
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
-            )
-            
+        if not empresa_id:
             return JsonResponse({
-                'success': True,
-                'message': f'Empresa "{empresa.nombre}" actualizada exitosamente',
-                'empresa': {
-                    'id': empresa.id,
-                    'nombre': empresa.nombre,
-                    'rut': empresa.rut,
-                    'tipo_empresa': empresa.get_tipo_empresa_display(),
-                    'activo': empresa.activo,
-                }
-            })
-            
-    except ValidationError as e:
+                'success': False,
+                'message': 'ID de empresa requerido'
+            }, status=400)
+        
+        empresa = get_object_or_404(Empresa, id=empresa_id)
+        
+        # Validaciones básicas
+        if not data.get('rut'):
+            return JsonResponse({
+                'success': False,
+                'message': 'El RUT es obligatorio'
+            }, status=400)
+        
+        if not data.get('razon_social'):
+            return JsonResponse({
+                'success': False,
+                'message': 'La razón social es obligatoria'
+            }, status=400)
+        
+        # Determinar si es proveedor basado en el tipo
+        tipo = data.get('tipo', 'cliente')
+        es_proveedor = tipo == 'proveedor'
+        
+        # Actualizar campos usando solo los campos que existen en app.models.Empresa
+        empresa.nombre = data.get('razon_social', '')  # Usar razon_social como nombre
+        empresa.rut = data.get('rut', '')
+        empresa.nombre_fantasia = data.get('nombre_fantasia', '')
+        empresa.razon_social = data.get('razon_social', '')
+        empresa.giro = data.get('giro_comercial', '')
+        empresa.direccion = data.get('direccion', '')
+        empresa.comuna = data.get('ciudad', '')  # Usar ciudad como comuna
+        empresa.ciudad = data.get('ciudad', '')
+        empresa.esProveedor = es_proveedor
+        empresa.correoVendedor = data.get('email', '')  # Usar email como correoVendedor
+        empresa.correoIntercambio = data.get('correoIntercambio', '')
+        empresa.correoAdministrador = data.get('correoAdministrador', '')
+        
+        empresa.save()
+        
+        # Determinar tipo para la respuesta
+        tipo_display = 'Proveedor' if es_proveedor else 'Cliente'
+        
         return JsonResponse({
-            'success': False,
-            'message': 'Error de validación',
-            'errors': e.message_dict
-        }, status=400)
+            'success': True,
+            'message': f'Empresa "{empresa.razon_social}" actualizada exitosamente',
+            'empresa': {
+                'id': empresa.id,
+                'nombre': empresa.nombre,
+                'rut': empresa.rut,
+                'razon_social': empresa.razon_social,
+                'tipo_display': tipo_display,
+                'esProveedor': empresa.esProveedor,
+            }
+        })
         
     except Exception as e:
         return JsonResponse({
@@ -247,50 +505,29 @@ def editar_empresa(request, empresa_id):
 
 @login_required
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["DELETE"])
 def eliminar_empresa(request, empresa_id):
     """Eliminar empresa via AJAX"""
     
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
         
-        with transaction.atomic():
             # Verificar si tiene registros relacionados
-            if empresa.sucursales.exists():
+        if empresa.sucursal_set.exists():
                 return JsonResponse({
                     'success': False,
                     'message': 'No se puede eliminar la empresa porque tiene sucursales asociadas'
                 }, status=400)
             
-            if empresa.clientes.exists():
-                return JsonResponse({
-                    'success': False,
-                    'message': 'No se puede eliminar la empresa porque tiene clientes asociados'
-                }, status=400)
-            
-            nombre_empresa = empresa.nombre
-            
-            # Crear log antes de eliminar
-            LogEmpresa.objects.create(
-                empresa=empresa,
-                usuario=request.user,
-                accion='ELIMINAR',
-                descripcion=f'Empresa "{nombre_empresa}" eliminada',
-                datos_anteriores={
-                    'nombre': empresa.nombre,
-                    'rut': empresa.rut,
-                    'tipo_empresa': empresa.tipo_empresa,
-                },
-                ip_address=request.META.get('REMOTE_ADDR'),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')
-            )
-            
-            empresa.delete()
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Empresa "{nombre_empresa}" eliminada exitosamente'
-            })
+        nombre_empresa = empresa.razon_social or empresa.nombre
+        
+        # Eliminar la empresa (sin log ya que LogEmpresa no existe)
+        empresa.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Empresa "{nombre_empresa}" eliminada exitosamente'
+        })
             
     except Exception as e:
         return JsonResponse({
@@ -438,8 +675,30 @@ def dashboard_empresas(request):
     
     # Estadísticas generales
     total_empresas = Empresa.objects.count()
-    empresas_activas = Empresa.objects.filter(activo=True).count()
-    empresas_inactivas = Empresa.objects.filter(activo=False).count()
+    empresas_activas = total_empresas  # Asumir que todas están activas
+    empresas_inactivas = 0  # No hay campo activo en app.models
+    
+    # Contar sucursales y contactos totales
+    try:
+        total_sucursales = Sucursal.objects.count()
+    except:
+        total_sucursales = 0
+    
+    # No hay ContactoEmpresa en app.models
+    total_contactos = 0
+    
+    # Si es una request AJAX, devolver JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
+        return JsonResponse({
+            'success': True,
+            'metricas': {
+                'total_empresas': total_empresas,
+                'empresas_activas': empresas_activas,
+                'empresas_inactivas': empresas_inactivas,
+                'total_sucursales': total_sucursales,
+                'total_contactos': total_contactos,
+            }
+        })
     
     # Por tipo de empresa
     por_tipo = Empresa.objects.values('tipo_empresa').annotate(
@@ -470,60 +729,14 @@ def dashboard_empresas(request):
         'empresas_recientes': empresas_recientes,
         'top_empresas_sucursales': top_empresas_sucursales,
         'empresas_sin_contactos': empresas_sin_contactos,
+        'total_sucursales': total_sucursales,
+        'total_contactos': total_contactos,
     }
     
     return render(request, 'empresa_management/dashboard_empresas.html', context)
 
-# ========== VISTAS PARA SUCURSALES ==========
-
-@login_required
-@csrf_exempt
-@require_http_methods(["POST"])
-def crear_sucursal(request, empresa_id):
-    """Crear nueva sucursal via AJAX"""
-    
-    try:
-        empresa = get_object_or_404(Empresa, id=empresa_id)
-        data = json.loads(request.body)
-        
-        with transaction.atomic():
-            sucursal = Sucursal(
-                empresa=empresa,
-                alias=data['alias'],
-                nombre=data.get('nombre', ''),
-                direccion=data.get('direccion', ''),
-                comuna=data.get('comuna', ''),
-                ciudad=data.get('ciudad', ''),
-                telefono=data.get('telefono', ''),
-                email=data.get('email', ''),
-            )
-            sucursal.full_clean()
-            sucursal.save()
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Sucursal "{sucursal.alias}" creada exitosamente',
-                'sucursal': {
-                    'id': sucursal.id,
-                    'alias': sucursal.alias,
-                    'nombre': sucursal.nombre,
-                    'direccion': sucursal.direccion,
-                    'activa': sucursal.activa,
-                }
-            })
-            
-    except ValidationError as e:
-        return JsonResponse({
-            'success': False,
-            'message': 'Error de validación',
-            'errors': e.message_dict
-        }, status=400)
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'Error al crear sucursal: {str(e)}'
-        }, status=500)
+# ========== FUNCIÓN DUPLICADA ELIMINADA ==========
+# La función crear_sucursal ya está definida arriba en la línea 184
 
 @login_required
 @csrf_exempt
@@ -633,33 +846,50 @@ def obtener_empresa(request, empresa_id):
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
         
-        # Contar sucursales y contactos
-        num_sucursales = empresa.sucursales.count()
-        num_contactos = empresa.contactos.count()
+        # Contar sucursales (usando sucursal_set ya que es la relación correcta)
+        try:
+            num_sucursales = empresa.sucursal_set.count()
+        except:
+            num_sucursales = 0
+        
+        # No hay contactos en app.models
+        num_contactos = 0
+        
+        # Determinar tipo basado en esProveedor
+        if empresa.esProveedor:
+            tipo_display = 'Proveedor'
+            tipo = 'proveedor'
+        else:
+            tipo_display = 'Cliente'
+            tipo = 'cliente'
         
         return JsonResponse({
             'success': True,
             'empresa': {
                 'id': empresa.id,
-                'rut': empresa.rut,
-                'razon_social': empresa.razon_social,
-                'nombre_fantasia': empresa.nombre_fantasia,
-                'tipo': empresa.tipo,
-                'get_tipo_display': empresa.get_tipo_display(),
-                'giro_comercial': empresa.giro_comercial,
-                'email': empresa.email,
-                'telefono': empresa.telefono,
-                'direccion': empresa.direccion,
-                'ciudad': empresa.ciudad,
-                'region': empresa.region,
-                'codigo_postal': empresa.codigo_postal,
-                'sitio_web': empresa.sitio_web,
-                'representante_legal': empresa.representante_legal,
-                'activo': empresa.activo,
-                'fecha_creacion': empresa.fecha_creacion.isoformat() if empresa.fecha_creacion else None,
-                'fecha_actualizacion': empresa.fecha_actualizacion.isoformat() if empresa.fecha_actualizacion else None,
+                'rut': empresa.rut or '',
+                'razon_social': empresa.razon_social or '',
+                'nombre_fantasia': empresa.nombre_fantasia or '',
+                'nombre': empresa.nombre or '',
+                'tipo': tipo,
+                'get_tipo_display': tipo_display,
+                'giro_comercial': empresa.giro or '',
+                'email': empresa.correoVendedor or '',  # Usar correoVendedor como email
+                'telefono': '',  # No existe en app.models
+                'direccion': empresa.direccion or '',
+                'ciudad': empresa.ciudad or '',
+                'region': '',  # No existe en app.models
+                'codigo_postal': '',  # No existe en app.models
+                'sitio_web': '',  # No existe en app.models
+                'representante_legal': '',  # No existe en app.models
+                'activo': True,  # Asumir que todas están activas
+                'fecha_creacion': None,  # No existe en app.models
+                'fecha_actualizacion': None,  # No existe en app.models
                 'num_sucursales': num_sucursales,
                 'num_contactos': num_contactos,
+                'correoVendedor': empresa.correoVendedor or '',
+                'correoIntercambio': empresa.correoIntercambio or '',
+                'correoAdministrador': empresa.correoAdministrador or '',
             }
         })
     except Exception as e:

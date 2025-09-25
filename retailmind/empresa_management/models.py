@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.conf import settings
 from django.core.validators import RegexValidator
 from django.utils import timezone
 import re
@@ -106,7 +106,7 @@ class Empresa(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
-        User, 
+        settings.AUTH_USER_MODEL, 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
@@ -114,7 +114,7 @@ class Empresa(models.Model):
         verbose_name="Creado por"
     )
     updated_by = models.ForeignKey(
-        User, 
+        settings.AUTH_USER_MODEL, 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
@@ -305,7 +305,7 @@ class Cliente(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
-        User, 
+        settings.AUTH_USER_MODEL, 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
@@ -313,7 +313,7 @@ class Cliente(models.Model):
         verbose_name="Creado por"
     )
     updated_by = models.ForeignKey(
-        User, 
+        settings.AUTH_USER_MODEL, 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
@@ -401,7 +401,7 @@ class LogEmpresa(models.Model):
     """Log de actividades de empresas"""
     
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='logs', verbose_name="Empresa")
-    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Usuario")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Usuario")
     
     # === DATOS DEL LOG ===
     accion = models.CharField(max_length=50, verbose_name="Acción")
@@ -431,7 +431,7 @@ class LogCliente(models.Model):
     """Log de actividades de clientes"""
     
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='logs', verbose_name="Cliente")
-    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Usuario")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Usuario")
     
     # === DATOS DEL LOG ===
     accion = models.CharField(max_length=50, verbose_name="Acción")

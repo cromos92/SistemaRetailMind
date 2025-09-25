@@ -1,5 +1,7 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.db.models import Sum
+from django.utils import timezone
+from django.conf import settings
 
 class Empresa(models.Model):
     nombre = models.CharField(max_length=100)
@@ -28,7 +30,7 @@ class EmpresaUser(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     sucursal = models.ForeignKey(Sucursal, on_delete=models.CASCADE, null=True, blank=True)
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     status = models.BooleanField(default=True) 
     active = models.BooleanField(default=False) 
     margenSobreprecio = models.IntegerField( null=True, blank=True) 
@@ -55,9 +57,68 @@ class Correlativo(models.Model):
     termino = models.IntegerField()
     fecha_actualizacion = models.DateField(null=True)
     alias = models.CharField(max_length=100)
-    responsable =   models.CharField(max_length=50)
+    responsable = models.CharField(max_length=50)
+    
     def __str__(self):
+        return f"{self.sucursal.alias} - {self.tipo_dte} ({self.inicio}-{self.termino})"
+    
+    @property
+    def numero_actual(self):
+        """Retorna el número actual del correlativo"""
         return self.inicio
+    
+    @property
+    def disponibles(self):
+        """Retorna la cantidad de números disponibles"""
+        return max(0, self.termino - self.inicio + 1)
+    
+    @property
+    def consumidos(self):
+        """Retorna la cantidad de números consumidos (asumiendo que empezó en 1)"""
+        return max(0, self.inicio - 1)
+    
+    @property
+    def total_rango(self):
+        """Retorna el total del rango"""
+        return self.termino
+    
+    @property
+    def porcentaje_consumo(self):
+        """Retorna el porcentaje de consumo"""
+        if self.total_rango > 0:
+            return (self.consumidos / self.total_rango) * 100
+        return 0
+    
+    @property
+    def estado(self):
+        """Retorna el estado del correlativo"""
+        if self.disponibles <= 0:
+            return 'agotado'
+        elif self.disponibles <= 100:
+            return 'critico'
+        else:
+            return 'activo'
+    
+    def puede_emitir(self):
+        """Verifica si se puede emitir un documento con este correlativo"""
+        return self.inicio <= self.termino
+    
+    def obtener_siguiente_numero(self):
+        """Obtiene el siguiente número y actualiza el correlativo"""
+        if not self.puede_emitir():
+            raise ValueError(f"Correlativo agotado para {self.tipo_dte} en {self.sucursal.alias}")
+        
+        numero_actual = self.inicio
+        self.inicio += 1
+        self.fecha_actualizacion = timezone.now().date()
+        self.save()
+        
+        return numero_actual
+    
+    class Meta:
+        unique_together = ['sucursal', 'tipo_dte']
+        verbose_name = 'Correlativo'
+        verbose_name_plural = 'Correlativos'
 TIPO_DOCUMENTO_CHOICES = [
     ('FACTURA ELECTRONICA', 'Factura Electronica'),
     ('BOLETA ELECTRONICA', 'Boleta Electronica'),
@@ -67,7 +128,9 @@ TIPO_DOCUMENTO_CHOICES = [
     ('NOTA DE DEBITO', 'Nota de debito'),
     ('FACTURA EXENTA', 'Factura Exenta'),
     ('COTIZACION', 'Cotizacion'),
- 
+    ('COMPRA', 'Compra'),
+    ('TICKET', 'Ticket'),
+    ('TRASPASO', 'Traspaso'),
 ]
 
 ESTADO_PAGO_CHOICES = [
@@ -82,6 +145,26 @@ ESTADO_DTE_CHOICES = [
     ('ACEPTADO', 'Aceptado'),
      ('ANULADO', 'Anulado'),
 ]
+METODO_PAGO_TICKET_CHOICES = [
+    ('EFECTIVO', 'Efectivo'),
+    ('TARJETA_DEBITO', 'Tarjeta Débito'),
+    ('TARJETA_CREDITO', 'Tarjeta Crédito'),
+    ('TRANSFERENCIA', 'Transferencia'),
+    ('CHEQUE', 'Cheque'),
+    ('OTRO', 'Otro'),
+    ('TBK_POS_INTEGRADO', 'Transbank POS Integrado'),
+    ('TBK_MANUAL', 'Transbank Manual'),
+    ('TBK_DEBITO_POS', 'Transbank Débito POS'),
+    ('TBK_CREDITO_POS', 'Transbank Crédito POS'),
+    ('TBK_PREPAGO_POS', 'Transbank Prepago POS'),
+    ('TARJETA_COMERCIAL', 'Tarjeta Comercial'),
+    ('VENTA_INTERNET', 'Venta por Internet'),
+    ('ORDEN_COMPRA', 'Orden de Compra'),
+    ('CREDITO_TRABAJADOR', 'Crédito Trabajador'),
+    ('CONVENIO', 'Convenio'),
+    ('MULTIPLE', 'Pagos Combinados'),
+]
+
 TIPO_TALLA_CHOICES = [
     ('CL', 'CL'),
     ('US', 'US'),
@@ -113,7 +196,12 @@ class Dte(models.Model):
     sucursal = models.ForeignKey(Sucursal, on_delete=models.SET_NULL, null=True, blank=True)
     fecha_recepcion = models.DateField(null=True, blank=True)
     hora = models.TimeField(null=True, blank=True)
-    tipo_transaccion = models.CharField(max_length=10, choices=[('COMPRA', 'Compra'), ('VENTA', 'Venta')])
+    tipo_transaccion = models.CharField(max_length=15, choices=[
+        ('COMPRA', 'Compra'),
+        ('VENTA', 'Venta'),
+        ('VENTA_PUBLICO', 'Venta al Público'),
+        ('TRASPASO', 'Traspaso')
+    ])
     referencias = models.TextField(blank=True, null=True)
 
     def __str__(self):
@@ -333,23 +421,30 @@ class Ticket(models.Model):
     cliente_rut = models.CharField(max_length=20, blank=True, null=True)
     cliente_email = models.EmailField(blank=True, null=True)
     cliente_telefono = models.CharField(max_length=20, blank=True, null=True)
+    cliente_giro = models.CharField(max_length=255, blank=True, null=True)
+    cliente_comuna = models.CharField(max_length=100, blank=True, null=True)
+    cliente_ciudad = models.CharField(max_length=100, blank=True, null=True)
+    cliente_direccion = models.CharField(max_length=255, blank=True, null=True)
+    cliente_telefono_secundario = models.CharField(max_length=20, blank=True, null=True)
+    cliente_email_facturacion = models.EmailField(blank=True, null=True)
     
     # === MÉTODOS DE PAGO ===
-    metodo_pago = models.CharField(max_length=50, default='EFECTIVO', choices=[
-        ('EFECTIVO', 'Efectivo'),
-        ('TARJETA_DEBITO', 'Tarjeta Débito'),
-        ('TARJETA_CREDITO', 'Tarjeta Crédito'),
-        ('TRANSFERENCIA', 'Transferencia'),
-        ('CHEQUE', 'Cheque'),
-        ('OTRO', 'Otro'),
-    ])
+    metodo_pago = models.CharField(max_length=50, default='EFECTIVO', choices=METODO_PAGO_TICKET_CHOICES)
     
     # === OBSERVACIONES ===
     observaciones = models.TextField(blank=True, null=True)
+    observaciones_adicionales = models.TextField(blank=True, null=True)
     
     # === METADATA ===
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # === CLASIFICACIÓN ===
+    modulo_origen = models.CharField(max_length=20, default='VENTA_PUBLICO', choices=[
+        ('VENTA_PUBLICO', 'Venta al Público'),
+        ('VENTA_MAYORISTA', 'Venta Mayorista'),
+        ('POS', 'Punto de Venta'),
+    ])
     
     class Meta:
         ordering = ['-fecha', '-hora']
@@ -357,6 +452,15 @@ class Ticket(models.Model):
     
     def __str__(self):
         return f"Ticket {self.correlativo} - {self.sucursal} - ${self.total:,}"
+
+    @property
+    def total_pagado(self):
+        return self.pagos.aggregate(total=Sum('monto'))['total'] or 0
+
+    @property
+    def saldo_por_pagar(self):
+        saldo = (self.total or 0) - self.total_pagado
+        return saldo if saldo > 0 else 0
 
 class Ticket_Productos(models.Model):
     ProductoTalla = models.ForeignKey(Producto_Talla, related_name='ticket_productos_talla', on_delete=models.CASCADE)
@@ -379,6 +483,25 @@ class Ticket_Productos(models.Model):
     
     def __str__(self):
         return f"Ticket Producto {self.ProductoTalla} - {self.stock} unidades"
+
+
+class TicketDetallePago(models.Model):
+    ticket = models.ForeignKey(Ticket, related_name='pagos', on_delete=models.CASCADE)
+    metodo_pago = models.CharField(max_length=50, choices=METODO_PAGO_TICKET_CHOICES)
+    tipo_tarjeta = models.CharField(max_length=100, null=True, blank=True)
+    voucher = models.CharField(max_length=100, null=True, blank=True)
+    monto = models.IntegerField()
+    notas = models.TextField(blank=True, null=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['creado_en']
+        verbose_name = 'Detalle de Pago de Ticket'
+        verbose_name_plural = 'Detalles de Pago de Tickets'
+
+    def __str__(self):
+        return f"Pago {self.get_metodo_pago_display()} - ${self.monto:,} (Ticket {self.ticket.correlativo})"
 
 # ========== MODELO PARA TRASPASOS ==========
 
@@ -706,3 +829,1347 @@ class LoteProducto(models.Model):
         if self.cantidad_inicial == 0:
             return 0
         return ((self.cantidad_inicial - self.cantidad_disponible) / self.cantidad_inicial) * 100
+
+
+# ========== MODELO PARA ARQUEO DE CAJA ==========
+
+ESTADO_ARQUEO_CHOICES = [
+    ('ABIERTO', 'En Proceso'),
+    ('CERRADO', 'Finalizado'),
+    ('CON_DIFERENCIAS', 'Con Diferencias'),
+    ('REVISADO', 'Revisado por Supervisor'),
+]
+
+class ArqueoCaja(models.Model):
+    """
+    Modelo para registrar arqueos de caja diarios
+    Guarda los mismos totales que se calculan en la cuadratura
+    """
+    # === INFORMACIÓN BÁSICA ===
+    fecha_arqueo = models.DateField()
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.CASCADE, related_name='arqueos_caja')
+    usuario_responsable = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='arqueos_realizados')
+    
+    # === TOTALES TEÓRICOS (CALCULADOS AUTOMÁTICAMENTE) ===
+    # Tarjetas Comerciales
+    total_visa_mc_amex_teorico = models.IntegerField(default=0)
+    total_presto_teorico = models.IntegerField(default=0)
+    total_abcdin_teorico = models.IntegerField(default=0)
+    total_tricot_teorico = models.IntegerField(default=0)
+    total_hites_teorico = models.IntegerField(default=0)
+    total_ripley_teorico = models.IntegerField(default=0)
+    total_falabella_teorico = models.IntegerField(default=0)
+    total_paris_teorico = models.IntegerField(default=0)
+    total_tarjetas_comerciales_teorico = models.IntegerField(default=0)
+    
+    # Efectivo
+    total_efectivo_teorico = models.IntegerField(default=0)
+    
+    # Venta Internet
+    total_webpay_teorico = models.IntegerField(default=0)
+    total_mercadolibre_teorico = models.IntegerField(default=0)
+    total_mercadopago_teorico = models.IntegerField(default=0)
+    total_transferencia_internet_teorico = models.IntegerField(default=0)
+    total_venta_internet_teorico = models.IntegerField(default=0)
+    
+    # Otros métodos
+    total_tarjeta_debito_teorico = models.IntegerField(default=0)
+    total_tarjeta_credito_teorico = models.IntegerField(default=0)
+    total_transbank_teorico = models.IntegerField(default=0)
+    total_transferencia_teorico = models.IntegerField(default=0)
+    total_cheque_teorico = models.IntegerField(default=0)
+    total_convenio_teorico = models.IntegerField(default=0)
+    
+    # Documentos
+    total_tickets_teorico = models.IntegerField(default=0)
+    total_boletas_electronicas_teorico = models.IntegerField(default=0)
+    total_facturas_teorico = models.IntegerField(default=0)
+    total_facturas_exentas_teorico = models.IntegerField(default=0)
+    total_notas_credito_teorico = models.IntegerField(default=0)
+    
+    # Cantidades de documentos
+    cantidad_tickets = models.IntegerField(default=0)
+    cantidad_boletas_electronicas = models.IntegerField(default=0)
+    cantidad_facturas = models.IntegerField(default=0)
+    cantidad_facturas_exentas = models.IntegerField(default=0)
+    
+    # Total general
+    venta_total_teorica = models.IntegerField(default=0)
+    
+    # === CONTEO FÍSICO (SOLO EFECTIVO) ===
+    # Billetes
+    billetes_20000 = models.IntegerField(default=0)
+    billetes_10000 = models.IntegerField(default=0)
+    billetes_5000 = models.IntegerField(default=0)
+    billetes_2000 = models.IntegerField(default=0)
+    billetes_1000 = models.IntegerField(default=0)
+    
+    # Monedas
+    monedas_500 = models.IntegerField(default=0)
+    monedas_100 = models.IntegerField(default=0)
+    monedas_50 = models.IntegerField(default=0)
+    monedas_10 = models.IntegerField(default=0)
+    monedas_5 = models.IntegerField(default=0)
+    monedas_1 = models.IntegerField(default=0)
+    
+    # Total físico calculado
+    total_efectivo_fisico = models.IntegerField(default=0)
+    
+    # === DIFERENCIAS ===
+    diferencia_efectivo = models.IntegerField(default=0)  # físico - teórico
+    
+    # === CONTROL Y ESTADO ===
+    estado = models.CharField(max_length=20, choices=ESTADO_ARQUEO_CHOICES, default='ABIERTO')
+    observaciones = models.TextField(blank=True, null=True)
+    observaciones_diferencia = models.TextField(blank=True, null=True)
+    
+    # === SUPERVISIÓN ===
+    supervisor_revision = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, blank=True,
+        related_name='arqueos_supervisados'
+    )
+    fecha_revision = models.DateTimeField(null=True, blank=True)
+    observaciones_supervisor = models.TextField(blank=True, null=True)
+    
+    # === METADATA ===
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_cierre = models.DateTimeField(null=True, blank=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-fecha_arqueo', '-fecha_creacion']
+        unique_together = ['fecha_arqueo', 'sucursal']  # Un arqueo por día por sucursal
+        verbose_name = 'Arqueo de Caja'
+        verbose_name_plural = 'Arqueos de Caja'
+        indexes = [
+            models.Index(fields=['fecha_arqueo', 'sucursal']),
+            models.Index(fields=['estado', 'fecha_arqueo']),
+            models.Index(fields=['diferencia_efectivo']),
+        ]
+    
+    def __str__(self):
+        return f"Arqueo {self.fecha_arqueo} - {self.sucursal.alias} - {self.get_estado_display()}"
+    
+    def save(self, *args, **kwargs):
+        # Calcular total físico automáticamente
+        self.total_efectivo_fisico = (
+            (self.billetes_20000 * 20000) +
+            (self.billetes_10000 * 10000) +
+            (self.billetes_5000 * 5000) +
+            (self.billetes_2000 * 2000) +
+            (self.billetes_1000 * 1000) +
+            (self.monedas_500 * 500) +
+            (self.monedas_100 * 100) +
+            (self.monedas_50 * 50) +
+            (self.monedas_10 * 10) +
+            (self.monedas_5 * 5) +
+            (self.monedas_1 * 1)
+        )
+        
+        # Calcular diferencia
+        self.diferencia_efectivo = self.total_efectivo_fisico - self.total_efectivo_teorico
+        
+        # Auto-determinar estado
+        if self.estado == 'ABIERTO' and self.fecha_cierre:
+            if self.diferencia_efectivo == 0:
+                self.estado = 'CERRADO'
+            else:
+                self.estado = 'CON_DIFERENCIAS'
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def tiene_diferencias(self):
+        """Retorna True si hay diferencias en efectivo"""
+        return self.diferencia_efectivo != 0
+    
+    @property
+    def diferencia_absoluta(self):
+        """Retorna el valor absoluto de la diferencia"""
+        return abs(self.diferencia_efectivo)
+    
+    @property
+    def tipo_diferencia(self):
+        """Retorna si es sobrante o faltante"""
+        if self.diferencia_efectivo > 0:
+            return 'SOBRANTE'
+        elif self.diferencia_efectivo < 0:
+            return 'FALTANTE'
+        else:
+            return 'EXACTO'
+    
+    @property
+    def porcentaje_diferencia(self):
+        """Calcula el porcentaje de diferencia respecto al teórico"""
+        if self.total_efectivo_teorico == 0:
+            return 0
+        return (self.diferencia_absoluta / self.total_efectivo_teorico) * 100
+    
+    @property
+    def requiere_supervision(self):
+        """Determina si requiere supervisión (diferencia > $1000 o > 1%)"""
+        return self.diferencia_absoluta > 1000 or self.porcentaje_diferencia > 1.0
+
+
+# ========== MÓDULO DE CRÉDITOS A TRABAJADORES ==========
+
+ESTADO_CREDITO_CHOICES = [
+    ('PENDIENTE', 'Pendiente de Aprobación'),
+    ('APROBADO', 'Aprobado'),
+    ('ACTIVO', 'Activo'),
+    ('PAGADO', 'Pagado Completamente'),
+    ('VENCIDO', 'Vencido'),
+    ('CANCELADO', 'Cancelado'),
+    ('RECHAZADO', 'Rechazado'),
+]
+
+TIPO_CREDITO_CHOICES = [
+    ('ANTICIPO_SUELDO', 'Anticipo de Sueldo'),
+    ('PRESTAMO_EMPRESA', 'Préstamo de Empresa'),
+    ('CREDITO_COMPRA', 'Crédito para Compra'),
+    ('EMERGENCIA', 'Crédito de Emergencia'),
+    ('OTRO', 'Otro'),
+]
+
+class CreditoTrabajador(models.Model):
+    """
+    Modelo para gestionar créditos otorgados a trabajadores/vendedores
+    """
+    # === RELACIONES ===
+    trabajador = models.ForeignKey(
+        Vendedor, 
+        on_delete=models.CASCADE, 
+        related_name='creditos_recibidos',
+        help_text="Trabajador/Vendedor que recibe el crédito"
+    )
+    empresa_origen = models.ForeignKey(
+        Empresa, 
+        on_delete=models.CASCADE, 
+        related_name='creditos_otorgados',
+        help_text="Empresa que otorga el crédito"
+    )
+    sucursal = models.ForeignKey(
+        Sucursal, 
+        on_delete=models.CASCADE, 
+        related_name='creditos_sucursal',
+        help_text="Sucursal donde se otorga el crédito"
+    )
+    
+    # === DATOS DEL CRÉDITO ===
+    numero_credito = models.CharField(max_length=50, unique=True, help_text="Número único del crédito")
+    tipo_credito = models.CharField(max_length=20, choices=TIPO_CREDITO_CHOICES, default='PRESTAMO_EMPRESA')
+    monto_solicitado = models.DecimalField(max_digits=12, decimal_places=2, help_text="Monto solicitado")
+    monto_aprobado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Monto aprobado")
+    monto_pagado = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Monto pagado hasta la fecha")
+    
+    # === FECHAS ===
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    fecha_vencimiento = models.DateField(help_text="Fecha límite para pago")
+    fecha_primer_pago = models.DateField(null=True, blank=True, help_text="Fecha del primer pago programado")
+    
+    # === ESTADO Y AUTORIZACIÓN ===
+    estado = models.CharField(max_length=20, choices=ESTADO_CREDITO_CHOICES, default='PENDIENTE')
+    autorizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, blank=True,
+        related_name='creditos_autorizados',
+        help_text="Usuario que autorizó el crédito"
+    )
+    solicitado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='creditos_solicitados',
+        help_text="Usuario que registró la solicitud"
+    )
+    
+    # === CONDICIONES DEL CRÉDITO ===
+    tasa_interes = models.DecimalField(
+        max_digits=5, decimal_places=2, 
+        default=0, 
+        help_text="Tasa de interés mensual (%)"
+    )
+    numero_cuotas = models.IntegerField(default=1, help_text="Número de cuotas para el pago")
+    valor_cuota = models.DecimalField(
+        max_digits=12, decimal_places=2, 
+        null=True, blank=True,
+        help_text="Valor de cada cuota (calculado automáticamente)"
+    )
+    
+    # === OBSERVACIONES Y JUSTIFICACIÓN ===
+    motivo_solicitud = models.TextField(help_text="Motivo o justificación del crédito")
+    observaciones_solicitud = models.TextField(blank=True, null=True)
+    observaciones_aprobacion = models.TextField(blank=True, null=True)
+    observaciones_rechazo = models.TextField(blank=True, null=True)
+    
+    # === GARANTÍAS ===
+    requiere_aval = models.BooleanField(default=False)
+    aval_nombre = models.CharField(max_length=200, blank=True, null=True)
+    aval_rut = models.CharField(max_length=20, blank=True, null=True)
+    aval_telefono = models.CharField(max_length=20, blank=True, null=True)
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-fecha_solicitud']
+        verbose_name = 'Crédito de Trabajador'
+        verbose_name_plural = 'Créditos de Trabajadores'
+        indexes = [
+            models.Index(fields=['numero_credito']),
+            models.Index(fields=['trabajador', 'estado']),
+            models.Index(fields=['empresa_origen', 'fecha_solicitud']),
+            models.Index(fields=['estado', 'fecha_vencimiento']),
+        ]
+    
+    def __str__(self):
+        return f"Crédito {self.numero_credito} - {self.trabajador.nombre} - ${self.monto_aprobado or self.monto_solicitado:,}"
+    
+    def save(self, *args, **kwargs):
+        # Generar número de crédito si no existe
+        if not self.numero_credito:
+            from django.utils import timezone
+            fecha = timezone.now()
+            ultimo_numero = CreditoTrabajador.objects.filter(
+                empresa_origen=self.empresa_origen,
+                fecha_solicitud__year=fecha.year
+            ).count()
+            self.numero_credito = f"CR-{fecha.year}-{ultimo_numero + 1:04d}"
+        
+        # Calcular valor de cuota si está aprobado
+        if self.estado == 'APROBADO' and self.monto_aprobado and self.numero_cuotas > 0:
+            if self.tasa_interes > 0:
+                # Cálculo con interés compuesto
+                tasa_mensual = float(self.tasa_interes) / 100
+                factor = (1 + tasa_mensual) ** self.numero_cuotas
+                self.valor_cuota = (float(self.monto_aprobado) * tasa_mensual * factor) / (factor - 1)
+            else:
+                # Sin interés
+                self.valor_cuota = float(self.monto_aprobado) / self.numero_cuotas
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def saldo_pendiente(self):
+        """Saldo pendiente de pago"""
+        monto_base = self.monto_aprobado or self.monto_solicitado
+        return float(monto_base) - float(self.monto_pagado)
+    
+    @property
+    def porcentaje_pagado(self):
+        """Porcentaje pagado del crédito"""
+        monto_base = self.monto_aprobado or self.monto_solicitado
+        if monto_base > 0:
+            return (float(self.monto_pagado) / float(monto_base)) * 100
+        return 0
+    
+    @property
+    def esta_vencido(self):
+        """Verifica si el crédito está vencido"""
+        from django.utils import timezone
+        return (
+            self.estado in ['ACTIVO', 'APROBADO'] and 
+            self.fecha_vencimiento < timezone.now().date() and
+            self.saldo_pendiente > 0
+        )
+    
+    @property
+    def dias_para_vencimiento(self):
+        """Días restantes para el vencimiento"""
+        from django.utils import timezone
+        if self.fecha_vencimiento:
+            delta = self.fecha_vencimiento - timezone.now().date()
+            return delta.days
+        return None
+    
+    def aprobar_credito(self, usuario_autorizador, monto_aprobado=None, observaciones=None):
+        """Aprobar el crédito"""
+        from django.utils import timezone
+        
+        self.estado = 'APROBADO'
+        self.autorizado_por = usuario_autorizador
+        self.fecha_aprobacion = timezone.now()
+        self.monto_aprobado = monto_aprobado or self.monto_solicitado
+        
+        if observaciones:
+            self.observaciones_aprobacion = observaciones
+        
+        self.save()
+    
+    def rechazar_credito(self, usuario_autorizador, motivo_rechazo):
+        """Rechazar el crédito"""
+        self.estado = 'RECHAZADO'
+        self.autorizado_por = usuario_autorizador
+        self.observaciones_rechazo = motivo_rechazo
+        self.save()
+    
+    def activar_credito(self):
+        """Activar el crédito (cuando se entrega el dinero)"""
+        if self.estado == 'APROBADO':
+            self.estado = 'ACTIVO'
+            self.save()
+
+
+class PagoCreditoTrabajador(models.Model):
+    """
+    Modelo para registrar pagos/abonos a créditos de trabajadores
+    """
+    # === RELACIONES ===
+    credito = models.ForeignKey(
+        CreditoTrabajador, 
+        on_delete=models.CASCADE, 
+        related_name='pagos'
+    )
+    
+    # === DATOS DEL PAGO ===
+    numero_pago = models.CharField(max_length=50, help_text="Número del pago/abono")
+    monto_pago = models.DecimalField(max_digits=12, decimal_places=2)
+    fecha_pago = models.DateField()
+    metodo_pago = models.CharField(
+        max_length=50, 
+        choices=METODO_PAGO_TICKET_CHOICES,
+        default='EFECTIVO'
+    )
+    
+    # === DETALLES DEL PAGO ===
+    numero_cuota = models.IntegerField(null=True, blank=True, help_text="Número de cuota si aplica")
+    es_pago_total = models.BooleanField(default=False, help_text="Si es el pago total del crédito")
+    referencia_pago = models.CharField(max_length=100, blank=True, null=True, help_text="Referencia del pago (voucher, etc.)")
+    
+    # === RESPONSABLES ===
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='pagos_credito_registrados'
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones = models.TextField(blank=True, null=True)
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-fecha_pago', '-created_at']
+        verbose_name = 'Pago de Crédito'
+        verbose_name_plural = 'Pagos de Créditos'
+        indexes = [
+            models.Index(fields=['credito', 'fecha_pago']),
+            models.Index(fields=['numero_pago']),
+        ]
+    
+    def __str__(self):
+        return f"Pago {self.numero_pago} - ${self.monto_pago:,} - {self.credito.numero_credito}"
+    
+    def save(self, *args, **kwargs):
+        # Generar número de pago si no existe
+        if not self.numero_pago:
+            ultimo_numero = PagoCreditoTrabajador.objects.filter(
+                credito=self.credito
+            ).count()
+            self.numero_pago = f"{self.credito.numero_credito}-P{ultimo_numero + 1:02d}"
+        
+        super().save(*args, **kwargs)
+        
+        # Actualizar monto pagado en el crédito
+        total_pagado = self.credito.pagos.aggregate(
+            total=models.Sum('monto_pago')
+        )['total'] or 0
+        
+        self.credito.monto_pagado = total_pagado
+        
+        # Actualizar estado del crédito
+        if self.credito.saldo_pendiente <= 0:
+            self.credito.estado = 'PAGADO'
+        elif self.credito.estado == 'APROBADO':
+            self.credito.estado = 'ACTIVO'
+        
+        self.credito.save()
+
+
+class FirmaCreditoTrabajador(models.Model):
+    """
+    Modelo para manejar firmas digitales de créditos
+    """
+    # === RELACIONES ===
+    credito = models.OneToOneField(
+        CreditoTrabajador, 
+        on_delete=models.CASCADE, 
+        related_name='firma'
+    )
+    
+    # === DATOS DE LA FIRMA ===
+    firmado_por_trabajador = models.BooleanField(default=False)
+    fecha_firma_trabajador = models.DateTimeField(null=True, blank=True)
+    firma_trabajador_data = models.TextField(blank=True, null=True, help_text="Datos de la firma digital del trabajador")
+    
+    firmado_por_autorizador = models.BooleanField(default=False)
+    fecha_firma_autorizador = models.DateTimeField(null=True, blank=True)
+    firma_autorizador_data = models.TextField(blank=True, null=True, help_text="Datos de la firma digital del autorizador")
+    
+    # === DATOS DEL AVAL (SI APLICA) ===
+    firmado_por_aval = models.BooleanField(default=False)
+    fecha_firma_aval = models.DateTimeField(null=True, blank=True)
+    firma_aval_data = models.TextField(blank=True, null=True, help_text="Datos de la firma digital del aval")
+    
+    # === METADATA ===
+    ip_firma_trabajador = models.GenericIPAddressField(null=True, blank=True)
+    ip_firma_autorizador = models.GenericIPAddressField(null=True, blank=True)
+    ip_firma_aval = models.GenericIPAddressField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Firma de Crédito'
+        verbose_name_plural = 'Firmas de Créditos'
+    
+    def __str__(self):
+        return f"Firmas - {self.credito.numero_credito}"
+    
+    @property
+    def esta_completamente_firmado(self):
+        """Verifica si todas las firmas requeridas están completas"""
+        firmas_requeridas = [self.firmado_por_trabajador, self.firmado_por_autorizador]
+        
+        if self.credito.requiere_aval:
+            firmas_requeridas.append(self.firmado_por_aval)
+        
+        return all(firmas_requeridas)
+    
+    def registrar_firma_trabajador(self, firma_data, ip_address=None):
+        """Registrar firma del trabajador"""
+        from django.utils import timezone
+        
+        self.firmado_por_trabajador = True
+        self.fecha_firma_trabajador = timezone.now()
+        self.firma_trabajador_data = firma_data
+        self.ip_firma_trabajador = ip_address
+        self.save()
+    
+    def registrar_firma_autorizador(self, firma_data, ip_address=None):
+        """Registrar firma del autorizador"""
+        from django.utils import timezone
+        
+        self.firmado_por_autorizador = True
+        self.fecha_firma_autorizador = timezone.now()
+        self.firma_autorizador_data = firma_data
+        self.ip_firma_autorizador = ip_address
+        self.save()
+    
+    def registrar_firma_aval(self, firma_data, ip_address=None):
+        """Registrar firma del aval"""
+        from django.utils import timezone
+        
+        self.firmado_por_aval = True
+        self.fecha_firma_aval = timezone.now()
+        self.firma_aval_data = firma_data
+        self.ip_firma_aval = ip_address
+        self.save()
+
+
+# ========== MÓDULO POS TRANSBANK ==========
+
+TIPO_POS_CHOICES = [
+    ('VERIFONE_VX520', 'Verifone VX520'),
+    ('INGENICO_3500', 'Ingenico 3500'),
+    ('INGENICO_DESK', 'Ingenico DESK'),
+    ('OTRO', 'Otro'),
+]
+
+ESTADO_TRANSACCION_POS_CHOICES = [
+    ('INICIADA', 'Iniciada'),
+    ('ESPERANDO_TARJETA', 'Esperando Tarjeta'),
+    ('PROCESANDO', 'Procesando'),
+    ('APROBADA', 'Aprobada'),
+    ('RECHAZADA', 'Rechazada'),
+    ('ANULADA', 'Anulada'),
+    ('ERROR', 'Error'),
+    ('TIMEOUT', 'Timeout'),
+]
+
+TIPO_TARJETA_CHOICES = [
+    ('DEBITO', 'Débito'),
+    ('CREDITO', 'Crédito'),
+    ('PREPAGO', 'Prepago'),
+    ('DESCONOCIDO', 'Desconocido'),
+]
+
+class ConfiguracionPOS(models.Model):
+    """
+    Configuración de terminales POS Transbank por sucursal
+    """
+    # === RELACIONES ===
+    sucursal = models.ForeignKey(
+        Sucursal, 
+        on_delete=models.CASCADE, 
+        related_name='configuraciones_pos'
+    )
+    
+    # === DATOS DEL TERMINAL ===
+    nombre = models.CharField(max_length=100, help_text="Nombre identificativo del terminal")
+    tipo_pos = models.CharField(max_length=20, choices=TIPO_POS_CHOICES)
+    puerto_conexion = models.CharField(
+        max_length=20, 
+        help_text="Puerto de conexión (COM1, /dev/ttyUSB0, etc.)"
+    )
+    velocidad_conexion = models.IntegerField(
+        default=115200, 
+        help_text="Velocidad de conexión en bps"
+    )
+    
+    # === CONFIGURACIÓN ===
+    activo = models.BooleanField(default=True)
+    es_principal = models.BooleanField(
+        default=False, 
+        help_text="Terminal principal para esta sucursal"
+    )
+    timeout_conexion = models.IntegerField(
+        default=30, 
+        help_text="Timeout de conexión en segundos"
+    )
+    
+    # === INFORMACIÓN TÉCNICA ===
+    numero_serie = models.CharField(max_length=50, blank=True, null=True)
+    version_firmware = models.CharField(max_length=20, blank=True, null=True)
+    ultima_conexion = models.DateTimeField(null=True, blank=True)
+    estado_conexion = models.CharField(
+        max_length=20, 
+        choices=[
+            ('CONECTADO', 'Conectado'),
+            ('DESCONECTADO', 'Desconectado'),
+            ('ERROR', 'Error'),
+            ('NO_PROBADO', 'No Probado'),
+        ],
+        default='NO_PROBADO'
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones = models.TextField(blank=True, null=True)
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['sucursal', 'nombre']
+        unique_together = ['sucursal', 'nombre']
+        verbose_name = 'Configuración POS'
+        verbose_name_plural = 'Configuraciones POS'
+        indexes = [
+            models.Index(fields=['sucursal', 'activo']),
+            models.Index(fields=['tipo_pos', 'activo']),
+        ]
+    
+    def __str__(self):
+        return f"{self.nombre} ({self.get_tipo_pos_display()}) - {self.sucursal.alias}"
+    
+    def save(self, *args, **kwargs):
+        # Si se marca como principal, desmarcar otros principales en la misma sucursal
+        if self.es_principal:
+            ConfiguracionPOS.objects.filter(
+                sucursal=self.sucursal, 
+                es_principal=True
+            ).exclude(id=self.id).update(es_principal=False)
+        
+        super().save(*args, **kwargs)
+
+
+class TransaccionPOS(models.Model):
+    """
+    Registro de transacciones POS Transbank para auditoría y seguimiento
+    """
+    # === RELACIONES ===
+    configuracion_pos = models.ForeignKey(
+        ConfiguracionPOS, 
+        on_delete=models.CASCADE, 
+        related_name='transacciones'
+    )
+    ticket = models.ForeignKey(
+        Ticket, 
+        on_delete=models.CASCADE, 
+        related_name='transacciones_pos',
+        null=True, blank=True
+    )
+    detalle_pago = models.ForeignKey(
+        TicketDetallePago, 
+        on_delete=models.CASCADE, 
+        related_name='transaccion_pos',
+        null=True, blank=True
+    )
+    
+    # === DATOS DE LA TRANSACCIÓN ===
+    ticket_pos = models.CharField(
+        max_length=50, 
+        unique=True, 
+        help_text="Ticket único generado para la transacción POS"
+    )
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    tipo_transaccion = models.CharField(
+        max_length=20, 
+        choices=[
+            ('VENTA', 'Venta'),
+            ('ANULACION', 'Anulación'),
+            ('DEVOLUCION', 'Devolución'),
+        ],
+        default='VENTA'
+    )
+    
+    # === ESTADO DE LA TRANSACCIÓN ===
+    estado = models.CharField(
+        max_length=20, 
+        choices=ESTADO_TRANSACCION_POS_CHOICES, 
+        default='INICIADA'
+    )
+    fecha_inicio = models.DateTimeField(auto_now_add=True)
+    fecha_completada = models.DateTimeField(null=True, blank=True)
+    
+    # === RESPUESTA DEL POS ===
+    codigo_respuesta = models.CharField(max_length=10, blank=True, null=True)
+    mensaje_respuesta = models.CharField(max_length=200, blank=True, null=True)
+    codigo_autorizacion = models.CharField(max_length=20, blank=True, null=True)
+    
+    # === DATOS DE LA TARJETA ===
+    tipo_tarjeta = models.CharField(
+        max_length=20, 
+        choices=TIPO_TARJETA_CHOICES, 
+        blank=True, null=True
+    )
+    ultimos_4_digitos = models.CharField(max_length=4, blank=True, null=True)
+    nombre_tarjeta = models.CharField(max_length=50, blank=True, null=True)  # VISA, MASTERCARD, etc.
+    
+    # === DATOS TÉCNICOS ===
+    numero_operacion = models.CharField(max_length=20, blank=True, null=True)
+    numero_cuotas = models.IntegerField(default=1)
+    codigo_comercio = models.CharField(max_length=20, blank=True, null=True)
+    terminal_id = models.CharField(max_length=20, blank=True, null=True)
+    
+    # === DATOS DE AUDITORÍA ===
+    ip_origen = models.GenericIPAddressField(null=True, blank=True)
+    usuario_operador = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, blank=True,
+        related_name='transacciones_pos_operadas'
+    )
+    
+    # === OBSERVACIONES Y ERRORES ===
+    observaciones = models.TextField(blank=True, null=True)
+    error_detalle = models.TextField(blank=True, null=True)
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-fecha_inicio']
+        verbose_name = 'Transacción POS'
+        verbose_name_plural = 'Transacciones POS'
+        indexes = [
+            models.Index(fields=['ticket_pos']),
+            models.Index(fields=['configuracion_pos', 'fecha_inicio']),
+            models.Index(fields=['estado', 'fecha_inicio']),
+            models.Index(fields=['codigo_autorizacion']),
+            models.Index(fields=['ticket', 'estado']),
+        ]
+    
+    def __str__(self):
+        return f"POS {self.ticket_pos} - {self.get_estado_display()} - ${self.monto:,}"
+    
+    def save(self, *args, **kwargs):
+        # Generar ticket_pos si no existe
+        if not self.ticket_pos:
+            from django.utils import timezone
+            timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+            ultimo_numero = TransaccionPOS.objects.filter(
+                configuracion_pos=self.configuracion_pos,
+                fecha_inicio__date=timezone.now().date()
+            ).count()
+            self.ticket_pos = f"POS-{self.configuracion_pos.sucursal.id}-{timestamp}-{ultimo_numero + 1:03d}"
+        
+        # Actualizar fecha_completada si el estado cambió a completado
+        if self.estado in ['APROBADA', 'RECHAZADA', 'ANULADA', 'ERROR'] and not self.fecha_completada:
+            from django.utils import timezone
+            self.fecha_completada = timezone.now()
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def duracion_transaccion(self):
+        """Duración de la transacción en segundos"""
+        if self.fecha_completada:
+            return (self.fecha_completada - self.fecha_inicio).total_seconds()
+        return None
+    
+    @property
+    def es_exitosa(self):
+        """Verifica si la transacción fue exitosa"""
+        return self.estado == 'APROBADA' and self.codigo_autorizacion
+    
+    @property
+    def puede_anular(self):
+        """Verifica si la transacción puede ser anulada"""
+        return (
+            self.estado == 'APROBADA' and 
+            self.codigo_autorizacion and 
+            self.fecha_completada and
+            (timezone.now() - self.fecha_completada).days == 0  # Solo el mismo día
+        )
+
+
+class LogPOS(models.Model):
+    """
+    Log detallado de comunicación con terminales POS para debugging
+    """
+    # === RELACIONES ===
+    configuracion_pos = models.ForeignKey(
+        ConfiguracionPOS, 
+        on_delete=models.CASCADE, 
+        related_name='logs'
+    )
+    transaccion_pos = models.ForeignKey(
+        TransaccionPOS, 
+        on_delete=models.CASCADE, 
+        related_name='logs',
+        null=True, blank=True
+    )
+    
+    # === DATOS DEL LOG ===
+    tipo_evento = models.CharField(
+        max_length=20, 
+        choices=[
+            ('CONEXION', 'Conexión'),
+            ('DESCONEXION', 'Desconexión'),
+            ('COMANDO_ENVIADO', 'Comando Enviado'),
+            ('RESPUESTA_RECIBIDA', 'Respuesta Recibida'),
+            ('ERROR', 'Error'),
+            ('TIMEOUT', 'Timeout'),
+            ('INFO', 'Información'),
+        ]
+    )
+    mensaje = models.TextField()
+    datos_tecnicos = models.JSONField(blank=True, null=True)  # Para datos estructurados
+    
+    # === METADATA ===
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Log POS'
+        verbose_name_plural = 'Logs POS'
+        indexes = [
+            models.Index(fields=['configuracion_pos', 'timestamp']),
+            models.Index(fields=['tipo_evento', 'timestamp']),
+            models.Index(fields=['transaccion_pos', 'timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_tipo_evento_display()} - {self.configuracion_pos.nombre} - {self.timestamp.strftime('%H:%M:%S')}"
+
+
+# ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
+
+TIPO_OPERACION_CAMBIO_CHOICES = [
+    ('CAMBIO_SIMPLE', 'Cambio Simple'),
+    ('CAMBIO_CON_DIFERENCIA', 'Cambio con Diferencia de Precio'),
+    ('DEVOLUCION_TOTAL', 'Devolución Total'),
+    ('DEVOLUCION_PARCIAL', 'Devolución Parcial'),
+]
+
+ESTADO_CAMBIO_CHOICES = [
+    ('SOLICITADO', 'Solicitado'),
+    ('EN_PROCESO', 'En Proceso'),
+    ('APROBADO', 'Aprobado'),
+    ('COMPLETADO', 'Completado'),
+    ('RECHAZADO', 'Rechazado'),
+    ('CANCELADO', 'Cancelado'),
+]
+
+MOTIVO_CAMBIO_CHOICES = [
+    ('TALLA_INCORRECTA', 'Talla Incorrecta'),
+    ('COLOR_INCORRECTO', 'Color Incorrecto'),
+    ('DEFECTO_PRODUCTO', 'Defecto en el Producto'),
+    ('NO_SATISFACE', 'No Satisface Expectativas'),
+    ('REGALO_NO_DESEADO', 'Regalo No Deseado'),
+    ('CAMBIO_OPINION', 'Cambio de Opinión'),
+    ('PRODUCTO_DAÑADO', 'Producto Dañado en Transporte'),
+    ('OTRO', 'Otro Motivo'),
+]
+
+CONDICION_PRODUCTO_CHOICES = [
+    ('PERFECTO', 'Perfecto Estado'),
+    ('BUENO', 'Buen Estado'),
+    ('REGULAR', 'Estado Regular'),
+    ('DAÑADO', 'Dañado'),
+    ('NO_APTO', 'No Apto para Cambio'),
+]
+
+class CambioDevolucion(models.Model):
+    """
+    Modelo principal para gestionar cambios y devoluciones
+    """
+    # === RELACIONES ===
+    ticket_original = models.ForeignKey(
+        Ticket, 
+        on_delete=models.CASCADE, 
+        related_name='cambios_devoluciones',
+        help_text="Ticket original de la venta"
+    )
+    ticket_nuevo = models.ForeignKey(
+        Ticket, 
+        on_delete=models.SET_NULL, 
+        related_name='cambios_generados',
+        null=True, blank=True,
+        help_text="Nuevo ticket generado por el cambio"
+    )
+    sucursal = models.ForeignKey(
+        Sucursal, 
+        on_delete=models.CASCADE, 
+        related_name='cambios_sucursal'
+    )
+    
+    # === DATOS PRINCIPALES ===
+    numero_operacion = models.CharField(
+        max_length=50, 
+        unique=True, 
+        help_text="Número único de la operación de cambio"
+    )
+    tipo_operacion = models.CharField(
+        max_length=30, 
+        choices=TIPO_OPERACION_CAMBIO_CHOICES,
+        help_text="Tipo de operación realizada"
+    )
+    estado = models.CharField(
+        max_length=20, 
+        choices=ESTADO_CAMBIO_CHOICES, 
+        default='SOLICITADO'
+    )
+    
+    # === FECHAS Y TIEMPOS ===
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    fecha_completado = models.DateTimeField(null=True, blank=True)
+    fecha_limite_cambio = models.DateField(
+        help_text="Fecha límite para realizar el cambio"
+    )
+    
+    # === MONTOS Y DIFERENCIAS ===
+    monto_original = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        help_text="Monto total del ticket original"
+    )
+    monto_nuevo = models.DecimalField(
+        max_digits=12, decimal_places=2, 
+        default=0,
+        help_text="Monto del nuevo ticket (si aplica)"
+    )
+    diferencia_monto = models.DecimalField(
+        max_digits=12, decimal_places=2, 
+        default=0,
+        help_text="Diferencia de precio (positivo: cliente paga, negativo: se devuelve)"
+    )
+    
+    # === RESPONSABLES ===
+    solicitado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='cambios_solicitados',
+        help_text="Usuario que registró la solicitud"
+    )
+    aprobado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL,
+        related_name='cambios_aprobados',
+        null=True, blank=True,
+        help_text="Usuario que aprobó el cambio"
+    )
+    
+    # === OBSERVACIONES ===
+    motivo_principal = models.CharField(
+        max_length=30, 
+        choices=MOTIVO_CAMBIO_CHOICES,
+        help_text="Motivo principal del cambio"
+    )
+    observaciones_cliente = models.TextField(
+        blank=True, null=True,
+        help_text="Observaciones del cliente"
+    )
+    observaciones_vendedor = models.TextField(
+        blank=True, null=True,
+        help_text="Observaciones del vendedor"
+    )
+    observaciones_aprobacion = models.TextField(
+        blank=True, null=True,
+        help_text="Observaciones de la aprobación/rechazo"
+    )
+    
+    # === POLÍTICAS Y VALIDACIONES ===
+    requiere_autorizacion = models.BooleanField(
+        default=False,
+        help_text="Si requiere autorización especial"
+    )
+    autorizado_excepcion = models.BooleanField(
+        default=False,
+        help_text="Si fue autorizado como excepción a las políticas"
+    )
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-fecha_solicitud']
+        verbose_name = 'Cambio/Devolución'
+        verbose_name_plural = 'Cambios y Devoluciones'
+        indexes = [
+            models.Index(fields=['numero_operacion']),
+            models.Index(fields=['ticket_original', 'estado']),
+            models.Index(fields=['sucursal', 'fecha_solicitud']),
+            models.Index(fields=['estado', 'fecha_solicitud']),
+            models.Index(fields=['tipo_operacion', 'fecha_solicitud']),
+        ]
+    
+    def __str__(self):
+        return f"Cambio {self.numero_operacion} - {self.get_tipo_operacion_display()} - {self.get_estado_display()}"
+    
+    def save(self, *args, **kwargs):
+        # Generar número de operación si no existe
+        if not self.numero_operacion:
+            from django.utils import timezone
+            fecha = timezone.now()
+            ultimo_numero = CambioDevolucion.objects.filter(
+                sucursal=self.sucursal,
+                fecha_solicitud__year=fecha.year,
+                fecha_solicitud__month=fecha.month
+            ).count()
+            self.numero_operacion = f"CD-{self.sucursal.id}-{fecha.strftime('%Y%m')}-{ultimo_numero + 1:04d}"
+        
+        # Calcular fecha límite si no existe (30 días desde la venta original)
+        if not self.fecha_limite_cambio and self.ticket_original:
+            from datetime import timedelta
+            self.fecha_limite_cambio = self.ticket_original.fecha + timedelta(days=30)
+        
+        # Actualizar fechas según estado
+        if self.estado == 'APROBADO' and not self.fecha_aprobacion:
+            from django.utils import timezone
+            self.fecha_aprobacion = timezone.now()
+        elif self.estado == 'COMPLETADO' and not self.fecha_completado:
+            from django.utils import timezone
+            self.fecha_completado = timezone.now()
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def dias_desde_venta(self):
+        """Días transcurridos desde la venta original"""
+        from django.utils import timezone
+        if self.ticket_original:
+            delta = timezone.now().date() - self.ticket_original.fecha
+            return delta.days
+        return 0
+    
+    @property
+    def dentro_del_plazo(self):
+        """Verifica si está dentro del plazo para cambios"""
+        from django.utils import timezone
+        return timezone.now().date() <= self.fecha_limite_cambio
+    
+    @property
+    def puede_completar(self):
+        """Verifica si el cambio puede ser completado"""
+        return (
+            self.estado == 'APROBADO' and 
+            self.dentro_del_plazo and
+            self.detalles.filter(estado_producto__in=['PERFECTO', 'BUENO']).exists()
+        )
+    
+    @property
+    def requiere_pago_adicional(self):
+        """Verifica si requiere pago adicional"""
+        return self.diferencia_monto > 0
+    
+    @property
+    def genera_devolucion(self):
+        """Verifica si genera devolución de dinero"""
+        return self.diferencia_monto < 0
+    
+    def aprobar_cambio(self, usuario_aprobador, observaciones=None):
+        """Aprobar el cambio/devolución"""
+        from django.utils import timezone
+        
+        self.estado = 'APROBADO'
+        self.aprobado_por = usuario_aprobador
+        self.fecha_aprobacion = timezone.now()
+        
+        if observaciones:
+            self.observaciones_aprobacion = observaciones
+        
+        self.save()
+    
+    def rechazar_cambio(self, usuario_aprobador, motivo_rechazo):
+        """Rechazar el cambio/devolución"""
+        self.estado = 'RECHAZADO'
+        self.aprobado_por = usuario_aprobador
+        self.observaciones_aprobacion = motivo_rechazo
+        self.save()
+    
+    def completar_cambio(self):
+        """Marcar el cambio como completado"""
+        if self.puede_completar:
+            self.estado = 'COMPLETADO'
+            self.save()
+            return True
+        return False
+
+
+class CambioDevolucionDetalle(models.Model):
+    """
+    Detalle de productos involucrados en cambios y devoluciones
+    """
+    # === RELACIONES ===
+    cambio_devolucion = models.ForeignKey(
+        CambioDevolucion, 
+        on_delete=models.CASCADE, 
+        related_name='detalles'
+    )
+    
+    # === PRODUCTO ORIGINAL (A DEVOLVER/CAMBIAR) ===
+    producto_original = models.ForeignKey(
+        Ticket_Productos, 
+        on_delete=models.CASCADE,
+        related_name='cambios_como_original',
+        help_text="Producto del ticket original que se cambia/devuelve"
+    )
+    cantidad_original = models.IntegerField(
+        help_text="Cantidad del producto original a cambiar/devolver"
+    )
+    
+    # === PRODUCTO NUEVO (SI ES CAMBIO) ===
+    producto_nuevo = models.ForeignKey(
+        Producto_Talla, 
+        on_delete=models.CASCADE,
+        related_name='cambios_como_nuevo',
+        null=True, blank=True,
+        help_text="Nuevo producto en caso de cambio"
+    )
+    cantidad_nueva = models.IntegerField(
+        default=0,
+        help_text="Cantidad del nuevo producto"
+    )
+    precio_nuevo = models.DecimalField(
+        max_digits=10, decimal_places=2, 
+        default=0,
+        help_text="Precio del nuevo producto"
+    )
+    
+    # === CONDICIÓN Y EVALUACIÓN ===
+    condicion_producto = models.CharField(
+        max_length=20, 
+        choices=CONDICION_PRODUCTO_CHOICES,
+        help_text="Condición del producto devuelto"
+    )
+    apto_para_venta = models.BooleanField(
+        default=True,
+        help_text="Si el producto devuelto está apto para venta"
+    )
+    
+    # === DIFERENCIAS DE PRECIO ===
+    precio_original_unitario = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text="Precio unitario original"
+    )
+    diferencia_unitaria = models.DecimalField(
+        max_digits=10, decimal_places=2, 
+        default=0,
+        help_text="Diferencia de precio por unidad"
+    )
+    diferencia_total = models.DecimalField(
+        max_digits=10, decimal_places=2, 
+        default=0,
+        help_text="Diferencia total para esta línea"
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones = models.TextField(
+        blank=True, null=True,
+        help_text="Observaciones específicas de este producto"
+    )
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Detalle de Cambio/Devolución'
+        verbose_name_plural = 'Detalles de Cambios/Devoluciones'
+        indexes = [
+            models.Index(fields=['cambio_devolucion', 'producto_original']),
+            models.Index(fields=['condicion_producto', 'apto_para_venta']),
+        ]
+    
+    def __str__(self):
+        return f"Detalle {self.cambio_devolucion.numero_operacion} - {self.producto_original.ProductoTalla.producto.articulo}"
+    
+    def save(self, *args, **kwargs):
+        # Calcular diferencias automáticamente
+        if self.producto_nuevo and self.cantidad_nueva > 0:
+            # Es un cambio
+            precio_nuevo_total = self.precio_nuevo * self.cantidad_nueva
+            precio_original_total = self.precio_original_unitario * self.cantidad_original
+            self.diferencia_total = precio_nuevo_total - precio_original_total
+            self.diferencia_unitaria = self.precio_nuevo - self.precio_original_unitario
+        else:
+            # Es una devolución
+            self.diferencia_total = -self.precio_original_unitario * self.cantidad_original
+            self.diferencia_unitaria = -self.precio_original_unitario
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def es_cambio(self):
+        """Verifica si es un cambio (tiene producto nuevo)"""
+        return self.producto_nuevo is not None
+    
+    @property
+    def es_devolucion(self):
+        """Verifica si es una devolución (no tiene producto nuevo)"""
+        return self.producto_nuevo is None
+    
+    @property
+    def valor_original_total(self):
+        """Valor total del producto original"""
+        return self.precio_original_unitario * self.cantidad_original
+    
+    @property
+    def valor_nuevo_total(self):
+        """Valor total del producto nuevo"""
+        if self.es_cambio:
+            return self.precio_nuevo * self.cantidad_nueva
+        return 0
+
+
+class PagoCambioDevolucion(models.Model):
+    """
+    Pagos asociados a cambios y devoluciones
+    """
+    # === RELACIONES ===
+    cambio_devolucion = models.ForeignKey(
+        CambioDevolucion, 
+        on_delete=models.CASCADE, 
+        related_name='pagos'
+    )
+    
+    # === DATOS DEL PAGO ===
+    tipo_pago = models.CharField(
+        max_length=20, 
+        choices=[
+            ('PAGO_DIFERENCIA', 'Pago de Diferencia'),
+            ('DEVOLUCION_EFECTIVO', 'Devolución en Efectivo'),
+            ('DEVOLUCION_TARJETA', 'Devolución a Tarjeta'),
+            ('CREDITO_TIENDA', 'Crédito en Tienda'),
+        ]
+    )
+    metodo_pago = models.CharField(
+        max_length=50, 
+        choices=METODO_PAGO_TICKET_CHOICES
+    )
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # === DETALLES ESPECÍFICOS ===
+    referencia_pago = models.CharField(
+        max_length=100, 
+        blank=True, null=True,
+        help_text="Referencia del pago (voucher, autorización, etc.)"
+    )
+    numero_autorizacion = models.CharField(
+        max_length=50, 
+        blank=True, null=True
+    )
+    
+    # === RESPONSABLES ===
+    procesado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='pagos_cambio_procesados'
+    )
+    
+    # === FECHAS ===
+    fecha_pago = models.DateTimeField(auto_now_add=True)
+    fecha_vencimiento_credito = models.DateField(
+        null=True, blank=True,
+        help_text="Fecha de vencimiento si es crédito en tienda"
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones = models.TextField(blank=True, null=True)
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-fecha_pago']
+        verbose_name = 'Pago de Cambio/Devolución'
+        verbose_name_plural = 'Pagos de Cambios/Devoluciones'
+    
+    def __str__(self):
+        return f"Pago {self.get_tipo_pago_display()} - ${self.monto:,} - {self.cambio_devolucion.numero_operacion}"
+
+
+class HistorialCambioDevolucion(models.Model):
+    """
+    Historial de cambios de estado y acciones en cambios/devoluciones
+    """
+    # === RELACIONES ===
+    cambio_devolucion = models.ForeignKey(
+        CambioDevolucion, 
+        on_delete=models.CASCADE, 
+        related_name='historial'
+    )
+    
+    # === DATOS DEL CAMBIO ===
+    accion = models.CharField(
+        max_length=50,
+        choices=[
+            ('CREADO', 'Creado'),
+            ('APROBADO', 'Aprobado'),
+            ('RECHAZADO', 'Rechazado'),
+            ('COMPLETADO', 'Completado'),
+            ('CANCELADO', 'Cancelado'),
+            ('MODIFICADO', 'Modificado'),
+            ('PAGO_PROCESADO', 'Pago Procesado'),
+            ('PRODUCTO_EVALUADO', 'Producto Evaluado'),
+        ]
+    )
+    estado_anterior = models.CharField(max_length=20, blank=True, null=True)
+    estado_nuevo = models.CharField(max_length=20, blank=True, null=True)
+    
+    # === RESPONSABLES ===
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='acciones_cambio_realizadas'
+    )
+    
+    # === DETALLES ===
+    descripcion = models.TextField(help_text="Descripción de la acción realizada")
+    datos_adicionales = models.JSONField(
+        blank=True, null=True,
+        help_text="Datos adicionales en formato JSON"
+    )
+    
+    # === METADATA ===
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Historial de Cambio/Devolución'
+        verbose_name_plural = 'Historiales de Cambios/Devoluciones'
+    
+    def __str__(self):
+        return f"{self.accion} - {self.cambio_devolucion.numero_operacion} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
+

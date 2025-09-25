@@ -1,0 +1,3542 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+/* Estilos personalizados para emisión de DTE */
+.dte-section {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #dee2e6;
+}
+
+.dte-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.method-selector {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.method-selector:hover {
+    border-color: #007bff;
+    box-shadow: 0 4px 8px rgba(0,123,255,0.1);
+}
+
+.method-selector.active {
+    border-color: #007bff;
+    background: #e7f3ff;
+}
+
+.method-selector i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    color: #6c757d;
+}
+
+.method-selector.active i {
+    color: #007bff;
+}
+
+.product-search-section {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.product-item {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    transition: all 0.3s ease;
+}
+
+.product-item:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+}
+
+.product-item.selected {
+    background: #e7f3ff;
+    border-color: #007bff;
+}
+
+.talla-selector {
+    display: inline-block;
+    margin: 2px;
+    padding: 5px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    background: white;
+    transition: all 0.2s ease;
+}
+
+.talla-selector:hover {
+    background: #e9ecef;
+}
+
+.talla-selector.selected {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.detail-section {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.total-section {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    border-left: 4px solid #28a745;
+}
+
+.btn-custom {
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn-custom:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.search-highlight {
+    background-color: #fff3cd;
+    font-weight: bold;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .method-selector {
+        margin-bottom: 10px;
+    }
+    
+    .dte-section {
+        padding: 15px;
+    }
+}
+
+/* Loading spinner */
+.loading-spinner {
+    display: none;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Animaciones */
+.fade-in {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Estilos del Wizard de Pasos */
+.wizard-steps {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 15px;
+}
+
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.step-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.step-line {
+    flex: 1;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.3);
+    margin: 0 15px;
+    margin-top: -20px;
+    transition: all 0.3s ease;
+}
+
+/* Estados del wizard */
+.step.active .step-number {
+    background: #28a745;
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+    transform: scale(1.1);
+}
+
+.step.active .step-label {
+    color: white;
+    font-weight: bold;
+}
+
+.step.completed .step-number {
+    background: #007bff;
+    color: white;
+}
+
+.step.completed .step-number::before {
+    content: "✓";
+    font-size: 14px;
+}
+
+.step.completed + .step-line {
+    background: #007bff;
+}
+
+.step.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.step:hover:not(.disabled) .step-number {
+    transform: scale(1.05);
+}
+
+/* Indicadores de progreso en secciones */
+.section-progress {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: rgba(0, 123, 255, 0.1);
+    color: #007bff;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.dte-section {
+    position: relative;
+}
+
+/* Botones de navegación del wizard */
+.wizard-navigation {
+    display: flex;
+    justify-content: between;
+    gap: 10px;
+    margin-top: 20px;
+    padding: 15px 0;
+    border-top: 1px solid #dee2e6;
+}
+
+.wizard-nav-left {
+    flex: 1;
+}
+
+.wizard-nav-right {
+    flex: 1;
+    text-align: right;
+}
+
+/* Animaciones de transición entre pasos */
+.step-content {
+    transition: all 0.3s ease;
+}
+
+.step-content.hiding {
+    opacity: 0;
+    transform: translateX(-20px);
+}
+
+.step-content.showing {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Responsive para móviles */
+@media (max-width: 768px) {
+    .step-indicator {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .step-line {
+        width: 2px;
+        height: 30px;
+        margin: 0;
+        margin-left: 19px;
+    }
+    
+    .step {
+        flex-direction: row;
+        gap: 15px;
+    }
+    
+    .step-number {
+        margin-bottom: 0;
+    }
+}
+
+/* Toast notifications */
+.toast-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(40, 167, 69, 0.95);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    display: none;
+    font-size: 14px;
+    backdrop-filter: blur(10px);
+}
+
+/* Secciones minimizadas */
+.section-summary {
+    margin-bottom: 15px;
+    display: none;
+}
+
+.section-summary .alert {
+    margin-bottom: 0;
+    border-left: 4px solid #28a745;
+}
+
+.expand-section-btn {
+    display: none;
+}
+
+.expand-section-btn .btn {
+    transition: all 0.3s ease;
+}
+
+.expand-section-btn .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Mejoras en selectores de método */
+.method-selector {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.method-selector::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.method-selector.active::before {
+    left: 100%;
+}
+
+.method-selector.active {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+/* Animación de selección */
+@keyframes selectPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.method-selector.just-selected {
+    animation: selectPulse 0.6s ease;
+}
+</style>
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" style="
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    text-align: center;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-3 fw-bold">Procesando información...</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Header Principal con Wizard de Pasos -->
+        <div class="dte-header">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h4 class="mb-1"><i class="bi bi-file-earmark-plus me-2"></i>Emisión de DTE</h4>
+                    <p class="mb-0 opacity-75">Sigue los pasos para generar tu documento</p>
+                </div>
+                <div class="text-end">
+                    <small class="opacity-75">Fecha: {{ "now"|date:"d/m/Y" }}</small><br>
+                    <small class="opacity-75">Usuario: {{ user.username }}</small>
+                </div>
+            </div>
+            
+            <!-- Wizard de Pasos -->
+            <div class="wizard-steps">
+                <div class="step-indicator">
+                    <div class="step active" data-step="1">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Configuración</div>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="2">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Productos & Detalle</div>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="3">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Emisión</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección 1: Configuración del DTE -->
+        <div class="dte-section fade-in step-content" id="step-1" data-step="1">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="section-progress">Paso 1 de 4</div>
+                    <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Paso 1: Configuración del Documento</h5>
+                </div>
+                <div class="panel-heading-btn">
+                    <button type="button" class="btn btn-sm btn-outline-primary me-1" id="btnExpandStep1" title="Expandir sección">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" id="btnCollapseStep1" title="Minimizar sección">
+                        <i class="bi bi-dash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>¿Qué necesitas hacer?</strong> Selecciona el tipo de documento y método de despacho para comenzar.
+            </div>
+            
+            <div class="row">
+                <!-- Método de Despacho -->
+                <div class="col-md-6 mb-4">
+                    <label class="form-label fw-bold">Método de Despacho</label>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="method-selector" data-method="interno">
+                                <i class="bi bi-building"></i>
+                                <h6>Despacho Interno</h6>
+                                <small class="text-muted">Entrega en sucursal</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="method-selector" data-method="externo">
+                                <i class="bi bi-truck"></i>
+                                <h6>Despacho Externo</h6>
+                                <small class="text-muted">Envío a domicilio</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tipo de Documento -->
+                <div class="col-md-6 mb-4">
+                    <label class="form-label fw-bold">Tipo de Documento</label>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="method-selector" data-concept="factura">
+                                <i class="bi bi-receipt"></i>
+                                <h6>Factura Electrónica</h6>
+                                <small class="text-muted">Con valor comercial</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="method-selector" data-concept="guia">
+                                <i class="bi bi-clipboard-check"></i>
+                                <h6>Guía Despacho</h6>
+                                <small class="text-muted">Solo traslado</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Receptor/Destino Dinámico -->
+            <div class="row mt-3">
+                <!-- Para Despacho Externo: Empresa Cliente -->
+                <div class="col-md-8" id="receptorExternoContainer">
+                    <label for="receptorSelect" class="form-label fw-bold">
+                        <i class="bi bi-building me-1"></i>Empresa Cliente
+                    </label>
+                    <select id="receptorSelect" class="form-select">
+                        <option value="">Seleccionar empresa cliente...</option>
+                    </select>
+                    <small class="text-muted">Empresa externa que recibirá el documento</small>
+                </div>
+                
+                <!-- Para Despacho Interno: Sucursal Destino -->
+                <div class="col-md-8" id="sucursalDestinoContainer" style="display: none;">
+                    <label for="sucursalDestinoSelect" class="form-label fw-bold">
+                        <i class="bi bi-building me-1"></i>Sucursal Destino
+                    </label>
+                    <select id="sucursalDestinoSelect" class="form-select">
+                        <option value="">Seleccionar sucursal destino...</option>
+                    </select>
+                    <small class="text-muted">Sucursal interna que recibirá la mercadería</small>
+                </div>
+                
+                <div class="col-md-4">
+                    <label for="fechaEmision" class="form-label fw-bold">Fecha de Emisión</label>
+                    <input type="date" id="fechaEmision" class="form-control" value="">
+                </div>
+            </div>
+
+            <!-- Campos adicionales -->
+            <div class="row mt-3">
+                <div class="col-md-3">
+                    <label for="formaPago" class="form-label fw-bold">Forma de Pago</label>
+                    <select id="formaPago" class="form-select">
+                        <option value="Credito">Crédito</option>
+                        <option value="Contado">Contado</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="vendedor" class="form-label fw-bold">Vendedor</label>
+                    <input type="text" id="vendedor" class="form-control" value="9999" readonly>
+                    <small class="text-muted">Código del vendedor asignado</small>
+                </div>
+                <div class="col-md-3">
+                    <label for="diasCredito" class="form-label fw-bold">Días Crédito</label>
+                    <input type="number" id="diasCredito" class="form-control" value="30" min="0" max="365">
+                    <small class="text-muted">Solo para forma de pago crédito</small>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <label class="form-label fw-bold">Folio Documento</label>
+                        <div class="alert alert-info py-2 mb-0">
+                            <h5 class="mb-0">N° <span id="folio_unico">---</span></h5>
+                            <small>Se asignará automáticamente</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Información adicional según tipo -->
+            <div class="row mt-2">
+                <div class="col-12">
+                    <div id="infoDespachoInterno" class="alert alert-info" style="display: none;">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Despacho Interno:</strong> El documento quedará pendiente hasta que la sucursal destino lo confirme. La empresa se determina automáticamente según la sucursal seleccionada.
+                    </div>
+                    <div id="infoDespachoExterno" class="alert alert-success" style="display: none;">
+                        <i class="bi bi-check-circle me-2"></i>
+                        <strong>Despacho Externo:</strong> El documento se emitirá directamente y el stock se reducirá inmediatamente.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navegación del Wizard -->
+            <div class="wizard-navigation">
+                <div class="wizard-nav-left">
+                    <!-- Primer paso, no hay botón anterior -->
+                </div>
+                <div class="wizard-nav-right">
+                    <button type="button" class="btn btn-primary btn-custom" id="btnSiguientePaso1" disabled>
+                        Siguiente: Seleccionar Productos <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección 2: Búsqueda, Selección de Productos y Emisión -->
+        <div class="product-search-section fade-in step-content" id="step-2" data-step="2" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="section-progress">Paso 2 de 2</div>
+                    <h5 class="mb-0"><i class="bi bi-box-seam me-2"></i>Paso 2: Productos, Detalle y Emisión del Documento</h5>
+                </div>
+                <div class="panel-heading-btn">
+                    <button type="button" class="btn btn-sm btn-outline-primary me-1" id="btnExpandStep2" title="Expandir sección">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" id="btnCollapseStep2" title="Minimizar sección">
+                        <i class="bi bi-dash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong>¡Configuración completa!</strong> Busca productos, selecciona tallas y revisa el detalle en tiempo real.
+                <br><small class="text-muted">💡 Tip: Para facturas con muchos productos, usa los filtros y la búsqueda para encontrar rápidamente lo que necesitas.</small>
+            </div>
+            
+            <!-- Filtros de búsqueda -->
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label for="searchProduct" class="form-label">Buscar por Artículo</label>
+                    <div class="input-group">
+                        <input type="text" id="searchProduct" class="form-control" placeholder="SKU, descripción, marca...">
+                        <button class="btn btn-outline-secondary" type="button" id="btnSearchProduct">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label for="searchReference" class="form-label">Buscar por Referencia</label>
+                    <div class="input-group">
+                        <input type="text" id="searchReference" class="form-control" placeholder="Factura, DTE, código...">
+                        <button class="btn btn-outline-secondary" type="button" id="btnSearchReference">
+                            <i class="bi bi-file-text"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label for="filterMarca" class="form-label">Marca</label>
+                    <select id="filterMarca" class="form-select">
+                        <option value="">Todas las marcas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filterCategoria" class="form-label">Categoría</label>
+                    <select id="filterCategoria" class="form-select">
+                        <option value="">Todas las categorías</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filterTipoTalla" class="form-label">Tipo Talla</label>
+                    <select id="filterTipoTalla" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="CL">CL</option>
+                        <option value="US">US</option>
+                        <option value="EU">EU</option>
+                        <option value="UK">UK</option>
+                        <option value="BR">BR</option>
+                        <option value="CM">CM</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Título de sección -->
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h4 class="text-center text-primary">
+                        <i class="bi bi-box-seam me-2"></i>Lista de Productos en Existencia
+                    </h4>
+                </div>
+            </div>
+
+            <!-- Tabla de productos expandida -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="tabla_productos_busqueda" class="table table-striped table-bordered table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th class="text-center">Artículo</th>
+                                    <th class="text-center">Descripción</th>
+                                    <th class="text-center">Color</th>
+                                    <th class="text-center">Marca</th>
+                                    <th class="text-center">Sexo</th>
+                                    <th class="text-center">Costo</th>
+                                    <th class="text-center">Precio Venta</th>
+                                    <th class="text-center">Stock Total</th>
+                                    <th class="text-center">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="datos_tabla_productos">
+                                <tr>
+                                    <td colspan="9" class="text-center text-muted py-4">
+                                        <i class="bi bi-search me-2"></i>
+                                        Use los filtros para buscar productos
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resultados de productos (mantener para compatibilidad) -->
+            <div id="productResults" class="mb-3" style="display: none;">
+                <div class="loading-spinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Buscando productos...</span>
+                    </div>
+                    <p class="mt-2">Cargando productos...</p>
+                </div>
+                <div id="productList"></div>
+            </div>
+
+            <!-- Paginación -->
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="text-muted">
+                    <span id="productInfo">0 productos encontrados</span>
+                </div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnPrevProducts">
+                        <i class="bi bi-chevron-left"></i> Anterior
+                    </button>
+                    <span class="btn btn-outline-secondary btn-sm" id="pageInfoProducts">Página 1</span>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnNextProducts">
+                        Siguiente <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Sección de Detalle Integrada -->
+            <div class="mt-4" id="detalleSection" style="display: none;">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card border-success">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0"><i class="bi bi-list-check me-2"></i>Detalle del Despacho</h6>
+                                    <small class="text-muted">Productos seleccionados para este documento</small>
+                                </div>
+                                <div>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnToggleDetalle" title="Ocultar/Mostrar detalle">
+                                        <i class="bi bi-eye-slash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover table-sm" id="detalleTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th width="15%">SKU</th>
+                                                <th width="25%">Producto</th>
+                                                <th width="15%">Tallas</th>
+                                                <th width="10%">Cantidad</th>
+                                                <th width="12%">Precio Unit.</th>
+                                                <th width="12%">Subtotal</th>
+                                                <th width="11%">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="detalleBody">
+                                            <tr id="emptyRow">
+                                                <td colspan="7" class="text-center text-muted py-4">
+                                                    <i class="bi bi-inbox display-6"></i>
+                                                    <br>No hay productos seleccionados
+                                                    <br><small>Busca y selecciona productos arriba</small>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Resumen de totales expandido -->
+                                <div class="row mt-3">
+                                    <div class="col-md-6">
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                            <span class="badge bg-primary" id="totalProductos">0 ítems por línea</span>
+                                        <span class="badge bg-info" id="totalUnidades">0 unidades</span>
+                                        <span class="badge bg-secondary" id="totalArticulosResumen">Total artículos: 0</span>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="btnLimpiarDetalle" style="display: none;">
+                                                <i class="bi bi-trash me-1"></i>Limpiar todo
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Totales originales (ocultos pero mantenidos para compatibilidad) -->
+                                <div style="display: none;">
+                                    <span id="totalNeto">0</span>
+                                    <span id="totalIva">0</span>
+                                    <span id="totalFinal">0</span>
+                                </div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navegación del Wizard -->
+            <!-- Separador visual -->
+            <hr class="my-4">
+            
+            <!-- Sección de Resumen y Emisión (antes era Paso 3) -->
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong>¡Todo listo!</strong> Revisa la información final y emite tu documento.
+            </div>
+
+            <!-- Resumen Final -->
+            <div class="row">
+                <div class="col-md-8">
+                    <!-- Resumen del Documento -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="bi bi-file-text me-2"></i>Resumen del Documento</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-6">
+                                    <strong>Tipo:</strong> <span id="resumenTipo">-</span><br>
+                                    <strong>Método:</strong> <span id="resumenMetodo">-</span><br>
+                                    <strong>Receptor:</strong> <span id="resumenReceptor">-</span>
+                                </div>
+                                <div class="col-6">
+                                    <strong>Fecha:</strong> <span id="resumenFecha">-</span><br>
+                                    <strong>Artículos:</strong> <span id="resumenTotalArticulos">0</span><br>
+                                    <strong>Items:</strong> <span id="resumenProductos">0 items por línea</span><br>
+                                    <strong>Unidades:</strong> <span id="resumenUnidades">0 unidades</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detalle de Productos -->
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="bi bi-list-ul me-2"></i>Productos a Despachar</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover" id="resumenProductosTable">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th width="20%">SKU</th>
+                                            <th width="35%">Producto</th>
+                                            <th width="20%">Tallas</th>
+                                            <th width="10%">Cantidad</th>
+                                            <th width="15%">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="resumenProductosBody">
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-3">
+                                                <i class="bi bi-inbox"></i> No hay productos para mostrar
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Observaciones finales -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="bi bi-chat-text me-2"></i>Observaciones</h6>
+                        </div>
+                        <div class="card-body">
+                            <textarea id="observacionesFinales" class="form-control" rows="3" placeholder="Observaciones adicionales del documento..."></textarea>
+                            <small class="text-muted">Las observaciones del detalle se copiarán automáticamente aquí.</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="bi bi-calculator me-2"></i>Totales Finales</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Subtotal (Neto):</span>
+                                <span id="finalSubtotalNeto">$0</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>IVA (19%):</span>
+                                <span id="finalMontoIva">$0</span>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-between fw-bold fs-5">
+                                <span>Total:</span>
+                                <span id="finalMontoTotal">$0</span>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">Total Unidades: <span id="finalTotalUnidades">0</span></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botón principal de emisión -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <button id="btnGenerarOperacion" type="button" class="btn btn-success btn-lg w-100 py-3">
+                        <i class="bi bi-file-earmark-plus me-2"></i>
+                        <span class="fw-bold">Generar Documento Tributario Electrónico</span>
+                        <div class="row justify-content-center mt-2">
+                            <span id="spinner_btn" style="display:none" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Navegación del wizard -->
+            <div class="wizard-navigation mt-3">
+                <div class="wizard-nav-left">
+                    <button type="button" class="btn btn-outline-secondary btn-custom" id="btnAnteriorPaso2">
+                        <i class="bi bi-arrow-left me-1"></i> Anterior: Configuración
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-custom ms-2" id="btnLimpiar">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Reiniciar
+                    </button>
+                </div>
+                <div class="wizard-nav-right">
+                    <button type="button" class="btn btn-outline-info btn-custom me-2" id="btnPreview">
+                        <i class="bi bi-eye me-1"></i>Vista Previa
+                    </button>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Step-3 eliminado - contenido movido al Step-2 -->
+
+    </div>
+</div>
+
+<!-- Modal para selección de tallas -->
+<!-- Modal de Tallas Mejorado -->
+<div class="modal fade" id="modalTallas" tabindex="-1" aria-labelledby="modalTallasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h4 class="modal-title" id="modalTallasLabel">
+                    <i class="bi bi-rulers me-2"></i>Lista de Tallas Por Artículo
+                </h4>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Información del Producto -->
+                <div class="row mb-3">
+                    <div class="col-md-2">
+                        <div class="card h-100">
+                            <div class="card-body text-center p-2">
+                                <h6 class="card-title text-primary mb-1">Artículo</h6>
+                                <h5 class="mb-0" id="art-modal"></h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center p-2">
+                                <h6 class="card-title text-primary mb-1">Descripción</h6>
+                                <h6 class="mb-0" id="art-modal_descripcion"></h6>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card h-100">
+                            <div class="card-body text-center p-2">
+                                <h6 class="card-title text-primary mb-1">Color</h6>
+                                <h5 class="mb-0" id="art-modal_color"></h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card h-100">
+                            <div class="card-body text-center p-2">
+                                <h6 class="card-title text-primary mb-1">Marca</h6>
+                                <h5 class="mb-0" id="art-modal_marca"></h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center p-2">
+                                <h6 class="card-title text-primary mb-1">Precio Venta</h6>
+                                <h5 class="mb-0 text-success" id="art-modal_preciointerno"></h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Tallas -->
+                <div class="table-responsive">
+                    <table id="table_modal_prod" class="table table-striped table-bordered table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th class="text-center">ID</th>
+                                <th class="text-center">SKU</th>
+                                <th class="text-center">Talla</th>
+                                <th class="text-center">Stock</th>
+                                <th class="text-center">Precio</th>
+                                <th class="text-center">Cantidad</th>
+                                <th class="text-center">Subtotal</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla_modal_ventas_interna">
+                            <!-- Las tallas se cargarán aquí dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Resumen de Selección -->
+                <div class="row mt-3">
+                    <div class="col-md-8">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Instrucciones:</strong> Ingrese la cantidad deseada para cada talla y use los botones de acción para agregar al detalle.
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">Resumen Selección</h6>
+                                <div class="d-flex justify-content-between">
+                                    <span>Total Tallas:</span>
+                                    <span id="totalTallasModal">0</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>Total Unidades:</span>
+                                    <span id="totalUnidadesModal">0</span>
+                                </div>
+                                <div class="d-flex justify-content-between fw-bold">
+                                    <span>Total Monto:</span>
+                                    <span id="totalMontoModal">$0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="btnAgregarSeleccionados">
+                    <i class="bi bi-plus-circle me-1"></i>Agregar Seleccionados
+                </button>
+                <button type="button" class="btn btn-success" id="btnAgregarTodo">
+                    <i class="bi bi-plus-square me-1"></i>Agregar Todo con Stock
+                </button>
+                <button type="button" class="btn btn-warning" id="btnLimpiarModal">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Limpiar
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Vista Previa -->
+<div class="modal fade" id="modalPreview" tabindex="-1" aria-labelledby="modalPreviewLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalPreviewLabel">
+                    <i class="bi bi-eye me-2"></i>Vista Previa del DTE
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent">
+                    <!-- El contenido de la vista previa se generará aquí -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cerrar
+                </button>
+                <button type="button" class="btn btn-primary" id="btnPrintPreview">
+                    <i class="bi bi-printer me-1"></i>Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+// Variables globales
+let selectedMethod = '';
+let selectedConcept = '';
+let selectedProducts = [];
+let currentPage = 1;
+let totalPages = 1;
+let currentSearch = '';
+let productData = [];
+
+// Variables del wizard
+let currentStep = 1;
+let maxStepReached = 1;
+
+// Función helper para parsear datos de tallas de forma segura
+function safeParseTallas(data) {
+    if (!data) return [];
+    if (typeof data === 'string') {
+        try {
+            return JSON.parse(data);
+        } catch (e) {
+            console.error('Error parsing tallas JSON:', e);
+            return [];
+        }
+    }
+    if (Array.isArray(data)) {
+        return data;
+    }
+    return [];
+}
+
+// Función para obtener cookies (CSRF token)
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Funciones de loading
+function showLoading() {
+    $('#loadingOverlay').fadeIn(200);
+}
+
+function hideLoading() {
+    $('#loadingOverlay').fadeOut(200);
+}
+
+// Inicialización
+$(document).ready(function() {
+    initializeEventListeners();
+    loadInitialData();
+});
+
+function initializeEventListeners() {
+    // Wizard navigation
+    initializeWizardNavigation();
+    
+    // Selectores de método y concepto
+    $('.method-selector').on('click', function() {
+        const type = $(this).data('method') || $(this).data('concept');
+        const isMethod = $(this).data('method') !== undefined;
+        
+        if (isMethod) {
+            // Remover active de TODOS los métodos de despacho
+            $('.method-selector[data-method]').removeClass('active just-selected');
+            $(this).addClass('active just-selected');
+            selectedMethod = type;
+            
+            // Mostrar/ocultar campos según el método
+            if (type === 'interno') {
+                // Despacho interno: mostrar sucursales, ocultar empresas
+                $('#receptorExternoContainer').slideUp(300);
+                $('#sucursalDestinoContainer').slideDown(300);
+                $('#infoDespachoExterno').slideUp(300);
+                $('#infoDespachoInterno').slideDown(300);
+                
+                // Limpiar y cargar datos
+                $('#receptorSelect').val('');
+                loadSucursalesDestino();
+            } else {
+                // Despacho externo: mostrar empresas, ocultar sucursales
+                $('#sucursalDestinoContainer').slideUp(300);
+                $('#receptorExternoContainer').slideDown(300);
+                $('#infoDespachoInterno').slideUp(300);
+                $('#infoDespachoExterno').slideDown(300);
+                
+                // Limpiar y cargar datos
+                $('#sucursalDestinoSelect').val('');
+                loadReceptores();
+            }
+            
+            // Mostrar feedback visual
+            const metodoTexto = type === 'interno' ? 'Despacho Interno' : 
+                               type === 'externo' ? 'Despacho Externo' : 'Concepto';
+            showMethodSelected('método de despacho', metodoTexto);
+        } else {
+            // Remover active de TODOS los conceptos
+            $('.method-selector[data-concept]').removeClass('active just-selected');
+            $(this).addClass('active just-selected');
+            selectedConcept = type;
+            
+            // Si es despacho interno y ya hay sucursales cargadas, recargar con el nuevo filtro
+            if (selectedMethod === 'interno' && $('#sucursalDestinoContainer').is(':visible')) {
+                loadSucursalesDestino();
+            }
+            
+            // Mostrar feedback visual
+            const tipoTexto = type === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho';
+            showMethodSelected('tipo de documento', tipoTexto);
+        }
+        
+        // Remover clase de animación después de la animación
+        setTimeout(() => {
+            $(this).removeClass('just-selected');
+        }, 600);
+        
+        validateStep1();
+        
+        // NO minimizar automáticamente aquí - esperar a que se complete todo
+    });
+
+    // Búsqueda de productos
+    $('#btnSearchProduct').on('click', searchProducts);
+    $('#searchProduct').on('keypress', function(e) {
+        if (e.which === 13) searchProducts();
+    });
+
+    // Filtros
+    $('#filterMarca, #filterCategoria, #filterTipoTalla').on('change', searchProducts);
+
+    // Paginación
+    $('#btnPrevProducts').on('click', function() {
+        if (currentPage > 1) {
+            currentPage--;
+            searchProducts();
+        }
+    });
+
+    $('#btnNextProducts').on('click', function() {
+        if (currentPage < totalPages) {
+            currentPage++;
+            searchProducts();
+        }
+    });
+
+    // Botones principales
+    $('#btnLimpiar').on('click', clearAll);
+    $('#btnPreview').on('click', showPreview);
+    $('#btnEmitir').on('click', emitirDTE);
+    $('#btnGenerarOperacion').on('click', emitirDTE);
+
+    // Modal de tallas - botones manejados por initializeModalButtons()
+    
+    // Receptor change
+    $('#receptorSelect').on('change', function() {
+        validateStep1();
+        
+        // Si todo está completo, minimizar la sección
+        if (isStep1Complete()) {
+            setTimeout(() => {
+                minimizeCompletedSection(1);
+            }, 500);
+        }
+    });
+    
+    // Sucursal destino change
+    $('#sucursalDestinoSelect').on('change', function() {
+        validateStep1();
+        
+        // Si todo está completo, minimizar la sección
+        if (isStep1Complete()) {
+            setTimeout(() => {
+                minimizeCompletedSection(1);
+            }, 500);
+        }
+    });
+}
+
+// ========== FUNCIONES DEL WIZARD ==========
+
+function initializeWizardNavigation() {
+    // Navegación entre pasos
+    $('#btnSiguientePaso1').on('click', () => goToStep(2));
+    $('#btnAnteriorPaso2').on('click', () => goToStep(1));
+    $('#btnSiguientePaso2').on('click', () => goToStep(2));
+    
+    // Botón limpiar detalle
+    $('#btnLimpiarDetalle').on('click', function() {
+        Swal.fire({
+            title: '¿Limpiar todos los productos?',
+            text: 'Se eliminarán todos los productos del detalle',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, limpiar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                clearDetalle();
+                validateStep2();
+                showToast('Detalle limpiado', 'success');
+            }
+        });
+    });
+    
+    // Botón toggle detalle (ocultar/mostrar)
+    $('#btnToggleDetalle').on('click', function() {
+        const detalleBody = $('#detalleSection .card-body');
+        const icon = $(this).find('i');
+        
+        if (detalleBody.is(':visible')) {
+            // Ocultar detalle
+            detalleBody.slideUp(300);
+            icon.removeClass('bi-eye-slash').addClass('bi-eye');
+            $(this).attr('title', 'Mostrar detalle');
+        } else {
+            // Mostrar detalle
+            detalleBody.slideDown(300);
+            icon.removeClass('bi-eye').addClass('bi-eye-slash');
+            $(this).attr('title', 'Ocultar detalle');
+        }
+    });
+    
+    // Clicks en los pasos del wizard
+    $('.step').on('click', function() {
+        const step = parseInt($(this).data('step'));
+        if (step <= maxStepReached && !$(this).hasClass('disabled')) {
+            goToStep(step);
+        }
+    });
+}
+
+function goToStep(step) {
+    if (step < 1 || step > 2) return;  // El wizard actual tiene 2 pasos visibles
+    
+    // Validar si puede avanzar al paso
+    if (step > currentStep && !canAdvanceToStep(step)) {
+        return;
+    }
+    
+    // Ocultar paso actual
+    $(`#step-${currentStep}`).fadeOut(300, function() {
+        // Mostrar nuevo paso
+        currentStep = step;
+        maxStepReached = Math.max(maxStepReached, step);
+        
+        $(`#step-${step}`).fadeIn(300);
+        updateWizardIndicator();
+        
+        // Expandir sección si está minimizada
+        expandSection(step);
+        
+        // Acciones específicas por paso
+        if (step === 2) {
+            searchProducts(); // Cargar productos automáticamente al entrar al paso de productos
+        }
+    });
+}
+
+function updateWizardIndicator() {
+    $('.step').removeClass('active completed');
+    
+    // Marcar pasos completados
+    for (let i = 1; i < currentStep; i++) {
+        $(`.step[data-step="${i}"]`).addClass('completed');
+    }
+    
+    // Marcar paso actual
+    $(`.step[data-step="${currentStep}"]`).addClass('active');
+    
+    // Habilitar/deshabilitar pasos
+    $('.step').each(function() {
+        const stepNum = parseInt($(this).data('step'));
+        if (stepNum <= maxStepReached) {
+            $(this).removeClass('disabled');
+        } else {
+            $(this).addClass('disabled');
+        }
+    });
+}
+
+function canAdvanceToStep(step) {
+    switch(step) {
+        case 2:
+            return validateStep1();
+        case 3:
+            return validateStep2();
+        default:
+            return true;
+    }
+}
+
+function validateStep1() {
+    const isValid = isStep1Complete();
+    $('#btnSiguientePaso1').prop('disabled', !isValid);
+    
+    if (isValid) {
+        showStepSuccess(1, '¡Configuración completa!');
+    }
+    
+    return isValid;
+}
+
+function isStep1Complete() {
+    const basicValid = selectedMethod && selectedConcept;
+    
+    if (!basicValid) return false;
+    
+    // Validar según el tipo de despacho
+    if (selectedMethod === 'interno') {
+        // Despacho interno: solo necesita sucursal destino
+        return $('#sucursalDestinoSelect').val();
+    } else {
+        // Despacho externo: solo necesita empresa cliente
+        return $('#receptorSelect').val();
+    }
+}
+
+function validateStep2() {
+    const hasProducts = $('#detalleBody tr:not(#emptyRow)').length > 0;
+    $('#btnSiguientePaso2').prop('disabled', !hasProducts);
+    
+    console.log('🔍 ValidateStep2:', {
+        hasProducts: hasProducts,
+        detalleSectionVisible: $('#detalleSection').is(':visible'),
+        cardBodyVisible: $('#detalleSection .card-body').is(':visible')
+    });
+    
+    // Mostrar sección de detalle cuando hay productos (pero no ocultar automáticamente)
+    if (hasProducts) {
+        // Mostrar la sección completa si está oculta
+        if (!$('#detalleSection').is(':visible')) {
+            console.log('📦 Mostrando sección de detalle');
+            $('#detalleSection').slideDown(500);
+        }
+        // Asegurar que el contenido del card-body también esté visible
+        if (!$('#detalleSection .card-body').is(':visible')) {
+            console.log('📦 Mostrando contenido del detalle');
+            $('#detalleSection .card-body').slideDown(300);
+            // Actualizar el icono del botón toggle
+            $('#btnToggleDetalle i').removeClass('bi-eye').addClass('bi-eye-slash');
+            $('#btnToggleDetalle').attr('title', 'Ocultar detalle');
+        }
+        $('#btnLimpiarDetalle').show();
+        showStepSuccess(2, '¡Productos seleccionados!');
+    } else {
+        // Solo ocultar botón de limpiar, pero mantener sección visible
+        $('#btnLimpiarDetalle').hide();
+    }
+    
+    return hasProducts;
+}
+
+function clearDetalle() {
+    // Limpiar tabla de detalle
+    $('#detalleBody').empty().append(`
+        <tr id="emptyRow">
+            <td colspan="7" class="text-center text-muted py-4">
+                <i class="bi bi-inbox display-6"></i>
+                <br>No hay productos seleccionados
+                <br><small>Busca y selecciona productos arriba</small>
+            </td>
+        </tr>
+    `);
+    
+    // Resetear totales
+    updateTotales();
+    
+    // NO ocultar automáticamente la sección - dejar que el usuario decida
+    // $('#detalleSection').slideUp(500); // Comentado
+}
+
+function validateStep3() {
+    const hasProducts = $('#detalleBody tr:not(#emptyRow)').length > 0;
+    $('#btnSiguientePaso3').prop('disabled', !hasProducts);
+    
+    return hasProducts;
+}
+
+function updateStep3Summary() {
+    console.log('📋 Actualizando resumen del Paso 3');
+    
+    // 1. Actualizar información del documento
+    const tipoTexto = selectedConcept === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho';
+    const metodoTexto = selectedMethod === 'interno' ? 'Despacho Interno' : 
+                       selectedMethod === 'externo' ? 'Despacho Externo' : 'Concepto';
+    
+    $('#resumenTipo').text(tipoTexto);
+    $('#resumenMetodo').text(metodoTexto);
+    
+    // Receptor según el método
+    let receptorTexto = '-';
+    if (selectedMethod === 'interno') {
+        const sucursalDestino = $('#sucursalDestinoSelect option:selected').text();
+        receptorTexto = sucursalDestino || 'No seleccionada';
+    } else {
+        const receptor = $('#receptorSelect option:selected').text();
+        receptorTexto = receptor || 'No seleccionado';
+    }
+    $('#resumenReceptor').text(receptorTexto);
+    
+    // Fecha actual
+    const fechaHoy = new Date().toLocaleDateString('es-CL');
+    $('#resumenFecha').text(fechaHoy);
+    
+    // 2. Actualizar contadores de productos
+    const numProductos = $('#detalleBody tr:not(#emptyRow)').length;
+    let totalUnidades = 0;
+    
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        const tallas = safeParseTallas($(this).data('tallas'));
+        if (tallas.length > 0) {
+            tallas.forEach(talla => {
+                totalUnidades += talla.cantidad;
+            });
+        }
+    });
+    
+    $('#resumenProductos').text(`${numProductos} item${numProductos !== 1 ? 's' : ''} por línea`);
+    $('#resumenUnidades').text(`${totalUnidades} unidad${totalUnidades !== 1 ? 'es' : ''}`);
+    $('#resumenTotalArticulos').text(numProductos);
+    
+    // 3. Actualizar tabla de productos
+    updateProductsTable();
+    
+    // 4. Actualizar totales finales
+    updateFinalTotals();
+    
+    // 5. Copiar observaciones del Paso 2
+    // Observaciones: ya no se sincronizan automáticamente
+}
+
+function updateProductsTable() {
+    const tbody = $('#resumenProductosBody');
+    tbody.empty();
+    
+    const productos = $('#detalleBody tr:not(#emptyRow)');
+    
+    if (productos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="5" class="text-center text-muted py-3">
+                    <i class="bi bi-inbox"></i> No hay productos para mostrar
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    productos.each(function() {
+        const row = $(this);
+        const sku = row.find('td:eq(0)').text();
+        const producto = row.find('td:eq(1)').text();
+        const tallas = safeParseTallas(row.data('tallas'));
+        
+        let tallasTexto = '';
+        let cantidadTotal = 0;
+        let subtotalProducto = 0;
+        
+        if (tallas.length > 0) {
+            const tallasArray = [];
+            tallas.forEach(talla => {
+                tallasArray.push(`${talla.talla}(${talla.cantidad})`);
+                cantidadTotal += talla.cantidad;
+                subtotalProducto += talla.cantidad * talla.precio;
+            });
+            tallasTexto = tallasArray.join(', ');
+        } else {
+            // Fallback: tomar datos desde la fila directamente
+            const cantidadInput = row.find('.cantidad-detalle-input');
+            const cantidad = parseInt(cantidadInput.val()) || 0;
+            const precio = parseInt(cantidadInput.data('precio')) || 0;
+            cantidadTotal = cantidad;
+            subtotalProducto = cantidad * precio;
+            const tallaTexto = row.find('td:eq(2) .badge').text();
+            tallasTexto = `${tallaTexto}(${cantidad})`;
+        }
+        
+        tbody.append(`
+            <tr>
+                <td><small class="text-muted">${sku}</small></td>
+                <td>${producto}</td>
+                <td><small>${tallasTexto}</small></td>
+                <td class="text-center"><span class="badge bg-primary">${cantidadTotal}</span></td>
+                <td class="text-end fw-bold">$${Math.round(subtotalProducto).toLocaleString()}</td>
+            </tr>
+        `);
+    });
+}
+
+function updateFinalTotals() {
+    // Calcular totales desde el detalle
+    let subtotalNeto = 0;
+    let totalUnidades = 0;
+    
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        const tallas = safeParseTallas($(this).data('tallas'));
+        
+        if (tallas.length > 0) {
+            tallas.forEach(talla => {
+                subtotalNeto += talla.cantidad * talla.precio;
+                totalUnidades += talla.cantidad;
+            });
+        }
+    });
+    
+    const iva = subtotalNeto * 0.19;
+    const total = subtotalNeto + iva;
+    
+    // Actualizar elementos del Paso 3
+    $('#finalSubtotalNeto').text(`$${Math.round(subtotalNeto).toLocaleString()}`);
+    $('#finalMontoIva').text(`$${Math.round(iva).toLocaleString()}`);
+    $('#finalMontoTotal').text(`$${Math.round(total).toLocaleString()}`);
+    $('#finalTotalUnidades').text(totalUnidades);
+}
+
+function showStepSuccess(step, message) {
+    // Mostrar indicador de éxito temporal
+    const stepElement = $(`.step[data-step="${step}"]`);
+    const originalContent = stepElement.find('.step-number').html();
+    
+    stepElement.find('.step-number').html('✓').addClass('bg-success');
+    
+    setTimeout(() => {
+        stepElement.find('.step-number').html(originalContent).removeClass('bg-success');
+    }, 2000);
+}
+
+function updateStep3Display() {
+    // Actualizar contadores y validaciones
+    updateTotales();
+    validateStep3();
+}
+
+function updateFinalSummary() {
+    // Actualizar resumen final
+    const tipoDoc = selectedConcept === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho';
+    const metodoDespacho = selectedMethod === 'interno' ? 'Despacho Interno' : 'Despacho Externo';
+    const receptor = $('#receptorSelect option:selected').text();
+    const fecha = $('#fechaEmision').val();
+    
+    $('#resumenTipo').text(tipoDoc);
+    $('#resumenMetodo').text(metodoDespacho);
+    $('#resumenReceptor').text(receptor);
+    $('#resumenFecha').text(new Date(fecha).toLocaleDateString('es-CL'));
+    
+    // Contar productos y unidades
+    let totalProductos = 0;
+    let totalUnidades = 0;
+    
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        totalProductos++;
+        const cantidad = parseInt($(this).find('.cantidad-total-input').val()) || 0;
+        totalUnidades += cantidad;
+    });
+    
+    $('#resumenProductos').text(totalProductos);
+    $('#resumenUnidades').text(totalUnidades);
+    
+    // Copiar totales
+    $('#finalSubtotalNeto').text($('#subtotalNeto').text());
+    $('#finalMontoIva').text($('#montoIva').text());
+    $('#finalMontoTotal').text($('#montoTotal').text());
+    $('#finalTotalUnidades').text($('#totalUnidades').text());
+    
+    // Copiar observaciones
+    // Observaciones: alineadas solo con el campo final
+}
+
+function showMethodSelected(tipo, valor) {
+    // Mostrar toast de confirmación
+    const toast = $(`
+        <div class="toast-notification">
+            <i class="bi bi-check-circle text-success me-2"></i>
+            <strong>${tipo.charAt(0).toUpperCase() + tipo.slice(1)}:</strong> ${valor}
+        </div>
+    `);
+    
+    $('body').append(toast);
+    toast.fadeIn(300);
+    
+    setTimeout(() => {
+        toast.fadeOut(300, function() {
+            $(this).remove();
+        });
+    }, 2000);
+}
+
+function minimizeCompletedSection(step) {
+    const section = $(`#step-${step}`);
+    const content = section.find('.row, .alert').not('.wizard-navigation');
+    
+    // Agregar botón para expandir
+    if (!section.find('.expand-section-btn').length) {
+        const expandBtn = $(`
+            <div class="expand-section-btn text-center mb-3">
+                <button type="button" class="btn btn-outline-success btn-sm" onclick="expandSection(${step})">
+                    <i class="bi bi-eye me-1"></i>Ver configuración completa
+                </button>
+            </div>
+        `);
+        
+        section.find('.wizard-navigation').before(expandBtn);
+    }
+    
+    // Crear resumen compacto
+    const resumen = createSectionSummary(step);
+    if (!section.find('.section-summary').length) {
+        section.find('.expand-section-btn').before(resumen);
+    }
+    
+    // Minimizar contenido
+    content.slideUp(500);
+    section.find('.expand-section-btn, .section-summary').slideDown(500);
+}
+
+function expandSection(step) {
+    const section = $(`#step-${step}`);
+    const content = section.find('.row, .alert').not('.wizard-navigation');
+    
+    // Mostrar contenido completo
+    content.slideDown(500);
+    section.find('.expand-section-btn, .section-summary').slideUp(500);
+}
+
+function createSectionSummary(step) {
+    let summaryContent = '';
+    
+    switch(step) {
+        case 1:
+            const metodoTexto = selectedMethod === 'interno' ? 'Despacho Interno' : 
+                               selectedMethod === 'externo' ? 'Despacho Externo' : 'Concepto';
+            const tipoTexto = selectedConcept === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho';
+            
+            let columnas = '';
+            
+            if (selectedMethod === 'interno') {
+                // Despacho interno: mostrar sucursal origen y destino
+                const sucursalDestino = $('#sucursalDestinoSelect option:selected').text();
+                
+                // Obtener sucursal origen de la sesión (mostrada en debugSession)
+                let sucursalOrigen = 'Cargando...';
+                if (window.sessionInfo && window.sessionInfo.alias) {
+                    sucursalOrigen = window.sessionInfo.alias;
+                }
+                
+                if (selectedConcept === 'factura') {
+                    // Para facturas internas: mostrar origen y destino claramente
+                    columnas = `
+                        <div class="col-md-3">
+                            <strong><i class="bi bi-file-text me-1"></i>Documento:</strong><br>
+                            <span class="text-muted">${tipoTexto}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><i class="bi bi-truck me-1"></i>Método:</strong><br>
+                            <span class="text-muted">${metodoTexto}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><i class="bi bi-building-check me-1"></i>Sucursal Origen:</strong><br>
+                            <span class="text-muted">${sucursalOrigen}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong><i class="bi bi-building-dash me-1"></i>Sucursal Destino:</strong><br>
+                            <span class="text-muted">${sucursalDestino || 'No seleccionada'}</span>
+                        </div>
+                    `;
+                } else {
+                    // Para guías internas: formato normal
+                    columnas = `
+                        <div class="col-md-4">
+                            <strong><i class="bi bi-truck me-1"></i>Método:</strong><br>
+                            <span class="text-muted">${metodoTexto}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <strong><i class="bi bi-file-text me-1"></i>Documento:</strong><br>
+                            <span class="text-muted">${tipoTexto}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <strong><i class="bi bi-building me-1"></i>Sucursal Destino:</strong><br>
+                            <span class="text-muted">${sucursalDestino || 'No seleccionada'}</span>
+                        </div>
+                    `;
+                }
+            } else {
+                // Despacho externo: mostrar empresa cliente
+                const receptor = $('#receptorSelect option:selected').text();
+                columnas = `
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-truck me-1"></i>Método:</strong><br>
+                        <span class="text-muted">${metodoTexto}</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-file-text me-1"></i>Documento:</strong><br>
+                        <span class="text-muted">${tipoTexto}</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong><i class="bi bi-person me-1"></i>Cliente:</strong><br>
+                        <span class="text-muted">${receptor || 'No seleccionado'}</span>
+                    </div>
+                `;
+            }
+            
+            summaryContent = `
+                <div class="section-summary">
+                    <div class="alert alert-success">
+                        <div class="row">
+                            ${columnas}
+                        </div>
+                    </div>
+                </div>
+            `;
+            break;
+            
+        case 2:
+            const productCount = $('#detalleBody tr:not(#emptyRow)').length;
+            summaryContent = `
+                <div class="section-summary">
+                    <div class="alert alert-info">
+                        <i class="bi bi-box me-2"></i>
+                        <strong>${productCount} producto(s) seleccionado(s)</strong>
+                    </div>
+                </div>
+            `;
+            break;
+    }
+    
+    return $(summaryContent);
+}
+
+function loadInitialData() {
+    // Establecer fecha de hoy automáticamente
+    const hoy = new Date().toISOString().split('T')[0];
+    $('#fechaEmision').val(hoy);
+    
+    // Debug: Verificar sesión
+    debugSession();
+    
+    loadReceptores();
+    loadSucursalesDestino();
+    loadMarcas();
+    loadCategorias();
+    
+    // Verificar sesión antes de cargar productos
+    setTimeout(() => {
+        console.log('🔄 Cargando productos después de verificar sesión...');
+        searchProducts(); // Cargar productos iniciales
+    }, 1000);
+}
+
+function debugSession() {
+    $.ajax({
+        url: '/app/debug_session/',
+        method: 'GET',
+        success: function(data) {
+            console.log('🔍 DEBUG SESIÓN COMPLETA:', data);
+            console.log('🏢 Sucursal actual:', data.idSucursalActual || data.sucursalActual || 'NO DEFINIDA');
+            console.log('🏭 Empresa actual:', data.idEmpresaActual || data.empresaActual || 'NO DEFINIDA');
+            console.log('👤 Usuario:', data.nombreUsuario || 'NO DEFINIDO');
+            
+            // Guardar información de sesión globalmente para usar en resúmenes
+            window.sessionInfo = {
+                idSucursal: data.idSucursalActual || data.sucursalActual,
+                idEmpresa: data.idEmpresaActual || data.empresaActual,
+                alias: data.alias || 'Sucursal no definida',
+                nombreEmpresa: data.nombreEmpresaActual || 'Empresa no definida',
+                nombreUsuario: data.nombreUsuario || 'Usuario no definido'
+            };
+            
+            console.log('💾 Información de sesión guardada:', window.sessionInfo);
+            
+            if (!data.idSucursalActual && !data.sucursalActual) {
+                console.warn('⚠️ NO HAY SUCURSAL ACTIVA EN LA SESIÓN');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin sucursal activa',
+                    html: `
+                        <p>No hay sucursal activa en tu sesión.</p>
+                        <p><strong>Solución:</strong> Ve al menú de usuario y selecciona "Cambiar Empresa/Sucursal"</p>
+                    `,
+                    confirmButtonText: 'Entendido',
+                    footer: '<small>Los productos se mostrarán cuando tengas una sucursal activa</small>'
+                });
+            } else {
+                console.log('✅ Sesión válida - Sucursal activa encontrada');
+            }
+        },
+        error: function() {
+            console.error('Error al verificar sesión');
+        }
+    });
+}
+
+function validateConfiguration() {
+    // Esta función ahora es manejada por el wizard
+    validateStep1();
+    validateStep2();
+    validateStep3();
+}
+
+function loadReceptores() {
+    $.ajax({
+        url: '/app/empresas_clientes/', // Ajustar según tu endpoint
+        method: 'GET',
+        success: function(data) {
+            const select = $('#receptorSelect');
+            select.empty().append('<option value="">Seleccionar cliente/empresa...</option>');
+            
+            data.forEach(cliente => {
+                select.append(`<option value="${cliente.id}">${cliente.nombre} - ${cliente.rut}</option>`);
+            });
+        },
+        error: function() {
+            console.error('Error al cargar receptores');
+        }
+    });
+}
+
+function loadSucursalesDestino() {
+    console.log('🔄 Cargando sucursales destino...');
+    
+    // Determinar el filtro según el tipo de documento
+    let filtroEmpresa = 'todas'; // Por defecto
+    if (selectedConcept === 'factura') {
+        filtroEmpresa = 'misma'; // Factura: solo misma empresa
+    } else if (selectedConcept === 'guia') {
+        filtroEmpresa = 'todas'; // Guía: cualquier empresa
+    }
+    
+    console.log(`📋 Tipo documento: ${selectedConcept}, Filtro empresa: ${filtroEmpresa}`);
+    
+    $.ajax({
+        url: '/app/obtener_sucursales/', 
+        method: 'GET',
+        data: {
+            filtro_empresa: filtroEmpresa
+        },
+        success: function(data) {
+            console.log('📥 Respuesta del servidor:', data);
+            
+            const select = $('#sucursalDestinoSelect');
+            select.empty().append('<option value="">Seleccionar sucursal destino...</option>');
+            
+            if (Array.isArray(data) && data.length > 0) {
+                data.forEach(sucursal => {
+                    // Mostrar sucursal con empresa para mayor claridad
+                    const optionText = `${sucursal.nombre} - ${sucursal.direccion} (${sucursal.empresa})`;
+                    select.append(`<option value="${sucursal.id}">${optionText}</option>`);
+                });
+                
+                console.log(`✅ Cargadas ${data.length} sucursales destino`);
+                
+                // Mostrar mensaje informativo según el tipo
+                updateSucursalInfo();
+            } else {
+                console.warn('⚠️ No se encontraron sucursales destino');
+                const mensaje = selectedConcept === 'factura' 
+                    ? 'No hay sucursales de otras empresas disponibles' 
+                    : 'No hay otras sucursales en tu empresa';
+                select.append(`<option value="" disabled>${mensaje}</option>`);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error al cargar sucursales destino:', {
+                status: xhr.status,
+                statusText: xhr.statusText,
+                responseText: xhr.responseText,
+                error: error
+            });
+            
+            let mensaje = 'Error al cargar sucursales destino';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                mensaje = xhr.responseJSON.error;
+            }
+            
+            showError(mensaje);
+            
+            // Mostrar opción de error en el select
+            const select = $('#sucursalDestinoSelect');
+            select.empty().append('<option value="" disabled>Error al cargar sucursales</option>');
+        }
+    });
+}
+
+function updateSucursalInfo() {
+    const infoContainer = $('#infoDespachoInterno');
+    
+    if (selectedConcept === 'factura') {
+        infoContainer.html(`
+            <i class="bi bi-building-exclamation me-2"></i>
+            <strong>Factura Electrónica - Despacho Interno:</strong> Se muestran sucursales de <strong>OTRAS empresas</strong> (diferentes a tu empresa actual).
+            <br><small class="text-muted">Las facturas internas son entre empresas diferentes. El documento quedará pendiente hasta confirmación.</small>
+        `).removeClass('alert-info').addClass('alert-warning');
+    } else if (selectedConcept === 'guia') {
+        infoContainer.html(`
+            <i class="bi bi-truck me-2"></i>
+            <strong>Guía de Despacho - Despacho Interno:</strong> Se muestran sucursales de <strong>tu misma empresa</strong> (traslados internos).
+            <br><small class="text-muted">Las guías internas son para mover mercadería entre sucursales de la misma empresa. El documento quedará pendiente hasta confirmación.</small>
+        `).removeClass('alert-warning').addClass('alert-info');
+    }
+}
+
+function loadMarcas() {
+    $.ajax({
+        url: '/app/obtener_marcas/', // Ajustar según tu endpoint
+        method: 'GET',
+        success: function(data) {
+            const select = $('#filterMarca');
+            data.forEach(marca => {
+                select.append(`<option value="${marca.id}">${marca.valor}</option>`);
+            });
+        },
+        error: function() {
+            console.error('Error al cargar marcas');
+        }
+    });
+}
+
+function loadCategorias() {
+    $.ajax({
+        url: '/app/obtener_categorias/', // Ajustar según tu endpoint
+        method: 'GET',
+        success: function(data) {
+            const select = $('#filterCategoria');
+            data.forEach(categoria => {
+                select.append(`<option value="${categoria.id}">${categoria.nombre}</option>`);
+            });
+        },
+        error: function() {
+            console.error('Error al cargar categorías');
+        }
+    });
+}
+
+function searchProducts() {
+    const search = $('#searchProduct').val().trim();
+    const marca = $('#filterMarca').val();
+    const categoria = $('#filterCategoria').val();
+    const tipoTalla = $('#filterTipoTalla').val();
+    
+    console.log('🔍 Iniciando búsqueda de productos...');
+    console.log('📋 Parámetros de búsqueda:', {
+        search: search,
+        marca: marca,
+        categoria: categoria,
+        tipo_talla: tipoTalla,
+        page: currentPage
+    });
+    
+    $('.loading-spinner').show();
+    $('#productList').empty();
+    
+    // Mostrar loading en la tabla también
+    $('#datos_tabla_productos').html(`
+        <tr>
+            <td colspan="9" class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Buscando productos...</span>
+                </div>
+                <p class="mt-2 mb-0">Cargando productos...</p>
+            </td>
+        </tr>
+    `);
+    
+    $.ajax({
+        url: '/app/buscar_productos_bodega/',
+        method: 'GET',  // Cambiar a GET
+        data: {  // Enviar como parámetros GET
+            search: search,
+            marca: marca,
+            categoria: categoria,
+            tipo_talla: tipoTalla,
+            page: currentPage,
+            page_size: 20
+        },
+        success: function(response) {
+            $('.loading-spinner').hide();
+            
+            console.log('📥 Respuesta del servidor:', response);
+            
+            if (response.success && response.productos) {
+                console.log(`✅ Productos encontrados: ${response.productos.length}`);
+                if (response.productos.length > 0) {
+                    console.log('📦 Primer producto:', response.productos[0]);
+                    console.log('🏢 Sucursales de productos:', response.productos.map(p => p.sucursal_id));
+                }
+                displayProducts(response.productos);  // Usar 'productos' en lugar de 'products'
+                updatePagination(response.pagination);
+                updateProductInfo(response.pagination.total_count);
+            } else {
+                console.error('❌ Error en respuesta:', response.error);
+                displayProducts([]);
+                updateProductInfo(0);
+                showError('Error al buscar productos: ' + (response.error || 'Error desconocido'));
+            }
+        },
+        error: function(xhr, status, error) {
+            $('.loading-spinner').hide();
+            console.error('Error en búsqueda de productos:', {
+                status: xhr.status,
+                statusText: xhr.statusText,
+                responseText: xhr.responseText,
+                error: error
+            });
+            
+            let mensaje = 'Error de conexión al buscar productos';
+            if (xhr.responseJSON && xhr.responseJSON.error) {
+                mensaje = xhr.responseJSON.error;
+            }
+            
+            showError(mensaje);
+        }
+    });
+}
+
+function displayProducts(products) {
+    // Llenar la nueva tabla expandida
+    displayProductsInTable(products);
+    
+    // Mantener compatibilidad con el sistema anterior (oculto)
+    const container = $('#productList');
+    container.empty();
+    
+    if (products.length === 0) {
+        container.append(`
+            <div class="text-center py-4">
+                <i class="bi bi-search display-4 text-muted"></i>
+                <p class="text-muted mt-2">No se encontraron productos</p>
+            </div>
+        `);
+        return;
+    }
+    
+    products.forEach(product => {
+        const productHtml = `
+            <div class="product-item" data-product-id="${product.id}">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="mb-1">${product.articulo}</h6>
+                        <p class="mb-1 text-muted">${product.descripcion}</p>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-primary">${product.marca || 'Sin marca'}</span>
+                            <span class="badge bg-secondary">${product.categoria || 'Sin categoría'}</span>
+                            <span class="badge bg-info">${product.tipo_talla}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-center">
+                        <div class="fw-bold">Stock Total</div>
+                        <div class="fs-4 text-primary">${product.stock_total}</div>
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <button class="btn btn-outline-primary btn-sm" onclick="selectProduct(${product.id})">
+                            <i class="bi bi-plus-circle me-1"></i>Seleccionar
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">Tallas disponibles: ${product.tallas_disponibles.join(', ')}</small>
+                </div>
+            </div>
+        `;
+        container.append(productHtml);
+    });
+    
+    productData = products;
+}
+
+function displayProductsInTable(products) {
+    const tbody = $('#datos_tabla_productos');
+    tbody.empty();
+    
+    if (!products || products.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="9" class="text-center text-muted py-4">
+                    <i class="bi bi-search me-2"></i>
+                    No se encontraron productos con los filtros aplicados
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    products.forEach(product => {
+        // Usar la estructura correcta del backend
+        const marca = product.marca || '-';
+        const color = product.color || '-';
+        const sexo = product.sexo || '-';
+        const costo = product.costo || 0;
+        const precioVenta = product.precio_venta || 0;
+        
+        const rowHtml = `
+            <tr data-product-id="${product.id}">
+                <td class="text-center fw-bold">${product.articulo}</td>
+                <td>${product.descripcion}</td>
+                <td class="text-center">
+                    <span class="badge bg-info">${color}</span>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-primary">${marca}</span>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-secondary">${sexo}</span>
+                </td>
+                <td class="text-end">$${parseInt(costo).toLocaleString()}</td>
+                <td class="text-end text-success fw-bold">$${parseInt(precioVenta).toLocaleString()}</td>
+                <td class="text-center">
+                    <span class="badge bg-success fs-6">${product.stock_total}</span>
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-primary btn-sm" onclick="selectProduct(${product.id})" title="Ver tallas disponibles">
+                        <i class="bi bi-eye me-1"></i>Ver Tallas
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(rowHtml);
+    });
+}
+
+function getProductAttribute(product, attributeName) {
+    // Buscar en los atributos del producto
+    if (product.atributos) {
+        for (let i = 1; i <= 4; i++) {
+            const attr = product[`atributo${i}`];
+            if (attr && attr.nombre && attr.nombre.toLowerCase().includes(attributeName.toLowerCase())) {
+                return attr.valor;
+            }
+        }
+    }
+    
+    // Buscar directamente en el producto
+    if (product[attributeName]) {
+        return product[attributeName];
+    }
+    
+    return null;
+}
+
+function selectProduct(productId) {
+    console.log('🔍 Seleccionando producto ID:', productId);
+    console.log('📊 productData disponible:', productData);
+    
+    // Buscar el producto en los datos cargados
+    const product = productData.find(p => p.id === productId);
+    
+    if (!product) {
+        console.error('❌ Producto no encontrado en productData');
+        console.error('🔍 IDs disponibles:', productData.map(p => p.id));
+        Swal.fire('Error', 'Producto no encontrado', 'error');
+        return;
+    }
+    
+    console.log('📦 Producto encontrado:', product);
+    console.log('👕 Tallas disponibles:', product.tallas_disponibles);
+    console.log('🔢 Tipo de tallas_disponibles:', typeof product.tallas_disponibles);
+    
+    // ✅ IMPORTANTE: Establecer el producto actual ANTES de abrir el modal
+    window.currentProduct = product;
+    console.log('✅ window.currentProduct establecido:', window.currentProduct);
+    
+    // Llenar información del producto en el modal
+    $('#art-modal').text(product.articulo);
+    $('#art-modal_descripcion').text(product.descripcion);
+    $('#art-modal_color').text(product.color || '-');
+    $('#art-modal_marca').text(product.marca || '-');
+    $('#art-modal_preciointerno').text(`$${parseInt(product.precio_venta || 0).toLocaleString()}`);
+    
+    // Llenar tabla de tallas con validación robusta
+    loadTallasDisponibles(product);
+    
+    // Resetear resumen
+    updateModalSummary();
+    
+    // Inicializar botones del modal
+    initializeModalButtons();
+    
+    // Mostrar modal
+    $('#modalTallas').modal('show');
+}
+
+function loadTallasDisponibles(product) {
+    const tbody = $('#tabla_modal_ventas_interna');
+    tbody.empty();
+    
+    console.log('🔍 DEBUG loadTallasDisponibles:');
+    console.log('  product:', product);
+    console.log('  product.tallas_disponibles:', product.tallas_disponibles);
+    console.log('  Array.isArray(product.tallas_disponibles):', Array.isArray(product.tallas_disponibles));
+    
+    // Validación robusta de tallas_disponibles
+    let tallas = [];
+    
+    if (product.tallas_disponibles && Array.isArray(product.tallas_disponibles)) {
+        tallas = product.tallas_disponibles;
+    } else if (product.tallas_disponibles && typeof product.tallas_disponibles === 'object') {
+        // Si es un objeto, intentar convertir a array
+        tallas = Object.values(product.tallas_disponibles);
+    } else {
+        console.warn('⚠️ tallas_disponibles no es un array válido');
+        tallas = [];
+    }
+    
+    console.log('👕 Tallas procesadas:', tallas);
+    
+    if (!tallas || tallas.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                    <i class="bi bi-info-circle me-2"></i>
+                    No hay tallas disponibles con stock para este producto
+                    <br><small>Producto ID: ${product.id} - Artículo: ${product.articulo}</small>
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    tallas.forEach((talla, index) => {
+        console.log(`👕 Procesando talla ${index}:`, talla);
+        
+        const rowHtml = `
+            <tr data-talla-id="${talla.id || index}">
+                <td class="text-center">${talla.id || index}</td>
+                <td class="text-center fw-bold">${talla.sku || '-'}</td>
+                <td class="text-center">
+                    <span class="badge bg-primary">${talla.talla || '-'}</span>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-success">${talla.stock || 0}</span>
+                </td>
+                <td class="text-end">$${parseInt(product.precio_venta || 0).toLocaleString()}</td>
+                <td class="text-center">
+                    <input type="number" class="form-control form-control-sm cantidad-input" 
+                           min="0" max="${talla.stock || 0}" value="0" 
+                           data-talla-id="${talla.id || index}" data-precio="${product.precio_venta || 0}">
+                </td>
+                <td class="text-end subtotal-cell">$0</td>
+                <td class="text-center">
+                    <button class="btn btn-success btn-sm" onclick="agregarTallaIndividual(${talla.id || index})">
+                        <i class="bi bi-plus"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(rowHtml);
+    });
+    
+    // Event listeners para cálculo de subtotales
+    $('.cantidad-input').off('input').on('input', function() {
+        const cantidad = parseInt($(this).val()) || 0;
+        const precio = parseInt($(this).data('precio')) || 0;
+        const subtotal = cantidad * precio;
+        
+        $(this).closest('tr').find('.subtotal-cell').text(`$${subtotal.toLocaleString()}`);
+        
+        // Actualizar resumen del modal
+        updateModalSummary();
+    });
+}
+
+// Funciones del panel lateral eliminadas - ahora el detalle se ve en tiempo real en la página principal
+
+// Funciones para los botones del modal mejorado
+function initializeModalButtons() {
+    // Botón Agregar Seleccionados
+    $('#btnAgregarSeleccionados').off('click').on('click', function() {
+        console.log('🔘 Botón Agregar Seleccionados clickeado');
+        console.log('🔍 DEBUG - window.currentProduct en botón:', window.currentProduct);
+        
+        const selectedTallas = getSelectedTallasFromModal();
+        console.log('📋 Tallas seleccionadas:', selectedTallas);
+        
+        if (selectedTallas.length === 0) {
+            Swal.fire('Atención', 'Debe ingresar cantidad en al menos una talla', 'warning');
+            return;
+        }
+        addTallasToDetalle(selectedTallas, window.currentProduct);
+        $('#modalTallas').modal('hide');
+    });
+    
+    // Botón Agregar Todo con Stock
+    $('#btnAgregarTodo').off('click').on('click', function() {
+        console.log('🔘 Botón Agregar Todo clickeado');
+        console.log('🔍 DEBUG - window.currentProduct en botón Todo:', window.currentProduct);
+        
+        // Llenar todas las cantidades con el stock disponible
+        $('#tabla_modal_ventas_interna .cantidad-input').each(function() {
+            const maxStock = parseInt($(this).attr('max')) || 0;
+            if (maxStock > 0) {
+                $(this).val(maxStock).trigger('input');
+            }
+        });
+        
+        const selectedTallas = getSelectedTallasFromModal();
+        console.log('📋 Tallas seleccionadas (Todo):', selectedTallas);
+        
+        if (selectedTallas.length === 0) {
+            Swal.fire('Atención', 'No hay tallas con stock disponible', 'warning');
+            return;
+        }
+        addTallasToDetalle(selectedTallas, window.currentProduct);
+        $('#modalTallas').modal('hide');
+    });
+    
+    // Botón Limpiar Modal
+    $('#btnLimpiarModal').off('click').on('click', function() {
+        $('#tabla_modal_ventas_interna .cantidad-input').val(0).trigger('input');
+    });
+    
+    // Botón toggle eliminado - ya no hay panel lateral
+}
+
+function getSelectedTallasFromModal() {
+    const selectedTallas = [];
+    
+    $('#tabla_modal_ventas_interna tr').each(function() {
+        const row = $(this);
+        const cantidad = parseInt(row.find('.cantidad-input').val()) || 0;
+        
+        if (cantidad > 0) {
+            const tallaId = row.data('talla-id');
+            const sku = row.find('td:nth-child(2)').text().trim();
+            const talla = row.find('td:nth-child(3) .badge').text().trim();
+            const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+            const precio = parseInt(row.find('.cantidad-input').data('precio')) || 0;
+            
+            selectedTallas.push({
+                id: tallaId,
+                sku: sku,
+                talla: talla,
+                cantidad: cantidad,
+                stock: stock,
+                precio: precio,
+                subtotal: cantidad * precio
+            });
+        }
+    });
+    
+    return selectedTallas;
+}
+
+function addTallasToDetalle(tallas, productOverride = null) {
+    console.log('🔄 Agregando tallas al detalle:', tallas);
+    console.log('🔍 DEBUG - window.currentProduct:', window.currentProduct);
+    console.log('🔍 DEBUG - productOverride:', productOverride);
+    
+    // Usar productOverride si se proporciona, sino usar window.currentProduct
+    let currentProduct = productOverride || window.currentProduct;
+    
+    // Si aún no tenemos producto, intentar obtenerlo del modal
+    if (!currentProduct) {
+        const modalTitle = $('#modalTallasLabel').text();
+        const articulo = $('#art-modal').text();
+        console.log('🔍 Intentando recuperar producto desde modal - Artículo:', articulo);
+        
+        if (articulo && productData && productData.length > 0) {
+            currentProduct = productData.find(p => p.articulo === articulo);
+            console.log('🔍 Producto recuperado desde modal:', currentProduct);
+        }
+    }
+    
+    if (!currentProduct) {
+        console.error('❌ No hay producto actual seleccionado');
+        console.error('🔍 DEBUG - window.currentProduct es:', window.currentProduct);
+        console.error('🔍 DEBUG - productOverride es:', productOverride);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No hay producto seleccionado. Por favor, cierre el modal y vuelva a seleccionar el producto.',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+    
+    console.log('✅ Usando producto:', currentProduct);
+    
+    // Verificar si estamos editando un producto existente
+    if (window.editingProductRow) {
+        console.log('✏️ Modo edición: actualizando fila existente');
+        
+        // Eliminar la fila existente
+        window.editingProductRow.remove();
+        
+        // Limpiar la referencia de edición
+        window.editingProductRow = null;
+    }
+    
+    const tbody = $('#detalleBody');
+    $('#emptyRow').remove();
+    
+    // Crear una fila por cada talla seleccionada
+    tallas.forEach(talla => {
+        const rowHtml = `
+            <tr data-producto-id="${currentProduct.id}" data-talla-id="${talla.id}">
+                <td class="text-center">${currentProduct.articulo}</td>
+                <td>${currentProduct.descripcion}</td>
+                <td class="text-center">
+                    <span class="badge bg-primary">${talla.talla}</span>
+                    <br><small class="text-muted">${talla.sku}</small>
+                </td>
+                <td class="text-center">
+                    <input type="number" class="form-control form-control-sm cantidad-detalle-input text-center" 
+                           value="${talla.cantidad}" min="1" max="${talla.stock}" 
+                           data-precio="${talla.precio}" data-stock-max="${talla.stock}">
+                </td>
+                <td class="text-end precio-unitario">$${talla.precio.toLocaleString()}</td>
+                <td class="text-end subtotal-detalle">$${talla.subtotal.toLocaleString()}</td>
+                <td class="text-center">
+                    <button class="btn btn-danger btn-sm" onclick="eliminarFilaDetalle(this)" title="Eliminar">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        const $row = $(rowHtml);
+        $row.data('tallas', [{
+            id: talla.id,
+            sku: talla.sku,
+            talla: talla.talla,
+            cantidad: talla.cantidad,
+            stock: talla.stock,
+            precio: talla.precio,
+            subtotal: talla.subtotal
+        }]);
+        tbody.append($row);
+    });
+    
+    // Agregar event listeners para las nuevas filas
+    $('.cantidad-detalle-input').off('input').on('input', function() {
+        const cantidad = parseInt($(this).val()) || 0;
+        const precio = parseInt($(this).data('precio')) || 0;
+        const maxStock = parseInt($(this).data('stock-max')) || 0;
+        
+        if (cantidad > maxStock) {
+            $(this).val(maxStock);
+            Swal.fire({
+                icon: 'warning',
+                title: 'Stock insuficiente',
+                text: `Solo hay ${maxStock} unidades disponibles`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+        
+            const subtotal = (parseInt($(this).val()) || 0) * precio;
+            const row = $(this).closest('tr');
+            row.find('.subtotal-detalle').text(`$${subtotal.toLocaleString()}`);
+            const tallasData = safeParseTallas(row.data('tallas'));
+            if (tallasData.length > 0) {
+                tallasData[0].cantidad = parseInt($(this).val()) || 0;
+                tallasData[0].subtotal = subtotal;
+                row.data('tallas', tallasData);
+            }
+        
+        // Actualizar totales
+        updateTotales();
+    });
+    
+    // Campo de descuento eliminado - funcionalidad deshabilitada
+    
+    // Actualizar totales y validaciones
+    updateTotales();
+    validateStep2();
+    
+    // Actualizar resumen en tiempo real (ya no necesitamos panel lateral)
+    
+    const actionText = window.editingProductRow ? 'actualizadas' : 'agregadas';
+    Swal.fire({
+        icon: 'success',
+        title: `Tallas ${actionText}`,
+        text: `Se ${actionText} ${tallas.length} tallas al detalle`,
+        timer: 2000,
+        showConfirmButton: false
+    });
+}
+
+function eliminarFilaDetalle(button) {
+    const row = $(button).closest('tr');
+    const articulo = row.find('td:first').text();
+    const talla = row.find('.badge').text();
+    
+    Swal.fire({
+        title: '¿Eliminar talla?',
+        text: `¿Está seguro de eliminar ${articulo} - Talla ${talla}?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            row.remove();
+            
+            // Si no quedan filas, mostrar mensaje vacío
+            if ($('#detalleBody tr').length === 0) {
+                $('#detalleBody').append(`
+                    <tr id="emptyRow">
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox me-2"></i>
+                            No hay productos agregados al detalle
+                        </td>
+                    </tr>
+                `);
+            }
+            
+            updateTotales();
+            validateStep2();
+            
+            // El detalle se actualiza automáticamente en tiempo real
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Eliminado',
+                text: 'Talla eliminada del detalle',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+    });
+}
+
+function agregarTallaIndividual(tallaId) {
+    console.log('🔘 Botón individual clickeado para talla ID:', tallaId);
+    console.log('🔍 DEBUG - window.currentProduct en individual:', window.currentProduct);
+    
+    const row = $(`tr[data-talla-id="${tallaId}"]`);
+    const cantidad = parseInt(row.find('.cantidad-input').val()) || 0;
+    
+    if (cantidad <= 0) {
+        Swal.fire('Atención', 'Ingrese una cantidad válida', 'warning');
+        return;
+    }
+    
+    // Obtener datos de la talla
+    const sku = row.find('td:nth-child(2)').text().trim();
+    const talla = row.find('td:nth-child(3) .badge').text().trim();
+    const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+    const precio = parseInt(row.find('.cantidad-input').data('precio')) || 0;
+    
+    const tallaData = [{
+        id: tallaId,
+        sku: sku,
+        talla: talla,
+        cantidad: cantidad,
+        stock: stock,
+        precio: precio,
+        subtotal: cantidad * precio
+    }];
+    
+    addTallasToDetalle(tallaData, window.currentProduct);
+    
+    // Limpiar la cantidad del modal
+    row.find('.cantidad-input').val(0).trigger('input');
+    
+    // Cerrar modal
+    $('#modalTallas').modal('hide');
+}
+
+function updateModalSummary() {
+    let totalTallas = 0;
+    let totalUnidades = 0;
+    let totalMonto = 0;
+    
+    $('#tabla_modal_ventas_interna tr').each(function() {
+        const cantidadInput = $(this).find('.cantidad-input');
+        if (cantidadInput.length > 0) {
+            const cantidad = parseInt(cantidadInput.val()) || 0;
+            const precio = parseInt(cantidadInput.data('precio')) || 0;
+            
+            if (cantidad > 0) {
+                totalTallas++;
+                totalUnidades += cantidad;
+                totalMonto += cantidad * precio;
+            }
+        }
+    });
+    
+    $('#totalTallasModal').text(totalTallas);
+    $('#totalUnidadesModal').text(totalUnidades);
+    $('#totalMontoModal').text(`$${totalMonto.toLocaleString()}`);
+}
+
+function agregarTallaIndividual(tallaId) {
+    const row = $(`tr[data-talla-id="${tallaId}"]`);
+    const cantidad = parseInt(row.find('.cantidad-input').val()) || 0;
+    
+    if (cantidad <= 0) {
+        Swal.fire('Atención', 'Ingrese una cantidad válida', 'warning');
+        return;
+    }
+    
+    // Aquí agregarías la lógica para agregar al detalle
+    console.log(`Agregando talla ${tallaId} con cantidad ${cantidad}`);
+    Swal.fire('Éxito', `Agregada talla con cantidad ${cantidad}`, 'success');
+}
+
+function updatePagination(pagination) {
+    currentPage = pagination.page;
+    totalPages = pagination.total_pages;
+    
+    $('#pageInfoProducts').text(`Página ${currentPage} de ${totalPages}`);
+    $('#btnPrevProducts').prop('disabled', currentPage <= 1);
+    $('#btnNextProducts').prop('disabled', currentPage >= totalPages);
+    $('#productInfo').text(`${pagination.total_count} productos encontrados`);
+}
+
+function updateProductInfo(totalCount) {
+    $('#productInfo').text(`${totalCount} productos encontrados`);
+}
+
+// Función duplicada eliminada - usar la versión mejorada que está más arriba
+
+// Función eliminada - ya no es necesaria con el nuevo modal
+
+// Funciones del modal anterior eliminadas - usar el modal mejorado
+
+// Función confirmarTallas del modal anterior eliminada - usar botones del modal mejorado
+
+function editarTallasProducto(button) {
+    const row = $(button).closest('tr');
+    const productoId = row.data('producto-id');
+    
+    console.log('✏️ Editando producto ID:', productoId);
+    
+    // Buscar el producto en los datos actuales
+    const producto = productData.find(p => p.id == productoId);
+    if (!producto) {
+        Swal.fire('Error', 'No se pudo encontrar la información del producto', 'error');
+        return;
+    }
+    
+    // Guardar referencia para edición (para saber que estamos editando, no agregando)
+    window.editingProductRow = row;
+    
+    // Abrir el modal de tallas para editar
+    selectProduct(productoId);
+    
+    // Opcional: Pre-llenar las cantidades actuales del detalle
+    setTimeout(() => {
+        // Aquí podrías pre-llenar las cantidades si quisieras
+        console.log('📝 Modal abierto para edición del producto:', producto.articulo);
+    }, 500);
+}
+
+function addToDetalle(tallas) {
+    const tbody = $('#detalleBody');
+    $('#emptyRow').remove();
+    
+    const productoNombre = $('#productoSeleccionado').text();
+    const productoId = window.currentProduct.id;
+    
+    // Verificar si ya existe una fila para este producto (para agrupación)
+    let filaProductoExistente = null;
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        const rowProductoId = $(this).data('producto-id');
+        if (rowProductoId == productoId) {
+            filaProductoExistente = $(this);
+            return false; // break
+        }
+    });
+    
+    if (filaProductoExistente) {
+        // Producto ya existe, actualizar tallas existentes o agregar nuevas
+        updateExistingProductRow(filaProductoExistente, tallas);
+    } else {
+        // Crear nueva fila de producto agrupada
+        createNewProductRow(productoId, productoNombre, tallas);
+    }
+    
+    updateTotales();
+    validateStep2();
+    validateStep3();
+    
+    // NO minimizar automáticamente - dejar que el usuario controle la vista
+    // if (currentStep === 2 && $('#detalleBody tr:not(#emptyRow)').length > 0) {
+    //     setTimeout(() => {
+    //         minimizeCompletedSection(2);
+    //     }, 1000);
+    // }
+}
+
+function createNewProductRow(productoId, productoNombre, tallas) {
+    const tbody = $('#detalleBody');
+    
+    // Calcular totales del producto
+    let cantidadTotal = 0;
+    let subtotalProducto = 0;
+    let tallasTexto = [];
+    let skusTexto = [];
+    
+    tallas.forEach(talla => {
+        cantidadTotal += talla.cantidad;
+        subtotalProducto += talla.cantidad * talla.precio;
+        tallasTexto.push(`${talla.talla}(${talla.cantidad})`);
+        skusTexto.push(talla.id);
+    });
+    
+    const row = `
+        <tr data-producto-id="${productoId}" data-tallas='${JSON.stringify(tallas)}'>
+            <td class="skus-cell">
+                <small class="text-muted">SKUs: ${skusTexto.join(', ')}</small>
+            </td>
+            <td>
+                <strong>${productoNombre}</strong>
+                <br><small class="text-muted">Tallas: ${tallasTexto.join(', ')}</small>
+            </td>
+            <td>
+                <span class="badge bg-info">${tallasTexto.length} tallas</span>
+            </td>
+            <td>
+                <input type="number" class="form-control form-control-sm cantidad-total-input" 
+                       value="${cantidadTotal}" min="1" readonly>
+                <button class="btn btn-sm btn-outline-primary mt-1" onclick="editarTallasProducto(this)">
+                    <i class="bi bi-pencil"></i> Editar
+                </button>
+            </td>
+            <td>$${tallas[0].precio.toLocaleString()}</td>
+            <td class="subtotal">$${subtotalProducto.toLocaleString()}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeFromDetalle(this)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `;
+    tbody.append(row);
+}
+
+function updateExistingProductRow(filaExistente, nuevasTallas) {
+    // Obtener tallas existentes
+    const tallasExistentes = safeParseTallas(filaExistente.data('tallas'));
+    
+    // Combinar con nuevas tallas
+    nuevasTallas.forEach(nuevaTalla => {
+        const tallaExistente = tallasExistentes.find(t => t.id === nuevaTalla.id);
+        if (tallaExistente) {
+            // Sumar cantidad a talla existente
+            tallaExistente.cantidad += nuevaTalla.cantidad;
+        } else {
+            // Agregar nueva talla
+            tallasExistentes.push(nuevaTalla);
+        }
+    });
+    
+    // Actualizar la fila
+    updateProductRowDisplay(filaExistente, tallasExistentes);
+}
+
+function updateProductRowDisplay(fila, tallas) {
+    // Recalcular totales
+    let cantidadTotal = 0;
+    let subtotalProducto = 0;
+    let tallasTexto = [];
+    let skusTexto = [];
+    
+    tallas.forEach(talla => {
+        cantidadTotal += talla.cantidad;
+        subtotalProducto += talla.cantidad * talla.precio;
+        tallasTexto.push(`${talla.talla}(${talla.cantidad})`);
+        skusTexto.push(talla.id);
+    });
+    
+    // Actualizar datos y display
+    fila.data('tallas', JSON.stringify(tallas));
+    fila.find('.skus-cell small').text(`SKUs: ${skusTexto.join(', ')}`);
+    fila.find('td:eq(1) small').text(`Tallas: ${tallasTexto.join(', ')}`);
+    fila.find('.badge').text(`${tallas.length} tallas`);
+    fila.find('.cantidad-total-input').val(cantidadTotal);
+    fila.find('.subtotal').text(`$${subtotalProducto.toLocaleString()}`);
+}
+
+function updateSubtotal() {
+    const row = $(this).closest('tr');
+    const cantidad = parseInt($(this).val()) || 0;
+    const precio = parseFloat(row.find('td:eq(4)').text().replace('$', '').replace(',', ''));
+    const subtotal = cantidad * precio;
+    
+    row.find('.subtotal').text(`$${subtotal.toLocaleString()}`);
+    updateTotales();
+}
+
+function removeFromDetalle(button) {
+    $(button).closest('tr').remove();
+    
+    if ($('#detalleBody tr').length === 0) {
+        $('#detalleBody').append(`
+            <tr id="emptyRow">
+                <td colspan="7" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox display-4 d-block mb-2"></i>
+                    No hay productos seleccionados
+                </td>
+            </tr>
+        `);
+    }
+    
+    updateTotales();
+    validateStep2();
+    validateStep3();
+    
+    // Minimizar sección de productos si hay productos agregados
+    if (currentStep === 2 && $('#detalleBody tr:not(#emptyRow)').length > 0) {
+        setTimeout(() => {
+            minimizeCompletedSection(2);
+        }, 1000);
+    }
+}
+
+function updateTotales() {
+    let subtotalNeto = 0;
+    let totalUnidades = 0;
+    let totalItems = 0;
+    
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        // Para la nueva estructura, cada fila es una talla individual
+        const cantidad = parseInt($(this).find('.cantidad-detalle-input').val()) || 0;
+        const precio = parseInt($(this).find('.cantidad-detalle-input').data('precio')) || 0;
+        
+        subtotalNeto += cantidad * precio;
+        totalUnidades += cantidad;
+        totalItems++;
+        
+        console.log('🔍 Procesando fila:', {
+            cantidad: cantidad,
+            precio: precio,
+            subtotal: cantidad * precio
+        });
+    });
+    
+    // Sin descuento - cálculo directo
+    const iva = subtotalNeto * 0.19;
+    const total = subtotalNeto + iva;
+    
+    // Debug para verificar cálculos
+    console.log('🧮 Actualizando totales:', {
+        subtotalNeto: subtotalNeto,
+        iva: iva,
+        total: total,
+        totalUnidades: totalUnidades,
+        totalItems: totalItems
+    });
+    
+    // Actualizar elementos del detalle (Paso 2) - solo los que existen
+    $('#totalNeto').text(Math.round(subtotalNeto).toLocaleString());
+    $('#totalIva').text(Math.round(iva).toLocaleString());
+    $('#totalFinal').text(Math.round(total).toLocaleString());
+    
+    // Actualizar badges de resumen
+    $('#totalProductos').text(`${totalItems} item${totalItems !== 1 ? 's' : ''} por línea`);
+    $('#totalUnidades').text(`${totalUnidades} unidad${totalUnidades !== 1 ? 'es' : ''}`);
+    $('#totalArticulosResumen').text(`Total artículos: ${totalItems}`);
+    
+    // Actualizar totales finales del resumen (antes Paso 3)
+    $('#finalSubtotalNeto').text(`$${Math.round(subtotalNeto).toLocaleString()}`);
+    $('#finalMontoIva').text(`$${Math.round(iva).toLocaleString()}`);
+    $('#finalMontoTotal').text(`$${Math.round(total).toLocaleString()}`);
+    $('#finalTotalUnidades').text(totalUnidades);
+    
+    // Actualizar resumen del documento
+    $('#resumenProductos').text(`${totalItems} items por línea`);
+    $('#resumenUnidades').text(`${totalUnidades} unidades`);
+    $('#resumenTotalArticulos').text(totalItems);
+    
+    // Actualizar tabla de resumen de productos
+    updateResumenProductosTable();
+    
+    // Actualizar información del resumen del documento
+    updateResumenDocumento();
+}
+
+function updateResumenProductosTable() {
+    const tbody = $('#resumenProductosBody');
+    tbody.empty();
+    
+    const detalleRows = $('#detalleBody tr:not(#emptyRow)');
+    
+    if (detalleRows.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="5" class="text-center text-muted py-3">
+                    <i class="bi bi-inbox"></i> No hay productos para mostrar
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    // Agrupar productos por artículo
+    const productosAgrupados = {};
+    
+    detalleRows.each(function() {
+        const row = $(this);
+        const productoId = row.data('producto-id');
+        const articulo = row.find('td:first').text().trim();
+        const descripcion = row.find('td:nth-child(2)').text().trim();
+        const talla = row.find('.badge').text().trim();
+        const sku = row.find('small').text().trim();
+        const cantidad = parseInt(row.find('.cantidad-detalle-input').val()) || 0;
+        const precio = parseInt(row.find('.cantidad-detalle-input').data('precio')) || 0;
+        const subtotal = cantidad * precio;
+        
+        if (!productosAgrupados[productoId]) {
+            productosAgrupados[productoId] = {
+                articulo: articulo,
+                descripcion: descripcion,
+                tallas: [],
+                totalCantidad: 0,
+                totalMonto: 0
+            };
+        }
+        
+        productosAgrupados[productoId].tallas.push({
+            talla: talla,
+            sku: sku,
+            cantidad: cantidad,
+            precio: precio,
+            subtotal: subtotal
+        });
+        
+        productosAgrupados[productoId].totalCantidad += cantidad;
+        productosAgrupados[productoId].totalMonto += subtotal;
+    });
+    
+    // Renderizar productos agrupados en la tabla
+    Object.keys(productosAgrupados).forEach(productoId => {
+        const producto = productosAgrupados[productoId];
+        
+        const tallasTexto = producto.tallas.map(t => `${t.talla}(${t.cantidad})`).join(', ');
+        const skusTexto = producto.tallas.map(t => t.sku).join(', ');
+        
+        const rowHtml = `
+            <tr>
+                <td class="fw-bold">${skusTexto}</td>
+                <td>
+                    <strong>${producto.articulo}</strong>
+                    <br><small class="text-muted">${producto.descripcion}</small>
+                </td>
+                <td>
+                    <span class="badge bg-primary">${producto.tallas.length}</span>
+                    <br><small class="text-muted">${tallasTexto}</small>
+                </td>
+                <td class="text-center">
+                    <span class="badge bg-success">${producto.totalCantidad}</span>
+                </td>
+                <td class="text-end fw-bold">
+                    $${producto.totalMonto.toLocaleString()}
+                </td>
+            </tr>
+        `;
+        
+        tbody.append(rowHtml);
+    });
+}
+
+function updateResumenDocumento() {
+    // Actualizar información del documento basada en las selecciones del Paso 1
+    const tipoDocumento = selectedConcept === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho';
+    const metodoDespacho = selectedMethod === 'interno' ? 'Despacho Interno' : 'Despacho Externo';
+    
+    $('#resumenTipo').text(tipoDocumento);
+    $('#resumenMetodo').text(metodoDespacho);
+    
+    // Actualizar receptor/destino
+    let receptor = '-';
+    if (selectedMethod === 'interno') {
+        const sucursalDestino = $('#sucursalDestinoSelect option:selected').text();
+        if (sucursalDestino && sucursalDestino !== 'Seleccionar sucursal destino') {
+            receptor = sucursalDestino;
+        }
+    } else {
+        const empresaCliente = $('#receptorSelect option:selected').text();
+        if (empresaCliente && empresaCliente !== 'Seleccionar empresa cliente') {
+            receptor = empresaCliente;
+        }
+    }
+    $('#resumenReceptor').text(receptor);
+    
+    // Actualizar fecha
+    const fechaActual = new Date().toLocaleDateString('es-CL');
+    $('#resumenFecha').text(fechaActual);
+    
+    // Copiar observaciones del detalle a las observaciones finales
+    // Observaciones: ya no se sincronizan automáticamente con una segunda caja
+}
+
+function clearAll() {
+    Swal.fire({
+        title: '¿Reiniciar proceso?',
+        text: 'Se perderán todos los datos ingresados y volverás al paso 1',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, reiniciar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Reiniciar variables
+            selectedMethod = '';
+            selectedConcept = '';
+            selectedProducts = [];
+            currentStep = 1;
+            maxStepReached = 1;
+            
+            // Limpiar formularios
+            $('.method-selector').removeClass('active');
+            $('#receptorSelect').val('');
+            $('#sucursalDestinoSelect').val('');
+            $('#fechaEmision').val(new Date().toISOString().split('T')[0]);
+            
+            // Ocultar contenedores dinámicos
+            $('#sucursalDestinoContainer').hide();
+            $('#receptorExternoContainer').show();
+            $('#infoDespachoInterno').hide();
+            $('#infoDespachoExterno').hide();
+            $('#detalleBody').empty().append(`
+                <tr id="emptyRow">
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox display-4 d-block mb-2"></i>
+                        No hay productos seleccionados
+                    </td>
+                </tr>
+            `);
+            
+            // Reiniciar totales
+            $('#subtotalNeto, #montoIva, #montoTotal').text('$0');
+            $('#totalUnidades').text('0');
+            
+            // Volver al paso 1
+            $('.step-content').hide();
+            $('#step-1').show();
+            updateWizardIndicator();
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Proceso reiniciado',
+                text: 'Puedes comenzar nuevamente',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    });
+}
+
+function showPreview() {
+    if (!validateBeforeEmit()) return;
+    
+    // Generar vista previa
+    const previewContent = generatePreviewContent();
+    $('#previewContent').html(previewContent);
+    $('#modalPreview').modal('show');
+}
+
+function generatePreviewContent() {
+    const receptor = $('#receptorSelect option:selected').text();
+    const fecha = $('#fechaEmision').val();
+    const tipoDoc = selectedConcept === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho';
+    const metodoDespacho = selectedMethod === 'interno' ? 'Despacho Interno' : 'Despacho Externo';
+    
+    let content = `
+        <div class="preview-document">
+            <div class="text-center mb-4">
+                <h4>${tipoDoc}</h4>
+                <p class="text-muted">${metodoDespacho}</p>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-6">
+                    <strong>Receptor:</strong><br>
+                    ${receptor}
+                </div>
+                <div class="col-6 text-end">
+                    <strong>Fecha:</strong><br>
+                    ${new Date(fecha).toLocaleDateString('es-CL')}
+                </div>
+            </div>
+            
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Talla</th>
+                        <th>Cantidad</th>
+                        <th>Precio</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        const producto = $(this).find('td:eq(1)').text();
+        const talla = $(this).find('td:eq(2)').text();
+        const cantidad = $(this).find('.cantidad-input').val();
+        const precio = $(this).find('td:eq(4)').text();
+        const subtotal = $(this).find('.subtotal').text();
+        
+        content += `
+            <tr>
+                <td>${producto}</td>
+                <td>${talla}</td>
+                <td>${cantidad}</td>
+                <td>${precio}</td>
+                <td>${subtotal}</td>
+            </tr>
+        `;
+    });
+    
+    content += `
+                </tbody>
+            </table>
+            
+            <div class="row">
+                <div class="col-8"></div>
+                <div class="col-4">
+                    <table class="table table-sm">
+                        <tr>
+                            <td>Subtotal (Neto):</td>
+                            <td class="text-end">${$('#subtotalNeto').text()}</td>
+                        </tr>
+                        <tr>
+                            <td>IVA (19%):</td>
+                            <td class="text-end">${$('#montoIva').text()}</td>
+                        </tr>
+                        <tr class="fw-bold">
+                            <td>Total:</td>
+                            <td class="text-end">${$('#montoTotal').text()}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return content;
+}
+
+function validateBeforeEmit() {
+    // Validar paso 1: Configuración
+    if (!selectedMethod || !selectedConcept) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Configuración incompleta',
+            text: 'Debe seleccionar método de despacho y tipo de documento',
+            confirmButtonText: 'Ir a Configuración'
+        }).then(() => {
+            goToStep(1);
+        });
+        return false;
+    }
+    
+    // Validar receptor según el método de despacho
+    if (selectedMethod === 'interno') {
+        // Para despacho interno: validar sucursal destino
+        if (!$('#sucursalDestinoSelect').val()) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Sucursal destino requerida',
+                text: 'Debe seleccionar una sucursal destino para el despacho interno',
+                confirmButtonText: 'Ir a Configuración'
+            }).then(() => {
+                goToStep(1);
+            });
+            return false;
+        }
+    } else {
+        // Para despacho externo: validar receptor
+        if (!$('#receptorSelect').val()) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Receptor requerido',
+                text: 'Debe seleccionar un receptor para el documento',
+                confirmButtonText: 'Ir a Configuración'
+            }).then(() => {
+                goToStep(1);
+            });
+            return false;
+        }
+    }
+    
+    // Validar paso 2/3: Productos
+    if ($('#detalleBody tr:not(#emptyRow)').length === 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Sin productos',
+            text: 'Debe agregar al menos un producto al documento',
+            confirmButtonText: 'Ir a Productos'
+        }).then(() => {
+            goToStep(2);
+        });
+        return false;
+    }
+    
+    // Validar que todos los productos tengan cantidades válidas
+    let hasInvalidQuantity = false;
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        if (hasInvalidQuantity) return false;
+        const tallas = safeParseTallas($(this).data('tallas'));
+        if (tallas.length > 0) {
+            for (const talla of tallas) {
+                if (!talla.cantidad || talla.cantidad <= 0) {
+                    hasInvalidQuantity = true;
+                    break;
+                }
+            }
+        } else {
+            // Fallback: validar a partir del campo de cantidad visible
+            const cantidad = parseInt($(this).find('.cantidad-detalle-input').val()) || 0;
+            if (cantidad <= 0) {
+                hasInvalidQuantity = true;
+            }
+        }
+    });
+    
+    if (hasInvalidQuantity) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Cantidades inválidas',
+            text: 'Todos los productos deben tener cantidades válidas',
+            confirmButtonText: 'Revisar Detalle'
+        }).then(() => {
+            goToStep(2);
+        });
+        return false;
+    }
+    
+    return true;
+}
+
+function emitirDTE() {
+    if (!validateBeforeEmit()) return;
+    
+    Swal.fire({
+        title: '¿Emitir DTE?',
+        text: 'Se generará el documento electrónico',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, emitir',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            procesarEmision();
+        }
+    });
+}
+
+function procesarEmision() {
+    showLoading();
+    
+    const detalleProductos = [];
+    $('#detalleBody tr:not(#emptyRow)').each(function() {
+        const tallas = safeParseTallas($(this).data('tallas'));
+        
+        tallas.forEach(talla => {
+            detalleProductos.push({
+                talla_id: talla.id,
+                cantidad: talla.cantidad,
+                precio: talla.precio
+            });
+        });
+    });
+    
+    // Usar observaciones finales si están disponibles, sino las del paso 3
+    const observaciones = $('#observacionesFinales').val().trim();
+    
+    // Mapear valores del frontend a los valores del modelo
+    const tipoDocumentoMap = {
+        'factura': 'FACTURA ELECTRONICA',
+        'guia': 'GUIA'
+    };
+    
+    const metodoDespachoMap = {
+        'interno': 'interno',
+        'externo': 'externo'
+    };
+    
+    // Preparar datos según el tipo de despacho
+    let data = {
+        metodo_despacho: metodoDespachoMap[selectedMethod] || selectedMethod,
+        tipo_documento: tipoDocumentoMap[selectedConcept] || selectedConcept,
+        fecha_emision: $('#fechaEmision').val(),
+        observaciones: observaciones,
+        detalle_productos: detalleProductos
+    };
+    
+    if (selectedMethod === 'interno') {
+        // Despacho interno: enviar sucursal destino
+        data.sucursal_destino_id = $('#sucursalDestinoSelect').val();
+        data.receptor_id = null; // No se usa para interno
+    } else {
+        // Despacho externo: enviar empresa cliente
+        data.receptor_id = $('#receptorSelect').val();
+        data.sucursal_destino_id = null; // No se usa para externo
+    }
+    
+    $.ajax({
+        url: '/app/emitir_dte/', // Ajustar según tu endpoint
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        data: JSON.stringify(data),
+        success: function(response) {
+            hideLoading();
+            
+            if (response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡DTE Emitido Exitosamente!',
+                    html: `
+                        <div class="text-center">
+                            <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                            <h4 class="mt-3">Documento generado correctamente</h4>
+                            <p class="mb-2"><strong>N° Documento:</strong> ${response.numero_documento}</p>
+                            <p class="mb-2"><strong>Tipo:</strong> ${selectedConcept === 'factura' ? 'Factura Electrónica' : 'Guía de Despacho'}</p>
+                            <p class="mb-2"><strong>Total:</strong> ${$('#finalMontoTotal').text()}</p>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="bi bi-plus-circle me-1"></i>Nuevo DTE',
+                    cancelButtonText: '<i class="bi bi-house me-1"></i>Ir al Menú',
+                    reverseButtons: true
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        clearAll(); // Reiniciar para nuevo DTE
+                    } else {
+                        window.location.href = '/app/'; // Ir al dashboard
+                    }
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error al emitir DTE',
+                    text: response.error || 'Ocurrió un error inesperado',
+                    confirmButtonText: 'Reintentar'
+                });
+            }
+        },
+        error: function() {
+            hideLoading();
+            Swal.fire('Error', 'Error de conexión al emitir DTE', 'error');
+        }
+    });
+}
+
+function showError(message) {
+    Swal.fire('Error', message, 'error');
+}
+
+// Event listeners para búsqueda por referencia
+$('#btnSearchReference').on('click', function() {
+    const referencia = $('#searchReference').val().trim();
+    if (referencia) {
+        buscarPorReferencia(referencia);
+    } else {
+        Swal.fire('Atención', 'Ingrese una referencia para buscar', 'warning');
+    }
+});
+
+$('#searchReference').on('keypress', function(e) {
+    if (e.which === 13) { // Enter key
+        $('#btnSearchReference').click();
+    }
+});
+
+// Función para buscar por referencia
+function buscarPorReferencia(referencia) {
+    console.log('🔍 Buscando por referencia:', referencia);
+    
+    // Mostrar loading
+    $('#datos_tabla_productos').html(`
+        <tr>
+            <td colspan="9" class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Buscando...</span>
+                </div>
+                <p class="mt-2 mb-0">Buscando productos por referencia...</p>
+            </td>
+        </tr>
+    `);
+    
+    // Por ahora, simular búsqueda (puedes implementar endpoint específico)
+    setTimeout(() => {
+        $('#datos_tabla_productos').html(`
+            <tr>
+                <td colspan="9" class="text-center text-muted py-4">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Función de búsqueda por referencia en desarrollo
+                    <br><small>Use la búsqueda por artículo mientras tanto</small>
+                </td>
+            </tr>
+        `);
+    }, 1000);
+}
+
+// Función para imprimir vista previa
+$('#btnPrintPreview').on('click', function() {
+    const content = $('#previewContent').html();
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Vista Previa DTE</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                <style>
+                    body { font-family: Arial, sans-serif; }
+                    .preview-document { padding: 20px; }
+                    @media print {
+                        .no-print { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                ${content}
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+});
+
+// Inicializar botones del modal cuando se carga la página
+$(document).ready(function() {
+    initializeModalButtons();
+    console.log('✅ Botones del modal inicializados');
+});
+
+</script>

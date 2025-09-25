@@ -1,0 +1,1904 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+ 
+    <div class="page-content">
+        <div class="container-fluid">
+            
+            <!-- DASHBOARD PRINCIPAL -->
+            <div id="dashboard-view">
+                <!-- Header -->
+                <div class="row mb-4">
+                    <div class="col">
+                        <h1 class="h3 mb-0">
+                            <i class="ri-store-2-line text-primary"></i> Punto de Venta
+                        </h1>
+                        <p class="text-muted mb-0">Sistema de gestión de tickets y ventas</p>
+                    </div>
+                    <div class="col-auto">
+                        <span class="badge bg-primary fs-6 me-2">
+                            <i class="ri-user-line"></i> {{ user.username }}
+                        </span>
+                        <span class="badge bg-info fs-6">
+                            <i class="ri-building-line"></i> {{ sucursal_actual.alias|default:"Sin sucursal" }}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Cards de Acciones Principales -->
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="card action-card h-100 shadow-sm" onclick="iniciarNuevaVenta()" style="cursor: pointer;">
+                            <div class="card-body text-center p-4">
+                                <div class="action-icon mb-3">
+                                    <i class="ri-add-circle-line display-1 text-success"></i>
+                                </div>
+                                <h5 class="card-title">Nueva Venta</h5>
+                                <p class="text-muted">Crear nuevo ticket de venta</p>
+                                <div class="action-overlay">
+                                    <span class="btn btn-success">Iniciar</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card action-card h-100 shadow-sm" onclick="buscarTicket()" style="cursor: pointer;">
+                            <div class="card-body text-center p-4">
+                                <div class="action-icon mb-3">
+                                    <i class="ri-search-line display-1 text-primary"></i>
+                                </div>
+                                <h5 class="card-title">Buscar Ticket</h5>
+                                <p class="text-muted">Por número o cliente</p>
+                                <div class="action-overlay">
+                                    <span class="btn btn-primary">Buscar</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card action-card h-100 shadow-sm" onclick="verReportes()" style="cursor: pointer;">
+                            <div class="card-body text-center p-4">
+                                <div class="action-icon mb-3">
+                                    <i class="ri-bar-chart-box-line display-1 text-warning"></i>
+                                </div>
+                                <h5 class="card-title">Reportes</h5>
+                                <p class="text-muted">Estadísticas y ventas</p>
+                                <div class="action-overlay">
+                                    <span class="btn btn-warning">Ver</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Indicadores KPI -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-primary bg-soft">
+                                            <span class="avatar-title rounded-circle bg-primary">
+                                                <i class="ri-money-dollar-circle-line text-white"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Ventas Hoy</p>
+                                        <h4 class="fs-4 fw-medium mb-0" id="ventasHoy">
+                                            <span class="counter-value">$0</span>
+                                        </h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-warning bg-soft">
+                                            <span class="avatar-title rounded-circle bg-warning">
+                                                <i class="ri-time-line text-white"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Pendientes</p>
+                                        <h4 class="fs-4 fw-medium mb-0" id="ticketsPendientes">
+                                            <span class="counter-value">0</span>
+                                        </h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-success bg-soft">
+                                            <span class="avatar-title rounded-circle bg-success">
+                                                <i class="ri-check-double-line text-white"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Pagados</p>
+                                        <h4 class="fs-4 fw-medium mb-0" id="ticketsPagados">
+                                            <span class="counter-value">0</span>
+                                        </h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="avatar-sm rounded-circle bg-info bg-soft">
+                                            <span class="avatar-title rounded-circle bg-info">
+                                                <i class="ri-calculator-line text-white"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Promedio</p>
+                                        <h4 class="fs-4 fw-medium mb-0" id="promedioVenta">
+                                            <span class="counter-value">$0</span>
+                                        </h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Tickets Recientes -->
+                <div class="card shadow-sm">
+                    <div class="card-header border-0">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h5 class="card-title mb-0">
+                                    <i class="ri-file-list-3-line text-primary"></i> Tickets del Día
+                                </h5>
+                            </div>
+                            <div class="col-auto">
+                                <button class="btn btn-sm btn-outline-primary" onclick="actualizarDashboard()">
+                                    <i class="ri-refresh-line"></i> Actualizar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body pt-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle table-nowrap mb-0" id="tablaTickets">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">#Ticket</th>
+                                        <th scope="col">Hora</th>
+                                        <th scope="col">Cliente</th>
+                                        <th scope="col">Vendedor</th>
+                                        <th scope="col">Total</th>
+                                        <th scope="col">Estado</th>
+                                        <th scope="col">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyTickets">
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Cargando...</span>
+                                            </div>
+                                            <p class="text-muted mt-2">Cargando tickets del día...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WIZARD DE VENTA (Oculto inicialmente) -->
+            <div id="wizard-view" style="display: none;">
+                
+                <!-- Progress Bar -->
+                <div class="row mb-4">
+                    <div class="col">
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: 25%;" id="wizardProgress"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <small class="text-muted">Paso <span id="pasoActual">1</span> de 4</small>
+                            <small class="text-muted" id="tituloPaso">Seleccionar Ticket</small>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-sm btn-outline-danger" onclick="cancelarVenta()">
+                            <i class="ri-close-line"></i> Cancelar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stepper -->
+                <div class="stepper-wrapper mb-4">
+                    <div class="stepper-item active" data-step="1">
+                        <div class="step-counter">
+                            <i class="ri-ticket-2-line"></i>
+                        </div>
+                        <div class="step-name">Ticket</div>
+                    </div>
+                    <div class="stepper-item" data-step="2">
+                        <div class="step-counter">
+                            <i class="ri-user-line"></i>
+                        </div>
+                        <div class="step-name">Cliente</div>
+                    </div>
+                    <div class="stepper-item" data-step="3">
+                        <div class="step-counter">
+                            <i class="ri-wallet-3-line"></i>
+                        </div>
+                        <div class="step-name">Pago</div>
+                    </div>
+                    <div class="stepper-item" data-step="4">
+                        <div class="step-counter">
+                            <i class="ri-check-double-line"></i>
+                        </div>
+                        <div class="step-name">Confirmar</div>
+                    </div>
+                </div>
+
+                <!-- Contenido de cada paso -->
+                <div class="step-content">
+                    
+                    <!-- PASO 1: Selección de Ticket -->
+                    <div id="step1" class="step-pane active">
+                        <div class="row justify-content-center">
+                            <div class="col-md-8">
+                                <div class="card shadow">
+                                    <div class="card-body text-center p-5">
+                                        <div class="mb-4">
+                                            <i class="ri-ticket-2-line display-1 text-primary"></i>
+                                            <h3 class="mt-3 mb-2">Seleccionar Ticket</h3>
+                                            <p class="text-muted">Busque un ticket existente o cree uno nuevo</p>
+                                        </div>
+                                        
+                                        <div class="row g-3">
+                                            <div class="col-md-6">
+                                                <div class="input-group input-group-lg">
+                                                    <span class="input-group-text">
+                                                        <i class="ri-search-line"></i>
+                                                    </span>
+                                                    <input type="text" 
+                                                           id="inputTicket" 
+                                                           class="form-control"
+                                                           placeholder="Número de Ticket"
+                                                           autofocus>
+                                                    <button class="btn btn-primary" onclick="buscarTicketPorNumero()">
+                                                        Buscar
+                                                    </button>
+                                                </div>
+                                                <small class="text-muted">Presione Enter para buscar</small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <button class="btn btn-success btn-lg w-100" onclick="crearNuevoTicket()">
+                                                    <i class="ri-add-line"></i> Crear Nuevo Ticket
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Lista de tickets pendientes -->
+                                        <div class="mt-5">
+                                            <h6 class="text-start mb-3">
+                                                <i class="ri-time-line text-warning"></i> Tickets Pendientes
+                                            </h6>
+                                            <div class="list-group text-start" id="listaTicketsPendientes">
+                                                <div class="text-center py-3">
+                                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                                    <small class="text-muted ms-2">Cargando tickets pendientes...</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 2: Datos del Cliente y Tipo de Documento -->
+                    <div id="step2" class="step-pane" style="display: none;">
+                        <div class="row justify-content-center">
+                            <div class="col-md-10">
+                                <!-- Selector de Tipo de Documento -->
+                                <div class="card shadow mb-4">
+                                    <div class="card-header bg-info text-white">
+                                        <h5 class="mb-0">
+                                            <i class="ri-file-text-line"></i> Tipo de Documento
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row g-3">
+                                            <div class="col-md-3">
+                                                <div class="form-check form-check-card">
+                                                    <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoTicket" value="TICKET" checked>
+                                                    <label class="form-check-label card h-100" for="tipoTicket">
+                                                        <div class="card-body text-center p-3">
+                                                            <i class="ri-receipt-line display-4 text-success mb-2"></i>
+                                                            <h6 class="card-title">Ticket Simple</h6>
+                                                            <p class="card-text small text-muted">Venta rápida sin datos fiscales</p>
+                                                            <div class="badge bg-success" id="correlativos-TICKET">
+                                                                <i class="ri-check-line"></i> Disponible
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="form-check form-check-card">
+                                                    <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaElectronica" value="BOLETA_ELECTRONICA">
+                                                    <label class="form-check-label card h-100" for="tipoBoletaElectronica">
+                                                        <div class="card-body text-center p-3">
+                                                            <i class="ri-file-check-line display-4 text-primary mb-2"></i>
+                                                            <h6 class="card-title">Boleta Electrónica</h6>
+                                                            <p class="card-text small text-muted">Documento tributario oficial</p>
+                                                            <div class="badge bg-primary" id="correlativos-BOLETA_ELECTRONICA">
+                                                                <i class="ri-check-line"></i> Disponible
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="form-check form-check-card">
+                                                    <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoFacturaElectronica" value="FACTURA_ELECTRONICA">
+                                                    <label class="form-check-label card h-100" for="tipoFacturaElectronica">
+                                                        <div class="card-body text-center p-3">
+                                                            <i class="ri-file-invoice-line display-4 text-warning mb-2"></i>
+                                                            <h6 class="card-title">Factura Electrónica</h6>
+                                                            <p class="card-text small text-muted">Para empresas con RUT</p>
+                                                            <div class="badge bg-warning" id="correlativos-FACTURA_ELECTRONICA">
+                                                                <i class="ri-check-line"></i> Disponible
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="form-check form-check-card">
+                                                    <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaPapel" value="BOLETA">
+                                                    <label class="form-check-label card h-100" for="tipoBoletaPapel">
+                                                        <div class="card-body text-center p-3">
+                                                            <i class="ri-file-paper-line display-4 text-secondary mb-2"></i>
+                                                            <h6 class="card-title">Boleta Papel</h6>
+                                                            <p class="card-text small text-muted">Documento físico tradicional</p>
+                                                            <div class="badge bg-secondary" id="correlativos-BOLETA">
+                                                                <i class="ri-check-line"></i> Disponible
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Información del tipo seleccionado -->
+                                        <div class="mt-3">
+                                            <div class="alert alert-info" id="infoTipoDocumento">
+                                                <i class="ri-information-line"></i>
+                                                <strong>Ticket Simple:</strong> Ideal para ventas rápidas. No requiere datos del cliente.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Datos del Cliente -->
+                                <div class="card shadow">
+                                    <div class="card-header bg-primary text-white">
+                                        <h4 class="mb-0">
+                                            <i class="ri-user-line"></i> Datos del Cliente
+                                            <small class="ms-2" id="requeridoCliente">(Opcional para Ticket Simple)</small>
+                                        </h4>
+                                    </div>
+                                    <div class="card-body p-4">
+                                        <!-- Búsqueda por RUT -->
+                                        <div class="row mb-4">
+                                            <div class="col-md-6">
+                                                <label class="form-label fw-medium">Buscar Cliente por RUT</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">
+                                                        <i class="ri-search-line"></i>
+                                                    </span>
+                                                    <input type="text" 
+                                                           id="buscarRut" 
+                                                           class="form-control"
+                                                           placeholder="11.111.111-1"
+                                                           maxlength="12">
+                                                    <button class="btn btn-primary" onclick="buscarClientePorRut()">
+                                                        Buscar
+                                                    </button>
+                                                </div>
+                                                <div class="invalid-feedback" id="rutError"></div>
+                                                <small class="text-muted">Formato: 11.111.111-1</small>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="alert alert-info d-none" id="clienteEncontrado">
+                                                    <i class="ri-information-line"></i> Cliente encontrado en el sistema
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <!-- Formulario de cliente -->
+                                        <form id="formCliente">
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-medium">Nombre/Razón Social *</label>
+                                                    <input type="text" class="form-control" id="clienteNombre" required>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-medium">RUT *</label>
+                                                    <input type="text" class="form-control" id="clienteRut" required>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Email</label>
+                                                    <input type="email" class="form-control" id="clienteEmail">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label">Teléfono</label>
+                                                    <input type="tel" class="form-control" id="clienteTelefono">
+                                                </div>
+                                            </div>
+
+                                            <!-- Datos adicionales (colapsable) -->
+                                            <div class="mt-4">
+                                                <button class="btn btn-outline-primary btn-sm" type="button" 
+                                                        data-bs-toggle="collapse" 
+                                                        data-bs-target="#datosFacturacion">
+                                                    <i class="ri-add-line"></i> Datos para Facturación Electrónica
+                                                </button>
+                                                
+                                                <div class="collapse mt-3" id="datosFacturacion">
+                                                    <div class="card card-body bg-light">
+                                                        <div class="row g-3">
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Giro</label>
+                                                                <input type="text" class="form-control" id="clienteGiro">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Comuna</label>
+                                                                <input type="text" class="form-control" id="clienteComuna">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Ciudad</label>
+                                                                <input type="text" class="form-control" id="clienteCiudad">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Dirección</label>
+                                                                <input type="text" class="form-control" id="clienteDireccion">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Teléfono Secundario</label>
+                                                                <input type="tel" class="form-control" id="clienteTelefono2">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Email Facturación</label>
+                                                                <input type="email" class="form-control" id="clienteEmailFactura">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 3: Detalle y Pagos -->
+                    <div id="step3" class="step-pane" style="display: none;">
+                        <div class="row">
+                            <!-- Panel Izquierdo: Productos -->
+                            <div class="col-md-7">
+                                <div class="card shadow">
+                                    <div class="card-header bg-dark text-white">
+                                        <h5 class="mb-0">
+                                            <i class="ri-shopping-cart-line"></i> Productos del Ticket
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>SKU</th>
+                                                        <th>Producto</th>
+                                                        <th>Talla</th>
+                                                        <th>Cant.</th>
+                                                        <th>Precio</th>
+                                                        <th>Subtotal</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="tablaProductos">
+                                                    <tr>
+                                                        <td colspan="6" class="text-center py-4">
+                                                            <i class="ri-shopping-cart-line display-4 text-muted"></i>
+                                                            <p class="text-muted mt-2">Seleccione un ticket para ver los productos</p>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Panel Derecho: Pagos -->
+                            <div class="col-md-5">
+                                <div class="card shadow mb-3">
+                                    <div class="card-header bg-success text-white">
+                                        <h5 class="mb-0">
+                                            <i class="ri-wallet-3-line"></i> Métodos de Pago
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-success w-100" onclick="agregarPago('EFECTIVO')">
+                                                    <i class="ri-cash-line"></i><br>Efectivo
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-primary w-100" onclick="agregarPago('TARJETA_DEBITO')">
+                                                    <i class="ri-bank-card-line"></i><br>Débito
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-info w-100" onclick="agregarPago('TARJETA_CREDITO')">
+                                                    <i class="ri-bank-card-2-line"></i><br>Crédito
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-warning w-100" onclick="agregarPago('TRANSFERENCIA')">
+                                                    <i class="ri-exchange-line"></i><br>Transfer.
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Lista de pagos -->
+                                        <div class="mt-3">
+                                            <h6>Pagos Registrados</h6>
+                                            <div id="listaPagos">
+                                                <div class="text-center text-muted py-3">
+                                                    <i class="ri-wallet-line"></i>
+                                                    <p class="mb-0 small">No hay pagos registrados</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Resumen -->
+                                <div class="card shadow sticky-top">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">
+                                            <i class="ri-calculator-line"></i> Resumen de Venta
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Items:</span>
+                                            <strong id="totalItems">0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Subtotal:</span>
+                                            <strong id="subtotal">$0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Descuento:</span>
+                                            <strong id="descuento">$0</strong>
+                                        </div>
+                                        <hr>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="h6">Total:</span>
+                                            <strong class="h6 text-primary" id="total">$0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Pagado:</span>
+                                            <strong class="text-success" id="pagado">$0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span>Saldo:</span>
+                                            <strong class="text-danger" id="saldo">$0</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PASO 4: Confirmación -->
+                    <div id="step4" class="step-pane" style="display: none;">
+                        <div class="row justify-content-center">
+                            <div class="col-md-8">
+                                <div class="card shadow">
+                                    <div class="card-header bg-success text-white">
+                                        <h4 class="mb-0">
+                                            <i class="ri-check-double-line"></i> Confirmación de Venta
+                                        </h4>
+                                    </div>
+                                    <div class="card-body p-4">
+                                        <!-- Selector de documento -->
+                                        <div class="mb-4">
+                                            <label class="form-label fw-medium">Tipo de Documento</label>
+                                            <select class="form-select form-select-lg" id="tipoDocumento">
+                                                <option value="TICKET">Ticket Simple</option>
+                                                <option value="BOLETA">Boleta</option>
+                                                <option value="BOLETA_ELECTRONICA" selected>Boleta Electrónica</option>
+                                                <option value="FACTURA">Factura Electrónica</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Preview del documento -->
+                                        <div class="border rounded p-4 mb-4 bg-light" id="previewDocumento">
+                                            <div class="text-center">
+                                                <i class="ri-file-text-line display-4 text-muted"></i>
+                                                <p class="text-muted">Vista previa del documento</p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Acciones finales -->
+                                        <div class="row g-2">
+                                            <div class="col-md-4">
+                                                <button class="btn btn-success btn-lg w-100" onclick="finalizarVenta()">
+                                                    <i class="ri-check-line"></i> Finalizar
+                                                </button>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <button class="btn btn-primary btn-lg w-100" onclick="imprimirYFinalizar()">
+                                                    <i class="ri-printer-line"></i> Imprimir
+                                                </button>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <button class="btn btn-info btn-lg w-100" onclick="enviarPorEmail()">
+                                                    <i class="ri-mail-line"></i> Email
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navegación del Wizard -->
+                <div class="wizard-footer mt-4">
+                    <div class="row">
+                        <div class="col">
+                            <button class="btn btn-outline-secondary" id="btnAnterior" onclick="pasoAnterior()" disabled>
+                                <i class="ri-arrow-left-line"></i> Anterior
+                            </button>
+                        </div>
+                        <div class="col text-center">
+                            <button class="btn btn-outline-danger" onclick="volverAlDashboard()">
+                                <i class="ri-dashboard-line"></i> Dashboard
+                            </button>
+                        </div>
+                        <div class="col text-end">
+                            <button class="btn btn-primary" id="btnSiguiente" onclick="pasoSiguiente()">
+                                Siguiente <i class="ri-arrow-right-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+ 
+
+<!-- Modales -->
+
+<!-- Modal de Pago -->
+<div class="modal fade" id="modalPago" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-wallet-line"></i> Agregar Pago
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formPago">
+                    <div class="mb-3">
+                        <label class="form-label">Método de Pago</label>
+                        <input type="text" class="form-control" id="pagoMetodo" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Monto *</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="pagoMonto" required min="1">
+                        </div>
+                    </div>
+                    <div class="mb-3" id="campoTarjeta" style="display: none;">
+                        <label class="form-label">Tipo de Tarjeta</label>
+                        <select class="form-select" id="pagoTipoTarjeta">
+                            <option value="">Seleccionar...</option>
+                            <option value="VISA">Visa</option>
+                            <option value="MASTERCARD">Mastercard</option>
+                            <option value="AMEX">American Express</option>
+                            <option value="DINERS">Diners Club</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="campoVoucher" style="display: none;">
+                        <label class="form-label">N° Voucher/Autorización</label>
+                        <input type="text" class="form-control" id="pagoVoucher" placeholder="Opcional">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notas</label>
+                        <textarea class="form-control" id="pagoNotas" rows="2" placeholder="Observaciones del pago (opcional)"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="confirmarPago()">
+                    <i class="ri-check-line"></i> Confirmar Pago
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CSS Personalizado -->
+<style>
+/* Action Cards */
+.action-card {
+    transition: all 0.3s ease;
+    border: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+}
+
+.action-card .action-overlay {
+    position: absolute;
+    bottom: -50px;
+    left: 0;
+    right: 0;
+    background: rgba(255,255,255,0.95);
+    padding: 10px;
+    transition: all 0.3s ease;
+}
+
+.action-card:hover .action-overlay {
+    bottom: 0;
+}
+
+/* Stepper */
+.stepper-wrapper {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.stepper-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+}
+
+.stepper-item:not(:last-child):after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 2px;
+    background-color: #dee2e6;
+    top: 20px;
+    left: 50%;
+    z-index: 1;
+}
+
+.stepper-item.active:not(:last-child):after,
+.stepper-item.completed:not(:last-child):after {
+    background-color: #0d6efd;
+}
+
+.step-counter {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #dee2e6;
+    color: #6c757d;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.stepper-item.active .step-counter,
+.stepper-item.completed .step-counter {
+    background-color: #0d6efd;
+    color: white;
+}
+
+.step-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6c757d;
+}
+
+.stepper-item.active .step-name,
+.stepper-item.completed .step-name {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+/* Utilidades */
+.border-left-primary {
+    border-left: 4px solid #0d6efd !important;
+}
+
+.border-left-warning {
+    border-left: 4px solid #ffc107 !important;
+}
+
+.border-left-success {
+    border-left: 4px solid #198754 !important;
+}
+
+.border-left-info {
+    border-left: 4px solid #0dcaf0 !important;
+}
+
+/* Botones de acción de tickets */
+.btn-group .btn {
+    margin-right: 2px;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+
+.btn-group .btn i {
+    font-size: 14px;
+}
+
+.bg-soft {
+    background-color: rgba(13, 110, 253, 0.1) !important;
+}
+
+.divider-text {
+    position: relative;
+    text-align: center;
+    margin: 20px 0;
+    color: #6c757d;
+}
+
+.divider-text:before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #dee2e6;
+}
+
+.divider-text span {
+    background: white;
+    padding: 0 15px;
+}
+
+/* Estilos para selector de tipo de documento */
+.form-check-card {
+    position: relative;
+}
+
+.form-check-card .form-check-input {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+}
+
+.form-check-card .card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid #dee2e6;
+    height: 100%;
+}
+
+.form-check-card .card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+    transform: translateY(-2px);
+}
+
+.form-check-card .form-check-input:checked + .card {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.05);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25);
+}
+
+.form-check-card .form-check-input:disabled + .card {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+}
+
+.form-check-card .form-check-input:disabled + .card:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: #dee2e6;
+}
+
+/* Campos requeridos */
+.text-danger {
+    color: #dc3545 !important;
+}
+
+.form-label.text-danger::after {
+    content: ' *';
+    color: #dc3545;
+}
+</style>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables globales
+    let pasoActual = 1;
+    let ticketActual = null;
+    let clienteActual = null;
+    let pagosActuales = [];
+    let estadisticasDashboard = {};
+
+    // URLs de API
+    const apiUrls = {
+        dashboard: '{% url "dashboard_stats" %}',
+        buscarTicket: '{% url "buscar_ticket_pos" %}',
+        crearTicket: '{% url "crear_ticket" %}',
+        registrarPagos: (correlativo) => `{% url 'registrar_pagos_ticket' correlativo=0 %}`.replace('/0/', `/${correlativo}/`),
+        validarRut: '{% url "validar_rut_cliente" %}',
+        buscarCliente: '{% url "buscar_cliente_rut" %}',
+        verificarCorrelativos: '{% url "verificar_correlativos_disponibles" %}'
+    };
+
+    // Inicialización
+    inicializarDashboard();
+
+    // === FUNCIONES DEL DASHBOARD ===
+    
+    function inicializarDashboard() {
+        mostrarVista('dashboard');
+        actualizarDashboard();
+    }
+
+    function actualizarDashboard() {
+        // Cargar estadísticas del día
+        fetch(apiUrls.dashboard)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    estadisticasDashboard = data.stats;
+                    actualizarKPIs(data.stats);
+                    cargarTicketsDelDia(data.tickets);
+                } else {
+                    console.error('Error en dashboard:', data.error);
+                    mostrarNotificacion(data.error || 'Error al cargar dashboard', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error al cargar dashboard:', error);
+                mostrarNotificacion('Error al cargar estadísticas. Verifique que tenga una sucursal seleccionada.', 'error');
+            });
+    }
+
+    function actualizarKPIs(stats) {
+        document.getElementById('ventasHoy').querySelector('.counter-value').textContent = formatearMoneda(stats.ventas_hoy || 0);
+        document.getElementById('ticketsPendientes').querySelector('.counter-value').textContent = stats.tickets_pendientes || 0;
+        document.getElementById('ticketsPagados').querySelector('.counter-value').textContent = stats.tickets_pagados || 0;
+        document.getElementById('promedioVenta').querySelector('.counter-value').textContent = formatearMoneda(stats.promedio_venta || 0);
+    }
+
+    function cargarTicketsDelDia(tickets) {
+        const tbody = document.getElementById('tbodyTickets');
+        if (!tickets || tickets.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-4">
+                        <i class="ri-inbox-line display-4 text-muted"></i>
+                        <p class="text-muted mt-2">No hay tickets registrados hoy</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = tickets.map(ticket => `
+            <tr>
+                <td>
+                    <span class="fw-medium">#${ticket.correlativo}</span>
+                </td>
+                <td>${ticket.hora}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-xs me-2">
+                            <span class="avatar-title rounded-circle bg-soft text-primary">
+                                ${(ticket.cliente_nombre || 'Cliente').charAt(0).toUpperCase()}
+                            </span>
+                        </div>
+                        <div>
+                            <h6 class="mb-0 fs-14">${ticket.cliente_nombre || 'Sin nombre'}</h6>
+                            <p class="mb-0 text-muted fs-12">${ticket.cliente_rut || ''}</p>
+                        </div>
+                    </div>
+                </td>
+                <td>${ticket.vendedor_nombre}</td>
+                <td>
+                    <span class="fw-medium">${formatearMoneda(ticket.total)}</span>
+                </td>
+                <td>
+                    <span class="badge ${obtenerClaseEstado(ticket.estado)}">${ticket.estado}</span>
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editarTicket(${ticket.correlativo})" title="Editar Ticket">
+                            <i class="ri-edit-line"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" onclick="pagarTicket(${ticket.correlativo})" title="Pagar Ticket">
+                            <i class="ri-wallet-line"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" onclick="imprimirTicket(${ticket.correlativo})" title="Reimprimir">
+                            <i class="ri-printer-line"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // === FUNCIONES DEL WIZARD ===
+
+    function iniciarNuevaVenta() {
+        mostrarVista('wizard');
+        reiniciarWizard();
+        irAPaso(1);
+    }
+
+    function buscarTicket() {
+        mostrarVista('wizard');
+        reiniciarWizard();
+        irAPaso(1);
+        document.getElementById('inputTicket').focus();
+    }
+
+    function mostrarVista(vista) {
+        document.getElementById('dashboard-view').style.display = vista === 'dashboard' ? 'block' : 'none';
+        document.getElementById('wizard-view').style.display = vista === 'wizard' ? 'block' : 'none';
+    }
+
+    function reiniciarWizard() {
+        pasoActual = 1;
+        ticketActual = null;
+        clienteActual = null;
+        pagosActuales = [];
+        
+        // Limpiar formularios
+        document.getElementById('inputTicket').value = '';
+        document.getElementById('formCliente').reset();
+        
+        // Actualizar UI
+        actualizarProgreso();
+        actualizarStepper();
+        actualizarBotones();
+    }
+
+    function irAPaso(paso) {
+        // Ocultar todos los pasos
+        for (let i = 1; i <= 4; i++) {
+            document.getElementById(`step${i}`).style.display = 'none';
+        }
+        
+        // Mostrar paso actual
+        document.getElementById(`step${paso}`).style.display = 'block';
+        pasoActual = paso;
+        
+        // Si es el paso 2, cargar correlativos disponibles
+        if (paso === 2) {
+            cargarCorrelativos();
+        }
+        
+        actualizarProgreso();
+        actualizarStepper();
+        actualizarBotones();
+    }
+
+    function cargarCorrelativos() {
+        fetch(apiUrls.verificarCorrelativos)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    actualizarEstadoCorrelativos(data.correlativos);
+                } else {
+                    console.error('Error al cargar correlativos:', data.error);
+                    mostrarNotificacion('Error al verificar correlativos disponibles', 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarNotificacion('Error al verificar correlativos', 'error');
+            });
+    }
+
+    function actualizarEstadoCorrelativos(correlativos) {
+        const tipos = ['TICKET', 'BOLETA_ELECTRONICA', 'FACTURA_ELECTRONICA', 'BOLETA'];
+        
+        tipos.forEach(tipo => {
+            const elemento = document.getElementById(`correlativos-${tipo}`);
+            if (elemento && correlativos[tipo]) {
+                const info = correlativos[tipo];
+                
+                // Limpiar clases anteriores
+                elemento.className = 'badge';
+                
+                if (info.disponible) {
+                    if (info.estado === 'critico') {
+                        elemento.className += ' bg-warning text-dark';
+                        elemento.innerHTML = `<i class="ri-alert-line"></i> Crítico (${info.disponibles})`;
+                    } else if (info.estado === 'activo') {
+                        elemento.className += ' bg-success';
+                        elemento.innerHTML = `<i class="ri-check-line"></i> Disponible (${info.disponibles})`;
+                    }
+                } else {
+                    elemento.className += ' bg-danger';
+                    elemento.innerHTML = `<i class="ri-close-line"></i> Agotado`;
+                    
+                    // Deshabilitar la opción si no hay correlativos
+                    const radioButton = document.getElementById(`tipo${tipo.charAt(0) + tipo.slice(1).toLowerCase().replace('_', '')}`);
+                    if (radioButton) {
+                        radioButton.disabled = true;
+                        radioButton.parentElement.style.opacity = '0.5';
+                    }
+                }
+                
+                // Agregar tooltip con información adicional
+                elemento.title = `Rango: ${info.rango || 'N/A'} | Consumo: ${info.porcentaje_consumo || 0}%`;
+            }
+        });
+    }
+
+    function pasoSiguiente() {
+        if (validarPasoActual()) {
+            if (pasoActual < 4) {
+                irAPaso(pasoActual + 1);
+            } else {
+                finalizarVenta();
+            }
+        }
+    }
+
+    function pasoAnterior() {
+        if (pasoActual > 1) {
+            irAPaso(pasoActual - 1);
+        }
+    }
+
+    function validarPasoActual() {
+        switch (pasoActual) {
+            case 1:
+                if (!ticketActual) {
+                    mostrarNotificacion('Debe seleccionar o crear un ticket', 'warning');
+                    return false;
+                }
+                return true;
+            case 2:
+                return validarDatosCliente();
+            case 3:
+                return validarPagos();
+            case 4:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    function actualizarProgreso() {
+        const progreso = (pasoActual / 4) * 100;
+        document.getElementById('wizardProgress').style.width = `${progreso}%`;
+        document.getElementById('pasoActual').textContent = pasoActual;
+        
+        const titulos = ['Seleccionar Ticket', 'Datos Cliente', 'Métodos de Pago', 'Confirmación'];
+        document.getElementById('tituloPaso').textContent = titulos[pasoActual - 1];
+    }
+
+    function actualizarStepper() {
+        const items = document.querySelectorAll('.stepper-item');
+        items.forEach((item, index) => {
+            const paso = index + 1;
+            item.classList.remove('active', 'completed');
+            
+            if (paso < pasoActual) {
+                item.classList.add('completed');
+            } else if (paso === pasoActual) {
+                item.classList.add('active');
+            }
+        });
+    }
+
+    function actualizarBotones() {
+        document.getElementById('btnAnterior').disabled = pasoActual === 1;
+        
+        const btnSiguiente = document.getElementById('btnSiguiente');
+        if (pasoActual === 4) {
+            btnSiguiente.innerHTML = '<i class="ri-check-line"></i> Finalizar Venta';
+        } else {
+            btnSiguiente.innerHTML = 'Siguiente <i class="ri-arrow-right-line"></i>';
+        }
+    }
+
+    // === FUNCIONES DE TICKET ===
+
+    function buscarTicketPorNumero() {
+        const correlativo = document.getElementById('inputTicket').value.trim();
+        if (!correlativo) {
+            mostrarNotificacion('Ingrese un número de ticket', 'warning');
+            return;
+        }
+
+        fetch(apiUrls.buscarTicket, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ correlativo }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                cargarTicket(data.ticket);
+                mostrarNotificacion('Ticket cargado correctamente', 'success');
+                pasoSiguiente();
+            } else {
+                mostrarNotificacion(data.error || 'Ticket no encontrado', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarNotificacion('Error al buscar el ticket', 'error');
+        });
+    }
+
+    function crearNuevoTicket() {
+        // Redirigir a la página de creación de tickets
+        window.location.href = '/ventas/ticket/';
+    }
+
+    function cargarTicket(ticket) {
+        ticketActual = ticket;
+        
+        // Cargar datos del cliente
+        if (ticket.cliente) {
+            clienteActual = ticket.cliente;
+            llenarFormularioCliente(ticket.cliente);
+        }
+        
+        // Cargar pagos
+        pagosActuales = ticket.pagos || [];
+        
+        // Actualizar UI
+        cargarProductosTicket(ticket.productos);
+        actualizarListaPagos();
+        actualizarResumenVenta();
+    }
+
+    function cargarProductosTicket(productos) {
+        const tbody = document.getElementById('tablaProductos');
+        if (!productos || productos.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-4">
+                        <i class="ri-shopping-cart-line display-4 text-muted"></i>
+                        <p class="text-muted mt-2">No hay productos en este ticket</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = productos.map(producto => `
+            <tr>
+                <td><code>${producto.sku}</code></td>
+                <td>
+                    <div>
+                        <h6 class="mb-0 fs-14">${producto.articulo}</h6>
+                        <small class="text-muted">${producto.descripcion}</small>
+                    </div>
+                </td>
+                <td><span class="badge bg-info">${producto.talla}</span></td>
+                <td class="text-center">${producto.cantidad}</td>
+                <td class="text-end">${formatearMoneda(producto.precio_unitario)}</td>
+                <td class="text-end fw-medium">${formatearMoneda(producto.subtotal)}</td>
+            </tr>
+        `).join('');
+    }
+
+    // === FUNCIONES DE CLIENTE ===
+
+    function buscarClientePorRut() {
+        const rut = document.getElementById('buscarRut').value.trim();
+        if (!rut) {
+            mostrarNotificacion('Ingrese un RUT', 'warning');
+            return;
+        }
+
+        if (!validarRutChileno(rut)) {
+            document.getElementById('rutError').textContent = 'RUT inválido';
+            document.getElementById('buscarRut').classList.add('is-invalid');
+            return;
+        }
+
+        document.getElementById('buscarRut').classList.remove('is-invalid');
+        document.getElementById('rutError').textContent = '';
+
+        // Buscar cliente en la base de datos
+        fetch(`${apiUrls.buscarCliente}?rut=${encodeURIComponent(rut)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.cliente) {
+                    llenarFormularioCliente(data.cliente);
+                    document.getElementById('clienteEncontrado').classList.remove('d-none');
+                    mostrarNotificacion('Cliente encontrado', 'success');
+                } else {
+                    document.getElementById('clienteEncontrado').classList.add('d-none');
+                    // Llenar solo el RUT formateado
+                    document.getElementById('clienteRut').value = formatearRut(rut);
+                    mostrarNotificacion('Cliente no encontrado, puede crear uno nuevo', 'info');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarNotificacion('Error al buscar cliente', 'error');
+            });
+    }
+
+    function llenarFormularioCliente(cliente) {
+        document.getElementById('clienteNombre').value = cliente.nombre || '';
+        document.getElementById('clienteRut').value = cliente.rut || '';
+        document.getElementById('clienteEmail').value = cliente.email || '';
+        document.getElementById('clienteTelefono').value = cliente.telefono || '';
+        document.getElementById('clienteGiro').value = cliente.giro || '';
+        document.getElementById('clienteComuna').value = cliente.comuna || '';
+        document.getElementById('clienteCiudad').value = cliente.ciudad || '';
+        document.getElementById('clienteDireccion').value = cliente.direccion || '';
+        document.getElementById('clienteTelefono2').value = cliente.telefono_secundario || '';
+        document.getElementById('clienteEmailFactura').value = cliente.email_facturacion || '';
+    }
+
+    function validarDatosCliente() {
+        const nombre = document.getElementById('clienteNombre').value.trim();
+        const rut = document.getElementById('clienteRut').value.trim();
+
+        if (!nombre) {
+            mostrarNotificacion('El nombre del cliente es obligatorio', 'warning');
+            document.getElementById('clienteNombre').focus();
+            return false;
+        }
+
+        if (!rut || !validarRutChileno(rut)) {
+            mostrarNotificacion('Ingrese un RUT válido', 'warning');
+            document.getElementById('clienteRut').focus();
+            return false;
+        }
+
+        return true;
+    }
+
+    // === FUNCIONES DE PAGOS ===
+
+    function agregarPago(metodo) {
+        document.getElementById('pagoMetodo').value = metodo;
+        
+        // Mostrar/ocultar campos según el método
+        const campoTarjeta = document.getElementById('campoTarjeta');
+        const campoVoucher = document.getElementById('campoVoucher');
+        
+        if (metodo.includes('TARJETA')) {
+            campoTarjeta.style.display = 'block';
+            campoVoucher.style.display = 'block';
+        } else {
+            campoTarjeta.style.display = 'none';
+            campoVoucher.style.display = 'none';
+        }
+
+        // Calcular monto sugerido (saldo pendiente)
+        const saldoPendiente = calcularSaldoPendiente();
+        if (saldoPendiente > 0) {
+            document.getElementById('pagoMonto').value = saldoPendiente;
+        }
+
+        // Mostrar modal
+        new bootstrap.Modal(document.getElementById('modalPago')).show();
+    }
+
+    function confirmarPago() {
+        const metodo = document.getElementById('pagoMetodo').value;
+        const monto = parseInt(document.getElementById('pagoMonto').value) || 0;
+        const tipoTarjeta = document.getElementById('pagoTipoTarjeta').value;
+        const voucher = document.getElementById('pagoVoucher').value.trim();
+        const notas = document.getElementById('pagoNotas').value.trim();
+
+        if (monto <= 0) {
+            mostrarNotificacion('Ingrese un monto válido', 'warning');
+            return;
+        }
+
+        const pago = {
+            metodo_pago: metodo,
+            monto: monto,
+            tipo_tarjeta: tipoTarjeta,
+            voucher: voucher,
+            notas: notas
+        };
+
+        pagosActuales.push(pago);
+        actualizarListaPagos();
+        actualizarResumenVenta();
+
+        // Cerrar modal y limpiar formulario
+        bootstrap.Modal.getInstance(document.getElementById('modalPago')).hide();
+        document.getElementById('formPago').reset();
+
+        mostrarNotificacion('Pago agregado correctamente', 'success');
+    }
+
+    function actualizarListaPagos() {
+        const container = document.getElementById('listaPagos');
+        
+        if (pagosActuales.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="ri-wallet-line"></i>
+                    <p class="mb-0 small">No hay pagos registrados</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = pagosActuales.map((pago, index) => `
+            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+                <div>
+                    <strong>${obtenerNombreMetodoPago(pago.metodo_pago)}</strong>
+                    <br>
+                    <small class="text-muted">${formatearMoneda(pago.monto)}</small>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarPago(${index})">
+                    <i class="ri-delete-bin-line"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    function eliminarPago(index) {
+        pagosActuales.splice(index, 1);
+        actualizarListaPagos();
+        actualizarResumenVenta();
+        mostrarNotificacion('Pago eliminado', 'info');
+    }
+
+    function validarPagos() {
+        const saldo = calcularSaldoPendiente();
+        if (saldo > 0) {
+            mostrarNotificacion('Aún queda saldo por pagar: ' + formatearMoneda(saldo), 'warning');
+            return false;
+        }
+        return true;
+    }
+
+    // === FUNCIONES DE RESUMEN ===
+
+    function actualizarResumenVenta() {
+        if (!ticketActual) return;
+
+        const totales = ticketActual.totales || {};
+        const totalPagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
+        const saldo = (totales.total || 0) - totalPagado;
+
+        document.getElementById('totalItems').textContent = totales.items || 0;
+        document.getElementById('subtotal').textContent = formatearMoneda(totales.subtotal || totales.total || 0);
+        document.getElementById('descuento').textContent = formatearMoneda(totales.descuento || 0);
+        document.getElementById('total').textContent = formatearMoneda(totales.total || 0);
+        document.getElementById('pagado').textContent = formatearMoneda(totalPagado);
+        document.getElementById('saldo').textContent = formatearMoneda(saldo);
+
+        // Cambiar color del saldo
+        const saldoElement = document.getElementById('saldo');
+        saldoElement.className = saldo > 0 ? 'text-danger' : 'text-success';
+    }
+
+    function calcularSaldoPendiente() {
+        if (!ticketActual) return 0;
+        const total = ticketActual.totales?.total || 0;
+        const pagado = pagosActuales.reduce((sum, pago) => sum + (pago.monto || 0), 0);
+        return Math.max(0, total - pagado);
+    }
+
+    // === FUNCIONES DE FINALIZACIÓN ===
+
+    function finalizarVenta() {
+        if (!ticketActual) {
+            mostrarNotificacion('No hay ticket seleccionado', 'error');
+            return;
+        }
+
+        const payload = {
+            correlativo: ticketActual.ticket_id,
+            cliente: obtenerDatosCliente(),
+            pagos: pagosActuales,
+            tipo_documento: document.getElementById('tipoDocumento').value,
+            estado: 'PAGADO',
+            metodo_pago_principal: pagosActuales.length > 0 ? pagosActuales[0].metodo_pago : 'EFECTIVO'
+        };
+
+        fetch(apiUrls.registrarPagos(ticketActual.ticket_id), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarNotificacion('Venta finalizada correctamente', 'success');
+                setTimeout(() => {
+                    volverAlDashboard();
+                    actualizarDashboard();
+                }, 2000);
+            } else {
+                mostrarNotificacion(data.error || 'Error al finalizar la venta', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarNotificacion('Error al finalizar la venta', 'error');
+        });
+    }
+
+    function obtenerDatosCliente() {
+        return {
+            nombre: document.getElementById('clienteNombre').value.trim(),
+            rut: document.getElementById('clienteRut').value.trim(),
+            email: document.getElementById('clienteEmail').value.trim(),
+            telefono: document.getElementById('clienteTelefono').value.trim(),
+            giro: document.getElementById('clienteGiro').value.trim(),
+            comuna: document.getElementById('clienteComuna').value.trim(),
+            ciudad: document.getElementById('clienteCiudad').value.trim(),
+            direccion: document.getElementById('clienteDireccion').value.trim(),
+            telefono_secundario: document.getElementById('clienteTelefono2').value.trim(),
+            email_facturacion: document.getElementById('clienteEmailFactura').value.trim(),
+        };
+    }
+
+    // === FUNCIONES DE NAVEGACIÓN ===
+
+    function volverAlDashboard() {
+        mostrarVista('dashboard');
+        actualizarDashboard();
+    }
+
+    function cancelarVenta() {
+        if (confirm('¿Está seguro de cancelar la venta? Se perderán todos los cambios.')) {
+            volverAlDashboard();
+        }
+    }
+
+    function verReportes() {
+        // Mostrar opciones de reportes
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Reportes de Ventas',
+                html: `
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="window.location.href='{% url "gestion_ventas_documentos" %}'">
+                            <i class="ri-file-search-line"></i> Consultar Documentos
+                        </button>
+                        <button class="btn btn-info" onclick="Swal.close(); mostrarNotificacion('Funcionalidad en desarrollo', 'info')">
+                            <i class="ri-bar-chart-line"></i> Reportes Estadísticos
+                        </button>
+                        <button class="btn btn-success" onclick="Swal.close(); mostrarNotificacion('Funcionalidad en desarrollo', 'info')">
+                            <i class="ri-file-excel-line"></i> Exportar Datos
+                        </button>
+                    </div>
+                `,
+                showConfirmButton: false,
+                showCloseButton: true,
+                width: 400
+            });
+        } else {
+            // Fallback si no hay SweetAlert
+            window.location.href = '{% url "gestion_ventas_documentos" %}';
+        }
+    }
+
+    // === FUNCIONES DE GESTIÓN DE TICKETS ===
+
+    function editarTicket(correlativo) {
+        // Cargar el ticket en el wizard para editarlo
+        document.getElementById('inputTicket').value = correlativo;
+        buscarTicketPorNumero();
+    }
+
+    function pagarTicket(correlativo) {
+        // Cargar el ticket y ir directamente al paso de pagos
+        document.getElementById('inputTicket').value = correlativo;
+        
+        // Buscar el ticket y luego ir al paso 3 (pagos)
+        fetch(apiUrls.buscarTicket, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ correlativo }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarVista('wizard');
+                cargarTicket(data.ticket);
+                irAPaso(3); // Ir directamente al paso de pagos
+                mostrarNotificacion('Ticket cargado para pago', 'success');
+            } else {
+                mostrarNotificacion(data.error || 'Ticket no encontrado', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarNotificacion('Error al cargar el ticket', 'error');
+        });
+    }
+
+    function imprimirTicket(correlativo) {
+        // Abrir ventana de impresión del ticket
+        const url = `/pos/ticket/${correlativo}/imprimir/`;
+        window.open(url, '_blank', 'width=800,height=600');
+    }
+
+    // === FUNCIONES DE UTILIDAD ===
+
+    function formatearMoneda(valor) {
+        const numero = parseInt(valor || 0, 10);
+        return '$' + numero.toLocaleString('es-CL');
+    }
+
+    function obtenerClaseEstado(estado) {
+        const clases = {
+            'PENDIENTE': 'bg-warning text-dark',
+            'PAGADO': 'bg-success',
+            'ANULADO': 'bg-secondary',
+            'DEVUELTO': 'bg-danger'
+        };
+        return clases[estado] || 'bg-info';
+    }
+
+    function obtenerNombreMetodoPago(metodo) {
+        const nombres = {
+            'EFECTIVO': 'Efectivo',
+            'TARJETA_DEBITO': 'Tarjeta Débito',
+            'TARJETA_CREDITO': 'Tarjeta Crédito',
+            'TRANSFERENCIA': 'Transferencia'
+        };
+        return nombres[metodo] || metodo;
+    }
+
+    function mostrarNotificacion(mensaje, tipo = 'info') {
+        // Usar SweetAlert2 si está disponible, sino alert simple
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                text: mensaje,
+                icon: tipo === 'error' ? 'error' : tipo === 'success' ? 'success' : tipo === 'warning' ? 'warning' : 'info',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 3000,
+                timerProgressBar: true
+            });
+        } else {
+            alert(mensaje);
+        }
+    }
+
+    // === VALIDACIÓN RUT CHILENO ===
+
+    function validarRutChileno(rut) {
+        // Limpiar RUT
+        const rutLimpio = rut.replace(/[^0-9kK]/g, '');
+        
+        if (rutLimpio.length < 2) return false;
+        
+        const cuerpo = rutLimpio.slice(0, -1);
+        const dv = rutLimpio.slice(-1).toLowerCase();
+        
+        // Calcular dígito verificador
+        let suma = 0;
+        let multiplicador = 2;
+        
+        for (let i = cuerpo.length - 1; i >= 0; i--) {
+            suma += parseInt(cuerpo[i]) * multiplicador;
+            multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
+        }
+        
+        const resto = suma % 11;
+        const dvCalculado = resto === 0 ? '0' : resto === 1 ? 'k' : (11 - resto).toString();
+        
+        return dv === dvCalculado;
+    }
+
+    function formatearRut(rut) {
+        const rutLimpio = rut.replace(/[^0-9kK]/g, '');
+        if (rutLimpio.length < 2) return rut;
+        
+        const cuerpo = rutLimpio.slice(0, -1);
+        const dv = rutLimpio.slice(-1);
+        
+        // Formatear con puntos
+        const cuerpoFormateado = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        
+        return `${cuerpoFormateado}-${dv}`;
+    }
+
+    // Event listeners
+    document.getElementById('inputTicket').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            buscarTicketPorNumero();
+        }
+    });
+
+    document.getElementById('buscarRut').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            buscarClientePorRut();
+        }
+    });
+
+    // Formatear RUT mientras se escribe
+    document.getElementById('buscarRut').addEventListener('input', function(e) {
+        const valor = e.target.value;
+        if (valor.length > 1) {
+            e.target.value = formatearRut(valor);
+        }
+    });
+
+    document.getElementById('clienteRut').addEventListener('input', function(e) {
+        const valor = e.target.value;
+        if (valor.length > 1) {
+            e.target.value = formatearRut(valor);
+        }
+    });
+
+    // Event listeners para cambio de tipo de documento
+    document.addEventListener('change', function(e) {
+        if (e.target.name === 'tipoDocumento') {
+            actualizarInfoTipoDocumento(e.target.value);
+            actualizarRequerimientosCliente(e.target.value);
+        }
+    });
+
+    function actualizarInfoTipoDocumento(tipo) {
+        const infoElement = document.getElementById('infoTipoDocumento');
+        const requeridoElement = document.getElementById('requeridoCliente');
+        
+        const informacion = {
+            'TICKET': {
+                texto: '<strong>Ticket Simple:</strong> Ideal para ventas rápidas. No requiere datos del cliente.',
+                clase: 'alert-info',
+                requerido: '(Opcional para Ticket Simple)'
+            },
+            'BOLETA_ELECTRONICA': {
+                texto: '<strong>Boleta Electrónica:</strong> Documento tributario oficial. Requiere nombre y RUT del cliente.',
+                clase: 'alert-primary',
+                requerido: '(Requerido: Nombre y RUT)'
+            },
+            'FACTURA_ELECTRONICA': {
+                texto: '<strong>Factura Electrónica:</strong> Para empresas. Requiere razón social, RUT, giro y dirección completa.',
+                clase: 'alert-warning',
+                requerido: '(Requerido: Datos completos de empresa)'
+            },
+            'BOLETA': {
+                texto: '<strong>Boleta Papel:</strong> Documento físico tradicional. Requiere datos básicos del cliente.',
+                clase: 'alert-secondary',
+                requerido: '(Requerido: Nombre y RUT)'
+            }
+        };
+
+        if (informacion[tipo]) {
+            infoElement.className = `alert ${informacion[tipo].clase}`;
+            infoElement.innerHTML = `<i class="ri-information-line"></i> ${informacion[tipo].texto}`;
+            requeridoElement.textContent = informacion[tipo].requerido;
+        }
+    }
+
+    function actualizarRequerimientosCliente(tipo) {
+        const campos = {
+            nombre: document.getElementById('clienteNombre'),
+            rut: document.getElementById('clienteRut'),
+            email: document.getElementById('clienteEmail'),
+            telefono: document.getElementById('clienteTelefono')
+        };
+
+        // Limpiar requerimientos anteriores
+        Object.values(campos).forEach(campo => {
+            if (campo) {
+                campo.required = false;
+                campo.parentElement.querySelector('label').classList.remove('text-danger');
+            }
+        });
+
+        // Aplicar nuevos requerimientos
+        if (tipo === 'BOLETA_ELECTRONICA' || tipo === 'FACTURA_ELECTRONICA' || tipo === 'BOLETA') {
+            if (campos.nombre) {
+                campos.nombre.required = true;
+                campos.nombre.parentElement.querySelector('label').classList.add('text-danger');
+            }
+            if (campos.rut) {
+                campos.rut.required = true;
+                campos.rut.parentElement.querySelector('label').classList.add('text-danger');
+            }
+        }
+
+        if (tipo === 'FACTURA_ELECTRONICA') {
+            // Para facturas, mostrar automáticamente los datos adicionales
+            const datosFacturacion = document.getElementById('datosFacturacion');
+            if (datosFacturacion && !datosFacturacion.classList.contains('show')) {
+                new bootstrap.Collapse(datosFacturacion).show();
+            }
+        }
+    }
+
+    // Funciones globales para eventos onclick
+    window.iniciarNuevaVenta = iniciarNuevaVenta;
+    window.buscarTicket = buscarTicket;
+    window.verReportes = verReportes;
+    window.actualizarDashboard = actualizarDashboard;
+    window.pasoSiguiente = pasoSiguiente;
+    window.pasoAnterior = pasoAnterior;
+    window.volverAlDashboard = volverAlDashboard;
+    window.cancelarVenta = cancelarVenta;
+    window.buscarTicketPorNumero = buscarTicketPorNumero;
+    window.crearNuevoTicket = crearNuevoTicket;
+    window.buscarClientePorRut = buscarClientePorRut;
+    window.agregarPago = agregarPago;
+    window.confirmarPago = confirmarPago;
+    window.eliminarPago = eliminarPago;
+    window.finalizarVenta = finalizarVenta;
+    window.imprimirYFinalizar = function() { mostrarNotificacion('Funcionalidad en desarrollo', 'info'); };
+    window.enviarPorEmail = function() { mostrarNotificacion('Funcionalidad en desarrollo', 'info'); };
+    window.editarTicket = editarTicket;
+    window.pagarTicket = pagarTicket;
+    window.imprimirTicket = imprimirTicket;
+});
+</script>

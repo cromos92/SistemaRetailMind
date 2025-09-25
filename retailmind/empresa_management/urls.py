@@ -19,7 +19,9 @@ urlpatterns = [
     path('obtener_empresa/<int:empresa_id>/', views.obtener_empresa, name='obtener_empresa'),
     
     # Sucursales
+    path('empresas/<int:empresa_id>/sucursales/', views.listar_sucursales, name='listar_sucursales'),
     path('empresas/<int:empresa_id>/sucursales/crear/', views.crear_sucursal, name='crear_sucursal'),
+    path('sucursales/<int:sucursal_id>/editar/', views.editar_sucursal, name='editar_sucursal'),
     path('sucursales/<int:sucursal_id>/eliminar/', views.eliminar_sucursal, name='eliminar_sucursal'),
     
     # Contactos

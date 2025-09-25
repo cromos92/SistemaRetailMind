@@ -1,0 +1,923 @@
+{% load static %}
+<!-- /.modal -->
+{% include '../../layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include '../../layout/menu.html' %}
+
+<style>
+/* Estilos para controles de paginación y búsqueda */
+.pagination-controls {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #dee2e6;
+}
+
+.search-highlight {
+    background-color: #fff3cd;
+    font-weight: bold;
+}
+
+.page-info {
+    min-width: 120px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Responsive para controles */
+@media (max-width: 768px) {
+    .pagination-controls .row > div {
+        margin-bottom: 10px;
+    }
+    
+    .pagination-controls .btn-group {
+        width: 100%;
+    }
+    
+    .pagination-controls .btn-group .btn {
+        flex: 1;
+    }
+}
+
+th.sorting::after,
+th.sorting_asc::after,
+th.sorting_desc::after {
+    display: none !important;
+}
+.dataTables_filter input {
+    margin-left: auto;
+    display: inline-block;
+}
+
+/* Estilos para la gestión de DTEs */
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    background-color: #f8f9fa;
+}
+
+.modal-xl {
+    max-width: 1200px;
+}
+
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+/* Mejorar la apariencia de las tablas */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Estilos para badges */
+.badge {
+    font-size: 0.75em;
+    padding: 0.35em 0.65em;
+}
+
+/* Animaciones suaves */
+.modal.fade .modal-dialog {
+    transition: transform 0.3s ease-out;
+}
+
+.btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Estilos para formularios */
+.form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-label {
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Responsive para móviles */
+@media (max-width: 768px) {
+    .modal-xl {
+        max-width: 95%;
+        margin: 1rem auto;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+}
+
+</style>
+
+<!-- Loader global -->
+<div id="fullscreenLoader" style="
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    text-align: center;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mt-3 fw-bold">Cargando información, por favor espera...</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-white">
+                    <i class="bi bi-file-earmark-text me-2"></i>Gestión de DTEs (Ventas) - <span id="sucursalActual">Cargando...</span>
+                </h5>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success btn-sm" onclick="window.location.href='/app/emisionDTE/'">
+                        <i class="bi bi-plus-circle me-1"></i>Emitir Nuevo DTE
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <!-- Filtros -->
+                <form id="formBuscarDTE" class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label for="fechaInicio" class="form-label">Fecha de Inicio</label>
+                        <input type="date" class="form-control" id="fechaInicio" name="fecha_inicio">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="fechaFin" class="form-label">Fecha de Término</label>
+                        <input type="date" class="form-control" id="fechaFin" name="fecha_fin">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-search me-1"></i>Buscar
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Controles de búsqueda y paginación -->
+                <div class="row mb-3 pagination-controls">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchDTE" placeholder="Buscar por cliente, RUT, número documento, tipo, estado...">
+                            <button class="btn btn-outline-secondary" type="button" id="btnSearchDTE">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary pagination-btn" id="btnPrevPageDTE">
+                                <i class="bi bi-chevron-left"></i> Anterior
+                            </button>
+                            <span class="btn btn-outline-secondary page-info" id="pageInfoDTE">Página 1</span>
+                            <button type="button" class="btn btn-outline-primary pagination-btn" id="btnNextPageDTE">
+                                Siguiente <i class="bi bi-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de DTEs -->
+                <div class="table-responsive mb-4">
+                    <table class="table table-sm table-hover text-center align-middle w-100" id="tablaDTE"
+                        style="table-layout: fixed; font-size: 0.875rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="display: none;">ID</th>
+                                <th style="width: 15%;">Cliente</th>
+                                <th style="width: 10%;">RUT</th>
+                                <th style="width: 8%;">N° Doc</th>
+                                <th style="width: 10%;">Tipo</th>
+                                <th style="width: 8%;">F. Emisión</th>
+                                <th style="width: 8%;">F. Vencimiento</th>
+                                <th style="width: 10%;">Monto c/IVA</th>
+                                <th style="width: 8%;">Descuento</th>
+                                <th style="width: 8%;">Estado DTE</th>
+                                <th style="width: 8%;">Estado Pago</th>
+                                <th style="width: 7%;">Vendedor</th>
+                                <th style="width: 10%;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaDTEBody">
+                            <!-- Los datos se cargarán aquí via AJAX -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Información de resultados -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <small class="text-muted" id="infoResultados">Mostrando 0 resultados</small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <small class="text-muted">Solo se muestran DTEs de venta de tu sucursal</small>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal Detalle DTE -->
+<div class="modal fade" id="modalDetalleDTE" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-eye me-2"></i>Detalle DTE <span id="detalleNumeroDTE">-</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-4 mb-3">
+                    <div class="col-lg-4">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="text-primary fw-bold mb-3">Información General</h6>
+                            <div class="small">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Tipo</span>
+                                    <span id="detalleTipoDTE" class="fw-semibold">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Estado DTE</span>
+                                    <span id="detalleEstadoDTE" class="badge bg-secondary">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Estado Pago</span>
+                                    <span id="detalleEstadoPago" class="badge bg-secondary">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Fecha Emisión</span>
+                                    <span id="detalleFechaEmision">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Fecha Vencimiento</span>
+                                    <span id="detalleFechaVencimiento">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Sucursal</span>
+                                    <span id="detalleSucursal">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Vendedor</span>
+                                    <span id="detalleVendedor">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Responsable</span>
+                                    <span id="detalleResponsable">-</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Días Crédito</span>
+                                    <span id="detalleDiasCredito">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="text-primary fw-bold mb-3">Emisor</h6>
+                            <div class="small">
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">Nombre</span>
+                                    <span id="detalleEmisorNombre" class="fw-semibold">-</span>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">RUT</span>
+                                    <span id="detalleEmisorRut">-</span>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">Dirección</span>
+                                    <span id="detalleEmisorDireccion">-</span>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">Comuna</span>
+                                    <span id="detalleEmisorComuna">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-muted d-block">Ciudad</span>
+                                    <span id="detalleEmisorCiudad">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="text-primary fw-bold mb-3">Receptor</h6>
+                            <div class="small">
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">Nombre</span>
+                                    <span id="detalleReceptorNombre" class="fw-semibold">-</span>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">RUT</span>
+                                    <span id="detalleReceptorRut">-</span>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">Dirección</span>
+                                    <span id="detalleReceptorDireccion">-</span>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="text-muted d-block">Comuna</span>
+                                    <span id="detalleReceptorComuna">-</span>
+                                </div>
+                                <div>
+                                    <span class="text-muted d-block">Ciudad</span>
+                                    <span id="detalleReceptorCiudad">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="text-primary fw-bold">Productos Asociados</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="text-start" style="min-width: 160px;">Producto</th>
+                                    <th>SKU</th>
+                                    <th>Talla</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th class="text-end">Precio Unitario</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detalleProductosBody">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">Sin productos asociados</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="text-primary fw-bold">Pagos Registrados</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Método</th>
+                                    <th>Voucher</th>
+                                    <th>Tarjeta</th>
+                                    <th class="text-end">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detallePagosBody">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">Sin pagos registrados</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="border rounded p-3">
+                            <h6 class="text-primary fw-bold mb-3">Montos</h6>
+                            <div class="small">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Monto Neto</span>
+                                    <span id="detalleMontoNeto" class="fw-semibold">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Monto con IVA</span>
+                                    <span id="detalleMontoIVA" class="fw-semibold">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Descuento</span>
+                                    <span id="detalleDescuento" class="fw-semibold">$0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3">
+                            <h6 class="text-primary fw-bold mb-3">Estado de Pagos</h6>
+                            <div class="small">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Total Detalle</span>
+                                    <span id="detalleTotalDetalle" class="fw-semibold">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Notas de Crédito</span>
+                                    <span id="detalleNotasCredito" class="fw-semibold">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Total Pagado</span>
+                                    <span id="detalleTotalPagado" class="fw-semibold">$0</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-muted">Saldo Pendiente</span>
+                                    <span id="detalleSaldoPendiente" class="fw-semibold">$0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+    // Función para obtener cookies (necesaria para CSRF token)
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Funciones globales de loading
+    function showGlobalLoader() {
+        $('#fullscreenLoader').fadeIn(100);
+    }
+    
+    function hideGlobalLoader() {
+        $('#fullscreenLoader').fadeOut(100);
+    }
+
+    // Variables para paginación y búsqueda de DTE
+    let currentPageDTE = 1;
+    let currentSearchDTE = '';
+    let paginationInfoDTE = null;
+    let modalDetalleDTEInstance = null;
+
+    // Al cargar la página
+    $(document).ready(function () {
+        const hoy = new Date();
+        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        const formato = date => date.toISOString().split('T')[0];
+
+        $('#fechaInicio').val(formato(primerDiaMes));
+        $('#fechaFin').val(formato(hoy));
+
+        const modalElement = document.getElementById('modalDetalleDTE');
+        if (modalElement && window.bootstrap) {
+            modalDetalleDTEInstance = new bootstrap.Modal(modalElement, {
+                backdrop: 'static',
+                keyboard: true
+            });
+        }
+
+        // Cargar DTEs del mes actual al iniciar
+        setTimeout(function() {
+            cargarDTEs(1, '');
+        }, 500);
+    });
+
+    // Al buscar con el formulario
+    $('#formBuscarDTE').on('submit', function (e) {
+        e.preventDefault();
+        currentPageDTE = 1;
+        currentSearchDTE = '';
+        $('#searchDTE').val('');
+        cargarDTEs(1, '');
+    });
+
+    // Eventos para paginación de DTE
+    $('#btnPrevPageDTE').on('click', function() {
+        if (paginationInfoDTE && paginationInfoDTE.has_previous) {
+            cargarDTEs(currentPageDTE - 1, currentSearchDTE);
+        }
+    });
+
+    $('#btnNextPageDTE').on('click', function() {
+        if (paginationInfoDTE && paginationInfoDTE.has_next) {
+            cargarDTEs(currentPageDTE + 1, currentSearchDTE);
+        }
+    });
+
+    // Evento para búsqueda en DTE
+    $('#btnSearchDTE').on('click', function() {
+        const search = $('#searchDTE').val().trim();
+        currentSearchDTE = search;
+        currentPageDTE = 1;
+        cargarDTEs(1, search);
+    });
+
+    // Búsqueda al presionar Enter en DTE
+    $('#searchDTE').on('keypress', function(e) {
+        if (e.which === 13) {
+            $('#btnSearchDTE').click();
+        }
+    });
+
+    // Variable para evitar múltiples llamadas simultáneas
+    let cargandoDTEs = false;
+
+    function formatearMoneda(valor) {
+        const numero = Number(valor);
+        if (isNaN(numero)) {
+            return '$0';
+        }
+        return '$' + numero.toLocaleString('es-CL');
+    }
+
+    function actualizarBadgeEstado(elemento, valor, tipo) {
+        if (!elemento) return;
+
+        const claseBase = 'badge bg-';
+        let color = 'secondary';
+
+        if (tipo === 'dte') {
+            if (valor === 'ACEPTADO' || valor === 'EMITIDO') {
+                color = 'success';
+            } else if (valor === 'RECHAZADO' || valor === 'ANULADO') {
+                color = 'danger';
+            }
+        } else if (tipo === 'pago') {
+            if (valor === 'PAGADO') {
+                color = 'success';
+            } else if (valor === 'VENCIDO') {
+                color = 'danger';
+            } else if (valor === 'PENDIENTE') {
+                color = 'warning text-dark';
+            }
+        }
+
+        elemento.className = claseBase + color;
+        elemento.textContent = valor || '-';
+    }
+
+    function limpiarDetalleDTE() {
+        $('#detalleNumeroDTE').text('-');
+        $('#detalleTipoDTE').text('-');
+        actualizarBadgeEstado(document.getElementById('detalleEstadoDTE'), '-', 'dte');
+        actualizarBadgeEstado(document.getElementById('detalleEstadoPago'), '-', 'pago');
+        $('#detalleFechaEmision').text('-');
+        $('#detalleFechaVencimiento').text('-');
+        $('#detalleSucursal').text('-');
+        $('#detalleVendedor').text('-');
+        $('#detalleResponsable').text('-');
+        $('#detalleDiasCredito').text('-');
+
+        $('#detalleEmisorNombre').text('-');
+        $('#detalleEmisorRut').text('-');
+        $('#detalleEmisorDireccion').text('-');
+        $('#detalleEmisorComuna').text('-');
+        $('#detalleEmisorCiudad').text('-');
+
+        $('#detalleReceptorNombre').text('-');
+        $('#detalleReceptorRut').text('-');
+        $('#detalleReceptorDireccion').text('-');
+        $('#detalleReceptorComuna').text('-');
+        $('#detalleReceptorCiudad').text('-');
+
+        $('#detalleMontoNeto').text('$0');
+        $('#detalleMontoIVA').text('$0');
+        $('#detalleDescuento').text('$0');
+        $('#detalleTotalDetalle').text('$0');
+        $('#detalleNotasCredito').text('$0');
+        $('#detalleTotalPagado').text('$0');
+        $('#detalleSaldoPendiente').text('$0');
+
+        $('#detalleProductosBody').html('<tr><td colspan="6" class="text-center text-muted">Sin productos asociados</td></tr>');
+        $('#detallePagosBody').html('<tr><td colspan="4" class="text-center text-muted">Sin pagos registrados</td></tr>');
+    }
+    
+    function cargarDTEs(page, search) {
+        // Evitar múltiples llamadas simultáneas
+        if (cargandoDTEs) {
+            console.log('Ya se está cargando, ignorando llamada adicional');
+            return;
+        }
+        
+        cargandoDTEs = true;
+        showGlobalLoader();
+
+        const fecha_inicio = $('#fechaInicio').val();
+        const fecha_fin = $('#fechaFin').val();
+
+        $.ajax({
+            url: '/app/documentos/api/cargar-dte-ventas/',
+            method: 'POST',
+            contentType: 'application/json',
+            timeout: 30000, // 30 segundos de timeout
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: JSON.stringify({ 
+                fecha_inicio, 
+                fecha_fin, 
+                page: page,
+                page_size: 20,
+                search: search
+            }),
+            success: function (data) {
+                try {
+                    if (!data.success) {
+                        throw new Error(data.error || 'Error desconocido');
+                    }
+
+                    // Limpiar la tabla
+                    const tbody = $('#tablaDTEBody');
+                    tbody.empty();
+                    
+                    // Actualizar información de paginación
+                    paginationInfoDTE = data.pagination;
+                    currentPageDTE = data.pagination.page;
+                    currentSearchDTE = data.search || '';
+                    
+                    // Actualizar controles de paginación
+                    $('#pageInfoDTE').text(`Página ${data.pagination.page} de ${data.pagination.total_pages}`);
+                    $('#btnPrevPageDTE').prop('disabled', !data.pagination.has_previous);
+                    $('#btnNextPageDTE').prop('disabled', !data.pagination.has_next);
+                    
+                    // Actualizar información de resultados
+                    $('#infoResultados').text(`Mostrando ${data.items.length} de ${data.pagination.total_count} resultados`);
+                    
+                    // Actualizar sucursal actual
+                    $('#sucursalActual').text(data.sucursal || 'Sin sucursal');
+
+                    if (!data.items || data.items.length === 0) {
+                        tbody.append('<tr><td colspan="13" class="text-center text-muted">No se encontraron DTEs' + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
+                    } else {
+                        data.items.forEach(dte => {
+                            const fila = `
+<tr>
+    <td style="display: none;">${dte.id || ''}</td>
+    <td class="text-start">${resaltarBusqueda(dte.receptor_nombre || '', search)}</td>
+    <td>${resaltarBusqueda(dte.receptor_rut || '', search)}</td>
+    <td>${resaltarBusqueda(dte.numero_documento || '', search)}</td>
+    <td>${resaltarBusqueda(dte.tipo_documento || '', search)}</td>
+    <td>${dte.fecha_emision || ''}</td>
+    <td>${dte.fecha_vencimiento || '-'}</td>
+    <td class="text-end">
+        $${parseFloat(dte.monto_con_iva || 0).toLocaleString()}
+        ${dte.notas_credito > 0
+            ? `<br><small class="text-danger">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC)</small>`
+            : ''}
+    </td>
+    <td class="text-end">
+        $${parseFloat(dte.descuento || 0).toLocaleString()} 
+        ${dte.descuento > 0
+            ? `<br><small class="text-muted">(${calcularPorcentajeDescuento(dte.descuento, dte.monto_con_iva)}%)</small>`
+            : ''}
+    </td>
+    <td><span class="badge bg-${estadoColor(dte.estado_dte || '')}">${resaltarBusqueda(dte.estado_dte || '', search)}</span></td>
+    <td>
+        <span class="badge bg-${dte.estado_pago === 'PAGADO' ? 'success' : 'warning'}">
+            ${dte.estado_pago || 'PENDIENTE'}
+        </span>
+        ${dte.saldo_pendiente > 0 ? 
+            `<br><small class="text-muted">Saldo: $${parseFloat(dte.saldo_pendiente).toLocaleString()}</small>` : 
+            ''}
+        ${dte.dias_credito_restantes !== undefined ? 
+            `<br><span class="badge bg-${creditoColor(dte.dias_credito_restantes)}">${dte.dias_credito_restantes} días</span>` : 
+            ''}
+    </td>
+    <td class="text-start">${dte.vendedor || '-'}</td>
+    <td>
+        <div class="d-flex flex-wrap justify-content-center gap-1">
+            <button class="btn btn-sm btn-outline-info" title="Ver detalles" onclick="verDetalleDTE(${dte.id || 0})">
+                <i class="bi bi-eye"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-primary" title="Imprimir" onclick="imprimirDTE(${dte.id || 0})">
+                <i class="bi bi-printer"></i>
+            </button>
+            ${dte.estado_pago !== 'PAGADO' ? 
+                `<button class="btn btn-sm btn-outline-success" title="Registrar pago" onclick="registrarPago(${dte.id || 0})">
+                    <i class="bi bi-cash-coin"></i>
+                </button>` : 
+                ''}
+        </div>
+    </td>
+</tr>`;
+                            tbody.append(fila);
+                        });
+                    }
+
+                    hideGlobalLoader();
+                    cargandoDTEs = false; // Liberar el flag
+                } catch (error) {
+                    console.error('Error al procesar datos:', error);
+                    hideGlobalLoader();
+                    cargandoDTEs = false; // Liberar el flag
+                    Swal.fire('Error', 'Error al procesar los datos de la tabla.', 'error');
+                }
+            },
+            error: function (xhr, status, error) {
+                hideGlobalLoader();
+                cargandoDTEs = false; // Liberar el flag
+                console.error('Error al cargar DTEs:', xhr.responseText);
+                
+                let mensaje = 'Error al obtener los DTEs.';
+                if (status === 'timeout') {
+                    mensaje = 'La solicitud tardó demasiado. Intenta nuevamente.';
+                } else if (xhr.status === 500) {
+                    mensaje = 'Error interno del servidor. Revisa la consola para más detalles.';
+                } else if (xhr.status === 404) {
+                    mensaje = 'No se encontró el endpoint. Verifica la URL.';
+                } else if (xhr.responseJSON && xhr.responseJSON.error) {
+                    mensaje = xhr.responseJSON.error;
+                }
+                
+                Swal.fire('Error', mensaje, 'error');
+            }
+        });
+    }
+
+    function calcularPorcentajeDescuento(descuento, montoConIVA) {
+        if (!montoConIVA || montoConIVA <= 0) return 0;
+        return ((descuento / montoConIVA) * 100).toFixed(1);
+    }
+
+    function creditoColor(dias) {
+        if (dias > 15) {
+            return 'success'; // verde
+        } else if (dias > 0) {
+            return 'warning'; // amarillo
+        } else {
+            return 'danger'; // rojo
+        }
+    }
+
+    // Estilos dinámicos para badges
+    function estadoColor(estado) {
+        return estado === 'ACEPTADO' ? 'success' : estado === 'RECHAZADO' ? 'danger' : 'secondary';
+    }
+
+    // Función para resaltar términos de búsqueda
+    function resaltarBusqueda(texto, busqueda) {
+        if (!busqueda || !texto) return texto;
+        
+        // Convertir a string si no lo es
+        const textoStr = String(texto);
+        const busquedaStr = String(busqueda);
+        
+        const regex = new RegExp(`(${busquedaStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return textoStr.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    // Funciones de acciones (placeholder - implementar según necesidades)
+    function verDetalleDTE(dteId) {
+        if (!dteId) {
+            Swal.fire('Advertencia', 'No se pudo identificar el DTE seleccionado.', 'warning');
+            return;
+        }
+
+        limpiarDetalleDTE();
+        showGlobalLoader();
+
+        $.ajax({
+            url: `/app/documentos/api/dte/${dteId}/`,
+            method: 'GET',
+            success: function (response) {
+                hideGlobalLoader();
+
+                if (!response.success) {
+                    Swal.fire('Error', response.error || 'No se pudo obtener el detalle del DTE.', 'error');
+                    return;
+                }
+
+                const { dte, productos, pagos, totales } = response;
+
+                $('#detalleNumeroDTE').text(`${dte.numero_documento || ''}`);
+                $('#detalleTipoDTE').text(dte.tipo_documento || '-');
+                actualizarBadgeEstado(document.getElementById('detalleEstadoDTE'), dte.estado_dte, 'dte');
+                actualizarBadgeEstado(document.getElementById('detalleEstadoPago'), dte.estado_pago, 'pago');
+                $('#detalleFechaEmision').text(dte.fecha_emision || '-');
+                $('#detalleFechaVencimiento').text(dte.fecha_vencimiento || '-');
+                $('#detalleSucursal').text(dte.sucursal || '-');
+                $('#detalleVendedor').text(dte.vendedor || '-');
+                $('#detalleResponsable').text(dte.responsable || '-');
+                $('#detalleDiasCredito').text(dte.dias_credito ?? '-');
+
+                if (dte.emisor) {
+                    $('#detalleEmisorNombre').text(dte.emisor.nombre || '-');
+                    $('#detalleEmisorRut').text(dte.emisor.rut || '-');
+                    $('#detalleEmisorDireccion').text(dte.emisor.direccion || '-');
+                    $('#detalleEmisorComuna').text(dte.emisor.comuna || '-');
+                    $('#detalleEmisorCiudad').text(dte.emisor.ciudad || '-');
+                }
+
+                if (dte.receptor) {
+                    $('#detalleReceptorNombre').text(dte.receptor.nombre || '-');
+                    $('#detalleReceptorRut').text(dte.receptor.rut || '-');
+                    $('#detalleReceptorDireccion').text(dte.receptor.direccion || '-');
+                    $('#detalleReceptorComuna').text(dte.receptor.comuna || '-');
+                    $('#detalleReceptorCiudad').text(dte.receptor.ciudad || '-');
+                }
+
+                $('#detalleMontoNeto').text(formatearMoneda(dte.monto_neto));
+                $('#detalleMontoIVA').text(formatearMoneda(dte.monto_con_iva));
+                $('#detalleDescuento').text(formatearMoneda(dte.descuento));
+
+                $('#detalleTotalDetalle').text(formatearMoneda(totales.total_detalle));
+                $('#detalleNotasCredito').text(formatearMoneda(totales.notas_credito));
+                $('#detalleTotalPagado').text(formatearMoneda(totales.total_pagado));
+                $('#detalleSaldoPendiente').text(formatearMoneda(totales.saldo_pendiente));
+
+                const productosBody = $('#detalleProductosBody');
+                productosBody.empty();
+                if (productos && productos.length) {
+                    productos.forEach(item => {
+                        productosBody.append(`
+                            <tr>
+                                <td class="text-start">${resaltarBusqueda(item.producto || item.descripcion || '-', currentSearchDTE)}</td>
+                                <td>${item.sku ?? '-'}</td>
+                                <td>${item.talla ?? '-'}</td>
+                                <td class="text-end">${item.cantidad ?? 0}</td>
+                                <td class="text-end">${formatearMoneda(item.precio_unitario)}</td>
+                                <td class="text-end">${formatearMoneda(item.subtotal)}</td>
+                            </tr>
+                        `);
+                    });
+                } else {
+                    productosBody.html('<tr><td colspan="6" class="text-center text-muted">Sin productos asociados</td></tr>');
+                }
+
+                const pagosBody = $('#detallePagosBody');
+                pagosBody.empty();
+                if (pagos && pagos.length) {
+                    pagos.forEach(pago => {
+                        pagosBody.append(`
+                            <tr>
+                                <td>${pago.metodo_pago || '-'}</td>
+                                <td>${pago.voucher || '-'}</td>
+                                <td>${pago.tipo_tarjeta || '-'}</td>
+                                <td class="text-end">${formatearMoneda(pago.monto)}</td>
+                            </tr>
+                        `);
+                    });
+                } else {
+                    pagosBody.html('<tr><td colspan="4" class="text-center text-muted">Sin pagos registrados</td></tr>');
+                }
+
+                if (modalDetalleDTEInstance) {
+                    modalDetalleDTEInstance.show();
+                } else {
+                    $('#modalDetalleDTE').modal('show');
+                }
+            },
+            error: function (xhr) {
+                hideGlobalLoader();
+                console.error('Error al obtener detalle del DTE:', xhr.responseText);
+                let mensaje = 'No se pudo obtener el detalle del DTE.';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    mensaje = xhr.responseJSON.error;
+                }
+                Swal.fire('Error', mensaje, 'error');
+            }
+        });
+    }
+
+    function imprimirDTE(dteId) {
+        Swal.fire('Info', `Imprimir DTE ${dteId}`, 'info');
+        // Implementar función de impresión
+    }
+
+    function registrarPago(dteId) {
+        Swal.fire('Info', `Registrar pago para DTE ${dteId}`, 'info');
+        // Implementar modal de registro de pago
+    }
+
+</script>

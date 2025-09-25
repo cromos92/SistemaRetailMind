@@ -1,0 +1,656 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+    .user-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        background: white;
+    }
+    .user-status {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .status-active {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .status-inactive {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="card-title">
+                        <i class="fas fa-users"></i> Gestión de Usuarios
+                    </h3>
+                    <button type="button" class="btn btn-primary" onclick="mostrarModalCrearUsuario()">
+                        <i class="fas fa-plus"></i> Crear Usuario
+                    </button>
+                </div>
+                <div class="card-body">
+                    <!-- Filtros -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="searchInput" placeholder="Buscar usuarios...">
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-control" id="estadoFilter">
+                                <option value="">Todos los estados</option>
+                                <option value="activo">Activos</option>
+                                <option value="inactivo">Inactivos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-info" onclick="cargarUsuarios()">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                        <div class="col-md-3 text-right">
+                            <button type="button" class="btn btn-success" onclick="exportarUsuarios()">
+                                <i class="fas fa-download"></i> Exportar CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Métricas -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-info"><i class="fas fa-users"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">Total Usuarios</span>
+                                    <span class="info-box-number" id="totalUsuarios">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-success"><i class="fas fa-user-check"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">Activos</span>
+                                    <span class="info-box-number" id="usuariosActivos">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-warning"><i class="fas fa-user-times"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">Inactivos</span>
+                                    <span class="info-box-number" id="usuariosInactivos">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lista de usuarios -->
+                    <div id="usuariosContainer">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin fa-2x"></i>
+                            <p>Cargando usuarios...</p>
+                        </div>
+                    </div>
+
+                    <!-- Paginación -->
+                    <div id="paginationContainer" class="d-flex justify-content-center mt-3">
+                        <!-- La paginación se generará dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crear Usuario -->
+<div class="modal fade" id="modalCrearUsuario" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Crear Nuevo Usuario</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="formCrearUsuario">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Nombre de Usuario *</label>
+                                <input type="text" class="form-control" name="username" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Email *</label>
+                                <input type="email" class="form-control" name="email" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Nombre *</label>
+                                <input type="text" class="form-control" name="first_name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Apellido *</label>
+                                <input type="text" class="form-control" name="last_name" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>RUT</label>
+                                <input type="text" class="form-control" name="rut" placeholder="12.345.678-9">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Teléfono</label>
+                                <input type="text" class="form-control" name="telefono">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Empresa</label>
+                                <input type="text" class="form-control" name="empresa">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Cargo</label>
+                                <input type="text" class="form-control" name="cargo">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Permisos</label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="puede_crear_usuarios">
+                                    <label class="form-check-label">Crear Usuarios</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="puede_editar_usuarios">
+                                    <label class="form-check-label">Editar Usuarios</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="is_staff">
+                                    <label class="form-check-label">Staff</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="crearUsuario()">Crear Usuario</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Usuario -->
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Usuario</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarUsuario">
+                    <input type="hidden" name="usuario_id" id="editUsuarioId">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Nombre de Usuario *</label>
+                                <input type="text" class="form-control" name="username" id="editUsername" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Email *</label>
+                                <input type="email" class="form-control" name="email" id="editEmail" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Nombre *</label>
+                                <input type="text" class="form-control" name="first_name" id="editFirstName" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Apellido *</label>
+                                <input type="text" class="form-control" name="last_name" id="editLastName" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>RUT</label>
+                                <input type="text" class="form-control" name="rut" id="editRut" placeholder="12.345.678-9">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Teléfono</label>
+                                <input type="text" class="form-control" name="telefono" id="editTelefono">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Empresa</label>
+                                <input type="text" class="form-control" name="empresa" id="editEmpresa">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Cargo</label>
+                                <input type="text" class="form-control" name="cargo" id="editCargo">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Dirección</label>
+                        <textarea class="form-control" name="direccion" id="editDireccion" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Departamento</label>
+                        <input type="text" class="form-control" name="departamento" id="editDepartamento">
+                    </div>
+                    <div class="form-group" id="permisosSection">
+                        <label>Permisos</label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="puede_crear_usuarios" id="editPuedeCrear">
+                                    <label class="form-check-label">Crear Usuarios</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="puede_editar_usuarios" id="editPuedeEditar">
+                                    <label class="form-check-label">Editar Usuarios</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="is_staff" id="editIsStaff">
+                                    <label class="form-check-label">Staff</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarEdicionUsuario()">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
+</div>
+<!-- main-content -->
+
+<!-- Toastr CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+
+{% include 'layout/footer.html' %}
+
+<!-- Toastr JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+<script>
+let currentPage = 1;
+let pageSize = 10;
+
+$(document).ready(function() {
+    cargarUsuarios();
+    
+    // Búsqueda en tiempo real
+    $('#searchInput').on('keyup', function() {
+        clearTimeout(window.searchTimeout);
+        window.searchTimeout = setTimeout(function() {
+            currentPage = 1;
+            cargarUsuarios();
+        }, 500);
+    });
+    
+    $('#estadoFilter').on('change', function() {
+        currentPage = 1;
+        cargarUsuarios();
+    });
+});
+
+function cargarUsuarios() {
+    const search = $('#searchInput').val();
+    const estado = $('#estadoFilter').val();
+    
+    $.ajax({
+        url: '{% url "users:listar_usuarios" %}',
+        method: 'GET',
+        data: {
+            page: currentPage,
+            page_size: pageSize,
+            search: search,
+            estado: estado
+        },
+        success: function(response) {
+            if (response.success) {
+                mostrarUsuarios(response.usuarios);
+                actualizarMetricas(response.metricas);
+                generarPaginacion(response.pagination);
+            } else {
+                mostrarError('Error al cargar usuarios: ' + response.error);
+            }
+        },
+        error: function() {
+            mostrarError('Error de conexión al cargar usuarios');
+        }
+    });
+}
+
+function mostrarUsuarios(usuarios) {
+    let html = '';
+    
+    if (usuarios.length === 0) {
+        html = '<div class="text-center"><p>No se encontraron usuarios</p></div>';
+    } else {
+        usuarios.forEach(function(usuario) {
+            const statusClass = usuario.es_activo ? 'status-active' : 'status-inactive';
+            const statusText = usuario.es_activo ? 'Activo' : 'Inactivo';
+            
+            html += `
+                <div class="user-card">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5>${usuario.first_name} ${usuario.last_name}</h5>
+                            <p class="mb-1"><strong>Usuario:</strong> ${usuario.username}</p>
+                            <p class="mb-1"><strong>Email:</strong> ${usuario.email}</p>
+                            <p class="mb-1"><strong>Empresa:</strong> ${usuario.empresa || 'N/A'}</p>
+                            <p class="mb-0"><strong>Último acceso:</strong> ${usuario.fecha_ultimo_acceso}</p>
+                        </div>
+                        <div class="col-md-4 text-right">
+                            <span class="user-status ${statusClass}">${statusText}</span>
+                            <div class="mt-2">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-primary" onclick="editarUsuario(${usuario.id})" title="Editar Usuario">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-info" onclick="resetearPassword(${usuario.id})" title="Resetear Contraseña">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                    <button class="btn btn-warning" onclick="toggleEstado(${usuario.id})" title="Cambiar Estado">
+                                        <i class="fas fa-toggle-on"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    $('#usuariosContainer').html(html);
+}
+
+function actualizarMetricas(metricas) {
+    $('#totalUsuarios').text(metricas.total_usuarios);
+    $('#usuariosActivos').text(metricas.usuarios_activos);
+    $('#usuariosInactivos').text(metricas.usuarios_inactivos);
+}
+
+function generarPaginacion(pagination) {
+    let html = '';
+    
+    if (pagination.total_pages > 1) {
+        html += '<nav><ul class="pagination">';
+        
+        // Botón anterior
+        if (pagination.has_previous) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="cambiarPagina(${currentPage - 1})">Anterior</a></li>`;
+        }
+        
+        // Números de página
+        for (let i = 1; i <= pagination.total_pages; i++) {
+            const active = i === currentPage ? 'active' : '';
+            html += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="cambiarPagina(${i})">${i}</a></li>`;
+        }
+        
+        // Botón siguiente
+        if (pagination.has_next) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="cambiarPagina(${currentPage + 1})">Siguiente</a></li>`;
+        }
+        
+        html += '</ul></nav>';
+    }
+    
+    $('#paginationContainer').html(html);
+}
+
+function cambiarPagina(page) {
+    currentPage = page;
+    cargarUsuarios();
+}
+
+function mostrarModalCrearUsuario() {
+    $('#modalCrearUsuario').modal('show');
+}
+
+function crearUsuario() {
+    const formData = new FormData($('#formCrearUsuario')[0]);
+    const data = {};
+    
+    formData.forEach((value, key) => {
+        if (key.includes('checkbox')) {
+            data[key] = $('#formCrearUsuario input[name="' + key + '"]').is(':checked');
+        } else {
+            data[key] = value;
+        }
+    });
+    
+    // Manejar checkboxes
+    data.puede_crear_usuarios = $('#formCrearUsuario input[name="puede_crear_usuarios"]').is(':checked');
+    data.puede_editar_usuarios = $('#formCrearUsuario input[name="puede_editar_usuarios"]').is(':checked');
+    data.is_staff = $('#formCrearUsuario input[name="is_staff"]').is(':checked');
+    
+    $.ajax({
+        url: '{% url "users:crear_usuario" %}',
+        method: 'POST',
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        success: function(response) {
+            if (response.success) {
+                $('#modalCrearUsuario').modal('hide');
+                $('#formCrearUsuario')[0].reset();
+                mostrarExito(response.message);
+                cargarUsuarios();
+            } else {
+                mostrarError(response.error);
+            }
+        },
+        error: function() {
+            mostrarError('Error de conexión al crear usuario');
+        }
+    });
+}
+
+function editarUsuario(usuarioId) {
+    // Cargar datos del usuario
+    $.ajax({
+        url: `/users/obtener/${usuarioId}/`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const usuario = response.usuario;
+                
+                // Llenar el formulario de edición
+                $('#editUsuarioId').val(usuario.id);
+                $('#editUsername').val(usuario.username);
+                $('#editEmail').val(usuario.email);
+                $('#editFirstName').val(usuario.first_name);
+                $('#editLastName').val(usuario.last_name);
+                $('#editRut').val(usuario.rut);
+                $('#editTelefono').val(usuario.telefono);
+                $('#editEmpresa').val(usuario.empresa);
+                $('#editCargo').val(usuario.cargo);
+                $('#editDireccion').val(usuario.direccion);
+                $('#editDepartamento').val(usuario.departamento);
+                
+                // Checkboxes de permisos
+                $('#editPuedeCrear').prop('checked', usuario.puede_crear_usuarios);
+                $('#editPuedeEditar').prop('checked', usuario.puede_editar_usuarios);
+                $('#editIsStaff').prop('checked', usuario.is_staff);
+                
+                // Mostrar/ocultar sección de permisos según si es superuser
+                if (!usuario.is_superuser) {
+                    $('#permisosSection').show();
+                } else {
+                    $('#permisosSection').hide();
+                }
+                
+                // Mostrar modal
+                $('#modalEditarUsuario').modal('show');
+            } else {
+                mostrarError(response.error);
+            }
+        },
+        error: function() {
+            mostrarError('Error de conexión al cargar datos del usuario');
+        }
+    });
+}
+
+function guardarEdicionUsuario() {
+    const usuarioId = $('#editUsuarioId').val();
+    const formData = new FormData($('#formEditarUsuario')[0]);
+    const data = {};
+    
+    formData.forEach((value, key) => {
+        if (key !== 'usuario_id') {
+            data[key] = value;
+        }
+    });
+    
+    // Manejar checkboxes
+    data.puede_crear_usuarios = $('#editPuedeCrear').is(':checked');
+    data.puede_editar_usuarios = $('#editPuedeEditar').is(':checked');
+    data.is_staff = $('#editIsStaff').is(':checked');
+    
+    $.ajax({
+        url: `/users/editar/${usuarioId}/`,
+        method: 'POST',
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        success: function(response) {
+            if (response.success) {
+                $('#modalEditarUsuario').modal('hide');
+                mostrarExito(response.message);
+                cargarUsuarios();
+            } else {
+                mostrarError(response.error);
+            }
+        },
+        error: function() {
+            mostrarError('Error de conexión al editar usuario');
+        }
+    });
+}
+
+function toggleEstado(usuarioId) {
+    if (confirm('¿Está seguro de cambiar el estado de este usuario?')) {
+        $.ajax({
+            url: `/users/toggle-estado/${usuarioId}/`,
+            method: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    mostrarExito(response.message);
+                    cargarUsuarios(); // Recargar la lista
+                } else {
+                    mostrarError(response.error);
+                }
+            },
+            error: function() {
+                mostrarError('Error de conexión al cambiar estado');
+            }
+        });
+    }
+}
+
+function resetearPassword(usuarioId) {
+    if (confirm('¿Está seguro de resetear la contraseña de este usuario?')) {
+        $.ajax({
+            url: `/users/resetear-password/${usuarioId}/`,
+            method: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    mostrarExito(response.message);
+                } else {
+                    mostrarError(response.error);
+                }
+            },
+            error: function() {
+                mostrarError('Error de conexión al resetear contraseña');
+            }
+        });
+    }
+}
+
+function exportarUsuarios() {
+    window.location.href = '{% url "users:exportar_usuarios" %}';
+}
+
+function mostrarExito(mensaje) {
+    toastr.success(mensaje);
+}
+
+function mostrarError(mensaje) {
+    toastr.error(mensaje);
+}
+</script>

@@ -451,6 +451,127 @@
     </div>
 </div>
 
+<!-- ========== MODAL GESTIONAR SUCURSALES ========== -->
+<div class="modal fade" id="modalSucursales" tabindex="-1" aria-labelledby="modalSucursalesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalSucursalesLabel">
+                    <i class="bi bi-building me-2"></i>Gestionar Sucursales
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Información de la empresa -->
+                <div class="alert alert-info">
+                    <h6 class="mb-1">
+                        <i class="bi bi-info-circle me-2"></i>Empresa: <span id="empresaSucursalesNombre"></span>
+                    </h6>
+                    <small class="text-muted">Gestiona las sucursales de esta empresa</small>
+                </div>
+                
+                <!-- Botón para agregar nueva sucursal -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Lista de Sucursales</h6>
+                    <button class="btn btn-primary btn-sm" onclick="abrirModalNuevaSucursal()">
+                        <i class="bi bi-plus-circle me-1"></i>Nueva Sucursal
+                    </button>
+                </div>
+                
+                <!-- Tabla de sucursales -->
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tablaSucursales">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Alias</th>
+                                <th>Dirección</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">
+                                    <i class="bi bi-hourglass-split"></i> Cargando sucursales...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL CREAR/EDITAR SUCURSAL ========== -->
+<div class="modal fade" id="modalSucursal" tabindex="-1" aria-labelledby="modalSucursalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalSucursalLabel">
+                    <i class="bi bi-building me-2"></i>Nueva Sucursal
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formSucursal">
+                    <input type="hidden" id="sucursalId" name="sucursal_id">
+                    <input type="hidden" id="sucursalEmpresaId" name="empresa_id">
+                    
+                    <div class="mb-3">
+                        <label for="aliasSucursal" class="form-label">Alias de la Sucursal *</label>
+                        <input type="text" class="form-control" id="aliasSucursal" name="alias" placeholder="Ej: Casa Matriz, Sucursal Centro, etc." required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="direccionSucursal" class="form-label">Dirección *</label>
+                        <input type="text" class="form-control" id="direccionSucursal" name="direccion" placeholder="Dirección completa de la sucursal" required>
+                    </div>
+                    
+                    <!-- Errores -->
+                    <div id="erroresSucursal" class="alert alert-danger" style="display: none;">
+                        <ul id="listaErroresSucursal" class="mb-0"></ul>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="guardarSucursal()">
+                    <i class="bi bi-check-circle me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL CONFIRMAR ELIMINACIÓN SUCURSAL ========== -->
+<div class="modal fade" id="modalConfirmarEliminarSucursal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirmar Eliminación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar la sucursal <strong id="nombreSucursalEliminar"></strong>?</p>
+                <p class="text-muted small">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="confirmarEliminarSucursal()">
+                    <i class="bi bi-trash me-1"></i>Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ========== SCRIPTS ========== -->
 <script>
 // Variables globales
@@ -490,6 +611,14 @@ $(document).ready(function() {
     window.limpiarFiltros = limpiarFiltros;
     window.cambiarPagina = cambiarPagina;
     window.cambiarRegistrosPorPagina = cambiarRegistrosPorPagina;
+    
+    // Funciones de sucursales
+    window.gestionarSucursales = gestionarSucursales;
+    window.abrirModalNuevaSucursal = abrirModalNuevaSucursal;
+    window.editarSucursal = editarSucursal;
+    window.eliminarSucursal = eliminarSucursal;
+    window.guardarSucursal = guardarSucursal;
+    window.confirmarEliminarSucursal = confirmarEliminarSucursal;
     
     console.log('✅ Gestión de Empresas inicializada');
 });
@@ -578,6 +707,9 @@ function actualizarTabla(empresas) {
                     <div class="btn-group btn-group-sm" role="group">
                         <button class="btn btn-outline-info btn-action" onclick="verDetalleEmpresa(${empresa.id})" title="Ver Detalle">
                             <i class="bi bi-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-success btn-action" onclick="gestionarSucursales(${empresa.id}, '${empresa.razon_social}')" title="Gestionar Sucursales">
+                            <i class="bi bi-building"></i>
                         </button>
                         <button class="btn btn-outline-primary btn-action" onclick="editarEmpresa(${empresa.id})" title="Editar">
                             <i class="bi bi-pencil"></i>
@@ -955,5 +1087,200 @@ function showErrorAlert(title, message) {
     } else {
         alert(`${title}: ${message}`);
     }
+}
+
+// ========== FUNCIONES PARA GESTIÓN DE SUCURSALES ==========
+
+// Variables globales para sucursales
+let empresaSeleccionadaSucursales = null;
+let sucursalSeleccionada = null;
+let modoEdicionSucursal = false;
+
+// Función para gestionar sucursales de una empresa
+function gestionarSucursales(empresaId, empresaNombre) {
+    empresaSeleccionadaSucursales = empresaId;
+    $('#empresaSucursalesNombre').text(empresaNombre);
+    $('#modalSucursales').modal('show');
+    cargarSucursales(empresaId);
+}
+
+// Función para cargar sucursales de una empresa
+function cargarSucursales(empresaId) {
+    $.ajax({
+        url: `/empresa_management/empresas/${empresaId}/sucursales/`,
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        success: function(response) {
+            if (response.success) {
+                actualizarTablaSucursales(response.sucursales);
+            } else {
+                showErrorAlert('Error', response.error || 'Error al cargar sucursales');
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al cargar sucursales');
+        }
+    });
+}
+
+// Función para actualizar la tabla de sucursales
+function actualizarTablaSucursales(sucursales) {
+    const tbody = $('#tablaSucursales tbody');
+    tbody.empty();
+    
+    if (sucursales.length === 0) {
+        tbody.html(`
+            <tr>
+                <td colspan="3" class="text-center text-muted">
+                    <i class="bi bi-building"></i> No hay sucursales registradas
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    sucursales.forEach(function(sucursal) {
+        const fila = `
+            <tr>
+                <td><strong>${sucursal.alias}</strong></td>
+                <td>${sucursal.direccion}</td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="editarSucursal(${sucursal.id})" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="eliminarSucursal(${sucursal.id}, '${sucursal.alias}')" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        tbody.append(fila);
+    });
+}
+
+// Función para abrir modal de nueva sucursal
+function abrirModalNuevaSucursal() {
+    modoEdicionSucursal = false;
+    $('#modalSucursalLabel').html('<i class="bi bi-building me-2"></i>Nueva Sucursal');
+    $('#formSucursal')[0].reset();
+    $('#sucursalId').val('');
+    $('#sucursalEmpresaId').val(empresaSeleccionadaSucursales);
+    $('#erroresSucursal').hide();
+    $('#modalSucursal').modal('show');
+}
+
+// Función para editar sucursal
+function editarSucursal(sucursalId) {
+    // Para simplicidad, vamos a usar los datos que ya tenemos en la tabla
+    // En una implementación más robusta, harías una llamada AJAX para obtener los datos
+    const fila = $(`button[onclick="editarSucursal(${sucursalId})"]`).closest('tr');
+    const alias = fila.find('td:first strong').text();
+    const direccion = fila.find('td:nth-child(2)').text();
+    
+    modoEdicionSucursal = true;
+    sucursalSeleccionada = sucursalId;
+    $('#modalSucursalLabel').html('<i class="bi bi-pencil me-2"></i>Editar Sucursal');
+    $('#sucursalId').val(sucursalId);
+    $('#sucursalEmpresaId').val(empresaSeleccionadaSucursales);
+    $('#aliasSucursal').val(alias);
+    $('#direccionSucursal').val(direccion);
+    $('#erroresSucursal').hide();
+    $('#modalSucursal').modal('show');
+}
+
+// Función para eliminar sucursal
+function eliminarSucursal(sucursalId, alias) {
+    sucursalSeleccionada = sucursalId;
+    $('#nombreSucursalEliminar').text(alias);
+    $('#modalConfirmarEliminarSucursal').modal('show');
+}
+
+// Función para confirmar eliminación de sucursal
+function confirmarEliminarSucursal() {
+    $.ajax({
+        url: `/empresa_management/sucursales/${sucursalSeleccionada}/eliminar/`,
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert('Sucursal Eliminada', response.message);
+                $('#modalConfirmarEliminarSucursal').modal('hide');
+                cargarSucursales(empresaSeleccionadaSucursales);
+                // Actualizar contador en la tabla principal
+                cargarEmpresas();
+            } else {
+                showErrorAlert('Error', response.error);
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al eliminar sucursal');
+        }
+    });
+}
+
+// Función para guardar sucursal (crear o editar)
+function guardarSucursal() {
+    const formData = new FormData($('#formSucursal')[0]);
+    const data = Object.fromEntries(formData);
+    
+    // Validaciones básicas
+    const errores = [];
+    if (!data.alias) errores.push('El alias de la sucursal es obligatorio');
+    if (!data.direccion) errores.push('La dirección de la sucursal es obligatoria');
+    
+    if (errores.length > 0) {
+        mostrarErroresSucursal(errores);
+        return;
+    }
+    
+    const url = modoEdicionSucursal ? 
+        `/empresa_management/sucursales/${sucursalSeleccionada}/editar/` : 
+        `/empresa_management/empresas/${empresaSeleccionadaSucursales}/sucursales/crear/`;
+    const method = modoEdicionSucursal ? 'PUT' : 'POST';
+    
+    $.ajax({
+        url: url,
+        method: method,
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCSRFToken()
+        },
+        success: function(response) {
+            if (response.success) {
+                showSuccessAlert(
+                    modoEdicionSucursal ? 'Sucursal Actualizada' : 'Sucursal Creada',
+                    response.message
+                );
+                $('#modalSucursal').modal('hide');
+                cargarSucursales(empresaSeleccionadaSucursales);
+                // Actualizar contador en la tabla principal
+                cargarEmpresas();
+            } else {
+                mostrarErroresSucursal([response.error]);
+            }
+        },
+        error: function() {
+            showErrorAlert('Error', 'Error de conexión al guardar sucursal');
+        }
+    });
+}
+
+// Función para mostrar errores de sucursal
+function mostrarErroresSucursal(errores) {
+    const lista = $('#listaErroresSucursal');
+    lista.empty();
+    
+    errores.forEach(function(error) {
+        lista.append(`<li>${error}</li>`);
+    });
+    
+    $('#erroresSucursal').show();
 }
 </script> 

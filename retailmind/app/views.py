@@ -1,12 +1,383 @@
 from django.shortcuts import render, redirect
-from .models import AtributoOpcion, Categoria, Compras, Compras_Producto, Compras_Producto_Talla, Dte, Dte_Detalle_Pago, Empresa,Correlativo, EmpresaUser, GuiaTalla, GuiaTallaItem, GuiaTallaProducto, Movimientos_Producto, ParametroGlobal, Producto, Producto_Talla, Productos_Atributos, Productos_Recepcionados,Sucursal, Vendedor, Ticket, Ticket_Productos, Traspaso, Traspaso_Detalle, AjusteInventario, AjusteInventario_Detalle, LoteProducto
+from .models import (
+    AtributoOpcion,
+    Categoria,
+    Compras,
+    Compras_Producto,
+    Compras_Producto_Talla,
+    Dte,
+    Dte_Detalle_Pago,
+    Dte_Productos,
+    Empresa,
+    Correlativo,
+    EmpresaUser,
+    GuiaTalla,
+    GuiaTallaItem,
+    GuiaTallaProducto,
+    Movimientos_Producto,
+    ParametroGlobal,
+    Producto,
+    Producto_Talla,
+    Productos_Atributos,
+    Productos_Recepcionados,
+    Sucursal,
+    Vendedor,
+    Ticket,
+    Ticket_Productos,
+    TicketDetallePago,
+    Traspaso,
+    Traspaso_Detalle,
+    AjusteInventario,
+    AjusteInventario_Detalle,
+    LoteProducto,
+    TIPO_DOCUMENTO_CHOICES,
+    ESTADO_TICKET_CHOICES,
+    METODO_PAGO_TICKET_CHOICES,
+)
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
-from django.views.decorators.http import require_POST,require_GET,require_http_methods
+from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, F,ExpressionWrapper,DecimalField,Count,Q,Avg
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg
+from django.core.paginator import Paginator
+from django.utils import timezone
+from django.core.exceptions import ValidationError
 import re
 from django.db import transaction
+import json
+
+
+@login_required
+def recepcion_dte(request):
+    """Vista web para la recepción de traspasos internos."""
+    return render(request, 'vistas/modulo_compras/recepcion_dte.html')
+
+
+@login_required
+@require_GET
+def recepciones_pendientes_api(request):
+    """Lista DTE internos pendientes de recepción para la vista de recepciones."""
+
+    try:
+        sucursal_destino_id = request.session.get('idSucursalActual')
+        empresa_actual_id = request.session.get('idEmpresaActual')
+
+        if not sucursal_destino_id or not empresa_actual_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal o empresa activa en la sesión.'
+            }, status=400)
+
+        pagina = max(int(request.GET.get('pagina', 1) or 1), 1)
+        page_size = 10
+
+        tipo_documento = request.GET.get('tipo_documento')
+        sucursal_origen_id = request.GET.get('sucursal_origen')
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+
+        queryset = (
+            Dte.objects.filter(
+                tipo_transaccion='TRASPASO',
+                estado_dte='EMITIDO',
+                fecha_recepcion__isnull=True,
+                dte_movimientos__concepto='TRASPASO_SALIDA',
+                dte_movimientos__tipo_movimiento='TRASPASO',
+                dte_movimientos__estado='PENDIENTE',
+                dte_movimientos__sucursal_destino_id=sucursal_destino_id
+            )
+            .select_related('emisor', 'sucursal')
+            .prefetch_related(
+                'dte_productos__productoTalla__producto',
+                'dte_movimientos__sucursal_origen__empresa'
+            )
+            .distinct()
+        )
+
+        if tipo_documento:
+            queryset = queryset.filter(tipo_documento=tipo_documento)
+
+        if sucursal_origen_id:
+            try:
+                queryset = queryset.filter(
+                    dte_movimientos__concepto='TRASPASO_SALIDA',
+                    dte_movimientos__sucursal_origen_id=int(sucursal_origen_id)
+                )
+            except (TypeError, ValueError):
+                queryset = queryset.none()
+
+        if fecha_inicio:
+            queryset = queryset.filter(fecha_emision__gte=parse_date(fecha_inicio))
+
+        if fecha_fin:
+            queryset = queryset.filter(fecha_emision__lte=parse_date(fecha_fin))
+
+        queryset = queryset.order_by('-fecha_emision', '-id')
+
+        dte_ids = list(queryset.values_list('id', flat=True))
+        total_unidades_global = Dte_Productos.objects.filter(
+            dte_id__in=dte_ids
+        ).aggregate(total=Sum('stock'))['total'] or 0
+
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(pagina)
+
+        items = []
+        total_unidades_pagina = 0
+
+        for dte in page_obj.object_list:
+            detalles_queryset = dte.dte_productos.select_related('productoTalla__producto')
+
+            movimientos_salida = [
+                mov for mov in dte.dte_movimientos.all()
+                if mov.concepto == 'TRASPASO_SALIDA'
+                and mov.estado == 'PENDIENTE'
+                and mov.sucursal_destino_id == sucursal_destino_id
+            ]
+            if not movimientos_salida:
+                # Si no hay movimiento pendiente asociado directamente, continuar con el siguiente
+                continue
+
+            movimiento_origen = movimientos_salida[0]
+
+            sucursal_origen_alias = '-'
+            empresa_origen_nombre = dte.emisor.razon_social if dte.emisor else ''
+            if movimiento_origen.sucursal_origen:
+                sucursal_origen_alias = movimiento_origen.sucursal_origen.alias or sucursal_origen_alias
+                if movimiento_origen.sucursal_origen.empresa:
+                    empresa_origen_nombre = movimiento_origen.sucursal_origen.empresa.razon_social or empresa_origen_nombre
+            sucursal_destino_alias = movimiento_origen.sucursal_destino.alias if movimiento_origen.sucursal_destino else request.session.get('alias', '-')
+
+            resumen_tallas = {}
+            detalle_completo = []
+
+            for detalle in detalles_queryset:
+                producto_talla = detalle.productoTalla
+                producto = producto_talla.producto if producto_talla else None
+                talla = producto_talla.talla if producto_talla else '-'
+                cantidad = detalle.stock or 0
+                precio = int(detalle.precio or 0)
+
+                resumen_tallas[talla] = resumen_tallas.get(talla, 0) + cantidad
+
+                detalle_completo.append({
+                    'sku': producto_talla.sku if producto_talla else '-',
+                    'descripcion': producto.descripcion if producto else '',
+                    'talla': talla,
+                    'cantidad': cantidad,
+                    'precio': precio,
+                })
+
+            total_unidades_doc = sum(resumen_tallas.values())
+            total_unidades_pagina += total_unidades_doc
+
+            items.append({
+                'id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'fecha_emision': dte.fecha_emision,
+                'emisor': dte.emisor.nombre,
+                'empresa_origen': empresa_origen_nombre,
+                'sucursal_origen': sucursal_origen_alias,
+                'sucursal_destino': sucursal_destino_alias,
+                'detalle_resumen': [
+                    {'talla': talla, 'cantidad': cantidad}
+                    for talla, cantidad in resumen_tallas.items()
+                ],
+                'detalle': detalle_completo,
+                'total_unidades': total_unidades_doc,
+                'referencias': dte.referencias or '',
+                'observaciones': movimiento_origen.observaciones or '',
+            })
+
+        hoy = timezone.now().date()
+        recibidos_hoy = Dte.objects.filter(
+            tipo_transaccion='TRASPASO',
+            sucursal_id=sucursal_destino_id,
+            fecha_recepcion=hoy
+        ).count()
+
+        pendientes_mes = queryset.filter(
+            fecha_emision__year=hoy.year,
+            fecha_emision__month=hoy.month
+        ).values('id').distinct().count()
+
+        movimiento_ids = set(queryset.values_list('dte_movimientos__id', flat=True))
+        movimiento_ids.discard(None)
+        movimientos_pendientes = Movimientos_Producto.objects.filter(
+            id__in=movimiento_ids,
+            concepto='TRASPASO_SALIDA',
+            estado='PENDIENTE',
+            sucursal_destino_id=sucursal_destino_id
+        ).select_related('sucursal_origen__empresa')
+
+        origenes_dict = {}
+        for mov in movimientos_pendientes:
+            suc_origen = mov.sucursal_origen
+            if suc_origen:
+                origenes_dict[suc_origen.id] = {
+                    'id': suc_origen.id,
+                    'alias': suc_origen.alias or 'Sin alias',
+                    'empresa': suc_origen.empresa.razon_social if suc_origen.empresa else ''
+                }
+
+        return JsonResponse({
+            'success': True,
+            'items': items,
+            'pagination': {
+                'page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+            },
+            'resumen': {
+                'recibidos_hoy': recibidos_hoy,
+                'pendientes': paginator.count,
+                'total_unidades_pendientes': total_unidades_global,
+                'pendientes_mes': pendientes_mes,
+            },
+            'origenes': sorted(origenes_dict.values(), key=lambda x: x['alias'].lower()),
+        }, json_dumps_params={'default': str})
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al cargar recepciones pendientes: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_GET
+def historial_recepciones_api(request):
+    """Devuelve el historial reciente de recepciones de traspasos."""
+
+    try:
+        sucursal_id = request.session.get('idSucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión.'
+            }, status=400)
+
+        limite = max(int(request.GET.get('limite', 5)), 1)
+
+        historial = (
+            Dte.objects.filter(
+                tipo_transaccion='TRASPASO',
+                sucursal_id=sucursal_id,
+                fecha_recepcion__isnull=False
+            )
+            .select_related('emisor', 'receptor', 'sucursal')
+            .order_by('-fecha_recepcion', '-id')[:limite]
+        )
+
+        items = []
+        sucursal_destino_alias = request.session.get('alias', '-')
+        for dte in historial:
+            total_unidades = dte.dte_productos.aggregate(total=Sum('stock'))['total'] or 0
+
+            items.append({
+                'id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'fecha_recepcion': dte.fecha_recepcion,
+                'sucursal_origen': dte.sucursal.alias if dte.sucursal else '-',
+                'sucursal_destino': sucursal_destino_alias,
+                'total_unidades': total_unidades,
+            })
+
+        return JsonResponse({'success': True, 'items': items}, json_dumps_params={'default': str})
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener historial: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+@transaction.atomic
+def confirmar_recepcion_api(request):
+    """Confirma la recepción de un DTE de traspaso y actualiza stock/movimientos."""
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido.'}, status=400)
+
+    dte_id = data.get('dte_id')
+    observaciones = data.get('observaciones_recepcion', '')
+
+    if not dte_id:
+        return JsonResponse({'success': False, 'error': 'Falta dte_id.'}, status=400)
+
+    try:
+        dte = Dte.objects.select_related('sucursal').prefetch_related('dte_productos__productoTalla').get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    if dte.tipo_transaccion != 'TRASPASO':
+        return JsonResponse({'success': False, 'error': 'El DTE no corresponde a un traspaso interno.'}, status=400)
+
+    if dte.fecha_recepcion is not None:
+        return JsonResponse({'success': False, 'error': 'El DTE ya fue recepcionado previamente.'}, status=400)
+
+    sucursal_destino_id = request.session.get('idSucursalActual')
+    if not sucursal_destino_id:
+        return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión.'}, status=400)
+
+    if dte.sucursal_id != sucursal_destino_id:
+        return JsonResponse({'success': False, 'error': 'El DTE no está asignado a la sucursal actual.'}, status=403)
+
+    usuario = request.user.username
+    sucursal_destino = get_object_or_404(Sucursal, id=sucursal_destino_id)
+
+    try:
+        with transaction.atomic():
+            hoy = timezone.now()
+            dte.fecha_recepcion = hoy.date()
+            dte.hora = hoy.time()
+            dte.estado_dte = 'ACEPTADO'
+            referencias_texto = (dte.referencias or '').strip()
+            registro = f"Recepción confirmada por {usuario} el {hoy.strftime('%Y-%m-%d %H:%M')}"
+            if observaciones:
+                registro += f". Nota: {observaciones}"
+            dte.referencias = f"{referencias_texto}\n{registro}".strip()
+            dte.save(update_fields=['fecha_recepcion', 'hora', 'estado_dte', 'referencias'])
+
+            for detalle in dte.dte_productos.select_related('productoTalla__producto').all():
+                producto_talla = detalle.productoTalla
+                cantidad = detalle.stock
+                producto_talla.stock += cantidad
+                producto_talla.save(update_fields=['stock'])
+
+                Movimientos_Producto.objects.create(
+                    dte=dte,
+                    ProductoTalla=producto_talla,
+                    sucursal_origen=dte.sucursal,
+                    sucursal_destino=sucursal_destino,
+                    cantidad=cantidad,
+                    costo=producto_talla.producto.costo,
+                    sobreprecio=producto_talla.producto.sobreprecio,
+                    precio=producto_talla.producto.precioventa,
+                    concepto='TRASPASO_ENTRADA',
+                    tipo_movimiento='TRASPASO',
+                    estado='COMPLETADO',
+                    responsable=usuario,
+                    observaciones=observaciones or f'Recepción DTE {dte.numero_documento}'
+                )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Recepción del DTE {dte.numero_documento} confirmada exitosamente.'
+        })
+
+    except Exception as e:
+        transaction.set_rollback(True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al confirmar recepción: {str(e)}'
+        }, status=500)
 
 def validar_rut_chileno(rut):
     """
@@ -169,17 +540,25 @@ def obtener_siguiente_correlativo(sucursal, tipo):
     correlativo, created = Correlativo.objects.get_or_create(
         tipo_dte=tipo,
         sucursal=sucursal,
-        defaults={'inicio': 1, 'termino': 999999, 'alias': f'{tipo}_{sucursal.alias}'}
+        defaults={
+            'inicio': 1, 
+            'termino': 999999, 
+            'alias': f'{tipo}_{sucursal.alias}',
+            'responsable': 'Sistema'
+        }
     )
     
-    numero_actual = correlativo.inicio
-    correlativo.inicio += 1
-    correlativo.save()
-    
-    return numero_actual
-
+    try:
+        return correlativo.obtener_siguiente_numero()
+    except ValueError as e:
+        # Si el correlativo está agotado, crear uno nuevo automáticamente
+        correlativo.inicio = correlativo.termino + 1
+        correlativo.termino = correlativo.termino + 100000
+        correlativo.fecha_actualizacion = timezone.now().date()
+        correlativo.save()
+        
+        return correlativo.obtener_siguiente_numero()
 # ========== VISTAS PARA VENTAS AL PÚBLICO ==========
-
 @require_POST
 @transaction.atomic
 def crear_ticket_venta(request):
@@ -626,113 +1005,6 @@ def crear_ajuste_inventario(request):
 
 # ========== VISTAS MEJORADAS PARA MOVIMIENTOS ==========
 
-@require_GET
-@login_required
-def obtener_movimientos_producto(request):
-    sucursal_id = request.session.get('idSucursalActual')
-    if not sucursal_id:
-        return JsonResponse({'success': False, 'error': 'No hay sucursal activa'}, status=400)
-
-    from datetime import datetime
-    from django.utils.dateparse import parse_date
-    def parse_fecha_ddmmyyyy(fecha_str):
-        try:
-            if fecha_str and '/' in fecha_str:
-                return datetime.strptime(fecha_str, '%d/%m/%Y').date()
-            elif fecha_str:
-                return parse_date(fecha_str)
-        except Exception:
-            return None
-        return None
-
-    # Filtros
-    fecha_inicio = request.GET.get('fecha_inicio')
-    fecha_fin = request.GET.get('fecha_fin')
-    tipo = request.GET.get('tipo')  # INGRESO, EGRESO, etc.
-    articulo = request.GET.get('articulo')
-    responsable = request.GET.get('responsable')
-    concepto = request.GET.get('concepto')
-    page = int(request.GET.get('page', 1))
-    page_size = min(int(request.GET.get('page_size', 50)), 100)
-
-    fecha_inicio_dt = parse_fecha_ddmmyyyy(fecha_inicio)
-    fecha_fin_dt = parse_fecha_ddmmyyyy(fecha_fin)
-
-    movimientos = Movimientos_Producto.objects.select_related(
-        'ProductoTalla__producto', 'dte'
-    ).filter(
-        ProductoTalla__producto__sucursal_id=sucursal_id
-    )
-    if fecha_inicio_dt:
-        movimientos = movimientos.filter(fecha__gte=fecha_inicio_dt)
-    if fecha_fin_dt:
-        movimientos = movimientos.filter(fecha__lte=fecha_fin_dt)
-    if tipo:
-        movimientos = movimientos.filter(tipo_movimiento__iexact=tipo)
-    if articulo:
-        movimientos = movimientos.filter(ProductoTalla__producto__articulo__icontains=articulo)
-    if responsable:
-        movimientos = movimientos.filter(responsable__icontains=responsable)
-    if concepto:
-        movimientos = movimientos.filter(concepto__icontains=concepto)
-
-    total_count = movimientos.count()
-    offset = (page - 1) * page_size
-    movimientos = movimientos.order_by('-fecha')[offset:offset+page_size]
-
-    data = []
-    for m in movimientos:
-        prod = m.ProductoTalla.producto
-        # Calcular cantidad basada en el tipo de movimiento
-        cantidad = 0
-        if m.tipo_movimiento == 'INGRESO':
-            cantidad = 1  # O el valor real si tienes un campo de cantidad
-        elif m.tipo_movimiento == 'EGRESO':
-            cantidad = -1  # O el valor real negativo
-        def limpiar_prefijo(valor):
-            if not valor:
-                return ''
-            for prefijo in ['Marca:', 'Color:', 'Género:']:
-                if valor.startswith(prefijo):
-                    return valor[len(prefijo):].strip()
-            return valor.strip()
-        marca = limpiar_prefijo(prod.atributo1.valor if prod.atributo1 else '')
-        color = limpiar_prefijo(prod.atributo2.valor if prod.atributo2 else '')
-        genero = limpiar_prefijo(prod.atributo3.valor if prod.atributo3 else '')
-        data.append({
-            'id': m.id,
-            'fecha': m.fecha.strftime('%Y-%m-%d'),
-            'hora': m.hora.strftime('%H:%M:%S') if m.hora else '',
-            'articulo': prod.articulo,
-            'descripcion': prod.descripcion,
-            'marca': marca,
-            'color': color,
-            'genero': genero,
-            'talla': m.ProductoTalla.talla,
-            'sku': m.ProductoTalla.sku,
-            'cantidad': cantidad,
-            'costo': m.costo,
-            'precio': m.precio,
-            'sobreprecio': m.sobreprecio,
-            'tipo_movimiento': m.tipo_movimiento,
-            'concepto': m.concepto,
-            'responsable': m.responsable,
-            'dte': m.dte.numero_documento if m.dte else None,
-            'referencia_externa': m.dte.numero_documento if m.dte else None,
-        })
-    return JsonResponse({
-        'success': True,
-        'items': data,
-        'pagination': {
-            'page': page,
-            'page_size': page_size,
-            'total_count': total_count,
-            'total_pages': (total_count + page_size - 1) // page_size,
-            'has_next': page * page_size < total_count,
-            'has_previous': page > 1
-        }
-    })
-
 # ========== VISTAS PARA REPORTES ==========
 
 @require_GET
@@ -763,21 +1035,15 @@ def reporte_movimientos_kardex(request):
     for m in movimientos:
         saldo += m.cantidad
         # Enriquecer referencia
-        referencia = m.referencia_externa or ''
-        tipo_ref = ''
+        referencia = ''
         if m.dte:
-            tipo_doc = m.dte.tipo_documento
-            if tipo_doc == 'GUIA' and m.dte.tipo_transaccion == 'VENTA':
-                tipo_ref = f"Despacho a sucursal ({m.sucursal_destino.alias if m.sucursal_destino else ''})"
-                referencia = f"Guía {m.dte.numero_documento} - {tipo_ref}"
-            else:
-                referencia = f"{tipo_doc} {m.dte.numero_documento}"
+            referencia = f"{m.dte.tipo_documento} {m.dte.numero_documento}"
         elif m.ticket:
-            if m.concepto == 'VENTA_INTERNA':
-                tipo_ref = 'Venta interna'
-                referencia = f"Ticket {m.ticket.correlativo} - {tipo_ref}"
-            else:
-                referencia = f"Ticket {m.ticket.correlativo}"
+            referencia = f"Ticket {m.ticket.correlativo}"
+        elif m.referencia_externa:
+            referencia = m.referencia_externa
+        elif m.sucursal_destino:
+            referencia = f"Destino: {m.sucursal_destino.alias}"
         kardex.append({
             'fecha': m.fecha.strftime('%Y-%m-%d'),
             'hora': m.hora.strftime('%H:%M'),
@@ -803,59 +1069,247 @@ def reporte_movimientos_kardex(request):
             'has_previous': page > 1
         }
     })
+@require_GET
+@login_required
+def reporte_kardex_agrupado(request):
+    """
+    Genera un kardex agrupado por producto (sin mostrar tallas ni SKU)
+    """
+    producto_id = request.GET.get('producto_id')
+    fecha_inicio = request.GET.get('fecha_inicio')
+    fecha_fin = request.GET.get('fecha_fin')
+    page = int(request.GET.get('page', 1))
+    page_size = min(int(request.GET.get('page_size', 100)), 500)
+    
+    if not producto_id:
+        return JsonResponse({'success': False, 'error': 'ID de producto requerido'}, status=400)
+    
+    producto = get_object_or_404(Producto, id=producto_id)
+    
+    # Obtener todos los movimientos del producto (todas las tallas)
+    movimientos = Movimientos_Producto.objects.filter(
+        ProductoTalla__producto=producto
+    ).select_related('ProductoTalla', 'dte', 'ticket').order_by('fecha', 'hora')
+    
+    if fecha_inicio:
+        from django.utils.dateparse import parse_date
+        movimientos = movimientos.filter(fecha__gte=parse_date(fecha_inicio))
+    if fecha_fin:
+        from django.utils.dateparse import parse_date
+        movimientos = movimientos.filter(fecha__lte=parse_date(fecha_fin))
+    
+    # Agrupar movimientos por fecha y concepto
+    from collections import defaultdict
+    movimientos_agrupados = defaultdict(lambda: {
+        'fecha': None,
+        'hora': None,
+        'concepto': None,
+        'tipo_movimiento': None,
+        'cantidad_total': 0,
+        'costo_promedio': 0,
+        'precio_promedio': 0,
+        'responsable': None,
+        'referencia': None,
+        'movimientos_detalle': []
+    })
+    
+    for m in movimientos:
+        # Crear clave única por fecha + concepto + responsable
+        key = f"{m.fecha}_{m.concepto}_{m.responsable}"
+        
+        grupo = movimientos_agrupados[key]
+        if not grupo['fecha']:
+            grupo['fecha'] = m.fecha
+            grupo['hora'] = m.hora
+            grupo['concepto'] = m.concepto
+            grupo['tipo_movimiento'] = m.tipo_movimiento
+            grupo['responsable'] = m.responsable
+            
+            # Enriquecer referencia
+            referencia = m.referencia_externa or ''
+            if m.dte:
+                tipo_doc = m.dte.tipo_documento
+                if tipo_doc == 'GUIA' and m.dte.tipo_transaccion == 'VENTA':
+                    referencia = f"Guía {m.dte.numero_documento} - Despacho"
+                else:
+                    referencia = f"{tipo_doc} {m.dte.numero_documento}"
+            elif m.ticket:
+                referencia = f"Ticket {m.ticket.correlativo}"
+            grupo['referencia'] = referencia
+        
+        # Sumar cantidades
+        grupo['cantidad_total'] += m.cantidad
+        grupo['movimientos_detalle'].append({
+            'talla': m.ProductoTalla.talla,
+            'sku': m.ProductoTalla.sku,
+            'cantidad': m.cantidad
+        })
+    
+    # Convertir a lista y calcular saldo acumulado
+    kardex_agrupado = []
+    saldo_acumulado = 0
+    
+    for grupo in sorted(movimientos_agrupados.values(), key=lambda x: (x['fecha'], x['hora'])):
+        saldo_acumulado += grupo['cantidad_total']
+        
+        kardex_agrupado.append({
+            'fecha': grupo['fecha'].strftime('%Y-%m-%d'),
+            'hora': grupo['hora'].strftime('%H:%M') if grupo['hora'] else '',
+            'concepto': grupo['concepto'],
+            'tipo_movimiento': grupo['tipo_movimiento'],
+            'entrada': grupo['cantidad_total'] if grupo['cantidad_total'] > 0 else 0,
+            'salida': abs(grupo['cantidad_total']) if grupo['cantidad_total'] < 0 else 0,
+            'saldo': saldo_acumulado,
+            'responsable': grupo['responsable'],
+            'referencia': grupo['referencia'],
+            'detalle_tallas': grupo['movimientos_detalle']  # Para mostrar en tooltip o modal
+        })
+    
+    # Paginación
+    total_count = len(kardex_agrupado)
+    offset = (page - 1) * page_size
+    kardex_paginado = kardex_agrupado[offset:offset+page_size]
+    
+    return JsonResponse({
+        'success': True,
+        'producto': {
+            'id': producto.id,
+            'articulo': producto.articulo,
+            'descripcion': producto.descripcion,
+            'stock_total': Producto_Talla.objects.filter(producto=producto).aggregate(total_stock=Sum('stock'))['total_stock'] or 0
+        },
+        'items': kardex_paginado,
+        'pagination': {
+            'page': page,
+            'page_size': page_size,
+            'total_count': total_count,
+            'total_pages': (total_count + page_size - 1) // page_size,
+            'has_next': offset + page_size < total_count,
+            'has_previous': page > 1
+        }
+    })
+
+@require_GET
+@login_required
+def obtener_productos_base(request):
+    """
+    Obtiene productos base (sin tallas) para el selector del kardex agrupado
+    """
+    q = request.GET.get('q', '').strip()
+    page = int(request.GET.get('page', 1))
+    page_size = min(int(request.GET.get('page_size', 20)), 100)
+    sucursal_id = request.session.get('idSucursalActual')
+    
+    productos = Producto.objects.all()
+    if sucursal_id:
+        productos = productos.filter(sucursal_id=sucursal_id)
+    
+    if q:
+        productos = productos.filter(
+            Q(articulo__icontains=q) |
+            Q(descripcion__icontains=q) |
+            Q(atributo1__valor__icontains=q) |
+            Q(atributo2__valor__icontains=q) |
+            Q(atributo3__valor__icontains=q)
+        )
+    
+    total_count = productos.count()
+    offset = (page - 1) * page_size
+    productos = productos.order_by('articulo')[offset:offset+page_size]
+    
+    def limpiar_prefijo(valor):
+        if not valor:
+            return ''
+        for prefijo in ['Marca:', 'Color:', 'Género:']:
+            if valor.startswith(prefijo):
+                return valor[len(prefijo):].strip()
+        return valor.strip()
+    
+    results = []
+    for prod in productos:
+        marca = limpiar_prefijo(prod.atributo1.valor if prod.atributo1 else '')
+        color = limpiar_prefijo(prod.atributo2.valor if prod.atributo2 else '')
+        genero = limpiar_prefijo(prod.atributo3.valor if prod.atributo3 else '')
+        
+        text = f"{prod.articulo} - {prod.descripcion}"
+        if marca:
+            text += f" | Marca: {marca}"
+        if color:
+            text += f" | Color: {color}"
+        if genero:
+            text += f" | Género: {genero}"
+        
+        results.append({
+            'id': prod.id,
+            'text': text,
+            'articulo': prod.articulo,
+            'descripcion': prod.descripcion,
+            'marca': marca,
+            'color': color,
+            'genero': genero
+        })
+    
+    return JsonResponse({
+        'results': results,
+        'pagination': {
+            'more': offset + page_size < total_count
+        }
+    })
 
 # Create your views here.
 @login_required
 def verHome(request):
    
-    return render(request, 'vistas/home1.html' )
+    return render(request, 'vistas/modulo_administracion/home1.html' )
 @login_required
 def verGestionCompras(request):
-    if request.method == 'POST':
-        empresa_id = request.POST.get('empresa')
-        nombre = request.POST.get('nombre')
-        correlativo = request.POST.get('correlativo')
-        responsable = request.POST.get('responsable')
-        temporada = request.POST.get('temporada')
-
-        try:
-            empresa = Empresa.objects.get(id=empresa_id)
-        except Empresa.DoesNotExist:
-            empresa = None  # O podés manejarlo con un mensaje de error
-
-        if empresa:
-            Compras.objects.create(
-                empresa=empresa,
-                nombre=nombre,
-                correlativo=correlativo,
-                responsable=responsable,
-                temporada=temporada
-            )
-
+    # Esta vista solo maneja GET requests para mostrar la página
+    # Los POST requests para crear compras se manejan en la vista crear_compra
     empresas = Empresa.objects.all()  # Lista para usar en el select del modal
-    return render(request, 'vistas/gestionCompras.html', {'empresas': empresas})
+    return render(request, 'vistas/modulo_compras/gestionCompras.html', {'empresas': empresas})
  
 @login_required
 def verGestionProducto(request):
-    marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
-    color = Productos_Atributos.objects.get(nombre__iexact='Color')
-    genero = Productos_Atributos.objects.get(nombre__iexact='Género')
- 
+    """
+    Vista para gestión de productos con inicialización automática de atributos
+    """
+    try:
+        # Intentar obtener los atributos básicos
+        marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
+        color = Productos_Atributos.objects.get(nombre__iexact='Color')
+        genero = Productos_Atributos.objects.get(nombre__iexact='Género')
+        
+    except Productos_Atributos.DoesNotExist:
+        # Si no existen los atributos, ejecutar inicialización automática
+        from django.core.management import call_command
+        from django.contrib import messages
+        
+        try:
+            call_command('inicializar_atributos')
+            messages.success(request, 'Atributos básicos inicializados correctamente.')
+            
+            # Intentar obtener los atributos nuevamente
+            marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
+            color = Productos_Atributos.objects.get(nombre__iexact='Color')
+            genero = Productos_Atributos.objects.get(nombre__iexact='Género')
+            
+        except Exception as e:
+            messages.error(request, f'Error al inicializar atributos: {str(e)}')
+            # Valores por defecto en caso de error
+            marca = color = genero = None
 
     context = {
-        'id_atributo_marca': marca.id,
-        'id_atributo_color': color.id,
-        'id_atributo_genero': genero.id,
-    
-    } 
+        'id_atributo_marca': marca.id if marca else 0,
+        'id_atributo_color': color.id if color else 0,
+        'id_atributo_genero': genero.id if genero else 0,
+    }
 
-     
-    return render(request, 'vistas/verGestionProductos.html' , context)
+    return render(request, 'vistas/modulo_existencias/verGestionProductos.html', context)
 @login_required
 def verGestionDteCompras(request):
      
      
-    return render(request, 'vistas/gestionDteCompras.html' )
+    return render(request, 'vistas/modulo_compras/gestionDteCompras.html' )
 
 
 def ver_resetPassword(request):
@@ -868,56 +1322,60 @@ def ver_resetPassword(request):
 def obtenerDetalleComprasPorParametros(request):
    
     return True
- 
-@require_POST
-@transaction.atomic
 def crear_compra(request):
     try:
+        # Obtener datos del formulario
         empresa_id = request.POST.get('empresa')
         nombre = request.POST.get('nombre')
         temporada = request.POST.get('temporada')
         fecha_inicio = request.POST.get('fechaInicioTemporada')
         fecha_termino = request.POST.get('fechaTerminoTemporada')
 
+        # Validar datos requeridos
         if not all([empresa_id, nombre, temporada, fecha_inicio, fecha_termino]):
             return JsonResponse({'success': False, 'error': 'Datos incompletos'}, status=400)
 
         if fecha_inicio > fecha_termino:
             return JsonResponse({'success': False, 'error': 'Fechas inválidas'}, status=400)
 
+        # Obtener empresa
         empresa = get_object_or_404(Empresa, id=empresa_id)
 
+        # Obtener sucursal de la sesión
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
-            return JsonResponse({'success': False, 'error': 'Sucursal no definida'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Sucursal no definida en la sesión'}, status=400)
 
-        correlativo = Correlativo.objects.select_for_update().get(
-            tipo_dte='Cotizacion',
-            sucursal_id=sucursal_id
-        )
+        # Obtener la sucursal
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
 
-        numero_actual = correlativo.inicio
+        # Usar la función obtener_siguiente_correlativo que maneja la creación automática
+        numero_actual = obtener_siguiente_correlativo(sucursal, 'Compra')
 
-        Compras.objects.create(
+        # Crear la compra
+        compra = Compras.objects.create(
             empresa=empresa,
             nombre=nombre,
             temporada=temporada,
-            responsable=request.user.get_full_name(),
+            responsable=request.user.get_full_name() or 'Sistema',
             correlativo=numero_actual,
             fechaInicioTemporada=fecha_inicio,
             fechaTerminoTemporada=fecha_termino
         )
 
-        correlativo.inicio += 1
-        correlativo.save()
-
-        return JsonResponse({'success': True})
-
-    except Correlativo.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Correlativo no encontrado'}, status=404)
+        return JsonResponse({
+            'success': True, 
+            'message': 'Compra creada exitosamente',
+            'compra_id': compra.id
+        })
 
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        # Log del error para debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error al crear compra: {str(e)}")
+        
+        return JsonResponse({'success': False, 'error': f'Error interno: {str(e)}'}, status=500)
 
  
 @require_GET
@@ -1380,9 +1838,6 @@ def empresas_proveedoras(request):
             return JsonResponse({'error': str(e)}, status=400)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
-
- 
- 
 def cargarDteCompra(request):
     if request.method == 'POST':
         try:
@@ -1655,9 +2110,6 @@ def eliminar_dte(request, dte_id):
             return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
-
-@require_POST
-@transaction.atomic
 def guardar_recepcion(request):
     try:
         data = json.loads(request.body)
@@ -2168,9 +2620,6 @@ def asociar_producto_guia(request):
             return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
- 
- 
- 
 def guia_talla_detalle(request, id):
     try:
         guia = GuiaTalla.objects.get(id=id)
@@ -2284,6 +2733,7 @@ def verificar_producto_existente(request):
     marca = request.GET.get('marca')
     color = request.GET.get('color')
     genero = request.GET.get('genero')
+    categoria = request.GET.get('categoria')  # 🔧 AGREGADA CATEGORÍA
 
     # Convertir a enteros si son números, o buscar por valor si son texto
     filtros = {'articulo': articulo}
@@ -2331,6 +2781,23 @@ def verificar_producto_existente(request):
                     'existe': False,
                     'tallas_existentes': []
                 })
+    
+    # 🔧 MANEJAR CATEGORÍA
+    if categoria:
+        try:
+            categoria_id = int(categoria)
+            filtros['categoria_id'] = categoria_id
+        except (ValueError, TypeError):
+            # Si es texto, buscar por nombre
+            try:
+                from .models import Categoria
+                categoria_obj = Categoria.objects.get(nombre=categoria)
+                filtros['categoria_id'] = categoria_obj.id
+            except Categoria.DoesNotExist:
+                return JsonResponse({
+                    'existe': False,
+                    'tallas_existentes': []
+                })
 
     producto = Producto.objects.filter(**filtros).first()
     
@@ -2348,9 +2815,6 @@ def verificar_producto_existente(request):
             'existe': False,
             'tallas_existentes': []
         })
- 
- 
- 
 @transaction.atomic
 def crear_producto_desde_recepcion(request):
     # 1. Validar sesión y datos básicos
@@ -2441,7 +2905,6 @@ def crear_producto_desde_recepcion(request):
             ).update(producto_talla=pt)
 
     return JsonResponse({'success': True, 'producto_id': producto.id})
-
 import re
 
 def obtener_tallas_post(request):
@@ -2579,7 +3042,7 @@ def verMovimientosProducto(request):
     """
     Renderiza la página de movimientos de producto por sucursal.
     """
-    return render(request, 'vistas/gestionMovimientos.html')
+    return render(request, 'vistas/modulo_existencias/gestionMovimientos.html')
 
 @require_GET
 @login_required
@@ -2638,12 +3101,13 @@ def obtener_movimientos_producto(request):
     data = []
     for m in movimientos:
         prod = m.ProductoTalla.producto
-        # Calcular cantidad basada en el tipo de movimiento
-        cantidad = 0
-        if m.tipo_movimiento == 'INGRESO':
-            cantidad = 1  # O el valor real si tienes un campo de cantidad
-        elif m.tipo_movimiento == 'EGRESO':
-            cantidad = -1  # O el valor real negativo
+        # Usar la cantidad real del movimiento
+        cantidad = m.cantidad
+        referencia = m.referencia_externa or ''
+        if m.tipo_movimiento == 'TRASPASO' and m.sucursal_destino:
+            referencia = f"Destino: {m.sucursal_destino.alias}"
+        elif m.dte:
+            referencia = f"{m.dte.tipo_documento} {m.dte.numero_documento}"
         def limpiar_prefijo(valor):
             if not valor:
                 return ''
@@ -2673,7 +3137,7 @@ def obtener_movimientos_producto(request):
             'concepto': m.concepto,
             'responsable': m.responsable,
             'dte': m.dte.numero_documento if m.dte else None,
-            'referencia_externa': m.dte.numero_documento if m.dte else None,  # Agregar referencia_externa
+            'referencia_externa': referencia,
         })
     return JsonResponse({
         'success': True,
@@ -2857,7 +3321,7 @@ def verReporteDespachosProveedor(request):
     """
     Renderiza la página completa del reporte de despachos por proveedor.
     """
-    return render(request, 'vistas/reporteDespachosProveedor.html')
+    return render(request, 'vistas/modulo reportes/reporteDespachosProveedor.html')
 
 # ========== VISTAS PARA CREACIÓN MANUAL DE PRODUCTOS ==========
 
@@ -2926,9 +3390,6 @@ def obtener_dtes_por_proveedor(request, proveedor_id):
     except Exception as e:
         print(f"❌ Error en obtener_dtes_por_proveedor: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
-
-@require_POST
-@transaction.atomic
 def crear_producto_manual(request):
     """
     Crea un producto manualmente con DTE y proveedor seleccionados
@@ -3139,7 +3600,6 @@ def detalle_producto_para_copiar(request, producto_id):
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
 @require_GET
 @login_required
 def tallas_producto(request, producto_id):
@@ -3226,7 +3686,6 @@ def crear_lote_producto(producto_talla, cantidad, costo_unitario, sobreprecio_un
     )
     
     return lote
-
 def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=None, 
                        observaciones=None, referencia_externa=None):
     """
@@ -3367,7 +3826,7 @@ def ver_lotes_producto(request, producto_talla_id):
             'stock_fifo': sum(lote.cantidad_disponible for lote in lotes_activos)
         }
         
-        return render(request, 'vistas/lotes_producto.html', context)
+        return render(request, 'vistas/modulo_existencias/lotes_producto.html', context)
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -3592,13 +4051,11 @@ def dashboard_fifo(request):
             'sucursal_id': sucursal_id
         }
         
-        return render(request, 'vistas/dashboard_fifo.html', context)
+        return render(request, 'vistas/modulo_dashboards/dashboard_fifo.html', context)
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
 # ========== VISTAS AJAX PARA DASHBOARD FIFO ==========
-
 @require_GET
 @login_required
 def obtener_datos_dashboard_fifo(request):
@@ -3933,9 +4390,6 @@ def exportar_dashboard_fifo(request):
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-@require_GET
-@login_required
 def obtener_analisis_fifo_detallado(request):
     """
     API para obtener análisis detallado del FIFO
@@ -4468,10 +4922,6 @@ def dashboard_compras_estrategico(request):
         
         return JsonResponse(response_data)
         
-        # Código eliminado - ahora usa datos de ejemplo por defecto
-        
-        return JsonResponse(response_data)
-        
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
@@ -4500,14 +4950,14 @@ def verDashboardCompras(request):
     """
     Vista para mostrar el dashboard estratégico de compras
     """
-    return render(request, 'vistas/dashboard_compras_estrategico.html')
+    return render(request, 'vistas/modulo_dashboards/dashboard_compras_estrategico.html')
 
 @login_required
 def verDiagnosticoCompras(request):
     """
     Vista para mostrar la página de diagnóstico de compras
     """
-    return render(request, 'vistas/diagnostico_compras.html')
+    return render(request, 'vistas/modulo_compras/diagnostico_compras.html')
 
 @login_required
 def diagnostico_datos_compras(request):
@@ -4652,7 +5102,7 @@ def gestion_vendedores(request):
     """
     Vista para mostrar la gestión de vendedores
     """
-    return render(request, 'vistas/gestion_vendedores.html')
+    return render(request, 'vistas/modulo_administracion/gestion_vendedores.html')
 
 @require_GET
 @login_required
@@ -4671,7 +5121,6 @@ def obtener_vendedores(request):
                 'codigo_vendedor': vendedor.codigo_vendedor,
                 'rut': vendedor.rut,
                 'nombre': vendedor.nombre,
-                'comision': vendedor.comision,
                 'fecha_nacimiento': vendedor.fecha_nacimiento.strftime('%d/%m/%Y') if vendedor.fecha_nacimiento else None,
                 'correo': vendedor.correo,
                 'activo': True,  # Por defecto activo
@@ -4732,11 +5181,6 @@ def obtener_metricas_vendedores(request):
             'success': False,
             'error': str(e)
         }, status=500)
-
-@require_POST
-@login_required
-@transaction.atomic
-@csrf_exempt
 def crear_vendedor(request):
     """
     Crear nuevo vendedor
@@ -4761,11 +5205,15 @@ def crear_vendedor(request):
             except ValueError:
                 errores.append('La comisión debe ser un número válido')
         
-        # Validar RUT si se proporciona
-        if data.get('rut'):
+        # Validar RUT si se proporciona y no está vacío
+        if data.get('rut') and data['rut'].strip():
             rut_valido, mensaje_rut = validar_rut_chileno(data['rut'])
             if not rut_valido:
                 errores.append(f'RUT inválido: {mensaje_rut}')
+            else:
+                # Verificar si ya existe un vendedor con el mismo RUT
+                if Vendedor.objects.filter(rut=data['rut'].strip()).exists():
+                    errores.append('Ya existe un vendedor con ese RUT')
         
         if errores:
             return JsonResponse({
@@ -4801,7 +5249,6 @@ def crear_vendedor(request):
             'success': False,
             'error': str(e)
         }, status=500)
-
 @require_http_methods(["PUT"])
 @login_required
 @transaction.atomic
@@ -4845,11 +5292,15 @@ def editar_vendedor(request):
             except ValueError:
                 errores.append('La comisión debe ser un número válido')
         
-        # Validar RUT si se proporciona
-        if data.get('rut'):
+        # Validar RUT si se proporciona y no está vacío
+        if data.get('rut') and data['rut'].strip():
             rut_valido, mensaje_rut = validar_rut_chileno(data['rut'])
             if not rut_valido:
                 errores.append(f'RUT inválido: {mensaje_rut}')
+            else:
+                # Verificar si ya existe otro vendedor con el mismo RUT
+                if Vendedor.objects.filter(rut=data['rut'].strip()).exclude(id=vendedor_id).exists():
+                    errores.append('Ya existe otro vendedor con ese RUT')
         
         if errores:
             return JsonResponse({
@@ -4970,7 +5421,7 @@ def dashboard_productos(request):
     """
     Vista para mostrar el dashboard de productos
     """
-    return render(request, 'vistas/dashboard_productos.html')
+    return render(request, 'vistas/modulo_dashboards/dashboard_productos.html')
 
 @require_GET
 @login_required
@@ -5451,7 +5902,6 @@ def gestionar_proveedor(request, proveedor_id):
                 'success': False,
                 'error': f'Error al eliminar proveedor: {str(e)}'
             }, status=500)
-
 @require_GET
 @login_required
 def listar_proveedores(request):
@@ -5527,3 +5977,2330 @@ def listar_proveedores(request):
             'success': False,
             'error': f'Error al obtener proveedores: {str(e)}'
         }, status=500)
+# ========== VISTAS PARA EMISIÓN DE DTE ==========
+
+@login_required
+def emision_dte(request):
+    """
+    Vista principal para la emisión de DTE
+    """
+    return render(request, 'vistas/modulo_administracion/emisionDTE.html')
+
+@login_required
+def debug_session(request):
+    """
+    Vista temporal para debug de sesión
+    """
+    session_data = {
+        'idSucursalActual': request.session.get('idSucursalActual'),
+        'idEmpresaActual': request.session.get('idEmpresaActual'),
+        'nombreUsuario': request.session.get('nombreUsuario'),
+        'nombreEmpresaActual': request.session.get('nombreEmpresaActual'),
+        'rutEmpresaActual': request.session.get('rutEmpresaActual'),
+        'alias': request.session.get('alias'),
+        'all_session_keys': list(request.session.keys())
+    }
+    return JsonResponse(session_data)
+def debug_user_empresas(request):
+    """Vista temporal para debug de empresas del usuario"""
+    try:
+        debug_data = {
+            'usuario_actual': str(request.user),
+            'empresas_disponibles': [],
+            'sucursales_disponibles': [],
+            'relaciones_empresa_user': [],
+            'problema_detectado': None
+        }
+        
+        # Obtener todas las empresas del usuario
+        empresas_usuario = EmpresaUser.objects.filter(
+            user=request.user
+        ).select_related('empresa', 'sucursal')
+        
+        for eu in empresas_usuario:
+            debug_data['relaciones_empresa_user'].append({
+                'empresa_id': eu.empresa.id,
+                'empresa_nombre': eu.empresa.nombre,
+                'empresa_rut': eu.empresa.rut,
+                'sucursal_id': eu.sucursal.id if eu.sucursal else None,
+                'sucursal_alias': eu.sucursal.alias if eu.sucursal else None,
+                'status': eu.status,
+                'active': eu.active
+            })
+            
+            # Agregar empresa a la lista si no está
+            empresa_info = {
+                'id': eu.empresa.id,
+                'nombre': eu.empresa.nombre,
+                'rut': eu.empresa.rut
+            }
+            if empresa_info not in debug_data['empresas_disponibles']:
+                debug_data['empresas_disponibles'].append(empresa_info)
+        
+        # Obtener todas las sucursales de las empresas del usuario
+        empresas_ids = [eu.empresa.id for eu in empresas_usuario if eu.status]
+        sucursales = Sucursal.objects.filter(
+            empresa_id__in=empresas_ids
+        ).select_related('empresa')
+        
+        # Detectar sucursales mal asignadas
+        problemas_sucursales = []
+        for sucursal in sucursales:
+            debug_data['sucursales_disponibles'].append({
+                'id': sucursal.id,
+                'alias': sucursal.alias,
+                'direccion': sucursal.direccion,
+                'empresa_id': sucursal.empresa.id,
+                'empresa_nombre': sucursal.empresa.nombre,
+                'empresa_rut': sucursal.empresa.rut
+            })
+            
+            # Detectar si hay sucursales NICK en empresa Paola
+            if 'NICK' in sucursal.alias and 'Paola' in sucursal.empresa.nombre:
+                problemas_sucursales.append(f"Sucursal {sucursal.alias} está en {sucursal.empresa.nombre} pero debería estar en Importadora Nicole Andrea")
+        
+        if problemas_sucursales:
+            debug_data['problema_detectado'] = {
+                'tipo': 'sucursales_mal_asignadas',
+                'detalles': problemas_sucursales,
+                'solucion': 'Corregir las asignaciones de empresa en las sucursales NICK1 y NICK2'
+            }
+        
+        # Información de sesión actual
+        debug_data['sesion_actual'] = {
+            'idSucursalActual': request.session.get('idSucursalActual'),
+            'idEmpresaActual': request.session.get('idEmpresaActual'),
+            'alias': request.session.get('alias'),
+            'nombreEmpresaActual': request.session.get('nombreEmpresaActual')
+        }
+        
+        # Simular filtro para facturas (otras empresas)
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        if empresa_actual_id:
+            otras_empresas = [emp for emp in debug_data['empresas_disponibles'] if emp['id'] != empresa_actual_id]
+            debug_data['simulacion_factura_interna'] = {
+                'empresa_actual_id': empresa_actual_id,
+                'otras_empresas_disponibles': otras_empresas,
+                'sucursales_otras_empresas': [
+                    suc for suc in debug_data['sucursales_disponibles'] 
+                    if suc['empresa_id'] != empresa_actual_id
+                ]
+            }
+        
+        return JsonResponse(debug_data, json_dumps_params={'indent': 2})
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'tipo_error': type(e).__name__
+        }, status=500)
+
+@require_GET
+@login_required
+def empresas_clientes(request):
+    """
+    Obtener lista de empresas que pueden ser receptores de DTE (clientes)
+    """
+    try:
+        # Obtener empresas que no son proveedores (son clientes)
+        clientes = Empresa.objects.filter(esProveedor=False).order_by('nombre')
+        
+        data = []
+        for cliente in clientes:
+            data.append({
+                'id': cliente.id,
+                'nombre': cliente.nombre,
+                'rut': cliente.rut,
+                'nombre_fantasia': cliente.nombre_fantasia,
+                'razon_social': cliente.razon_social,
+                'direccion': cliente.direccion,
+                'ciudad': cliente.ciudad
+            })
+        
+        return JsonResponse(data, safe=False)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener clientes: {str(e)}'
+        }, status=500)
+
+@require_GET
+@login_required
+def obtener_marcas(request):
+    """
+    Obtener lista de marcas disponibles (atributo1)
+    """
+    try:
+        # Obtener el atributo "Marca" 
+        atributo_marca = Productos_Atributos.objects.filter(nombre__icontains='marca').first()
+        
+        if not atributo_marca:
+            return JsonResponse([])
+        
+        marcas = AtributoOpcion.objects.filter(atributo=atributo_marca).order_by('valor')
+        
+        data = []
+        for marca in marcas:
+            data.append({
+                'id': marca.id,
+                'valor': marca.valor
+            })
+        
+        return JsonResponse(data, safe=False)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener marcas: {str(e)}'
+        }, status=500)
+
+@require_GET
+@login_required
+def obtener_categorias(request):
+    """
+    Obtener lista de categorías disponibles
+    """
+    try:
+        categorias = Categoria.objects.all().order_by('nombre')
+        
+        data = []
+        for categoria in categorias:
+            data.append({
+                'id': categoria.id,
+                'nombre': categoria.nombre
+            })
+        
+        return JsonResponse(data, safe=False)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener categorías: {str(e)}'
+        }, status=500)
+
+@require_POST
+@login_required
+def buscar_productos_bodega(request):
+    """
+    Buscar productos en bodega con filtros y paginación
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Parámetros de búsqueda
+        search = data.get('search', '').strip()
+        marca_id = data.get('marca')
+        categoria_id = data.get('categoria')
+        tipo_talla = data.get('tipo_talla')
+        page = int(data.get('page', 1))
+        page_size = min(int(data.get('page_size', 10)), 50)
+        
+        # Obtener sucursal actual del usuario desde la sesión
+        sucursal_id = request.session.get('idSucursalActual')
+        empresa_id = request.session.get('idEmpresaActual')
+        
+        print(f"🔍 DEBUG SESIÓN - Usuario: {request.user}")
+        print(f"🔍 DEBUG SESIÓN - idSucursalActual: {sucursal_id}")
+        print(f"🔍 DEBUG SESIÓN - idEmpresaActual: {empresa_id}")
+        print(f"🔍 DEBUG SESIÓN - nombreEmpresaActual: {request.session.get('nombreEmpresaActual')}")
+        print(f"🔍 DEBUG SESIÓN - alias: {request.session.get('alias')}")
+        print(f"🔍 DEBUG SESIÓN - Todas las claves de sesión: {list(request.session.keys())}")
+        
+        # Mostrar todos los valores de sesión para debug completo
+        for key in request.session.keys():
+            print(f"  📋 {key}: {request.session.get(key)}")
+        
+        if not sucursal_id:
+            # Intentar obtener de las claves alternativas de compatibilidad
+            sucursal_id = request.session.get('sucursalActual')
+            empresa_id = request.session.get('empresaActual')
+            print(f"🔍 DEBUG SESIÓN - Intentando claves alternativas:")
+            print(f"  - sucursalActual: {sucursal_id}")
+            print(f"  - empresaActual: {empresa_id}")
+            
+            if sucursal_id:
+                # Actualizar las claves principales
+                request.session['idSucursalActual'] = sucursal_id
+                request.session['idEmpresaActual'] = empresa_id
+                print(f"✅ DEBUG SESIÓN - Actualizadas claves principales")
+        
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión. Por favor, selecciona una empresa/sucursal desde el menú de usuario.',
+                'debug_info': {
+                    'session_keys': list(request.session.keys()),
+                    'user': str(request.user)
+                }
+            }, status=400)
+        
+        # Query base - productos de la sucursal actual
+        print(f"🔍 DEBUG - Filtrando productos por sucursal_id: {sucursal_id}")
+        productos = Producto.objects.filter(sucursal_id=sucursal_id)
+        print(f"🔍 DEBUG - Productos encontrados en sucursal: {productos.count()}")
+        
+        # Aplicar filtros
+        if search:
+            productos = productos.filter(
+                Q(articulo__icontains=search) |
+                Q(descripcion__icontains=search)
+            )
+        
+        if marca_id:
+            productos = productos.filter(atributo1_id=marca_id)
+        
+        if categoria_id:
+            productos = productos.filter(categoria_id=categoria_id)
+        
+        if tipo_talla:
+            productos = productos.filter(tipo_talla=tipo_talla)
+        
+        # Contar total
+        total_count = productos.count()
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        # Aplicar paginación
+        offset = (page - 1) * page_size
+        productos = productos[offset:offset + page_size]
+        
+        # Formatear datos con información de tallas
+        productos_data = []
+        for producto in productos:
+            print(f"  📦 Producto: {producto.articulo} (ID: {producto.id}, Sucursal: {producto.sucursal_id})")
+            
+            # Verificar información de la sucursal del producto
+            try:
+                sucursal_producto = Sucursal.objects.get(id=producto.sucursal_id)
+                print(f"    🏢 Sucursal del producto: {sucursal_producto.alias} (Empresa: {sucursal_producto.empresa.nombre})")
+            except:
+                print(f"    ❌ No se pudo obtener info de sucursal {producto.sucursal_id}")
+            # Obtener tallas con stock
+            tallas = Producto_Talla.objects.filter(
+                producto=producto,
+                stock__gt=0
+            ).order_by('talla')
+            
+            if tallas.exists():
+                tallas_data = []
+                tallas_disponibles = []
+                stock_total = 0
+                
+                for talla in tallas:
+                    tallas_data.append({
+                        'id': talla.id,
+                        'talla': talla.talla,
+                        'stock': talla.stock,
+                        'precio_venta': float(producto.precioventa)
+                    })
+                    tallas_disponibles.append(talla.talla)
+                    stock_total += talla.stock
+                
+                productos_data.append({
+                    'id': producto.id,
+                    'articulo': producto.articulo,
+                    'descripcion': producto.descripcion,
+                    'marca': producto.atributo1.valor if producto.atributo1 else None,
+                    'categoria': producto.categoria.nombre if producto.categoria else None,
+                    'tipo_talla': producto.tipo_talla,
+                    'precio_venta': float(producto.precioventa),
+                    'stock_total': stock_total,
+                    'tallas_disponibles': tallas_disponibles,
+                    'tallas': tallas_data,
+                    'sucursal_id': producto.sucursal_id  # Para debug
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'products': productos_data,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_previous': page > 1
+            }
+        })
+        
+    except json.JSONDecodeError as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Datos JSON inválidos: {str(e)}'
+        }, status=400)
+    except Exception as e:
+        # Log más detallado para debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f'Error en buscar_productos_bodega: {str(e)}', exc_info=True)
+        
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al buscar productos: {str(e)}'
+        }, status=500)
+
+@require_GET
+@login_required
+def obtener_sucursales(request):
+    """
+    Obtener lista de sucursales para despacho interno
+    Solo muestra sucursales de empresas a las que el usuario tiene acceso
+    """
+    try:
+        sucursal_actual_id = request.session.get('idSucursalActual')
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        filtro_empresa = request.GET.get('filtro_empresa', 'todas')
+        
+        print(f"🔍 DEBUG - Usuario: {request.user}")
+        print(f"🔍 DEBUG - Sucursal actual: {sucursal_actual_id}")
+        print(f"🔍 DEBUG - Empresa actual: {empresa_actual_id}")
+        print(f"🔍 DEBUG - Filtro empresa: {filtro_empresa}")
+        
+        # Determinar qué empresas incluir según el filtro
+        if filtro_empresa == 'misma':
+            # Para facturas electrónicas: OTRAS empresas (no la actual)
+            if not empresa_actual_id:
+                print("❌ ERROR - No hay empresa actual en sesión")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No hay empresa actual en la sesión'
+                }, status=400)
+            
+            # Debug: Mostrar TODAS las empresas del usuario primero
+            todas_empresas_usuario = EmpresaUser.objects.filter(
+                user=request.user,
+                status=True
+            ).select_related('empresa')
+            
+            print(f"🔍 DEBUG - TODAS las empresas del usuario {request.user}:")
+            for eu in todas_empresas_usuario:
+                print(f"  🏭 {eu.empresa.nombre} (ID: {eu.empresa.id}, RUT: {eu.empresa.rut}) - Status: {eu.status}, Active: {eu.active}")
+            
+            # Obtener todas las empresas del usuario EXCEPTO la actual
+            empresas_usuario = EmpresaUser.objects.filter(
+                user=request.user,
+                status=True
+            ).exclude(
+                empresa_id=empresa_actual_id
+            ).values_list('empresa_id', flat=True)
+            
+            empresas_filtro = list(empresas_usuario)
+            print(f"🔍 DEBUG - FACTURA ELECTRÓNICA: OTRAS empresas (excluyendo actual ID {empresa_actual_id})")
+            print(f"  📋 Empresas filtro: {empresas_filtro}")
+            
+            if not empresas_filtro:
+                print("⚠️ WARNING - No hay otras empresas disponibles para facturas internas")
+                print("  💡 Esto significa que el usuario solo tiene acceso a UNA empresa")
+            
+            # Verificar que la empresa actual existe y mostrar su información
+            try:
+                empresa_actual = Empresa.objects.get(id=empresa_actual_id)
+                print(f"  🏭 Empresa actual (EXCLUIDA): {empresa_actual.nombre} (RUT: {empresa_actual.rut})")
+            except Empresa.DoesNotExist:
+                print(f"❌ ERROR - Empresa ID {empresa_actual_id} no existe")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Empresa con ID {empresa_actual_id} no encontrada'
+                }, status=400)
+        else:
+            # Para guías de despacho: SOLO la misma empresa (sesión actual)
+            if not empresa_actual_id:
+                print("❌ ERROR - No hay empresa actual en sesión para guías")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No hay empresa actual en la sesión'
+                }, status=400)
+            
+            empresas_filtro = [empresa_actual_id]
+            print(f"🔍 DEBUG - GUÍA DE DESPACHO: Solo empresa actual ID {empresa_actual_id}")
+            
+            # Verificar que la empresa actual existe y mostrar su información
+            try:
+                empresa_actual = Empresa.objects.get(id=empresa_actual_id)
+                print(f"  🏭 Empresa actual (INCLUIDA): {empresa_actual.nombre} (RUT: {empresa_actual.rut})")
+            except Empresa.DoesNotExist:
+                print(f"❌ ERROR - Empresa ID {empresa_actual_id} no existe")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Empresa con ID {empresa_actual_id} no encontrada'
+                }, status=400)
+        
+        # Obtener sucursales según el filtro, excluyendo la actual
+        sucursales_query = Sucursal.objects.filter(
+            empresa_id__in=empresas_filtro
+        ).exclude(
+            id=sucursal_actual_id
+        ).select_related('empresa')
+        
+        print(f"🔍 DEBUG - Query sucursales: {sucursales_query.query}")
+        print(f"🔍 DEBUG - Sucursales encontradas: {sucursales_query.count()}")
+        
+        sucursales_list = []
+        for sucursal in sucursales_query:
+            sucursal_data = {
+                'id': sucursal.id,
+                'nombre': sucursal.alias,  # Usar 'alias' en lugar de 'nombre'
+                'direccion': sucursal.direccion,
+                'empresa': sucursal.empresa.razon_social,
+                'empresa_id': sucursal.empresa.id,  # Para debug
+                'empresa_rut': sucursal.empresa.rut  # Para debug
+            }
+            sucursales_list.append(sucursal_data)
+            print(f"  ✅ Sucursal incluida: {sucursal.alias} | Empresa: {sucursal.empresa.nombre} (ID: {sucursal.empresa.id}, RUT: {sucursal.empresa.rut})")
+        
+        # Mostrar resumen final
+        if filtro_empresa == 'misma':
+            print(f"📋 RESUMEN FACTURA: Se devuelven {len(sucursales_list)} sucursales de la empresa actual")
+        else:
+            print(f"📋 RESUMEN GUÍA: Se devuelven {len(sucursales_list)} sucursales de todas las empresas del usuario")
+        
+        print(f"🔍 DEBUG - Total sucursales devueltas: {len(sucursales_list)}")
+        print(f"🔍 DEBUG - Filtro aplicado: {filtro_empresa} ({'Solo misma empresa' if filtro_empresa == 'misma' else 'Todas las empresas del usuario'})")
+        
+        return JsonResponse(sucursales_list, safe=False)
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f'Error en obtener_sucursales: {str(e)}', exc_info=True)
+        
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener sucursales: {str(e)}'
+        }, status=500)
+@require_POST
+@login_required
+def emitir_dte(request):
+    """
+    Procesar la emisión de un DTE
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # DEBUG COMPLETO: Mostrar todos los datos recibidos
+        print("🔍 DEBUG COMPLETO - Datos recibidos en emitir_dte:")
+        print(f"📋 Raw data: {data}")
+        
+        # Validar datos requeridos
+        metodo_despacho = data.get('metodo_despacho')
+        tipo_documento = data.get('tipo_documento')
+        receptor_id = data.get('receptor_id')
+        sucursal_destino_id = data.get('sucursal_destino_id')
+        fecha_emision = data.get('fecha_emision')
+        detalle_productos = data.get('detalle_productos', [])
+        observaciones = data.get('observaciones', '')
+        
+        # DEBUG: Mostrar cada campo individualmente
+        print(f"📝 metodo_despacho: '{metodo_despacho}' (len: {len(str(metodo_despacho)) if metodo_despacho else 0})")
+        print(f"📝 tipo_documento: '{tipo_documento}' (len: {len(str(tipo_documento)) if tipo_documento else 0})")
+        print(f"📝 receptor_id: '{receptor_id}'")
+        print(f"📝 sucursal_destino_id: '{sucursal_destino_id}'")
+        print(f"📝 fecha_emision: '{fecha_emision}'")
+        print(f"📝 observaciones: '{observaciones}' (len: {len(str(observaciones)) if observaciones else 0})")
+        print(f"📝 detalle_productos: {len(detalle_productos)} items")
+        
+        # Validar datos básicos
+        if not all([metodo_despacho, tipo_documento, fecha_emision]):
+            return JsonResponse({
+                'success': False,
+                'error': 'Faltan datos obligatorios básicos'
+            }, status=400)
+        
+        # Validar según tipo de despacho
+        if metodo_despacho == 'interno':
+            if not sucursal_destino_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Debe seleccionar una sucursal destino para despacho interno'
+                }, status=400)
+        else:  # despacho externo
+            if not receptor_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Debe seleccionar una empresa cliente para despacho externo'
+                }, status=400)
+        
+        if not detalle_productos:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe incluir al menos un producto'
+            }, status=400)
+        
+        # Obtener datos de sesión
+        sucursal_id = request.session.get('idSucursalActual')
+        empresa_id = request.session.get('idEmpresaActual')
+        
+        if not sucursal_id or not empresa_id:
+            # Intentar obtener la primera sucursal disponible como fallback
+            try:
+                primera_sucursal = Sucursal.objects.first()
+                if primera_sucursal:
+                    sucursal_id = primera_sucursal.id
+                    empresa_id = primera_sucursal.empresa.id
+                    # Establecer en sesión
+                    request.session['idSucursalActual'] = sucursal_id
+                    request.session['idEmpresaActual'] = empresa_id
+                else:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'No hay sucursales configuradas en el sistema'
+                    }, status=400)
+            except Exception as e:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Error al obtener datos de sesión: {str(e)}'
+                }, status=400)
+        
+        # Obtener objetos según tipo de despacho
+        emisor = get_object_or_404(Empresa, id=empresa_id)
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        receptor = None
+        sucursal_destino = None
+        
+        if metodo_despacho == 'interno':
+            # Despacho interno: obtener sucursal destino y su empresa como receptor
+            sucursal_destino = get_object_or_404(Sucursal, id=sucursal_destino_id)
+            receptor = sucursal_destino.empresa  # La empresa se deduce de la sucursal
+        else:
+            # Despacho externo: obtener empresa cliente
+            receptor = get_object_or_404(Empresa, id=receptor_id)
+        
+        # El frontend ya envía los valores correctos del modelo, no necesitamos mapear
+        tipo_doc = tipo_documento
+        
+        # DEBUG: Verificar tipo de documento
+        print(f"🔍 DEBUG - tipo_documento recibido: '{tipo_documento}' (len: {len(tipo_documento)})")
+        
+        # Validar que el tipo de documento sea válido
+        tipos_validos = ['FACTURA ELECTRONICA', 'BOLETA ELECTRONICA', 'GUIA', 'NOTA DE PEDIDO', 'NOTA DE CREDITO']
+        if tipo_doc not in tipos_validos:
+            print(f"❌ ERROR - Tipo de documento inválido: '{tipo_doc}'")
+            return JsonResponse({
+                'success': False,
+                'error': f'Tipo de documento inválido: {tipo_doc}. Valores válidos: {tipos_validos}'
+            }, status=400)
+        
+        with transaction.atomic():
+            # Calcular totales
+            subtotal_neto = 0
+            total_unidades = 0
+            
+            for item in detalle_productos:
+                talla_id = item.get('talla_id')
+                cantidad = int(item.get('cantidad', 0))
+                precio = int(float(item.get('precio', 0)))  # Convertir a int para compatibilidad con IntegerField
+                
+                # Validar stock disponible
+                talla = get_object_or_404(Producto_Talla, id=talla_id)
+                if talla.stock < cantidad:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Stock insuficiente para {talla.producto.articulo} talla {talla.talla}'
+                    }, status=400)
+                
+                subtotal_neto += cantidad * precio
+                total_unidades += cantidad
+            
+            # Calcular IVA y total
+            subtotal_decimal = Decimal(str(subtotal_neto))
+            iva = subtotal_decimal * Decimal('0.19')
+            total_con_iva = subtotal_decimal + iva
+            
+            # Obtener correlativo oficial de la sucursal para este tipo de DTE
+            try:
+                numero_documento = obtener_siguiente_correlativo(sucursal, tipo_doc)
+            except Exception as correlativo_error:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'No fue posible obtener el correlativo para {tipo_doc}: {correlativo_error}'
+                }, status=400)
+            
+            # Determinar estado y tipo según contexto de negocio
+            if metodo_despacho == 'interno':
+                estado_dte = 'EMITIDO'
+                estado_pago = 'PENDIENTE'
+                
+                # Lógica de tipo_transaccion según documento
+                if tipo_doc == 'FACTURA ELECTRONICA':
+                    # Factura interna = Venta entre empresas del grupo
+                    tipo_transaccion = 'VENTA'
+                else:  # GUIA
+                    # Guía interna = Traspaso entre sucursales de la misma empresa
+                    tipo_transaccion = 'TRASPASO'
+            else:
+                # Despacho externo = Venta a cliente
+                estado_dte = 'EMITIDO'
+                estado_pago = 'PENDIENTE'
+                tipo_transaccion = 'VENTA'
+            
+            # DEBUG: Mostrar valores asignados y lógica aplicada
+            print(f"🔍 DEBUG - Lógica aplicada:")
+            print(f"  metodo_despacho: '{metodo_despacho}'")
+            print(f"  tipo_doc: '{tipo_doc}'")
+            print(f"  → estado_dte: '{estado_dte}' (len: {len(estado_dte)})")
+            print(f"  → estado_pago: '{estado_pago}' (len: {len(estado_pago)})")
+            print(f"  → tipo_transaccion: '{tipo_transaccion}' (len: {len(tipo_transaccion)})")
+            
+            # Explicar la lógica aplicada
+            if metodo_despacho == 'interno':
+                if tipo_doc == 'FACTURA ELECTRONICA':
+                    print("  📋 Lógica: Factura interna → VENTA (entre empresas del grupo)")
+                else:
+                    print("  📋 Lógica: Guía interna → TRASPASO (entre sucursales misma empresa)")
+            else:
+                print("  📋 Lógica: Despacho externo → VENTA (a cliente)")
+            
+            # Preparar referencias
+            referencias_texto = f"Método despacho: {metodo_despacho}"
+            if sucursal_destino:
+                referencias_texto += f". Destino: {sucursal_destino.alias}"
+            if observaciones:
+                referencias_texto += f". {observaciones}"
+            
+            # Crear DTE con todos los campos requeridos
+            dte = Dte.objects.create(
+                emisor=emisor,
+                receptor=receptor,
+                numero_documento=numero_documento,
+                tipo_documento=tipo_doc,
+                monto_neto=subtotal_decimal,
+                monto_con_iva=total_con_iva,
+                estado_pago=estado_pago,
+                estado_dte=estado_dte,
+                responsable=request.user.username,
+                fecha_emision=parse_date(fecha_emision),
+                fecha_vencimiento=parse_date(fecha_emision),  # Mismo día por defecto
+                diasCredito=0,
+                bultos=1,  # Por defecto
+                unidades_productos=total_unidades,
+                tipo_transaccion=tipo_transaccion,
+                referencias=referencias_texto,
+                sucursal=sucursal
+            )
+            
+            # Crear detalle de productos y actualizar stock
+            
+            for item in detalle_productos:
+                talla_id = item.get('talla_id')
+                cantidad = int(item.get('cantidad', 0))
+                precio = int(float(item.get('precio', 0)))  # Convertir a int para compatibilidad con IntegerField
+                
+                talla = Producto_Talla.objects.get(id=talla_id)
+                producto = talla.producto
+                
+                # Crear detalle del DTE
+                Dte_Productos.objects.create(
+                    dte=dte,
+                    productoTalla=talla,
+                    descripcion=f"{producto.articulo} - Talla {talla.talla}",
+                    costo=producto.costo,
+                    sobreprecio=producto.sobreprecio,
+                    precio=int(precio),
+                    stock=cantidad,
+                    activo=True
+                )
+                
+                # Gestión de stock y movimientos según tipo de despacho
+                if metodo_despacho == 'externo':
+                    # DESPACHO EXTERNO: Reducir stock inmediatamente (venta real)
+                    if talla.stock < cantidad:
+                        raise ValueError(f"Stock insuficiente para {producto.articulo} talla {talla.talla}. Disponible: {talla.stock}, Solicitado: {cantidad}")
+                    
+                    talla.stock -= cantidad
+                    talla.save()
+                    
+                    # Crear movimiento de egreso completado
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla,
+                        sucursal_origen=sucursal,
+                        sucursal_destino=None,  # Venta externa
+                        cantidad=-cantidad,  # Negativo porque es egreso
+                        costo=producto.costo,
+                        sobreprecio=producto.sobreprecio,
+                        precio=int(precio),
+                        concepto='VENTA_MAYORISTA',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=request.user.username,
+                        observaciones=f"Venta DTE {numero_documento} - Cliente: {receptor.nombre if receptor else 'N/A'}"
+                    )
+                else:
+                    # DESPACHO INTERNO: Crear movimiento de traspaso pendiente
+                    # NO reducir stock aún - se hará cuando la sucursal destino confirme
+                    
+                    # Validar que hay stock suficiente (pero no reducir aún)
+                    if talla.stock < cantidad:
+                        raise ValueError(f"Stock insuficiente para {producto.articulo} talla {talla.talla}. Disponible: {talla.stock}, Solicitado: {cantidad}")
+                    
+                    # Crear movimiento de egreso pendiente en sucursal origen
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla,
+                        sucursal_origen=sucursal,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=-cantidad,  # Negativo porque será egreso
+                        costo=producto.costo,
+                        sobreprecio=producto.sobreprecio,
+                        precio=int(precio),
+                        concepto='TRASPASO_SALIDA',  # Usar concepto que existe en el modelo
+                        tipo_movimiento='TRASPASO',
+                        estado='PENDIENTE',
+                        responsable=request.user.username,
+                        observencias=f"Traspaso DTE {numero_documento} - Origen: {sucursal.alias} → Destino: {sucursal_destino.alias}"
+                    )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'DTE emitido correctamente',
+            'numero_documento': numero_documento,
+            'dte_id': dte.id,
+            'total': float(total_con_iva)
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al emitir DTE: {str(e)}'
+        }, status=500)
+
+# ========== REDIRECCIÓN PARA GESTIÓN DE USUARIOS ==========
+
+@login_required
+def gestion_usuarios_redirect(request):
+    """
+    Redirige a la gestión de usuarios en la app users
+    """
+    return redirect('users:gestion_usuarios')
+# ========== GESTIÓN DE CAMBIO DE EMPRESA/SUCURSAL ==========
+@login_required
+def cambiar_empresa(request):
+    """
+    Vista para mostrar las empresas y sucursales disponibles para el usuario
+    SOLO muestra empresas que tienen sucursales asignadas
+    """
+    print(f"🔍 DEBUG - Usuario actual: {request.user}")
+    print(f"🔍 DEBUG - Usuario ID: {request.user.id}")
+    
+    # Primero verificar todos los EmpresaUser del usuario
+    todos_empresa_user = EmpresaUser.objects.filter(user=request.user)
+    print(f"🔍 DEBUG - Total EmpresaUser para usuario: {todos_empresa_user.count()}")
+    
+    for eu in todos_empresa_user:
+        sucursal_info = f"Sucursal: {eu.sucursal.alias} (ID: {eu.sucursal.id})" if eu.sucursal else "Sucursal: None"
+        print(f"  - EmpresaUser ID: {eu.id}, Empresa: {eu.empresa.nombre} (ID: {eu.empresa.id}), {sucursal_info}, Status: {eu.status}, Active: {eu.active}")
+    
+    # Obtener solo las empresas que tienen sucursales asignadas al usuario
+    empresas_usuario = EmpresaUser.objects.filter(
+        user=request.user,
+        status=True,
+        sucursal__isnull=False  # Solo registros que tienen sucursal asignada
+    ).select_related('empresa', 'sucursal')
+    
+    print(f"🔍 DEBUG - EmpresaUser con sucursales: {empresas_usuario.count()}")
+    
+    # Organizar por empresa
+    empresas_data = {}
+    for eu in empresas_usuario:
+        print(f"🔍 DEBUG - Procesando: Empresa {eu.empresa.nombre}, Sucursal {eu.sucursal.alias}")
+        empresa_id = eu.empresa.id
+        if empresa_id not in empresas_data:
+            empresas_data[empresa_id] = {
+                'empresa': eu.empresa,
+                'sucursales': [],
+                'is_current': eu.empresa.id == request.session.get('idEmpresaActual')
+            }
+        
+        # Como ya filtramos por sucursal__isnull=False, sabemos que eu.sucursal existe
+        empresas_data[empresa_id]['sucursales'].append({
+            'sucursal': eu.sucursal,
+            'empresa_user': eu,
+                'is_current': (
+                    eu.empresa.id == request.session.get('idEmpresaActual') and 
+                    eu.sucursal.id == request.session.get('idSucursalActual')
+                )
+        })
+    
+    print(f"🔍 DEBUG - Empresas finales organizadas: {len(empresas_data)}")
+    
+    # Ordenar empresas y sucursales para una mejor presentación
+    empresas_data = dict(
+        sorted(
+            empresas_data.items(),
+            key=lambda item: item[1]['empresa'].nombre.lower()
+        )
+    )
+
+    for data in empresas_data.values():
+        data['sucursales'].sort(key=lambda s: s['sucursal'].alias.lower())
+
+    total_empresas = len(empresas_data)
+    total_sucursales = sum(len(data['sucursales']) for data in empresas_data.values())
+
+    context = {
+        'empresas_data': empresas_data,
+        'empresa_actual_id': request.session.get('idEmpresaActual'),
+        'sucursal_actual_id': request.session.get('idSucursalActual'),
+        'total_empresas': total_empresas,
+        'total_sucursales': total_sucursales,
+        'abrir_modal': request.GET.get('modal') == '1',
+    }
+    
+    return render(request, 'vistas/modulo_administracion/cambiar_empresa.html', context)
+
+@login_required
+@require_POST
+def seleccionar_empresa_sucursal(request):
+    """
+    Vista AJAX para cambiar la empresa y sucursal activa del usuario
+    """
+    try:
+        empresa_user_id = request.POST.get('empresa_user_id')
+        
+        if not empresa_user_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de empresa-usuario requerido'
+            })
+        
+        # Verificar que el usuario tenga acceso a esta empresa/sucursal
+        empresa_user = get_object_or_404(
+            EmpresaUser,
+            id=empresa_user_id,
+            user=request.user,
+            status=True
+        )
+        
+        # Desactivar todas las empresas del usuario
+        EmpresaUser.objects.filter(user=request.user).update(active=False)
+        
+        # Activar la empresa/sucursal seleccionada
+        empresa_user.active = True
+        empresa_user.save()
+        
+        # Actualizar la sesión (usar claves consistentes)
+        request.session['idEmpresaActual'] = empresa_user.empresa.id
+        request.session['empresaActual'] = empresa_user.empresa.id  # Mantener compatibilidad
+        request.session['nombreEmpresaActual'] = empresa_user.empresa.nombre
+        request.session['rutEmpresaActual'] = empresa_user.empresa.rut
+        
+        if empresa_user.sucursal:
+            request.session['idSucursalActual'] = empresa_user.sucursal.id
+            request.session['sucursalActual'] = empresa_user.sucursal.id  # Mantener compatibilidad
+            request.session['alias'] = empresa_user.sucursal.alias
+        else:
+            request.session['idSucursalActual'] = None
+            request.session['sucursalActual'] = None  # Mantener compatibilidad
+            request.session['alias'] = 'Sin sucursal'
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Cambiado a {empresa_user.empresa.nombre}' + 
+                      (f' - {empresa_user.sucursal.alias}' if empresa_user.sucursal else ''),
+            'empresa': {
+                'id': empresa_user.empresa.id,
+                'nombre': empresa_user.empresa.nombre,
+                'rut': empresa_user.empresa.rut,
+            },
+            'sucursal': {
+                'id': empresa_user.sucursal.id if empresa_user.sucursal else None,
+                'alias': empresa_user.sucursal.alias if empresa_user.sucursal else 'Sin sucursal',
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al cambiar empresa/sucursal: {str(e)}'
+        })
+
+# ========== BÚSQUEDA DE PRODUCTOS POR SUCURSAL ==========
+
+@login_required
+def buscar_productos_sucursal(request):
+    """
+    Vista para mostrar productos por sucursal con filtros de búsqueda
+    """
+    # Obtener sucursal actual del usuario
+    sucursal_actual_id = request.session.get('sucursalActual')
+    
+    # Obtener todas las sucursales disponibles para el usuario
+    sucursales_usuario = EmpresaUser.objects.filter(
+        user=request.user,
+        status=True,
+        sucursal__isnull=False
+    ).select_related('sucursal').values_list('sucursal', flat=True).distinct()
+    
+    sucursales = Sucursal.objects.filter(id__in=sucursales_usuario)
+    
+    # Obtener todos los atributos disponibles para los filtros
+    atributos = Productos_Atributos.objects.all().prefetch_related('opciones')
+    
+    # Obtener categorías
+    categorias = Categoria.objects.all()
+    
+    context = {
+        'sucursales': sucursales,
+        'sucursal_actual_id': sucursal_actual_id,
+        'atributos': atributos,
+        'categorias': categorias,
+    }
+    
+    return render(request, 'vistas/modulo_existencias/buscar_productos_sucursal.html', context)
+
+def obtener_productos_sucursal(request):
+    """
+    Vista AJAX para obtener productos filtrados por sucursal y atributos
+    """
+    try:
+        # Obtener parámetros de filtro
+        filtro_marca = request.GET.get('marca', '').strip()
+        filtro_sku = request.GET.get('sku', '').strip()
+        sucursal_id = request.GET.get('sucursal_id')
+        articulo = request.GET.get('articulo', '').strip()
+        descripcion = request.GET.get('descripcion', '').strip()
+        categoria_id = request.GET.get('categoria_id')
+        atributo1_id = request.GET.get('atributo1_id')
+        atributo2_id = request.GET.get('atributo2_id')
+        atributo3_id = request.GET.get('atributo3_id')
+        atributo4_id = request.GET.get('atributo4_id')
+        
+        # Parámetros de paginación
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 25))
+        
+        # Verificar que el usuario tenga acceso a la sucursal
+        if sucursal_id:
+            tiene_acceso = EmpresaUser.objects.filter(
+                user=request.user,
+                status=True,
+                sucursal_id=sucursal_id
+            ).exists()
+            
+            if not tiene_acceso:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No tienes acceso a esta sucursal'
+                })
+        
+        # Construir query base
+        productos_query = Producto.objects.select_related(
+            'sucursal', 'categoria', 'atributo1__atributo', 'atributo2__atributo',
+            'atributo3__atributo', 'atributo4__atributo'
+        ).prefetch_related('producto_talla')
+        
+        # Filtrar por sucursal
+        if sucursal_id:
+            productos_query = productos_query.filter(sucursal_id=sucursal_id)
+        
+        # Filtrar por artículo
+        if articulo:
+            productos_query = productos_query.filter(articulo__icontains=articulo)
+        
+        # Filtrar por descripción
+        if descripcion:
+            productos_query = productos_query.filter(descripcion__icontains=descripcion)
+        
+        if filtro_marca:
+            productos_query = productos_query.filter(
+                Q(atributo1__valor__icontains=filtro_marca) |
+                Q(atributo2__valor__icontains=filtro_marca) |
+                Q(atributo3__valor__icontains=filtro_marca) |
+                Q(atributo4__valor__icontains=filtro_marca)
+            )
+
+        if filtro_sku:
+            productos_query = productos_query.filter(producto_talla__sku__icontains=filtro_sku)
+
+        # Filtrar por categoría
+        if categoria_id:
+            productos_query = productos_query.filter(categoria_id=categoria_id)
+        
+        # Filtrar por atributos
+        if atributo1_id:
+            productos_query = productos_query.filter(atributo1_id=atributo1_id)
+        if atributo2_id:
+            productos_query = productos_query.filter(atributo2_id=atributo2_id)
+        if atributo3_id:
+            productos_query = productos_query.filter(atributo3_id=atributo3_id)
+        if atributo4_id:
+            productos_query = productos_query.filter(atributo4_id=atributo4_id)
+        
+        productos_query = productos_query.distinct()
+
+        # Contar total
+        total_productos = productos_query.count()
+        
+        # Aplicar paginación
+        start = (page - 1) * page_size
+        end = start + page_size
+        productos = productos_query[start:end]
+        
+        # Preparar datos para JSON
+        productos_data = []
+        for producto in productos:
+            # Calcular stock total
+            stock_total = sum(pt.stock for pt in producto.producto_talla.all())
+            
+            # Obtener tallas con stock
+            tallas_stock = [
+                {
+                    'talla': pt.talla,
+                    'stock': pt.stock,
+                    'sku': pt.sku
+                }
+                for pt in producto.producto_talla.all()
+            ]
+            
+            productos_data.append({
+                'id': producto.id,
+                'articulo': producto.articulo,
+                'descripcion': producto.descripcion,
+                'sucursal': producto.sucursal.alias,
+                'categoria': producto.categoria.nombre if producto.categoria else '',
+                'atributo1': f"{producto.atributo1.atributo.nombre}: {producto.atributo1.valor}" if producto.atributo1 else '',
+                'atributo2': f"{producto.atributo2.atributo.nombre}: {producto.atributo2.valor}" if producto.atributo2 else '',
+                'atributo3': f"{producto.atributo3.atributo.nombre}: {producto.atributo3.valor}" if producto.atributo3 else '',
+                'atributo4': f"{producto.atributo4.atributo.nombre}: {producto.atributo4.valor}" if producto.atributo4 else '',
+                'costo': producto.costo,
+                'sobreprecio': producto.sobreprecio,
+                'precio_venta': producto.precioventa,
+                'precio_sugerido': producto.precioSugerido,
+                'stock_total': stock_total,
+                'tallas_stock': tallas_stock,
+                'tipo_talla': producto.tipo_talla,
+            })
+        
+        # Calcular paginación
+        total_paginas = (total_productos + page_size - 1) // page_size
+        
+        return JsonResponse({
+            'success': True,
+            'productos': productos_data,
+            'pagination': {
+                'current_page': page,
+                'total_pages': total_paginas,
+                'page_size': page_size,
+                'total_items': total_productos
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener productos: {str(e)}'
+        })
+
+@login_required
+def obtener_opciones_atributo(request):
+    """
+    Vista AJAX para obtener opciones de un atributo específico
+    """
+    try:
+        atributo_id = request.GET.get('atributo_id')
+        
+        if not atributo_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de atributo requerido'
+            })
+        
+        opciones = AtributoOpcion.objects.filter(
+            atributo_id=atributo_id
+        ).values('id', 'valor').order_by('valor')
+        
+        return JsonResponse({
+            'success': True,
+            'opciones': list(opciones)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener opciones: {str(e)}'
+        })
+
+# ========== TICKET DE VENTA ==========
+
+@login_required
+def ticket_venta(request):
+    """
+    Vista principal para crear tickets de venta
+    Muestra vendedores asociados a la sucursal actual del usuario
+    """
+    # Obtener sucursal actual del usuario
+    sucursal_actual_id = request.session.get('sucursalActual')
+    sucursal_actual = None
+    empresa_actual_nombre = request.session.get('nombreEmpresaActual', 'Sin empresa')
+    
+    # Si hay sucursal actual, obtenerla
+    if sucursal_actual_id:
+        try:
+            sucursal_actual = Sucursal.objects.get(id=sucursal_actual_id)
+        except Sucursal.DoesNotExist:
+            sucursal_actual = None
+    
+    # Si no hay sucursal actual, obtener las sucursales disponibles para el usuario
+    sucursales_disponibles = []
+    if not sucursal_actual:
+        sucursales_usuario = EmpresaUser.objects.filter(
+            user=request.user,
+            status=True,
+            sucursal__isnull=False
+        ).select_related('sucursal', 'empresa').distinct()
+        
+        sucursales_disponibles = [
+            {
+                'sucursal': eu.sucursal,
+                'empresa': eu.empresa
+            }
+            for eu in sucursales_usuario
+        ]
+    
+    # Obtener todos los vendedores
+    vendedores = Vendedor.objects.all().order_by('nombre')
+    
+    context = {
+        'sucursal_actual': sucursal_actual,
+        'empresa_actual_nombre': empresa_actual_nombre,
+        'vendedores': vendedores,
+        'sucursales_disponibles': sucursales_disponibles,
+        'necesita_seleccionar_sucursal': not sucursal_actual,
+    }
+    
+    return render(request, 'vistas/modulo_ventas/ticket_venta.html', context)
+
+@login_required
+def buscar_vendedor_por_codigo(request):
+    """
+    Vista AJAX para buscar vendedor por código
+    """
+    try:
+        codigo = request.GET.get('codigo', '').strip()
+        
+        if not codigo:
+            return JsonResponse({
+                'success': False,
+                'error': 'Código de vendedor requerido'
+            })
+        
+        try:
+            vendedor = Vendedor.objects.get(codigo_vendedor=codigo)
+            
+            return JsonResponse({
+                'success': True,
+                'vendedor': {
+                    'id': vendedor.id,
+                    'codigo': vendedor.codigo_vendedor,
+                    'nombre': vendedor.nombre,
+                    'rut': vendedor.rut,
+                    'correo': vendedor.correo,
+                }
+            })
+            
+        except Vendedor.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'No se encontró vendedor con código: {codigo}'
+            })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al buscar vendedor: {str(e)}'
+        })
+def buscar_producto_por_sku(request):
+    """
+    Buscar producto por SKU para el ticket de venta
+    """
+    sku = request.GET.get('sku', '').strip()
+    sucursal_id = request.session.get('sucursalActual')
+    
+    if not sku:
+        return JsonResponse({
+            'success': False,
+            'message': 'SKU requerido'
+        })
+    
+    if not sucursal_id:
+        return JsonResponse({
+            'success': False,
+            'message': 'No hay sucursal seleccionada'
+        })
+    
+    try:
+        # Buscar el producto por SKU en la sucursal actual
+        producto_talla = Producto_Talla.objects.select_related(
+            'producto',
+            'producto__atributo1__atributo',
+            'producto__atributo2__atributo', 
+            'producto__atributo3__atributo',
+            'producto__atributo4__atributo'
+        ).get(
+            sku=sku,
+            producto__sucursal_id=sucursal_id
+        )
+        
+        producto = producto_talla.producto
+        
+        # Obtener la marca desde los atributos (asumiendo que está en atributo1, 2, 3 o 4)
+        marca = '-'
+        for attr_num in range(1, 5):
+            attr = getattr(producto, f'atributo{attr_num}')
+            if attr and attr.atributo and attr.atributo.nombre.lower() in ['marca', 'brand']:
+                marca = attr.valor
+                break
+        
+        return JsonResponse({
+            'success': True,
+            'producto': {
+                'sku': producto_talla.sku,
+                'articulo': producto.articulo,
+                'descripcion': producto.descripcion,
+                'marca': marca,
+                'talla': producto_talla.talla,
+                'precio_venta': int(producto.precioventa),
+                'stock': producto_talla.stock,
+                'producto_talla_id': producto_talla.id
+            }
+        })
+        
+    except Producto_Talla.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': f'No se encontró producto con SKU {sku} en esta sucursal'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al buscar producto: {str(e)}'
+        })
+
+def buscar_productos_bodega(request):
+    """
+    Buscar productos en bodega para emisión DTE con estructura correcta de atributos
+    """
+    try:
+        # Obtener parámetros de búsqueda
+        search = request.GET.get('search', '').strip()
+        marca_id = request.GET.get('marca', '')
+        categoria_id = request.GET.get('categoria', '')
+        tipo_talla = request.GET.get('tipo_talla', '')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        
+        # Obtener sucursal actual
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        empresa_id = request.session.get('idEmpresaActual') or request.session.get('empresaActual')
+        
+        print(f"🔍 DEBUG - Búsqueda productos bodega:")
+        print(f"  sucursal_id: {sucursal_id}")
+        print(f"  empresa_id: {empresa_id}")
+        print(f"  search: '{search}'")
+        print(f"  marca_id: '{marca_id}'")
+        print(f"  categoria_id: '{categoria_id}'")
+        
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión'
+            }, status=400)
+        
+        # Query base con select_related para optimizar
+        productos_query = Producto.objects.select_related(
+            'atributo1',  # Marca
+            'atributo2',  # Color  
+            'atributo3',  # Género/Sexo
+            'atributo4',  # Otro
+            'categoria',
+            'sucursal'
+        ).prefetch_related(
+            'producto_talla'  # Tallas del producto
+        ).filter(
+            sucursal_id=sucursal_id
+        )
+        
+        # Filtros de búsqueda
+        if search:
+            productos_query = productos_query.filter(
+                Q(articulo__icontains=search) |
+                Q(descripcion__icontains=search) |
+                Q(producto_talla__sku__icontains=search)
+            ).distinct()
+        
+        if marca_id:
+            productos_query = productos_query.filter(atributo1_id=marca_id)
+            
+        if categoria_id:
+            productos_query = productos_query.filter(categoria_id=categoria_id)
+            
+        if tipo_talla:
+            productos_query = productos_query.filter(tipo_talla=tipo_talla)
+        
+        # Paginación
+        from django.core.paginator import Paginator
+        paginator = Paginator(productos_query, page_size)
+        page_obj = paginator.get_page(page)
+        
+        # Construir respuesta
+        productos_data = []
+        for producto in page_obj:
+            # Obtener atributos correctamente
+            marca = producto.atributo1.valor if producto.atributo1 else '-'
+            color = producto.atributo2.valor if producto.atributo2 else '-'
+            sexo = producto.atributo3.valor if producto.atributo3 else '-'
+            otro = producto.atributo4.valor if producto.atributo4 else '-'
+            
+            # Calcular stock total y obtener tallas
+            tallas_disponibles = []
+            stock_total = 0
+            
+            for talla in producto.producto_talla.all():
+                if talla.stock > 0:  # Solo incluir tallas con stock
+                    tallas_disponibles.append({
+                        'id': talla.id,
+                        'talla': talla.talla,
+                        'sku': talla.sku,
+                        'stock': talla.stock
+                    })
+                    stock_total += talla.stock
+            
+            productos_data.append({
+                'id': producto.id,
+                'articulo': producto.articulo,
+                'descripcion': producto.descripcion,
+                'marca': marca,
+                'color': color,
+                'sexo': sexo,
+                'otro': otro,
+                'categoria': producto.categoria.nombre if producto.categoria else '-',
+                'costo': producto.costo,
+                'precio_venta': producto.precioventa,
+                'sobreprecio': producto.sobreprecio,
+                'stock_total': stock_total,
+                'tipo_talla': producto.tipo_talla,
+                'tallas_disponibles': tallas_disponibles,
+                'sucursal_id': producto.sucursal_id
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'productos': productos_data,
+            'pagination': {
+                'page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'has_previous': page_obj.has_previous(),
+                'has_next': page_obj.has_next(),
+                'page_size': page_size
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ ERROR en buscar_productos_bodega: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al buscar productos: {str(e)}'
+        }, status=500)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def crear_ticket(request):
+    """
+    Crear ticket de venta
+    """
+    try:
+        data = json.loads(request.body)
+        vendedor_id = data.get('vendedor_id')
+        productos = data.get('productos', [])
+        total = data.get('total', 0)
+        total_items = data.get('total_items', 0)
+
+        sucursal_id = (
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual')
+            or data.get('sucursal_id')
+            or data.get('sucursal')
+        )
+
+        # Validaciones
+        if not vendedor_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Vendedor requerido'
+            })
+        
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Sucursal requerida'
+            })
+        
+        if not productos:
+            return JsonResponse({
+                'success': False,
+                'message': 'Debe agregar al menos un producto'
+            })
+        
+        # Verificar que el vendedor existe
+        try:
+            vendedor = Vendedor.objects.get(id=vendedor_id)
+        except Vendedor.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Vendedor no encontrado'
+            })
+        
+        # Verificar que la sucursal existe
+        try:
+            sucursal = Sucursal.objects.get(id=sucursal_id)
+        except Sucursal.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Sucursal no encontrada'
+            })
+        
+        with transaction.atomic():
+            # Obtener correlativo desde tabla Correlativo para tipo Ticket
+            correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
+            
+            # Crear el ticket
+            ticket = Ticket.objects.create(
+                vendedor=vendedor,
+                sucursal=sucursal,
+                correlativo=correlativo,
+                estado='PENDIENTE',
+                subTotal=total,
+                descuento=0,
+                total=total,
+                responsable=request.user.username if request.user.is_authenticated else 'Sistema'
+            )
+            
+            # Agregar productos al ticket
+            for producto_data in productos:
+                sku = producto_data.get('sku')
+                cantidad = int(producto_data.get('cantidad', 1))
+                precio = int(producto_data.get('precio', 0))
+                
+                try:
+                    producto_talla = Producto_Talla.objects.get(
+                        sku=sku,
+                        producto__sucursal=sucursal
+                    )
+                    
+                    # Verificar stock
+                    if producto_talla.stock < cantidad:
+                        raise ValidationError(f'Stock insuficiente para SKU {sku}')
+                    
+                    # Crear registro en Ticket_Productos
+                    Ticket_Productos.objects.create(
+                        ProductoTalla=producto_talla,
+                        idTicket=ticket,
+                        stock=cantidad,
+                        precio=precio,
+                        descuento_unitario=0,
+                        subtotal=precio * cantidad
+                    )
+                    
+                    # Actualizar stock
+                    producto_talla.stock -= cantidad
+                    producto_talla.save()
+                    
+                except Producto_Talla.DoesNotExist:
+                    raise ValidationError(f'Producto con SKU {sku} no encontrado')
+            
+            ticket_data = construir_ticket_data(ticket)
+            ticket_html = generar_ticket_html(ticket_data)
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Ticket creado exitosamente',
+                'ticket_id': ticket.correlativo,
+                'ticket_html': ticket_html,
+                'ticket_data': ticket_data
+            })
+            
+    except ValidationError as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al crear ticket: {str(e)}'
+        })
+def construir_ticket_data(ticket):
+    """
+    Prepara los datos del ticket para impresión térmica y respuesta JSON
+    """
+    productos_procesados = []
+    total_items = 0
+    subtotal = 0
+
+    for tp in ticket.ticket_productos.select_related(
+        'ProductoTalla',
+        'ProductoTalla__producto',
+        'ProductoTalla__producto__atributo1',
+        'ProductoTalla__producto__atributo2',
+        'ProductoTalla__producto__atributo3',
+        'ProductoTalla__producto__atributo4',
+    ).all():
+        producto_talla = tp.ProductoTalla
+        producto = producto_talla.producto if producto_talla else None
+
+        marca = ''
+        if producto:
+            atributo_marca = getattr(producto, 'atributo1', None)
+            if atributo_marca:
+                marca = getattr(atributo_marca, 'valor', '') or ''
+
+        subtotal += tp.subtotal
+        total_items += tp.stock
+        productos_procesados.append({
+            'detalle_id': tp.id,
+            'producto_talla_id': producto_talla.id if producto_talla else None,
+            'producto_id': producto.id if producto else None,
+            'sku': producto_talla.sku if producto_talla else '',
+            'articulo': producto.articulo if producto else '',
+            'descripcion': producto.descripcion if producto else '',
+            'marca': marca,
+            'talla': producto_talla.talla if producto_talla else '',
+            'cantidad': tp.stock,
+            'precio_unitario': tp.precio,
+            'precio_original': tp.precio_original,
+            'descuento_unitario': tp.descuento_unitario,
+            'porcentaje_descuento': float(tp.porcentaje_descuento or 0),
+            'subtotal': tp.subtotal,
+            'costo_fifo': tp.costo_fifo,
+            'lotes_utilizados': tp.lotes_utilizados,
+            'stock_actual': producto_talla.stock if producto_talla else None,
+        })
+
+    sucursal = ticket.sucursal
+    empresa = sucursal.empresa if hasattr(sucursal, 'empresa') else None
+    pagos_queryset = ticket.pagos.all().order_by('creado_en')
+    pagos = [
+        {
+            'id': pago.id,
+            'metodo_pago': pago.metodo_pago,
+            'metodo_pago_display': pago.get_metodo_pago_display(),
+            'monto': pago.monto,
+            'voucher': pago.voucher or '',
+            'tipo_tarjeta': pago.tipo_tarjeta or '',
+            'notas': pago.notas or '',
+            'creado_en': pago.creado_en.strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        for pago in pagos_queryset
+    ]
+
+    return {
+        'ticket_id': ticket.correlativo,
+        'fecha': ticket.fecha.strftime('%Y-%m-%d'),
+        'hora': ticket.hora.strftime('%H:%M:%S'),
+        'tipo_documento': 'TICKET',
+        'estado': ticket.estado,
+        'metodo_pago_principal': ticket.metodo_pago,
+        'total_pagado': ticket.total_pagado,
+        'saldo_por_pagar': ticket.saldo_por_pagar,
+        'responsable': ticket.responsable,
+        'sucursal': {
+            'alias': sucursal.alias,
+            'direccion': sucursal.direccion,
+            'empresa': empresa.nombre if empresa else '',
+            'rut_empresa': empresa.rut if empresa else ''
+        },
+        'vendedor': {
+            'nombre': ticket.vendedor.nombre,
+            'codigo': ticket.vendedor.codigo_vendedor
+        },
+        'cliente': {
+            'nombre': ticket.cliente_nombre or '',
+            'rut': ticket.cliente_rut or '',
+            'giro': ticket.cliente_giro or '',
+            'comuna': ticket.cliente_comuna or '',
+            'ciudad': ticket.cliente_ciudad or '',
+            'direccion': ticket.cliente_direccion or '',
+            'telefono': ticket.cliente_telefono or '',
+            'telefono_secundario': ticket.cliente_telefono_secundario or '',
+            'email': ticket.cliente_email or '',
+            'email_facturacion': ticket.cliente_email_facturacion or '',
+        },
+        'observaciones': ticket.observaciones or '',
+        'observaciones_adicionales': ticket.observaciones_adicionales or '',
+        'productos': productos_procesados,
+        'pagos': pagos,
+        'totales': {
+            'items': total_items,
+            'subtotal': subtotal,
+            'descuento': ticket.descuento or 0,
+            'total': ticket.total
+        }
+    }
+
+def generar_ticket_html(ticket_data):
+    """
+    Generar HTML del ticket utilizando la estructura estandarizada
+    """
+    productos = ticket_data['productos']
+    sucursal = ticket_data['sucursal']
+    vendedor = ticket_data['vendedor']
+    cliente = ticket_data.get('cliente', {})
+    totales = ticket_data['totales']
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Ticket #{ticket_data['ticket_id']}</title>
+        <style>
+            body {{ font-family: 'Courier New', monospace; font-size: 12px; margin: 0; padding: 10px; width: 280px; }}
+            .center {{ text-align: center; }}
+            .bold {{ font-weight: bold; }}
+            hr {{ border: none; border-top: 1px dashed #000; margin: 8px 0; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th, td {{ text-align: left; padding: 2px; }}
+            .right {{ text-align: right; }}
+            .productos-header {{ margin-top: 10px; margin-bottom: 5px; }}
+            .producto-descripcion small {{ display: block; }}
+        </style>
+    </head>
+    <body>
+        <div class="center">
+            <div class="bold">{sucursal.get('empresa', 'SUCURSAL')}</div>
+            <div>{sucursal.get('alias', '')}</div>
+            <div>{sucursal.get('direccion', '')}</div>
+            <div>RUT: {sucursal.get('rut_empresa', '')}</div>
+            <hr>
+        </div>
+        <div>
+            <div><span class="bold">Documento:</span> {ticket_data['tipo_documento']}</div>
+            <div><span class="bold">Ticket N°:</span> {ticket_data['ticket_id']}</div>
+            <div><span class="bold">Fecha:</span> {ticket_data['fecha']} {ticket_data['hora']}</div>
+            <div><span class="bold">Vendedor:</span> {vendedor.get('nombre', '')} ({vendedor.get('codigo', '')})</div>
+    """
+
+    if cliente.get('nombre') or cliente.get('rut'):
+        html += f"""
+            <div><span class="bold">Cliente:</span> {cliente.get('nombre', '')} {cliente.get('rut', '')}</div>
+        """
+
+    html += """
+        </div>
+        <hr>
+        <div class="productos-header center bold">DETALLE DE VENTA</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Cant</th>
+                    <th>Artículo</th>
+                    <th class="right">Precio</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+
+    for item in productos:
+        descripcion = item.get('descripcion', '')
+        articulo = item.get('articulo', '')
+        html += f"""
+                <tr>
+                    <td>{item.get('cantidad', 0)}</td>
+                    <td class="producto-descripcion">
+                        {articulo}<br>
+                        <small>{descripcion}</small>
+                        <small>SKU: {item.get('sku', '')} | Talla: {item.get('talla', '')}</small>
+                    </td>
+                    <td class="right">${item.get('subtotal', 0):,}</td>
+                </tr>
+        """
+
+    html += f"""
+            </tbody>
+        </table>
+        <hr>
+        <div class="right"><span class="bold">Items:</span> {totales.get('items', 0)}</div>
+        <div class="right"><span class="bold">Subtotal:</span> ${totales.get('subtotal', 0):,}</div>
+    """
+
+    if totales.get('descuento', 0):
+        html += f"""
+        <div class="right"><span class="bold">Descuento:</span> -${totales.get('descuento', 0):,}</div>
+        """
+
+    html += f"""
+        <div class="right bold">TOTAL: ${totales.get('total', 0):,}</div>
+        <hr>
+        <div class="center" style="margin-top: 15px;">
+            <div>¡GRACIAS POR SU COMPRA!</div>
+            <div>CAMBIOS HASTA 15 DÍAS</div>
+            <div>*NO SE REALIZAN DEVOLUCIONES DE DINERO</div>
+        </div>
+    </body>
+    </html>
+    """
+
+    return html
+
+# ========== GESTIÓN DE DTEs VENTAS ==========
+
+@login_required
+def gestion_dte(request):
+    """Vista para mostrar la página de gestión de DTEs de venta"""
+    return render(request, 'vistas/modulo_administracion/gestion_dte.html')
+
+@login_required
+@require_GET
+def detalle_dte(request, dte_id):
+    """Retorna el detalle de un DTE de ventas, con productos y pagos"""
+    try:
+        from django.db.models import Prefetch
+
+        dte = (Dte.objects
+               .select_related('receptor', 'emisor', 'sucursal', 'vendedor')
+               .prefetch_related(
+                   Prefetch('dte_productos', queryset=Dte_Productos.objects.select_related('productoTalla__producto')),
+                   Prefetch('dte_asociado', queryset=Dte_Detalle_Pago.objects.all())
+               )
+               .get(id=dte_id))
+
+        # Validar que sea un DTE de ventas de la sucursal del usuario
+        try:
+            empresa_user = EmpresaUser.objects.get(user=request.user, active=True)
+        except EmpresaUser.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Usuario no tiene empresa asignada'}, status=403)
+
+        if dte.sucursal_id != empresa_user.sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No tienes permiso para ver este DTE'}, status=403)
+
+        productos = []
+        total_detalle = 0
+        for detalle in dte.dte_productos.all():
+            producto = detalle.productoTalla.producto if detalle.productoTalla else None
+            subtotal = (detalle.precio or 0) * (detalle.stock or 0)
+            total_detalle += subtotal
+            productos.append({
+                'id': detalle.id,
+                'producto': producto.articulo if producto else detalle.descripcion,
+                'sku': detalle.productoTalla.sku if detalle.productoTalla else None,
+                'talla': detalle.productoTalla.talla if detalle.productoTalla else None,
+                'descripcion': detalle.descripcion,
+                'cantidad': detalle.stock,
+                'precio_unitario': detalle.precio,
+                'subtotal': subtotal,
+                'costo': detalle.costo,
+                'sobreprecio': detalle.sobreprecio,
+            })
+
+        pagos = []
+        total_pagado = 0
+        notas_credito = 0
+        for pago in dte.dte_asociado.all():
+            registro = {
+                'id': pago.id,
+                'metodo_pago': pago.metodo_pago,
+                'voucher': pago.voucher,
+                'monto': pago.monto,
+                'tipo_tarjeta': pago.tipo_tarjeta,
+            }
+            pagos.append(registro)
+
+            if pago.metodo_pago == 'Nota de Crédito':
+                notas_credito += pago.monto
+            else:
+                total_pagado += pago.monto
+
+        saldo = float(dte.monto_con_iva) - float(total_pagado)
+
+        return JsonResponse({
+            'success': True,
+            'dte': {
+                'id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'estado_dte': dte.estado_dte,
+                'estado_pago': dte.estado_pago,
+                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else None,
+                'fecha_vencimiento': dte.fecha_vencimiento.strftime('%d/%m/%Y') if dte.fecha_vencimiento else None,
+                'fecha_recepcion': dte.fecha_recepcion.strftime('%d/%m/%Y') if dte.fecha_recepcion else None,
+                'responsable': dte.responsable,
+                'dias_credito': dte.diasCredito,
+                'bultos': dte.bultos,
+                'unidades_productos': dte.unidades_productos,
+                'monto_neto': float(dte.monto_neto),
+                'monto_con_iva': float(dte.monto_con_iva),
+                'descuento': float(dte.descuento),
+                'referencias': dte.referencias,
+                'sucursal': dte.sucursal.alias if dte.sucursal else None,
+                'vendedor': dte.vendedor.nombre if dte.vendedor else None,
+                'receptor': {
+                    'nombre': dte.receptor.nombre if dte.receptor else '',
+                    'rut': dte.receptor.rut if dte.receptor else '',
+                    'direccion': dte.receptor.direccion if dte.receptor else '',
+                    'ciudad': dte.receptor.ciudad if dte.receptor else '',
+                    'comuna': dte.receptor.comuna if dte.receptor else '',
+                },
+                'emisor': {
+                    'nombre': dte.emisor.nombre,
+                    'rut': dte.emisor.rut,
+                    'direccion': dte.emisor.direccion,
+                    'ciudad': dte.emisor.ciudad,
+                    'comuna': dte.emisor.comuna,
+                }
+            },
+            'productos': productos,
+            'pagos': pagos,
+            'totales': {
+                'total_detalle': total_detalle,
+                'total_pagado': total_pagado,
+                'notas_credito': notas_credito,
+                'saldo_pendiente': saldo,
+            }
+        })
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al obtener el DTE: {str(e)}'}, status=500)
+
+
+@login_required
+@require_POST
+def cargar_dte_ventas(request):
+    """Vista AJAX para cargar DTEs de venta filtrados por sucursal y fecha"""
+    try:
+        import json
+        from datetime import datetime, date
+        from django.core.paginator import Paginator
+        
+        # Obtener datos del request
+        data = json.loads(request.body)
+        fecha_inicio = data.get('fecha_inicio')
+        fecha_fin = data.get('fecha_fin')
+        page = data.get('page', 1)
+        page_size = data.get('page_size', 20)
+        search = data.get('search', '').strip()
+        
+        # Obtener la sucursal del usuario actual
+        try:
+            empresa_user = EmpresaUser.objects.get(user=request.user, active=True)
+            sucursal_usuario = empresa_user.sucursal
+            
+            if not sucursal_usuario:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Usuario no tiene sucursal asignada'
+                })
+        except EmpresaUser.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Usuario no tiene empresa asignada'
+            })
+        
+        # Construir query base - DTEs de VENTA y TRASPASO de la sucursal del usuario
+        # Incluimos TRASPASO porque también son documentos emitidos por la sucursal
+        query = Dte.objects.filter(
+            sucursal=sucursal_usuario,
+            tipo_transaccion__in=['VENTA', 'TRASPASO']
+        ).select_related('receptor', 'vendedor', 'sucursal')
+        
+        # Aplicar filtros de fecha
+        if fecha_inicio:
+            try:
+                fecha_inicio_obj = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+                query = query.filter(fecha_emision__gte=fecha_inicio_obj)
+            except ValueError:
+                pass
+                
+        if fecha_fin:
+            try:
+                fecha_fin_obj = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+                query = query.filter(fecha_emision__lte=fecha_fin_obj)
+            except ValueError:
+                pass
+        
+        # Aplicar búsqueda si existe
+        if search:
+            query = query.filter(
+                Q(receptor__nombre__icontains=search) |
+                Q(receptor__rut__icontains=search) |
+                Q(numero_documento__icontains=search) |
+                Q(tipo_documento__icontains=search) |
+                Q(estado_dte__icontains=search) |
+                Q(estado_pago__icontains=search) |
+                Q(responsable__icontains=search)
+            )
+        
+        # Ordenar por fecha de emisión descendente
+        query = query.order_by('-fecha_emision', '-id')
+        
+        # Paginación
+        paginator = Paginator(query, page_size)
+        page_obj = paginator.get_page(page)
+        
+        # Preparar datos para respuesta
+        items = []
+        for dte in page_obj:
+            # Calcular días de crédito restantes
+            dias_credito_restantes = 0
+            if dte.estado_pago != 'PAGADO' and dte.fecha_vencimiento:
+                diferencia = dte.fecha_vencimiento - date.today()
+                dias_credito_restantes = diferencia.days
+            
+            # Obtener total de pagos realizados
+            total_pagos = Dte_Detalle_Pago.objects.filter(dte=dte).aggregate(
+                total=Sum('monto')
+            )['total'] or 0
+            
+            # Obtener notas de crédito
+            notas_credito = Dte_Detalle_Pago.objects.filter(
+                dte=dte, 
+                metodo_pago='Nota de Crédito'
+            ).aggregate(total=Sum('monto'))['total'] or 0
+            
+            items.append({
+                'id': dte.id,
+                'receptor_nombre': dte.receptor.nombre if dte.receptor else 'Sin receptor',
+                'receptor_rut': dte.receptor.rut if dte.receptor else '',
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
+                'fecha_vencimiento': dte.fecha_vencimiento.strftime('%d/%m/%Y') if dte.fecha_vencimiento else '',
+                'monto_con_iva': float(dte.monto_con_iva),
+                'monto_neto': float(dte.monto_neto),
+                'descuento': float(dte.descuento),
+                'estado_dte': dte.estado_dte,
+                'estado_pago': dte.estado_pago,
+                'responsable': dte.responsable,
+                'vendedor': dte.vendedor.nombre if dte.vendedor else '',
+                'dias_credito_restantes': dias_credito_restantes,
+                'total_pagos': float(total_pagos),
+                'notas_credito': float(notas_credito),
+                'saldo_pendiente': float(dte.monto_con_iva) - float(total_pagos),
+                'bultos': dte.bultos,
+                'unidades_productos': dte.unidades_productos
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'items': items,
+            'pagination': {
+                'page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'has_previous': page_obj.has_previous(),
+                'has_next': page_obj.has_next(),
+                'page_size': page_size
+            },
+            'search': search,
+            'sucursal': sucursal_usuario.alias
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al cargar DTEs: {str(e)}'
+        })
+# ========== VISTAS PARA GESTIÓN DE CORRELATIVOS ==========
+
+@login_required
+def gestion_correlativos(request):
+    """
+    Vista principal para la gestión de correlativos
+    """
+    try:
+        # Obtener filtros
+        sucursal_filtro = request.GET.get('sucursal')
+        tipo_documento_filtro = request.GET.get('tipo_documento')
+        estado_filtro = request.GET.get('estado')
+        
+        # Query base - corregir correlativos con datos inconsistentes
+        correlativos = Correlativo.objects.select_related('sucursal').all()
+        
+        # Corregir correlativos con datos faltantes
+        for correlativo in correlativos:
+            updated = False
+            if not correlativo.responsable:
+                correlativo.responsable = 'Sistema'
+                updated = True
+            if not correlativo.fecha_actualizacion:
+                correlativo.fecha_actualizacion = timezone.now().date()
+                updated = True
+            if correlativo.tipo_dte == 'Compra':
+                correlativo.tipo_dte = 'COMPRA'
+                updated = True
+            if updated:
+                correlativo.save()
+        
+        # Aplicar filtros
+        if sucursal_filtro:
+            correlativos = correlativos.filter(sucursal_id=sucursal_filtro)
+        
+        if tipo_documento_filtro:
+            correlativos = correlativos.filter(tipo_dte=tipo_documento_filtro)
+        
+        # Filtro por estado
+        if estado_filtro == 'activo':
+            correlativos = correlativos.filter(inicio__lt=F('termino'))
+        elif estado_filtro == 'agotado':
+            correlativos = correlativos.filter(inicio__gte=F('termino'))
+        elif estado_filtro == 'proximo_agotarse':
+            # Correlativos con menos de 100 números disponibles
+            correlativos = correlativos.annotate(
+                disponibles=F('termino') - F('inicio') + 1
+            ).filter(disponibles__lte=100, disponibles__gt=0)
+        
+        # Calcular estadísticas
+        total_correlativos = Correlativo.objects.count()
+        correlativos_activos = Correlativo.objects.filter(inicio__lt=F('termino')).count()
+        correlativos_agotados = Correlativo.objects.filter(inicio__gte=F('termino')).count()
+        correlativos_proximos_agotar = Correlativo.objects.annotate(
+            disponibles=F('termino') - F('inicio') + 1
+        ).filter(disponibles__lte=100, disponibles__gt=0).count()
+        
+        # Obtener datos para formularios
+        sucursales = Sucursal.objects.all().order_by('alias')
+        tipos_documento = TIPO_DOCUMENTO_CHOICES
+        
+        # Los correlativos ya tienen las propiedades calculadas en el modelo
+        correlativos_con_datos = list(correlativos)
+        
+        context = {
+            'correlativos': correlativos_con_datos,
+            'sucursales': sucursales,
+            'tipos_documento': tipos_documento,
+            'total_correlativos': total_correlativos,
+            'correlativos_activos': correlativos_activos,
+            'correlativos_agotados': correlativos_agotados,
+            'correlativos_proximos_agotar': correlativos_proximos_agotar,
+            'filtros': {
+                'sucursal': sucursal_filtro,
+                'tipo_documento': tipo_documento_filtro,
+                'estado': estado_filtro
+            }
+        }
+        
+        return render(request, 'vistas/modulo_administracion/gestion_correlativos.html', context)
+        
+    except Exception as e:
+        return render(request, 'vistas/modulo_administracion/gestion_correlativos.html', {
+            'error': f'Error al cargar correlativos: {str(e)}',
+            'correlativos': [],
+            'sucursales': Sucursal.objects.all(),
+            'tipos_documento': TIPO_DOCUMENTO_CHOICES,
+            'total_correlativos': 0,
+            'correlativos_activos': 0,
+            'correlativos_agotados': 0,
+            'correlativos_proximos_agotar': 0
+        })
+
+@login_required
+@require_POST
+def guardar_correlativo(request):
+    """
+    Guarda o actualiza un correlativo
+    """
+    try:
+        correlativo_id = request.POST.get('correlativo_id')
+        sucursal_id = request.POST.get('sucursal')
+        tipo_documento = request.POST.get('tipo_documento')
+        inicio = int(request.POST.get('inicio'))
+        termino = int(request.POST.get('termino'))
+        alias = request.POST.get('alias', '')
+        responsable = request.POST.get('responsable')
+        
+        # Validaciones
+        if inicio >= termino:
+            return JsonResponse({
+                'success': False,
+                'message': 'El número inicial debe ser menor que el número final'
+            })
+        
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        
+        # Verificar si ya existe un correlativo para esta combinación (excepto el actual)
+        existing_query = Correlativo.objects.filter(
+            sucursal=sucursal,
+            tipo_dte=tipo_documento
+        )
+        
+        if correlativo_id:
+            existing_query = existing_query.exclude(id=correlativo_id)
+        
+        if existing_query.exists():
+            return JsonResponse({
+                'success': False,
+                'message': f'Ya existe un correlativo para {tipo_documento} en {sucursal.nombre}'
+            })
+        
+        # Crear o actualizar
+        if correlativo_id:
+            correlativo = get_object_or_404(Correlativo, id=correlativo_id)
+            correlativo.sucursal = sucursal
+            correlativo.tipo_dte = tipo_documento
+            correlativo.inicio = inicio
+            correlativo.termino = termino
+            correlativo.alias = alias
+            correlativo.responsable = responsable
+            correlativo.fecha_actualizacion = timezone.now().date()
+            mensaje = 'Correlativo actualizado exitosamente'
+        else:
+            correlativo = Correlativo.objects.create(
+                sucursal=sucursal,
+                tipo_dte=tipo_documento,
+                inicio=inicio,
+                termino=termino,
+                alias=alias,
+                responsable=responsable,
+                fecha_actualizacion=timezone.now().date()
+            )
+            mensaje = 'Correlativo creado exitosamente'
+        
+        correlativo.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': mensaje,
+            'correlativo_id': correlativo.id
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al guardar correlativo: {str(e)}'
+        })
+
+@login_required
+@require_GET
+def obtener_correlativo(request, correlativo_id):
+    """
+    Obtiene los datos de un correlativo específico
+    """
+    try:
+        correlativo = get_object_or_404(Correlativo, id=correlativo_id)
+        
+        # DEBUG
+        print(f"DEBUG obtener_correlativo ID {correlativo_id}:")
+        print(f"  - Correlativo: {correlativo}")
+        print(f"  - Sucursal ID: {correlativo.sucursal.id}")
+        print(f"  - Sucursal alias: {correlativo.sucursal.alias}")
+        print(f"  - Tipo DTE: {correlativo.tipo_dte}")
+        
+        return JsonResponse({
+            'success': True,
+            'correlativo': {
+                'id': correlativo.id,
+                'sucursal_id': correlativo.sucursal.id,
+                'sucursal_nombre': correlativo.sucursal.alias,
+                'tipo_dte': correlativo.tipo_dte,
+                'inicio': correlativo.inicio,
+                'termino': correlativo.termino,
+                'alias': correlativo.alias,
+                'responsable': correlativo.responsable,
+                'fecha_actualizacion': correlativo.fecha_actualizacion.strftime('%d/%m/%Y') if correlativo.fecha_actualizacion else None
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al obtener correlativo: {str(e)}'
+        })
+
+@login_required
+@require_POST
+def renovar_correlativo(request):
+    """
+    Renueva un correlativo con un nuevo rango
+    """
+    try:
+        correlativo_id = request.POST.get('correlativo_id')
+        nuevo_inicio = int(request.POST.get('nuevo_inicio'))
+        nuevo_termino = int(request.POST.get('nuevo_termino'))
+        
+        # Validaciones
+        if nuevo_inicio >= nuevo_termino:
+            return JsonResponse({
+                'success': False,
+                'message': 'El número inicial debe ser menor que el número final'
+            })
+        
+        correlativo = get_object_or_404(Correlativo, id=correlativo_id)
+        
+        # Actualizar correlativo
+        correlativo.inicio = nuevo_inicio
+        correlativo.termino = nuevo_termino
+        correlativo.fecha_actualizacion = timezone.now().date()
+        correlativo.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Correlativo renovado. Nuevo rango: {nuevo_inicio} - {nuevo_termino}'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al renovar correlativo: {str(e)}'
+        })
+
+@login_required
+@require_GET
+def historial_correlativo(request, correlativo_id):
+    """
+    Obtiene el historial de uso de un correlativo
+    """
+    try:
+        correlativo = get_object_or_404(Correlativo, id=correlativo_id)
+        
+        # Buscar documentos que usen este correlativo
+        historial = []
+        
+        # Buscar en DTEs
+        dtes = Dte.objects.filter(
+            sucursal=correlativo.sucursal,
+            tipo_documento=correlativo.tipo_dte
+        ).order_by('-fecha_emision')[:50]  # Últimos 50 registros
+        
+        for dte in dtes:
+            historial.append({
+                'fecha': dte.fecha_emision.strftime('%d/%m/%Y'),
+                'tipo_documento': dte.tipo_documento,
+                'numero': dte.numero_documento,
+                'responsable': dte.responsable,
+                'observaciones': f'Monto: ${dte.monto_con_iva:,}'
+            })
+        
+        # Buscar en Tickets
+        tickets = Ticket.objects.filter(
+            sucursal=correlativo.sucursal
+        ).order_by('-fecha')[:50]  # Últimos 50 registros
+        
+        for ticket in tickets:
+            if correlativo.tipo_dte == 'TICKET':
+                historial.append({
+                    'fecha': ticket.fecha.strftime('%d/%m/%Y'),
+                    'tipo_documento': 'TICKET',
+                    'numero': ticket.correlativo,
+                    'responsable': ticket.responsable,
+                    'observaciones': f'Total: ${ticket.total:,}'
+                })
+        
+        # Ordenar por fecha descendente
+        historial.sort(key=lambda x: x['fecha'], reverse=True)
+        
+        return JsonResponse({
+            'success': True,
+            'historial': historial[:50]  # Limitar a 50 registros
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error al obtener historial: {str(e)}'
+        })

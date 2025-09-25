@@ -1,0 +1,2266 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .arqueo-card {
+        border: 1px solid #e3e6f0;
+        border-radius: 0.35rem;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        margin-bottom: 1rem;
+    }
+    
+    .estado-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-weight: 600;
+    }
+    
+    .estado-cerrado { background-color: #d4edda; color: #155724; }
+    .estado-abierto { background-color: #fff3cd; color: #856404; }
+    .estado-con-diferencias { background-color: #f8d7da; color: #721c24; }
+    .estado-revisado { background-color: #cce7ff; color: #004085; }
+    
+    .diferencia-positiva { color: #28a745; font-weight: bold; }
+    .diferencia-negativa { color: #dc3545; font-weight: bold; }
+    .diferencia-exacta { color: #6c757d; font-weight: bold; }
+    
+    .conteo-input {
+        width: 80px;
+        text-align: center;
+        margin: 0 5px;
+    }
+    
+    .total-denominacion {
+        font-weight: bold;
+        color: #495057;
+    }
+    
+    .alert-diferencia {
+        border-left: 4px solid #dc3545;
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+    }
+    
+    .alert-exacto {
+        border-left: 4px solid #28a745;
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+    }
+    
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    
+    .btn-arqueo {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-arqueo:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+    
+    /* Estilos para el grupo de botones */
+    .btn-group .btn {
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+        margin-right: 0;
+    }
+    
+    .btn-group .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .btn-group .btn-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+    }
+    
+    .btn-group .btn-success {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+    }
+    
+    .form-control.is-invalid {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+    
+    .form-control.is-valid {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    }
+    
+    .invalid-feedback {
+        display: block;
+        width: 100%;
+        margin-top: 0.25rem;
+        font-size: 0.875rem;
+        color: #dc3545;
+    }
+    
+    .border-danger {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+    }
+    
+    /* Estilos para el modal de resumen de caja */
+    .modal-fullscreen .modal-body {
+        overflow-y: auto;
+        max-height: calc(100vh - 200px);
+    }
+    
+    .form-control-lg.text-end {
+        font-weight: 600;
+        background-color: #f8f9fa;
+    }
+    
+    .card-header h6 {
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .form-label.small {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+    
+    .text-success {
+        color: #198754 !important;
+    }
+    
+    .text-primary {
+        color: #0d6efd !important;
+    }
+    
+    .text-warning {
+        color: #fd7e14 !important;
+    }
+    
+    .text-info {
+        color: #0dcaf0 !important;
+    }
+    
+    /* Animación para los campos de la cuadratura */
+    .form-control[readonly] {
+        transition: all 0.3s ease;
+    }
+    
+    .form-control[readonly]:focus {
+        background-color: #e9ecef;
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="text-center text-white">
+                <div class="spinner-border text-light mb-3" role="status">
+                    <span class="sr-only">Cargando...</span>
+                </div>
+                <h5>Procesando arqueo...</h5>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">💰 Cuadratura y Arqueo de Caja</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="javascript: void(0);">Ventas</a></li>
+                            <li class="breadcrumb-item active">Arqueo de Caja</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estado del Día -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="arqueo-card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h5 class="card-title mb-1">📅 Estado de Hoy</h5>
+                                <p class="text-muted mb-0" id="fechaHoy"></p>
+                            </div>
+                            <div class="col-md-6">
+                                <div id="estadoHoy" class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="sr-only">Cargando...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Verificando estado del arqueo...</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-info" onclick="abrirResumenCaja()">
+                                        <i class="ri-calculator-2-line me-1"></i>Resumen de Caja
+                                    </button>
+                                    <button type="button" class="btn btn-success" onclick="generarCuadratura()">
+                                        <i class="ri-refresh-line me-1"></i>Generar Cuadratura
+                                    </button>
+                                    <button type="button" class="btn btn-arqueo" onclick="iniciarArqueoHoy()">
+                                        <i class="ri-calculator-line me-1"></i>Nuevo Arqueo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros y Controles -->
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Desde</label>
+                                <input type="date" class="form-control" id="fechaDesde">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Hasta</label>
+                                <input type="date" class="form-control" id="fechaHasta">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Estado</label>
+                                <select class="form-select" id="filtroEstado">
+                                    <option value="">Todos</option>
+                                    <option value="CERRADO">Cerrado</option>
+                                    <option value="CON_DIFERENCIAS">Con Diferencias</option>
+                                    <option value="ABIERTO">Abierto</option>
+                                    <option value="REVISADO">Revisado</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary me-2" onclick="filtrarArqueos()">
+                                    <i class="ri-search-line me-1"></i>Filtrar
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                    <i class="ri-refresh-line me-1"></i>Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h6 class="card-title">📊 Resumen Rápido</h6>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="text-success">
+                                    <i class="ri-check-line"></i>
+                                    <span id="totalExactos">0</span> Exactos
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-danger">
+                                    <i class="ri-error-warning-line"></i>
+                                    <span id="totalDiferencias">0</span> Diferencias
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <button type="button" class="btn btn-sm btn-warning" onclick="corregirArqueosExpress()" title="Corregir arqueos Express mal guardados">
+                                    <i class="ri-tools-line me-1"></i>Corregir Express
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Arqueos -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">📋 Historial de Arqueos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Usuario</th>
+                                        <th>Estado</th>
+                                        <th>Efectivo Teórico</th>
+                                        <th>Efectivo Físico</th>
+                                        <th>Diferencia</th>
+                                        <th>Venta Total</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaArqueos">
+                                    <tr>
+                                        <td colspan="8" class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="sr-only">Cargando...</span>
+                                            </div>
+                                            <p class="mt-2 text-muted">Cargando arqueos...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Paginación -->
+                        <div class="row mt-3">
+                            <div class="col-sm-12 col-md-5">
+                                <div class="dataTables_info" id="infoArqueos"></div>
+                            </div>
+                            <div class="col-sm-12 col-md-7">
+                                <div class="dataTables_paginate" id="paginacionArqueos"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal de Arqueo -->
+<div class="modal fade" id="modalArqueo" tabindex="-1" aria-labelledby="modalArqueoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalArqueoLabel">
+                    <i class="ri-calculator-line me-2"></i>Arqueo de Caja - <span id="fechaArqueoModal"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- Resumen de Cuadratura -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <h6 class="alert-heading"><i class="ri-information-line me-2"></i>Resumen de Ventas del Día</h6>
+                            <div class="row" id="resumenVentas">
+                                <!-- Se llena dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conteo de Efectivo -->
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="card-title mb-0">💵 Conteo Físico de Efectivo</h6>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <input type="radio" class="btn-check" name="modoArqueo" id="modoDetallado" checked>
+                                    <label class="btn btn-outline-primary" for="modoDetallado">
+                                        <i class="ri-calculator-line me-1"></i>Detallado
+                                    </label>
+                                    <input type="radio" class="btn-check" name="modoArqueo" id="modoExpress">
+                                    <label class="btn btn-outline-success" for="modoExpress">
+                                        <i class="ri-flashlight-line me-1"></i>Express
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                
+                                <!-- Modo Express -->
+                                <div id="conteoExpress" style="display: none;">
+                                    <div class="alert alert-info">
+                                        <i class="ri-information-line me-2"></i>
+                                        <strong>Modo Express:</strong> Ingresa directamente el monto total de efectivo físico contado.
+                                    </div>
+                                    <div class="row justify-content-center">
+                                        <div class="col-md-8">
+                                            <div class="form-group">
+                                                <label class="form-label h5 text-primary">💰 Monto Total Físico</label>
+                                                <div class="input-group input-group-lg">
+                                                    <span class="input-group-text">$</span>
+                                                    <input type="number" class="form-control text-center" id="montoTotalExpress" 
+                                                           placeholder="Ej: 10000" min="0" step="1" 
+                                                           style="font-size: 1.5rem; font-weight: bold;"
+                                                           onchange="calcularTotalExpressFisico()" 
+                                                           oninput="validarMontoExpress(this)">
+                                                </div>
+                                                <small class="form-text text-muted mt-2">
+                                                    <i class="ri-lightbulb-line me-1"></i>
+                                                    Ingresa el total contado sin separar por denominaciones
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Modo Detallado -->
+                                <div id="conteoDetallado">
+                                
+                                <!-- Billetes -->
+                                <h6 class="text-primary mb-3">Billetes</h6>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$20.000 x</span>
+                                            <input type="number" class="form-control conteo-input" id="billetes_20000" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_20000">= $0</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$10.000 x</span>
+                                            <input type="number" class="form-control conteo-input" id="billetes_10000" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_10000">= $0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$5.000 x</span>
+                                            <input type="number" class="form-control conteo-input" id="billetes_5000" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_5000">= $0</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$2.000 x</span>
+                                            <input type="number" class="form-control conteo-input" id="billetes_2000" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_2000">= $0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-2 mb-4">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$1.000 x</span>
+                                            <input type="number" class="form-control conteo-input" id="billetes_1000" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_1000">= $0</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Monedas -->
+                                <h6 class="text-primary mb-3">Monedas</h6>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$500 x</span>
+                                            <input type="number" class="form-control conteo-input" id="monedas_500" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_500">= $0</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$100 x</span>
+                                            <input type="number" class="form-control conteo-input" id="monedas_100" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_100">= $0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$50 x</span>
+                                            <input type="number" class="form-control conteo-input" id="monedas_50" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_50">= $0</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$10 x</span>
+                                            <input type="number" class="form-control conteo-input" id="monedas_10" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_10">= $0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$5 x</span>
+                                            <input type="number" class="form-control conteo-input" id="monedas_5" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_5">= $0</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-3" style="width: 80px;">$1 x</span>
+                                            <input type="number" class="form-control conteo-input" id="monedas_1" min="0" onchange="calcularTotalFisico()">
+                                            <span class="ms-3 total-denominacion" id="total_1">= $0</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                </div> <!-- Fin modo detallado -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Resumen y Diferencias -->
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="card-title mb-0">📊 Resultado del Arqueo</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted">Efectivo Teórico</label>
+                                    <div class="h5 text-info" id="efectivoTeorico">$0</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label text-muted">Efectivo Físico</label>
+                                    <div class="h5 text-primary" id="efectivoFisico">$0</div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="mb-3" id="resultadoDiferencia">
+                                    <label class="form-label text-muted">Diferencia</label>
+                                    <div class="h4" id="diferencia">$0</div>
+                                    <small class="text-muted" id="porcentajeDiferencia"></small>
+                                </div>
+                                
+                                <!-- Observaciones -->
+                                <div class="mb-3">
+                                    <label class="form-label">Observaciones</label>
+                                    <textarea class="form-control" id="observaciones" rows="3" placeholder="Observaciones generales..."></textarea>
+                                </div>
+                                
+                                <div class="mb-3" id="observacionesDiferenciaDiv" style="display: none;">
+                                    <label class="form-label text-danger">
+                                        <i class="ri-alert-line me-1"></i>Explicación de Diferencia *
+                                    </label>
+                                    <textarea class="form-control" id="observacionesDiferencia" rows="3" 
+                                              placeholder="Explique detalladamente el motivo de la diferencia (mínimo 10 caracteres)..."></textarea>
+                                    <small class="form-text text-danger">
+                                        <i class="ri-information-line me-1"></i>
+                                        Obligatorio para diferencias mayores a $500. Sea específico sobre la causa.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-warning" onclick="guardarConteo()" id="btnGuardarConteo">
+                    <i class="ri-save-line me-1"></i>Guardar Conteo
+                </button>
+                <button type="button" class="btn btn-success" onclick="cerrarArqueo()" id="btnCerrarArqueo">
+                    <i class="ri-check-line me-1"></i>Cerrar Arqueo
+                </button>
+                <button type="button" class="btn btn-info" onclick="imprimirArqueo()" id="btnImprimirArqueo">
+                    <i class="ri-printer-line me-1"></i>Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Resumen de Caja -->
+<div class="modal fade" id="modalResumenCaja" tabindex="-1" aria-labelledby="modalResumenCajaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalResumenCajaLabel">
+                    <i class="ri-calculator-2-line me-2"></i>Resumen de Caja - <span id="fechaResumenCaja"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                
+                <!-- Selector de Fecha -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <label for="fechaCuadratura" class="form-label">Seleccionar Fecha:</label>
+                        <input type="date" class="form-control" id="fechaCuadratura">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-success" onclick="buscarCuadratura()">
+                            <span id="spinnerBuscar" style="display:none" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <i class="ri-search-line me-1"></i>Buscar
+                        </button>
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end justify-content-end">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="exportarCuadraturaExcel()">
+                                <i class="ri-file-excel-line me-1"></i>Exportar Excel
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="imprimirResumenTermica()">
+                                <i class="ri-printer-line me-1"></i>Imprimir Térmica
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Contenido de la Cuadratura -->
+                <div class="row" id="contenidoCuadratura">
+                    
+                    <!-- Tarjetas Comerciales -->
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="ri-bank-card-line me-1"></i>Tarjetas Comerciales</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">VISA-MC-AMEX</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="visa" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">REDCOMPRA DÉBITO</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="debito" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">PRESTO</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="presto" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">ABCDIN</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="abcdin" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">TRICOT</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="tricot" readonly>
+                                </div>
+                                <div class="form-group mb-0">
+                                    <label class="form-label small">HITES</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="hites" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Efectivo y Otros -->
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0"><i class="ri-money-dollar-circle-line me-1"></i>Efectivo y Otros</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">EFECTIVO</label>
+                                    <input type="text" class="form-control form-control-lg text-end fw-bold" id="efectivo" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">TRANSFERENCIA</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="transferencia" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">NOTA DE CRÉDITO</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="nota_credito" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">CONVENIO</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="convenio" readonly>
+                                </div>
+                                <div class="form-group mb-0">
+                                    <label class="form-label small">CHEQUE</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="cheque" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Venta Internet -->
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="mb-0"><i class="ri-global-line me-1"></i>Venta Internet</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">WEBPAY</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="webpay" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">MERCADOLIBRE</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="mercadolibre" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">MERCADO PAGO</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="mercadopago" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">PARIS</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="paris" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">RIPLEY</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="ripley" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">FALABELLA</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="falabella" readonly>
+                                </div>
+                                <div class="form-group mb-0">
+                                    <label class="form-label small">TRANSFERENCIA INTERNET</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="transferenciaInternet" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Documentos y Resumen -->
+                    <div class="col-md-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="ri-file-text-line me-1"></i>Documentos</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">TOTAL TICKETS</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="totaltickets" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">TOTAL BOLETA ELECTRÓNICA</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="totalboletaelectronica" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">TOTAL FACTURA</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="totalfactura" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">TOTAL FACTURA EXENTA</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="totalfacturaexenta" readonly>
+                                </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small">TOTAL NOTAS CRÉDITO</label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="totalnotascredito" readonly>
+                                </div>
+                                <hr>
+                                <div class="form-group mb-0">
+                                    <label class="form-label fw-bold">VENTA TOTAL</label>
+                                    <input type="text" class="form-control form-control-lg text-end fw-bold bg-light" id="ventatotal" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumen Totales -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="ri-pie-chart-line me-1"></i>Resumen por Método de Pago</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label fw-bold">TOTAL EFECTIVO</label>
+                                            <input type="text" class="form-control form-control-lg text-end fw-bold text-success" id="totalefectivo" readonly>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label fw-bold">TOTAL TRANSBANK</label>
+                                            <input type="text" class="form-control form-control-lg text-end fw-bold text-primary" id="totaltbk" readonly>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label fw-bold">TOTAL TARJETAS COMERCIALES</label>
+                                            <input type="text" class="form-control form-control-lg text-end fw-bold text-warning" id="totalcomercial" readonly>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-group">
+                                            <label class="form-label fw-bold">TOTAL VENTA INTERNET</label>
+                                            <input type="text" class="form-control form-control-lg text-end fw-bold text-info" id="totalinternet" readonly>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estado de Carga -->
+                <div class="row mt-3" id="estadoCarga" style="display: none;">
+                    <div class="col-12">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-3" role="status">
+                                <span class="sr-only">Cargando...</span>
+                            </div>
+                            <p class="text-muted">Generando cuadratura...</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i>Cerrar
+                </button>
+                <button type="button" class="btn btn-success" onclick="generarCuadratura()">
+                    <i class="ri-refresh-line me-1"></i>Actualizar Datos
+                </button>
+                <button type="button" class="btn btn-primary" onclick="exportarCuadraturaExcel()">
+                    <i class="ri-file-excel-line me-1"></i>Exportar Excel
+                </button>
+                <button type="button" class="btn btn-info" onclick="imprimirResumenTermica()">
+                    <i class="ri-printer-line me-1"></i>Imprimir Térmica
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% include '../../layout/footer.html' %}
+
+<!-- Scripts JavaScript del Arqueo -->
+<script>
+// Variables globales
+let arqueoActual = null;
+let paginaActual = 1;
+
+$(document).ready(function() {
+    try {
+        console.log('🚀 Iniciando sistema de arqueo...');
+        
+        // Establecer fecha actual
+        const hoy = new Date().toISOString().split('T')[0];
+        $('#fechaHoy').text(new Date().toLocaleDateString('es-CL'));
+        $('#fechaDesde').val(hoy);
+        $('#fechaHasta').val(hoy);
+        
+        console.log('📅 Fecha configurada:', hoy);
+        
+        // Cargar estado inicial
+        console.log('🔍 Verificando estado de hoy...');
+        verificarEstadoHoy();
+        
+        console.log('📋 Cargando lista de arqueos...');
+        cargarArqueos();
+        
+        console.log('✅ Sistema de arqueo inicializado correctamente');
+        
+        // Configurar eventos para cambio de modo
+        $('input[name="modoArqueo"]').change(function() {
+            cambiarModoArqueo();
+        });
+        
+        // Verificar que las funciones estén definidas
+        console.log('🔧 Verificando funciones:');
+        console.log('- filtrarArqueos:', typeof filtrarArqueos);
+        console.log('- limpiarFiltros:', typeof limpiarFiltros);
+        console.log('- iniciarArqueoHoy:', typeof iniciarArqueoHoy);
+        
+    } catch (error) {
+        console.error('❌ Error al inicializar sistema de arqueo:', error);
+    }
+});
+
+// ========== FUNCIONES PRINCIPALES ==========
+
+function verificarEstadoHoy() {
+    const hoy = new Date().toISOString().split('T')[0];
+    console.log('🔍 Verificando estado para fecha:', hoy);
+    
+    $.ajax({
+        url: '/app/api/arqueos/',
+        method: 'GET',
+        data: {
+            fecha_desde: hoy,
+            fecha_hasta: hoy,
+            per_page: 1
+        },
+        success: function(response) {
+            console.log('✅ Respuesta verificarEstadoHoy:', response);
+            if (response.success && response.arqueos.length > 0) {
+                const arqueo = response.arqueos[0];
+                console.log('📊 Arqueo encontrado:', arqueo);
+                mostrarEstadoHoy(arqueo);
+            } else {
+                console.log('❌ No hay arqueo para hoy');
+                mostrarSinArqueo();
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error en verificarEstadoHoy:', {xhr, status, error});
+            console.error('Response Text:', xhr.responseText);
+            mostrarSinArqueo();
+        }
+    });
+}
+
+function mostrarEstadoHoy(arqueo) {
+    let estadoHtml = '';
+    
+    switch(arqueo.estado) {
+        case 'CERRADO':
+            estadoHtml = `
+                <div class="text-center">
+                    <i class="ri-check-circle-line text-success" style="font-size: 2rem;"></i>
+                    <h6 class="mt-2 mb-1">✅ Arqueo Completado</h6>
+                    <p class="text-muted mb-1">Diferencia: <span class="diferencia-exacta">$0 (Perfecto!)</span></p>
+                    <small class="text-muted">Por: ${arqueo.usuario_responsable} - ${arqueo.fecha_cierre}</small>
+                </div>
+            `;
+            break;
+        case 'CON_DIFERENCIAS':
+            const tipoClass = arqueo.diferencia_efectivo > 0 ? 'diferencia-positiva' : 'diferencia-negativa';
+            estadoHtml = `
+                <div class="text-center">
+                    <i class="ri-error-warning-line text-warning" style="font-size: 2rem;"></i>
+                    <h6 class="mt-2 mb-1">⚠️ Con Diferencias</h6>
+                    <p class="text-muted mb-1">Diferencia: <span class="${tipoClass}">$${formatearNumero(arqueo.diferencia_absoluta)}</span></p>
+                    <small class="text-muted">Por: ${arqueo.usuario_responsable} - ${arqueo.fecha_cierre}</small>
+                </div>
+            `;
+            break;
+        case 'ABIERTO':
+            estadoHtml = `
+                <div class="text-center">
+                    <i class="ri-time-line text-warning" style="font-size: 2rem;"></i>
+                    <h6 class="mt-2 mb-1">🕒 En Proceso</h6>
+                    <p class="text-muted mb-1">Arqueo iniciado pero no finalizado</p>
+                    <small class="text-muted">Por: ${arqueo.usuario_responsable} - ${arqueo.fecha_creacion}</small>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-warning" onclick="continuarArqueo(${arqueo.id})">
+                            <i class="ri-play-line me-1"></i>Continuar
+                        </button>
+                    </div>
+                </div>
+            `;
+            break;
+    }
+    
+    $('#estadoHoy').html(estadoHtml);
+}
+
+function mostrarSinArqueo() {
+    $('#estadoHoy').html(`
+        <div class="text-center">
+            <i class="ri-calculator-line text-muted" style="font-size: 2rem;"></i>
+            <h6 class="mt-2 mb-1">📋 Sin Arqueo</h6>
+            <p class="text-muted mb-0">No se ha realizado arqueo para hoy</p>
+        </div>
+    `);
+}
+
+function iniciarArqueoHoy() {
+    const hoy = new Date().toISOString().split('T')[0];
+    
+    mostrarLoading(true);
+    
+    $.ajax({
+        url: '/app/api/arqueo/crear/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({
+            fecha: hoy
+        }),
+        success: function(response) {
+            mostrarLoading(false);
+            
+            if (response.success) {
+                arqueoActual = {
+                    id: response.arqueo_id,
+                    fecha: hoy,
+                    cuadratura: response.cuadratura
+                };
+                
+                abrirModalArqueo();
+                verificarEstadoHoy();
+            } else {
+                if (response.arqueo_id) {
+                    // Ya existe, continuar con ese arqueo
+                    continuarArqueo(response.arqueo_id);
+                } else {
+                    mostrarError('Error al crear arqueo: ' + response.error);
+                }
+            }
+        },
+        error: function(xhr) {
+            mostrarLoading(false);
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+function continuarArqueo(arqueoId) {
+    mostrarLoading(true);
+    
+    $.ajax({
+        url: `/app/api/arqueo/${arqueoId}/`,
+        method: 'GET',
+        success: function(response) {
+            mostrarLoading(false);
+            
+            if (response.success) {
+                arqueoActual = {
+                    id: arqueoId,
+                    fecha: response.arqueo.fecha_arqueo,
+                    arqueo: response.arqueo
+                };
+                
+                abrirModalArqueo();
+                cargarDatosArqueoExistente(response.arqueo);
+            } else {
+                mostrarError('Error al cargar arqueo: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            mostrarLoading(false);
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+function abrirModalArqueo() {
+    $('#fechaArqueoModal').text(new Date(arqueoActual.fecha).toLocaleDateString('es-CL'));
+    
+    // Limpiar formulario
+    $('.conteo-input').val(0);
+    $('#montoTotalExpress').val(0);
+    $('#observaciones').val('');
+    $('#observacionesDiferencia').val('');
+    
+    // Resetear a modo detallado
+    $('#modoDetallado').prop('checked', true);
+    cambiarModoArqueo();
+    
+    // Cargar datos de cuadratura
+    if (arqueoActual.cuadratura) {
+        cargarResumenVentas(arqueoActual.cuadratura);
+        $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
+    } else if (arqueoActual.arqueo) {
+        cargarResumenVentasArqueo(arqueoActual.arqueo);
+        $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.arqueo.totales_teoricos.efectivo));
+    }
+    
+    calcularTotalFisico();
+    $('#modalArqueo').modal('show');
+}
+
+function cargarDatosArqueoExistente(arqueo) {
+    // Cargar conteo físico existente
+    $('#billetes_20000').val(arqueo.conteo_fisico.billetes['20000']);
+    $('#billetes_10000').val(arqueo.conteo_fisico.billetes['10000']);
+    $('#billetes_5000').val(arqueo.conteo_fisico.billetes['5000']);
+    $('#billetes_2000').val(arqueo.conteo_fisico.billetes['2000']);
+    $('#billetes_1000').val(arqueo.conteo_fisico.billetes['1000']);
+    
+    $('#monedas_500').val(arqueo.conteo_fisico.monedas['500']);
+    $('#monedas_100').val(arqueo.conteo_fisico.monedas['100']);
+    $('#monedas_50').val(arqueo.conteo_fisico.monedas['50']);
+    $('#monedas_10').val(arqueo.conteo_fisico.monedas['10']);
+    $('#monedas_5').val(arqueo.conteo_fisico.monedas['5']);
+    $('#monedas_1').val(arqueo.conteo_fisico.monedas['1']);
+    
+    $('#observaciones').val(arqueo.observaciones);
+    $('#observacionesDiferencia').val(arqueo.observaciones_diferencia);
+    
+    calcularTotalFisico();
+}
+
+function cargarResumenVentas(cuadratura) {
+    const resumenHtml = `
+        <div class="col-md-3">
+            <strong>Efectivo:</strong> $${formatearNumero(cuadratura.total_efectivo)}
+        </div>
+        <div class="col-md-3">
+            <strong>Tarjetas:</strong> $${formatearNumero(cuadratura.total_tarjetas_comerciales)}
+        </div>
+        <div class="col-md-3">
+            <strong>Internet:</strong> $${formatearNumero(cuadratura.total_venta_internet)}
+        </div>
+        <div class="col-md-3">
+            <strong>Total:</strong> $${formatearNumero(cuadratura.venta_total)}
+        </div>
+    `;
+    $('#resumenVentas').html(resumenHtml);
+}
+
+function cargarResumenVentasArqueo(arqueo) {
+    const resumenHtml = `
+        <div class="col-md-3">
+            <strong>Efectivo:</strong> $${formatearNumero(arqueo.totales_teoricos.efectivo)}
+        </div>
+        <div class="col-md-3">
+            <strong>Tarjetas:</strong> $${formatearNumero(arqueo.totales_teoricos.tarjetas_comerciales.total)}
+        </div>
+        <div class="col-md-3">
+            <strong>Internet:</strong> $${formatearNumero(arqueo.totales_teoricos.venta_internet.total)}
+        </div>
+        <div class="col-md-3">
+            <strong>Total:</strong> $${formatearNumero(arqueo.totales_teoricos.venta_total)}
+        </div>
+    `;
+    $('#resumenVentas').html(resumenHtml);
+}
+
+function calcularTotalFisico() {
+    // Calcular totales por denominación
+    const denominaciones = [
+        {id: 'billetes_20000', valor: 20000, totalId: 'total_20000'},
+        {id: 'billetes_10000', valor: 10000, totalId: 'total_10000'},
+        {id: 'billetes_5000', valor: 5000, totalId: 'total_5000'},
+        {id: 'billetes_2000', valor: 2000, totalId: 'total_2000'},
+        {id: 'billetes_1000', valor: 1000, totalId: 'total_1000'},
+        {id: 'monedas_500', valor: 500, totalId: 'total_500'},
+        {id: 'monedas_100', valor: 100, totalId: 'total_100'},
+        {id: 'monedas_50', valor: 50, totalId: 'total_50'},
+        {id: 'monedas_10', valor: 10, totalId: 'total_10'},
+        {id: 'monedas_5', valor: 5, totalId: 'total_5'},
+        {id: 'monedas_1', valor: 1, totalId: 'total_1'}
+    ];
+    
+    let totalFisico = 0;
+    
+    denominaciones.forEach(function(denom) {
+        const cantidad = parseInt($('#' + denom.id).val()) || 0;
+        const total = cantidad * denom.valor;
+        totalFisico += total;
+        $('#' + denom.totalId).text('= $' + formatearNumero(total));
+    });
+    
+    // Actualizar total físico
+    $('#efectivoFisico').text('$' + formatearNumero(totalFisico));
+    
+    // Calcular diferencia
+    const efectivoTeorico = parseInt($('#efectivoTeorico').text().replace(/[^0-9]/g, '')) || 0;
+    const diferencia = totalFisico - efectivoTeorico;
+    
+    // Mostrar diferencia
+    let diferenciaClass = 'diferencia-exacta';
+    let diferenciaTexto = '$0';
+    let alertClass = 'alert-exacto';
+    
+    if (diferencia > 0) {
+        diferenciaClass = 'diferencia-positiva';
+        diferenciaTexto = '+$' + formatearNumero(diferencia);
+        alertClass = 'alert-diferencia';
+    } else if (diferencia < 0) {
+        diferenciaClass = 'diferencia-negativa';
+        diferenciaTexto = '-$' + formatearNumero(Math.abs(diferencia));
+        alertClass = 'alert-diferencia';
+    }
+    
+    $('#diferencia').removeClass('diferencia-exacta diferencia-positiva diferencia-negativa').addClass(diferenciaClass).text(diferenciaTexto);
+    $('#resultadoDiferencia').removeClass('alert-exacto alert-diferencia').addClass(alertClass);
+    
+    // Calcular porcentaje
+    if (efectivoTeorico > 0) {
+        const porcentaje = (Math.abs(diferencia) / efectivoTeorico * 100).toFixed(2);
+        $('#porcentajeDiferencia').text(`(${porcentaje}% del teórico)`);
+    }
+    
+    // Mostrar/ocultar observaciones de diferencia
+    if (Math.abs(diferencia) > 500) {
+        $('#observacionesDiferenciaDiv').show();
+        $('#observacionesDiferencia').attr('required', true);
+        $('#observacionesDiferencia').addClass('border-danger');
+    } else if (diferencia !== 0) {
+        $('#observacionesDiferenciaDiv').show();
+        $('#observacionesDiferencia').attr('required', false);
+        $('#observacionesDiferencia').removeClass('border-danger');
+    } else {
+        $('#observacionesDiferenciaDiv').hide();
+        $('#observacionesDiferencia').attr('required', false);
+        $('#observacionesDiferencia').removeClass('border-danger');
+    }
+}
+
+// ========== FUNCIONES MODO EXPRESS ==========
+
+function cambiarModoArqueo() {
+    const modoExpress = $('#modoExpress').is(':checked');
+    
+    if (modoExpress) {
+        $('#conteoDetallado').hide();
+        $('#conteoExpress').show();
+        console.log('🚀 Cambiado a modo Express');
+    } else {
+        $('#conteoExpress').hide();
+        $('#conteoDetallado').show();
+        console.log('📊 Cambiado a modo Detallado');
+    }
+    
+    // Recalcular totales según el modo activo
+    if (modoExpress) {
+        calcularTotalExpressFisico();
+    } else {
+        calcularTotalFisico();
+    }
+}
+
+function validarMontoExpress(input) {
+    const valor = parseInt(input.value);
+    
+    // Remover clases de validación previas
+    $(input).removeClass('is-invalid is-valid');
+    
+    if (input.value === '' || input.value === null) {
+        // Campo vacío - neutral
+        return;
+    }
+    
+    if (isNaN(valor) || valor < 0) {
+        // Valor inválido
+        $(input).addClass('is-invalid');
+        $(input).next('.invalid-feedback').remove();
+        $(input).after('<div class="invalid-feedback">El monto debe ser mayor o igual a 0</div>');
+    } else {
+        // Valor válido
+        $(input).addClass('is-valid');
+        $(input).next('.invalid-feedback').remove();
+    }
+}
+
+function calcularTotalExpressFisico() {
+    const montoTotal = parseInt($('#montoTotalExpress').val()) || 0;
+    
+    // Validar antes de calcular
+    if (montoTotal < 0) {
+        $('#efectivoFisico').text('$0');
+        $('#diferencia').text('Monto inválido').removeClass('diferencia-exacta diferencia-positiva diferencia-negativa').addClass('text-danger');
+        return;
+    }
+    
+    // Actualizar total físico
+    $('#efectivoFisico').text('$' + formatearNumero(montoTotal));
+    
+    // Calcular diferencia
+    const efectivoTeorico = parseInt($('#efectivoTeorico').text().replace(/[^0-9]/g, '')) || 0;
+    const diferencia = montoTotal - efectivoTeorico;
+    
+    // Mostrar diferencia
+    let diferenciaClass = 'diferencia-exacta';
+    let diferenciaTexto = '$0';
+    let alertClass = 'alert-exacto';
+    
+    if (diferencia > 0) {
+        diferenciaClass = 'diferencia-positiva';
+        diferenciaTexto = '+$' + formatearNumero(diferencia);
+        alertClass = 'alert-diferencia';
+    } else if (diferencia < 0) {
+        diferenciaClass = 'diferencia-negativa';
+        diferenciaTexto = '-$' + formatearNumero(Math.abs(diferencia));
+        alertClass = 'alert-diferencia';
+    }
+    
+    $('#diferencia').removeClass('diferencia-exacta diferencia-positiva diferencia-negativa').addClass(diferenciaClass).text(diferenciaTexto);
+    $('#resultadoDiferencia').removeClass('alert-exacto alert-diferencia').addClass(alertClass);
+    
+    // Calcular porcentaje
+    if (efectivoTeorico > 0) {
+        const porcentaje = (Math.abs(diferencia) / efectivoTeorico * 100).toFixed(2);
+        $('#porcentajeDiferencia').text(`(${porcentaje}% del teórico)`);
+    }
+    
+    // Mostrar/ocultar observaciones de diferencia
+    if (Math.abs(diferencia) > 500) {
+        $('#observacionesDiferenciaDiv').show();
+        $('#observacionesDiferencia').attr('required', true);
+        
+        // Agregar clase de campo requerido
+        $('#observacionesDiferencia').addClass('border-danger');
+    } else if (diferencia !== 0) {
+        $('#observacionesDiferenciaDiv').show();
+        $('#observacionesDiferencia').attr('required', false);
+        $('#observacionesDiferencia').removeClass('border-danger');
+    } else {
+        $('#observacionesDiferenciaDiv').hide();
+        $('#observacionesDiferencia').attr('required', false);
+        $('#observacionesDiferencia').removeClass('border-danger');
+    }
+}
+
+function guardarConteo() {
+    if (!arqueoActual) {
+        mostrarError('No hay arqueo activo');
+        return;
+    }
+    
+    const modoExpress = $('#modoExpress').is(':checked');
+    
+    // Validaciones específicas por modo
+    if (modoExpress) {
+        const montoTotal = parseInt($('#montoTotalExpress').val()) || 0;
+        if (montoTotal < 0) {
+            mostrarError('El monto debe ser mayor o igual a 0');
+            return;
+        }
+    }
+    
+    let datos = {
+        arqueo_id: arqueoActual.id,
+        observaciones: $('#observaciones').val(),
+        observaciones_diferencia: $('#observacionesDiferencia').val(),
+        modo_express: modoExpress
+    };
+    
+    if (modoExpress) {
+        // Modo Express: solo enviar el monto total
+        const montoTotal = parseInt($('#montoTotalExpress').val()) || 0;
+        datos.monto_total_express = montoTotal;
+        console.log('💰 Guardando en modo Express:', montoTotal);
+    } else {
+        // Modo Detallado: enviar todas las denominaciones
+        datos.billetes_20000 = parseInt($('#billetes_20000').val()) || 0;
+        datos.billetes_10000 = parseInt($('#billetes_10000').val()) || 0;
+        datos.billetes_5000 = parseInt($('#billetes_5000').val()) || 0;
+        datos.billetes_2000 = parseInt($('#billetes_2000').val()) || 0;
+        datos.billetes_1000 = parseInt($('#billetes_1000').val()) || 0;
+        datos.monedas_500 = parseInt($('#monedas_500').val()) || 0;
+        datos.monedas_100 = parseInt($('#monedas_100').val()) || 0;
+        datos.monedas_50 = parseInt($('#monedas_50').val()) || 0;
+        datos.monedas_10 = parseInt($('#monedas_10').val()) || 0;
+        datos.monedas_5 = parseInt($('#monedas_5').val()) || 0;
+        datos.monedas_1 = parseInt($('#monedas_1').val()) || 0;
+        console.log('📊 Guardando en modo Detallado');
+    }
+    
+    mostrarLoading(true);
+    
+    $.ajax({
+        url: '/app/api/arqueo/conteo/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify(datos),
+        success: function(response) {
+            mostrarLoading(false);
+            
+            if (response.success) {
+                const modoTexto = response.modo_usado === 'express' ? 'Express' : 'Detallado';
+                mostrarExito(`Conteo guardado exitosamente (Modo ${modoTexto})`);
+                console.log('✅ Arqueo guardado:', response.arqueo);
+            } else {
+                mostrarError('Error al guardar: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            mostrarLoading(false);
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+function cerrarArqueo() {
+    if (!arqueoActual) {
+        mostrarError('No hay arqueo activo');
+        return;
+    }
+    
+    // Obtener diferencia actual calculando directamente desde los valores
+    const efectivoTeorico = parseInt($('#efectivoTeorico').text().replace(/[^0-9]/g, '')) || 0;
+    let efectivoFisico = 0;
+    
+    // Obtener efectivo físico según el modo
+    const modoExpress = $('#modoExpress').is(':checked');
+    if (modoExpress) {
+        efectivoFisico = parseInt($('#montoTotalExpress').val()) || 0;
+    } else {
+        // Calcular desde denominaciones
+        const denominaciones = [
+            {id: 'billetes_20000', valor: 20000},
+            {id: 'billetes_10000', valor: 10000},
+            {id: 'billetes_5000', valor: 5000},
+            {id: 'billetes_2000', valor: 2000},
+            {id: 'billetes_1000', valor: 1000},
+            {id: 'monedas_500', valor: 500},
+            {id: 'monedas_100', valor: 100},
+            {id: 'monedas_50', valor: 50},
+            {id: 'monedas_10', valor: 10},
+            {id: 'monedas_5', valor: 5},
+            {id: 'monedas_1', valor: 1}
+        ];
+        
+        denominaciones.forEach(function(denom) {
+            const cantidad = parseInt($('#' + denom.id).val()) || 0;
+            efectivoFisico += cantidad * denom.valor;
+        });
+    }
+    
+    // Calcular diferencia real
+    const diferencia = Math.abs(efectivoFisico - efectivoTeorico);
+    const diferenciaTexto = $('#diferencia').text();
+    
+    console.log('🔍 Validando cierre - Teórico:', efectivoTeorico, 'Físico:', efectivoFisico, 'Diferencia:', diferencia, 'Texto:', diferenciaTexto);
+    console.log('🔍 Modo Express activo:', modoExpress);
+    if (modoExpress) {
+        console.log('🔍 Valor del campo Express:', $('#montoTotalExpress').val());
+    }
+    
+    // Validar observaciones SOLO si hay diferencias significativas (mayor a $500)
+    if (diferencia > 500) {
+        const observacionesDiferencia = $('#observacionesDiferencia').val().trim();
+        
+        if (!observacionesDiferencia) {
+            mostrarError('Debe agregar observaciones para explicar las diferencias significativas (mayor a $500)');
+            $('#observacionesDiferencia').focus();
+            return;
+        }
+        
+        if (observacionesDiferencia.length < 10) {
+            mostrarError('Las observaciones deben ser más detalladas (mínimo 10 caracteres)');
+            $('#observacionesDiferencia').focus();
+            return;
+        }
+    }
+    
+    // Si la diferencia es cero, no requerir observaciones especiales
+    if (diferencia === 0) {
+        console.log('✅ Arqueo perfecto - Sin diferencias, procediendo a cerrar');
+    }
+    
+    // Confirmación final
+    let mensajeConfirmacion = '¿Está seguro de cerrar este arqueo? No podrá modificarlo después.';
+    if (diferencia > 0) {
+        mensajeConfirmacion = `¿Cerrar arqueo con diferencia de $${formatearNumero(diferencia)}? No podrá modificarlo después.`;
+    }
+    
+    if (!confirm(mensajeConfirmacion)) {
+        return;
+    }
+    
+    console.log('🔒 Guardando conteo antes de cerrar arqueo...');
+    
+    // Primero guardar el conteo físico (incluyendo observaciones)
+    // modoExpress ya está declarado arriba
+    let datos = {
+        arqueo_id: arqueoActual.id,
+        observaciones: $('#observaciones').val(),
+        observaciones_diferencia: $('#observacionesDiferencia').val(),
+        modo_express: modoExpress
+    };
+    
+    if (modoExpress) {
+        const montoTotal = parseInt($('#montoTotalExpress').val()) || 0;
+        datos.monto_total_express = montoTotal;
+    } else {
+        datos.billetes_20000 = parseInt($('#billetes_20000').val()) || 0;
+        datos.billetes_10000 = parseInt($('#billetes_10000').val()) || 0;
+        datos.billetes_5000 = parseInt($('#billetes_5000').val()) || 0;
+        datos.billetes_2000 = parseInt($('#billetes_2000').val()) || 0;
+        datos.billetes_1000 = parseInt($('#billetes_1000').val()) || 0;
+        datos.monedas_500 = parseInt($('#monedas_500').val()) || 0;
+        datos.monedas_100 = parseInt($('#monedas_100').val()) || 0;
+        datos.monedas_50 = parseInt($('#monedas_50').val()) || 0;
+        datos.monedas_10 = parseInt($('#monedas_10').val()) || 0;
+        datos.monedas_5 = parseInt($('#monedas_5').val()) || 0;
+        datos.monedas_1 = parseInt($('#monedas_1').val()) || 0;
+    }
+    
+    console.log('💾 Datos a guardar:', datos);
+    console.log('💾 Modo Express:', modoExpress);
+    console.log('💾 Efectivo teórico actual:', $('#efectivoTeorico').text());
+    console.log('💾 Efectivo físico mostrado:', $('#efectivoFisico').text());
+    
+    mostrarLoading(true);
+    
+    // Primero guardar el conteo físico
+    $.ajax({
+        url: '/app/api/arqueo/conteo/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify(datos),
+        success: function(conteoResponse) {
+            console.log('💾 Conteo guardado:', conteoResponse);
+            
+            if (conteoResponse.success) {
+                // Ahora cerrar el arqueo
+                console.log('🔒 Enviando solicitud de cierre para arqueo:', arqueoActual.id);
+                
+                $.ajax({
+                    url: '/app/api/arqueo/cerrar/',
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json'
+                    },
+                    data: JSON.stringify({
+                        arqueo_id: arqueoActual.id
+                    }),
+                    success: function(response) {
+                        mostrarLoading(false);
+                        console.log('📨 Respuesta del servidor:', response);
+                        
+                        if (response.success) {
+                            mostrarExito('Arqueo cerrado exitosamente: ' + response.estado_final);
+                            $('#modalArqueo').modal('hide');
+                            verificarEstadoHoy();
+                            cargarArqueos();
+                        } else {
+                            console.error('❌ Error del servidor:', response.error);
+                            mostrarError('Error al cerrar arqueo: ' + response.error);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        mostrarLoading(false);
+                        console.error('❌ Error de conexión al cerrar:', {xhr, status, error});
+                        mostrarError('Error de conexión al cerrar: ' + xhr.responseText);
+                    }
+                });
+            } else {
+                mostrarLoading(false);
+                mostrarError('Error al guardar conteo: ' + conteoResponse.error);
+            }
+        },
+        error: function(xhr, status, error) {
+            mostrarLoading(false);
+            console.error('❌ Error de conexión al guardar:', {xhr, status, error});
+            mostrarError('Error de conexión al guardar: ' + xhr.responseText);
+        }
+    });
+}
+
+function imprimirArqueo() {
+    mostrarInfo('Función de impresión térmica en desarrollo');
+}
+
+// ========== FUNCIONES DE LISTA ==========
+
+function cargarArqueos() {
+    console.log('📋 Iniciando carga de arqueos...');
+    
+    const filtros = {
+        page: paginaActual,
+        per_page: 20
+    };
+    
+    const fechaDesde = $('#fechaDesde').val();
+    const fechaHasta = $('#fechaHasta').val();
+    const estado = $('#filtroEstado').val();
+    
+    if (fechaDesde) filtros.fecha_desde = fechaDesde;
+    if (fechaHasta) filtros.fecha_hasta = fechaHasta;
+    if (estado) filtros.estado = estado;
+    
+    console.log('📋 Filtros aplicados:', filtros);
+    
+    $.ajax({
+        url: '/app/api/arqueos/',
+        method: 'GET',
+        data: filtros,
+        success: function(response) {
+            console.log('✅ Respuesta cargarArqueos:', response);
+            if (response.success) {
+                mostrarArqueos(response.arqueos);
+                actualizarPaginacion(response.pagination);
+                actualizarResumen(response.arqueos);
+            } else {
+                console.error('❌ Error en respuesta:', response.error);
+                mostrarError('Error al cargar arqueos: ' + response.error);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error en cargarArqueos:', {xhr, status, error});
+            console.error('Response Text:', xhr.responseText);
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+function mostrarArqueos(arqueos) {
+    let html = '';
+    
+    if (arqueos.length === 0) {
+        html = `
+            <tr>
+                <td colspan="8" class="text-center text-muted">
+                    <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                    <p class="mt-2">No hay arqueos para mostrar</p>
+                </td>
+            </tr>
+        `;
+    } else {
+        arqueos.forEach(function(arqueo) {
+            const estadoBadge = `<span class="estado-badge estado-${arqueo.estado.toLowerCase().replace('_', '-')}">${arqueo.estado_display}</span>`;
+            
+            let diferenciaHtml = '';
+            if (arqueo.diferencia_efectivo === 0) {
+                diferenciaHtml = '<span class="diferencia-exacta">$0</span>';
+            } else if (arqueo.diferencia_efectivo > 0) {
+                diferenciaHtml = `<span class="diferencia-positiva">+$${formatearNumero(arqueo.diferencia_absoluta)}</span>`;
+            } else {
+                diferenciaHtml = `<span class="diferencia-negativa">-$${formatearNumero(arqueo.diferencia_absoluta)}</span>`;
+            }
+            
+            html += `
+                <tr>
+                    <td>${new Date(arqueo.fecha_arqueo).toLocaleDateString('es-CL')}</td>
+                    <td>${arqueo.usuario_responsable}</td>
+                    <td>${estadoBadge}</td>
+                    <td>$${formatearNumero(arqueo.efectivo_teorico)}</td>
+                    <td>$${formatearNumero(arqueo.efectivo_fisico)}</td>
+                    <td>${diferenciaHtml}</td>
+                    <td>$${formatearNumero(arqueo.venta_total)}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" onclick="verDetalleArqueo(${arqueo.id})" title="Ver detalle">
+                                <i class="ri-eye-line"></i>
+                            </button>
+                            <button class="btn btn-outline-info" onclick="imprimirArqueoId(${arqueo.id})" title="Imprimir">
+                                <i class="ri-printer-line"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+    
+    $('#tablaArqueos').html(html);
+}
+
+function actualizarPaginacion(pagination) {
+    $('#infoArqueos').text(`Mostrando ${pagination.total_items} arqueos`);
+    
+    let paginacionHtml = '';
+    if (pagination.total_pages > 1) {
+        paginacionHtml = '<nav><ul class="pagination pagination-sm justify-content-end">';
+        
+        // Anterior
+        if (pagination.has_previous) {
+            paginacionHtml += `<li class="page-item"><a class="page-link" href="#" onclick="cambiarPagina(${pagination.current_page - 1})">Anterior</a></li>`;
+        }
+        
+        // Páginas
+        for (let i = 1; i <= pagination.total_pages; i++) {
+            const active = i === pagination.current_page ? 'active' : '';
+            paginacionHtml += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="cambiarPagina(${i})">${i}</a></li>`;
+        }
+        
+        // Siguiente
+        if (pagination.has_next) {
+            paginacionHtml += `<li class="page-item"><a class="page-link" href="#" onclick="cambiarPagina(${pagination.current_page + 1})">Siguiente</a></li>`;
+        }
+        
+        paginacionHtml += '</ul></nav>';
+    }
+    
+    $('#paginacionArqueos').html(paginacionHtml);
+}
+
+function actualizarResumen(arqueos) {
+    let exactos = 0;
+    let conDiferencias = 0;
+    
+    arqueos.forEach(function(arqueo) {
+        if (arqueo.diferencia_efectivo === 0) {
+            exactos++;
+        } else {
+            conDiferencias++;
+        }
+    });
+    
+    $('#totalExactos').text(exactos);
+    $('#totalDiferencias').text(conDiferencias);
+}
+
+function cambiarPagina(pagina) {
+    paginaActual = pagina;
+    cargarArqueos();
+}
+
+function filtrarArqueos() {
+    paginaActual = 1;
+    cargarArqueos();
+}
+
+function limpiarFiltros() {
+    const hoy = new Date().toISOString().split('T')[0];
+    $('#fechaDesde').val(hoy);
+    $('#fechaHasta').val(hoy);
+    $('#filtroEstado').val('');
+    paginaActual = 1;
+    cargarArqueos();
+}
+
+function verDetalleArqueo(arqueoId) {
+    continuarArqueo(arqueoId);
+}
+
+function imprimirArqueoId(arqueoId) {
+    mostrarInfo('Función de impresión en desarrollo para arqueo #' + arqueoId);
+}
+
+function corregirArqueosExpress() {
+    if (!confirm('¿Está seguro de corregir los arqueos Express mal guardados? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    $.ajax({
+        url: '/app/api/arqueo/corregir-express/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({}),
+        success: function(response) {
+            mostrarLoading(false);
+            
+            if (response.success) {
+                mostrarExito(`Se corrigieron ${response.arqueos_corregidos} arqueos Express`);
+                cargarArqueos(); // Recargar la lista
+            } else {
+                mostrarError('Error al corregir arqueos: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            mostrarLoading(false);
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+// ========== FUNCIONES AUXILIARES ==========
+
+function mostrarLoading(mostrar) {
+    if (mostrar) {
+        $('#loadingOverlay').show();
+    } else {
+        $('#loadingOverlay').hide();
+    }
+}
+
+function mostrarExito(mensaje) {
+    Swal.fire({
+        icon: 'success',
+        title: '¡Éxito!',
+        text: mensaje,
+        timer: 3000,
+        showConfirmButton: false
+    });
+}
+
+function mostrarError(mensaje) {
+    Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: mensaje
+    });
+}
+
+function mostrarInfo(mensaje) {
+    Swal.fire({
+        icon: 'info',
+        title: 'Información',
+        text: mensaje
+    });
+}
+
+function formatearNumero(numero) {
+    return new Intl.NumberFormat('es-CL').format(numero);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// ========== FUNCIONES DE RESUMEN DE CAJA ==========
+
+function abrirResumenCaja() {
+    const hoy = new Date().toISOString().split('T')[0];
+    $('#fechaCuadratura').val(hoy);
+    $('#fechaResumenCaja').text(new Date().toLocaleDateString('es-CL'));
+    
+    // Limpiar campos
+    limpiarCamposCuadratura();
+    
+    // Abrir modal
+    $('#modalResumenCaja').modal('show');
+    
+    // Generar cuadratura automáticamente
+    generarCuadratura();
+}
+
+function limpiarCamposCuadratura() {
+    // Limpiar todos los campos de la cuadratura
+    const campos = [
+        'visa', 'debito', 'presto', 'abcdin', 'tricot', 'hites',
+        'efectivo', 'transferencia', 'nota_credito', 'convenio', 'cheque',
+        'webpay', 'mercadolibre', 'mercadopago', 'paris', 'ripley', 'falabella', 'transferenciaInternet',
+        'totaltickets', 'totalboletaelectronica', 'totalfactura', 'totalfacturaexenta', 'totalnotascredito',
+        'ventatotal', 'totalefectivo', 'totaltbk', 'totalcomercial', 'totalinternet'
+    ];
+    
+    campos.forEach(campo => {
+        $(`#${campo}`).val('$0');
+    });
+}
+
+function buscarCuadratura() {
+    const fecha = $('#fechaCuadratura').val();
+    if (!fecha) {
+        mostrarError('Seleccione una fecha');
+        return;
+    }
+    
+    $('#fechaResumenCaja').text(new Date(fecha).toLocaleDateString('es-CL'));
+    generarCuadratura();
+}
+
+function generarCuadratura() {
+    const fecha = $('#fechaCuadratura').val();
+    if (!fecha) {
+        mostrarError('Seleccione una fecha');
+        return;
+    }
+    
+    console.log('📊 Generando cuadratura para fecha:', fecha);
+    
+    // Mostrar loading
+    $('#estadoCarga').show();
+    $('#spinnerBuscar').show();
+    
+    // Crear FormData para enviar como POST
+    const formData = new FormData();
+    formData.append('fecha', fecha);
+    
+    $.ajax({
+        url: '/app/api/cuadratura/generar/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            $('#estadoCarga').hide();
+            $('#spinnerBuscar').hide();
+            
+            if (response.success) {
+                console.log('✅ Cuadratura generada:', response.cuadratura);
+                cargarDatosCuadratura(response.cuadratura);
+                mostrarExito('Cuadratura generada exitosamente');
+            } else {
+                console.error('❌ Error en cuadratura:', response.error);
+                mostrarError('Error al generar cuadratura: ' + response.error);
+            }
+        },
+        error: function(xhr, status, error) {
+            $('#estadoCarga').hide();
+            $('#spinnerBuscar').hide();
+            console.error('❌ Error de conexión:', {xhr, status, error});
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+function cargarDatosCuadratura(cuadratura) {
+    console.log('📋 Cargando datos de cuadratura:', cuadratura);
+    
+    // Tarjetas Comerciales
+    $('#visa').val(formatearMoneda(cuadratura.total_visa_mc_amex || 0));
+    $('#debito').val(formatearMoneda(cuadratura.total_tarjeta_debito || 0));
+    $('#presto').val(formatearMoneda(cuadratura.total_presto || 0));
+    $('#abcdin').val(formatearMoneda(cuadratura.total_abcdin || 0));
+    $('#tricot').val(formatearMoneda(cuadratura.total_tricot || 0));
+    $('#hites').val(formatearMoneda(cuadratura.total_hites || 0));
+    
+    // Efectivo y Otros
+    $('#efectivo').val(formatearMoneda(cuadratura.total_efectivo || 0));
+    $('#transferencia').val(formatearMoneda(cuadratura.total_transferencia || 0));
+    $('#nota_credito').val(formatearMoneda(cuadratura.total_notas_credito || 0));
+    $('#convenio').val(formatearMoneda(cuadratura.total_convenio || 0));
+    $('#cheque').val(formatearMoneda(cuadratura.total_cheque || 0));
+    
+    // Venta Internet
+    $('#webpay').val(formatearMoneda(cuadratura.total_webpay || 0));
+    $('#mercadolibre').val(formatearMoneda(cuadratura.total_mercadolibre || 0));
+    $('#mercadopago').val(formatearMoneda(cuadratura.total_mercadopago || 0));
+    $('#paris').val(formatearMoneda(cuadratura.total_paris || 0));
+    $('#ripley').val(formatearMoneda(cuadratura.total_ripley || 0));
+    $('#falabella').val(formatearMoneda(cuadratura.total_falabella || 0));
+    $('#transferenciaInternet').val(formatearMoneda(cuadratura.total_transferencia_internet || 0));
+    
+    // Documentos
+    $('#totaltickets').val(formatearMoneda(cuadratura.total_tickets || 0));
+    $('#totalboletaelectronica').val(formatearMoneda(cuadratura.total_boletas_electronicas || 0));
+    $('#totalfactura').val(formatearMoneda(cuadratura.total_facturas || 0));
+    $('#totalfacturaexenta').val(formatearMoneda(cuadratura.total_facturas_exentas || 0));
+    $('#totalnotascredito').val(formatearMoneda(cuadratura.total_notas_credito || 0));
+    
+    // Totales
+    $('#ventatotal').val(formatearMoneda(cuadratura.venta_total || 0));
+    $('#totalefectivo').val(formatearMoneda(cuadratura.total_efectivo || 0));
+    $('#totaltbk').val(formatearMoneda(cuadratura.total_transbank || 0));
+    $('#totalcomercial').val(formatearMoneda(cuadratura.total_tarjetas_comerciales || 0));
+    $('#totalinternet').val(formatearMoneda(cuadratura.total_venta_internet || 0));
+}
+
+function exportarCuadraturaExcel() {
+    const fecha = $('#fechaCuadratura').val();
+    if (!fecha) {
+        mostrarError('Seleccione una fecha');
+        return;
+    }
+    
+    console.log('📊 Exportando cuadratura a Excel para fecha:', fecha);
+    
+    // Crear URL con parámetros
+    const url = `/app/api/cuadratura/exportar/?fecha=${fecha}`;
+    
+    // Abrir en nueva ventana para descargar
+    window.open(url, '_blank');
+    
+    mostrarExito('Exportando cuadratura a Excel...');
+}
+
+function imprimirResumenTermica() {
+    const fecha = $('#fechaCuadratura').val();
+    if (!fecha) {
+        mostrarError('Seleccione una fecha');
+        return;
+    }
+    
+    console.log('🖨️ Preparando impresión térmica para fecha:', fecha);
+    
+    // Obtener datos actuales de la cuadratura
+    const datosImpresion = {
+        fecha: new Date(fecha).toLocaleDateString('es-CL'),
+        efectivo: $('#efectivo').val(),
+        transbank: $('#totaltbk').val(),
+        tarjetas_comerciales: $('#totalcomercial').val(),
+        venta_internet: $('#totalinternet').val(),
+        venta_total: $('#ventatotal').val(),
+        // Detalles por método
+        visa: $('#visa').val(),
+        debito: $('#debito').val(),
+        presto: $('#presto').val(),
+        abcdin: $('#abcdin').val(),
+        tricot: $('#tricot').val(),
+        hites: $('#hites').val(),
+        paris: $('#paris').val(),
+        ripley: $('#ripley').val(),
+        falabella: $('#falabella').val(),
+        webpay: $('#webpay').val(),
+        mercadolibre: $('#mercadolibre').val(),
+        mercadopago: $('#mercadopago').val(),
+        transferencia: $('#transferencia').val(),
+        // Documentos
+        tickets: $('#totaltickets').val(),
+        boletas_electronicas: $('#totalboletaelectronica').val(),
+        facturas: $('#totalfactura').val(),
+        facturas_exentas: $('#totalfacturaexenta').val(),
+        notas_credito: $('#totalnotascredito').val()
+    };
+    
+    // Crear contenido para impresión térmica
+    const contenidoTermica = generarContenidoTermica(datosImpresion);
+    
+    // Abrir ventana de impresión
+    const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+    ventanaImpresion.document.write(contenidoTermica);
+    ventanaImpresion.document.close();
+    ventanaImpresion.focus();
+    ventanaImpresion.print();
+    
+    mostrarExito('Enviando a impresora térmica...');
+}
+
+function generarContenidoTermica(datos) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Resumen de Caja</title>
+            <style>
+                @media print {
+                    body { margin: 0; padding: 0; }
+                    .no-print { display: none !important; }
+                }
+                
+                body {
+                    font-family: 'Courier New', 'Lucida Console', monospace;
+                    font-size: 11px;
+                    line-height: 1.2;
+                    margin: 0;
+                    padding: 8px;
+                    width: 280px;
+                    background: white;
+                    color: black;
+                    -webkit-print-color-adjust: exact;
+                    print-color-adjust: exact;
+                }
+                
+                .centro { 
+                    text-align: center; 
+                    margin: 5px 0;
+                }
+                
+                .derecha { 
+                    text-align: right; 
+                }
+                
+                .izquierda { 
+                    text-align: left; 
+                }
+                
+                .linea { 
+                    border-bottom: 1px dashed #000; 
+                    margin: 8px 0; 
+                    height: 1px;
+                }
+                
+                .linea-doble { 
+                    border-bottom: 2px solid #000; 
+                    margin: 8px 0; 
+                    height: 2px;
+                }
+                
+                .titulo {
+                    font-size: 14px;
+                    font-weight: bold;
+                    margin: 8px 0;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }
+                
+                .subtitulo {
+                    font-size: 12px;
+                    font-weight: bold;
+                    margin: 6px 0 4px 0;
+                    text-transform: uppercase;
+                }
+                
+                .total { 
+                    font-weight: bold; 
+                    font-size: 13px;
+                    background: #000;
+                    color: white;
+                    padding: 4px;
+                    margin: 8px 0;
+                }
+                
+                .seccion { 
+                    margin: 8px 0; 
+                }
+                
+                table { 
+                    width: 100%; 
+                    border-collapse: collapse;
+                    margin: 4px 0;
+                }
+                
+                td { 
+                    padding: 1px 2px;
+                    vertical-align: top;
+                    font-size: 11px;
+                }
+                
+                .metodo { 
+                    width: 65%; 
+                    text-align: left;
+                    font-weight: normal;
+                }
+                
+                .monto { 
+                    width: 35%; 
+                    text-align: right;
+                    font-weight: bold;
+                    font-family: 'Courier New', monospace;
+                }
+                
+                .empresa {
+                    font-size: 10px;
+                    margin: 4px 0;
+                }
+                
+                .fecha-hora {
+                    font-size: 9px;
+                    margin: 4px 0;
+                    color: #666;
+                }
+                
+                .resumen-principal {
+                    background: #f0f0f0;
+                    padding: 6px;
+                    margin: 8px 0;
+                    border: 1px solid #000;
+                }
+                
+                .resumen-principal .monto {
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+                
+                /* Ocultar elementos con valor $0 */
+                .cero { display: none; }
+                
+                @page {
+                    size: 80mm auto;
+                    margin: 0;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="centro">
+                <div class="titulo">RESUMEN DE CAJA</div>
+                <div class="empresa">RETAILMIND SYSTEM</div>
+                <div>${datos.fecha}</div>
+            </div>
+            <div class="linea-doble"></div>
+            
+            <div class="seccion resumen-principal">
+                <div class="subtitulo centro">RESUMEN GENERAL</div>
+                <table>
+                    <tr><td class="metodo">EFECTIVO:</td><td class="monto">${datos.efectivo}</td></tr>
+                    <tr><td class="metodo">TRANSBANK:</td><td class="monto">${datos.transbank}</td></tr>
+                    <tr><td class="metodo">TARJETAS COMERCIALES:</td><td class="monto">${datos.tarjetas_comerciales}</td></tr>
+                    <tr><td class="metodo">VENTA INTERNET:</td><td class="monto">${datos.venta_internet}</td></tr>
+                </table>
+            </div>
+            <div class="linea"></div>
+            
+            <div class="seccion">
+                <div class="subtitulo">DETALLE TARJETAS</div>
+                <table>
+                    ${datos.visa !== '$0' ? `<tr><td class="metodo">VISA/MC/AMEX:</td><td class="monto">${datos.visa}</td></tr>` : ''}
+                    ${datos.debito !== '$0' ? `<tr><td class="metodo">REDCOMPRA DEBITO:</td><td class="monto">${datos.debito}</td></tr>` : ''}
+                    ${datos.presto !== '$0' ? `<tr><td class="metodo">PRESTO:</td><td class="monto">${datos.presto}</td></tr>` : ''}
+                    ${datos.abcdin !== '$0' ? `<tr><td class="metodo">ABCDIN:</td><td class="monto">${datos.abcdin}</td></tr>` : ''}
+                    ${datos.tricot !== '$0' ? `<tr><td class="metodo">TRICOT:</td><td class="monto">${datos.tricot}</td></tr>` : ''}
+                    ${datos.hites !== '$0' ? `<tr><td class="metodo">HITES:</td><td class="monto">${datos.hites}</td></tr>` : ''}
+                    ${datos.paris !== '$0' ? `<tr><td class="metodo">PARIS:</td><td class="monto">${datos.paris}</td></tr>` : ''}
+                    ${datos.ripley !== '$0' ? `<tr><td class="metodo">RIPLEY:</td><td class="monto">${datos.ripley}</td></tr>` : ''}
+                    ${datos.falabella !== '$0' ? `<tr><td class="metodo">FALABELLA:</td><td class="monto">${datos.falabella}</td></tr>` : ''}
+                </table>
+            </div>
+            <div class="linea"></div>
+            
+            <div class="seccion">
+                <div class="subtitulo">VENTA INTERNET</div>
+                <table>
+                    ${datos.webpay !== '$0' ? `<tr><td class="metodo">WEBPAY:</td><td class="monto">${datos.webpay}</td></tr>` : ''}
+                    ${datos.mercadolibre !== '$0' ? `<tr><td class="metodo">MERCADOLIBRE:</td><td class="monto">${datos.mercadolibre}</td></tr>` : ''}
+                    ${datos.mercadopago !== '$0' ? `<tr><td class="metodo">MERCADO PAGO:</td><td class="monto">${datos.mercadopago}</td></tr>` : ''}
+                    ${datos.transferencia !== '$0' ? `<tr><td class="metodo">TRANSFERENCIA:</td><td class="monto">${datos.transferencia}</td></tr>` : ''}
+                </table>
+            </div>
+            <div class="linea"></div>
+            
+            <div class="seccion">
+                <div class="subtitulo">DOCUMENTOS EMITIDOS</div>
+                <table>
+                    ${datos.tickets !== '$0' ? `<tr><td class="metodo">TICKETS:</td><td class="monto">${datos.tickets}</td></tr>` : ''}
+                    ${datos.boletas_electronicas !== '$0' ? `<tr><td class="metodo">BOLETAS ELECTRONICAS:</td><td class="monto">${datos.boletas_electronicas}</td></tr>` : ''}
+                    ${datos.facturas !== '$0' ? `<tr><td class="metodo">FACTURAS:</td><td class="monto">${datos.facturas}</td></tr>` : ''}
+                    ${datos.facturas_exentas !== '$0' ? `<tr><td class="metodo">FACTURAS EXENTAS:</td><td class="monto">${datos.facturas_exentas}</td></tr>` : ''}
+                    ${datos.notas_credito !== '$0' ? `<tr><td class="metodo">NOTAS DE CREDITO:</td><td class="monto">${datos.notas_credito}</td></tr>` : ''}
+                </table>
+            </div>
+            <div class="linea-doble"></div>
+            
+            <div class="total centro">
+                VENTA TOTAL: ${datos.venta_total}
+            </div>
+            <div class="linea-doble"></div>
+            
+            <div class="centro fecha-hora">
+                Impreso: ${new Date().toLocaleString('es-CL')}
+            </div>
+            <div class="centro fecha-hora">
+                Sistema RetailMind v2.0
+            </div>
+            
+            <script>
+                // Auto-imprimir al cargar
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                    }, 500);
+                };
+            </script>
+        </body>
+        </html>
+    `;
+}
+
+function formatearMoneda(valor) {
+    const numero = parseInt(valor || 0);
+    return '$' + numero.toLocaleString('es-CL');
+}
+
+// Verificación final de que todas las funciones están definidas
+console.log('🔍 Verificación final de funciones (v2.0):');
+console.log('- verificarEstadoHoy:', typeof verificarEstadoHoy);
+console.log('- filtrarArqueos:', typeof filtrarArqueos);
+console.log('- limpiarFiltros:', typeof limpiarFiltros);
+console.log('- iniciarArqueoHoy:', typeof iniciarArqueoHoy);
+console.log('- cargarArqueos:', typeof cargarArqueos);
+console.log('- abrirResumenCaja:', typeof abrirResumenCaja);
+console.log('- generarCuadratura:', typeof generarCuadratura);
+console.log('- exportarCuadraturaExcel:', typeof exportarCuadraturaExcel);
+console.log('- imprimirResumenTermica:', typeof imprimirResumenTermica);
+console.log('✅ Todas las funciones del arqueo han sido definidas correctamente');
+</script>

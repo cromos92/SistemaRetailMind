@@ -1,0 +1,1141 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<link href="{% static 'css/pos-transbank.css' %}" rel="stylesheet">
+<style>
+    .pos-card {
+        border: 1px solid #e3e6f0;
+        border-radius: 0.35rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s;
+    }
+    
+    .pos-card:hover {
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    }
+    
+    .pos-status {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .pos-status.conectado {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .pos-status.desconectado {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .pos-status.error {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .transaction-status {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+        text-align: center;
+        font-weight: 600;
+    }
+    
+    .transaction-status.iniciada {
+        background-color: #cce5ff;
+        color: #004085;
+    }
+    
+    .transaction-status.procesando {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .transaction-status.aprobada {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .transaction-status.rechazada {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .amount-display {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #5a5c69;
+    }
+    
+    .pos-terminal-icon {
+        font-size: 3rem;
+        color: #5a5c69;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .log-entry {
+        padding: 0.5rem;
+        border-left: 3px solid #007bff;
+        margin-bottom: 0.5rem;
+        background-color: #f8f9fc;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+    }
+    
+    .log-entry.error {
+        border-left-color: #dc3545;
+        background-color: #fff5f5;
+    }
+    
+    .log-entry.success {
+        border-left-color: #28a745;
+        background-color: #f8fff8;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-credit-card mr-2"></i>
+            Gestión POS Transbank
+        </h1>
+        <div>
+            <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modalConfiguracionPOS">
+                <i class="fas fa-plus mr-1"></i> Nueva Configuración
+            </button>
+            <button type="button" class="btn btn-info btn-sm" onclick="cargarConfiguraciones()">
+                <i class="fas fa-sync-alt mr-1"></i> Actualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Información de Sucursal -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-store mr-2"></i>
+                Sucursal: {{ sucursal_actual.alias }}
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Dirección:</strong> {{ sucursal_actual.direccion }}</p>
+                    <p><strong>Empresa:</strong> {{ sucursal_actual.empresa.nombre }}</p>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-right">
+                        <span class="badge badge-info">{{ configuraciones_pos.count }} Terminal(es) Configurado(s)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs de Navegación -->
+    <ul class="nav nav-tabs" id="posTab" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="terminales-tab" data-toggle="tab" href="#terminales" role="tab">
+                <i class="fas fa-desktop mr-1"></i> Terminales POS
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="venta-tab" data-toggle="tab" href="#venta" role="tab">
+                <i class="fas fa-shopping-cart mr-1"></i> Procesar Venta
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="transacciones-tab" data-toggle="tab" href="#transacciones" role="tab">
+                <i class="fas fa-history mr-1"></i> Historial
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="logs-tab" data-toggle="tab" href="#logs" role="tab">
+                <i class="fas fa-file-alt mr-1"></i> Logs
+            </a>
+        </li>
+    </ul>
+
+    <!-- Contenido de Tabs -->
+    <div class="tab-content" id="posTabContent">
+        
+        <!-- Tab Terminales POS -->
+        <div class="tab-pane fade show active" id="terminales" role="tabpanel">
+            <div class="card shadow mt-3">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Terminales POS Configurados</h6>
+                </div>
+                <div class="card-body">
+                    <div id="configuraciones-container" class="row">
+                        <!-- Las configuraciones se cargarán aquí via AJAX -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Procesar Venta -->
+        <div class="tab-pane fade" id="venta" role="tabpanel">
+            <div class="card shadow mt-3">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Procesar Venta POS</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form id="form-venta-pos">
+                                <div class="form-group">
+                                    <label for="select-pos-venta">Terminal POS:</label>
+                                    <select class="form-control" id="select-pos-venta" required>
+                                        <option value="">Seleccionar terminal...</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="monto-venta">Monto a Cobrar:</label>
+                                    <div class="input-group">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">$</span>
+                                        </div>
+                                        <input type="number" class="form-control" id="monto-venta" 
+                                               placeholder="0" min="1" step="1" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="ticket-asociado">Ticket Asociado (Opcional):</label>
+                                    <input type="number" class="form-control" id="ticket-asociado" 
+                                           placeholder="Número de ticket">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="observaciones-venta">Observaciones:</label>
+                                    <textarea class="form-control" id="observaciones-venta" rows="2" 
+                                              placeholder="Observaciones adicionales..."></textarea>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-success btn-lg btn-block" id="btn-procesar-venta">
+                                    <i class="fas fa-credit-card mr-2"></i>
+                                    Procesar Venta POS
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <!-- Estado de la Transacción -->
+                            <div id="estado-transaccion" class="d-none">
+                                <h5>Estado de la Transacción</h5>
+                                <div id="transaction-status-display" class="transaction-status iniciada">
+                                    <div class="loading-spinner mr-2"></div>
+                                    Iniciando transacción...
+                                </div>
+                                
+                                <div id="transaction-details" class="mt-3">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <small class="text-muted">Ticket POS:</small>
+                                            <div id="ticket-pos-display" class="font-weight-bold">-</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted">Monto:</small>
+                                            <div id="monto-display" class="font-weight-bold">$0</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="transaction-result" class="mt-3 d-none">
+                                    <!-- Resultado de la transacción -->
+                                </div>
+                            </div>
+                            
+                            <!-- Instrucciones -->
+                            <div id="instrucciones-pos" class="alert alert-info">
+                                <h6><i class="fas fa-info-circle mr-2"></i>Instrucciones:</h6>
+                                <ol class="mb-0">
+                                    <li>Seleccione el terminal POS a utilizar</li>
+                                    <li>Ingrese el monto a cobrar</li>
+                                    <li>Opcionalmente asocie un ticket de venta</li>
+                                    <li>Haga clic en "Procesar Venta POS"</li>
+                                    <li>Siga las instrucciones en el terminal</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Historial de Transacciones -->
+        <div class="tab-pane fade" id="transacciones" role="tabpanel">
+            <div class="card shadow mt-3">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Historial de Transacciones POS</h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="cargarTransacciones()">
+                        <i class="fas fa-sync-alt mr-1"></i> Actualizar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <!-- Filtros -->
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="filtro-fecha-desde">Desde:</label>
+                            <input type="date" class="form-control form-control-sm" id="filtro-fecha-desde">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filtro-fecha-hasta">Hasta:</label>
+                            <input type="date" class="form-control form-control-sm" id="filtro-fecha-hasta">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filtro-estado">Estado:</label>
+                            <select class="form-control form-control-sm" id="filtro-estado">
+                                <option value="">Todos</option>
+                                <option value="APROBADA">Aprobada</option>
+                                <option value="RECHAZADA">Rechazada</option>
+                                <option value="ANULADA">Anulada</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary btn-sm btn-block" onclick="aplicarFiltrosTransacciones()">
+                                <i class="fas fa-search mr-1"></i> Filtrar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabla de Transacciones -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="tabla-transacciones">
+                            <thead>
+                                <tr>
+                                    <th>Ticket POS</th>
+                                    <th>Fecha/Hora</th>
+                                    <th>Monto</th>
+                                    <th>Estado</th>
+                                    <th>Terminal</th>
+                                    <th>Tarjeta</th>
+                                    <th>Autorización</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-transacciones">
+                                <!-- Las transacciones se cargarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Paginación -->
+                    <nav id="paginacion-transacciones" class="d-none">
+                        <ul class="pagination justify-content-center">
+                            <!-- Paginación se generará aquí -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Logs -->
+        <div class="tab-pane fade" id="logs" role="tabpanel">
+            <div class="card shadow mt-3">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Logs del Sistema POS</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="select-pos-logs">Terminal:</label>
+                            <select class="form-control form-control-sm" id="select-pos-logs">
+                                <option value="">Seleccionar terminal...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="filtro-tipo-evento">Tipo de Evento:</label>
+                            <select class="form-control form-control-sm" id="filtro-tipo-evento">
+                                <option value="">Todos</option>
+                                <option value="CONEXION">Conexión</option>
+                                <option value="ERROR">Error</option>
+                                <option value="COMANDO_ENVIADO">Comando Enviado</option>
+                                <option value="RESPUESTA_RECIBIDA">Respuesta Recibida</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="limite-logs">Límite:</label>
+                            <select class="form-control form-control-sm" id="limite-logs">
+                                <option value="50">50 registros</option>
+                                <option value="100" selected>100 registros</option>
+                                <option value="200">200 registros</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary btn-sm btn-block" onclick="cargarLogs()">
+                                <i class="fas fa-search mr-1"></i> Ver Logs
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="logs-container" style="max-height: 500px; overflow-y: auto;">
+                        <!-- Los logs se mostrarán aquí -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nueva Configuración POS -->
+<div class="modal fade" id="modalConfiguracionPOS" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-desktop mr-2"></i>
+                    Nueva Configuración POS
+                </h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form id="form-configuracion-pos">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="nombre-pos">Nombre del Terminal:</label>
+                                <input type="text" class="form-control" id="nombre-pos" 
+                                       placeholder="Ej: POS Principal" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="tipo-pos">Tipo de Terminal:</label>
+                                <select class="form-control" id="tipo-pos" required>
+                                    <option value="">Seleccionar...</option>
+                                    {% for value, display in tipo_pos_choices %}
+                                    <option value="{{ value }}">{{ display }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="puerto-conexion">Puerto de Conexión:</label>
+                                <input type="text" class="form-control" id="puerto-conexion" 
+                                       placeholder="Ej: COM1, /dev/ttyUSB0" required>
+                                <small class="form-text text-muted">
+                                    Windows: COM1, COM2, etc. | Linux: /dev/ttyUSB0, /dev/ttyS0
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="velocidad-conexion">Velocidad (bps):</label>
+                                <select class="form-control" id="velocidad-conexion">
+                                    <option value="9600">9600</option>
+                                    <option value="19200">19200</option>
+                                    <option value="38400">38400</option>
+                                    <option value="57600">57600</option>
+                                    <option value="115200" selected>115200</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="timeout-conexion">Timeout (segundos):</label>
+                                <input type="number" class="form-control" id="timeout-conexion" 
+                                       value="30" min="5" max="120">
+                            </div>
+                            
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="es-principal">
+                                    <label class="custom-control-label" for="es-principal">
+                                        Terminal Principal
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="numero-serie">Número de Serie (Opcional):</label>
+                                <input type="text" class="form-control" id="numero-serie" 
+                                       placeholder="Número de serie del terminal">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="version-firmware">Versión Firmware (Opcional):</label>
+                                <input type="text" class="form-control" id="version-firmware" 
+                                       placeholder="Versión del firmware">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="observaciones-config">Observaciones:</label>
+                        <textarea class="form-control" id="observaciones-config" rows="3" 
+                                  placeholder="Observaciones adicionales sobre este terminal..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-1"></i> Guardar Configuración
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts JavaScript -->
+<script src="{% static 'js/pos-transbank.js' %}"></script>
+<script>
+    // Variables globales
+    let configuracionesActuales = [];
+    let transaccionActual = null;
+    
+    // Inicializar cuando el documento esté listo
+    $(document).ready(function() {
+        cargarConfiguraciones();
+        configurarEventos();
+        
+        // Establecer fecha de hoy en filtros
+        const hoy = new Date().toISOString().split('T')[0];
+        $('#filtro-fecha-desde').val(hoy);
+        $('#filtro-fecha-hasta').val(hoy);
+    });
+    
+    function configurarEventos() {
+        // Formulario de nueva configuración
+        $('#form-configuracion-pos').on('submit', function(e) {
+            e.preventDefault();
+            crearConfiguracionPOS();
+        });
+        
+        // Formulario de venta POS
+        $('#form-venta-pos').on('submit', function(e) {
+            e.preventDefault();
+            procesarVentaPOS();
+        });
+        
+        // Cambio de tab
+        $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+            const target = $(e.target).attr("href");
+            if (target === '#transacciones') {
+                cargarTransacciones();
+            }
+        });
+    }
+    
+    function cargarConfiguraciones() {
+        $.get('/pos/configuraciones/', function(response) {
+            if (response.success) {
+                configuracionesActuales = response.configuraciones;
+                mostrarConfiguraciones(response.configuraciones);
+                actualizarSelectoresTerminales(response.configuraciones);
+            } else {
+                mostrarError('Error al cargar configuraciones: ' + response.error);
+            }
+        }).fail(function() {
+            mostrarError('Error de conexión al cargar configuraciones');
+        });
+    }
+    
+    function mostrarConfiguraciones(configuraciones) {
+        const container = $('#configuraciones-container');
+        container.empty();
+        
+        if (configuraciones.length === 0) {
+            container.html(`
+                <div class="col-12">
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                        <h5>No hay terminales configurados</h5>
+                        <p>Agregue su primer terminal POS haciendo clic en "Nueva Configuración"</p>
+                    </div>
+                </div>
+            `);
+            return;
+        }
+        
+        configuraciones.forEach(config => {
+            const estadoClass = config.estado_conexion.toLowerCase();
+            const estadoBadge = getEstadoBadge(config.estado_conexion);
+            
+            const card = `
+                <div class="col-md-6 col-lg-4">
+                    <div class="pos-card card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">
+                                    <i class="fas fa-desktop mr-2"></i>
+                                    ${config.nombre}
+                                    ${config.es_principal ? '<span class="badge badge-primary ml-1">Principal</span>' : ''}
+                                </h6>
+                                ${estadoBadge}
+                            </div>
+                            
+                            <p class="card-text text-muted mb-2">
+                                <small>
+                                    <strong>Tipo:</strong> ${config.tipo_pos_display}<br>
+                                    <strong>Puerto:</strong> ${config.puerto_conexion}<br>
+                                    <strong>Velocidad:</strong> ${config.velocidad_conexion} bps
+                                </small>
+                            </p>
+                            
+                            ${config.ultima_conexion ? 
+                                `<p class="card-text"><small class="text-muted">
+                                    <i class="fas fa-clock mr-1"></i>
+                                    Última conexión: ${config.ultima_conexion}
+                                </small></p>` : ''
+                            }
+                            
+                            <div class="btn-group btn-group-sm w-100" role="group">
+                                <button class="btn btn-outline-primary" onclick="probarConexion(${config.id})">
+                                    <i class="fas fa-plug mr-1"></i> Probar
+                                </button>
+                                <button class="btn btn-outline-info" onclick="verLogs(${config.id})">
+                                    <i class="fas fa-file-alt mr-1"></i> Logs
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="editarConfiguracion(${config.id})">
+                                    <i class="fas fa-edit mr-1"></i> Editar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.append(card);
+        });
+    }
+    
+    function getEstadoBadge(estado) {
+        const badges = {
+            'CONECTADO': '<span class="pos-status conectado">Conectado</span>',
+            'DESCONECTADO': '<span class="pos-status desconectado">Desconectado</span>',
+            'ERROR': '<span class="pos-status error">Error</span>',
+            'NO_PROBADO': '<span class="pos-status desconectado">Sin probar</span>'
+        };
+        return badges[estado] || '<span class="pos-status desconectado">Desconocido</span>';
+    }
+    
+    function actualizarSelectoresTerminales(configuraciones) {
+        const selectores = ['#select-pos-venta', '#select-pos-logs'];
+        
+        selectores.forEach(selector => {
+            const select = $(selector);
+            const valorActual = select.val();
+            
+            select.empty().append('<option value="">Seleccionar terminal...</option>');
+            
+            configuraciones.filter(c => c.activo).forEach(config => {
+                select.append(`
+                    <option value="${config.id}" ${valorActual == config.id ? 'selected' : ''}>
+                        ${config.nombre} (${config.tipo_pos_display})
+                        ${config.estado_conexion !== 'CONECTADO' ? ' - Desconectado' : ''}
+                    </option>
+                `);
+            });
+        });
+    }
+    
+    function crearConfiguracionPOS() {
+        const datos = {
+            nombre: $('#nombre-pos').val(),
+            tipo_pos: $('#tipo-pos').val(),
+            puerto_conexion: $('#puerto-conexion').val(),
+            velocidad_conexion: parseInt($('#velocidad-conexion').val()),
+            timeout_conexion: parseInt($('#timeout-conexion').val()),
+            es_principal: $('#es-principal').is(':checked'),
+            numero_serie: $('#numero-serie').val(),
+            version_firmware: $('#version-firmware').val(),
+            observaciones: $('#observaciones-config').val()
+        };
+        
+        $.ajax({
+            url: '/pos/configuraciones/crear/',
+            method: 'POST',
+            data: JSON.stringify(datos),
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#modalConfiguracionPOS').modal('hide');
+                    $('#form-configuracion-pos')[0].reset();
+                    mostrarExito('Configuración POS creada exitosamente');
+                    cargarConfiguraciones();
+                } else {
+                    mostrarError('Error: ' + response.error);
+                }
+            },
+            error: function() {
+                mostrarError('Error de conexión al crear configuración');
+            }
+        });
+    }
+    
+    function probarConexion(configuracionId) {
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        
+        btn.innerHTML = '<div class="loading-spinner mr-1"></div> Probando...';
+        btn.disabled = true;
+        
+        $.ajax({
+            url: '/pos/probar-conexion/',
+            method: 'POST',
+            data: JSON.stringify({ configuracion_id: configuracionId }),
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                if (response.success) {
+                    mostrarExito('Conexión exitosa: ' + response.message);
+                    cargarConfiguraciones(); // Recargar para actualizar estado
+                } else {
+                    mostrarError('Error de conexión: ' + response.error);
+                }
+            },
+            error: function() {
+                mostrarError('Error al probar conexión');
+            },
+            complete: function() {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+    }
+    
+    function procesarVentaPOS() {
+        const datos = {
+            configuracion_id: $('#select-pos-venta').val(),
+            monto: parseFloat($('#monto-venta').val()),
+            ticket_id: $('#ticket-asociado').val() || null,
+            observaciones: $('#observaciones-venta').val()
+        };
+        
+        if (!datos.configuracion_id) {
+            mostrarError('Debe seleccionar un terminal POS');
+            return;
+        }
+        
+        if (!datos.monto || datos.monto <= 0) {
+            mostrarError('Debe ingresar un monto válido');
+            return;
+        }
+        
+        // Mostrar estado de transacción
+        $('#instrucciones-pos').addClass('d-none');
+        $('#estado-transaccion').removeClass('d-none');
+        $('#btn-procesar-venta').prop('disabled', true);
+        
+        actualizarEstadoTransaccion('iniciada', 'Iniciando transacción POS...');
+        
+        $.ajax({
+            url: '/pos/iniciar-venta/',
+            method: 'POST',
+            data: JSON.stringify(datos),
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                if (response.success) {
+                    transaccionActual = response.transaccion;
+                    
+                    // Actualizar display
+                    $('#ticket-pos-display').text(transaccionActual.ticket_pos);
+                    $('#monto-display').text('$' + transaccionActual.monto.toLocaleString());
+                    
+                    actualizarEstadoTransaccion('procesando', 'Esperando respuesta del terminal...');
+                    
+                    // Simular proceso de POS (en producción esto sería manejado por el SDK)
+                    setTimeout(() => {
+                        simularRespuestaPOS();
+                    }, 3000);
+                    
+                } else {
+                    mostrarError('Error al iniciar venta: ' + response.error);
+                    resetearFormularioVenta();
+                }
+            },
+            error: function() {
+                mostrarError('Error de conexión al iniciar venta');
+                resetearFormularioVenta();
+            }
+        });
+    }
+    
+    function simularRespuestaPOS() {
+        // Esta función simula la respuesta del POS
+        // En producción, esto sería manejado por el SDK de Transbank
+        
+        const respuestaSimulada = {
+            success: Math.random() > 0.2, // 80% de éxito
+            response_code: '00',
+            response_message: 'Transacción aprobada',
+            authorization_code: 'AUTH' + Math.floor(Math.random() * 1000000),
+            card_type: 'CREDITO',
+            card_brand: 'VISA',
+            card_number: '************1234',
+            operation_number: 'OP' + Math.floor(Math.random() * 100000),
+            installments: 1,
+            commerce_code: '597020000540',
+            terminal_id: 'T001'
+        };
+        
+        if (!respuestaSimulada.success) {
+            respuestaSimulada.error_message = 'Transacción rechazada por el banco';
+        }
+        
+        completarTransaccionPOS(respuestaSimulada);
+    }
+    
+    function completarTransaccionPOS(respuestaPOS) {
+        const datos = {
+            ticket_pos: transaccionActual.ticket_pos,
+            respuesta_pos: respuestaPOS
+        };
+        
+        $.ajax({
+            url: '/pos/completar-transaccion/',
+            method: 'POST',
+            data: JSON.stringify(datos),
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                if (response.success) {
+                    const transaccion = response.transaccion;
+                    
+                    if (transaccion.es_exitosa) {
+                        actualizarEstadoTransaccion('aprobada', '¡Transacción Aprobada!');
+                        mostrarResultadoExitoso(transaccion);
+                    } else {
+                        actualizarEstadoTransaccion('rechazada', 'Transacción Rechazada');
+                        mostrarResultadoRechazado(transaccion);
+                    }
+                } else {
+                    mostrarError('Error al completar transacción: ' + response.error);
+                    actualizarEstadoTransaccion('rechazada', 'Error en el proceso');
+                }
+            },
+            error: function() {
+                mostrarError('Error de conexión al completar transacción');
+                actualizarEstadoTransaccion('rechazada', 'Error de conexión');
+            },
+            complete: function() {
+                setTimeout(() => {
+                    resetearFormularioVenta();
+                }, 5000);
+            }
+        });
+    }
+    
+    function actualizarEstadoTransaccion(estado, mensaje) {
+        const statusDiv = $('#transaction-status-display');
+        statusDiv.removeClass('iniciada procesando aprobada rechazada').addClass(estado);
+        
+        let icono = '';
+        switch(estado) {
+            case 'iniciada':
+                icono = '<div class="loading-spinner mr-2"></div>';
+                break;
+            case 'procesando':
+                icono = '<div class="loading-spinner mr-2"></div>';
+                break;
+            case 'aprobada':
+                icono = '<i class="fas fa-check-circle mr-2"></i>';
+                break;
+            case 'rechazada':
+                icono = '<i class="fas fa-times-circle mr-2"></i>';
+                break;
+        }
+        
+        statusDiv.html(icono + mensaje);
+    }
+    
+    function mostrarResultadoExitoso(transaccion) {
+        $('#transaction-result').html(`
+            <div class="alert alert-success">
+                <h6><i class="fas fa-check-circle mr-2"></i>Transacción Exitosa</h6>
+                <div class="row">
+                    <div class="col-6">
+                        <small><strong>Código Autorización:</strong></small><br>
+                        <span class="font-weight-bold">${transaccion.codigo_autorizacion}</span>
+                    </div>
+                    <div class="col-6">
+                        <small><strong>Tipo de Tarjeta:</strong></small><br>
+                        <span class="font-weight-bold">${transaccion.tipo_tarjeta}</span>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-6">
+                        <small><strong>Tarjeta:</strong></small><br>
+                        <span class="font-weight-bold">${transaccion.nombre_tarjeta} ****${transaccion.ultimos_4_digitos}</span>
+                    </div>
+                    <div class="col-6">
+                        <small><strong>Duración:</strong></small><br>
+                        <span class="font-weight-bold">${transaccion.duracion || 0} segundos</span>
+                    </div>
+                </div>
+            </div>
+        `).removeClass('d-none');
+    }
+    
+    function mostrarResultadoRechazado(transaccion) {
+        $('#transaction-result').html(`
+            <div class="alert alert-danger">
+                <h6><i class="fas fa-times-circle mr-2"></i>Transacción Rechazada</h6>
+                <p class="mb-0">
+                    <strong>Motivo:</strong> ${transaccion.error_detalle || 'Transacción no autorizada'}
+                </p>
+            </div>
+        `).removeClass('d-none');
+    }
+    
+    function resetearFormularioVenta() {
+        $('#btn-procesar-venta').prop('disabled', false);
+        $('#estado-transaccion').addClass('d-none');
+        $('#instrucciones-pos').removeClass('d-none');
+        $('#transaction-result').addClass('d-none');
+        transaccionActual = null;
+    }
+    
+    function cargarTransacciones() {
+        const filtros = {
+            fecha_desde: $('#filtro-fecha-desde').val(),
+            fecha_hasta: $('#filtro-fecha-hasta').val(),
+            estado: $('#filtro-estado').val(),
+            page: 1
+        };
+        
+        $.get('/pos/transacciones/', filtros, function(response) {
+            if (response.success) {
+                mostrarTransacciones(response.transacciones);
+                // Aquí podrías agregar paginación si es necesario
+            } else {
+                mostrarError('Error al cargar transacciones: ' + response.error);
+            }
+        });
+    }
+    
+    function mostrarTransacciones(transacciones) {
+        const tbody = $('#tbody-transacciones');
+        tbody.empty();
+        
+        if (transacciones.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="8" class="text-center text-muted">
+                        No hay transacciones para mostrar
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+        
+        transacciones.forEach(t => {
+            const estadoBadge = getEstadoTransaccionBadge(t.estado);
+            const acciones = getAccionesTransaccion(t);
+            
+            tbody.append(`
+                <tr>
+                    <td><code>${t.ticket_pos}</code></td>
+                    <td><small>${t.fecha_inicio}</small></td>
+                    <td><strong>$${t.monto.toLocaleString()}</strong></td>
+                    <td>${estadoBadge}</td>
+                    <td><small>${t.configuracion_pos}</small></td>
+                    <td>
+                        ${t.nombre_tarjeta ? 
+                            `<small>${t.nombre_tarjeta} ****${t.ultimos_4_digitos}</small>` : 
+                            '<small class="text-muted">-</small>'
+                        }
+                    </td>
+                    <td>
+                        ${t.codigo_autorizacion ? 
+                            `<code>${t.codigo_autorizacion}</code>` : 
+                            '<small class="text-muted">-</small>'
+                        }
+                    </td>
+                    <td>${acciones}</td>
+                </tr>
+            `);
+        });
+    }
+    
+    function getEstadoTransaccionBadge(estado) {
+        const badges = {
+            'APROBADA': '<span class="badge badge-success">Aprobada</span>',
+            'RECHAZADA': '<span class="badge badge-danger">Rechazada</span>',
+            'ANULADA': '<span class="badge badge-warning">Anulada</span>',
+            'INICIADA': '<span class="badge badge-info">Iniciada</span>',
+            'PROCESANDO': '<span class="badge badge-primary">Procesando</span>'
+        };
+        return badges[estado] || '<span class="badge badge-secondary">' + estado + '</span>';
+    }
+    
+    function getAccionesTransaccion(transaccion) {
+        let acciones = '';
+        
+        if (transaccion.puede_anular) {
+            acciones += `
+                <button class="btn btn-sm btn-outline-warning" onclick="anularTransaccion(${transaccion.id})" 
+                        title="Anular transacción">
+                    <i class="fas fa-ban"></i>
+                </button>
+            `;
+        }
+        
+        acciones += `
+            <button class="btn btn-sm btn-outline-info" onclick="verDetalleTransaccion(${transaccion.id})" 
+                    title="Ver detalle">
+                <i class="fas fa-eye"></i>
+            </button>
+        `;
+        
+        return acciones || '<small class="text-muted">-</small>';
+    }
+    
+    function aplicarFiltrosTransacciones() {
+        cargarTransacciones();
+    }
+    
+    function anularTransaccion(transaccionId) {
+        if (!confirm('¿Está seguro de anular esta transacción?')) {
+            return;
+        }
+        
+        $.ajax({
+            url: '/pos/anular-transaccion/',
+            method: 'POST',
+            data: JSON.stringify({ transaccion_id: transaccionId }),
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                if (response.success) {
+                    mostrarExito('Transacción anulada exitosamente');
+                    cargarTransacciones();
+                } else {
+                    mostrarError('Error al anular: ' + response.error);
+                }
+            },
+            error: function() {
+                mostrarError('Error de conexión al anular transacción');
+            }
+        });
+    }
+    
+    function cargarLogs() {
+        const configuracionId = $('#select-pos-logs').val();
+        if (!configuracionId) {
+            mostrarError('Debe seleccionar un terminal');
+            return;
+        }
+        
+        const filtros = {
+            tipo_evento: $('#filtro-tipo-evento').val(),
+            limit: $('#limite-logs').val()
+        };
+        
+        $.get(`/pos/logs/${configuracionId}/`, filtros, function(response) {
+            if (response.success) {
+                mostrarLogs(response.logs);
+            } else {
+                mostrarError('Error al cargar logs: ' + response.error);
+            }
+        });
+    }
+    
+    function mostrarLogs(logs) {
+        const container = $('#logs-container');
+        container.empty();
+        
+        if (logs.length === 0) {
+            container.html('<div class="alert alert-info">No hay logs para mostrar</div>');
+            return;
+        }
+        
+        logs.forEach(log => {
+            const logClass = log.tipo_evento === 'ERROR' ? 'error' : 
+                           log.tipo_evento === 'CONEXION' ? 'success' : '';
+            
+            container.append(`
+                <div class="log-entry ${logClass}">
+                    <div class="d-flex justify-content-between">
+                        <strong>[${log.timestamp}] ${log.tipo_evento_display}</strong>
+                        ${log.transaccion_pos ? `<small>Transacción: ${log.transaccion_pos}</small>` : ''}
+                    </div>
+                    <div>${log.mensaje}</div>
+                    ${log.datos_tecnicos ? 
+                        `<details class="mt-1">
+                            <summary>Datos técnicos</summary>
+                            <pre class="mt-1 mb-0">${JSON.stringify(log.datos_tecnicos, null, 2)}</pre>
+                        </details>` : ''
+                    }
+                </div>
+            `);
+        });
+    }
+    
+    // Funciones auxiliares
+    function mostrarExito(mensaje) {
+        // Implementar notificación de éxito (toast, alert, etc.)
+        alert('Éxito: ' + mensaje);
+    }
+    
+    function mostrarError(mensaje) {
+        // Implementar notificación de error (toast, alert, etc.)
+        alert('Error: ' + mensaje);
+    }
+    
+    function verDetalleTransaccion(transaccionId) {
+        // Implementar modal con detalle de transacción
+        console.log('Ver detalle de transacción:', transaccionId);
+    }
+    
+    function editarConfiguracion(configuracionId) {
+        // Implementar edición de configuración
+        console.log('Editar configuración:', configuracionId);
+    }
+    
+    function verLogs(configuracionId) {
+        // Cambiar a tab de logs y cargar logs de esta configuración
+        $('#select-pos-logs').val(configuracionId);
+        $('#logs-tab').tab('show');
+        setTimeout(() => {
+            cargarLogs();
+        }, 100);
+    }
+</script>
+
+{% include '../../layout/footer.html' %}

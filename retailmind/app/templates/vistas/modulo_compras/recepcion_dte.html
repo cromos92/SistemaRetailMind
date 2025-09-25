@@ -1,0 +1,849 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+    .recepcion-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+
+    .recepcion-card {
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+        border: none;
+        border-radius: 10px;
+    }
+
+    .recepcion-card .card-header {
+        background: #f8f9fa;
+        border-bottom: none;
+        border-radius: 10px 10px 0 0;
+    }
+
+    .badge-pendiente {
+        background-color: #ffc107;
+        color: #212529;
+    }
+
+    .badge-en-proceso {
+        background-color: #0dcaf0;
+    }
+
+    .badge-completado {
+        background-color: #28a745;
+    }
+
+    .badge-anulado {
+        background-color: #dc3545;
+    }
+
+    .table th {
+        background: #f1f3f5;
+        font-size: 13px;
+        text-transform: uppercase;
+    }
+
+    .table td {
+        vertical-align: middle;
+        font-size: 14px;
+    }
+
+    .detalle-tallas {
+        font-size: 13px;
+        color: #6c757d;
+    }
+
+    .resumen-card {
+        border-left: 4px solid #20c997;
+        background: #f8fdfb;
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+
+    .filter-section label {
+        font-weight: 600;
+        font-size: 13px;
+        color: #495057;
+    }
+
+    .filter-section .form-control,
+    .filter-section .form-select {
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .date-reference {
+        background: #e3fcef;
+        border: 1px solid #a6f0c6;
+        border-radius: 8px;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 13px;
+        color: #198754;
+    }
+
+    .date-reference .btn-link {
+        font-size: 12px;
+        padding: 0;
+    }
+
+    @media (max-width: 576px) {
+        .date-reference {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .date-reference .acciones-rapidas {
+            width: 100%;
+            justify-content: space-between;
+        }
+    }
+
+    .modal-header {
+        background: #20c997;
+        color: white;
+    }
+
+    .timeline {
+        position: relative;
+        padding-left: 40px;
+        margin: 20px 0;
+    }
+
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e9ecef;
+    }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -25px;
+        top: 5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #20c997;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #e9ecef;
+    }
+
+    .timeline-content {
+        padding: 10px;
+        border-radius: 6px;
+        background: #f8f9fa;
+    }
+
+    .empty-state {
+        padding: 40px;
+        text-align: center;
+        background: white;
+        border-radius: 12px;
+        border: 1px dashed #ced4da;
+    }
+
+    .empty-state i {
+        font-size: 48px;
+        color: #adb5bd;
+        margin-bottom: 15px;
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="recepcion-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-1"><i class="bi bi-box-arrow-in-down me-2"></i>Recepción de Documentos Internos</h4>
+                    <p class="mb-0 opacity-75">Confirma la recepción de traspasos internos dirigidos a tu bodega</p>
+                </div>
+                <div class="text-end">
+                    <small class="opacity-75">
+                        <i class="bi bi-building me-1"></i>Sucursal Destino: <strong id="infoSucursalDestino">-</strong>
+                    </small>
+                    <br>
+                    <small class="opacity-75">
+                        <i class="bi bi-person-circle me-1"></i>Usuario: {{ user.username }}
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="card recepcion-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-0">Documentos pendientes de recepción</h5>
+                            <small class="text-muted">Solo se muestran documentos internos con estado pendiente para tu sucursal</small>
+                        </div>
+                        <div>
+                            <button id="btnRefresh" class="btn btn-outline-success btn-sm">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="filter-section mb-4">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <div class="date-reference shadow-sm">
+                                        <i class="bi bi-calendar2-check-fill fs-4"></i>
+                                        <div>
+                                            <div><strong>Referencia rápida:</strong> Hoy es <span id="textoFechaHoy">-</span></div>
+                                            <small class="text-muted">Usa los accesos rápidos para ajustar el rango de búsqueda.</small>
+                                        </div>
+                                        <div class="acciones-rapidas ms-auto d-flex align-items-center gap-2 flex-wrap">
+                                            <button type="button" class="btn btn-link text-success" id="btnRangoMesActual">Mes actual</button>
+                                            <span class="text-muted">|</span>
+                                            <button type="button" class="btn btn-link text-success" id="btnSoloHoy">Solo hoy</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="filterTipoDocumento" class="form-label">Tipo de documento</label>
+                                    <select id="filterTipoDocumento" class="form-select">
+                                        <option value="">Todos</option>
+                                        <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
+                                        <option value="GUIA">Guía de Despacho</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="filterOrigen" class="form-label">Sucursal Origen</label>
+                                    <select id="filterOrigen" class="form-select">
+                                        <option value="">Todas las sucursales</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="filterFechaInicio" class="form-label">Fecha desde</label>
+                                    <input type="date" id="filterFechaInicio" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="filterFechaFin" class="form-label">Fecha hasta</label>
+                                    <input type="date" id="filterFechaFin" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="tablaRecepciones">
+                                <thead>
+                                    <tr>
+                                        <th>Documento</th>
+                                        <th>Origen</th>
+                                        <th>Fecha Emisión</th>
+                                        <th>Items</th>
+                                        <th>Cantidad Total</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recepcionesBody">
+                                    <tr>
+                                        <td colspan="6">
+                                            <div class="empty-state">
+                                                <i class="bi bi-clipboard-data"></i>
+                                                <h5 class="mt-2">Sin documentos pendientes</h5>
+                                                <p class="text-muted">Cuando haya traspasos internos dirigidos a tu bodega aparecerán aquí para confirmación.</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer" style="display: none;">
+                            <button class="btn btn-outline-secondary btn-sm" id="btnPrev"><i class="bi bi-chevron-left"></i> Anterior</button>
+                            <span class="mx-3" id="pageInfo">Página 1 de 1</span>
+                            <button class="btn btn-outline-secondary btn-sm" id="btnNext">Siguiente <i class="bi bi-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3">
+                <div class="card resumen-card mb-3">
+                    <div class="card-body">
+                        <div class="section-title">
+                            <i class="bi bi-clipboard-check me-2"></i>Resumen de recepción
+                        </div>
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2"><span class="text-muted">Recibidos hoy:</span> <strong id="resumenRecibidos">0</strong></li>
+                            <li class="mb-2"><span class="text-muted">Pendientes:</span> <strong id="resumenPendientes">0</strong></li>
+                            <li class="mb-2"><span class="text-muted">DTE pendientes mes actual:</span> <strong id="resumenPendientesMes">0</strong></li>
+                            <li><span class="text-muted">Total unidades:</span> <strong id="resumenUnidades">0</strong></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Cómo funciona</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Solo ves documentos internos con destino a tu sucursal.</li>
+                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Revisa el detalle antes de confirmar la recepción.</li>
+                            <li><i class="bi bi-check-circle text-success me-2"></i>Al confirmar, el stock se incrementa automáticamente y el movimiento queda completado.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Historial reciente</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline" id="historialTimeline">
+                            <div class="timeline-item">
+                                <div class="timeline-content">
+                                    <small class="text-muted">Sin confirmaciones recientes</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal detalle documento -->
+<div class="modal fade" id="modalDetalleDocumento" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDetalleLabel"><i class="bi bi-file-text me-2"></i>Detalle del Documento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class= "card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">Información del Documento</h6>
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-2"><span class="text-muted">Número:</span> <strong id="detalleNumero">-</strong></li>
+                                    <li class="mb-2"><span class="text-muted">Tipo:</span> <strong id="detalleTipo">-</strong></li>
+                                    <li class="mb-2"><span class="text-muted">Emisor:</span> <strong id="detalleEmisor">-</strong></li>
+                                    <li class="mb-2"><span class="text-muted">Sucursal Origen:</span> <strong id="detalleOrigen">-</strong></li>
+                                    <li class="mb-2"><span class="text-muted">Fecha Emisión:</span> <strong id="detalleFechaEmision">-</strong></li>
+                                    <li class="mb-2"><span class="text-muted">Observaciones:</span> <span id="detalleObservaciones">-</span></li>
+                                    <li><span class="text-muted">Referencia:</span> <span id="detalleReferencia">-</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">Productos del documento</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>SKU</th>
+                                                <th>Producto</th>
+                                                <th>Talla</th>
+                                                <th class="text-center">Cantidad</th>
+                                                <th class="text-end">Precio</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="detalleProductosBody">
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted">Cargando detalle...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="d-flex justify-content-end gap-3">
+                                    <div><span class="text-muted">Tallas distintas:</span> <strong id="detalleTotalTallas">0</strong></div>
+                                    <div><span class="text-muted">Unidades totales:</span> <strong id="detalleTotalUnidades">0</strong></div>
+                                    <div><span class="text-muted">Total Neto:</span> <strong id="detalleTotalNeto">$0</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-1"></i>Cerrar</button>
+                <button type="button" class="btn btn-success" id="btnConfirmarRecepcion"><i class="bi bi-check-circle me-1"></i>Confirmar Recepción</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal historial completo -->
+<div class="modal fade" id="modalHistorial" tabindex="-1" aria-labelledby="modalHistorialLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalHistorialLabel"><i class="bi bi-clock-history me-2"></i>Historial de recepciones</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="timeline" id="historialCompleto">
+                    <div class="timeline-item">
+                        <div class="timeline-content">
+                            <small class="text-muted">Sin recepciones registradas</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+let modalDetalle = null;
+let recepcionesData = [];
+let historialData = [];
+let sucursalDestinoInfo = null;
+let paginaActual = 1;
+let totalPaginas = 1;
+let documentoSeleccionado = null;
+
+$(document).ready(function() {
+    modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
+
+    $('#btnRefresh').on('click', () => cargarRecepciones(true));
+    $('#filterTipoDocumento, #filterOrigen, #filterFechaInicio, #filterFechaFin').on('change', () => cargarRecepciones());
+    $('#btnPrev').on('click', () => cambiarPagina(-1));
+    $('#btnNext').on('click', () => cambiarPagina(1));
+    $('#btnConfirmarRecepcion').on('click', confirmarRecepcion);
+    $('#btnRangoMesActual').on('click', aplicarRangoMesActual);
+    $('#btnSoloHoy').on('click', aplicarRangoHoy);
+
+    inicializarReferenciaFechas();
+    cargarInfoSucursal();
+    cargarRecepciones();
+    cargarHistorial();
+});
+
+function inicializarReferenciaFechas() {
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const inputInicio = $('#filterFechaInicio');
+    const inputFin = $('#filterFechaFin');
+
+    if (!inputInicio.val()) {
+        inputInicio.val(formatoISO(primerDiaMes));
+    }
+
+    if (!inputFin.val()) {
+        inputFin.val(formatoISO(hoy));
+    }
+
+    actualizarTextoFechaHoy(hoy);
+}
+
+function aplicarRangoMesActual() {
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    $('#filterFechaInicio').val(formatoISO(primerDiaMes));
+    $('#filterFechaFin').val(formatoISO(hoy));
+    cargarRecepciones(true);
+}
+
+function aplicarRangoHoy() {
+    const hoy = new Date();
+    const fechaISO = formatoISO(hoy);
+    $('#filterFechaInicio').val(fechaISO);
+    $('#filterFechaFin').val(fechaISO);
+    cargarRecepciones(true);
+}
+
+function formatoISO(fecha) {
+    return fecha.toISOString().split('T')[0];
+}
+
+function actualizarTextoFechaHoy(fecha) {
+    const opciones = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+    const texto = fecha.toLocaleDateString('es-CL', opciones);
+    $('#textoFechaHoy').text(texto.charAt(0).toUpperCase() + texto.slice(1));
+}
+
+function cargarInfoSucursal() {
+    $.getJSON('/app/debug_session/')
+        .done(data => {
+            if (data && data.alias) {
+                sucursalDestinoInfo = data;
+                $('#infoSucursalDestino').text(data.alias);
+            }
+        })
+        .fail(() => {
+            console.warn('No fue posible obtener la información de la sesión.');
+        });
+}
+
+function cargarRecepciones(forzarActualizacion = false) {
+    const filtros = {
+        tipo_documento: $('#filterTipoDocumento').val(),
+        sucursal_origen: $('#filterOrigen').val(),
+        fecha_inicio: $('#filterFechaInicio').val(),
+        fecha_fin: $('#filterFechaFin').val(),
+        pagina: paginaActual
+    };
+
+    $('#recepcionesBody').html(`
+        <tr>
+            <td colspan="6" class="text-center py-4">
+                <div class="spinner-border text-success" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2 mb-0 text-muted">Cargando documentos pendientes...</p>
+            </td>
+        </tr>
+    `);
+
+    $.ajax({
+        url: '/app/dte/recepciones_pendientes/',
+        method: 'GET',
+        data: filtros,
+        dataType: 'json'
+    }).done(response => {
+        recepcionesData = response.items || [];
+        totalPaginas = response.pagination ? response.pagination.total_pages : 1;
+
+        renderTablaRecepciones();
+        actualizarResumen(response.resumen || {});
+        cargarOpcionesOrigen(response.origenes || []);
+        actualizarPaginacion();
+
+        if (forzarActualizacion) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Actualizado',
+                text: 'Se actualizó la lista de recepciones.',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }
+    }).fail(xhr => {
+        $('#recepcionesBody').html(`
+            <tr>
+                <td colspan="6" class="text-center py-4 text-muted">
+                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                    Error al cargar recepciones: ${xhr.responseJSON ? xhr.responseJSON.error : 'Error inesperado'}
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function renderTablaRecepciones() {
+    const tbody = $('#recepcionesBody');
+    tbody.empty();
+
+    if (!recepcionesData.length) {
+        tbody.append(`
+            <tr>
+                <td colspan="6">
+                    <div class="empty-state">
+                        <i class="bi bi-clipboard-data"></i>
+                        <h5 class="mt-2">Sin documentos pendientes</h5>
+                        <p class="text-muted">Cuando haya traspasos internos dirigidos a tu bodega aparecerán aquí para confirmación.</p>
+                    </div>
+                </td>
+            </tr>
+        `);
+        return;
+    }
+
+    recepcionesData.forEach(doc => {
+        const badgeTipo = doc.tipo_documento === 'FACTURA ELECTRONICA'
+            ? '<span class="badge bg-primary">Factura</span>'
+            : '<span class="badge bg-info text-dark">Guía</span>';
+
+        const fechaEmision = new Date(doc.fecha_emision).toLocaleDateString('es-CL');
+        const resumenItems = doc.detalle_resumen || [];
+        const resumenHtml = resumenItems.length
+            ? resumenItems.map(item => `<span class="badge bg-secondary me-1">${item.talla} (${item.cantidad})</span>`).join(' ')
+            : '<span class="text-muted">Sin detalle</span>';
+
+        tbody.append(`
+            <tr data-id="${doc.id}">
+                <td>
+                    <div class="fw-bold">${badgeTipo} Nº ${doc.numero_documento}</div>
+                    <small class="text-muted">${doc.referencias || 'Sin observaciones'}</small>
+                </td>
+                <td>
+                    <strong>${doc.sucursal_origen}</strong>
+                    <br><small class="text-muted">${doc.empresa_origen}</small>
+                </td>
+                <td>${fechaEmision}</td>
+                <td class="detalle-tallas">${resumenHtml}</td>
+                <td class="text-center"><span class="badge bg-dark">${doc.total_unidades}</span></td>
+                <td class="text-center">
+                    <button class="btn btn-outline-primary btn-sm" onclick="verDetalle(${doc.id})">
+                        <i class="bi bi-eye me-1"></i>Ver detalle
+                    </button>
+                    <button class="btn btn-success btn-sm ms-1" onclick="abrirConfirmacion(${doc.id})">
+                        <i class="bi bi-check2-circle me-1"></i>Confirmar
+                    </button>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function actualizarResumen(resumen) {
+    $('#resumenRecibidos').text(resumen.recibidos_hoy || 0);
+    $('#resumenPendientes').text(resumen.pendientes || recepcionesData.length);
+    $('#resumenUnidades').text(resumen.total_unidades_pendientes || 0);
+
+    let pendientesMes = null;
+    if (resumen && typeof resumen.pendientes_mes !== 'undefined') {
+        pendientesMes = resumen.pendientes_mes;
+    } else if (resumen && typeof resumen.pendientes_mes_actual !== 'undefined') {
+        pendientesMes = resumen.pendientes_mes_actual;
+    } else {
+        const hoy = new Date();
+        const mes = hoy.getMonth();
+        const anio = hoy.getFullYear();
+        pendientesMes = recepcionesData.filter(doc => {
+            if (!doc.fecha_emision) return false;
+            const fechaDoc = new Date(doc.fecha_emision);
+            return fechaDoc.getMonth() === mes && fechaDoc.getFullYear() === anio;
+        }).length;
+    }
+
+    $('#resumenPendientesMes').text(pendientesMes !== null ? pendientesMes : '—');
+}
+
+function cargarOpcionesOrigen(origenes) {
+    const select = $('#filterOrigen');
+    const valorActual = select.val();
+    select.empty().append('<option value="">Todas las sucursales</option>');
+    origenes.forEach(origen => {
+        select.append(`<option value="${origen.id}">${origen.alias} - ${origen.empresa}</option>`);
+    });
+    select.val(valorActual);
+}
+
+function actualizarPaginacion() {
+    if (totalPaginas <= 1) {
+        $('#paginationContainer').hide();
+        return;
+    }
+    $('#paginationContainer').show();
+    $('#btnPrev').prop('disabled', paginaActual <= 1);
+    $('#btnNext').prop('disabled', paginaActual >= totalPaginas);
+    $('#pageInfo').text(`Página ${paginaActual} de ${totalPaginas}`);
+}
+
+function cambiarPagina(delta) {
+    const nuevaPagina = paginaActual + delta;
+    if (nuevaPagina < 1 || nuevaPagina > totalPaginas) return;
+    paginaActual = nuevaPagina;
+    cargarRecepciones();
+}
+
+function verDetalle(id) {
+    const documento = recepcionesData.find(doc => doc.id === id);
+    if (!documento) {
+        Swal.fire('Documento no encontrado', 'No se pudo encontrar la información del documento seleccionado.', 'error');
+        return;
+    }
+
+    documentoSeleccionado = documento;
+    llenarDetalleDocumento(documento);
+    modalDetalle.show();
+}
+
+function abrirConfirmacion(id) {
+    verDetalle(id);
+}
+
+function llenarDetalleDocumento(doc) {
+    $('#detalleNumero').text(doc.numero_documento || '-');
+    $('#detalleTipo').html(doc.tipo_documento === 'FACTURA ELECTRONICA'
+        ? '<span class="badge bg-primary">Factura</span>'
+        : '<span class="badge bg-info text-dark">Guía</span>');
+    $('#detalleEmisor').text(doc.emisor || '-');
+    $('#detalleOrigen').text(doc.sucursal_origen || '-');
+    $('#detalleFechaEmision').text(new Date(doc.fecha_emision).toLocaleDateString('es-CL'));
+    $('#detalleObservaciones').text(doc.observaciones || 'Sin observaciones adicionales');
+    $('#detalleReferencia').text(doc.referencias || 'Sin referencias');
+
+    const tbody = $('#detalleProductosBody');
+    tbody.empty();
+
+    if (!doc.detalle || !doc.detalle.length) {
+        tbody.append('<tr><td colspan="5" class="text-center text-muted">Sin detalle de productos disponible.</td></tr>');
+        $('#detalleTotalTallas').text(0);
+        $('#detalleTotalUnidades').text(0);
+        $('#detalleTotalNeto').text('$0');
+        return;
+    }
+
+    let totalTallas = 0;
+    let totalUnidades = 0;
+    let totalNeto = 0;
+
+    doc.detalle.forEach(item => {
+        tbody.append(`
+            <tr>
+                <td>${item.sku || '-'}</td>
+                <td>${item.descripcion || '-'}</td>
+                <td>${item.talla || '-'}</td>
+                <td class="text-center">${item.cantidad || 0}</td>
+                <td class="text-end">$${Number(item.precio || 0).toLocaleString()}</td>
+            </tr>
+        `);
+        totalTallas += 1;
+        totalUnidades += item.cantidad || 0;
+        totalNeto += (item.cantidad || 0) * (item.precio || 0);
+    });
+
+    $('#detalleTotalTallas').text(totalTallas);
+    $('#detalleTotalUnidades').text(totalUnidades);
+    $('#detalleTotalNeto').text(`$${Math.round(totalNeto).toLocaleString()}`);
+}
+
+function confirmarRecepcion() {
+    if (!documentoSeleccionado) {
+        Swal.fire('Sin documento', 'Selecciona un documento para confirmar la recepción.', 'warning');
+        return;
+    }
+
+    Swal.fire({
+        title: '¿Confirmar recepción?',
+        html: `
+            <div class="text-start">
+                <p>¿Deseas confirmar la recepción del documento <strong>${documentoSeleccionado.tipo_documento === 'FACTURA ELECTRONICA' ? 'Factura' : 'Guía'} Nº ${documentoSeleccionado.numero_documento}</strong>?</p>
+                <ul class="list-unstyled mb-0">
+                    <li><i class="bi bi-arrow-right-circle text-success me-2"></i>Se actualizará el stock en esta sucursal.</li>
+                    <li><i class="bi bi-arrow-right-circle text-success me-2"></i>El movimiento quedará marcado como completado.</li>
+                    <li><i class="bi bi-arrow-right-circle text-success me-2"></i>Se registrará la fecha y hora de recepción.</li>
+                </ul>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, confirmar recepción',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        const payload = {
+            dte_id: documentoSeleccionado.id,
+            observaciones_recepcion: $('#observacionesRecepcion').val() || ''
+        };
+
+        $('#btnConfirmarRecepcion').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...');
+
+        $.ajax({
+            url: '/app/dte/confirmar_recepcion/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            data: JSON.stringify(payload)
+        }).done(response => {
+            Swal.fire({
+                icon: 'success',
+                title: 'Recepción confirmada',
+                html: response.message || 'El stock fue actualizado y el documento quedó marcado como recibido.',
+                confirmButtonText: 'Entendido'
+            });
+
+            modalDetalle.hide();
+            cargarRecepciones();
+            cargarHistorial(true);
+        }).fail(xhr => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al confirmar recepción',
+                text: xhr.responseJSON ? (xhr.responseJSON.error || 'Error inesperado.') : 'Error de conexión o servidor.'
+            });
+        }).always(() => {
+            $('#btnConfirmarRecepcion').prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción');
+        });
+    });
+}
+
+function cargarHistorial(refrescar = false) {
+    $.getJSON('/app/dte/historial_recepciones/?limite=5')
+        .done(response => {
+            historialData = response.items || [];
+            renderHistorial(historialData);
+
+            if (refrescar) {
+                $('#modalHistorial').modal('hide');
+            }
+        })
+        .fail(() => {
+            console.warn('No fue posible cargar el historial de recepciones.');
+        });
+}
+
+function renderHistorial(items) {
+    const timeline = $('#historialTimeline');
+    timeline.empty();
+
+    if (!items.length) {
+        timeline.append(`<div class="timeline-item"><div class="timeline-content"><small class="text-muted">Sin recepciones registradas</small></div></div>`);
+        return;
+    }
+
+    items.forEach(item => {
+        timeline.append(`
+            <div class="timeline-item">
+                <div class="timeline-content">
+                    <div class="d-flex justify-content-between">
+                        <strong>${item.numero_documento}</strong>
+                        <small class="text-muted">${item.fecha_recepcion}</small>
+                    </div>
+                    <div class="text-muted">${item.tipo_documento}</div>
+                    <div><small class="text-muted">${item.sucursal_origen} → ${item.sucursal_destino}</small></div>
+                    <div class="mt-1"><span class="badge bg-success">${item.total_unidades} unidades</span></div>
+                </div>
+            </div>
+        `);
+    });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+
+

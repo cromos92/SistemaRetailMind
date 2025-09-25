@@ -1,0 +1,893 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include 'layout/menu.html' %} {% include 'layout/footer.html' %}
+{% csrf_token %}
+
+<!-- DataTables CSS -->
+<link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<!-- SweetAlert2 -->
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+
+<style>
+        .correlativo-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid #007bff;
+        }
+        
+        .correlativo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .correlativo-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        .badge-consumo {
+            font-size: 0.9em;
+        }
+        
+        .progress-correlativo {
+            height: 8px;
+            border-radius: 4px;
+        }
+        
+        .btn-action {
+            border-radius: 20px;
+            padding: 5px 15px;
+            font-size: 0.85em;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        
+        .modal-header-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .form-floating label {
+            color: #6c757d;
+        }
+        
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .alert-warning-custom {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border: none;
+            color: #8b4513;
+        }
+        
+        .alert-danger-custom {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            border: none;
+            color: #721c24;
+        }
+        
+        /* Asegurar que los modales se vean correctamente */
+        .modal-body .form-floating > .form-select,
+        .modal-body .form-floating > .form-control {
+            background-color: #fff;
+            border: 1px solid #ced4da;
+        }
+        
+        .modal-body .form-floating > label {
+            color: #6c757d;
+            background-color: #fff;
+        }
+    </style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+            
+            <!-- start page title -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                        <h4 class="mb-sm-0">
+                            <i class="ri-file-list-3-line text-primary me-2"></i>
+                            Gestión de Correlativos
+                        </h4>
+                        <div class="page-title-right">
+                            <ol class="breadcrumb m-0">
+                                <li class="breadcrumb-item"><a href="javascript: void(0);">Documentos</a></li>
+                                <li class="breadcrumb-item active">Gestión de Correlativos</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- end page title -->
+            
+            <!-- Header Actions -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <p class="text-muted mb-0">Administra los correlativos por tipo de documento y sucursal</p>
+                        </div>
+                        <div>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoCorrelativo">
+                                <i class="ri-add-circle-line me-2"></i>Nuevo Correlativo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <!-- Filtros -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Sucursal</label>
+                                <select class="form-select" id="filtroSucursal">
+                                    <option value="">Todas las sucursales</option>
+                                    {% for sucursal in sucursales %}
+                                    <option value="{{ sucursal.id }}">{{ sucursal.alias }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tipo de Documento</label>
+                                <select class="form-select" id="filtroTipoDocumento">
+                                    <option value="">Todos los tipos</option>
+                                    {% for tipo in tipos_documento %}
+                                    <option value="{{ tipo.0 }}">{{ tipo.1 }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Estado</label>
+                                <select class="form-select" id="filtroEstado">
+                                    <option value="">Todos los estados</option>
+                                    <option value="activo">Activos</option>
+                                    <option value="agotado">Agotados</option>
+                                    <option value="proximo_agotarse">Próximos a agotarse</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button class="btn btn-outline-primary me-2" onclick="aplicarFiltros()">
+                                    <i class="ri-filter-line me-1"></i>Filtrar
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                    <i class="ri-close-circle-line me-1"></i>Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card text-center">
+                    <div class="card-body">
+                        <i class="ri-file-text-line display-4 mb-2"></i>
+                        <h3 class="mb-0" id="totalCorrelativos">{{ total_correlativos }}</h3>
+                        <p class="mb-0">Total Correlativos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white text-center">
+                    <div class="card-body">
+                        <i class="ri-play-circle-line display-4 mb-2"></i>
+                        <h3 class="mb-0" id="correlativosActivos">{{ correlativos_activos }}</h3>
+                        <p class="mb-0">Activos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white text-center">
+                    <div class="card-body">
+                        <i class="ri-error-warning-line display-4 mb-2"></i>
+                        <h3 class="mb-0" id="correlativosProximosAgotar">{{ correlativos_proximos_agotar }}</h3>
+                        <p class="mb-0">Próximos a Agotar</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white text-center">
+                    <div class="card-body">
+                        <i class="ri-close-circle-line display-4 mb-2"></i>
+                        <h3 class="mb-0" id="correlativosAgotados">{{ correlativos_agotados }}</h3>
+                        <p class="mb-0">Agotados</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Correlativos -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header correlativo-header">
+                        <h5 class="mb-0">
+                            <i class="ri-table-line me-2"></i>
+                            Lista de Correlativos
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="tablaCorrelativos">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Sucursal</th>
+                                        <th>Tipo Documento</th>
+                                        <th>Rango</th>
+                                        <th>Actual</th>
+                                        <th>Disponibles</th>
+                                        <th>Consumo</th>
+                                        <th>Progreso</th>
+                                        <th>Responsable</th>
+                                        <th>Última Actualización</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for correlativo in correlativos %}
+                                    <tr data-correlativo-id="{{ correlativo.id }}">
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <i class="ri-building-line text-primary me-2"></i>
+                                                <span class="fw-semibold">{{ correlativo.sucursal.alias }}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">{{ correlativo.tipo_dte }}</span>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                1 - {{ correlativo.termino }}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-primary">{{ correlativo.inicio }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold {% if correlativo.disponibles <= 100 %}text-danger{% elif correlativo.disponibles <= 500 %}text-warning{% else %}text-success{% endif %}">
+                                                {{ correlativo.disponibles }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-consumo {% if correlativo.porcentaje_consumo >= 90 %}bg-danger{% elif correlativo.porcentaje_consumo >= 70 %}bg-warning{% else %}bg-success{% endif %}">
+                                                {{ correlativo.consumidos }}/{{ correlativo.total_rango }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="progress progress-correlativo">
+                                                <div class="progress-bar {% if correlativo.porcentaje_consumo >= 90 %}bg-danger{% elif correlativo.porcentaje_consumo >= 70 %}bg-warning{% else %}bg-success{% endif %}" 
+                                                     style="width: {{ correlativo.porcentaje_consumo }}%"></div>
+                                            </div>
+                                            <small class="text-muted">{{ correlativo.porcentaje_consumo|floatformat:1 }}%</small>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">{{ correlativo.responsable }}</small>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                {% if correlativo.fecha_actualizacion %}
+                                                    {{ correlativo.fecha_actualizacion|date:"d/m/Y" }}
+                                                {% else %}
+                                                    Sin actualizar
+                                                {% endif %}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            {% if correlativo.estado == 'agotado' %}
+                                                <span class="badge bg-danger">Agotado</span>
+                                            {% elif correlativo.estado == 'critico' %}
+                                                <span class="badge bg-warning">Crítico</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Activo</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-sm btn-outline-primary btn-action" 
+                                                        onclick="editarCorrelativo({{ correlativo.id }})"
+                                                        title="Editar">
+                                                    <i class="ri-pencil-line"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-success btn-action" 
+                                                        onclick="renovarCorrelativo({{ correlativo.id }})"
+                                                        title="Renovar">
+                                                    <i class="ri-refresh-line"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-info btn-action" 
+                                                        onclick="verHistorial({{ correlativo.id }})"
+                                                        title="Historial">
+                                                    <i class="ri-history-line"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="11" class="text-center py-4">
+                                            <div class="text-muted">
+                                                <i class="ri-inbox-line display-4 d-block mb-2"></i>
+                                                No hay correlativos registrados
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nuevo/Editar Correlativo -->
+    <div class="modal fade" id="modalNuevoCorrelativo" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title">
+                        <i class="ri-add-circle-line me-2"></i>
+                        <span id="tituloModal">Nuevo Correlativo</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formCorrelativo">
+                        <input type="hidden" id="correlativoId" name="correlativo_id">
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <select class="form-select" id="sucursal" name="sucursal" required>
+                                        <option value="">Seleccionar sucursal</option>
+                                        {% for sucursal in sucursales %}
+                                        <option value="{{ sucursal.id }}">{{ sucursal.alias }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="sucursal">Sucursal *</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <select class="form-select" id="tipoDocumento" name="tipo_documento" required>
+                                        <option value="">Seleccionar tipo</option>
+                                        {% for tipo in tipos_documento %}
+                                        <option value="{{ tipo.0 }}">{{ tipo.1 }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="tipoDocumento">Tipo de Documento *</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="inicio" name="inicio" min="1" required>
+                                    <label for="inicio">Número Inicial *</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="termino" name="termino" min="1" required>
+                                    <label for="termino">Número Final *</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="alias" name="alias" maxlength="100">
+                                    <label for="alias">Alias</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="responsable" name="responsable" maxlength="50" required>
+                                    <label for="responsable">Responsable *</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="ri-information-line me-2"></i>
+                                    <strong>Información:</strong> El correlativo se iniciará desde el número especificado y se consumirá automáticamente con cada documento emitido.
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="guardarCorrelativo()">
+                        <i class="ri-check-circle-line me-2"></i>Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Renovar Correlativo -->
+    <div class="modal fade" id="modalRenovarCorrelativo" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title">
+                        <i class="ri-refresh-line me-2"></i>
+                        Renovar Correlativo
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning-custom">
+                        <i class="ri-error-warning-line me-2"></i>
+                        <strong>¿Está seguro de renovar este correlativo?</strong>
+                    </div>
+                    
+                    <div id="infoRenovacion" class="mb-3"></div>
+                    
+                    <form id="formRenovacion">
+                        <input type="hidden" id="renovarCorrelativoId">
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="nuevoInicio" min="1" required>
+                                    <label for="nuevoInicio">Nuevo Número Inicial *</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="nuevoTermino" min="1" required>
+                                    <label for="nuevoTermino">Nuevo Número Final *</label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" onclick="confirmarRenovacion()">
+                        <i class="ri-refresh-line me-2"></i>Renovar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Historial -->
+    <div class="modal fade" id="modalHistorial" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header modal-header-custom">
+                    <h5 class="modal-title">
+                        <i class="ri-history-line me-2"></i>
+                        Historial de Consumo
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="contenidoHistorial">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- End Page-content -->
+</div>
+<!-- end main content-->
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+        $(document).ready(function() {
+            // Verificar que la tabla existe antes de inicializar DataTable
+            if ($('#tablaCorrelativos').length) {
+                // Verificar si hay datos reales (no solo el mensaje de "no hay datos")
+                var hasData = $('#tablaCorrelativos tbody tr').length > 0 && 
+                             !$('#tablaCorrelativos tbody tr').first().find('td[colspan]').length;
+                
+                if (hasData) {
+                    // Solo inicializar si hay datos reales
+                    try {
+                        $('#tablaCorrelativos').DataTable({
+                            language: {
+                                url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
+                            },
+                            pageLength: 25,
+                            order: [[0, 'asc']],
+                            columnDefs: [
+                                { orderable: false, targets: [10] }
+                            ],
+                            destroy: true, // Permite reinicializar si ya existe
+                            responsive: true,
+                            autoWidth: false
+                        });
+                        console.log('DataTable inicializado correctamente');
+                    } catch (error) {
+                        console.error('Error al inicializar DataTable:', error);
+                    }
+                } else {
+                    console.log('Tabla sin datos válidos, DataTable no inicializado');
+                }
+            }
+        });
+
+        // Función para reinicializar DataTable
+        function reinicializarDataTable() {
+            if ($.fn.DataTable.isDataTable('#tablaCorrelativos')) {
+                $('#tablaCorrelativos').DataTable().destroy();
+            }
+            
+            var hasData = $('#tablaCorrelativos tbody tr').length > 0 && 
+                         !$('#tablaCorrelativos tbody tr').first().find('td[colspan]').length;
+            
+            if (hasData) {
+                try {
+                    $('#tablaCorrelativos').DataTable({
+                        language: {
+                            url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
+                        },
+                        pageLength: 25,
+                        order: [[0, 'asc']],
+                        columnDefs: [
+                            { orderable: false, targets: [10] }
+                        ],
+                        responsive: true,
+                        autoWidth: false
+                    });
+                } catch (error) {
+                    console.error('Error al reinicializar DataTable:', error);
+                }
+            }
+        }
+
+        function aplicarFiltros() {
+            const sucursal = $('#filtroSucursal').val();
+            const tipoDocumento = $('#filtroTipoDocumento').val();
+            const estado = $('#filtroEstado').val();
+            
+            // Aquí implementarías la lógica de filtrado
+            // Por ahora, recarga la página con los filtros
+            let url = new URL(window.location);
+            if (sucursal) url.searchParams.set('sucursal', sucursal);
+            if (tipoDocumento) url.searchParams.set('tipo_documento', tipoDocumento);
+            if (estado) url.searchParams.set('estado', estado);
+            
+            window.location.href = url.toString();
+        }
+
+        function limpiarFiltros() {
+            $('#filtroSucursal').val('');
+            $('#filtroTipoDocumento').val('');
+            $('#filtroEstado').val('');
+            
+            // Limpiar URL
+            window.location.href = window.location.pathname;
+        }
+
+        function guardarCorrelativo() {
+            const form = document.getElementById('formCorrelativo');
+            const formData = new FormData(form);
+            
+            // Validaciones
+            const inicio = parseInt(formData.get('inicio'));
+            const termino = parseInt(formData.get('termino'));
+            
+            if (inicio >= termino) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de validación',
+                    text: 'El número inicial debe ser menor que el número final'
+                });
+                return;
+            }
+            
+            // Enviar datos
+            fetch('/app/correlativos/guardar/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Éxito!',
+                        text: data.message
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Ocurrió un error al guardar el correlativo'
+                });
+            });
+        }
+
+        function editarCorrelativo(id) {
+            console.log('Editando correlativo ID:', id);
+            
+            // Cargar datos del correlativo
+            fetch(`/app/correlativos/obtener/${id}/`)
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Data received:', data);
+                
+                if (data.success) {
+                    const correlativo = data.correlativo;
+                    console.log('Correlativo data:', correlativo);
+                    
+                    // Llenar formulario
+                    document.getElementById('correlativoId').value = correlativo.id || '';
+                    document.getElementById('sucursal').value = correlativo.sucursal_id || '';
+                    document.getElementById('tipoDocumento').value = correlativo.tipo_dte || '';
+                    document.getElementById('inicio').value = correlativo.inicio || '';
+                    document.getElementById('termino').value = correlativo.termino || '';
+                    document.getElementById('alias').value = correlativo.alias || '';
+                    document.getElementById('responsable').value = correlativo.responsable || '';
+                    
+                    // Cambiar título
+                    document.getElementById('tituloModal').textContent = 'Editar Correlativo';
+                    
+                    // Mostrar modal
+                    new bootstrap.Modal(document.getElementById('modalNuevoCorrelativo')).show();
+                } else {
+                    console.error('Error en respuesta:', data.message);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message || 'Error al cargar datos del correlativo'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error en fetch:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error de conexión al cargar el correlativo'
+                });
+            });
+        }
+
+        function renovarCorrelativo(id) {
+            // Cargar información del correlativo
+            fetch(`/app/correlativos/obtener/${id}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const correlativo = data.correlativo;
+                    
+                    document.getElementById('renovarCorrelativoId').value = id;
+                    document.getElementById('infoRenovacion').innerHTML = `
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${correlativo.sucursal_nombre} - ${correlativo.tipo_dte}</h6>
+                                <p class="card-text">
+                                    <strong>Rango actual:</strong> ${correlativo.inicio} - ${correlativo.termino}<br>
+                                    <strong>Número actual:</strong> ${correlativo.inicio}<br>
+                                    <strong>Disponibles:</strong> ${correlativo.termino - correlativo.inicio + 1}
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Sugerir valores
+                    document.getElementById('nuevoInicio').value = correlativo.termino + 1;
+                    document.getElementById('nuevoTermino').value = correlativo.termino + 10000;
+                    
+                    new bootstrap.Modal(document.getElementById('modalRenovarCorrelativo')).show();
+                }
+            });
+        }
+
+        function confirmarRenovacion() {
+            const id = document.getElementById('renovarCorrelativoId').value;
+            const nuevoInicio = document.getElementById('nuevoInicio').value;
+            const nuevoTermino = document.getElementById('nuevoTermino').value;
+            
+            if (parseInt(nuevoInicio) >= parseInt(nuevoTermino)) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de validación',
+                    text: 'El número inicial debe ser menor que el número final'
+                });
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('correlativo_id', id);
+            formData.append('nuevo_inicio', nuevoInicio);
+            formData.append('nuevo_termino', nuevoTermino);
+            
+            fetch('/app/correlativos/renovar/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Correlativo renovado!',
+                        text: data.message
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.message
+                    });
+                }
+            });
+        }
+
+        function verHistorial(id) {
+            document.getElementById('contenidoHistorial').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                </div>
+            `;
+            
+            new bootstrap.Modal(document.getElementById('modalHistorial')).show();
+            
+            // Cargar historial
+            fetch(`/app/correlativos/historial/${id}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    let html = `
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Documento</th>
+                                        <th>Número</th>
+                                        <th>Responsable</th>
+                                        <th>Observaciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    if (data.historial.length > 0) {
+                        data.historial.forEach(item => {
+                            html += `
+                                <tr>
+                                    <td>${item.fecha}</td>
+                                    <td>${item.tipo_documento}</td>
+                                    <td><span class="badge bg-primary">${item.numero}</span></td>
+                                    <td>${item.responsable}</td>
+                                    <td>${item.observaciones || '-'}</td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        html += `
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    No hay historial disponible
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    
+                    document.getElementById('contenidoHistorial').innerHTML = html;
+                } else {
+                    document.getElementById('contenidoHistorial').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Error al cargar el historial: ${data.message}
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                document.getElementById('contenidoHistorial').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Error al cargar el historial
+                    </div>
+                `;
+            });
+        }
+
+        // Función para obtener el token CSRF
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Limpiar formulario al abrir modal (solo si es nuevo)
+        document.getElementById('modalNuevoCorrelativo').addEventListener('show.bs.modal', function () {
+            // Solo limpiar si no hay ID de correlativo (es decir, es nuevo)
+            if (!document.getElementById('correlativoId').value) {
+                document.getElementById('formCorrelativo').reset();
+                document.getElementById('tituloModal').textContent = 'Nuevo Correlativo';
+            }
+        });
+        
+        // Limpiar formulario al cerrar modal
+        document.getElementById('modalNuevoCorrelativo').addEventListener('hidden.bs.modal', function () {
+            document.getElementById('formCorrelativo').reset();
+            document.getElementById('correlativoId').value = '';
+            document.getElementById('tituloModal').textContent = 'Nuevo Correlativo';
+        });
+    </script>

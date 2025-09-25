@@ -1,8 +1,65 @@
 from retailmind import settings
 from . import views
+from .views_modulo_ventas import (
+    # Funciones POS Dashboard
+    pos_dashboard,
+    dashboard_stats,
+    verificar_correlativos_disponibles,
+    validar_rut_cliente,
+    buscar_cliente_rut,
+    # Funciones Ticket POS
+    obtener_ticket_por_correlativo,
+    registrar_pagos_ticket,
+    ticket_pago_pos,
+    buscar_ticket_pos,
+    # Funciones Gestión Documentos
+    gestion_ventas_documentos,
+    listar_documentos_ventas,
+    convertir_ticket_a_factura,
+    detalle_documento_venta,
+    anular_documento_venta,
+    # Funciones Cuadratura y Arqueo
+    cuadratura_caja,
+    generar_cuadratura_caja,
+    exportar_cuadratura_excel,
+    listar_arqueos,
+    crear_arqueo,
+    guardar_conteo_fisico,
+    cerrar_arqueo,
+    corregir_arqueos_express,
+    obtener_arqueo_detalle,
+    # Funciones POS Transbank
+    gestion_pos_transbank,
+    obtener_configuraciones_pos,
+    crear_configuracion_pos,
+    probar_conexion_pos,
+    iniciar_venta_pos,
+    completar_transaccion_pos,
+    obtener_transacciones_pos,
+    anular_transaccion_pos,
+    obtener_logs_pos,
+)
+from .views_modulo_creditos import (
+    # Gestión de Créditos
+    gestion_creditos,
+    crear_credito_trabajador,
+    cargar_creditos_trabajadores,
+    detalle_credito_trabajador,
+    aprobar_credito_trabajador,
+    rechazar_credito_trabajador,
+    activar_credito_trabajador,
+    # Pagos y Firmas
+    registrar_pago_credito,
+    registrar_firma_credito,
+    # Utilidades
+    obtener_trabajadores_credito,
+    reporte_creditos_trabajadores,
+)
+from . import views_modulo_documentos
 from django.urls import path
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+
 urlpatterns = [
         
      path('home/', views.verHome, name='verHome'),
@@ -78,6 +135,8 @@ urlpatterns = [
      
      # === REPORTES ===
      path('reporte_movimientos_kardex/', views.reporte_movimientos_kardex, name='reporte_movimientos_kardex'),
+     path('reporte_kardex_agrupado/', views.reporte_kardex_agrupado, name='reporte_kardex_agrupado'),
+     path('obtener_productos_base/', views.obtener_productos_base, name='obtener_productos_base'),
      
      # === URLs EXISTENTES PARA FACTURAS ===
      path('facturas_pendientes/', views.facturas_pendientes, name='facturas_pendientes'),
@@ -130,8 +189,115 @@ urlpatterns = [
     path('eliminar_vendedor/<int:vendedor_id>/', views.eliminar_vendedor, name='eliminar_vendedor'),
     path('exportar_vendedores/', views.exportar_vendedores, name='exportar_vendedores'),
 
+    # === URLs PARA EMISIÓN DE DTE ===
+    path('emisionDTE/', views.emision_dte, name='emision_dte'),
+    path('recepcion-dte/', views.recepcion_dte, name='recepcion_dte'),
+    path('dte/recepciones_pendientes/', views.recepciones_pendientes_api, name='recepciones_pendientes_api'),
+    path('dte/historial_recepciones/', views.historial_recepciones_api, name='historial_recepciones_api'),
+    path('dte/confirmar_recepcion/', views.confirmar_recepcion_api, name='confirmar_recepcion_api'),
+    path('debug_session/', views.debug_session, name='debug_session'),
+    path('debug_user_empresas/', views.debug_user_empresas, name='debug_user_empresas'),  # Temporal para debug
+    path('empresas_clientes/', views.empresas_clientes, name='empresas_clientes'),
+    path('obtener_marcas/', views.obtener_marcas, name='obtener_marcas'),
+    path('obtener_categorias/', views.obtener_categorias, name='obtener_categorias'),
+    path('obtener_sucursales/', views.obtener_sucursales, name='obtener_sucursales'),
+    path('buscar_productos_bodega/', views.buscar_productos_bodega, name='buscar_productos_bodega'),
+    path('emitir_dte/', views.emitir_dte, name='emitir_dte'),
+    
+    # === URLs PARA GESTIÓN DE USUARIOS ===
+    path('gestion_usuarios/', views.gestion_usuarios_redirect, name='gestion_usuarios'),
+    
+    # ========== GESTIÓN DE CAMBIO DE EMPRESA/SUCURSAL ==========
+    path('cambiar-empresa/', views.cambiar_empresa, name='cambiar_empresa'),
+    path('seleccionar-empresa-sucursal/', views.seleccionar_empresa_sucursal, name='seleccionar_empresa_sucursal'),
+    
+    # ========== BÚSQUEDA DE PRODUCTOS POR SUCURSAL ==========
+    path('productos-sucursal/', views.buscar_productos_sucursal, name='buscar_productos_sucursal'),
+    path('api/productos-sucursal/', views.obtener_productos_sucursal, name='obtener_productos_sucursal'),
+    path('api/opciones-atributo/', views.obtener_opciones_atributo, name='obtener_opciones_atributo'),
+    
+    # ========== TICKET DE VENTA ==========
+    path('ticket-venta/', views.ticket_venta, name='ticket_venta'),
+    path('api/buscar-vendedor/', views.buscar_vendedor_por_codigo, name='buscar_vendedor_por_codigo'),
+    path('api/buscar-producto-sku/', views.buscar_producto_por_sku, name='buscar_producto_por_sku'),
+    path('api/crear-ticket/', views.crear_ticket, name='crear_ticket'),
+    path('api/tickets/<int:correlativo>/', obtener_ticket_por_correlativo, name='obtener_ticket_por_correlativo'),
+    path('api/tickets/buscar/', buscar_ticket_pos, name='buscar_ticket_pos'),
+    path('api/tickets/<int:correlativo>/pagos/', registrar_pagos_ticket, name='registrar_pagos_ticket'),
+    path('ticket-pago-pos/', ticket_pago_pos, name='ticket_pago_pos'),
+
+    # ========== NUEVO POS DASHBOARD ==========
+    path('pos-dashboard/', pos_dashboard, name='pos_dashboard'),
+    path('api/dashboard/stats/', dashboard_stats, name='dashboard_stats'),
+    path('api/correlativos/verificar/', verificar_correlativos_disponibles, name='verificar_correlativos_disponibles'),
+    path('api/validar-rut/', validar_rut_cliente, name='validar_rut_cliente'),
+    path('api/buscar-cliente/', buscar_cliente_rut, name='buscar_cliente_rut'),
+    
+    # === GESTIÓN DE DOCUMENTOS DE VENTAS ===
+    path('ventas/documentos/', gestion_ventas_documentos, name='gestion_ventas_documentos'),
+    path('api/ventas/documentos/', listar_documentos_ventas, name='listar_documentos_ventas'),
+    path('api/ventas/convertir-factura/', convertir_ticket_a_factura, name='convertir_ticket_a_factura'),
+    path('api/ventas/documento/<int:documento_id>/', detalle_documento_venta, name='detalle_documento_venta'),
+    path('api/ventas/anular-documento/', anular_documento_venta, name='anular_documento_venta'),
+    
+    # === CUADRATURA Y ARQUEO DE CAJA ===
+    path('ventas/cuadratura-caja/', cuadratura_caja, name='cuadratura_caja'),
+    path('api/cuadratura/generar/', generar_cuadratura_caja, name='generar_cuadratura_caja'),
+    path('api/cuadratura/exportar/', exportar_cuadratura_excel, name='exportar_cuadratura_excel'),
+    
+    # URLs para arqueo mejorado
+    path('api/arqueos/', listar_arqueos, name='listar_arqueos'),
+    path('api/arqueo/crear/', crear_arqueo, name='crear_arqueo'),
+    path('api/arqueo/conteo/', guardar_conteo_fisico, name='guardar_conteo_fisico'),
+    path('api/arqueo/cerrar/', cerrar_arqueo, name='cerrar_arqueo'),
+    path('api/arqueo/corregir-express/', corregir_arqueos_express, name='corregir_arqueos_express'),
+    path('api/arqueo/<int:arqueo_id>/', obtener_arqueo_detalle, name='obtener_arqueo_detalle'),
+
+    # ========== MÓDULO DOCUMENTOS ==========
+    # === Gestión de DTEs ===
+    path('documentos/gestion-dte/', views.gestion_dte, name='gestion_dte'),
+    path('documentos/api/cargar-dte-ventas/', views.cargar_dte_ventas, name='cargar_dte_ventas'),
+    path('documentos/api/dte/<int:dte_id>/', views.detalle_dte, name='detalle_dte'),
+    
+    # === Gestión de Correlativos ===
+    path('documentos/gestion-correlativos/', views.gestion_correlativos, name='gestion_correlativos'),
+    path('correlativos/guardar/', views.guardar_correlativo, name='guardar_correlativo'),
+    path('correlativos/obtener/<int:correlativo_id>/', views.obtener_correlativo, name='obtener_correlativo'),
+    path('correlativos/renovar/', views.renovar_correlativo, name='renovar_correlativo'),
+    path('correlativos/historial/<int:correlativo_id>/', views.historial_correlativo, name='historial_correlativo'),
+    
+    # === Gestión de Créditos ===
+    path('documentos/gestion-creditos/', views_modulo_documentos.gestion_creditos_documentos, name='gestion_creditos_documentos'),
+
+    # ========== MÓDULO DE CRÉDITOS A TRABAJADORES ==========
+    path('creditos/', gestion_creditos, name='gestion_creditos'),
+    path('api/creditos/crear/', crear_credito_trabajador, name='crear_credito_trabajador'),
+    path('api/creditos/cargar/', cargar_creditos_trabajadores, name='cargar_creditos_trabajadores'),
+    path('api/creditos/<int:credito_id>/', detalle_credito_trabajador, name='detalle_credito_trabajador'),
+    path('api/creditos/aprobar/', aprobar_credito_trabajador, name='aprobar_credito_trabajador'),
+    path('api/creditos/rechazar/', rechazar_credito_trabajador, name='rechazar_credito_trabajador'),
+    path('api/creditos/activar/', activar_credito_trabajador, name='activar_credito_trabajador'),
+    path('api/creditos/pago/', registrar_pago_credito, name='registrar_pago_credito'),
+    path('api/creditos/firma/', registrar_firma_credito, name='registrar_firma_credito'),
+    path('api/creditos/trabajadores/', obtener_trabajadores_credito, name='obtener_trabajadores_credito'),
+    path('api/creditos/reporte/', reporte_creditos_trabajadores, name='reporte_creditos_trabajadores'),
+
+    # ========== MÓDULO POS TRANSBANK ==========
+    # Vista principal
+    path('pos/transbank/', gestion_pos_transbank, name='gestion_pos_transbank'),
+    
+    # APIs de configuración
+    path('pos/configuraciones/', obtener_configuraciones_pos, name='obtener_configuraciones_pos'),
+    path('pos/configuraciones/crear/', crear_configuracion_pos, name='crear_configuracion_pos'),
+    path('pos/probar-conexion/', probar_conexion_pos, name='probar_conexion_pos'),
+    
+    # APIs de transacciones
+    path('pos/iniciar-venta/', iniciar_venta_pos, name='iniciar_venta_pos'),
+    path('pos/completar-transaccion/', completar_transaccion_pos, name='completar_transaccion_pos'),
+    path('pos/transacciones/', obtener_transacciones_pos, name='obtener_transacciones_pos'),
+    path('pos/anular-transaccion/', anular_transaccion_pos, name='anular_transaccion_pos'),
+    
+    # APIs de logs
+    path('pos/logs/<int:configuracion_id>/', obtener_logs_pos, name='obtener_logs_pos'),
+
 ]
-
- 
-
- 
