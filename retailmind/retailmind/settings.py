@@ -38,6 +38,7 @@ if 'RAILWAY_ENVIRONMENT' in os.environ:
     ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PUBLIC_DOMAIN', ''))
     ALLOWED_HOSTS.append('*.railway.app')
     ALLOWED_HOSTS.append('*.up.railway.app')
+    ALLOWED_HOSTS.append('retail.webappsolutions.cl')
 
 # Para desarrollo/testing - permite todos los hosts
 if ALLOWED_HOSTS == ['*']:
@@ -207,7 +208,8 @@ if not DEBUG:
         CSRF_TRUSTED_ORIGINS = [
             f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')}",
             "https://*.railway.app",
-            "https://*.up.railway.app"
+            "https://*.up.railway.app",
+            "https://retail.webappsolutions.cl"
         ]
 
 # Configuración de autenticación
