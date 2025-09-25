@@ -1,11 +1,10 @@
 [phases.setup]
-nixPkgs = ['python39', 'pip']
-nixLibs = ['python39Packages.pip']
+nixPkgs = ['python39']
 
 [phases.install]
 cmds = [
     'cd retailmind',
-    'pip install -r requirements.txt'
+    'python -m pip install -r requirements.txt'
 ]
 
 [phases.build]
