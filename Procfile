@@ -1,2 +1,2 @@
-web: gunicorn retailmind.wsgi --log-file -
-release: python manage.py migrate
+web: cd retailmind && gunicorn retailmind.wsgi --log-file -
+release: cd retailmind && python manage.py migrate
