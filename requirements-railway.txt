@@ -19,7 +19,7 @@ python-dotenv==1.1.1
 PyJWT==2.3.0
 
 # Image Processing (if needed)
-Pillow==9.0.1
+Pillow==10.0.0
 
 # Utilities
 requests==2.30.0
