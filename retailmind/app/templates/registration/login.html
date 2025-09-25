@@ -1,17 +1,16 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-layout="vertical" data-layout-style="detached" data-sidebar="light" data-topbar="dark" data-sidebar-size="lg" data-sidebar-image="none" data-preloader="disable">
+<html lang="es" data-layout="vertical" data-layout-style="detached" data-sidebar="light" data-topbar="dark" data-sidebar-size="lg" data-sidebar-image="none" data-preloader="disable">
 
 <head>
-
     <meta charset="utf-8" />
-    <title>Iniciar sesión | Webappsolutions - Plantilla de Administración y Panel de Control</title>
+    <title>RetailMind - Iniciar Sesión | Sistema de Gestión Retail</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta content="Plantilla Premium de Administración y Panel de Control Multipropósito" name="description" />
-    <meta content="Webappsolutions" name="Javier Araya" />
+    <meta content="Sistema de Gestión Retail Avanzado - RetailMind" name="description" />
+    <meta content="WebAppSolutions" name="author" />
 
     <!-- App favicon -->
-    <link rel="shortcut icon" href="assets/images/favicon.ico">
+    <link rel="shortcut icon" href="{% static 'images/favicon.ico' %}">
 
     <!-- Layout config Js -->
     <script src="{% static 'js/layout.js' %}"></script>
@@ -24,119 +23,447 @@
     <!-- custom Css-->
     <link href="{% static 'css/custom.min.css' %}" rel="stylesheet" type="text/css" />
 
-
+    <!-- Custom Login Styles -->
+    <style>
+        .auth-page-wrapper {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            padding: 0 !important;
+        }
+        
+        .auth-one-bg {
+            background-image: url("{% static 'images/bg-auth.jpg' %}");
+            background-size: cover;
+            background-position: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 0;
+        }
+        
+        .auth-one-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.8) 0%, rgba(118, 75, 162, 0.8) 100%);
+        }
+        
+        .auth-page-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 0;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .login-card {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .login-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 35px 55px rgba(0, 0, 0, 0.15);
+        }
+        
+        .brand-logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        .brand-logo i {
+            font-size: 2.5rem;
+            color: white;
+        }
+        
+        .form-control {
+            border-radius: 12px;
+            border: 2px solid #e3e6f0;
+            padding: 12px 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .btn-login {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 12px;
+            padding: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .welcome-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+        }
+        
+        .floating-shapes {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        .shape {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .shape:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+        
+        .shape:nth-child(2) {
+            width: 120px;
+            height: 120px;
+            top: 60%;
+            right: 10%;
+            animation-delay: 2s;
+        }
+        
+        .shape:nth-child(3) {
+            width: 60px;
+            height: 60px;
+            bottom: 20%;
+            left: 20%;
+            animation-delay: 4s;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        @keyframes heartbeat {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .footer-custom {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+            backdrop-filter: blur(20px);
+            border-top: 3px solid rgba(102, 126, 234, 0.3);
+            margin-top: auto;
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+            position: relative;
+            z-index: 2;
+            box-shadow: 0 -15px 40px rgba(0, 0, 0, 0.5);
+            min-height: 60px;
+        }
+        
+        .footer-badges {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 50px;
+            padding: 15px 25px;
+            margin-bottom: 20px;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+        
+        .footer-badge-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+            margin: 0 4px;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .footer-badge-item:hover {
+            background: rgba(102, 126, 234, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+        
+        .footer-main-text {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 25px 35px;
+            border-radius: 20px;
+            margin: 20px 0;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .footer-version {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.4) 0%, rgba(118, 75, 162, 0.4) 100%);
+            padding: 12px 25px;
+            border-radius: 30px;
+            border: 2px solid rgba(102, 126, 234, 0.4);
+            display: inline-block;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        /* Reset completo para eliminar overflow */
+        * {
+            box-sizing: border-box;
+        }
+        
+        body, html {
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            overflow: hidden !important;
+            position: relative;
+        }
+        
+        .auth-page-wrapper {
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        
+        .auth-page-content {
+            flex: 1 !important;
+            overflow-y: auto !important;
+            padding: 1rem 0 !important;
+        }
+        
+        .footer-custom {
+            flex-shrink: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        /* Eliminar márgenes de Bootstrap que causan overflow */
+        .container, .row, .col-lg-12 {
+            margin: 0 !important;
+            padding-left: 15px !important;
+            padding-right: 15px !important;
+        }
+        
+        .row {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+    </style>
 </head>
 
 <body>
-
-    <div class="auth-page-wrapper pt-5">
+    <div class="auth-page-wrapper">
+        <!-- Floating shapes background -->
+        <div class="floating-shapes">
+            <div class="shape"></div>
+            <div class="shape"></div>
+            <div class="shape"></div>
+        </div>
+        
         <!-- auth page bg -->
         <div class="auth-one-bg-position auth-one-bg" id="auth-particles">
             <div class="bg-overlay"></div>
-
-            <div class="shape">
-                <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1440 120">
-                    <path d="M 0,36 C 144,53.6 432,123.2 720,124 C 1008,124.8 1296,56.8 1440,40L1440 140L0 140z"></path>
-                </svg>
-            </div>
         </div>
 
         <!-- auth page content -->
         <div class="auth-page-content">
-            <div class="container">
-                <div class="row">
-                    <div class="col-lg-12">
-                        <div class="text-center mt-sm-5 mb-4 text-white-50">
-                            <div>
-                                <a href="index.html" class="d-inline-block auth-logo">
-                                    <img src="assets/images/logo-light.png" alt="" height="20">
-                                </a>
-                            </div>
-                            <p class="mt-3 fs-15 fw-medium">WebAppSolution Retail 10</p>
-                        </div>
+            <div class="container-fluid px-3">
+                <!-- Brand Header -->
+                <div class="text-center mb-4">
+                    <div class="brand-logo">
+                        <i class="ri-store-3-line"></i>
+                    </div>
+                    <h2 class="text-white fw-bold mb-2">RetailMind</h2>
+                    <p class="text-white-50 fs-16 fw-medium">Sistema de Gestión Retail Avanzado</p>
+                    <div class="mt-2">
+                        <span class="badge bg-light text-dark px-3 py-2 rounded-pill">
+                            <i class="ri-shield-check-line me-1"></i>
+                            Seguro & Confiable
+                        </span>
                     </div>
                 </div>
-                <!-- end row -->
 
-                <div class="row justify-content-center">
-
-                    <div class="col-md-8 col-lg-6 col-xl-5">
-                        <div class="card mt-4">
-
-                            <div class="card-body p-4">
-                                <div class="text-center mt-2">
-                                    <h5 class="text-primary">Bienvenido !</h5>
-                                    <p class="text-muted">Inicia sesión para Continuar</p>
+                <!-- Login Form -->
+                <div class="d-flex justify-content-center">
+                    <div class="col-md-8 col-lg-6 col-xl-4">
+                        <div class="card login-card border-0">
+                            <div class="card-body p-5">
+                                <div class="text-center mb-4">
+                                    <h3 class="welcome-text mb-2">¡Bienvenido de vuelta!</h3>
+                                    <p class="text-muted fs-15">Ingresa tus credenciales para acceder al sistema</p>
                                 </div>
-                                <div class="p-2 mt-4">
-                                    {% if messages %}
-                                    <ul>
-                                        {% for message in messages %}
-                                        <li{% if message.tags %} class="text-danger" {% endif %}>{{ message }}</li>
-                                            {% endfor %}
-                                    </ul>
-                                    {% endif %} {% if user.is_authenticated %} {% endif %}
-                                    <form method="POST">
 
-                                        {% csrf_token %}
-                                        <div class="mb-3">
-                                            <label for="username" class="form-label">Email</label>
-                                            <input type="email" class="form-control" id="email" name="email" placeholder="Enter email">
+                                <!-- Messages -->
+                                {% if messages %}
+                                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                    {% for message in messages %}
+                                        <i class="ri-error-warning-line me-2"></i>{{ message }}
+                                    {% endfor %}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                                {% endif %}
+
+                                <form method="POST" class="needs-validation" novalidate>
+                                    {% csrf_token %}
+                                    
+                                    <div class="mb-4">
+                                        <label for="email" class="form-label fw-semibold">
+                                            <i class="ri-mail-line me-2 text-primary"></i>Correo Electrónico
+                                        </label>
+                                        <input type="email" class="form-control form-control-lg" id="email" name="email" 
+                                               placeholder="Ingresa tu correo electrónico" required>
+                                        <div class="invalid-feedback">
+                                            Por favor ingresa un correo válido.
                                         </div>
+                                    </div>
 
-                                        <div class="mb-3">
-                                            <div class="float-end">
-                                                <a href="{% url 'verResetPassword' %}" class="text-muted">Forgot password?</a>
-                                            </div>
-                                            <label class="form-label" for="password-input">Password</label>
-                                            <div class="position-relative auth-pass-inputgroup mb-3">
-                                                <input type="password" class="form-control pe-5 password-input" placeholder="Enter password" id="password-input" name="password-input">
-                                                <button class="btn btn-link position-absolute end-0 top-0 text-decoration-none text-muted password-addon" type="button" id="password-addon"><i class="ri-eye-fill align-middle"></i></button>
-                                            </div>
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label fw-semibold mb-0" for="password-input">
+                                                <i class="ri-lock-line me-2 text-primary"></i>Contraseña
+                                            </label>
+                                            <a href="{% url 'verResetPassword' %}" class="text-decoration-none small">
+                                                <i class="ri-question-line me-1"></i>¿Olvidaste tu contraseña?
+                                            </a>
                                         </div>
+                                        <div class="position-relative">
+                                            <input type="password" class="form-control form-control-lg pe-5" 
+                                                   placeholder="Ingresa tu contraseña" id="password-input" name="password-input" required>
+                                            <button class="btn btn-link position-absolute end-0 top-50 translate-middle-y text-muted password-addon" 
+                                                    type="button" id="password-addon">
+                                                <i class="ri-eye-line"></i>
+                                            </button>
+                                        </div>
+                                        <div class="invalid-feedback">
+                                            Por favor ingresa tu contraseña.
+                                        </div>
+                                    </div>
 
+                                    <div class="mb-4">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" value="" id="auth-remember-check">
-                                            <label class="form-check-label" for="auth-remember-check">Remember me</label>
+                                            <label class="form-check-label text-muted" for="auth-remember-check">
+                                                Recordar mi sesión
+                                            </label>
                                         </div>
+                                    </div>
 
-                                        <div class="mt-4">
-                                            <button class="btn btn-info w-100" type="submit">Sign In</button>
-                                        </div>
+                                    <div class="mb-4">
+                                        <button class="btn btn-login btn-lg w-100 text-white" type="submit">
+                                            <i class="ri-login-circle-line me-2"></i>Iniciar Sesión
+                                        </button>
+                                    </div>
 
-
-                                    </form>
-                                </div>
+                                    <div class="text-center">
+                                        <p class="text-muted small mb-0">
+                                            <i class="ri-shield-check-line me-1 text-success"></i>
+                                            Conexión segura SSL
+                                        </p>
+                                    </div>
+                                </form>
                             </div>
                             <!-- end card body -->
                         </div>
                         <!-- end card -->
-
-
-
                     </div>
                 </div>
-                <!-- end row -->
+                <!-- end login form -->
             </div>
             <!-- end container -->
         </div>
         <!-- end auth page content -->
 
         <!-- footer -->
-        <footer class="footer">
-            <div class="container">
-                <div class="row">
-                    <div class="col-lg-12">
-                        <div class="text-center">
-                            <p class="mb-0 text-muted">&copy;
-                                <script>
-                                    document.write(new Date().getFullYear())
-                                </script>Creado Por <a href="https://webappsolutions.cl" target="_blank">WebAppSolutions</a>
-                            </p>
-
-
-                        </div>
-                    </div>
+        <footer class="footer footer-custom" style="z-index: 2;">
+            <div class="container-fluid px-3">
+                <div class="text-center py-2">
+                            <!-- Footer compacto en una sola línea -->
+                            <div class="d-flex justify-content-center align-items-center flex-wrap gap-3">
+                                <!-- Badges de características -->
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="footer-badge-item">
+                                        <i class="ri-shield-check-line me-1" style="color: #00ff88; font-size: 1rem; text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);"></i>
+                                        <small style="color: #ffffff; font-weight: 600;">Seguro</small>
+                                    </div>
+                                    <div class="footer-badge-item">
+                                        <i class="ri-time-line me-1" style="color: #00d4ff; font-size: 1rem; text-shadow: 0 0 8px rgba(0, 212, 255, 0.5);"></i>
+                                        <small style="color: #ffffff; font-weight: 600;">24/7</small>
+                                    </div>
+                                    <div class="footer-badge-item">
+                                        <i class="ri-customer-service-2-line me-1" style="color: #ffdd00; font-size: 1rem; text-shadow: 0 0 8px rgba(255, 221, 0, 0.5);"></i>
+                                        <small style="color: #ffffff; font-weight: 600;">Soporte</small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Separador -->
+                                <div style="height: 30px; width: 1px; background: rgba(255, 255, 255, 0.3);"></div>
+                                
+                                <!-- Texto principal compacto -->
+                                <div class="text-center">
+                                    <small style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);">
+                                        &copy; <span id="currentYear"></span> <strong style="color: #00d4ff;">RetailMind</strong> 
+                                        | Desarrollado con <i class="ri-heart-fill mx-1" style="color: #ff4757; animation: heartbeat 1.5s ease-in-out infinite; text-shadow: 0 0 6px rgba(255, 71, 87, 0.6);"></i> por 
+                                        <a href="https://webappsolutions.cl" target="_blank" class="text-decoration-none fw-bold" 
+                                           style="color: #667eea; transition: all 0.3s ease;"
+                                           onmouseover="this.style.color='#ffffff'; this.style.textShadow='0 0 10px rgba(102, 126, 234, 0.8)'" 
+                                           onmouseout="this.style.color='#667eea'; this.style.textShadow='none'">
+                                            WebAppSolutions
+                                        </a>
+                                    </small>
+                                </div>
+                                
+                                <!-- Separador -->
+                                <div style="height: 30px; width: 1px; background: rgba(255, 255, 255, 0.3);"></div>
+                                
+                                <!-- Información de versión compacta -->
+                                <div class="footer-badge-item">
+                                    <i class="ri-code-line me-1" style="color: #a78bfa; text-shadow: 0 0 6px rgba(167, 139, 250, 0.5);"></i>
+                                    <small style="color: #ffffff; font-weight: 600;">v2.0</small>
+                                </div>
+                            </div>
                 </div>
             </div>
         </footer>
@@ -152,13 +479,67 @@
     <script src="{% static 'libs/feather-icons/feather.min.js' %}"></script>
     <script src="{% static 'js/pages/plugins/lord-icon-2.1.0.js' %}"></script>
 
-
-
     <!-- particles js -->
     <script src="{% static 'libs/particles.js/particles.js' %}"></script>
-
     <!-- particles app js -->
     <script src="{% static 'js/pages/particles.app.js' %}"></script>
+
+    <!-- Custom Login Scripts -->
+    <script>
+        // Set current year
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+        
+        // Password visibility toggle
+        document.getElementById('password-addon').addEventListener('click', function() {
+            const passwordInput = document.getElementById('password-input');
+            const icon = this.querySelector('i');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                icon.className = 'ri-eye-off-line';
+            } else {
+                passwordInput.type = 'password';
+                icon.className = 'ri-eye-line';
+            }
+        });
+        
+        // Form validation
+        (function() {
+            'use strict';
+            window.addEventListener('load', function() {
+                const forms = document.getElementsByClassName('needs-validation');
+                Array.prototype.filter.call(forms, function(form) {
+                    form.addEventListener('submit', function(event) {
+                        if (form.checkValidity() === false) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
+                        form.classList.add('was-validated');
+                    }, false);
+                });
+            }, false);
+        })();
+        
+        // Add loading state to login button
+        document.querySelector('form').addEventListener('submit', function() {
+            const btn = document.querySelector('.btn-login');
+            btn.innerHTML = '<i class="ri-loader-4-line me-2 spinner-border spinner-border-sm"></i>Iniciando sesión...';
+            btn.disabled = true;
+        });
+        
+        // Add focus effects
+        document.querySelectorAll('.form-control').forEach(function(input) {
+            input.addEventListener('focus', function() {
+                this.parentElement.classList.add('focused');
+            });
+            
+            input.addEventListener('blur', function() {
+                if (!this.value) {
+                    this.parentElement.classList.remove('focused');
+                }
+            });
+        });
+    </script>
 
 </body>
 

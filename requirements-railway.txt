@@ -24,3 +24,10 @@ Pillow==10.0.0
 # Utilities
 requests==2.30.0
 humanize==4.9.0
+
+# WebSockets for Transbank service
+websockets==11.0.3
+
+# Additional dependencies that might be needed
+reportlab==4.0.4
+celery==5.3.4
