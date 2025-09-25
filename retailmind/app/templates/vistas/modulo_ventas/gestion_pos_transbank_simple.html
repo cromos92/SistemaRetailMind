@@ -1,0 +1,743 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .pos-card {
+        transition: all 0.3s ease;
+    }
+    .pos-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .terminal-status {
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+        font-weight: bold;
+    }
+    .status-connected {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    .status-disconnected {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+    .status-processing {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        color: #856404;
+    }
+    .btn-pos {
+        margin: 5px;
+        min-width: 160px;
+        transition: all 0.3s ease;
+    }
+    .btn-pos:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .transaction-log {
+        max-height: 200px;
+        overflow-y: auto;
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 0.9em;
+    }
+    .amount-input {
+        font-size: 1.2em;
+        text-align: center;
+        font-weight: bold;
+    }
+</style>
+
+<div class="container-fluid mt-4">
+    <!-- Header de Sucursal -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-store mr-2"></i>
+                Sucursal: {{ sucursal_actual.alias }}
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Dirección:</strong> {{ sucursal_actual.direccion }}</p>
+                    <p><strong>Empresa:</strong> {{ sucursal_actual.empresa.nombre }}</p>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-right">
+                        <span class="badge badge-info" id="terminal-count">{{ configuraciones_pos.count }} Terminal(es) Configurado(s)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Panel de Control Terminal -->
+        <div class="col-lg-8">
+            <div class="card shadow pos-card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-credit-card mr-2"></i>
+                        Terminal POS Integrado
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Mensaje de Ayuda Inicial -->
+                    <div class="alert alert-info alert-dismissible fade show" role="alert" id="help-alert">
+                        <i class="fas fa-lightbulb mr-2"></i>
+                        <strong>¡Bienvenido al Terminal POS!</strong> 
+                        Para comenzar: <strong>1)</strong> Selecciona un terminal, <strong>2)</strong> Haz clic en "Conectar Terminal" o usa el "Modo Demo" para probar sin hardware.
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Selector de Terminal -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="terminal-select" class="form-label">
+                                <i class="fas fa-desktop mr-2"></i>Seleccionar Terminal:
+                            </label>
+                            <select id="terminal-select" class="form-control">
+                                <option value="">Seleccionar terminal...</option>
+                                {% for config in configuraciones_pos %}
+                                <option value="{{ config.id }}">{{ config.nombre }} - {{ config.get_tipo_pos_display }} ({{ config.puerto_conexion }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Estado de Conexión:</label>
+                            <div id="connection-status" class="terminal-status status-disconnected">
+                                <i class="fas fa-times-circle mr-2"></i>Desconectado
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botones de Conexión y Configuración -->
+                    <div class="mb-4">
+                        <h6 class="text-secondary">
+                            <i class="fas fa-link mr-2"></i>Conexión y Configuración
+                        </h6>
+                        <div class="btn-group-vertical d-inline-block me-3">
+                            <button id="btn-connect" class="btn btn-success btn-pos">
+                                <i class="fas fa-plug mr-2"></i>Conectar Terminal
+                            </button>
+                            <button id="btn-disconnect" class="btn btn-secondary btn-pos" disabled>
+                                <i class="fas fa-unlink mr-2"></i>Desconectar
+                            </button>
+                        </div>
+                        <div class="btn-group-vertical d-inline-block">
+                            <button id="btn-load-keys" class="btn btn-warning btn-pos" disabled>
+                                <i class="fas fa-key mr-2"></i>Cargar Llaves
+                            </button>
+                            <button id="btn-poll" class="btn btn-info btn-pos" disabled>
+                                <i class="fas fa-heartbeat mr-2"></i>Verificar Conexión
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Operaciones de Venta -->
+                    <div class="mb-4">
+                        <h6 class="text-secondary">
+                            <i class="fas fa-shopping-cart mr-2"></i>Operaciones de Venta
+                        </h6>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="sale-amount" class="form-label">Monto ($):</label>
+                                <input type="number" id="sale-amount" class="form-control amount-input" 
+                                       placeholder="0" min="10" step="1" value="10">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="ticket-id" class="form-label">Ticket ID:</label>
+                                <input type="text" id="ticket-id" class="form-control" 
+                                       placeholder="Auto-generado" readonly>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Estados Intermedios:</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="send-status" checked>
+                                    <label class="form-check-label" for="send-status">
+                                        Mostrar progreso
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="btn-group-vertical d-inline-block me-3">
+                            <button id="btn-sale" class="btn btn-primary btn-pos" disabled>
+                                <i class="fas fa-cash-register mr-2"></i>Procesar Venta
+                            </button>
+                            <button id="btn-quick-sale-10" class="btn btn-outline-primary btn-pos" disabled>
+                                <i class="fas fa-bolt mr-2"></i>Venta Rápida $10
+                            </button>
+                        </div>
+                        <div class="btn-group-vertical d-inline-block">
+                            <button id="btn-refund" class="btn btn-danger btn-pos" disabled>
+                                <i class="fas fa-undo mr-2"></i>Devolución
+                            </button>
+                            <button id="btn-annulment" class="btn btn-warning btn-pos" disabled>
+                                <i class="fas fa-ban mr-2"></i>Anulación
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Reportes y Consultas -->
+                    <div class="mb-4">
+                        <h6 class="text-secondary">
+                            <i class="fas fa-chart-line mr-2"></i>Reportes y Consultas
+                        </h6>
+                        <div class="btn-group-vertical d-inline-block me-3">
+                            <button id="btn-sales-report" class="btn btn-info btn-pos" disabled>
+                                <i class="fas fa-file-alt mr-2"></i>Reporte de Ventas
+                            </button>
+                            <button id="btn-last-sale" class="btn btn-outline-info btn-pos" disabled>
+                                <i class="fas fa-receipt mr-2"></i>Última Venta
+                            </button>
+                        </div>
+                        <div class="btn-group-vertical d-inline-block">
+                            <button id="btn-totals" class="btn btn-secondary btn-pos" disabled>
+                                <i class="fas fa-calculator mr-2"></i>Totales del Día
+                            </button>
+                            <button id="btn-detail" class="btn btn-outline-secondary btn-pos" disabled>
+                                <i class="fas fa-list mr-2"></i>Detalle General
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cierre de Terminal -->
+                    <div class="mb-4">
+                        <h6 class="text-secondary">
+                            <i class="fas fa-power-off mr-2"></i>Cierre de Terminal
+                        </h6>
+                        <div class="btn-group-vertical d-inline-block me-3">
+                            <button id="btn-close-terminal" class="btn btn-danger btn-pos" disabled>
+                                <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Terminal
+                            </button>
+                            <button id="btn-change-to-normal" class="btn btn-warning btn-pos" disabled>
+                                <i class="fas fa-exchange-alt mr-2"></i>Modo Normal
+                            </button>
+                        </div>
+                        <div class="btn-group-vertical d-inline-block">
+                            <button id="btn-change-to-pos" class="btn btn-success btn-pos" disabled>
+                                <i class="fas fa-desktop mr-2"></i>Modo POS
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Modo Demostración -->
+                    <div class="mb-4">
+                        <h6 class="text-secondary">
+                            <i class="fas fa-play-circle mr-2"></i>Modo Demostración
+                        </h6>
+                        <div class="alert alert-warning">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            <strong>¿No tienes un terminal POS físico?</strong> 
+                            Usa el modo demostración para probar todas las funciones.
+                        </div>
+                        <button id="btn-demo-mode" class="btn btn-outline-warning btn-pos">
+                            <i class="fas fa-magic mr-2"></i>Activar Modo Demo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Estado y Log -->
+        <div class="col-lg-4">
+            <!-- Estado Actual -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle mr-2"></i>Estado Actual
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="current-operation" class="alert alert-light">
+                        <i class="fas fa-clock mr-2"></i>Esperando operación...
+                    </div>
+                    <div id="transaction-progress" class="d-none">
+                        <div class="progress mb-2">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted" id="progress-text"></small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resultado de Operación -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-check-circle mr-2"></i>Último Resultado
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="operation-result" class="text-center text-muted">
+                        No hay operaciones recientes
+                    </div>
+                </div>
+            </div>
+
+            <!-- Log de Transacciones -->
+            <div class="card shadow">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-terminal mr-2"></i>Log de Transacciones
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div id="transaction-log" class="transaction-log">
+                        Sistema iniciado...<br>
+                        Esperando conexión POS...<br>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SDK Transbank POS Integrado -->
+<script src="https://unpkg.com/transbank-pos-sdk-web@5/dist/pos.js"></script>
+
+<script>
+    // Clase para manejar POS Integration
+    class POSManager {
+        constructor() {
+            this.isConnected = false;
+            this.currentPort = null;
+            this.currentTerminal = null;
+            this.transactionCounter = 1;
+            this.csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        }
+
+        // Logging
+        log(message, type = 'info') {
+            const logDiv = document.getElementById('transaction-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            logDiv.innerHTML += `${timestamp} ${icon} ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Actualizar estado de operación
+        updateOperationStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('current-operation');
+            statusDiv.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'}`;
+            statusDiv.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check' : 'clock'} mr-2"></i>${message}`;
+        }
+
+        // Mostrar resultado de operación
+        showResult(result) {
+            const resultDiv = document.getElementById('operation-result');
+            if (result.success) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-check-circle mr-2"></i>Operación Exitosa</h6>
+                        <small>Código: ${result.response_code || 'N/A'}</small><br>
+                        <small>Autorización: ${result.authorization_code || 'N/A'}</small><br>
+                        <small>Monto: $${result.amount || 'N/A'}</small>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6><i class="fas fa-times-circle mr-2"></i>Error</h6>
+                        <small>${result.error || 'Error desconocido'}</small>
+                    </div>
+                `;
+            }
+        }
+
+        // Actualizar estado de conexión
+        updateConnectionStatus(connected, message = '') {
+            const statusDiv = document.getElementById('connection-status');
+            if (connected) {
+                statusDiv.className = 'terminal-status status-connected';
+                statusDiv.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Conectado' + (message ? ` - ${message}` : '');
+            } else {
+                statusDiv.className = 'terminal-status status-disconnected';
+                statusDiv.innerHTML = '<i class="fas fa-times-circle mr-2"></i>Desconectado' + (message ? ` - ${message}` : '');
+            }
+            
+            // Habilitar/deshabilitar botones
+            const buttons = document.querySelectorAll('.btn-pos:not(#btn-connect):not(#btn-demo-mode)');
+            buttons.forEach(btn => {
+                btn.disabled = !connected;
+            });
+            document.getElementById('btn-connect').disabled = connected;
+            document.getElementById('btn-disconnect').disabled = !connected;
+            
+            this.isConnected = connected;
+        }
+
+        // Generar ticket ID
+        generateTicketId() {
+            const timestamp = Date.now().toString().slice(-6);
+            const counter = this.transactionCounter.toString().padStart(3, '0');
+            this.transactionCounter++;
+            return `TXN${timestamp}${counter}`;
+        }
+
+        // Simular progreso de transacción
+        showTransactionProgress() {
+            const progressDiv = document.getElementById('transaction-progress');
+            const progressBar = progressDiv.querySelector('.progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            progressDiv.classList.remove('d-none');
+            
+            const steps = [
+                'Iniciando transacción...',
+                'Seleccionar método de pago',
+                'Pasar/insertar tarjeta',
+                'Ingresando clave...',
+                'Procesando pago...',
+                'Imprimiendo voucher...'
+            ];
+            
+            let currentStep = 0;
+            const interval = setInterval(() => {
+                if (currentStep < steps.length) {
+                    const progress = ((currentStep + 1) / steps.length) * 100;
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = steps[currentStep];
+                    currentStep++;
+                } else {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        progressDiv.classList.add('d-none');
+                        progressBar.style.width = '0%';
+                    }, 1000);
+                }
+            }, 1500);
+        }
+
+        // Conectar al POS
+        async connect() {
+            try {
+                this.updateOperationStatus('Conectando al terminal POS...', 'info');
+                this.log('Intentando conectar al terminal POS...');
+                
+                const terminalSelect = document.getElementById('terminal-select');
+                if (!terminalSelect || !terminalSelect.value) {
+                    throw new Error('Debe seleccionar un terminal POS');
+                }
+                
+                // Probar conexión real con backend
+                const response = await fetch('/app/pos/probar-conexion/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.csrfToken
+                    },
+                    body: JSON.stringify({
+                        configuracion_id: terminalSelect.value
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    const selectedOption = terminalSelect.options[terminalSelect.selectedIndex];
+                    this.currentTerminal = selectedOption.text;
+                    
+                    this.updateConnectionStatus(true, this.currentTerminal);
+                    this.updateOperationStatus('Terminal conectado y listo', 'success');
+                    this.log(`Conectado exitosamente a ${this.currentTerminal}`, 'success');
+                    
+                    return true;
+                } else {
+                    throw new Error(data.error || 'Error de conexión');
+                }
+            } catch (error) {
+                this.log(`Error de conexión: ${error.message}`, 'error');
+                this.updateOperationStatus('Error al conectar terminal', 'error');
+                this.showResult({ success: false, error: error.message });
+                return false;
+            }
+        }
+
+        // Desconectar
+        async disconnect() {
+            this.updateOperationStatus('Desconectando terminal...', 'info');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            this.updateConnectionStatus(false);
+            this.updateOperationStatus('Terminal desconectado', 'info');
+            this.log('Terminal desconectado', 'info');
+            this.currentPort = null;
+            this.currentTerminal = null;
+        }
+
+        // Ejecutar operaciones del POS
+        async executeOperation(operationType, params = {}) {
+            if (!this.isConnected && operationType !== 'conectar') {
+                this.showResult({ success: false, error: 'Terminal no conectado' });
+                return;
+            }
+
+            try {
+                this.updateOperationStatus(`Ejecutando ${operationType}...`, 'info');
+                this.log(`Iniciando ${operationType}${params.amount ? ` por $${params.amount}` : ''}`);
+                
+                // Mostrar progreso para operaciones de venta
+                if (['venta', 'devolución', 'anulación'].includes(operationType)) {
+                    this.showTransactionProgress();
+                }
+
+                let result;
+                
+                // Ejecutar operación específica
+                switch (operationType) {
+                    case 'venta':
+                        result = await this.processSale(params);
+                        break;
+                    case 'carga de llaves':
+                        result = await this.loadKeys();
+                        break;
+                    case 'verificación de conexión':
+                        result = await this.poll();
+                        break;
+                    default:
+                        // Simular otras operaciones
+                        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000));
+                        result = {
+                            success: Math.random() > 0.1,
+                            message: `${operationType} ${Math.random() > 0.1 ? 'exitosa' : 'fallida'}`,
+                            response_code: Math.random() > 0.1 ? '00' : '01'
+                        };
+                        break;
+                }
+
+                this.showResult(result);
+                this.updateOperationStatus(
+                    result.success ? `${operationType} completada exitosamente` : `Error en ${operationType}`, 
+                    result.success ? 'success' : 'error'
+                );
+                this.log(`${operationType} ${result.success ? 'exitosa' : 'fallida'}`, result.success ? 'success' : 'error');
+
+                return result;
+            } catch (error) {
+                this.showResult({ success: false, error: error.message });
+                this.updateOperationStatus(`Error en ${operationType}`, 'error');
+                this.log(`Error en ${operationType}: ${error.message}`, 'error');
+                return { success: false, error: error.message };
+            }
+        }
+
+        // Procesar venta real
+        async processSale(params) {
+            const terminalSelect = document.getElementById('terminal-select');
+            if (!terminalSelect.value) {
+                throw new Error('Debe seleccionar un terminal POS');
+            }
+
+            const response = await fetch('/app/pos/iniciar-venta/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': this.csrfToken
+                },
+                body: JSON.stringify({
+                    monto: params.amount,
+                    configuracion_id: terminalSelect.value,
+                    ticket_id: params.ticketId,
+                    observaciones: 'Venta desde interfaz web'
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                const transaccion = data.transaccion;
+                return {
+                    success: transaccion.estado === 'APROBADA',
+                    status: transaccion.estado,
+                    response_code: transaccion.estado === 'APROBADA' ? '00' : '01',
+                    authorization_code: transaccion.codigo_autorizacion,
+                    amount: transaccion.monto,
+                    message: transaccion.mensaje || (transaccion.estado === 'APROBADA' ? 'Venta aprobada' : 'Venta rechazada'),
+                    transaction_id: transaccion.id,
+                    ticket_pos: transaccion.ticket_pos
+                };
+            } else {
+                throw new Error(data.error);
+            }
+        }
+
+        // Cargar llaves (simulado)
+        async loadKeys() {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            return {
+                success: Math.random() > 0.2,
+                message: Math.random() > 0.2 ? 'Llaves cargadas exitosamente' : 'Error cargando llaves'
+            };
+        }
+
+        // Poll/verificación (simulado)
+        async poll() {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return {
+                success: this.isConnected,
+                message: this.isConnected ? 'Terminal responde correctamente' : 'Terminal no responde'
+            };
+        }
+
+        // Activar modo demostración
+        activateDemoMode() {
+            this.log('🎭 Activando modo demostración...', 'info');
+            
+            // Ocultar mensaje de ayuda
+            const helpAlert = document.getElementById('help-alert');
+            if (helpAlert) {
+                helpAlert.style.display = 'none';
+            }
+            
+            // Simular conexión exitosa
+            this.updateConnectionStatus(true, 'Terminal Demo Virtual');
+            this.updateOperationStatus('Modo demostración activado - Todas las funciones disponibles', 'success');
+            
+            // Cambiar texto del botón
+            const demoBtn = document.getElementById('btn-demo-mode');
+            if (demoBtn) {
+                demoBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Modo Demo Activo';
+                demoBtn.className = 'btn btn-success btn-pos';
+                demoBtn.disabled = true;
+            }
+            
+            // Agregar terminal demo al selector
+            const terminalSelect = document.getElementById('terminal-select');
+            if (terminalSelect && !terminalSelect.querySelector('option[value="demo"]')) {
+                const demoOption = document.createElement('option');
+                demoOption.value = 'demo';
+                demoOption.text = '🎭 Terminal Demo Virtual - Puerto DEMO';
+                demoOption.selected = true;
+                terminalSelect.appendChild(demoOption);
+            }
+            
+            this.log('✅ Modo demostración activo. Todas las funciones están habilitadas para pruebas.', 'success');
+            
+            // Mostrar resultado de ejemplo
+            this.showResult({
+                success: true,
+                response_code: '00',
+                authorization_code: 'DEMO123456',
+                amount: 10,
+                message: 'Modo demostración activado - ¡Prueba todas las funciones!'
+            });
+        }
+    }
+
+    // Inicializar POS Manager
+    const posManager = new POSManager();
+
+    // Event Listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        // Generar ticket ID inicial
+        document.getElementById('ticket-id').value = posManager.generateTicketId();
+
+        // Botones de conexión
+        document.getElementById('btn-connect').addEventListener('click', () => {
+            posManager.connect();
+        });
+
+        document.getElementById('btn-disconnect').addEventListener('click', () => {
+            posManager.disconnect();
+        });
+
+        // Operaciones básicas
+        document.getElementById('btn-load-keys').addEventListener('click', () => {
+            posManager.executeOperation('carga de llaves');
+        });
+
+        document.getElementById('btn-poll').addEventListener('click', () => {
+            posManager.executeOperation('verificación de conexión');
+        });
+
+        // Operaciones de venta
+        document.getElementById('btn-sale').addEventListener('click', () => {
+            const amount = parseInt(document.getElementById('sale-amount').value) || 10;
+            const ticketId = document.getElementById('ticket-id').value || posManager.generateTicketId();
+            posManager.executeOperation('venta', { amount, ticketId });
+            // Generar nuevo ticket para próxima transacción
+            document.getElementById('ticket-id').value = posManager.generateTicketId();
+        });
+
+        document.getElementById('btn-quick-sale-10').addEventListener('click', () => {
+            document.getElementById('sale-amount').value = '10';
+            document.getElementById('ticket-id').value = posManager.generateTicketId();
+            posManager.executeOperation('venta', { amount: 10, ticketId: document.getElementById('ticket-id').value });
+            document.getElementById('ticket-id').value = posManager.generateTicketId();
+        });
+
+        document.getElementById('btn-refund').addEventListener('click', () => {
+            const amount = parseInt(document.getElementById('sale-amount').value) || 10;
+            posManager.executeOperation('devolución', { amount });
+        });
+
+        document.getElementById('btn-annulment').addEventListener('click', () => {
+            const amount = parseInt(document.getElementById('sale-amount').value) || 10;
+            posManager.executeOperation('anulación', { amount });
+        });
+
+        // Reportes
+        document.getElementById('btn-sales-report').addEventListener('click', () => {
+            posManager.executeOperation('reporte de ventas');
+        });
+
+        document.getElementById('btn-last-sale').addEventListener('click', () => {
+            posManager.executeOperation('última venta');
+        });
+
+        document.getElementById('btn-totals').addEventListener('click', () => {
+            posManager.executeOperation('totales del día');
+        });
+
+        document.getElementById('btn-detail').addEventListener('click', () => {
+            posManager.executeOperation('detalle general');
+        });
+
+        // Cierre y cambios de modo
+        document.getElementById('btn-close-terminal').addEventListener('click', () => {
+            if (confirm('¿Está seguro que desea cerrar el terminal? Esto finalizará todas las operaciones pendientes.')) {
+                posManager.executeOperation('cierre de terminal');
+            }
+        });
+
+        document.getElementById('btn-change-to-normal').addEventListener('click', () => {
+            if (confirm('¿Desea cambiar el terminal a modo normal?')) {
+                posManager.executeOperation('cambio a modo normal');
+            }
+        });
+
+        document.getElementById('btn-change-to-pos').addEventListener('click', () => {
+            posManager.executeOperation('cambio a modo POS');
+        });
+
+        // Auto-generar ticket ID cuando cambia el monto
+        document.getElementById('sale-amount').addEventListener('change', () => {
+            document.getElementById('ticket-id').value = posManager.generateTicketId();
+        });
+
+        // Modo demostración
+        document.getElementById('btn-demo-mode').addEventListener('click', () => {
+            posManager.activateDemoMode();
+        });
+
+        posManager.log('Sistema de POS iniciado. Seleccione un terminal y haga clic en "Conectar Terminal".', 'info');
+    });
+</script>
+
+{% include '../../layout/footer.html' %}

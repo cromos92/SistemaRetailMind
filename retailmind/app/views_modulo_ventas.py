@@ -17,6 +17,15 @@ import json
 import re
 from datetime import timedelta
 
+# Importar funciones necesarias desde views.py
+from .views import obtener_siguiente_correlativo, consumir_stock_fifo
+
+# Importar servicios de Transbank
+from .services.transbank_sdk_service import (
+    run_transbank_operation, test_pos_connection, 
+    execute_pos_sale, get_available_ports, cancel_pos_sale
+)
+
 from .models import (
     Ticket, Ticket_Productos, TicketDetallePago, Vendedor, Producto, Producto_Talla,
     Sucursal, EmpresaUser, Empresa, Movimientos_Producto, LoteProducto, Dte, Dte_Productos, Dte_Detalle_Pago,
@@ -627,7 +636,6 @@ def crear_ticket(request):
             sucursal = get_object_or_404(Sucursal, id=sucursal_id)
             
             # Obtener siguiente correlativo
-            from .views import obtener_siguiente_correlativo
             correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
             
             # Calcular totales
@@ -687,7 +695,6 @@ def crear_ticket(request):
                 ticket.save()
                 
                 # Consumir stock FIFO
-                from .views import consumir_stock_fifo
                 for item in productos:
                     producto_talla = get_object_or_404(Producto_Talla, id=item['producto_talla_id'])
                     consumir_stock_fifo(
@@ -750,7 +757,6 @@ def crear_ticket_venta(request):
         vendedor = get_object_or_404(Vendedor, id=vendedor_id)
         
         # Obtener siguiente correlativo
-        from .views import obtener_siguiente_correlativo
         correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
         
         # Calcular totales
@@ -794,7 +800,6 @@ def crear_ticket_venta(request):
             )
             
             # Consumir stock FIFO
-            from .views import consumir_stock_fifo
             consumir_stock_fifo(
                 producto_talla=producto_talla,
                 cantidad_requerida=item['cantidad'],
@@ -961,7 +966,6 @@ def verificar_correlativos_disponibles(request):
                 
             except Correlativo.DoesNotExist:
                 # Si no existe, crear uno automáticamente
-                from .views import obtener_siguiente_correlativo
                 try:
                     # Esto creará el correlativo si no existe
                     numero = obtener_siguiente_correlativo(sucursal, tipo_db)
@@ -1751,7 +1755,6 @@ def convertir_ticket_a_factura(request):
                 receptor.save()
 
             # Obtener siguiente correlativo para factura
-            from .views import obtener_siguiente_correlativo
             numero_factura = obtener_siguiente_correlativo(ticket.sucursal, 'FACTURA ELECTRONICA')
 
             # Crear la factura
@@ -3000,7 +3003,7 @@ def gestion_pos_transbank(request):
         'tipo_pos_choices': TIPO_POS_CHOICES,
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
     }
-    return render(request, 'vistas/modulo_ventas/gestion_pos_transbank.html', context)
+    return render(request, 'vistas/modulo_ventas/gestion_pos_transbank_simple.html', context)
 
 
 @login_required
@@ -3145,37 +3148,77 @@ def probar_conexion_pos(request):
                 'error': 'No tiene acceso a esta configuración'
             })
         
-        # Aquí iría la lógica real de prueba de conexión con el SDK de Transbank
-        # Por ahora simulamos la respuesta
-        
-        # Simular prueba de conexión
-        import time
-        time.sleep(1)  # Simular tiempo de conexión
-        
-        # Actualizar estado de conexión
-        configuracion.ultima_conexion = timezone.now()
-        configuracion.estado_conexion = 'CONECTADO'  # En producción esto dependería del resultado real
-        configuracion.save()
-        
-        # Crear log de la prueba
-        LogPOS.objects.create(
-            configuracion_pos=configuracion,
-            tipo_evento='CONEXION',
-            mensaje=f'Prueba de conexión exitosa en puerto {configuracion.puerto_conexion}',
-            datos_tecnicos={
-                'puerto': configuracion.puerto_conexion,
-                'velocidad': configuracion.velocidad_conexion,
-                'timeout': configuracion.timeout_conexion,
-                'resultado': 'EXITOSO'
-            }
+        # Probar conexión real con SDK Transbank
+        result = run_transbank_operation(
+            test_pos_connection,
+            configuracion.puerto_conexion,
+            configuracion.velocidad_conexion
         )
         
-        return JsonResponse({
-            'success': True,
-            'message': 'Conexión exitosa',
-            'estado_conexion': configuracion.get_estado_conexion_display(),
-            'ultima_conexion': configuracion.ultima_conexion.strftime('%d/%m/%Y %H:%M')
-        })
+        # Actualizar estado de conexión
+        if result['success']:
+            configuracion.ultima_conexion = timezone.now()
+            configuracion.estado_conexion = 'CONECTADO'
+            
+            # Actualizar información del terminal si está disponible
+            terminal_info = result.get('terminal_info', {})
+            if terminal_info.get('serialNumber'):
+                configuracion.numero_serie = terminal_info['serialNumber']
+            if terminal_info.get('firmwareVersion'):
+                configuracion.version_firmware = terminal_info['firmwareVersion']
+            
+            configuracion.save()
+            
+            # Crear log exitoso
+            LogPOS.objects.create(
+                configuracion_pos=configuracion,
+                tipo_evento='CONEXION',
+                mensaje=f'Conexión exitosa - {result["message"]}',
+                datos_tecnicos={
+                    'puerto': configuracion.puerto_conexion,
+                    'velocidad': configuracion.velocidad_conexion,
+                    'tipo_pos': configuracion.tipo_pos,
+                    'resultado': 'EXITOSO',
+                    'puertos_disponibles': result.get('available_ports', []),
+                    'terminal_info': terminal_info
+                }
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': result['message'],
+                'estado_conexion': configuracion.get_estado_conexion_display(),
+                'ultima_conexion': configuracion.ultima_conexion.strftime('%d/%m/%Y %H:%M'),
+                'numero_serie': configuracion.numero_serie,
+                'version_firmware': configuracion.version_firmware,
+                'puertos_disponibles': result.get('available_ports', []),
+                'terminal_info': terminal_info
+            })
+        else:
+            # Error en la conexión
+            configuracion.estado_conexion = 'ERROR'
+            configuracion.save()
+            
+            # Crear log de error
+            LogPOS.objects.create(
+                configuracion_pos=configuracion,
+                tipo_evento='ERROR',
+                mensaje=f'Error de conexión - {result.get("error", "Error desconocido")}',
+                datos_tecnicos={
+                    'puerto': configuracion.puerto_conexion,
+                    'velocidad': configuracion.velocidad_conexion,
+                    'error': result.get('error'),
+                    'suggestion': result.get('suggestion'),
+                    'available_ports': result.get('available_ports', [])
+                }
+            )
+            
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Error de conexión'),
+                'suggestion': result.get('suggestion', 'Verifique la conexión del terminal'),
+                'puertos_disponibles': result.get('available_ports', [])
+            })
         
     except json.JSONDecodeError:
         return JsonResponse({
@@ -3289,17 +3332,104 @@ def iniciar_venta_pos(request):
             }
         )
         
-        return JsonResponse({
-            'success': True,
-            'transaccion': {
-                'id': transaccion.id,
-                'ticket_pos': transaccion.ticket_pos,
-                'monto': float(transaccion.monto),
-                'estado': transaccion.estado,
-                'puerto_conexion': configuracion.puerto_conexion,
-                'timeout': configuracion.timeout_conexion
-            }
-        })
+        # Ejecutar venta real con SDK Transbank
+        from decimal import Decimal
+        result = run_transbank_operation(
+            execute_pos_sale,
+            Decimal(str(monto)),
+            transaccion.ticket_pos,
+            configuracion.puerto_conexion,
+            configuracion.velocidad_conexion
+        )
+        
+        # Actualizar transacción con resultado
+        if result['success']:
+            transaccion.estado = result['status']
+            transaccion.codigo_respuesta = result.get('response_code', '')
+            transaccion.mensaje_respuesta = result.get('message', '')
+            transaccion.codigo_autorizacion = result.get('authorization_code', '')
+            transaccion.tipo_tarjeta = result.get('card_type', 'DESCONOCIDO')
+            transaccion.ultimos_4_digitos = result.get('card_number', '')[-4:] if result.get('card_number') else ''
+            transaccion.nombre_tarjeta = result.get('card_brand', '')
+            transaccion.numero_operacion = result.get('operation_number', '')
+            transaccion.numero_cuotas = result.get('installments', 1)
+            transaccion.codigo_comercio = result.get('commerce_code', '')
+            transaccion.terminal_id = result.get('terminal_id', '')
+            transaccion.save()
+            
+            # Crear log de respuesta
+            LogPOS.objects.create(
+                configuracion_pos=configuracion,
+                transaccion_pos=transaccion,
+                tipo_evento='RESPUESTA_RECIBIDA',
+                mensaje=f'Venta {result["status"].lower()}: {result["message"]}',
+                datos_tecnicos=result.get('raw_response', result)
+            )
+            
+            # Si la transacción fue exitosa y hay un ticket asociado, procesar pago
+            if transaccion.es_exitosa and ticket:
+                # Determinar método de pago según el tipo de tarjeta
+                metodo_pago = 'TBK_POS_INTEGRADO'
+                if transaccion.tipo_tarjeta == 'DEBITO':
+                    metodo_pago = 'TBK_DEBITO_POS'
+                elif transaccion.tipo_tarjeta == 'CREDITO':
+                    metodo_pago = 'TBK_CREDITO_POS'
+                elif transaccion.tipo_tarjeta == 'PREPAGO':
+                    metodo_pago = 'TBK_PREPAGO_POS'
+                
+                # Crear detalle de pago
+                detalle_pago = TicketDetallePago.objects.create(
+                    ticket=ticket,
+                    metodo_pago=metodo_pago,
+                    tipo_tarjeta=transaccion.nombre_tarjeta,
+                    voucher=transaccion.codigo_autorizacion,
+                    monto=int(transaccion.monto),
+                    notas=f'POS {configuracion.nombre} - Oper: {transaccion.numero_operacion}'
+                )
+                
+                # Asociar el detalle de pago con la transacción
+                transaccion.detalle_pago = detalle_pago
+                transaccion.save()
+                
+                # Actualizar estado del ticket si está completamente pagado
+                if ticket.saldo_por_pagar <= 0:
+                    ticket.estado = 'PAGADO'
+                    ticket.save()
+            
+            return JsonResponse({
+                'success': True,
+                'transaccion': {
+                    'id': transaccion.id,
+                    'ticket_pos': transaccion.ticket_pos,
+                    'monto': float(transaccion.monto),
+                    'estado': transaccion.estado,
+                    'codigo_autorizacion': transaccion.codigo_autorizacion,
+                    'tipo_tarjeta': transaccion.tipo_tarjeta,
+                    'mensaje': result['message'],
+                    'puerto_conexion': configuracion.puerto_conexion
+                }
+            })
+        else:
+            # Error en la venta
+            transaccion.estado = 'ERROR'
+            transaccion.error_detalle = result.get('error', 'Error desconocido')
+            transaccion.save()
+            
+            # Crear log de error
+            LogPOS.objects.create(
+                configuracion_pos=configuracion,
+                transaccion_pos=transaccion,
+                tipo_evento='ERROR',
+                mensaje=f'Error en venta: {result.get("error", "Error desconocido")}',
+                datos_tecnicos=result
+            )
+            
+            return JsonResponse({
+                'success': False,
+                'error': result.get('error', 'Error en la venta POS'),
+                'suggestion': result.get('suggestion', 'Verifique el terminal y intente nuevamente'),
+                'transaccion_id': transaccion.id
+            })
         
     except json.JSONDecodeError:
         return JsonResponse({
@@ -3696,7 +3826,7 @@ def gestion_cambios_devoluciones(request):
             sucursal_actual = None
     
     if not sucursal_actual:
-        return redirect('dashboard')
+        return redirect('verHome')
     
     context = {
         'sucursal_actual': sucursal_actual,
@@ -4303,7 +4433,6 @@ def completar_cambio_devolucion(request):
                 
                 if productos_nuevos.exists():
                     # Crear nuevo ticket
-                    from .views import obtener_siguiente_correlativo
                     correlativo_nuevo = obtener_siguiente_correlativo(cambio.sucursal, 'TICKET')
                     
                     ticket_nuevo = Ticket.objects.create(
@@ -4358,7 +4487,6 @@ def completar_cambio_devolucion(request):
                         raise ValidationError(f'Stock insuficiente para {detalle.producto_nuevo.producto.articulo}')
                     
                     # Consumir stock FIFO
-                    from .views import consumir_stock_fifo
                     consumir_stock_fifo(
                         producto_talla=detalle.producto_nuevo,
                         cantidad_requerida=detalle.cantidad_nueva,

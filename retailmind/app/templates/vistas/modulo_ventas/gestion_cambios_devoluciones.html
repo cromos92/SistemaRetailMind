@@ -1,9 +1,11 @@
-{% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Gestión de Cambios y Devoluciones{% endblock %}
+{% include 'layout/header.html' %}
+<!-- ========== App Menu ========== -->
+{% include 'layout/menu.html' %} {% include 'layout/footer.html' %}
+{% csrf_token %}
 
-{% block extra_css %}
+<!-- Extra CSS -->
 <link rel="stylesheet" href="{% static 'assets/plugins/datatables.net-bs5/css/dataTables.bootstrap5.min.css' %}">
 <link rel="stylesheet" href="{% static 'assets/plugins/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css' %}">
 <style>
@@ -112,10 +114,13 @@
         font-size: 12px;
     }
 </style>
-{% endblock %}
 
-{% block content %}
-<div class="container-fluid">
+<!-- ============================================================== -->
+<!-- Start right Content here -->
+<!-- ============================================================== -->
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-12">
@@ -692,9 +697,8 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
+<!-- Extra JS -->
 <script src="{% static 'assets/plugins/datatables.net/js/jquery.dataTables.min.js' %}"></script>
 <script src="{% static 'assets/plugins/datatables.net-bs5/js/dataTables.bootstrap5.min.js' %}"></script>
 <script src="{% static 'assets/plugins/datatables.net-responsive/js/dataTables.responsive.min.js' %}"></script>
@@ -1477,4 +1481,3 @@ function mostrarInfo(mensaje) {
     alert('ℹ️ ' + mensaje);
 }
 </script>
-{% endblock %}

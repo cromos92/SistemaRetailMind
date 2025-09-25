@@ -38,6 +38,15 @@ from .views_modulo_ventas import (
     obtener_transacciones_pos,
     anular_transaccion_pos,
     obtener_logs_pos,
+    # Funciones Cambios y Devoluciones
+    gestion_cambios_devoluciones,
+    listar_cambios_devoluciones,
+    crear_cambio_devolucion,
+    obtener_detalle_cambio,
+    aprobar_cambio_devolucion,
+    completar_cambio_devolucion,
+    buscar_ticket_para_cambio,
+    buscar_productos_para_cambio,
 )
 from .views_modulo_creditos import (
     # Gestión de Créditos
@@ -299,5 +308,20 @@ urlpatterns = [
     
     # APIs de logs
     path('pos/logs/<int:configuracion_id>/', obtener_logs_pos, name='obtener_logs_pos'),
+
+    # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
+    # Vista principal
+    path('ventas/cambios-devoluciones/', gestion_cambios_devoluciones, name='gestion_cambios_devoluciones'),
+    
+    # APIs de gestión
+    path('ventas/api/cambios-devoluciones/', listar_cambios_devoluciones, name='listar_cambios_devoluciones'),
+    path('ventas/api/crear-cambio-devolucion/', crear_cambio_devolucion, name='crear_cambio_devolucion'),
+    path('ventas/api/cambio-detalle/<int:cambio_id>/', obtener_detalle_cambio, name='obtener_detalle_cambio'),
+    path('ventas/api/aprobar-cambio-devolucion/', aprobar_cambio_devolucion, name='aprobar_cambio_devolucion'),
+    path('ventas/api/completar-cambio-devolucion/', completar_cambio_devolucion, name='completar_cambio_devolucion'),
+    
+    # APIs de búsqueda
+    path('ventas/api/buscar-ticket-cambio/', buscar_ticket_para_cambio, name='buscar_ticket_para_cambio'),
+    path('ventas/api/buscar-productos-cambio/', buscar_productos_para_cambio, name='buscar_productos_para_cambio'),
 
 ]
