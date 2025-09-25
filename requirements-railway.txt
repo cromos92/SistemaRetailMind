@@ -1,0 +1,26 @@
+# Django Core
+Django==4.2.2
+asgiref==3.7.2
+sqlparse==0.4.4
+tzdata==2023.3
+
+# Database
+psycopg2-binary==2.9.10
+dj-database-url==2.1.0
+
+# Production Server
+gunicorn==21.2.0
+whitenoise==6.5.0
+
+# Environment
+python-dotenv==1.1.1
+
+# Authentication & Security
+PyJWT==2.3.0
+
+# Image Processing (if needed)
+Pillow==9.0.1
+
+# Utilities
+requests==2.30.0
+humanize==4.9.0
