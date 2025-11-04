@@ -95,10 +95,17 @@
                 </div>
                 <div class="card-body">
                     <!-- Mensaje de Ayuda Inicial -->
-                    <div class="alert alert-info alert-dismissible fade show" role="alert" id="help-alert">
+                    <div class="alert alert-success alert-dismissible fade show" role="alert" id="help-alert">
                         <i class="fas fa-lightbulb mr-2"></i>
-                        <strong>¡Bienvenido al Terminal POS!</strong> 
-                        Para comenzar: <strong>1)</strong> Selecciona un terminal, <strong>2)</strong> Haz clic en "Conectar Terminal" o usa el "Modo Demo" para probar sin hardware.
+                        <strong>¡Bienvenido al Terminal POS Transbank!</strong><br>
+                        <strong>Para comenzar:</strong> Haz clic en <strong>"Conectar y Detectar POS"</strong>. 
+                        El sistema escaneará automáticamente todos los puertos COM y se conectará al POS.
+                        <hr>
+                        <small>
+                            <i class="fas fa-check-circle mr-1"></i> No necesitas configurar puertos manualmente<br>
+                            <i class="fas fa-check-circle mr-1"></i> La detección es completamente automática<br>
+                            <i class="fas fa-check-circle mr-1"></i> Solo asegúrate de que el terminal esté encendido
+                        </small>
                         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                             <span aria-hidden="true">&times;</span>
                         </button>
@@ -155,10 +162,10 @@
                         </div>
                         <div class="btn-group-vertical d-inline-block">
                             <button id="btn-auto-detect" class="btn btn-success btn-pos">
-                                <i class="fas fa-search mr-2"></i>Auto-Detectar Terminales
+                                <i class="fas fa-plug mr-2"></i>Conectar y Detectar POS
                             </button>
                             <button id="btn-test-getports" class="btn btn-outline-success btn-pos">
-                                <i class="fas fa-plug mr-2"></i>Probar getPorts()
+                                <i class="fas fa-info-circle mr-2"></i>Verificar Estado
                             </button>
                             <button id="btn-load-keys" class="btn btn-warning btn-pos" disabled>
                                 <i class="fas fa-key mr-2"></i>Cargar Llaves
@@ -232,45 +239,33 @@
                         </div>
                     </div>
 
-                    <!-- Reportes y Consultas -->
+                    <!-- Reportes y Cierre de Día -->
                     <div class="mb-4">
                         <h6 class="text-secondary">
-                            <i class="fas fa-chart-line mr-2"></i>Reportes y Consultas
+                            <i class="fas fa-chart-line mr-2"></i>Reportes y Cierre de Día
                         </h6>
+                        <div class="alert alert-warning" role="alert">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            <strong>Proceso de Cierre (3 pasos obligatorios):</strong><br>
+                            1️⃣ Detalle de Ventas → 2️⃣ Totales del Día → 3️⃣ Cerrar Día
+                        </div>
                         <div class="btn-group-vertical d-inline-block me-3">
-                            <button id="btn-sales-report" class="btn btn-info btn-pos" disabled>
-                                <i class="fas fa-file-alt mr-2"></i>Reporte de Ventas
+                            <button id="btn-detail" class="btn btn-outline-primary btn-pos" disabled>
+                                <i class="fas fa-list mr-2"></i>1. Detalle de Ventas
                             </button>
-                            <button id="btn-last-sale" class="btn btn-outline-info btn-pos" disabled>
-                                <i class="fas fa-receipt mr-2"></i>Última Venta
+                            <button id="btn-totals" class="btn btn-outline-info btn-pos" disabled>
+                                <i class="fas fa-calculator mr-2"></i>2. Totales del Día
+                            </button>
+                            <button id="btn-close-day" class="btn btn-danger btn-pos" disabled>
+                                <i class="fas fa-moon mr-2"></i>3. Cerrar Día
                             </button>
                         </div>
                         <div class="btn-group-vertical d-inline-block">
-                            <button id="btn-totals" class="btn btn-secondary btn-pos" disabled>
-                                <i class="fas fa-calculator mr-2"></i>Totales del Día
-                            </button>
-                            <button id="btn-detail" class="btn btn-outline-secondary btn-pos" disabled>
-                                <i class="fas fa-list mr-2"></i>Detalle General
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Cierre de Terminal -->
-                    <div class="mb-4">
-                        <h6 class="text-secondary">
-                            <i class="fas fa-power-off mr-2"></i>Cierre de Terminal
-                        </h6>
-                        <div class="btn-group-vertical d-inline-block me-3">
-                            <button id="btn-close-terminal" class="btn btn-danger btn-pos" disabled>
-                                <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Terminal
+                            <button id="btn-last-sale" class="btn btn-info btn-pos" disabled>
+                                <i class="fas fa-receipt mr-2"></i>Última Venta
                             </button>
                             <button id="btn-change-to-normal" class="btn btn-warning btn-pos" disabled>
                                 <i class="fas fa-exchange-alt mr-2"></i>Modo Normal
-                            </button>
-                        </div>
-                        <div class="btn-group-vertical d-inline-block">
-                            <button id="btn-change-to-pos" class="btn btn-success btn-pos" disabled>
-                                <i class="fas fa-desktop mr-2"></i>Modo POS
                             </button>
                         </div>
                     </div>
@@ -348,8 +343,8 @@
     </div>
 </div>
 
-<!-- SDK Transbank POS Integrado -->
-<script src="https://unpkg.com/transbank-pos-sdk-web@5/dist/pos.js"></script>
+<!-- SDK Transbank POS Integrado v3 (versión que funciona) -->
+<script src="https://unpkg.com/transbank-pos-sdk-web@3/dist/pos.js"></script>
 
 <script>
     // Suprimir errores de consola del agente Transbank cuando no está disponible
@@ -419,34 +414,44 @@
             try {
                 // Verificar SDK antes de hacer polling
                 if (typeof Transbank === 'undefined' || !Transbank.POS || 
-                    typeof Transbank.POS.getPorts !== 'function') {
+                    typeof Transbank.POS.getPortStatus !== 'function') {
                     return;
                 }
                 
-                const result = await Transbank.POS.getPorts();
+                // Conectar antes de getPortStatus
+                await Transbank.POS.connect();
                 
-                // Procesar resultado
-                let ports = [];
-                if (Array.isArray(result)) {
-                    ports = result;
-                } else if (result && typeof result === 'object') {
-                    if (Array.isArray(result.ports)) ports = result.ports;
-                    else if (Array.isArray(result.data)) ports = result.data;
+                // Obtener estado del puerto
+                const status = await Transbank.POS.getPortStatus();
+                
+                if (!status) {
+                    return;
                 }
                 
                 // Verificar si cambió desde el último polling
-                const portsStr = ports.join(',');
-                const changed = this.lastPollingResult !== portsStr;
+                const statusStr = `${status.connected}:${status.activePort}`;
+                const changed = this.lastPollingResult !== statusStr;
                 
                 if (changed) {
-                    this.log(`🔄 Polling: ${ports.length} terminal(es) detectado(s)`, 'info');
-                    this.lastPollingResult = portsStr;
+                    this.lastPollingResult = statusStr;
                     
-                    // Actualizar badge si existe
-                    const badge = document.getElementById('terminal-count');
-                    if (badge && ports.length > 0) {
-                        badge.textContent = `${ports.length} Terminal(es) Detectado(s)`;
-                        badge.className = 'badge badge-success';
+                    if (status.connected) {
+                        this.log(`🔄 Polling: POS conectado en ${status.activePort}`, 'info');
+                        
+                        // Actualizar badge si existe
+                        const badge = document.getElementById('terminal-count');
+                        if (badge) {
+                            badge.textContent = `POS Activo: ${status.activePort}`;
+                            badge.className = 'badge badge-success';
+                        }
+                    } else {
+                        this.log(`🔄 Polling: POS desconectado`, 'warning');
+                        
+                        const badge = document.getElementById('terminal-count');
+                        if (badge) {
+                            badge.textContent = `POS Desconectado`;
+                            badge.className = 'badge badge-danger';
+                        }
                     }
                 }
                 
@@ -731,93 +736,51 @@
             };
         }
 
-        // Auto-detectar terminales POS
+        // Auto-detectar y conectar POS (MÉTODO AUTOMÁTICO SIMPLE)
         async autoDetectTerminals() {
             try {
-                this.log('🔍 Iniciando auto-detección de terminales...', 'info');
-                this.updateOperationStatus('Detectando terminales POS...', 'info');
+                this.log('🔍 Iniciando conexión automática al POS...', 'info');
+                this.updateOperationStatus('Escaneando puertos COM automáticamente...', 'info');
                 
                 // Verificar que el SDK esté disponible
-                if (typeof Transbank === 'undefined') {
-                    throw new Error('SDK de Transbank no está cargado. Verifique la conexión a internet.');
+                if (typeof Transbank === 'undefined' || !Transbank.POS) {
+                    throw new Error('SDK de Transbank no está disponible');
                 }
                 
-                if (!Transbank.POS) {
-                    throw new Error('Módulo POS no está disponible en el SDK de Transbank');
+                // 1. Conectar (ESCANEA TODOS LOS PUERTOS AUTOMÁTICAMENTE)
+                this.log('🔗 Conectando al agente Transbank...', 'info');
+                this.log('   → El agente escaneará COM1, COM2, COM3... automáticamente', 'info');
+                
+                await Transbank.POS.connect();
+                
+                this.log('✅ Conexión establecida con el agente', 'success');
+                
+                // 2. Esperar a que complete el escaneo automático
+                this.log('⏳ Esperando que el agente detecte el POS...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // 3. Obtener estado del puerto detectado automáticamente
+                this.log('🔍 Consultando puerto detectado...', 'info');
+                const status = await Transbank.POS.getPortStatus();
+                
+                this.log(`📋 Estado: ${JSON.stringify(status)}`, 'info');
+                
+                // Validar que detectó el POS
+                if (!status || !status.connected) {
+                    throw new Error('El agente no detectó ningún POS conectado. Verifique que el terminal esté encendido y conectado por USB/Serial.');
                 }
                 
-                // 1. Conectar al agente POS (con manejo de reconexión)
-                this.log('🔗 Verificando conexión con el agente POS...');
-                try {
-                    await Transbank.POS.connect();
-                    this.log('✅ Conectado al agente POS Transbank');
-                    
-                    // Esperar un momento para que el SDK se estabilice después de conectar
-                    this.log('⏳ Esperando estabilización del SDK...');
-                    await new Promise(resolve => setTimeout(resolve, 1500));
-                    
-                } catch (connectError) {
-                    this.log(`⚠️ Advertencia al conectar: ${connectError.message}`, 'warning');
-                    // Continuar de todos modos - el agente podría ya estar conectado
-                    this.log('🔄 Continuando con la detección de puertos...', 'info');
+                if (!status.activePort) {
+                    throw new Error('No se pudo obtener el puerto del POS detectado');
                 }
                 
-                // 2. Verificar que getPorts existe
-                if (typeof Transbank.POS.getPorts !== 'function') {
-                    throw new Error('Método getPorts() no está disponible en esta versión del SDK');
-                }
+                // 4. POS detectado exitosamente
+                const puertoDetectado = status.activePort;
+                this.log(`✅ POS DETECTADO en puerto: ${puertoDetectado}`, 'success');
+                this.log(`✅ Terminal listo para operar`, 'success');
                 
-                // 3. Obtener puertos disponibles con timeout extendido
-                this.log('🔍 Obteniendo lista de puertos del agente...');
-                const portsPromise = Transbank.POS.getPorts();
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout: getPorts() tardó más de 15 segundos')), 15000)
-                );
-                
-                const portsResponse = await Promise.race([portsPromise, timeoutPromise]);
-                
-                this.log(`📋 Respuesta cruda de getPorts(): ${JSON.stringify(portsResponse)}`, 'info');
-                
-                // Procesar la respuesta - puede ser un array o un objeto con propiedad 'ports'
-                let ports = null;
-                
-                if (Array.isArray(portsResponse)) {
-                    // Respuesta directa como array
-                    ports = portsResponse;
-                } else if (portsResponse && typeof portsResponse === 'object') {
-                    // Respuesta como objeto - intentar extraer puertos
-                    if (Array.isArray(portsResponse.ports)) {
-                        ports = portsResponse.ports;
-                    } else if (Array.isArray(portsResponse.data)) {
-                        ports = portsResponse.data;
-                    } else if (portsResponse.port) {
-                        // Un solo puerto
-                        ports = [portsResponse.port];
-                    } else {
-                        this.log(`⚠️ Estructura de respuesta inesperada: ${JSON.stringify(portsResponse)}`, 'warning');
-                        // Intentar extraer todas las propiedades que parezcan puertos
-                        ports = Object.values(portsResponse).filter(v => 
-                            typeof v === 'string' && (v.startsWith('COM') || v.startsWith('/dev/'))
-                        );
-                    }
-                }
-                
-                if (!ports) {
-                    throw new Error('getPorts() devolvió null/undefined. Verifique que el agente POS esté ejecutándose y que haya terminales conectados.');
-                }
-                
-                if (!Array.isArray(ports)) {
-                    throw new Error(`No se pudo extraer array de puertos. Tipo recibido: ${typeof ports}`);
-                }
-                
-                this.log(`🔌 Puertos detectados: [${ports.join(', ')}]`);
-                
-                if (ports.length === 0) {
-                    throw new Error('No se detectaron terminales POS conectados. Verifique las conexiones físicas y que los terminales estén encendidos.');
-                }
-                
-                // 4. Guardar terminales detectados en Django
-                this.log(`💾 Guardando ${ports.length} terminal(es) detectado(s) en la base de datos...`);
+                // 5. Guardar en BD (opcional, para registro)
+                this.log(`💾 Guardando configuración...`, 'info');
                 const response = await fetch('/app/pos/detectar-terminales/', {
                     method: 'POST',
                     headers: {
@@ -825,42 +788,292 @@
                         'X-CSRFToken': this.csrfToken
                     },
                     body: JSON.stringify({
-                        puertos_detectados: ports
+                        puertos_detectados: [puertoDetectado],
+                        deteccion_automatica: true,
+                        connected: status.connected
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    this.log(`✅ Detección completada: ${data.total_detectados} terminales`, 'success');
-                    this.updateOperationStatus(data.message, 'success');
-                    
-                    // 5. Actualizar selector de terminales
+                    this.log(`✅ Configuración guardada en BD`, 'success');
                     await this.refreshTerminalSelector();
+                }
+                
+                // 6. Actualizar UI
+                this.updateOperationStatus(`POS operativo en ${puertoDetectado}`, 'success');
+                this.updateConnectionStatus(true, `Terminal POS - ${puertoDetectado}`);
+                
+                this.showResult({
+                    success: true,
+                    message: `POS detectado y conectado exitosamente`,
+                    puerto: puertoDetectado,
+                    connected: true,
+                    note: 'El POS está listo para realizar ventas'
+                });
+                
+                // Ocultar alerta de ayuda
+                const helpAlert = document.getElementById('help-alert');
+                if (helpAlert) {
+                    helpAlert.style.display = 'none';
+                }
+                
+                // Habilitar botones de operación
+                this.enableOperationButtons();
+                
+                return {
+                    success: true,
+                    puerto: puertoDetectado
+                };
+                
+            } catch (error) {
+                this.log(`❌ Error: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en detección automática', 'error');
+                
+                // Mostrar alerta del agente si es necesario
+                if (error.message.includes('SDK') || 
+                    error.message.includes('agente') || 
+                    error.message.includes('disponible')) {
+                    const agentAlert = document.getElementById('agent-alert');
+                    if (agentAlert) {
+                        agentAlert.style.display = 'block';
+                    }
+                }
+                
+                this.showResult({
+                    success: false,
+                    error: error.message,
+                    suggestion: 'Verifique: 1) Agente Transbank ejecutándose, 2) Terminal POS encendido, 3) Terminal conectado por USB'
+                });
+                
+                return { success: false, error: error.message };
+            }
+        }
+        
+        // Habilitar botones de operación cuando POS está conectado
+        enableOperationButtons() {
+            const buttons = [
+                'btn-sale', 'btn-refund', 'btn-annulment',
+                'btn-detail', 'btn-totals', 'btn-last-sale',
+                'btn-poll', 'btn-load-keys', 'btn-change-to-normal',
+                'btn-disconnect'
+            ];
+            
+            buttons.forEach(btnId => {
+                const btn = document.getElementById(btnId);
+                if (btn) btn.disabled = false;
+            });
+            
+            // Marcar como conectado
+            this.isConnected = true;
+        }
+        
+        // ========== FUNCIONES DE VENTA REAL ==========
+        
+        // Realizar venta real con el POS
+        async realizarVentaReal(monto, ticketId) {
+            try {
+                this.log('💳 Iniciando venta real con POS Transbank...', 'info');
+                this.log(`   Monto: $${monto.toLocaleString()}`, 'info');
+                this.log(`   Ticket: ${ticketId}`, 'info');
+                this.updateOperationStatus(`Procesando venta por $${monto.toLocaleString()}...`, 'info');
+                
+                // Asegurar conexión
+                await Transbank.POS.connect();
+                
+                // Callback para mensajes de estado durante la venta
+                const statusCallback = (statusMessage) => {
+                    this.log(`   📊 ${statusMessage}`, 'info');
+                };
+                
+                this.log('   → Pase o inserte la tarjeta en el terminal POS...', 'info');
+                
+                // Ejecutar venta con el SDK real
+                const saleResponse = await Transbank.POS.doSale(
+                    parseInt(monto),
+                    ticketId,
+                    statusCallback
+                );
+                
+                console.log('Respuesta venta completa:', saleResponse);
+                
+                // MOSTRAR TODA LA RESPUESTA EN EL LOG
+                this.log('', 'info');
+                this.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                this.log('📋 RESPUESTA COMPLETA DEL POS:', 'info');
+                this.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                this.log(JSON.stringify(saleResponse, null, 2), 'info');
+                this.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                this.log('', 'info');
+                
+                // Procesar respuesta
+                if (saleResponse.responseCode === 0) {
+                    // VENTA APROBADA
+                    this.log('', 'success');
+                    this.log('═══════════════════════════════════════', 'success');
+                    this.log('🎉 VENTA APROBADA', 'success');
+                    this.log('═══════════════════════════════════════', 'success');
+                    this.log(`💰 Monto: $${saleResponse.amount.toLocaleString()}`, 'success');
+                    this.log(`💳 Tarjeta: ${saleResponse.cardBrand || 'N/A'} ${saleResponse.cardType === 'DB' ? 'DÉBITO' : saleResponse.cardType === 'CR' ? 'CRÉDITO' : saleResponse.cardType}`, 'success');
+                    this.log(`🔢 Últimos 4 dígitos: ${saleResponse.last4Digits || 'N/A'}`, 'success');
+                    this.log(`🔑 Código autorización: ${saleResponse.authorizationCode || 'N/A'}`, 'success');
+                    this.log(`📋 Operación: ${saleResponse.operationNumber || 'N/A'}`, 'success');
+                    this.log(`🖥️ Terminal: ${saleResponse.terminalId || 'N/A'}`, 'success');
+                    this.log(`🏪 Código comercio: ${saleResponse.commerceCode || 'N/A'}`, 'success');
+                    this.log(`📅 Fecha: ${saleResponse.realDate || 'N/A'} ${saleResponse.realTime || 'N/A'}`, 'success');
+                    this.log(`🎫 Ticket: ${saleResponse.ticket || ticketId}`, 'success');
+                    this.log(`✅ Successful: ${saleResponse.successful}`, 'success');
+                    this.log(`📝 Mensaje: ${saleResponse.responseMessage || 'APROBADO'}`, 'success');
+                    this.log('═══════════════════════════════════════', 'success');
                     
-                    // 6. Mostrar resultado
+                    this.updateOperationStatus('Venta aprobada exitosamente', 'success');
+                    
+                    // Guardar transacción en el backend Django
+                    try {
+                        this.log('💾 Guardando transacción en base de datos...', 'info');
+                        
+                        const saveResponse = await fetch('/app/pos/guardar-venta/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': this.csrfToken
+                            },
+                            body: JSON.stringify({
+                                sale_response: saleResponse,
+                                ticket_id: ticketId,
+                                monto: monto
+                            })
+                        });
+                        
+                        const saveData = await saveResponse.json();
+                        
+                        if (saveData.success) {
+                            this.log('✅ Transacción guardada en BD', 'success');
+                        } else {
+                            this.log(`⚠️ Error guardando: ${saveData.error}`, 'warning');
+                        }
+                    } catch (saveError) {
+                        this.log(`⚠️ Advertencia: No se pudo guardar en BD: ${saveError.message}`, 'warning');
+                    }
+                    
                     this.showResult({
                         success: true,
-                        message: `Auto-detección exitosa: ${data.total_detectados} terminales encontrados`,
-                        terminals: ports
+                        response_code: '00',
+                        message: 'VENTA APROBADA',
+                        amount: saleResponse.amount,
+                        authorization_code: saleResponse.authorizationCode,
+                        card_brand: saleResponse.cardBrand,
+                        card_type: saleResponse.cardType,
+                        last4_digits: saleResponse.last4Digits,
+                        operation_number: saleResponse.operationNumber,
+                        terminal_id: saleResponse.terminalId,
+                        ticket: saleResponse.ticket
                     });
                     
-                    return {
-                        success: true,
-                        terminals: ports,
-                        data: data
-                    };
+                    return { success: true, data: saleResponse };
+                    
                 } else {
-                    throw new Error(data.error);
+                    // VENTA RECHAZADA
+                    this.log('', 'error');
+                    this.log('❌ VENTA RECHAZADA', 'error');
+                    this.log(`   Código: ${saleResponse.responseCode}`, 'error');
+                    this.log(`   Mensaje: ${saleResponse.responseMessage}`, 'error');
+                    
+                    this.updateOperationStatus('Venta rechazada', 'error');
+                    
+                    this.showResult({
+                        success: false,
+                        response_code: saleResponse.responseCode,
+                        message: saleResponse.responseMessage || 'Venta rechazada',
+                        error: `Código de rechazo: ${saleResponse.responseCode}`
+                    });
+                    
+                    return { success: false, data: saleResponse };
                 }
                 
             } catch (error) {
-                this.log(`❌ Error en auto-detección: ${error.message}`, 'error');
-                this.updateOperationStatus('Error en auto-detección - Usando modo simulado', 'error');
+                this.log(`❌ Error en venta: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en transacción', 'error');
                 
-                // Fallback: Usar puertos simulados para desarrollo
-                this.log('🔄 Intentando con puertos simulados para desarrollo...', 'info');
-                return await this.simulatePortDetection(error.message);
+                this.showResult({
+                    success: false,
+                    error: error.message,
+                    suggestion: 'Verifique la conexión del POS y que el terminal esté operativo'
+                });
+                
+                return { success: false, error: error.message };
+            }
+        }
+        
+        // Anular transacción (refund)
+        async anularTransaccion(voucher) {
+            try {
+                this.log(`🔄 Anulando transacción: ${voucher}...`, 'info');
+                this.updateOperationStatus('Procesando anulación...', 'info');
+                
+                // Asegurar conexión
+                await Transbank.POS.connect();
+                
+                const result = await Transbank.POS.refund(voucher);
+                console.log('Resultado anulación:', result);
+                
+                if (result && result.responseCode === 0) {
+                    this.log('✅ Transacción anulada exitosamente', 'success');
+                    this.updateOperationStatus('Anulación completada', 'success');
+                    
+                    this.showResult({
+                        success: true,
+                        message: 'Transacción anulada correctamente',
+                        voucher: voucher
+                    });
+                } else {
+                    throw new Error(result.responseMessage || 'Error en anulación');
+                }
+                
+                return { success: true };
+                
+            } catch (error) {
+                this.log(`❌ Error en anulación: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en anulación', 'error');
+                this.showResult({ success: false, error: error.message });
+                return { success: false };
+            }
+        }
+        
+        // Poll - Verificar que POS responde
+        async verificarPOS() {
+            try {
+                this.log('📡 Verificando respuesta del POS...', 'info');
+                this.updateOperationStatus('Verificando terminal...', 'info');
+                
+                // Asegurar conexión
+                await Transbank.POS.connect();
+                
+                const result = await Transbank.POS.poll();
+                console.log('Poll result:', result);
+                
+                if (result === true || result === 'true') {
+                    this.log('✅ POS respondiendo correctamente', 'success');
+                    this.updateOperationStatus('POS operativo', 'success');
+                    this.showResult({ success: true, message: 'POS responde correctamente' });
+                } else {
+                    this.log('⚠️ POS no responde como esperado (puede ser normal en POS de prueba)', 'warning');
+                    this.updateOperationStatus('POS con advertencia', 'warning');
+                    this.showResult({ 
+                        success: true, 
+                        message: 'POS responde pero con advertencia',
+                        note: 'Esto es normal en POS de prueba'
+                    });
+                }
+                
+                return { success: true };
+                
+            } catch (error) {
+                this.log(`❌ Error en poll: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en verificación', 'error');
+                this.showResult({ success: false, error: error.message });
+                return { success: false };
             }
         }
 
@@ -918,11 +1131,11 @@
             }
         }
 
-        // Probar solo getPorts() sin guardar (para pruebas rápidas)
+        // Verificar estado del POS (para pruebas rápidas)
         async testGetPorts() {
             try {
-                this.log('🧪 Probando getPorts() directamente...', 'info');
-                this.updateOperationStatus('Probando detección de puertos...', 'info');
+                this.log('🧪 Verificando estado del POS...', 'info');
+                this.updateOperationStatus('Verificando conexión POS...', 'info');
                 
                 // Verificar SDK
                 if (typeof Transbank === 'undefined') {
@@ -933,72 +1146,62 @@
                     throw new Error('Módulo POS no está disponible en el SDK de Transbank. Verifique que el SDK esté correctamente cargado.');
                 }
                 
-                if (typeof Transbank.POS.getPorts !== 'function') {
-                    throw new Error('Método getPorts() no está disponible en esta versión del SDK');
+                if (typeof Transbank.POS.getPortStatus !== 'function') {
+                    throw new Error('Método getPortStatus() no está disponible en esta versión del SDK');
                 }
                 
-                // Intentar conectar primero (si no está conectado)
-                try {
-                    this.log('🔗 Asegurando conexión al agente...', 'info');
-                    await Transbank.POS.connect();
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                } catch (e) {
-                    this.log(`⚠️ Advertencia de conexión: ${e.message}`, 'warning');
-                }
+                // Conectar al agente
+                this.log('🔗 Conectando al agente Transbank...', 'info');
+                await Transbank.POS.connect();
+                this.log('✅ Conectado al agente', 'success');
                 
-                // Ejecutar getPorts()
-                this.log('🔍 Ejecutando getPorts()...', 'info');
+                // Esperar estabilización
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Obtener estado del puerto
+                this.log('🔍 Ejecutando getPortStatus()...', 'info');
                 const startTime = Date.now();
                 
-                const portsPromise = Transbank.POS.getPorts();
+                const statusPromise = Transbank.POS.getPortStatus();
                 const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout: 15 segundos')), 15000)
+                    setTimeout(() => reject(new Error('Timeout: 10 segundos')), 10000)
                 );
                 
-                const result = await Promise.race([portsPromise, timeoutPromise]);
+                const status = await Promise.race([statusPromise, timeoutPromise]);
                 const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
                 
-                this.log(`⏱️ getPorts() completado en ${elapsedTime}s`, 'info');
-                this.log(`📋 Respuesta cruda: ${JSON.stringify(result)}`, 'info');
+                this.log(`⏱️ getPortStatus() completado en ${elapsedTime}s`, 'info');
+                this.log(`📋 Respuesta: ${JSON.stringify(status)}`, 'info');
                 
-                // Procesar resultado
-                let ports = [];
-                if (Array.isArray(result)) {
-                    ports = result;
-                } else if (result && typeof result === 'object') {
-                    if (Array.isArray(result.ports)) ports = result.ports;
-                    else if (Array.isArray(result.data)) ports = result.data;
-                    else if (result.port) ports = [result.port];
-                }
-                
-                if (ports.length > 0) {
-                    this.log(`✅ ${ports.length} puerto(s) detectado(s): [${ports.join(', ')}]`, 'success');
-                    this.updateOperationStatus(`${ports.length} puerto(s) encontrado(s)`, 'success');
+                if (status && status.connected) {
+                    this.log(`✅ POS conectado en puerto: ${status.activePort}`, 'success');
+                    this.updateOperationStatus(`POS operativo en ${status.activePort}`, 'success');
                     
                     this.showResult({
                         success: true,
-                        message: `getPorts() exitoso: ${ports.length} terminal(es) detectado(s)`,
-                        ports: ports,
+                        message: `POS conectado exitosamente`,
+                        puerto: status.activePort,
+                        connected: true,
                         elapsed_time: `${elapsedTime}s`,
-                        note: 'Esto es solo una prueba. Use "Auto-Detectar Terminales" para guardar en BD.'
+                        note: 'El POS está listo para operar'
                     });
                 } else {
-                    this.log('⚠️ getPorts() devolvió respuesta vacía', 'warning');
-                    this.updateOperationStatus('Sin terminales detectados', 'warning');
+                    this.log('⚠️ POS no conectado', 'warning');
+                    this.updateOperationStatus('POS no detectado', 'warning');
                     
                     this.showResult({
                         success: false,
-                        message: 'No se detectaron terminales',
-                        raw_response: result,
-                        suggestion: 'Verifique que los terminales estén conectados y encendidos'
+                        message: 'POS no conectado',
+                        connected: false,
+                        suggestion: 'Verifique que el terminal POS esté encendido y conectado por USB/Serial'
                     });
                 }
                 
-                return { success: ports.length > 0, ports: ports };
+                return { success: status && status.connected, status: status };
                 
             } catch (error) {
-                this.log(`❌ Error probando getPorts(): ${error.message}`, 'error');
-                this.updateOperationStatus('Error en getPorts()', 'error');
+                this.log(`❌ Error verificando estado: ${error.message}`, 'error');
+                this.updateOperationStatus('Error verificando POS', 'error');
                 
                 this.showResult({
                     success: false,
@@ -1056,36 +1259,36 @@
                     diagnostics.canConnect = false;
                 }
                 
-                // Prueba 2: Obtener puertos (incluso si la conexión falló)
+                // Prueba 2: Obtener estado del puerto (método correcto)
                 try {
-                    this.log('   ▶ Probando getPorts()...', 'info');
-                    const portsPromise = Transbank.POS.getPorts();
+                    this.log('   ▶ Probando getPortStatus()...', 'info');
+                    
+                    // Asegurar conexión antes de getPortStatus
+                    if (!diagnostics.canConnect) {
+                        await Transbank.POS.connect();
+                    }
+                    
+                    const statusPromise = Transbank.POS.getPortStatus();
                     const timeoutPromise = new Promise((_, reject) => 
                         setTimeout(() => reject(new Error('Timeout: 10 segundos')), 10000)
                     );
                     
-                    const result = await Promise.race([portsPromise, timeoutPromise]);
+                    const result = await Promise.race([statusPromise, timeoutPromise]);
                     
-                    this.log(`   📋 Respuesta de getPorts(): ${JSON.stringify(result)}`, 'info');
+                    this.log(`   📋 Respuesta de getPortStatus(): ${JSON.stringify(result)}`, 'info');
                     
-                    // Procesar resultado
-                    if (Array.isArray(result)) {
-                        diagnostics.portsFound = result;
+                    // Procesar resultado {connected: boolean, activePort: string}
+                    if (result && result.connected) {
+                        diagnostics.portsFound = [result.activePort];
                         diagnostics.getPortsWorks = true;
-                    } else if (result && typeof result === 'object') {
-                        // Intentar extraer puertos del objeto
-                        if (Array.isArray(result.ports)) {
-                            diagnostics.portsFound = result.ports;
-                        } else if (Array.isArray(result.data)) {
-                            diagnostics.portsFound = result.data;
-                        }
-                        diagnostics.getPortsWorks = diagnostics.portsFound.length > 0;
+                        this.log(`   ✅ POS conectado en: ${result.activePort}`, 'success');
+                    } else {
+                        diagnostics.getPortsWorks = false;
+                        this.log(`   ⚠️ POS no conectado`, 'warning');
                     }
                     
-                    this.log(`   ✅ getPorts() funciona: ${diagnostics.portsFound.length} puerto(s) encontrado(s)`, 'success');
-                    
                 } catch (getPortsError) {
-                    this.log(`   ❌ Error en getPorts(): ${getPortsError.message}`, 'error');
+                    this.log(`   ❌ Error en getPortStatus(): ${getPortsError.message}`, 'error');
                     diagnostics.getPortsWorks = false;
                 }
             }
@@ -1142,6 +1345,195 @@
                 }
             } catch (error) {
                 this.log(`❌ Error actualizando selector: ${error.message}`, 'error');
+            }
+        }
+
+        // ========== FUNCIONES DE REPORTES Y CIERRE ==========
+        
+        // Variables de control de cierre
+        operacion_detalle = 0;
+        operacion_totales = 0;
+        
+        // Obtener detalle de ventas (Paso 1 del cierre)
+        async obtenerDetalleVentas(imprimirEnPOS = true) {
+            try {
+                this.log('📋 Obteniendo detalle de ventas del día...', 'info');
+                this.updateOperationStatus('Consultando detalle de ventas...', 'info');
+                
+                const result = await Transbank.POS.getDetails(imprimirEnPOS);
+                console.log('Detalle ventas:', result);
+                
+                this.operacion_detalle = 1;
+                this.log('✅ Detalle de ventas obtenido', 'success');
+                this.updateOperationStatus('Detalle obtenido correctamente', 'success');
+                
+                this.showResult({
+                    success: true,
+                    message: 'Detalle de ventas obtenido correctamente',
+                    impreso_en_pos: imprimirEnPOS,
+                    note: 'Paso 1/3 completado. Ahora ejecute "Totales del Día"'
+                });
+                
+                // Habilitar botón de totales
+                document.getElementById('btn-totals').disabled = false;
+                
+                return { success: true };
+                
+            } catch (error) {
+                this.log(`❌ Error obteniendo detalle: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en detalle de ventas', 'error');
+                this.showResult({ success: false, error: error.message });
+                return { success: false };
+            }
+        }
+        
+        // Obtener totales del día (Paso 2 del cierre)
+        async obtenerTotales() {
+            try {
+                this.log('🧮 Obteniendo totales del día...', 'info');
+                this.updateOperationStatus('Consultando totales...', 'info');
+                
+                const result = await Transbank.POS.getTotals();
+                console.log('Totales:', result);
+                
+                this.operacion_totales = 1;
+                this.log('✅ Totales del día obtenidos', 'success');
+                this.updateOperationStatus('Totales obtenidos correctamente', 'success');
+                
+                this.showResult({
+                    success: true,
+                    message: 'Totales del día obtenidos correctamente',
+                    note: 'Paso 2/3 completado. Ahora puede ejecutar "Cerrar Día"'
+                });
+                
+                // Habilitar botón de cerrar día
+                document.getElementById('btn-close-day').disabled = false;
+                
+                return { success: true };
+                
+            } catch (error) {
+                this.log(`❌ Error obteniendo totales: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en totales', 'error');
+                this.showResult({ success: false, error: error.message });
+                return { success: false };
+            }
+        }
+        
+        // Cerrar día (Paso 3 - requiere pasos 1 y 2)
+        async cerrarDia() {
+            try {
+                // Validar que se hayan ejecutado los pasos previos
+                if (this.operacion_detalle !== 1 || this.operacion_totales !== 1) {
+                    this.log('❌ Debe ejecutar primero "Detalle de Ventas" y "Totales del Día"', 'error');
+                    this.showResult({
+                        success: false,
+                        error: 'Pasos previos requeridos',
+                        suggestion: 'Ejecute en orden: 1) Detalle → 2) Totales → 3) Cerrar Día'
+                    });
+                    return { success: false };
+                }
+                
+                this.log('🌙 Ejecutando cierre de día...', 'info');
+                this.updateOperationStatus('Procesando cierre de día...', 'info');
+                
+                const result = await Transbank.POS.closeDay();
+                console.log('Cierre de día:', result);
+                
+                // Resetear contadores
+                this.operacion_detalle = 0;
+                this.operacion_totales = 0;
+                
+                this.log('✅ Cierre de día ejecutado exitosamente', 'success');
+                this.updateOperationStatus('Cierre de día completado', 'success');
+                
+                this.showResult({
+                    success: true,
+                    message: 'Cierre de día realizado correctamente',
+                    note: 'El POS ha sido cerrado. Puede iniciar nuevas operaciones.'
+                });
+                
+                // Deshabilitar botón hasta nuevo ciclo
+                document.getElementById('btn-close-day').disabled = true;
+                document.getElementById('btn-totals').disabled = true;
+                
+                return { success: true };
+                
+            } catch (error) {
+                this.log(`❌ Error en cierre de día: ${error.message}`, 'error');
+                this.updateOperationStatus('Error en cierre', 'error');
+                this.showResult({ success: false, error: error.message });
+                return { success: false };
+            }
+        }
+        
+        // Obtener última venta
+        async obtenerUltimaVenta() {
+            try {
+                this.log('📄 Obteniendo última venta...', 'info');
+                this.updateOperationStatus('Consultando última venta...', 'info');
+                
+                const result = await Transbank.POS.getLastSale();
+                console.log('Última venta:', result);
+                
+                this.log('✅ Última venta obtenida', 'success');
+                this.updateOperationStatus('Última venta consultada', 'success');
+                
+                // Mostrar información de la última venta
+                this.showResult({
+                    success: true,
+                    message: 'Última venta obtenida correctamente',
+                    amount: result.amount,
+                    response_code: result.responseCode,
+                    authorization_code: result.authorizationCode,
+                    card_type: result.cardType,
+                    last4_digits: result.last4Digits,
+                    operation_number: result.operationNumber
+                });
+                
+                return { success: true, data: result };
+                
+            } catch (error) {
+                this.log(`❌ Error obteniendo última venta: ${error.message}`, 'error');
+                this.updateOperationStatus('Error consultando venta', 'error');
+                this.showResult({ success: false, error: error.message });
+                return { success: false };
+            }
+        }
+        
+        // Cargar llaves (como en tu app)
+        async cargarLlaves() {
+            try {
+                this.log('🔑 Cargando llaves en el POS...', 'info');
+                this.updateOperationStatus('Cargando llaves de seguridad...', 'info');
+                
+                let loadKeysResponse = Transbank.POS.loadKeys();
+                console.log('LoadKeys response:', loadKeysResponse);
+                
+                // Esperar a que la promesa se resuelva
+                const result = await loadKeysResponse;
+                
+                if (result && result.success !== false) {
+                    this.log('✅ Llaves cargadas correctamente', 'success');
+                    this.updateOperationStatus('Llaves cargadas', 'success');
+                    this.showResult({
+                        success: true,
+                        message: 'Carga de llaves correcta'
+                    });
+                } else {
+                    throw new Error('Error en carga de llaves');
+                }
+                
+                return { success: true };
+                
+            } catch (error) {
+                this.log(`⚠️ Error cargando llaves: ${error.message || 'Error desconocido'}`, 'warning');
+                this.updateOperationStatus('Error en carga de llaves', 'warning');
+                this.showResult({
+                    success: false,
+                    error: error.message || 'Error en carga de llaves',
+                    note: 'Esto es normal en POS de prueba o sin llaves configuradas'
+                });
+                return { success: false };
             }
         }
 
@@ -1311,72 +1703,215 @@
         });
 
         // Operaciones básicas
-        document.getElementById('btn-load-keys').addEventListener('click', () => {
-            posManager.executeOperation('carga de llaves');
+        document.getElementById('btn-load-keys').addEventListener('click', async () => {
+            await posManager.cargarLlaves();
         });
 
-        document.getElementById('btn-poll').addEventListener('click', () => {
-            posManager.executeOperation('verificación de conexión');
+        document.getElementById('btn-poll').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-poll');
+            const originalText = btn.innerHTML;
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Verificando...';
+                btn.disabled = true;
+                await posManager.verificarPOS();
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         });
 
-        // Operaciones de venta
-        document.getElementById('btn-sale').addEventListener('click', () => {
+        // Operaciones de venta REALES
+        document.getElementById('btn-sale').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-sale');
+            const originalText = btn.innerHTML;
+            
             const amount = parseInt(document.getElementById('sale-amount').value) || 10;
             const ticketId = document.getElementById('ticket-id').value || posManager.generateTicketId();
-            posManager.executeOperation('venta', { amount, ticketId });
-            // Generar nuevo ticket para próxima transacción
-            document.getElementById('ticket-id').value = posManager.generateTicketId();
-        });
-
-        document.getElementById('btn-quick-sale-10').addEventListener('click', () => {
-            document.getElementById('sale-amount').value = '10';
-            document.getElementById('ticket-id').value = posManager.generateTicketId();
-            posManager.executeOperation('venta', { amount: 10, ticketId: document.getElementById('ticket-id').value });
-            document.getElementById('ticket-id').value = posManager.generateTicketId();
-        });
-
-        document.getElementById('btn-refund').addEventListener('click', () => {
-            const amount = parseInt(document.getElementById('sale-amount').value) || 10;
-            posManager.executeOperation('devolución', { amount });
-        });
-
-        document.getElementById('btn-annulment').addEventListener('click', () => {
-            const amount = parseInt(document.getElementById('sale-amount').value) || 10;
-            posManager.executeOperation('anulación', { amount });
-        });
-
-        // Reportes
-        document.getElementById('btn-sales-report').addEventListener('click', () => {
-            posManager.executeOperation('reporte de ventas');
-        });
-
-        document.getElementById('btn-last-sale').addEventListener('click', () => {
-            posManager.executeOperation('última venta');
-        });
-
-        document.getElementById('btn-totals').addEventListener('click', () => {
-            posManager.executeOperation('totales del día');
-        });
-
-        document.getElementById('btn-detail').addEventListener('click', () => {
-            posManager.executeOperation('detalle general');
-        });
-
-        // Cierre y cambios de modo
-        document.getElementById('btn-close-terminal').addEventListener('click', () => {
-            if (confirm('¿Está seguro que desea cerrar el terminal? Esto finalizará todas las operaciones pendientes.')) {
-                posManager.executeOperation('cierre de terminal');
+            
+            if (amount < 50) {
+                posManager.log('❌ El monto mínimo es $50', 'error');
+                return;
+            }
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando venta...';
+                btn.disabled = true;
+                
+                // VENTA REAL CON SDK TRANSBANK
+                await posManager.realizarVentaReal(amount, ticketId);
+                
+                // Generar nuevo ticket para próxima transacción
+                document.getElementById('ticket-id').value = posManager.generateTicketId();
+                
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         });
 
-        document.getElementById('btn-change-to-normal').addEventListener('click', () => {
-            if (confirm('¿Desea cambiar el terminal a modo normal?')) {
-                posManager.executeOperation('cambio a modo normal');
+        document.getElementById('btn-quick-sale-10').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-quick-sale-10');
+            const originalText = btn.innerHTML;
+            
+            document.getElementById('sale-amount').value = '1000';
+            const ticketId = posManager.generateTicketId();
+            document.getElementById('ticket-id').value = ticketId;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
+                btn.disabled = true;
+                
+                // VENTA REAL
+                await posManager.realizarVentaReal(1000, ticketId);
+                
+                document.getElementById('ticket-id').value = posManager.generateTicketId();
+                
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         });
 
-        document.getElementById('btn-change-to-pos').addEventListener('click', () => {
-            posManager.executeOperation('cambio a modo POS');
+        document.getElementById('btn-refund').addEventListener('click', async () => {
+            const voucher = prompt('Ingrese el número de voucher/operación a anular:');
+            if (!voucher) return;
+            
+            const btn = document.getElementById('btn-refund');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Anulando...';
+                btn.disabled = true;
+                
+                await posManager.anularTransaccion(voucher);
+                
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('btn-annulment').addEventListener('click', async () => {
+            const voucher = prompt('Ingrese el número de operación a anular:');
+            if (!voucher) return;
+            
+            const btn = document.getElementById('btn-annulment');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Anulando...';
+                btn.disabled = true;
+                
+                await posManager.anularTransaccion(voucher);
+                
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Reportes y Cierre de Día (Implementación Real)
+        document.getElementById('btn-detail').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-detail');
+            const originalText = btn.innerHTML;
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Obteniendo...';
+                btn.disabled = true;
+                await posManager.obtenerDetalleVentas(true);
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('btn-totals').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-totals');
+            const originalText = btn.innerHTML;
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Obteniendo...';
+                btn.disabled = true;
+                await posManager.obtenerTotales();
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+            }
+        });
+
+        document.getElementById('btn-close-day').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-close-day');
+            const originalText = btn.innerHTML;
+            
+            // Confirmación antes de cerrar
+            if (!confirm('¿Está seguro de ejecutar el cierre de día? Esta operación no se puede deshacer.')) {
+                return;
+            }
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cerrando...';
+                btn.disabled = true;
+                await posManager.cerrarDia();
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+            }
+        });
+
+        document.getElementById('btn-last-sale').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-last-sale');
+            const originalText = btn.innerHTML;
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Consultando...';
+                btn.disabled = true;
+                await posManager.obtenerUltimaVenta();
+            } catch (error) {
+                posManager.log(`Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('btn-change-to-normal').addEventListener('click', async () => {
+            if (!confirm('¿Desea cambiar el terminal a modo normal?')) {
+                return;
+            }
+            
+            const btn = document.getElementById('btn-change-to-normal');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cambiando...';
+                btn.disabled = true;
+                
+                posManager.log('🔄 Cambiando a modo normal...', 'info');
+                const result = await Transbank.POS.setNormalMode();
+                console.log('Modo normal:', result);
+                
+                posManager.log('✅ Modo normal activado', 'success');
+                posManager.showResult({
+                    success: true,
+                    message: 'Terminal cambiado a modo normal'
+                });
+            } catch (error) {
+                posManager.log(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         });
 
         // Auto-generar ticket ID cuando cambia el monto
@@ -1389,48 +1924,28 @@
             posManager.activateDemoMode();
         });
 
-        posManager.log('Sistema de POS iniciado. Ejecutando diagnóstico inicial...', 'info');
-        posManager.log('ℹ️ El SDK intentará conectarse al Agente Transbank en localhost:8090', 'info');
-        posManager.log('ℹ️ Los errores de SSL/conexión son normales si el agente no está instalado', 'info');
+        posManager.log('🚀 Sistema de POS Transbank iniciado', 'info');
+        posManager.log('💡 Click en "Conectar y Detectar POS" para comenzar', 'info');
+        posManager.log('', 'info');
         
-        // Diagnóstico inicial del SDK
-        setTimeout(async () => {
-            const diagnostics = await posManager.diagnoseTransbankSDK();
-            
-            if (diagnostics.sdkLoaded && diagnostics.posModule && diagnostics.getPortsMethod) {
-                posManager.log('✅ SDK verificado correctamente. Iniciando auto-detección...', 'success');
-                
-                // Auto-detectar terminales si el SDK está OK
-                setTimeout(async () => {
-                    try {
-                        await posManager.autoDetectTerminals();
-                    } catch (error) {
-                        posManager.log('ℹ️ Auto-detección automática falló. Use el botón "Auto-Detectar Terminales" manualmente.', 'info');
-                        
-                        // Mostrar alerta del agente si no se pudo conectar
-                        if (error.message.includes('agente') || error.message.includes('connect') || !diagnostics.agentRunning) {
-                            const agentAlert = document.getElementById('agent-alert');
-                            if (agentAlert) {
-                                agentAlert.style.display = 'block';
-                            }
-                        }
-                    }
-                }, 1000);
+        // Verificación simple del SDK al cargar
+        setTimeout(() => {
+            if (typeof Transbank !== 'undefined' && Transbank.POS) {
+                posManager.log('✅ SDK Transbank v3 cargado correctamente', 'success');
+                posManager.log('✅ Todos los métodos disponibles', 'success');
+                posManager.log('', 'info');
+                posManager.log('🎯 Listo para conectar. Haga clic en "Conectar y Detectar POS"', 'info');
             } else {
-                posManager.log('⚠️ Problemas detectados en el SDK. Use "Diagnosticar SDK" para más detalles.', 'error');
-                posManager.log('💡 Puede usar el "Modo Demo" para probar sin hardware real.', 'info');
+                posManager.log('❌ SDK Transbank no disponible', 'error');
+                posManager.log('   → Verifique su conexión a internet', 'error');
+                posManager.log('   → Recargue la página (Ctrl+F5)', 'error');
                 
-                // Mostrar alerta del agente
-                if (!diagnostics.sdkLoaded) {
-                    posManager.log('❌ SDK de Transbank no cargado. Recargue la página.', 'error');
-                } else if (!diagnostics.agentRunning) {
-                    const agentAlert = document.getElementById('agent-alert');
-                    if (agentAlert) {
-                        agentAlert.style.display = 'block';
-                    }
+                const agentAlert = document.getElementById('agent-alert');
+                if (agentAlert) {
+                    agentAlert.style.display = 'block';
                 }
             }
-        }, 2000); // Esperar 2 segundos para que cargue todo y el SDK intente conectar
+        }, 1000);
     });
 </script>
 

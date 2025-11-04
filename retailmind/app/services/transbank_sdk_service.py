@@ -31,8 +31,9 @@ class TransbankSDKService:
         Conectar al agente desktop de Transbank
         """
         try:
-            self.connection = await websockets.connect(
-                self.websocket_url,
+            # Usar asyncio.wait_for para manejar el timeout
+            self.connection = await asyncio.wait_for(
+                websockets.connect(self.websocket_url),
                 timeout=self.timeout
             )
             self.is_connected = True

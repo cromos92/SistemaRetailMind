@@ -1,5 +1,6 @@
 from retailmind import settings
 from . import views
+from django.shortcuts import render
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -43,6 +44,7 @@ from .views_modulo_ventas import (
     crear_configuracion_pos,
     probar_conexion_pos,
     iniciar_venta_pos,
+    guardar_venta_pos,
     completar_transaccion_pos,
     obtener_transacciones_pos,
     anular_transaccion_pos,
@@ -352,6 +354,9 @@ urlpatterns = [
     # Vista principal
     path('pos/transbank/', gestion_pos_transbank, name='gestion_pos_transbank'),
     
+    # Página de test del SDK (solo para diagnóstico)
+    path('test-transbank-sdk/', lambda request: render(request, 'test_transbank_sdk.html'), name='test_transbank_sdk'),
+    
     # APIs de configuración
     path('pos/detectar-terminales/', detectar_terminales_pos, name='detectar_terminales_pos'),
     path('pos/configuraciones/', obtener_configuraciones_pos, name='obtener_configuraciones_pos'),
@@ -360,6 +365,7 @@ urlpatterns = [
     
     # APIs de transacciones
     path('pos/iniciar-venta/', iniciar_venta_pos, name='iniciar_venta_pos'),
+    path('pos/guardar-venta/', guardar_venta_pos, name='guardar_venta_pos'),
     path('pos/completar-transaccion/', completar_transaccion_pos, name='completar_transaccion_pos'),
     path('pos/transacciones/', obtener_transacciones_pos, name='obtener_transacciones_pos'),
     path('pos/anular-transaccion/', anular_transaccion_pos, name='anular_transaccion_pos'),

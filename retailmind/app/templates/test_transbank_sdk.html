@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test SDK Transbank POS</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+        }
+        h1 { 
+            color: #333; 
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        .buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        button { 
+            padding: 12px 24px; 
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .btn-primary { background: #4CAF50; color: white; }
+        .btn-secondary { background: #2196F3; color: white; }
+        .btn-tertiary { background: #FF9800; color: white; }
+        .btn-danger { background: #f44336; color: white; }
+        
+        #log { 
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .log-entry { 
+            padding: 8px 12px; 
+            margin: 5px 0; 
+            border-left: 4px solid #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+            color: #4CAF50;
+            border-radius: 4px;
+        }
+        .log-entry.error { 
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+            color: #f44336;
+        }
+        .log-entry.warning { 
+            border-left-color: #FF9800;
+            background: rgba(255, 152, 0, 0.1);
+            color: #FF9800;
+        }
+        .log-entry.info { 
+            border-left-color: #2196F3;
+            background: rgba(33, 150, 243, 0.1);
+            color: #2196F3;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        .status.ok { background: #4CAF50; color: white; }
+        .status.fail { background: #f44336; color: white; }
+        .status.pending { background: #FF9800; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test SDK Transbank POS</h1>
+        <p class="subtitle">Diagnóstico completo del SDK JavaScript de Transbank</p>
+        
+        <div class="buttons">
+            <button class="btn-primary" onclick="testSDK()">1️⃣ Verificar SDK</button>
+            <button class="btn-secondary" onclick="testConnect()">2️⃣ Conectar Agente</button>
+            <button class="btn-tertiary" onclick="testGetPorts()">3️⃣ Verificar Estado POS</button>
+            <button class="btn-danger" onclick="clearLog()">🗑️ Limpiar Log</button>
+        </div>
+        
+        <div id="log"></div>
+    </div>
+
+    <!-- SDK Transbank POS desde CDN -->
+    <script src="https://unpkg.com/transbank-pos-sdk-web@5/dist/pos.js"></script>
+    
+    <script>
+        function log(message, type = 'success') {
+            const div = document.createElement('div');
+            div.className = 'log-entry ' + type;
+            const time = new Date().toLocaleTimeString();
+            div.innerHTML = `<strong>${time}</strong> ${message}`;
+            document.getElementById('log').appendChild(div);
+            // Auto-scroll
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('🗑️ Log limpiado', 'info');
+        }
+        
+        async function testSDK() {
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('🔍 INICIANDO VERIFICACIÓN DEL SDK...', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            // Test 1: Variable Transbank
+            if (typeof Transbank === 'undefined') {
+                log('❌ CRÍTICO: SDK NO CARGADO', 'error');
+                log('   → El objeto Transbank no existe', 'error');
+                log('   → Verifique conexión a internet', 'error');
+                log('   → URL del CDN: https://unpkg.com/transbank-pos-sdk-web@5/dist/pos.js', 'info');
+                log('   → Intente recargar (Ctrl+F5)', 'warning');
+                return false;
+            }
+            log('✅ SDK Transbank cargado', 'success');
+            log('   → Objeto Transbank: ' + typeof Transbank, 'info');
+            
+            // Test 2: Módulo POS
+            if (!Transbank.POS) {
+                log('❌ ERROR: Módulo POS no disponible', 'error');
+                log('   → Versión del SDK podría ser incompatible', 'warning');
+                return false;
+            }
+            log('✅ Módulo POS disponible', 'success');
+            log('   → Objeto POS: ' + typeof Transbank.POS, 'info');
+            
+            // Test 3: Método connect()
+            if (typeof Transbank.POS.connect !== 'function') {
+                log('❌ ERROR: Método connect() no encontrado', 'error');
+                return false;
+            }
+            log('✅ Método connect() disponible', 'success');
+            
+            // Test 4: Método getPorts()
+            if (typeof Transbank.POS.getPorts !== 'function') {
+                log('❌ ERROR: Método getPorts() no encontrado', 'error');
+                return false;
+            }
+            log('✅ Método getPorts() disponible', 'success');
+            
+            // Test 5: getPortStatus (CRÍTICO)
+            if (typeof Transbank.POS.getPortStatus !== 'function') {
+                log('❌ ERROR: Método getPortStatus() no encontrado', 'error');
+                log('   → Este método es CRÍTICO para el funcionamiento', 'error');
+                return false;
+            }
+            log('✅ Método getPortStatus() disponible', 'success');
+            
+            // Test 6: Otros métodos
+            const methods = ['openPort', 'closePort', 'poll', 'doSale', 'getLastSale', 'loadKeys', 'getDetails', 'getTotals'];
+            log('📋 Verificando métodos adicionales:', 'info');
+            methods.forEach(method => {
+                const exists = typeof Transbank.POS[method] === 'function';
+                const icon = exists ? '✅' : '⚠️';
+                log(`   ${icon} ${method}(): ${exists ? 'OK' : 'No disponible'}`, exists ? 'success' : 'warning');
+            });
+            
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('🎉 SDK COMPLETAMENTE FUNCIONAL', 'success');
+            log('   → Todos los componentes necesarios están presentes', 'success');
+            log('   → Puede continuar con "2️⃣ Conectar Agente"', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            return true;
+        }
+        
+        async function testConnect() {
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('🔗 INICIANDO CONEXIÓN AL AGENTE...', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            if (typeof Transbank === 'undefined') {
+                log('❌ SDK no cargado. Ejecute primero "1️⃣ Verificar SDK"', 'error');
+                return;
+            }
+            
+            try {
+                log('⏳ Conectando a localhost:8090...', 'info');
+                const startTime = Date.now();
+                
+                await Transbank.POS.connect();
+                
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                log(`✅ CONEXIÓN EXITOSA en ${elapsed}s`, 'success');
+                log('   → Agente Transbank: ACTIVO', 'success');
+                log('   → Puerto: 8090', 'info');
+                log('   → Protocolo: Socket.IO', 'info');
+                log('', 'info');
+                log('🎉 AGENTE TRANSBANK RESPONDIENDO CORRECTAMENTE', 'success');
+                log('   → Puede ejecutar "3️⃣ Obtener Puertos"', 'info');
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                
+            } catch (error) {
+                log('❌ ERROR AL CONECTAR', 'error');
+                log('   → ' + error.message, 'error');
+                log('', 'error');
+                log('📋 DIAGNÓSTICO DEL ERROR:', 'warning');
+                
+                if (error.message.includes('refused') || error.message.includes('ECONNREFUSED')) {
+                    log('   ⚠️ El agente NO está corriendo', 'error');
+                    log('', 'warning');
+                    log('🔧 SOLUCIONES:', 'warning');
+                    log('   1. Abrir Administrador de Tareas (Ctrl+Shift+Esc)', 'info');
+                    log('   2. Buscar "Transbank POS Agent" o "tbk_agent.exe"', 'info');
+                    log('   3. Si NO aparece → Iniciar desde Menú Inicio', 'info');
+                    log('   4. Esperar 10 segundos', 'info');
+                    log('   5. Volver a intentar esta conexión', 'info');
+                } else if (error.message.includes('timeout')) {
+                    log('   ⚠️ Timeout: El agente no responde a tiempo', 'error');
+                    log('', 'warning');
+                    log('🔧 SOLUCIONES:', 'warning');
+                    log('   1. Reiniciar el agente Transbank', 'info');
+                    log('   2. Verificar que puerto 8090 esté libre', 'info');
+                    log('   3. Ejecutar: netstat -ano | findstr :8090', 'info');
+                } else {
+                    log('   ⚠️ Error desconocido', 'error');
+                    log('   → Mensaje: ' + error.message, 'error');
+                }
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            }
+        }
+        
+        async function testGetPorts() {
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            log('📡 OBTENIENDO ESTADO Y PUERTO DEL POS...', 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            try {
+                // Conectar primero
+                log('🔗 Conectando al agente...', 'info');
+                await Transbank.POS.connect();
+                log('✅ Conectado al agente', 'success');
+                
+                // Usar getPortStatus() en lugar de getPorts()
+                log('⏳ Ejecutando getPortStatus()...', 'info');
+                const startTime = Date.now();
+                
+                const status = await Transbank.POS.getPortStatus();
+                
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+                log(`⏱️ Respuesta en ${elapsed}s`, 'info');
+                log('', 'info');
+                log('📋 RESPUESTA COMPLETA:', 'info');
+                log('   → JSON: ' + JSON.stringify(status, null, 2), 'info');
+                log('', 'info');
+                
+                // Verificar estructura esperada: {connected: boolean, activePort: string}
+                if (status && typeof status === 'object') {
+                    if (status.connected === true) {
+                        log('✅ POS CONECTADO', 'success');
+                        log(`   → Puerto activo: ${status.activePort}`, 'success');
+                        log('', 'success');
+                        log('🎉 ¡TODO FUNCIONA CORRECTAMENTE!', 'success');
+                        log('   → El POS está operativo', 'success');
+                        log('   → Puerto: ' + status.activePort, 'success');
+                        log('   → Puede realizar ventas', 'success');
+                    } else {
+                        log('⚠️ POS NO CONECTADO', 'warning');
+                        log(`   → Connected: ${status.connected}`, 'warning');
+                        log(`   → Puerto: ${status.activePort || 'ninguno'}`, 'warning');
+                        log('', 'warning');
+                        log('🔧 SOLUCIONES:', 'warning');
+                        log('   1. Conectar terminal POS por USB o Serial', 'info');
+                        log('   2. Verificar en Device Manager → Ports (COM & LPT)', 'info');
+                        log('   3. Encender el terminal POS', 'info');
+                        log('   4. Reiniciar agente Transbank', 'info');
+                        log('   5. Volver a probar', 'info');
+                    }
+                } else {
+                    log('❌ Respuesta inesperada: ' + typeof status, 'error');
+                    log('   → Se esperaba objeto con {connected, activePort}', 'error');
+                }
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                
+            } catch (error) {
+                log('❌ ERROR VERIFICANDO ESTADO DEL POS', 'error');
+                log('   → ' + error.message, 'error');
+                log('', 'warning');
+                log('💡 SUGERENCIA:', 'warning');
+                log('   → Ejecute primero "2️⃣ Conectar Agente"', 'info');
+                log('   → Verifique que el agente esté corriendo', 'info');
+                log('   → Verifique que getPortStatus() esté disponible', 'info');
+                log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            }
+        }
+        
+        // Auto-ejecutar verificación al cargar
+        window.addEventListener('load', async () => {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            log('🚀 Página cargada. Iniciando verificación automática...', 'info');
+            log('', 'info');
+            await testSDK();
+        });
+    </script>
+</body>
+</html>
+

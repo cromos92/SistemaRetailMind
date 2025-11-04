@@ -4222,39 +4222,37 @@ def probar_conexion_pos(request):
                 'error': 'No tiene acceso a esta configuración'
             })
         
-        # Probar conexión real con SDK Transbank
-        result = run_transbank_operation(
-            test_pos_connection,
-            configuracion.puerto_conexion,
-            configuracion.velocidad_conexion
-        )
+        # NOTA: La conexión real se prueba desde el frontend usando el SDK JavaScript
+        # El agente Transbank usa Socket.IO, no WebSocket directo
+        # Por lo tanto, el backend solo valida la configuración y retorna datos
+        
+        # Validar que la configuración es correcta
+        result = {
+            'success': True,
+            'message': 'Configuración validada. La conexión real se probará desde el navegador.',
+            'puerto': configuracion.puerto_conexion,
+            'velocidad': configuracion.velocidad_conexion,
+            'tipo_pos': configuracion.get_tipo_pos_display(),
+            'note': 'Use el SDK de JavaScript en el navegador para conectarse al agente Transbank'
+        }
         
         # Actualizar estado de conexión
         if result['success']:
             configuracion.ultima_conexion = timezone.now()
-            configuracion.estado_conexion = 'CONECTADO'
-            
-            # Actualizar información del terminal si está disponible
-            terminal_info = result.get('terminal_info', {})
-            if terminal_info.get('serialNumber'):
-                configuracion.numero_serie = terminal_info['serialNumber']
-            if terminal_info.get('firmwareVersion'):
-                configuracion.version_firmware = terminal_info['firmwareVersion']
-            
+            configuracion.estado_conexion = 'VALIDADO'
             configuracion.save()
             
             # Crear log exitoso
             LogPOS.objects.create(
                 configuracion_pos=configuracion,
-                tipo_evento='CONEXION',
-                mensaje=f'Conexión exitosa - {result["message"]}',
+                tipo_evento='VALIDACION',
+                mensaje=f'Configuración validada - {result["message"]}',
                 datos_tecnicos={
                     'puerto': configuracion.puerto_conexion,
                     'velocidad': configuracion.velocidad_conexion,
                     'tipo_pos': configuracion.tipo_pos,
-                    'resultado': 'EXITOSO',
-                    'puertos_disponibles': result.get('available_ports', []),
-                    'terminal_info': terminal_info
+                    'resultado': 'VALIDADO',
+                    'nota': result.get('note', '')
                 }
             )
             
@@ -4263,35 +4261,10 @@ def probar_conexion_pos(request):
                 'message': result['message'],
                 'estado_conexion': configuracion.get_estado_conexion_display(),
                 'ultima_conexion': configuracion.ultima_conexion.strftime('%d/%m/%Y %H:%M'),
-                'numero_serie': configuracion.numero_serie,
-                'version_firmware': configuracion.version_firmware,
-                'puertos_disponibles': result.get('available_ports', []),
-                'terminal_info': terminal_info
-            })
-        else:
-            # Error en la conexión
-            configuracion.estado_conexion = 'ERROR'
-            configuracion.save()
-            
-            # Crear log de error
-            LogPOS.objects.create(
-                configuracion_pos=configuracion,
-                tipo_evento='ERROR',
-                mensaje=f'Error de conexión - {result.get("error", "Error desconocido")}',
-                datos_tecnicos={
-                    'puerto': configuracion.puerto_conexion,
-                    'velocidad': configuracion.velocidad_conexion,
-                    'error': result.get('error'),
-                    'suggestion': result.get('suggestion'),
-                    'available_ports': result.get('available_ports', [])
-                }
-            )
-            
-            return JsonResponse({
-                'success': False,
-                'error': result.get('error', 'Error de conexión'),
-                'suggestion': result.get('suggestion', 'Verifique la conexión del terminal'),
-                'puertos_disponibles': result.get('available_ports', [])
+                'puerto': result.get('puerto', ''),
+                'velocidad': result.get('velocidad', 0),
+                'tipo_pos': result.get('tipo_pos', ''),
+                'note': result.get('note', '')
             })
         
     except json.JSONDecodeError:
@@ -4371,17 +4344,36 @@ def iniciar_venta_pos(request):
             })
         
         # Obtener ticket si se proporcionó
+        # NOTA: ticket_id puede ser:
+        # - Un ID numérico de ticket de venta existente (para asociar pago a ticket)
+        # - Un string generado (TXNxxxxxx) para identificar la transacción POS
         ticket = None
+        ticket_referencia = ticket_id  # Guardar para usar como referencia
+        
         if ticket_id:
+            # Intentar convertir a número (si es ID de ticket real)
             try:
-                ticket = Ticket.objects.get(id=ticket_id, sucursal_id=sucursal_id)
-            except Ticket.DoesNotExist:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Ticket no encontrado'
-                })
+                ticket_id_num = int(ticket_id)
+                # Es un número, buscar ticket en BD
+                try:
+                    ticket = Ticket.objects.get(id=ticket_id_num, sucursal_id=sucursal_id)
+                except Ticket.DoesNotExist:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Ticket {ticket_id_num} no encontrado'
+                    })
+            except (ValueError, TypeError):
+                # No es un número, es un string generado (TXNxxxxxx)
+                # Esto es válido - se usa como referencia de transacción
+                # No se asocia a un ticket de venta
+                ticket = None
         
         # Crear transacción POS
+        observaciones = data.get('observaciones', '')
+        if ticket_referencia and not ticket:
+            # Si hay referencia de ticket pero no se asoció a un Ticket de BD
+            observaciones = f"Ref: {ticket_referencia}. {observaciones}".strip()
+        
         transaccion = TransaccionPOS.objects.create(
             configuracion_pos=configuracion,
             ticket=ticket,
@@ -4390,7 +4382,7 @@ def iniciar_venta_pos(request):
             estado='INICIADA',
             usuario_operador=request.user,
             ip_origen=request.META.get('REMOTE_ADDR'),
-            observaciones=data.get('observaciones', '')
+            observaciones=observaciones
         )
         
         # Crear log de inicio
@@ -4514,6 +4506,116 @@ def iniciar_venta_pos(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al iniciar venta POS: {str(e)}'
+        })
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def guardar_venta_pos(request):
+    """Guardar venta POS procesada desde el frontend"""
+    try:
+        data = json.loads(request.body)
+        
+        sale_response = data.get('sale_response', {})
+        ticket_id = data.get('ticket_id')
+        monto = data.get('monto')
+        
+        if not sale_response:
+            return JsonResponse({
+                'success': False,
+                'error': 'Respuesta de venta requerida'
+            })
+        
+        # Obtener sucursal y configuración
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa'
+            })
+        
+        # Buscar configuración POS activa (si hay una detectada recientemente)
+        configuracion = ConfiguracionPOS.objects.filter(
+            sucursal_id=sucursal_id,
+            activo=True
+        ).order_by('-ultima_conexion').first()
+        
+        if not configuracion:
+            # Crear configuración temporal si no existe
+            from .models import Sucursal
+            sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+            configuracion = ConfiguracionPOS.objects.create(
+                sucursal=sucursal,
+                nombre=f"POS Auto",
+                tipo_pos='VERIFONE_520',
+                puerto_conexion=sale_response.get('activePort', 'AUTO'),
+                velocidad_conexion=115200,
+                activo=True,
+                es_principal=True
+            )
+        
+        # Obtener ticket si se proporcionó ID numérico
+        ticket = None
+        if ticket_id:
+            try:
+                ticket_id_num = int(ticket_id)
+                ticket = Ticket.objects.get(id=ticket_id_num, sucursal_id=sucursal_id)
+            except (ValueError, TypeError, Ticket.DoesNotExist):
+                ticket = None
+        
+        # Crear transacción POS
+        transaccion = TransaccionPOS.objects.create(
+            configuracion_pos=configuracion,
+            ticket=ticket,
+            monto=monto or sale_response.get('amount', 0),
+            tipo_transaccion='VENTA',
+            estado='APROBADA' if sale_response.get('responseCode') == 0 else 'RECHAZADA',
+            codigo_respuesta=str(sale_response.get('responseCode', '')),
+            mensaje_respuesta=sale_response.get('responseMessage', ''),
+            codigo_autorizacion=sale_response.get('authorizationCode', ''),
+            tipo_tarjeta='DEBITO' if sale_response.get('cardType') == 'DB' else 'CREDITO',
+            ultimos_4_digitos=sale_response.get('last4Digits', ''),
+            nombre_tarjeta=sale_response.get('cardBrand', ''),
+            numero_operacion=sale_response.get('operationNumber', ''),
+            numero_cuotas=1,
+            codigo_comercio=sale_response.get('commerceCode', ''),
+            terminal_id=sale_response.get('terminalId', ''),
+            usuario_operador=request.user,
+            ip_origen=request.META.get('REMOTE_ADDR'),
+            observaciones=f"Ref: {ticket_id}" if ticket_id and not ticket else ''
+        )
+        
+        # Si hay ticket asociado, crear pago
+        if transaccion.es_exitosa and ticket:
+            metodo_pago = 'TBK_DEBITO_POS' if sale_response.get('cardType') == 'DB' else 'TBK_CREDITO_POS'
+            
+            detalle_pago = TicketDetallePago.objects.create(
+                ticket=ticket,
+                metodo_pago=metodo_pago,
+                tipo_tarjeta=sale_response.get('cardBrand', ''),
+                voucher=sale_response.get('authorizationCode', ''),
+                monto=int(transaccion.monto),
+                notas=f'POS - Oper: {sale_response.get("operationNumber", "")}'
+            )
+            
+            transaccion.detalle_pago = detalle_pago
+            transaccion.save()
+            
+            if ticket.saldo_por_pagar <= 0:
+                ticket.estado = 'PAGADO'
+                ticket.save()
+        
+        return JsonResponse({
+            'success': True,
+            'transaccion_id': transaccion.id,
+            'message': 'Transacción guardada exitosamente'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error guardando transacción: {str(e)}'
         })
 
 
