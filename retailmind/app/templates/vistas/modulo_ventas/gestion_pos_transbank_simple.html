@@ -104,6 +104,21 @@
                         </button>
                     </div>
                     
+                    <!-- Alerta sobre Agente Transbank -->
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert" id="agent-alert" style="display: none;">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        <strong>Agente Transbank POS no detectado</strong><br>
+                        El SDK está intentando conectarse al agente local en <code>localhost:8090</code>.<br>
+                        <small>
+                            • Asegúrese de que el <strong>Agente Transbank POS</strong> esté instalado y ejecutándose<br>
+                            • Puede descargar el agente desde: <a href="https://www.transbankdevelopers.cl/producto/posintegrado" target="_blank">Transbank Developers</a><br>
+                            • Si no tiene hardware POS, use el botón <strong>"Modo Demo"</strong> para pruebas
+                        </small>
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    
                     <!-- Selector de Terminal -->
                     <div class="row mb-3">
                         <div class="col-md-6">
@@ -335,6 +350,24 @@
 
 <!-- SDK Transbank POS Integrado -->
 <script src="https://unpkg.com/transbank-pos-sdk-web@5/dist/pos.js"></script>
+
+<script>
+    // Suprimir errores de consola del agente Transbank cuando no está disponible
+    // Esto evita que se llene la consola de errores ERR_SSL_PROTOCOL_ERROR
+    const originalError = console.error;
+    console.error = function(...args) {
+        // Filtrar errores conocidos del agente Transbank
+        const errorStr = args.join(' ');
+        if (errorStr.includes('localhost:8090') || 
+            errorStr.includes('ERR_SSL_PROTOCOL_ERROR') ||
+            errorStr.includes('socket.io') && errorStr.includes('polling')) {
+            // No mostrar estos errores - son esperados cuando el agente no está instalado
+            return;
+        }
+        // Mostrar otros errores normalmente
+        originalError.apply(console, args);
+    };
+</script>
 
 <script>
     // Clase para manejar POS Integration
@@ -892,12 +925,16 @@
                 this.updateOperationStatus('Probando detección de puertos...', 'info');
                 
                 // Verificar SDK
-                if (typeof Transbank === 'undefined' || !Transbank.POS) {
-                    throw new Error('SDK de Transbank no disponible');
+                if (typeof Transbank === 'undefined') {
+                    throw new Error('SDK de Transbank no está cargado. Verifique la conexión a internet y recargue la página.');
+                }
+                
+                if (!Transbank.POS) {
+                    throw new Error('Módulo POS no está disponible en el SDK de Transbank. Verifique que el SDK esté correctamente cargado.');
                 }
                 
                 if (typeof Transbank.POS.getPorts !== 'function') {
-                    throw new Error('Método getPorts() no disponible');
+                    throw new Error('Método getPorts() no está disponible en esta versión del SDK');
                 }
                 
                 // Intentar conectar primero (si no está conectado)
@@ -1353,6 +1390,8 @@
         });
 
         posManager.log('Sistema de POS iniciado. Ejecutando diagnóstico inicial...', 'info');
+        posManager.log('ℹ️ El SDK intentará conectarse al Agente Transbank en localhost:8090', 'info');
+        posManager.log('ℹ️ Los errores de SSL/conexión son normales si el agente no está instalado', 'info');
         
         // Diagnóstico inicial del SDK
         setTimeout(async () => {
@@ -1367,13 +1406,31 @@
                         await posManager.autoDetectTerminals();
                     } catch (error) {
                         posManager.log('ℹ️ Auto-detección automática falló. Use el botón "Auto-Detectar Terminales" manualmente.', 'info');
+                        
+                        // Mostrar alerta del agente si no se pudo conectar
+                        if (error.message.includes('agente') || error.message.includes('connect') || !diagnostics.agentRunning) {
+                            const agentAlert = document.getElementById('agent-alert');
+                            if (agentAlert) {
+                                agentAlert.style.display = 'block';
+                            }
+                        }
                     }
                 }, 1000);
             } else {
                 posManager.log('⚠️ Problemas detectados en el SDK. Use "Diagnosticar SDK" para más detalles.', 'error');
                 posManager.log('💡 Puede usar el "Modo Demo" para probar sin hardware real.', 'info');
+                
+                // Mostrar alerta del agente
+                if (!diagnostics.sdkLoaded) {
+                    posManager.log('❌ SDK de Transbank no cargado. Recargue la página.', 'error');
+                } else if (!diagnostics.agentRunning) {
+                    const agentAlert = document.getElementById('agent-alert');
+                    if (agentAlert) {
+                        agentAlert.style.display = 'block';
+                    }
+                }
             }
-        }, 1000); // Esperar 1 segundo para que cargue todo
+        }, 2000); // Esperar 2 segundos para que cargue todo y el SDK intente conectar
     });
 </script>
 

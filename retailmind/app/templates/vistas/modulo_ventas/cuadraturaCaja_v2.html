@@ -313,13 +313,20 @@
                     </div>
                     <div class="text-end">
                         <label class="form-label mb-1 small text-muted">Fecha de cuadratura:</label>
-                        <div class="input-group" style="width: 250px;">
-                            <input type="date" class="form-control" id="fechaCuadraturaSelector" onchange="cambiarFechaCuadratura()">
-                            <button class="btn btn-outline-primary" onclick="irAHoy()" title="Ir a hoy">
-                                <i class="ri-calendar-todo-line"></i> Hoy
+                        <div class="d-flex gap-2 align-items-end">
+                            <div>
+                                <div class="input-group" style="width: 250px;">
+                                    <input type="date" class="form-control" id="fechaCuadraturaSelector" onchange="cambiarFechaCuadratura()">
+                                    <button class="btn btn-outline-primary" onclick="irAHoy()" title="Ir a hoy">
+                                        <i class="ri-calendar-todo-line"></i> Hoy
+                                    </button>
+                                </div>
+                                <small class="text-muted" id="diasAtras"></small>
+                            </div>
+                            <button class="btn btn-info" onclick="verCuadraturaDiariaDirecto()" title="Ver detalle de transacciones del día">
+                                <i class="ri-file-list-3-line"></i> Ver Detalle Diario
                             </button>
                         </div>
-                        <small class="text-muted" id="diasAtras"></small>
                     </div>
                 </div>
             </div>
@@ -2455,18 +2462,41 @@ function mostrarError(mensaje) {
 }
 
 // ========== FUNCIÓN PARA VER CUADRATURA DIARIA ==========
-function verCuadraturaDiaria() {
-    const fecha = datosArqueo.cuadratura?.fecha_seleccionada;
+
+// Función para ver cuadratura desde cualquier parte (sin necesidad de haberla generado)
+function verCuadraturaDiariaDirecto() {
+    const fecha = $('#fechaCuadraturaSelector').val();
     
     if (!fecha) {
         Swal.fire({
             icon: 'warning',
             title: 'Atención',
-            text: 'Primero debes generar una cuadratura para ver el detalle diario'
+            text: 'Por favor selecciona una fecha primero'
         });
         return;
     }
     
+    cargarYMostrarCuadraturaDiaria(fecha);
+}
+
+// Función para ver cuadratura desde el botón del paso final
+function verCuadraturaDiaria() {
+    const fecha = datosArqueo.cuadratura?.fecha_seleccionada || $('#fechaCuadraturaSelector').val();
+    
+    if (!fecha) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Atención',
+            text: 'Por favor selecciona una fecha primero'
+        });
+        return;
+    }
+    
+    cargarYMostrarCuadraturaDiaria(fecha);
+}
+
+// Función centralizada para cargar y mostrar cuadratura diaria
+function cargarYMostrarCuadraturaDiaria(fecha) {
     console.log('📊 Cargando cuadratura diaria completa para:', fecha);
     
     Swal.fire({
@@ -2478,33 +2508,69 @@ function verCuadraturaDiaria() {
         }
     });
     
-    // Obtener transacciones del día
+    // Primero obtener la cuadratura (totales)
+    const formData = new FormData();
+    formData.append('fecha', fecha);
+    
     $.ajax({
-        url: '/app/api/cuadratura/transacciones-dia/',
+        url: '/app/api/cuadratura/generar/',
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken')
         },
-        data: JSON.stringify({
-            fecha: fecha
-        }),
-        contentType: 'application/json',
-        success: function(response) {
-            Swal.close();
-            
-            if (response.success) {
-                mostrarModalCuadraturaDiaria(response.data, fecha);
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(cuadraturaResponse) {
+            if (cuadraturaResponse.success) {
+                const cuadratura = cuadraturaResponse.cuadratura;
+                
+                // Ahora obtener transacciones del día
+                $.ajax({
+                    url: '/app/api/cuadratura/transacciones-dia/',
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    data: JSON.stringify({
+                        fecha: fecha
+                    }),
+                    contentType: 'application/json',
+                    success: function(transaccionesResponse) {
+                        Swal.close();
+                        
+                        if (transaccionesResponse.success) {
+                            mostrarModalCuadraturaDiaria(transaccionesResponse.data, fecha, cuadratura);
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: transaccionesResponse.error || 'No se pudieron cargar las transacciones'
+                            });
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        Swal.close();
+                        console.error('❌ Error al cargar transacciones:', error);
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error de conexión',
+                            text: 'No se pudo conectar con el servidor'
+                        });
+                    }
+                });
             } else {
+                Swal.close();
                 Swal.fire({
                     icon: 'error',
                     title: 'Error',
-                    text: response.error || 'No se pudieron cargar las transacciones'
+                    text: cuadraturaResponse.error || 'No se pudo generar la cuadratura'
                 });
             }
         },
         error: function(xhr, status, error) {
             Swal.close();
-            console.error('❌ Error al cargar transacciones:', error);
+            console.error('❌ Error al cargar cuadratura:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Error de conexión',
@@ -2514,8 +2580,9 @@ function verCuadraturaDiaria() {
     });
 }
 
-function mostrarModalCuadraturaDiaria(data, fecha) {
-    const cuadratura = datosArqueo.cuadratura || {};
+function mostrarModalCuadraturaDiaria(data, fecha, cuadraturaParam) {
+    // Usar la cuadratura pasada como parámetro o la guardada en datosArqueo
+    const cuadratura = cuadraturaParam || datosArqueo.cuadratura || {};
     
     // Construir HTML del modal
     const html = `
@@ -2930,13 +2997,13 @@ function imprimirCuadraturaDiaria() {
 }
 
 function exportarCuadraturaDiariaExcel() {
-    const fecha = datosArqueo.cuadratura?.fecha_seleccionada;
+    const fecha = datosArqueo.cuadratura?.fecha_seleccionada || $('#fechaCuadraturaSelector').val();
     
     if (!fecha) {
         Swal.fire({
             icon: 'warning',
             title: 'Atención',
-            text: 'No hay datos para exportar'
+            text: 'Por favor selecciona una fecha primero'
         });
         return;
     }
