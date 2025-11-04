@@ -13,64 +13,18 @@
                 <!-- Header -->
                 <div class="row mb-4">
                     <div class="col">
-                        <h1 class="h3 mb-0">
+                        <h1 class="display-5 mb-2 fw-bold">
                             <i class="ri-store-2-line text-primary"></i> Punto de Venta
                         </h1>
-                        <p class="text-muted mb-0">Sistema de gestión de tickets y ventas</p>
+                        <p class="text-muted mb-0 fs-5">Sistema de gestión de tickets y ventas</p>
                     </div>
                     <div class="col-auto">
-                        <span class="badge bg-primary fs-6 me-2">
+                        <span class="badge bg-primary fs-5 me-2 py-2 px-3">
                             <i class="ri-user-line"></i> {{ user.username }}
                         </span>
-                        <span class="badge bg-info fs-6">
+                        <span class="badge bg-info fs-5 py-2 px-3">
                             <i class="ri-building-line"></i> {{ sucursal_actual.alias|default:"Sin sucursal" }}
                         </span>
-                    </div>
-                </div>
-
-                <!-- Cards de Acciones Principales -->
-                <div class="row g-4 mb-4">
-                    <div class="col-md-4">
-                        <div class="card action-card h-100 shadow-sm" onclick="iniciarNuevaVenta()" style="cursor: pointer;">
-                            <div class="card-body text-center p-4">
-                                <div class="action-icon mb-3">
-                                    <i class="ri-add-circle-line display-1 text-success"></i>
-                                </div>
-                                <h5 class="card-title">Nueva Venta</h5>
-                                <p class="text-muted">Crear nuevo ticket de venta</p>
-                                <div class="action-overlay">
-                                    <span class="btn btn-success">Iniciar</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card action-card h-100 shadow-sm" onclick="buscarTicket()" style="cursor: pointer;">
-                            <div class="card-body text-center p-4">
-                                <div class="action-icon mb-3">
-                                    <i class="ri-search-line display-1 text-primary"></i>
-                                </div>
-                                <h5 class="card-title">Buscar Ticket</h5>
-                                <p class="text-muted">Por número o cliente</p>
-                                <div class="action-overlay">
-                                    <span class="btn btn-primary">Buscar</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card action-card h-100 shadow-sm" onclick="verReportes()" style="cursor: pointer;">
-                            <div class="card-body text-center p-4">
-                                <div class="action-icon mb-3">
-                                    <i class="ri-bar-chart-box-line display-1 text-warning"></i>
-                                </div>
-                                <h5 class="card-title">Reportes</h5>
-                                <p class="text-muted">Estadísticas y ventas</p>
-                                <div class="action-overlay">
-                                    <span class="btn btn-warning">Ver</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -88,10 +42,10 @@
                                         </div>
                                     </div>
                                     <div class="flex-grow-1 ms-3">
-                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Ventas Hoy</p>
-                                        <h4 class="fs-4 fw-medium mb-0" id="ventasHoy">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Ventas Hoy</p>
+                                        <h3 class="fs-3 fw-bold mb-0" id="ventasHoy">
                                             <span class="counter-value">$0</span>
-                                        </h4>
+                                        </h3>
                                     </div>
                                 </div>
                             </div>
@@ -109,10 +63,10 @@
                                         </div>
                                     </div>
                                     <div class="flex-grow-1 ms-3">
-                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Pendientes</p>
-                                        <h4 class="fs-4 fw-medium mb-0" id="ticketsPendientes">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Pendientes</p>
+                                        <h3 class="fs-3 fw-bold mb-0" id="ticketsPendientes">
                                             <span class="counter-value">0</span>
-                                        </h4>
+                                        </h3>
                                     </div>
                                 </div>
                             </div>
@@ -130,10 +84,10 @@
                                         </div>
                                     </div>
                                     <div class="flex-grow-1 ms-3">
-                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Pagados</p>
-                                        <h4 class="fs-4 fw-medium mb-0" id="ticketsPagados">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Pagados</p>
+                                        <h3 class="fs-3 fw-bold mb-0" id="ticketsPagados">
                                             <span class="counter-value">0</span>
-                                        </h4>
+                                        </h3>
                                     </div>
                                 </div>
                             </div>
@@ -151,11 +105,57 @@
                                         </div>
                                     </div>
                                     <div class="flex-grow-1 ms-3">
-                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Promedio</p>
-                                        <h4 class="fs-4 fw-medium mb-0" id="promedioVenta">
+                                        <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Promedio</p>
+                                        <h3 class="fs-3 fw-bold mb-0" id="promedioVenta">
                                             <span class="counter-value">$0</span>
-                                        </h4>
+                                        </h3>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cards de Acciones Principales -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="card action-card h-100 shadow-sm" onclick="iniciarNuevaVenta()" style="cursor: pointer;">
+                            <div class="card-body text-center p-3">
+                                <div class="action-icon mb-2">
+                                    <i class="ri-add-circle-line" style="font-size: 3rem; color: #198754;"></i>
+                                </div>
+                                <h5 class="card-title mb-2 fw-bold">Nueva Venta</h5>
+                                <p class="text-muted small mb-0">Crear nuevo ticket de venta</p>
+                                <div class="action-overlay">
+                                    <span class="btn btn-success px-3">Iniciar</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card action-card h-100 shadow-sm" onclick="buscarTicket()" style="cursor: pointer;">
+                            <div class="card-body text-center p-3">
+                                <div class="action-icon mb-2">
+                                    <i class="ri-search-line" style="font-size: 3rem; color: #0d6efd;"></i>
+                                </div>
+                                <h5 class="card-title mb-2 fw-bold">Buscar Ticket</h5>
+                                <p class="text-muted small mb-0">Por número o cliente</p>
+                                <div class="action-overlay">
+                                    <span class="btn btn-primary px-3">Buscar</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card action-card h-100 shadow-sm" onclick="verReportes()" style="cursor: pointer;">
+                            <div class="card-body text-center p-3">
+                                <div class="action-icon mb-2">
+                                    <i class="ri-bar-chart-box-line" style="font-size: 3rem; color: #ffc107;"></i>
+                                </div>
+                                <h5 class="card-title mb-2 fw-bold">Reportes</h5>
+                                <p class="text-muted small mb-0">Estadísticas y ventas</p>
+                                <div class="action-overlay">
+                                    <span class="btn btn-warning px-3">Ver</span>
                                 </div>
                             </div>
                         </div>
@@ -167,12 +167,12 @@
                     <div class="card-header border-0">
                         <div class="row align-items-center">
                             <div class="col">
-                                <h5 class="card-title mb-0">
-                                    <i class="ri-file-list-3-line text-primary"></i> Tickets del Día
-                                </h5>
+                                <h4 class="card-title mb-0 fs-4 fw-bold">
+                                    <i class="ri-time-line text-warning"></i> Tickets Pendientes del Día
+                                </h4>
                             </div>
                             <div class="col-auto">
-                                <button class="btn btn-sm btn-outline-primary" onclick="actualizarDashboard()">
+                                <button class="btn btn-outline-primary px-4 py-2" onclick="actualizarDashboard()">
                                     <i class="ri-refresh-line"></i> Actualizar
                                 </button>
                             </div>
@@ -180,16 +180,16 @@
                     </div>
                     <div class="card-body pt-0">
                         <div class="table-responsive">
-                            <table class="table table-hover align-middle table-nowrap mb-0" id="tablaTickets">
+                            <table class="table table-hover align-middle table-nowrap mb-0" id="tablaTickets" style="font-size: 1rem;">
                                 <thead class="table-light">
                                     <tr>
-                                        <th scope="col">#Ticket</th>
-                                        <th scope="col">Hora</th>
-                                        <th scope="col">Cliente</th>
-                                        <th scope="col">Vendedor</th>
-                                        <th scope="col">Total</th>
-                                        <th scope="col">Estado</th>
-                                        <th scope="col">Acciones</th>
+                                        <th scope="col" class="fs-5 fw-bold">#Ticket</th>
+                                        <th scope="col" class="fs-5 fw-bold">Hora</th>
+                                        <th scope="col" class="fs-5 fw-bold">Cliente</th>
+                                        <th scope="col" class="fs-5 fw-bold">Vendedor</th>
+                                        <th scope="col" class="fs-5 fw-bold">Total</th>
+                                        <th scope="col" class="fs-5 fw-bold">Estado</th>
+                                        <th scope="col" class="fs-5 fw-bold">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tbodyTickets">
@@ -326,30 +326,15 @@
                                         </h5>
                                     </div>
                                     <div class="card-body">
-                                        <div class="row g-3">
-                                            <div class="col-md-3">
+                                        <div class="row g-3 justify-content-center">
+                                            <div class="col-md-4">
                                                 <div class="form-check form-check-card">
-                                                    <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoTicket" value="TICKET" checked>
-                                                    <label class="form-check-label card h-100" for="tipoTicket">
-                                                        <div class="card-body text-center p-3">
-                                                            <i class="ri-receipt-line display-4 text-success mb-2"></i>
-                                                            <h6 class="card-title">Ticket Simple</h6>
-                                                            <p class="card-text small text-muted">Venta rápida sin datos fiscales</p>
-                                                            <div class="badge bg-success" id="correlativos-TICKET">
-                                                                <i class="ri-check-line"></i> Disponible
-                                                            </div>
-                                                        </div>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-3">
-                                                <div class="form-check form-check-card">
-                                                    <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaElectronica" value="BOLETA_ELECTRONICA">
+                                                    <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaElectronica" value="BOLETA_ELECTRONICA" checked>
                                                     <label class="form-check-label card h-100" for="tipoBoletaElectronica">
                                                         <div class="card-body text-center p-3">
                                                             <i class="ri-file-check-line display-4 text-primary mb-2"></i>
                                                             <h6 class="card-title">Boleta Electrónica</h6>
-                                                            <p class="card-text small text-muted">Documento tributario oficial</p>
+                                                            <p class="card-text small text-muted">Documento tributario oficial para ventas al público</p>
                                                             <div class="badge bg-primary" id="correlativos-BOLETA_ELECTRONICA">
                                                                 <i class="ri-check-line"></i> Disponible
                                                             </div>
@@ -357,22 +342,22 @@
                                                     </label>
                                                 </div>
                                             </div>
-                                            <div class="col-md-3">
+                                            <div class="col-md-4">
                                                 <div class="form-check form-check-card">
                                                     <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoFacturaElectronica" value="FACTURA_ELECTRONICA">
                                                     <label class="form-check-label card h-100" for="tipoFacturaElectronica">
                                                         <div class="card-body text-center p-3">
                                                             <i class="ri-file-invoice-line display-4 text-warning mb-2"></i>
                                                             <h6 class="card-title">Factura Electrónica</h6>
-                                                            <p class="card-text small text-muted">Para empresas con RUT</p>
-                                                            <div class="badge bg-warning" id="correlativos-FACTURA_ELECTRONICA">
+                                                            <p class="card-text small text-muted">Para empresas con RUT válido</p>
+                                                            <div class="badge bg-warning text-dark" id="correlativos-FACTURA_ELECTRONICA">
                                                                 <i class="ri-check-line"></i> Disponible
                                                             </div>
                                                         </div>
                                                     </label>
                                                 </div>
                                             </div>
-                                            <div class="col-md-3">
+                                            <div class="col-md-4">
                                                 <div class="form-check form-check-card">
                                                     <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaPapel" value="BOLETA">
                                                     <label class="form-check-label card h-100" for="tipoBoletaPapel">
@@ -393,7 +378,7 @@
                                         <div class="mt-3">
                                             <div class="alert alert-info" id="infoTipoDocumento">
                                                 <i class="ri-information-line"></i>
-                                                <strong>Ticket Simple:</strong> Ideal para ventas rápidas. No requiere datos del cliente.
+                                                <strong>Boleta Electrónica:</strong> Documento tributario oficial para ventas al público. Requiere datos básicos del cliente.
                                             </div>
                                         </div>
                                     </div>
@@ -404,11 +389,11 @@
                                     <div class="card-header bg-primary text-white">
                                         <h4 class="mb-0">
                                             <i class="ri-user-line"></i> Datos del Cliente
-                                            <small class="ms-2" id="requeridoCliente">(Opcional para Ticket Simple)</small>
+                                            <small class="ms-2" id="requeridoCliente">(Requerido para documentos tributarios)</small>
                                         </h4>
                                     </div>
                                     <div class="card-body p-4">
-                                        <!-- Búsqueda por RUT -->
+                                        <!-- Búsqueda por RUT o Empresa -->
                                         <div class="row mb-4">
                                             <div class="col-md-6">
                                                 <label class="form-label fw-medium">Buscar Cliente por RUT</label>
@@ -419,18 +404,40 @@
                                                     <input type="text" 
                                                            id="buscarRut" 
                                                            class="form-control"
-                                                           placeholder="11.111.111-1"
-                                                           maxlength="12">
+                                                           placeholder="11111111-1"
+                                                           maxlength="10">
                                                     <button class="btn btn-primary" onclick="buscarClientePorRut()">
                                                         Buscar
                                                     </button>
                                                 </div>
                                                 <div class="invalid-feedback" id="rutError"></div>
-                                                <small class="text-muted">Formato: 11.111.111-1</small>
+                                                <small class="text-muted">Formato: 11111111-1 (sin puntos)</small>
                                             </div>
-                                            <div class="col-md-6">
+                                            <div class="col-md-6" id="busquedaEmpresaSection" style="display: none;">
+                                                <label class="form-label fw-medium">Buscar Empresa por RUT o Nombre</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text">
+                                                        <i class="ri-building-line"></i>
+                                                    </span>
+                                                    <input type="text" 
+                                                           id="buscarEmpresa" 
+                                                           class="form-control"
+                                                           placeholder="Nombre o RUT de empresa">
+                                                    <button class="btn btn-success" onclick="buscarEmpresa()">
+                                                        Buscar
+                                                    </button>
+                                                </div>
+                                                <small class="text-muted">Busca empresas registradas</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row mb-3">
+                                            <div class="col-12">
+                                                <div class="alert alert-success d-none" id="empresaEncontrada">
+                                                    <i class="ri-building-check-line"></i> <span id="mensajeEmpresa">Empresa encontrada</span>
+                                                </div>
                                                 <div class="alert alert-info d-none" id="clienteEncontrado">
-                                                    <i class="ri-information-line"></i> Cliente encontrado en el sistema
+                                                    <i class="ri-user-line"></i> Cliente encontrado en el sistema
                                                 </div>
                                             </div>
                                         </div>
@@ -441,58 +448,53 @@
                                         <form id="formCliente">
                                             <div class="row g-3">
                                                 <div class="col-md-6">
-                                                    <label class="form-label fw-medium">Nombre/Razón Social *</label>
-                                                    <input type="text" class="form-control" id="clienteNombre" required>
+                                                    <label class="form-label fw-medium fs-5" id="labelNombre">Nombre/Razón Social</label>
+                                                    <input type="text" class="form-control form-control-lg" id="clienteNombre">
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label class="form-label fw-medium">RUT *</label>
-                                                    <input type="text" class="form-control" id="clienteRut" required>
+                                                    <label class="form-label fw-medium fs-5" id="labelRut">RUT</label>
+                                                    <input type="text" class="form-control form-control-lg" id="clienteRut">
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label class="form-label">Email</label>
-                                                    <input type="email" class="form-control" id="clienteEmail">
+                                                    <label class="form-label fs-5">Email</label>
+                                                    <input type="email" class="form-control form-control-lg" id="clienteEmail" placeholder="correo@ejemplo.com">
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label class="form-label">Teléfono</label>
-                                                    <input type="tel" class="form-control" id="clienteTelefono">
+                                                    <label class="form-label fs-5">Teléfono <span class="text-muted">(Opcional)</span></label>
+                                                    <input type="tel" class="form-control form-control-lg" id="clienteTelefono" placeholder="+56 9 1234 5678">
                                                 </div>
                                             </div>
 
-                                            <!-- Datos adicionales (colapsable) -->
-                                            <div class="mt-4">
-                                                <button class="btn btn-outline-primary btn-sm" type="button" 
-                                                        data-bs-toggle="collapse" 
-                                                        data-bs-target="#datosFacturacion">
-                                                    <i class="ri-add-line"></i> Datos para Facturación Electrónica
-                                                </button>
-                                                
-                                                <div class="collapse mt-3" id="datosFacturacion">
-                                                    <div class="card card-body bg-light">
-                                                        <div class="row g-3">
-                                                            <div class="col-md-6">
-                                                                <label class="form-label">Giro</label>
-                                                                <input type="text" class="form-control" id="clienteGiro">
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <label class="form-label">Comuna</label>
-                                                                <input type="text" class="form-control" id="clienteComuna">
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <label class="form-label">Ciudad</label>
-                                                                <input type="text" class="form-control" id="clienteCiudad">
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <label class="form-label">Dirección</label>
-                                                                <input type="text" class="form-control" id="clienteDireccion">
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <label class="form-label">Teléfono Secundario</label>
-                                                                <input type="tel" class="form-control" id="clienteTelefono2">
-                                                            </div>
-                                                            <div class="col-md-6">
-                                                                <label class="form-label">Email Facturación</label>
-                                                                <input type="email" class="form-control" id="clienteEmailFactura">
-                                                            </div>
+                                            <!-- Datos de facturación (solo para Factura Electrónica) -->
+                                            <div class="mt-4" id="seccionFacturacion" style="display: none;">
+                                                <div class="alert alert-warning">
+                                                    <i class="ri-alert-line"></i> <strong>Factura Electrónica requiere datos tributarios completos</strong>
+                                                </div>
+                                                <div class="card card-body bg-light">
+                                                    <div class="row g-3">
+                                                        <div class="col-md-6">
+                                                            <label class="form-label fw-medium">Giro *</label>
+                                                            <input type="text" class="form-control form-control-lg" id="clienteGiro">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label fw-medium">Dirección *</label>
+                                                            <input type="text" class="form-control form-control-lg" id="clienteDireccion">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label fw-medium">Comuna *</label>
+                                                            <input type="text" class="form-control form-control-lg" id="clienteComuna">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label fw-medium">Ciudad *</label>
+                                                            <input type="text" class="form-control form-control-lg" id="clienteCiudad">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label">Teléfono Secundario</label>
+                                                            <input type="tel" class="form-control form-control-lg" id="clienteTelefono2">
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label">Email Facturación</label>
+                                                            <input type="email" class="form-control form-control-lg" id="clienteEmailFactura">
                                                         </div>
                                                     </div>
                                                 </div>
@@ -506,31 +508,38 @@
 
                     <!-- PASO 3: Detalle y Pagos -->
                     <div id="step3" class="step-pane" style="display: none;">
-                        <div class="row">
+                        <div class="row g-3">
                             <!-- Panel Izquierdo: Productos -->
-                            <div class="col-md-7">
-                                <div class="card shadow">
+                            <div class="col-md-8">
+                                <div class="card shadow h-100">
                                     <div class="card-header bg-dark text-white">
-                                        <h5 class="mb-0">
-                                            <i class="ri-shopping-cart-line"></i> Productos del Ticket
-                                        </h5>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h4 class="mb-0 fw-bold">
+                                                <i class="ri-shopping-cart-line"></i> Productos del Ticket
+                                            </h4>
+                                            <button class="btn btn-success" onclick="mostrarModalAgregarProducto()">
+                                                <i class="ri-add-line"></i> Agregar Producto
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="card-body">
                                         <div class="table-responsive">
-                                            <table class="table table-sm table-hover">
+                                            <table class="table table-hover" style="font-size: 1rem;">
                                                 <thead class="table-light">
                                                     <tr>
-                                                        <th>SKU</th>
-                                                        <th>Producto</th>
-                                                        <th>Talla</th>
-                                                        <th>Cant.</th>
-                                                        <th>Precio</th>
-                                                        <th>Subtotal</th>
+                                                        <th class="fs-6 fw-bold">SKU</th>
+                                                        <th class="fs-6 fw-bold">Producto</th>
+                                                        <th class="fs-6 fw-bold">Talla</th>
+                                                        <th class="fs-6 fw-bold" style="width: 100px;">Cant.</th>
+                                                        <th class="fs-6 fw-bold">Precio Unit.</th>
+                                                        <th class="fs-6 fw-bold">Descuento</th>
+                                                        <th class="fs-6 fw-bold">Subtotal</th>
+                                                        <th class="fs-6 fw-bold" style="width: 110px;">Acciones</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="tablaProductos">
                                                     <tr>
-                                                        <td colspan="6" class="text-center py-4">
+                                                        <td colspan="8" class="text-center py-4">
                                                             <i class="ri-shopping-cart-line display-4 text-muted"></i>
                                                             <p class="text-muted mt-2">Seleccione un ticket para ver los productos</p>
                                                         </td>
@@ -542,83 +551,107 @@
                                 </div>
                             </div>
 
-                            <!-- Panel Derecho: Pagos -->
-                            <div class="col-md-5">
+                            <!-- Panel Derecho: Resumen y Pagos -->
+                            <div class="col-md-4">
+                                <!-- Resumen -->
                                 <div class="card shadow mb-3">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0 fw-bold">
+                                            <i class="ri-calculator-line"></i> Resumen de Venta
+                                        </h5>
+                                    </div>
+                                    <div class="card-body p-4">
+                                        <div class="d-flex justify-content-between mb-3 fs-5">
+                                            <span class="fw-medium">Items:</span>
+                                            <strong id="totalItems">0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-3 fs-5">
+                                            <span class="fw-medium">Subtotal:</span>
+                                            <strong id="subtotal">$0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-3 fs-5" id="lineaDescuento" style="display: none;">
+                                            <span class="fw-medium text-warning">
+                                                <i class="ri-price-tag-3-line"></i> Descuento:
+                                            </span>
+                                            <strong class="text-warning" id="descuento">-$0</strong>
+                                        </div>
+                                        <hr class="border-2">
+                                        <div class="d-flex justify-content-between mb-3">
+                                            <span class="h5 fw-bold">Total:</span>
+                                            <strong class="h4 text-primary" id="total">$0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-3 fs-5">
+                                            <span class="fw-medium">Pagado:</span>
+                                            <strong class="text-success" id="pagado">$0</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between fs-5">
+                                            <span class="fw-medium">Saldo:</span>
+                                            <strong class="text-danger fs-4" id="saldo">$0</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Métodos de Pago -->
+                                <div class="card shadow">
                                     <div class="card-header bg-success text-white">
-                                        <h5 class="mb-0">
+                                        <h5 class="mb-0 fw-bold">
                                             <i class="ri-wallet-3-line"></i> Métodos de Pago
                                         </h5>
                                     </div>
-                                    <div class="card-body">
-                                        <div class="row g-2">
+                                    <div class="card-body p-3">
+                                        <div class="row g-2 mb-3">
                                             <div class="col-6">
-                                                <button class="btn btn-outline-success w-100" onclick="agregarPago('EFECTIVO')">
-                                                    <i class="ri-cash-line"></i><br>Efectivo
+                                                <button class="btn btn-outline-success w-100 py-3" onclick="agregarPago('EFECTIVO')">
+                                                    <i class="ri-cash-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">Efectivo</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-primary w-100" onclick="agregarPago('TARJETA_DEBITO')">
-                                                    <i class="ri-bank-card-line"></i><br>Débito
+                                                <button class="btn btn-outline-primary w-100 py-3" onclick="agregarPago('TARJETA_DEBITO')">
+                                                    <i class="ri-bank-card-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">Débito</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-info w-100" onclick="agregarPago('TARJETA_CREDITO')">
-                                                    <i class="ri-bank-card-2-line"></i><br>Crédito
+                                                <button class="btn btn-outline-info w-100 py-3" onclick="agregarPago('TARJETA_CREDITO')">
+                                                    <i class="ri-bank-card-2-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">Crédito</span>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-warning w-100" onclick="agregarPago('TRANSFERENCIA')">
-                                                    <i class="ri-exchange-line"></i><br>Transfer.
+                                                <button class="btn btn-outline-warning w-100 py-3" onclick="agregarPago('TRANSFERENCIA')">
+                                                    <i class="ri-exchange-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">Transfer.</span>
                                                 </button>
+                                            </div>
+                                            <div class="col-12">
+                                                <button class="btn btn-outline-danger w-100 py-3" onclick="activarCreditoTrabajador()" style="border: 2px dashed;">
+                                                    <i class="ri-vip-crown-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">CRÉDITO TRABAJADOR</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Indicador de crédito activo -->
+                                        <div id="indicador-credito-trabajador" style="display: none;" class="alert alert-success mt-2 mb-0">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <i class="ri-vip-crown-fill"></i> <strong id="nombre-trabajador-credito"></strong>
+                                                    <br><small>Saldo: <span id="saldo-credito-trabajador" class="fw-bold"></span></small>
+                                                </div>
+                                                <button type="button" class="btn-close btn-sm" onclick="desactivarCreditoTrabajador()"></button>
                                             </div>
                                         </div>
 
                                         <!-- Lista de pagos -->
                                         <div class="mt-3">
-                                            <h6>Pagos Registrados</h6>
+                                            <h6 class="fw-bold mb-2">Pagos Registrados</h6>
                                             <div id="listaPagos">
                                                 <div class="text-center text-muted py-3">
-                                                    <i class="ri-wallet-line"></i>
-                                                    <p class="mb-0 small">No hay pagos registrados</p>
+                                                    <i class="ri-wallet-line fs-4"></i>
+                                                    <p class="mb-0">No hay pagos registrados</p>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Resumen -->
-                                <div class="card shadow sticky-top">
-                                    <div class="card-header bg-info text-white">
-                                        <h6 class="mb-0">
-                                            <i class="ri-calculator-line"></i> Resumen de Venta
-                                        </h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Items:</span>
-                                            <strong id="totalItems">0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Subtotal:</span>
-                                            <strong id="subtotal">$0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Descuento:</span>
-                                            <strong id="descuento">$0</strong>
-                                        </div>
-                                        <hr>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span class="h6">Total:</span>
-                                            <strong class="h6 text-primary" id="total">$0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <span>Pagado:</span>
-                                            <strong class="text-success" id="pagado">$0</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between">
-                                            <span>Saldo:</span>
-                                            <strong class="text-danger" id="saldo">$0</strong>
                                         </div>
                                     </div>
                                 </div>
@@ -629,7 +662,7 @@
                     <!-- PASO 4: Confirmación -->
                     <div id="step4" class="step-pane" style="display: none;">
                         <div class="row justify-content-center">
-                            <div class="col-md-8">
+                            <div class="col-md-10">
                                 <div class="card shadow">
                                     <div class="card-header bg-success text-white">
                                         <h4 class="mb-0">
@@ -637,17 +670,6 @@
                                         </h4>
                                     </div>
                                     <div class="card-body p-4">
-                                        <!-- Selector de documento -->
-                                        <div class="mb-4">
-                                            <label class="form-label fw-medium">Tipo de Documento</label>
-                                            <select class="form-select form-select-lg" id="tipoDocumento">
-                                                <option value="TICKET">Ticket Simple</option>
-                                                <option value="BOLETA">Boleta</option>
-                                                <option value="BOLETA_ELECTRONICA" selected>Boleta Electrónica</option>
-                                                <option value="FACTURA">Factura Electrónica</option>
-                                            </select>
-                                        </div>
-
                                         <!-- Preview del documento -->
                                         <div class="border rounded p-4 mb-4 bg-light" id="previewDocumento">
                                             <div class="text-center">
@@ -656,21 +678,28 @@
                                             </div>
                                         </div>
 
-                                        <!-- Acciones finales -->
-                                        <div class="row g-2">
+                                        <!-- Botón Finalizar Grande -->
+                                        <div class="mb-4">
+                                            <button class="btn btn-success btn-lg w-100 py-4" onclick="finalizarVenta()" style="font-size: 1.5rem; font-weight: bold;">
+                                                <i class="ri-check-line"></i> FINALIZAR VENTA
+                                            </button>
+                                        </div>
+
+                                        <!-- Acciones Adicionales -->
+                                        <div class="row g-3">
                                             <div class="col-md-4">
-                                                <button class="btn btn-success btn-lg w-100" onclick="finalizarVenta()">
-                                                    <i class="ri-check-line"></i> Finalizar
-                                                </button>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <button class="btn btn-primary btn-lg w-100" onclick="imprimirYFinalizar()">
+                                                <button class="btn btn-outline-primary btn-lg w-100" onclick="imprimirTicket()">
                                                     <i class="ri-printer-line"></i> Imprimir
                                                 </button>
                                             </div>
                                             <div class="col-md-4">
-                                                <button class="btn btn-info btn-lg w-100" onclick="enviarPorEmail()">
-                                                    <i class="ri-mail-line"></i> Email
+                                                <button class="btn btn-outline-info btn-lg w-100" onclick="enviarPorEmail()">
+                                                    <i class="ri-mail-line"></i> Enviar por Mail
+                                                </button>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <button class="btn btn-outline-warning btn-lg w-100" onclick="imprimirTicketCambio()">
+                                                    <i class="ri-printer-fill"></i> Ticket Cambio
                                                 </button>
                                             </div>
                                         </div>
@@ -726,9 +755,17 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Monto *</label>
-                        <div class="input-group">
+                        <div class="input-group input-group-lg">
                             <span class="input-group-text">$</span>
                             <input type="number" class="form-control" id="pagoMonto" required min="1">
+                        </div>
+                        <small class="text-muted" id="montoSugerido"></small>
+                    </div>
+                    <div class="mb-3" id="campoVuelto" style="display: none;">
+                        <label class="form-label fw-bold text-success">Vuelto</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text bg-success text-white">$</span>
+                            <input type="text" class="form-control fw-bold fs-4 text-success" id="pagoVuelto" readonly>
                         </div>
                     </div>
                     <div class="mb-3" id="campoTarjeta" style="display: none;">
@@ -755,6 +792,176 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="confirmarPago()">
                     <i class="ri-check-line"></i> Confirmar Pago
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Agregar Producto -->
+<div class="modal fade" id="modalAgregarProducto" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="ri-add-line"></i> Agregar Producto al Ticket
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Búsqueda por SKU -->
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Buscar por SKU</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="buscarSkuModal" placeholder="Ingrese SKU">
+                            <button class="btn btn-primary" onclick="buscarProductoPorSkuModal()">
+                                <i class="ri-search-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Buscar por nombre</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="buscarNombreModal" placeholder="Nombre del producto">
+                            <button class="btn btn-primary" onclick="buscarProductoPorNombreModal()">
+                                <i class="ri-search-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Formulario de producto -->
+                <form id="formProducto">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">SKU *</label>
+                            <input type="text" class="form-control" id="productoSku" readonly>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Artículo *</label>
+                            <input type="text" class="form-control" id="productoArticulo" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Descripción</label>
+                            <input type="text" class="form-control" id="productoDescripcion" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Marca</label>
+                            <input type="text" class="form-control" id="productoMarca" readonly>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Talla</label>
+                            <input type="text" class="form-control" id="productoTalla" readonly>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Stock</label>
+                            <input type="number" class="form-control" id="productoStock" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Precio *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="productoPrecio" min="0">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Cantidad *</label>
+                            <input type="number" class="form-control" id="productoCantidad" value="1" min="1">
+                        </div>
+                    </div>
+                </form>
+
+                <div class="alert alert-info mt-3 d-none" id="alertProductoInfo">
+                    <i class="ri-information-line"></i> <span id="mensajeProductoInfo"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarAgregarProducto()">
+                    <i class="ri-check-line"></i> Agregar al Ticket
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Aplicar Descuento -->
+<div class="modal fade" id="modalDescuento" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="ri-price-tag-3-line"></i> Aplicar Descuento
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info del producto -->
+                <div class="alert alert-info mb-3">
+                    <div class="d-flex align-items-center">
+                        <i class="ri-information-line fs-4 me-2"></i>
+                        <div>
+                            <strong id="descuentoProductoNombre">-</strong><br>
+                            <small class="text-muted">Precio: <span id="descuentoPrecioOriginal">$0</span></small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Selector de tipo de descuento -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tipo de Descuento</label>
+                    <div class="btn-group w-100" role="group">
+                        <input type="radio" class="btn-check" name="tipoDescuentoProducto" id="descProductoPorcentaje" value="PORCENTAJE" checked>
+                        <label class="btn btn-outline-warning" for="descProductoPorcentaje">
+                            <i class="ri-percent-line"></i> Porcentaje
+                        </label>
+                        
+                        <input type="radio" class="btn-check" name="tipoDescuentoProducto" id="descProductoMonto" value="MONTO">
+                        <label class="btn btn-outline-warning" for="descProductoMonto">
+                            <i class="ri-money-dollar-circle-line"></i> Monto Fijo
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Input de valor -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Valor del Descuento</label>
+                    <div class="input-group">
+                        <span class="input-group-text" id="descuentoSimbolo">%</span>
+                        <input type="number" class="form-control form-control-lg" id="valorDescuentoProducto" placeholder="0" min="0" step="0.01">
+                    </div>
+                    <small class="text-muted" id="descuentoAyuda">Ingrese el porcentaje de descuento (0-100)</small>
+                </div>
+
+                <!-- Preview del descuento -->
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Precio Original:</span>
+                            <strong id="descuentoPreviewOriginal">$0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 text-warning">
+                            <span>Descuento:</span>
+                            <strong id="descuentoPreviewMonto">-$0</strong>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold">Precio Final:</span>
+                            <strong class="text-success fs-5" id="descuentoPreviewFinal">$0</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="quitarDescuentoProducto()">
+                    <i class="ri-close-line"></i> Quitar Descuento
+                </button>
+                <button type="button" class="btn btn-warning" onclick="confirmarDescuentoProducto()">
+                    <i class="ri-check-line"></i> Aplicar Descuento
                 </button>
             </div>
         </div>
@@ -983,7 +1190,8 @@ document.addEventListener('DOMContentLoaded', function() {
         registrarPagos: (correlativo) => `{% url 'registrar_pagos_ticket' correlativo=0 %}`.replace('/0/', `/${correlativo}/`),
         validarRut: '{% url "validar_rut_cliente" %}',
         buscarCliente: '{% url "buscar_cliente_rut" %}',
-        verificarCorrelativos: '{% url "verificar_correlativos_disponibles" %}'
+        verificarCorrelativos: '{% url "verificar_correlativos_disponibles" %}',
+        anularTicket: '{% url "anular_ticket_pendiente" %}'
     };
 
     // Inicialización
@@ -1005,6 +1213,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     estadisticasDashboard = data.stats;
                     actualizarKPIs(data.stats);
                     cargarTicketsDelDia(data.tickets);
+                    cargarTicketsPendientesWizard(data.tickets_pendientes || []);
                 } else {
                     console.error('Error en dashboard:', data.error);
                     mostrarNotificacion(data.error || 'Error al cargar dashboard', 'error');
@@ -1029,55 +1238,87 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" class="text-center py-4">
-                        <i class="ri-inbox-line display-4 text-muted"></i>
-                        <p class="text-muted mt-2">No hay tickets registrados hoy</p>
+                        <i class="ri-checkbox-circle-line display-4 text-success"></i>
+                        <p class="text-success mt-2 fw-bold">¡Excelente! No hay tickets pendientes</p>
+                        <small class="text-muted">Todos los tickets han sido procesados</small>
                     </td>
                 </tr>
             `;
             return;
         }
 
-        tbody.innerHTML = tickets.map(ticket => `
-            <tr>
-                <td>
-                    <span class="fw-medium">#${ticket.correlativo}</span>
-                </td>
-                <td>${ticket.hora}</td>
-                <td>
-                    <div class="d-flex align-items-center">
-                        <div class="avatar-xs me-2">
-                            <span class="avatar-title rounded-circle bg-soft text-primary">
-                                ${(ticket.cliente_nombre || 'Cliente').charAt(0).toUpperCase()}
-                            </span>
+        tbody.innerHTML = tickets.map(ticket => {
+            // Determinar qué acciones mostrar según el estado
+            let botonesAccion = '';
+            
+            if (ticket.estado === 'PENDIENTE') {
+                // Tickets pendientes: pueden editarse y pagarse
+                botonesAccion = `
+                    <button class="btn btn-outline-primary" onclick="editarTicket(${ticket.correlativo})" title="Editar Ticket">
+                        <i class="ri-edit-line fs-5"></i>
+                    </button>
+                    <button class="btn btn-outline-success" onclick="pagarTicket(${ticket.correlativo})" title="Pagar Ticket">
+                        <i class="ri-wallet-line fs-5"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" onclick="anularTicketPendiente(${ticket.correlativo})" title="Anular Ticket">
+                        <i class="ri-close-circle-line fs-6"></i>
+                    </button>
+                `;
+            } else if (ticket.estado === 'PAGADO') {
+                // Tickets pagados: solo reimprimir
+                botonesAccion = `
+                    <button class="btn btn-outline-info" onclick="imprimirTicket(${ticket.correlativo})" title="Reimprimir Ticket">
+                        <i class="ri-printer-line fs-5"></i>
+                    </button>
+                `;
+            } else if (ticket.estado === 'ANULADO') {
+                // Tickets anulados: no se puede hacer nada
+                botonesAccion = `
+                    <span class="text-muted small">Sin acciones</span>
+                `;
+            } else {
+                // Otros estados: solo ver
+                botonesAccion = `
+                    <button class="btn btn-outline-secondary btn-sm" onclick="editarTicket(${ticket.correlativo})" title="Ver Detalle">
+                        <i class="ri-eye-line fs-6"></i>
+                    </button>
+                `;
+            }
+            
+            return `
+                <tr style="font-size: 1rem;">
+                    <td>
+                        <span class="fw-bold fs-5">#${ticket.correlativo}</span>
+                    </td>
+                    <td class="fs-6">${ticket.hora}</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="avatar-sm me-2">
+                                <span class="avatar-title rounded-circle bg-soft text-primary fs-5">
+                                    ${(ticket.cliente_nombre || 'Cliente').charAt(0).toUpperCase()}
+                                </span>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fs-6 fw-bold">${ticket.cliente_nombre || 'Sin nombre'}</h6>
+                                <p class="mb-0 text-muted">${ticket.cliente_rut || ''}</p>
+                            </div>
                         </div>
-                        <div>
-                            <h6 class="mb-0 fs-14">${ticket.cliente_nombre || 'Sin nombre'}</h6>
-                            <p class="mb-0 text-muted fs-12">${ticket.cliente_rut || ''}</p>
+                    </td>
+                    <td class="fs-6">${ticket.vendedor_nombre}</td>
+                    <td>
+                        <span class="fw-bold fs-5">${formatearMoneda(ticket.total)}</span>
+                    </td>
+                    <td>
+                        <span class="badge fs-6 ${obtenerClaseEstado(ticket.estado)}">${ticket.estado}</span>
+                    </td>
+                    <td>
+                        <div class="btn-group" role="group">
+                            ${botonesAccion}
                         </div>
-                    </div>
-                </td>
-                <td>${ticket.vendedor_nombre}</td>
-                <td>
-                    <span class="fw-medium">${formatearMoneda(ticket.total)}</span>
-                </td>
-                <td>
-                    <span class="badge ${obtenerClaseEstado(ticket.estado)}">${ticket.estado}</span>
-                </td>
-                <td>
-                    <div class="btn-group" role="group">
-                        <button class="btn btn-sm btn-outline-primary" onclick="editarTicket(${ticket.correlativo})" title="Editar Ticket">
-                            <i class="ri-edit-line"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-success" onclick="pagarTicket(${ticket.correlativo})" title="Pagar Ticket">
-                            <i class="ri-wallet-line"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-info" onclick="imprimirTicket(${ticket.correlativo})" title="Reimprimir">
-                            <i class="ri-printer-line"></i>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
 
     // === FUNCIONES DEL WIZARD ===
@@ -1126,9 +1367,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById(`step${paso}`).style.display = 'block';
         pasoActual = paso;
         
-        // Si es el paso 2, cargar correlativos disponibles
+        // Si es el paso 2, cargar correlativos disponibles y aplicar validaciones del tipo de documento
         if (paso === 2) {
             cargarCorrelativos();
+            // Aplicar las reglas del tipo de documento actual
+            const tipoDocumentoActual = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'TICKET';
+            actualizarInfoTipoDocumento(tipoDocumentoActual);
+            actualizarRequerimientosCliente(tipoDocumentoActual);
         }
         
         actualizarProgreso();
@@ -1192,6 +1437,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function pasoSiguiente() {
         if (validarPasoActual()) {
+            // Si estamos en el paso 2, guardar datos del cliente antes de continuar
+            if (pasoActual === 2) {
+                guardarDatosCliente();
+            }
+            
             if (pasoActual < 4) {
                 irAPaso(pasoActual + 1);
             } else {
@@ -1320,7 +1570,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!productos || productos.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="text-center py-4">
+                    <td colspan="8" class="text-center py-4">
                         <i class="ri-shopping-cart-line display-4 text-muted"></i>
                         <p class="text-muted mt-2">No hay productos en este ticket</p>
                     </td>
@@ -1329,24 +1579,98 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        tbody.innerHTML = productos.map(producto => `
-            <tr>
+        tbody.innerHTML = productos.map((producto, index) => {
+            const descuento = producto.descuento_unitario || 0;
+            const precioOriginal = producto.precio_unitario || producto.precio;
+            const precioConDescuento = precioOriginal - descuento;
+            const subtotalConDescuento = precioConDescuento * producto.cantidad;
+            
+            return `
+            <tr data-producto-index="${index}">
                 <td><code>${producto.sku}</code></td>
                 <td>
                     <div>
                         <h6 class="mb-0 fs-14">${producto.articulo}</h6>
-                        <small class="text-muted">${producto.descripcion}</small>
+                        <small class="text-muted">${producto.descripcion || ''}</small>
                     </div>
                 </td>
-                <td><span class="badge bg-info">${producto.talla}</span></td>
-                <td class="text-center">${producto.cantidad}</td>
-                <td class="text-end">${formatearMoneda(producto.precio_unitario)}</td>
-                <td class="text-end fw-medium">${formatearMoneda(producto.subtotal)}</td>
+                <td><span class="badge bg-info">${producto.talla || '-'}</span></td>
+                <td class="text-center">
+                    <input type="number" class="form-control form-control-sm text-center" 
+                           value="${producto.cantidad}" min="1" 
+                           onchange="cambiarCantidadProducto(${index}, this.value)"
+                           style="width: 60px;">
+                </td>
+                <td class="text-end">
+                    ${descuento > 0 ? `
+                        <span class="text-decoration-line-through text-muted small">${formatearMoneda(precioOriginal)}</span><br>
+                        <span class="text-success fw-bold">${formatearMoneda(precioConDescuento)}</span>
+                    ` : formatearMoneda(precioOriginal)}
+                </td>
+                <td class="text-end">
+                    ${descuento > 0 ? `
+                        <span class="badge bg-warning text-dark">-${formatearMoneda(descuento * producto.cantidad)}</span>
+                    ` : '-'}
+                </td>
+                <td class="text-end fw-medium">${formatearMoneda(subtotalConDescuento)}</td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-warning" onclick="mostrarModalDescuento(${index})" title="Aplicar Descuento">
+                            <i class="ri-price-tag-3-line"></i>
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="eliminarProductoTicket(${index})" title="Eliminar">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                    </div>
+                </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     // === FUNCIONES DE CLIENTE ===
+
+    function buscarEmpresa() {
+        const termino = document.getElementById('buscarEmpresa').value.trim();
+        if (!termino || termino.length < 3) {
+            mostrarNotificacion('Ingrese al menos 3 caracteres para buscar', 'warning');
+            return;
+        }
+
+        // Buscar empresa en la base de datos
+        fetch(`/empresa_management/api/buscar-empresa/?q=${encodeURIComponent(termino)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.empresa) {
+                    llenarDatosEmpresa(data.empresa);
+                    document.getElementById('empresaEncontrada').classList.remove('d-none');
+                    document.getElementById('mensajeEmpresa').textContent = `Empresa: ${data.empresa.nombre}`;
+                    mostrarNotificacion('Empresa encontrada. Datos cargados.', 'success');
+                } else {
+                    document.getElementById('empresaEncontrada').classList.add('d-none');
+                    mostrarNotificacion(data.error || 'Empresa no encontrada', 'info');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarNotificacion('Error al buscar empresa', 'error');
+            });
+    }
+
+    function llenarDatosEmpresa(empresa) {
+        // Llenar datos básicos
+        document.getElementById('clienteNombre').value = empresa.razon_social || empresa.nombre || '';
+        document.getElementById('clienteRut').value = empresa.rut || '';
+        document.getElementById('clienteEmail').value = empresa.email || '';
+        document.getElementById('clienteTelefono').value = empresa.telefono || '';
+        
+        // Llenar datos de facturación
+        document.getElementById('clienteGiro').value = empresa.giro || '';
+        document.getElementById('clienteDireccion').value = empresa.direccion || '';
+        document.getElementById('clienteComuna').value = empresa.comuna || '';
+        document.getElementById('clienteCiudad').value = empresa.ciudad || '';
+        document.getElementById('clienteEmailFactura').value = empresa.email || '';
+    }
 
     function buscarClientePorRut() {
         const rut = document.getElementById('buscarRut').value.trim();
@@ -1363,6 +1687,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('buscarRut').classList.remove('is-invalid');
         document.getElementById('rutError').textContent = '';
+        document.getElementById('empresaEncontrada').classList.add('d-none');
+
+        // Detectar si es RUT de empresa
+        const esEmpresa = esRutEmpresa(rut);
 
         // Buscar cliente en la base de datos
         fetch(`${apiUrls.buscarCliente}?rut=${encodeURIComponent(rut)}`)
@@ -1371,12 +1699,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success && data.cliente) {
                     llenarFormularioCliente(data.cliente);
                     document.getElementById('clienteEncontrado').classList.remove('d-none');
-                    mostrarNotificacion('Cliente encontrado', 'success');
+                    mostrarNotificacion('Cliente encontrado en el sistema', 'success');
+                    
+                    // Si es empresa o tiene datos de facturación, sugerir factura electrónica
+                    if (esEmpresa || data.cliente.giro) {
+                        sugerirTipoDocumento('FACTURA_ELECTRONICA', 'El RUT corresponde a una empresa. Se recomienda Factura Electrónica.');
+                    }
+                    
+                    // Si el cliente tiene datos de facturación y está seleccionada factura electrónica, mostrar la sección
+                    const tipoDoc = document.querySelector('input[name="tipoDocumento"]:checked')?.value;
+                    if (tipoDoc === 'FACTURA_ELECTRONICA' && (data.cliente.giro || data.cliente.direccion)) {
+                        const seccionFacturacion = document.getElementById('seccionFacturacion');
+                        if (seccionFacturacion) {
+                            seccionFacturacion.style.display = 'block';
+                        }
+                    }
                 } else {
                     document.getElementById('clienteEncontrado').classList.add('d-none');
-                    // Llenar solo el RUT formateado
-                    document.getElementById('clienteRut').value = formatearRut(rut);
-                    mostrarNotificacion('Cliente no encontrado, puede crear uno nuevo', 'info');
+                    // Llenar solo el RUT formateado (sin puntos)
+                    const rutFormateado = data.rut_formateado || formatearRut(rut);
+                    document.getElementById('clienteRut').value = rutFormateado;
+                    
+                    // Si es empresa, sugerir factura electrónica
+                    if (esEmpresa) {
+                        sugerirTipoDocumento('FACTURA_ELECTRONICA', 'El RUT ingresado corresponde a una empresa. Se ha seleccionado Factura Electrónica automáticamente.');
+                    }
+                    
+                    mostrarNotificacion('Cliente nuevo. Complete los datos requeridos.', 'info');
+                    
+                    // Enfocar en el campo de nombre
+                    setTimeout(() => {
+                        document.getElementById('clienteNombre').focus();
+                    }, 300);
                 }
             })
             .catch(error => {
@@ -1399,22 +1753,158 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function validarDatosCliente() {
+        const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'TICKET';
         const nombre = document.getElementById('clienteNombre').value.trim();
         const rut = document.getElementById('clienteRut').value.trim();
+        const email = document.getElementById('clienteEmail').value.trim();
+        const telefono = document.getElementById('clienteTelefono').value.trim();
 
-        if (!nombre) {
-            mostrarNotificacion('El nombre del cliente es obligatorio', 'warning');
-            document.getElementById('clienteNombre').focus();
-            return false;
+        // TICKET: Datos opcionales (no validar, solo guardar si están)
+        if (tipoDocumento === 'TICKET') {
+            // Si ingresaron RUT, validarlo
+            if (rut && !validarRutChileno(rut)) {
+                mostrarNotificacion('El RUT ingresado no es válido', 'warning');
+                document.getElementById('clienteRut').focus();
+                return false;
+            }
+            return true; // Todo opcional
         }
 
-        if (!rut || !validarRutChileno(rut)) {
-            mostrarNotificacion('Ingrese un RUT válido', 'warning');
-            document.getElementById('clienteRut').focus();
-            return false;
+        // BOLETAS: Validar datos básicos
+        if (tipoDocumento === 'BOLETA_ELECTRONICA' || tipoDocumento === 'BOLETA') {
+            if (!nombre) {
+                mostrarNotificacion('El nombre del cliente es obligatorio', 'warning');
+                document.getElementById('clienteNombre').focus();
+                return false;
+            }
+
+            if (!rut || !validarRutChileno(rut)) {
+                mostrarNotificacion('Ingrese un RUT válido', 'warning');
+                document.getElementById('clienteRut').focus();
+                return false;
+            }
+
+            if (!email) {
+                mostrarNotificacion('El email es obligatorio para boletas electrónicas', 'warning');
+                document.getElementById('clienteEmail').focus();
+                return false;
+            }
+
+            // Teléfono es opcional
+            // if (!telefono) {
+            //     mostrarNotificacion('El teléfono es obligatorio', 'warning');
+            //     document.getElementById('clienteTelefono').focus();
+            //     return false;
+            // }
+
+            return true;
+        }
+
+        // FACTURA: Validar todos los datos
+        if (tipoDocumento === 'FACTURA_ELECTRONICA') {
+            if (!nombre) {
+                mostrarNotificacion('La razón social es obligatoria', 'warning');
+                document.getElementById('clienteNombre').focus();
+                return false;
+            }
+
+            if (!rut || !validarRutChileno(rut)) {
+                mostrarNotificacion('Ingrese un RUT de empresa válido', 'warning');
+                document.getElementById('clienteRut').focus();
+                return false;
+            }
+
+            const giro = document.getElementById('clienteGiro').value.trim();
+            const direccion = document.getElementById('clienteDireccion').value.trim();
+            const comuna = document.getElementById('clienteComuna').value.trim();
+            const ciudad = document.getElementById('clienteCiudad').value.trim();
+
+            if (!giro) {
+                mostrarNotificacion('El giro es obligatorio para facturas', 'warning');
+                document.getElementById('clienteGiro').focus();
+                return false;
+            }
+
+            if (!direccion) {
+                mostrarNotificacion('La dirección es obligatoria para facturas', 'warning');
+                document.getElementById('clienteDireccion').focus();
+                return false;
+            }
+
+            if (!comuna) {
+                mostrarNotificacion('La comuna es obligatoria para facturas', 'warning');
+                document.getElementById('clienteComuna').focus();
+                return false;
+            }
+
+            if (!ciudad) {
+                mostrarNotificacion('La ciudad es obligatoria para facturas', 'warning');
+                document.getElementById('clienteCiudad').focus();
+                return false;
+            }
+
+            return true;
         }
 
         return true;
+    }
+
+    function guardarDatosCliente() {
+        const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'TICKET';
+        const nombre = document.getElementById('clienteNombre').value.trim();
+        const rut = document.getElementById('clienteRut').value.trim();
+        const email = document.getElementById('clienteEmail').value.trim();
+        const telefono = document.getElementById('clienteTelefono').value.trim();
+        
+        // Solo guardar si hay datos ingresados
+        if (!nombre && !rut && !email && !telefono) {
+            console.log('No hay datos de cliente para guardar');
+            return;
+        }
+
+        const datosCliente = {
+            nombre: nombre,
+            rut: rut,
+            email: email,
+            telefono: telefono,
+            tipo_documento: tipoDocumento
+        };
+
+        // Si es factura, agregar datos adicionales
+        if (tipoDocumento === 'FACTURA_ELECTRONICA') {
+            datosCliente.giro = document.getElementById('clienteGiro').value.trim();
+            datosCliente.direccion = document.getElementById('clienteDireccion').value.trim();
+            datosCliente.comuna = document.getElementById('clienteComuna').value.trim();
+            datosCliente.ciudad = document.getElementById('clienteCiudad').value.trim();
+        }
+
+        // Guardar en variable global
+        clienteActual = datosCliente;
+
+        // Enviar al servidor para guardar en BD
+        fetch('{% url "guardar_cliente_pos" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(datosCliente)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Cliente guardado exitosamente:', data.cliente_id);
+                clienteActual.id = data.cliente_id;
+                mostrarNotificacion('Datos del cliente guardados', 'success');
+            } else {
+                console.warn('No se pudo guardar el cliente:', data.error);
+                // No mostrar error al usuario, los datos se mantienen en memoria
+            }
+        })
+        .catch(error => {
+            console.error('Error al guardar cliente:', error);
+            // No mostrar error al usuario, los datos se mantienen en memoria
+        });
     }
 
     // === FUNCIONES DE PAGOS ===
@@ -1425,23 +1915,62 @@ document.addEventListener('DOMContentLoaded', function() {
         // Mostrar/ocultar campos según el método
         const campoTarjeta = document.getElementById('campoTarjeta');
         const campoVoucher = document.getElementById('campoVoucher');
+        const campoVuelto = document.getElementById('campoVuelto');
         
         if (metodo.includes('TARJETA')) {
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
+            campoVuelto.style.display = 'none';
         } else {
             campoTarjeta.style.display = 'none';
             campoVoucher.style.display = 'none';
+            // Mostrar campo de vuelto solo para efectivo
+            if (metodo === 'EFECTIVO') {
+                campoVuelto.style.display = 'block';
+            } else {
+                campoVuelto.style.display = 'none';
+            }
         }
 
         // Calcular monto sugerido (saldo pendiente)
         const saldoPendiente = calcularSaldoPendiente();
         if (saldoPendiente > 0) {
             document.getElementById('pagoMonto').value = saldoPendiente;
+            document.getElementById('montoSugerido').textContent = `Saldo pendiente: ${formatearMoneda(saldoPendiente)}`;
+        }
+
+        // Limpiar vuelto
+        document.getElementById('pagoVuelto').value = '';
+
+        // Si es efectivo, calcular vuelto al cambiar el monto
+        if (metodo === 'EFECTIVO') {
+            calcularVuelto();
         }
 
         // Mostrar modal
         new bootstrap.Modal(document.getElementById('modalPago')).show();
+    }
+
+    function calcularVuelto() {
+        const monto = parseFloat(document.getElementById('pagoMonto').value) || 0;
+        const saldoPendiente = calcularSaldoPendiente();
+        const vuelto = monto - saldoPendiente;
+
+        const campoVuelto = document.getElementById('pagoVuelto');
+        
+        if (vuelto > 0) {
+            campoVuelto.value = formatearMoneda(vuelto);
+            campoVuelto.classList.remove('text-danger');
+            campoVuelto.classList.add('text-success');
+        } else if (vuelto < 0) {
+            campoVuelto.value = 'Falta: ' + formatearMoneda(Math.abs(vuelto));
+            campoVuelto.classList.remove('text-success');
+            campoVuelto.classList.add('text-danger');
+        } else {
+            campoVuelto.value = formatearMoneda(0);
+            campoVuelto.classList.remove('text-danger');
+            campoVuelto.classList.add('text-success');
+        }
     }
 
     function confirmarPago() {
@@ -1489,11 +2018,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         container.innerHTML = pagosActuales.map((pago, index) => `
-            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 ${pago.metodo_pago === 'CREDITO_TRABAJADOR' ? 'border-warning bg-warning bg-opacity-10' : ''}">
                 <div>
                     <strong>${obtenerNombreMetodoPago(pago.metodo_pago)}</strong>
+                    ${pago.metodo_pago === 'CREDITO_TRABAJADOR' && pago.trabajador_nombre ? `
+                        <br><small class="text-muted"><i class="ri-user-line"></i> ${pago.trabajador_nombre}</small>
+                    ` : ''}
                     <br>
-                    <small class="text-muted">${formatearMoneda(pago.monto)}</small>
+                    <small class="text-muted fw-bold">${formatearMoneda(pago.monto)}</small>
                 </div>
                 <button class="btn btn-sm btn-outline-danger" onclick="eliminarPago(${index})">
                     <i class="ri-delete-bin-line"></i>
@@ -1529,10 +2061,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('totalItems').textContent = totales.items || 0;
         document.getElementById('subtotal').textContent = formatearMoneda(totales.subtotal || totales.total || 0);
-        document.getElementById('descuento').textContent = formatearMoneda(totales.descuento || 0);
+        document.getElementById('descuento').textContent = '-' + formatearMoneda(totales.descuento || 0);
         document.getElementById('total').textContent = formatearMoneda(totales.total || 0);
         document.getElementById('pagado').textContent = formatearMoneda(totalPagado);
         document.getElementById('saldo').textContent = formatearMoneda(saldo);
+
+        // Mostrar/ocultar línea de descuento
+        const lineaDescuento = document.getElementById('lineaDescuento');
+        if (lineaDescuento) {
+            lineaDescuento.style.display = (totales.descuento > 0) ? 'flex' : 'none';
+        }
 
         // Cambiar color del saldo
         const saldoElement = document.getElementById('saldo');
@@ -1546,6 +2084,379 @@ document.addEventListener('DOMContentLoaded', function() {
         return Math.max(0, total - pagado);
     }
 
+    // === FUNCIONES DE EDICIÓN DE PRODUCTOS ===
+
+    function mostrarModalAgregarProducto() {
+        // Limpiar formulario
+        document.getElementById('formProducto').reset();
+        document.getElementById('buscarSkuModal').value = '';
+        document.getElementById('buscarNombreModal').value = '';
+        document.getElementById('alertProductoInfo').classList.add('d-none');
+        
+        // Mostrar modal
+        new bootstrap.Modal(document.getElementById('modalAgregarProducto')).show();
+    }
+
+    function buscarProductoPorSkuModal() {
+        const sku = document.getElementById('buscarSkuModal').value.trim();
+        if (!sku) {
+            mostrarNotificacion('Ingrese un SKU', 'warning');
+            return;
+        }
+
+        fetch(`{% url "buscar_producto_por_sku" %}?sku=${encodeURIComponent(sku)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    llenarFormularioProducto(data.producto);
+                    mostrarNotificacion('Producto encontrado', 'success');
+                } else {
+                    mostrarNotificacion(data.message || 'Producto no encontrado', 'error');
+                    limpiarFormularioProductoModal();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarNotificacion('Error al buscar producto', 'error');
+            });
+    }
+
+    function buscarProductoPorNombreModal() {
+        mostrarNotificacion('Funcionalidad en desarrollo. Use búsqueda por SKU', 'info');
+    }
+
+    function llenarFormularioProducto(producto) {
+        document.getElementById('productoSku').value = producto.sku || '';
+        document.getElementById('productoArticulo').value = producto.articulo || '';
+        document.getElementById('productoDescripcion').value = producto.descripcion || '';
+        document.getElementById('productoMarca').value = producto.marca || '';
+        document.getElementById('productoTalla').value = producto.talla || '';
+        document.getElementById('productoStock').value = producto.stock || 0;
+        document.getElementById('productoPrecio').value = producto.precio_venta || 0;
+        document.getElementById('productoCantidad').value = 1;
+        document.getElementById('productoCantidad').max = producto.stock || 999;
+    }
+
+    function limpiarFormularioProductoModal() {
+        document.getElementById('productoSku').value = '';
+        document.getElementById('productoArticulo').value = '';
+        document.getElementById('productoDescripcion').value = '';
+        document.getElementById('productoMarca').value = '';
+        document.getElementById('productoTalla').value = '';
+        document.getElementById('productoStock').value = '';
+        document.getElementById('productoPrecio').value = '';
+        document.getElementById('productoCantidad').value = 1;
+    }
+
+    function confirmarAgregarProducto() {
+        const sku = document.getElementById('productoSku').value.trim();
+        const articulo = document.getElementById('productoArticulo').value.trim();
+        const cantidad = parseInt(document.getElementById('productoCantidad').value) || 0;
+        const precio = parseInt(document.getElementById('productoPrecio').value) || 0;
+        const stock = parseInt(document.getElementById('productoStock').value) || 0;
+
+        // Validaciones
+        if (!sku || !articulo) {
+            mostrarNotificacion('Debe buscar un producto válido', 'warning');
+            return;
+        }
+
+        if (cantidad <= 0) {
+            mostrarNotificacion('La cantidad debe ser mayor a 0', 'warning');
+            return;
+        }
+
+        if (cantidad > stock) {
+            mostrarNotificacion(`Stock insuficiente. Disponible: ${stock}`, 'error');
+            return;
+        }
+
+        if (precio <= 0) {
+            mostrarNotificacion('El precio debe ser mayor a 0', 'warning');
+            return;
+        }
+
+        // Crear objeto producto
+        const nuevoProducto = {
+            sku: sku,
+            articulo: articulo,
+            descripcion: document.getElementById('productoDescripcion').value.trim(),
+            marca: document.getElementById('productoMarca').value.trim(),
+            talla: document.getElementById('productoTalla').value.trim(),
+            cantidad: cantidad,
+            precio_unitario: precio,
+            precio: precio,
+            subtotal: precio * cantidad,
+            stock: stock
+        };
+
+        // Verificar si el producto ya existe en el ticket
+        const productoExistente = ticketActual.productos.find(p => p.sku === sku);
+        if (productoExistente) {
+            // Actualizar cantidad
+            const nuevaCantidad = productoExistente.cantidad + cantidad;
+            if (nuevaCantidad > stock) {
+                mostrarNotificacion(`Stock insuficiente. Máximo disponible: ${stock}`, 'error');
+                return;
+            }
+            productoExistente.cantidad = nuevaCantidad;
+            productoExistente.subtotal = productoExistente.precio_unitario * nuevaCantidad;
+        } else {
+            // Agregar nuevo producto
+            ticketActual.productos.push(nuevoProducto);
+        }
+
+        // Actualizar totales del ticket
+        recalcularTotalesTicket();
+
+        // Actualizar UI
+        cargarProductosTicket(ticketActual.productos);
+        actualizarResumenVenta();
+
+        // Cerrar modal
+        bootstrap.Modal.getInstance(document.getElementById('modalAgregarProducto')).hide();
+
+        mostrarNotificacion('Producto agregado al ticket', 'success');
+    }
+
+    function cambiarCantidadProducto(index, nuevaCantidad) {
+        nuevaCantidad = parseInt(nuevaCantidad) || 1;
+
+        if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
+            mostrarNotificacion('Error al actualizar cantidad', 'error');
+            return;
+        }
+
+        const producto = ticketActual.productos[index];
+        const stock = producto.stock || 999;
+
+        if (nuevaCantidad <= 0) {
+            mostrarNotificacion('La cantidad debe ser mayor a 0', 'warning');
+            cargarProductosTicket(ticketActual.productos); // Recargar con valor anterior
+            return;
+        }
+
+        if (nuevaCantidad > stock) {
+            mostrarNotificacion(`Stock insuficiente. Máximo: ${stock}`, 'error');
+            cargarProductosTicket(ticketActual.productos); // Recargar con valor anterior
+            return;
+        }
+
+        // Actualizar cantidad y subtotal
+        producto.cantidad = nuevaCantidad;
+        producto.subtotal = (producto.precio_unitario || producto.precio) * nuevaCantidad;
+
+        // Recalcular totales
+        recalcularTotalesTicket();
+
+        // Actualizar UI
+        cargarProductosTicket(ticketActual.productos);
+        actualizarResumenVenta();
+
+        mostrarNotificacion('Cantidad actualizada', 'success');
+    }
+
+    function eliminarProductoTicket(index) {
+        if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
+            mostrarNotificacion('Error al eliminar producto', 'error');
+            return;
+        }
+
+        const producto = ticketActual.productos[index];
+
+        if (confirm(`¿Eliminar ${producto.articulo} del ticket?`)) {
+            // Eliminar producto del array
+            ticketActual.productos.splice(index, 1);
+
+            // Recalcular totales
+            recalcularTotalesTicket();
+
+            // Actualizar UI
+            cargarProductosTicket(ticketActual.productos);
+            actualizarResumenVenta();
+
+            mostrarNotificacion('Producto eliminado del ticket', 'info');
+        }
+    }
+
+    function recalcularTotalesTicket() {
+        if (!ticketActual) return;
+
+        const productos = ticketActual.productos || [];
+        
+        let totalItems = 0;
+        let subtotalSinDescuento = 0;
+        let totalDescuentos = 0;
+        let subtotalConDescuento = 0;
+
+        productos.forEach(producto => {
+            const precioOriginal = producto.precio_unitario || producto.precio;
+            const descuento = producto.descuento_unitario || 0;
+            const cantidad = producto.cantidad;
+            
+            totalItems += cantidad;
+            subtotalSinDescuento += precioOriginal * cantidad;
+            totalDescuentos += descuento * cantidad;
+            subtotalConDescuento += (precioOriginal - descuento) * cantidad;
+        });
+
+        ticketActual.totales = {
+            items: totalItems,
+            subtotal: subtotalSinDescuento,
+            descuento: totalDescuentos,
+            total: subtotalConDescuento
+        };
+    }
+
+    // === FUNCIONES DE DESCUENTOS POR PRODUCTO ===
+
+    let productoDescuentoIndex = null;
+
+    function mostrarModalDescuento(index) {
+        if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
+            mostrarNotificacion('Producto no encontrado', 'error');
+            return;
+        }
+
+        productoDescuentoIndex = index;
+        const producto = ticketActual.productos[index];
+        const precioOriginal = producto.precio_unitario || producto.precio;
+        const descuentoActual = producto.descuento_unitario || 0;
+
+        // Llenar datos del producto
+        document.getElementById('descuentoProductoNombre').textContent = producto.articulo;
+        document.getElementById('descuentoPrecioOriginal').textContent = formatearMoneda(precioOriginal);
+        
+        // Si ya tiene descuento, pre-cargar el valor
+        if (descuentoActual > 0) {
+            document.getElementById('valorDescuentoProducto').value = descuentoActual;
+            document.getElementById('descProductoMonto').checked = true;
+            actualizarPreviewDescuento();
+        } else {
+            document.getElementById('valorDescuentoProducto').value = '';
+            document.getElementById('descProductoPorcentaje').checked = true;
+        }
+
+        // Configurar eventos en tiempo real
+        const inputValor = document.getElementById('valorDescuentoProducto');
+        inputValor.oninput = actualizarPreviewDescuento;
+        
+        const radiosPorcentaje = document.getElementById('descProductoPorcentaje');
+        const radiosMonto = document.getElementById('descProductoMonto');
+        radiosPorcentaje.onchange = actualizarPreviewDescuento;
+        radiosMonto.onchange = actualizarPreviewDescuento;
+
+        // Mostrar modal
+        actualizarPreviewDescuento();
+        new bootstrap.Modal(document.getElementById('modalDescuento')).show();
+    }
+
+    function actualizarPreviewDescuento() {
+        if (productoDescuentoIndex === null || !ticketActual || !ticketActual.productos[productoDescuentoIndex]) {
+            return;
+        }
+
+        const producto = ticketActual.productos[productoDescuentoIndex];
+        const precioOriginal = producto.precio_unitario || producto.precio;
+        const tipoDescuento = document.querySelector('input[name="tipoDescuentoProducto"]:checked').value;
+        const valorInput = parseFloat(document.getElementById('valorDescuentoProducto').value) || 0;
+
+        let montoDescuento = 0;
+        
+        // Actualizar símbolo y ayuda
+        const simbolo = document.getElementById('descuentoSimbolo');
+        const ayuda = document.getElementById('descuentoAyuda');
+        
+        if (tipoDescuento === 'PORCENTAJE') {
+            simbolo.textContent = '%';
+            ayuda.textContent = 'Ingrese el porcentaje de descuento (0-100)';
+            montoDescuento = Math.round((precioOriginal * Math.min(valorInput, 100)) / 100);
+        } else {
+            simbolo.textContent = '$';
+            ayuda.textContent = 'Ingrese el monto de descuento en pesos';
+            montoDescuento = Math.min(valorInput, precioOriginal);
+        }
+
+        const precioFinal = precioOriginal - montoDescuento;
+
+        // Actualizar preview
+        document.getElementById('descuentoPreviewOriginal').textContent = formatearMoneda(precioOriginal);
+        document.getElementById('descuentoPreviewMonto').textContent = '-' + formatearMoneda(montoDescuento);
+        document.getElementById('descuentoPreviewFinal').textContent = formatearMoneda(precioFinal);
+    }
+
+    function confirmarDescuentoProducto() {
+        if (productoDescuentoIndex === null || !ticketActual || !ticketActual.productos[productoDescuentoIndex]) {
+            mostrarNotificacion('Error al aplicar descuento', 'error');
+            return;
+        }
+
+        const producto = ticketActual.productos[productoDescuentoIndex];
+        const precioOriginal = producto.precio_unitario || producto.precio;
+        const tipoDescuento = document.querySelector('input[name="tipoDescuentoProducto"]:checked').value;
+        const valorInput = parseFloat(document.getElementById('valorDescuentoProducto').value) || 0;
+
+        let montoDescuento = 0;
+
+        if (tipoDescuento === 'PORCENTAJE') {
+            if (valorInput < 0 || valorInput > 100) {
+                mostrarNotificacion('El porcentaje debe estar entre 0 y 100', 'warning');
+                return;
+            }
+            montoDescuento = Math.round((precioOriginal * valorInput) / 100);
+        } else {
+            if (valorInput < 0 || valorInput > precioOriginal) {
+                mostrarNotificacion('El monto de descuento no puede ser mayor al precio', 'warning');
+                return;
+            }
+            montoDescuento = Math.round(valorInput);
+        }
+
+        // Aplicar descuento al producto
+        producto.descuento_unitario = montoDescuento;
+        producto.precio_original = precioOriginal;
+        producto.subtotal = (precioOriginal - montoDescuento) * producto.cantidad;
+
+        // Recalcular totales
+        recalcularTotalesTicket();
+
+        // Actualizar UI
+        cargarProductosTicket(ticketActual.productos);
+        actualizarResumenVenta();
+
+        // Cerrar modal
+        bootstrap.Modal.getInstance(document.getElementById('modalDescuento')).hide();
+        mostrarNotificacion(`Descuento de ${formatearMoneda(montoDescuento)} aplicado al producto`, 'success');
+        productoDescuentoIndex = null;
+    }
+
+    function quitarDescuentoProducto() {
+        if (productoDescuentoIndex === null || !ticketActual || !ticketActual.productos[productoDescuentoIndex]) {
+            mostrarNotificacion('Error al quitar descuento', 'error');
+            return;
+        }
+
+        const producto = ticketActual.productos[productoDescuentoIndex];
+        const precioOriginal = producto.precio_unitario || producto.precio;
+
+        // Quitar descuento
+        producto.descuento_unitario = 0;
+        producto.precio_original = 0;
+        producto.subtotal = precioOriginal * producto.cantidad;
+
+        // Recalcular totales
+        recalcularTotalesTicket();
+
+        // Actualizar UI
+        cargarProductosTicket(ticketActual.productos);
+        actualizarResumenVenta();
+
+        // Cerrar modal
+        bootstrap.Modal.getInstance(document.getElementById('modalDescuento')).hide();
+        mostrarNotificacion('Descuento eliminado del producto', 'info');
+        productoDescuentoIndex = null;
+    }
+
     // === FUNCIONES DE FINALIZACIÓN ===
 
     function finalizarVenta() {
@@ -1554,11 +2465,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Obtener el tipo de documento seleccionado en el paso 2
+        const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'TICKET';
+
         const payload = {
             correlativo: ticketActual.ticket_id,
             cliente: obtenerDatosCliente(),
             pagos: pagosActuales,
-            tipo_documento: document.getElementById('tipoDocumento').value,
+            tipo_documento: tipoDocumento,
             estado: 'PAGADO',
             metodo_pago_principal: pagosActuales.length > 0 ? pagosActuales[0].metodo_pago : 'EFECTIVO'
         };
@@ -1574,11 +2488,116 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                mostrarNotificacion('Venta finalizada correctamente', 'success');
-                setTimeout(() => {
-                    volverAlDashboard();
-                    actualizarDashboard();
-                }, 2000);
+                // Si hay crédito de trabajador en los pagos, descontar del crédito
+                const pagoCreditoTrabajador = pagosActuales.find(p => p.metodo_pago === 'CREDITO_TRABAJADOR');
+                
+                if (pagoCreditoTrabajador && pagoCreditoTrabajador.credito_id) {
+                    // Registrar uso del crédito
+                    fetch('/app/api/creditos/usar-en-venta/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        body: JSON.stringify({
+                            credito_id: pagoCreditoTrabajador.credito_id,
+                            monto_usado: pagoCreditoTrabajador.monto,
+                            ticket_id: ticketActual.ticket_id
+                        })
+                    })
+                    .then(resp => resp.json())
+                    .then(creditoData => {
+                        if (creditoData.success) {
+                            console.log('✅ Crédito descontado:', creditoData);
+                            
+                            // Mostrar mensaje con info del crédito
+                            let htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
+                            
+                            if (data.dte_generado) {
+                                htmlMensaje += `
+                                    <hr>
+                                    <p class="text-success">
+                                        <i class="ri-file-check-line"></i> 
+                                        <strong>${data.dte_generado.tipo} #${data.dte_generado.numero}</strong> generado
+                                    </p>
+                                `;
+                            }
+                            
+                            htmlMensaje += `
+                                <hr>
+                                <div class="alert alert-success">
+                                    <i class="ri-vip-crown-fill"></i> <strong>Crédito Trabajador</strong><br>
+                                    <small>Usado: ${formatearMoneda(pagoCreditoTrabajador.monto)}</small><br>
+                                    <small>Nuevo saldo: <strong>${formatearMoneda(creditoData.nuevo_saldo)}</strong></small>
+                                    ${creditoData.credito_pagado_completo ? '<br><span class="badge bg-success mt-1">✅ CRÉDITO PAGADO COMPLETO</span>' : ''}
+                                </div>
+                            `;
+                            
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Venta Completada!',
+                                html: htmlMensaje,
+                                confirmButtonText: 'Aceptar',
+                                timer: 5000,
+                                timerProgressBar: true
+                            }).then(() => {
+                                desactivarCreditoTrabajador();
+                                volverAlDashboard();
+                                actualizarDashboard();
+                            });
+                        } else {
+                            console.error('Error al descontar crédito:', creditoData.error);
+                            mostrarNotificacion('Venta finalizada pero error al descontar del crédito: ' + creditoData.error, 'warning');
+                            setTimeout(() => {
+                                volverAlDashboard();
+                                actualizarDashboard();
+                            }, 3000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error al procesar crédito:', error);
+                        mostrarNotificacion('Venta finalizada pero error al procesar el crédito', 'warning');
+                        setTimeout(() => {
+                            volverAlDashboard();
+                            actualizarDashboard();
+                        }, 2000);
+                    });
+                } else {
+                    // Venta normal sin crédito de trabajador
+                    let mensaje = '¡Venta finalizada correctamente!';
+                    let htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
+                    
+                    if (data.dte_generado) {
+                        htmlMensaje += `
+                            <hr>
+                            <p class="text-success">
+                                <i class="ri-file-check-line"></i> 
+                                <strong>${data.dte_generado.tipo} #${data.dte_generado.numero}</strong> generado
+                            </p>
+                            <small class="text-muted">El documento tributario electrónico ha sido creado exitosamente</small>
+                        `;
+                    }
+                    
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Venta Completada!',
+                            html: htmlMensaje,
+                            confirmButtonText: 'Aceptar',
+                            timer: data.dte_generado ? 4000 : 2000,
+                            timerProgressBar: true
+                        }).then(() => {
+                            volverAlDashboard();
+                            actualizarDashboard();
+                        });
+                    } else {
+                        mostrarNotificacion(mensaje, 'success');
+                        setTimeout(() => {
+                            volverAlDashboard();
+                            actualizarDashboard();
+                        }, 2000);
+                    }
+                }
             } else {
                 mostrarNotificacion(data.error || 'Error al finalizar la venta', 'error');
             }
@@ -1602,6 +2621,178 @@ document.addEventListener('DOMContentLoaded', function() {
             telefono_secundario: document.getElementById('clienteTelefono2').value.trim(),
             email_facturacion: document.getElementById('clienteEmailFactura').value.trim(),
         };
+    }
+
+    function imprimirTicket() {
+        if (!ticketActual) {
+            mostrarNotificacion('No hay ticket para imprimir', 'warning');
+            return;
+        }
+
+        // Generar HTML del ticket (similar a ticket_venta.html)
+        const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+        ventanaImpresion.document.write(generarHtmlTicketImpresion(ticketActual));
+        ventanaImpresion.document.close();
+        
+        ventanaImpresion.onload = function() {
+            ventanaImpresion.print();
+        };
+        
+        mostrarNotificacion('Preparando impresión...', 'info');
+    }
+
+    function imprimirTicketCambio() {
+        if (!ticketActual) {
+            mostrarNotificacion('No hay ticket para imprimir', 'warning');
+            return;
+        }
+
+        // Generar ticket de cambio
+        const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+        ventanaImpresion.document.write(generarHtmlTicketCambio(ticketActual));
+        ventanaImpresion.document.close();
+        
+        ventanaImpresion.onload = function() {
+            ventanaImpresion.print();
+        };
+        
+        mostrarNotificacion('Preparando ticket de cambio...', 'info');
+    }
+
+    function enviarPorEmail() {
+        if (!ticketActual) {
+            mostrarNotificacion('No hay ticket para enviar', 'warning');
+            return;
+        }
+
+        const email = document.getElementById('clienteEmail').value.trim();
+        
+        if (!email) {
+            Swal.fire({
+                title: 'Email del Cliente',
+                input: 'email',
+                inputLabel: 'Ingrese el email del cliente',
+                inputPlaceholder: 'cliente@ejemplo.com',
+                showCancelButton: true,
+                confirmButtonText: 'Enviar',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'Debe ingresar un email válido';
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    enviarEmailTicket(result.value);
+                }
+            });
+        } else {
+            enviarEmailTicket(email);
+        }
+    }
+
+    function enviarEmailTicket(email) {
+        mostrarNotificacion('Enviando email...', 'info');
+        
+        fetch('{% url "enviar_ticket_email" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                ticket_id: ticketActual.ticket_id,
+                email: email
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarNotificacion(`Email enviado exitosamente a ${email}`, 'success');
+            } else {
+                mostrarNotificacion(data.error || 'Error al enviar email', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarNotificacion('Error al enviar email', 'error');
+        });
+    }
+
+    function generarHtmlTicketImpresion(ticketData) {
+        // Función básica de impresión (se puede mejorar)
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Ticket #${ticketData.ticket_id}</title>
+                <style>
+                    body { font-family: monospace; font-size: 12px; width: 80mm; padding: 5mm; }
+                    .header { text-align: center; border-bottom: 1px dashed #000; margin-bottom: 10px; padding-bottom: 10px; }
+                    .item { margin: 5px 0; }
+                    .total { border-top: 1px solid #000; margin-top: 10px; padding-top: 10px; font-weight: bold; }
+                    @media print { body { width: 80mm; } @page { size: 80mm auto; margin: 0; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <strong>TICKET DE VENTA</strong><br>
+                    #${ticketData.ticket_id}<br>
+                    ${new Date().toLocaleString()}
+                </div>
+                <div class="items">
+                    ${ticketData.productos?.map(p => `
+                        <div class="item">
+                            ${p.cantidad}x ${p.articulo} - $${p.precio?.toLocaleString()}
+                        </div>
+                    `).join('') || 'Sin productos'}
+                </div>
+                <div class="total">
+                    TOTAL: $${ticketData.totales?.total?.toLocaleString() || 0}
+                </div>
+            </body>
+            </html>
+        `;
+    }
+
+    function generarHtmlTicketCambio(ticketData) {
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Ticket Cambio #${ticketData.ticket_id}</title>
+                <style>
+                    body { font-family: monospace; font-size: 12px; width: 80mm; padding: 5mm; }
+                    .header { text-align: center; border-bottom: 1px dashed #000; margin-bottom: 10px; padding-bottom: 10px; }
+                    .item { margin: 5px 0; }
+                    @media print { body { width: 80mm; } @page { size: 80mm auto; margin: 0; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <strong>TICKET DE CAMBIO</strong><br>
+                    Ticket Original: #${ticketData.ticket_id}<br>
+                    ${new Date().toLocaleString()}<br>
+                    Válido por 15 días
+                </div>
+                <div class="items">
+                    <p>Este ticket es válido para realizar cambios de productos.</p>
+                    <p><strong>Condiciones:</strong></p>
+                    <ul>
+                        <li>Producto en perfecto estado</li>
+                        <li>Con etiquetas originales</li>
+                        <li>Dentro de 15 días corridos</li>
+                        <li>NO se devuelve dinero</li>
+                    </ul>
+                </div>
+                <div class="total">
+                    Monto: $${ticketData.totales?.total?.toLocaleString() || 0}
+                </div>
+            </body>
+            </html>
+        `;
     }
 
     // === FUNCIONES DE NAVEGACIÓN ===
@@ -1647,9 +2838,138 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // === FUNCIONES DE GESTIÓN DE TICKETS ===
 
+    function cargarTicketsPendientesWizard(ticketsPendientes) {
+        const container = document.getElementById('listaTicketsPendientes');
+        
+        if (!ticketsPendientes || ticketsPendientes.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="ri-inbox-line fs-2 text-muted"></i>
+                    <p class="text-muted mt-2 mb-0">No hay tickets pendientes</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = ticketsPendientes.map(ticket => `
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <h6 class="mb-1 fw-bold">Ticket #${ticket.correlativo}</h6>
+                            <span class="badge bg-warning text-dark">${formatearMoneda(ticket.total)}</span>
+                        </div>
+                        <p class="mb-1 text-muted small">
+                            <i class="ri-user-line"></i> ${ticket.cliente_nombre}
+                            ${ticket.cliente_rut ? ` - ${ticket.cliente_rut}` : ''}
+                        </p>
+                        <small class="text-muted">
+                            <i class="ri-time-line"></i> ${ticket.hora} | 
+                            <i class="ri-user-star-line"></i> ${ticket.vendedor_nombre} |
+                            <i class="ri-shopping-bag-line"></i> ${ticket.productos_count} productos
+                        </small>
+                    </div>
+                    <div class="ms-3">
+                        <button class="btn btn-sm btn-success mb-1 w-100" 
+                                onclick="seleccionarTicketPendiente(${ticket.correlativo})"
+                                title="Seleccionar ticket">
+                            <i class="ri-check-line"></i> Seleccionar
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger w-100" 
+                                onclick="anularTicketPendiente(${ticket.correlativo})"
+                                title="Anular ticket">
+                            <i class="ri-delete-bin-line"></i> Anular
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function seleccionarTicketPendiente(correlativo) {
+        document.getElementById('inputTicket').value = correlativo;
+        buscarTicketPorNumero();
+    }
+
+    function anularTicketPendiente(correlativo) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: `¿Anular Ticket #${correlativo}?`,
+                html: `
+                    <p>Esta acción no se puede deshacer.</p>
+                    <p>El stock de los productos será devuelto al inventario.</p>
+                    <textarea id="motivoAnulacion" class="form-control mt-3" 
+                              placeholder="Motivo de anulación (opcional)" rows="3"></textarea>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, anular ticket',
+                cancelButtonText: 'Cancelar',
+                preConfirm: () => {
+                    return document.getElementById('motivoAnulacion').value;
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    ejecutarAnulacionTicket(correlativo, result.value || 'Anulado desde dashboard');
+                }
+            });
+        } else {
+            const motivo = prompt(`¿Motivo de anulación del ticket #${correlativo}?`, 'Anulado desde dashboard');
+            if (motivo !== null) {
+                ejecutarAnulacionTicket(correlativo, motivo);
+            }
+        }
+    }
+
+    function ejecutarAnulacionTicket(correlativo, motivo) {
+        // Mostrar loading
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Anulando ticket...',
+                text: 'Por favor espere',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+        }
+
+        fetch(apiUrls.anularTicket, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ 
+                correlativo: correlativo,
+                motivo: motivo
+            }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarNotificacion('Ticket anulado exitosamente', 'success');
+                actualizarDashboard(); // Recargar el dashboard
+            } else {
+                mostrarNotificacion(data.error || 'Error al anular el ticket', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarNotificacion('Error al anular el ticket', 'error');
+        });
+    }
+
     function editarTicket(correlativo) {
+        // Cambiar a vista wizard
+        mostrarVista('wizard');
+        
         // Cargar el ticket en el wizard para editarlo
         document.getElementById('inputTicket').value = correlativo;
+        
+        // Buscar y cargar el ticket
         buscarTicketPorNumero();
     }
 
@@ -1671,8 +2991,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success) {
                 mostrarVista('wizard');
                 cargarTicket(data.ticket);
-                irAPaso(3); // Ir directamente al paso de pagos
-                mostrarNotificacion('Ticket cargado para pago', 'success');
+                
+                // Si el ticket tiene cliente, ir directo a pagos (paso 3)
+                // Si no tiene cliente, ir a paso 2 para capturar datos
+                if (data.ticket.cliente && data.ticket.cliente.rut) {
+                    irAPaso(3); // Ir directo a pagos
+                    mostrarNotificacion('Ticket cargado. Registre los pagos.', 'success');
+                } else {
+                    irAPaso(2); // Ir a datos de cliente
+                    mostrarNotificacion('Complete los datos del cliente antes de pagar', 'info');
+                }
             } else {
                 mostrarNotificacion(data.error || 'Ticket no encontrado', 'error');
             }
@@ -1711,7 +3039,8 @@ document.addEventListener('DOMContentLoaded', function() {
             'EFECTIVO': 'Efectivo',
             'TARJETA_DEBITO': 'Tarjeta Débito',
             'TARJETA_CREDITO': 'Tarjeta Crédito',
-            'TRANSFERENCIA': 'Transferencia'
+            'TRANSFERENCIA': 'Transferencia',
+            'CREDITO_TRABAJADOR': 'Crédito Trabajador'
         };
         return nombres[metodo] || metodo;
     }
@@ -1759,6 +3088,49 @@ document.addEventListener('DOMContentLoaded', function() {
         return dv === dvCalculado;
     }
 
+    function esRutEmpresa(rut) {
+        // Limpiar RUT
+        const rutLimpio = rut.replace(/[^0-9kK]/g, '');
+        const cuerpo = parseInt(rutLimpio.slice(0, -1));
+        
+        // RUTs de empresa típicamente:
+        // - Empiezan con 76 o 77 (76.xxx.xxx-x, 77.xxx.xxx-x)
+        // - Son mayores a 50.000.000 (empresas más recientes)
+        if (cuerpo >= 76000000 && cuerpo < 78000000) {
+            return true; // Claramente empresa (76 o 77)
+        }
+        if (cuerpo >= 50000000) {
+            return true; // Probablemente empresa
+        }
+        
+        return false; // Persona natural
+    }
+
+    function sugerirTipoDocumento(tipo, mensaje) {
+        // Seleccionar el tipo de documento sugerido
+        const radioButton = document.getElementById(`tipo${tipo === 'FACTURA_ELECTRONICA' ? 'FacturaElectronica' : 'BoletaElectronica'}`);
+        if (radioButton) {
+            radioButton.checked = true;
+            
+            // Actualizar información y requerimientos
+            actualizarInfoTipoDocumento(tipo);
+            actualizarRequerimientosCliente(tipo);
+            
+            // Mostrar sección de facturación si es factura
+            if (tipo === 'FACTURA_ELECTRONICA') {
+                const seccionFacturacion = document.getElementById('seccionFacturacion');
+                if (seccionFacturacion) {
+                    seccionFacturacion.style.display = 'block';
+                }
+            }
+            
+            // Mostrar notificación informativa
+            if (mensaje) {
+                mostrarNotificacion(mensaje, 'info');
+            }
+        }
+    }
+
     function formatearRut(rut) {
         const rutLimpio = rut.replace(/[^0-9kK]/g, '');
         if (rutLimpio.length < 2) return rut;
@@ -1766,10 +3138,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const cuerpo = rutLimpio.slice(0, -1);
         const dv = rutLimpio.slice(-1);
         
-        // Formatear con puntos
-        const cuerpoFormateado = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-        
-        return `${cuerpoFormateado}-${dv}`;
+        // Formatear SIN puntos (solo guión)
+        return `${cuerpo}-${dv}`;
     }
 
     // Event listeners
@@ -1784,6 +3154,15 @@ document.addEventListener('DOMContentLoaded', function() {
             buscarClientePorRut();
         }
     });
+
+    const buscarEmpresaInput = document.getElementById('buscarEmpresa');
+    if (buscarEmpresaInput) {
+        buscarEmpresaInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                buscarEmpresa();
+            }
+        });
+    }
 
     // Formatear RUT mientras se escribe
     document.getElementById('buscarRut').addEventListener('input', function(e) {
@@ -1800,38 +3179,72 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Event listeners para el modal de agregar producto
+    const buscarSkuModal = document.getElementById('buscarSkuModal');
+    if (buscarSkuModal) {
+        buscarSkuModal.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                buscarProductoPorSkuModal();
+            }
+        });
+    }
+
+    const buscarNombreModal = document.getElementById('buscarNombreModal');
+    if (buscarNombreModal) {
+        buscarNombreModal.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                buscarProductoPorNombreModal();
+            }
+        });
+    }
+
+    // Event listener para calcular vuelto automáticamente
+    const pagoMontoInput = document.getElementById('pagoMonto');
+    if (pagoMontoInput) {
+        pagoMontoInput.addEventListener('input', function() {
+            const metodo = document.getElementById('pagoMetodo').value;
+            if (metodo === 'EFECTIVO') {
+                calcularVuelto();
+            }
+        });
+    }
+
     // Event listeners para cambio de tipo de documento
     document.addEventListener('change', function(e) {
         if (e.target.name === 'tipoDocumento') {
-            actualizarInfoTipoDocumento(e.target.value);
-            actualizarRequerimientosCliente(e.target.value);
+            const tipoSeleccionado = e.target.value;
+            console.log('Tipo de documento seleccionado:', tipoSeleccionado);
+            actualizarInfoTipoDocumento(tipoSeleccionado);
+            actualizarRequerimientosCliente(tipoSeleccionado);
         }
     });
 
     function actualizarInfoTipoDocumento(tipo) {
         const infoElement = document.getElementById('infoTipoDocumento');
         const requeridoElement = document.getElementById('requeridoCliente');
+        const seccionFacturacion = document.getElementById('seccionFacturacion');
+        const busquedaEmpresaSection = document.getElementById('busquedaEmpresaSection');
         
         const informacion = {
             'TICKET': {
-                texto: '<strong>Ticket Simple:</strong> Ideal para ventas rápidas. No requiere datos del cliente.',
+                texto: '<strong>Ticket Simple:</strong> Ideal para ventas rápidas. Datos del cliente opcionales para fidelización.',
                 clase: 'alert-info',
-                requerido: '(Opcional para Ticket Simple)'
+                requerido: '(Opcional - Recomendado para fidelización)'
             },
             'BOLETA_ELECTRONICA': {
-                texto: '<strong>Boleta Electrónica:</strong> Documento tributario oficial. Requiere nombre y RUT del cliente.',
+                texto: '<strong>Boleta Electrónica:</strong> Documento tributario oficial. Solo requiere datos básicos del cliente.',
                 clase: 'alert-primary',
-                requerido: '(Requerido: Nombre y RUT)'
+                requerido: '(Requerido: Nombre, RUT, Email y Teléfono)'
             },
             'FACTURA_ELECTRONICA': {
-                texto: '<strong>Factura Electrónica:</strong> Para empresas. Requiere razón social, RUT, giro y dirección completa.',
+                texto: '<strong>Factura Electrónica:</strong> Para empresas. Requiere todos los datos tributarios.',
                 clase: 'alert-warning',
                 requerido: '(Requerido: Datos completos de empresa)'
             },
             'BOLETA': {
-                texto: '<strong>Boleta Papel:</strong> Documento físico tradicional. Requiere datos básicos del cliente.',
+                texto: '<strong>Boleta Papel:</strong> Documento físico tradicional. Solo requiere datos básicos.',
                 clase: 'alert-secondary',
-                requerido: '(Requerido: Nombre y RUT)'
+                requerido: '(Requerido: Nombre, RUT, Email y Teléfono)'
             }
         };
 
@@ -1839,10 +3252,21 @@ document.addEventListener('DOMContentLoaded', function() {
             infoElement.className = `alert ${informacion[tipo].clase}`;
             infoElement.innerHTML = `<i class="ri-information-line"></i> ${informacion[tipo].texto}`;
             requeridoElement.textContent = informacion[tipo].requerido;
+            
+            // Mostrar/ocultar sección de facturación y búsqueda de empresas
+            if (tipo === 'FACTURA_ELECTRONICA') {
+                seccionFacturacion.style.display = 'block';
+                busquedaEmpresaSection.style.display = 'block';
+            } else {
+                seccionFacturacion.style.display = 'none';
+                busquedaEmpresaSection.style.display = 'none';
+            }
         }
     }
 
     function actualizarRequerimientosCliente(tipo) {
+        const labelNombre = document.getElementById('labelNombre');
+        const labelRut = document.getElementById('labelRut');
         const campos = {
             nombre: document.getElementById('clienteNombre'),
             rut: document.getElementById('clienteRut'),
@@ -1854,28 +3278,39 @@ document.addEventListener('DOMContentLoaded', function() {
         Object.values(campos).forEach(campo => {
             if (campo) {
                 campo.required = false;
-                campo.parentElement.querySelector('label').classList.remove('text-danger');
             }
         });
+        
+        labelNombre.classList.remove('text-danger');
+        labelRut.classList.remove('text-danger');
 
-        // Aplicar nuevos requerimientos
-        if (tipo === 'BOLETA_ELECTRONICA' || tipo === 'FACTURA_ELECTRONICA' || tipo === 'BOLETA') {
-            if (campos.nombre) {
-                campos.nombre.required = true;
-                campos.nombre.parentElement.querySelector('label').classList.add('text-danger');
-            }
-            if (campos.rut) {
-                campos.rut.required = true;
-                campos.rut.parentElement.querySelector('label').classList.add('text-danger');
-            }
-        }
-
-        if (tipo === 'FACTURA_ELECTRONICA') {
-            // Para facturas, mostrar automáticamente los datos adicionales
-            const datosFacturacion = document.getElementById('datosFacturacion');
-            if (datosFacturacion && !datosFacturacion.classList.contains('show')) {
-                new bootstrap.Collapse(datosFacturacion).show();
-            }
+        // Aplicar requerimientos según el tipo de documento
+        if (tipo === 'TICKET') {
+            // TICKET: Todo opcional (para fidelización)
+            labelNombre.innerHTML = 'Nombre/Razón Social <small class="text-muted">(opcional)</small>';
+            labelRut.innerHTML = 'RUT <small class="text-muted">(opcional)</small>';
+        } else if (tipo === 'BOLETA_ELECTRONICA' || tipo === 'BOLETA') {
+            // BOLETAS: Solo datos básicos obligatorios (teléfono opcional)
+            campos.nombre.required = true;
+            campos.rut.required = true;
+            campos.email.required = true;
+            campos.telefono.required = false; // Teléfono opcional
+            
+            labelNombre.innerHTML = 'Nombre/Razón Social <span class="text-danger">*</span>';
+            labelRut.innerHTML = 'RUT <span class="text-danger">*</span>';
+            labelNombre.classList.add('text-danger');
+            labelRut.classList.add('text-danger');
+        } else if (tipo === 'FACTURA_ELECTRONICA') {
+            // FACTURA: Datos de facturación obligatorios (teléfono opcional)
+            campos.nombre.required = true;
+            campos.rut.required = true;
+            campos.email.required = true;
+            campos.telefono.required = false; // Teléfono opcional
+            
+            labelNombre.innerHTML = 'Razón Social <span class="text-danger">*</span>';
+            labelRut.innerHTML = 'RUT Empresa <span class="text-danger">*</span>';
+            labelNombre.classList.add('text-danger');
+            labelRut.classList.add('text-danger');
         }
     }
 
@@ -1900,5 +3335,281 @@ document.addEventListener('DOMContentLoaded', function() {
     window.editarTicket = editarTicket;
     window.pagarTicket = pagarTicket;
     window.imprimirTicket = imprimirTicket;
+    
+    // Funciones de edición de productos
+    window.mostrarModalAgregarProducto = mostrarModalAgregarProducto;
+    window.buscarProductoPorSkuModal = buscarProductoPorSkuModal;
+    window.buscarProductoPorNombreModal = buscarProductoPorNombreModal;
+    window.confirmarAgregarProducto = confirmarAgregarProducto;
+    window.cambiarCantidadProducto = cambiarCantidadProducto;
+    window.eliminarProductoTicket = eliminarProductoTicket;
+    
+    // Funciones de descuentos por producto
+    window.mostrarModalDescuento = mostrarModalDescuento;
+    window.confirmarDescuentoProducto = confirmarDescuentoProducto;
+    window.quitarDescuentoProducto = quitarDescuentoProducto;
+    
+    // Funciones de gestión de tickets pendientes
+    window.seleccionarTicketPendiente = seleccionarTicketPendiente;
+    window.anularTicketPendiente = anularTicketPendiente;
+    
+    // Funciones de búsqueda de empresas
+    window.buscarEmpresa = buscarEmpresa;
+    
+    // ========== FUNCIONES DE CRÉDITO TRABAJADOR ==========
+    
+    // Variable global para crédito activo
+    let creditoTrabajadorActivo = null;
+    
+    window.activarCreditoTrabajador = function() {
+        Swal.fire({
+            title: 'Código de Crédito',
+            html: `
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Ingrese el código del crédito:</label>
+                    <input type="text" id="codigo-credito-input" 
+                           class="form-control form-control-lg text-center text-uppercase" 
+                           placeholder="CR-2025-0001" 
+                           style="font-family: monospace; font-size: 20px; letter-spacing: 2px;">
+                    <small class="text-muted d-block mt-2">
+                        <i class="ri-barcode-line"></i> Escanee el código de barras o escríbalo manualmente
+                    </small>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-check-line"></i> Validar',
+            cancelButtonText: '<i class="ri-close-line"></i> Cancelar',
+            customClass: {
+                confirmButton: 'btn btn-primary btn-lg',
+                cancelButton: 'btn btn-secondary'
+            },
+            didOpen: () => {
+                const input = document.getElementById('codigo-credito-input');
+                input.focus();
+                
+                // Permitir validar con Enter
+                input.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        Swal.clickConfirm();
+                    }
+                });
+            },
+            preConfirm: () => {
+                const codigo = document.getElementById('codigo-credito-input').value.trim();
+                if (!codigo) {
+                    Swal.showValidationMessage('Ingrese el código del crédito');
+                    return false;
+                }
+                return codigo.toUpperCase();
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                validarCodigoCreditoTrabajador(result.value);
+            }
+        });
+    };
+    
+    function validarCodigoCreditoTrabajador(codigo) {
+        // Mostrar loading
+        Swal.fire({
+            title: 'Validando...',
+            html: '<i class="ri-loader-4-line ri-spin" style="font-size: 48px;"></i><br>Verificando crédito',
+            allowOutsideClick: false,
+            showConfirmButton: false
+        });
+        
+        fetch('/app/api/creditos/validar-codigo/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ codigo_credito: codigo })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                creditoTrabajadorActivo = data.credito;
+                mostrarCreditoValidado(data.credito);
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Código Inválido',
+                    html: `
+                        <p class="mb-3">${data.error}</p>
+                        <div class="alert alert-warning">
+                            <small><i class="ri-information-line"></i> Verifique que el código sea correcto y que el crédito esté activo</small>
+                        </div>
+                    `,
+                    confirmButtonText: 'Intentar de nuevo'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        activarCreditoTrabajador();
+                    }
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Error al validar el crédito. Intente nuevamente.'
+            });
+        });
+    }
+    
+    function mostrarCreditoValidado(credito) {
+        Swal.fire({
+            icon: 'success',
+            title: '✅ Crédito Válido',
+            html: `
+                <div class="text-start">
+                    <div class="card border-success mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title text-center mb-3">
+                                <i class="ri-user-line"></i> ${credito.trabajador.nombre}
+                            </h5>
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td class="fw-bold">RUT:</td>
+                                    <td>${credito.trabajador.rut}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Código:</td>
+                                    <td>${credito.trabajador.codigo_vendedor}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold">Crédito:</td>
+                                    <td><span class="badge bg-primary">${credito.numero_credito}</span></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success text-center">
+                        <p class="mb-1"><strong>Saldo Disponible:</strong></p>
+                        <h2 class="mb-0 text-success">${formatearMoneda(credito.saldo_disponible)}</h2>
+                    </div>
+                    
+                    <div class="alert alert-info small">
+                        <i class="ri-information-line"></i> 
+                        <strong>Tipo:</strong> ${credito.tipo_credito}<br>
+                        <strong>Vence:</strong> ${credito.fecha_vencimiento} 
+                        (${credito.dias_para_vencimiento} días)
+                    </div>
+                </div>
+            `,
+            confirmButtonText: '<i class="ri-shopping-cart-line"></i> Continuar con la Venta',
+            confirmButtonColor: '#28a745',
+            width: '650px'
+        }).then(() => {
+            mostrarIndicadorCreditoActivo();
+        });
+    }
+    
+    function mostrarIndicadorCreditoActivo() {
+        const indicador = document.getElementById('indicador-credito-trabajador');
+        const nombreSpan = document.getElementById('nombre-trabajador-credito');
+        const saldoSpan = document.getElementById('saldo-credito-trabajador');
+        
+        nombreSpan.textContent = creditoTrabajadorActivo.trabajador.nombre;
+        saldoSpan.textContent = formatearMoneda(creditoTrabajadorActivo.saldo_disponible);
+        
+        indicador.style.display = 'block';
+        
+        // Scroll suave al indicador
+        indicador.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        // Agregar automáticamente el pago con el saldo total
+        agregarPagoCreditoAutomatico();
+    }
+    
+    function agregarPagoCreditoAutomatico() {
+        const saldoPendiente = calcularSaldoPendiente();
+        
+        if (saldoPendiente <= 0) {
+            mostrarNotificacion('No hay saldo pendiente por pagar', 'warning');
+            return;
+        }
+        
+        // Validar que no exceda el saldo del crédito
+        if (saldoPendiente > creditoTrabajadorActivo.saldo_disponible) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Saldo Insuficiente',
+                html: `
+                    <p>El total de la compra excede el saldo del crédito.</p>
+                    <table class="table table-sm mt-3">
+                        <tr>
+                            <td><strong>Total Compra:</strong></td>
+                            <td class="text-end"><strong>${formatearMoneda(saldoPendiente)}</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Saldo Crédito:</strong></td>
+                            <td class="text-end text-success"><strong>${formatearMoneda(creditoTrabajadorActivo.saldo_disponible)}</strong></td>
+                        </tr>
+                        <tr class="table-danger">
+                            <td><strong>Faltante:</strong></td>
+                            <td class="text-end"><strong>${formatearMoneda(saldoPendiente - creditoTrabajadorActivo.saldo_disponible)}</strong></td>
+                        </tr>
+                    </table>
+                    <p class="text-muted small">Puede combinar con otro método de pago o reducir los productos</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Usar Saldo Completo del Crédito',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#28a745'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Agregar pago por el monto del saldo del crédito
+                    const pago = {
+                        metodo_pago: 'CREDITO_TRABAJADOR',
+                        monto: creditoTrabajadorActivo.saldo_disponible,
+                        credito_id: creditoTrabajadorActivo.id,
+                        trabajador_nombre: creditoTrabajadorActivo.trabajador.nombre,
+                        notas: `Crédito ${creditoTrabajadorActivo.numero_credito}`
+                    };
+                    
+                    pagosActuales.push(pago);
+                    actualizarListaPagos();
+                    actualizarResumenVenta();
+                    mostrarNotificacion('Crédito de trabajador agregado. Complete con otro método de pago.', 'info');
+                }
+            });
+        } else {
+            // El saldo del crédito es suficiente
+            const pago = {
+                metodo_pago: 'CREDITO_TRABAJADOR',
+                monto: saldoPendiente,
+                credito_id: creditoTrabajadorActivo.id,
+                trabajador_nombre: creditoTrabajadorActivo.trabajador.nombre,
+                notas: `Crédito ${creditoTrabajadorActivo.numero_credito}`
+            };
+            
+            pagosActuales.push(pago);
+            actualizarListaPagos();
+            actualizarResumenVenta();
+            
+            mostrarNotificacion('Pago con crédito de trabajador agregado', 'success');
+        }
+    }
+    
+    window.desactivarCreditoTrabajador = function() {
+        creditoTrabajadorActivo = null;
+        document.getElementById('indicador-credito-trabajador').style.display = 'none';
+        
+        // Eliminar pago de crédito si existe
+        const indexCredito = pagosActuales.findIndex(p => p.metodo_pago === 'CREDITO_TRABAJADOR');
+        if (indexCredito >= 0) {
+            pagosActuales.splice(indexCredito, 1);
+            actualizarListaPagos();
+            actualizarResumenVenta();
+        }
+    };
+    
+    // Exponer funciones globales
+    window.activarCreditoTrabajador = activarCreditoTrabajador;
+    window.creditoTrabajadorActivo = null;
 });
 </script>

@@ -108,6 +108,53 @@
             justify-content: space-between;
         }
     }
+    
+    /* Estilos para verificación de productos */
+    .table-success {
+        background-color: #d1f4e0 !important;
+    }
+    
+    .table-warning {
+        background-color: #fff3cd !important;
+    }
+    
+    #productosVerificacionBody tr {
+        transition: all 0.2s ease;
+    }
+    
+    #productosVerificacionBody tr:hover {
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .cantidad-recepcionada {
+        border: 2px solid #dee2e6;
+        transition: border-color 0.2s ease;
+    }
+    
+    .cantidad-recepcionada:focus {
+        border-color: #20c997;
+        box-shadow: 0 0 0 0.2rem rgba(32, 201, 151, 0.25);
+    }
+    
+    .producto-checkbox {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    
+    .btn-detallar {
+        transition: all 0.2s ease;
+    }
+    
+    .btn-detallar:hover {
+        transform: scale(1.1);
+    }
+    
+    /* Sticky header para la tabla de productos */
+    .sticky-top {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
 
     .modal-header {
         background: #20c997;
@@ -116,14 +163,14 @@
 
     .timeline {
         position: relative;
-        padding-left: 40px;
-        margin: 20px 0;
+        padding-left: 30px;
+        margin: 10px 0;
     }
 
     .timeline::before {
         content: '';
         position: absolute;
-        left: 15px;
+        left: 10px;
         top: 0;
         bottom: 0;
         width: 2px;
@@ -132,16 +179,16 @@
 
     .timeline-item {
         position: relative;
-        margin-bottom: 20px;
+        margin-bottom: 12px;
     }
 
     .timeline-item::before {
         content: '';
         position: absolute;
-        left: -25px;
+        left: -20px;
         top: 5px;
-        width: 10px;
-        height: 10px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
         background: #20c997;
         border: 2px solid white;
@@ -149,9 +196,27 @@
     }
 
     .timeline-content {
-        padding: 10px;
+        padding: 8px 10px;
         border-radius: 6px;
         background: #f8f9fa;
+        border-left: 2px solid #20c997;
+        transition: all 0.2s ease;
+    }
+    
+    .timeline-content:hover {
+        background: #e9ecef;
+        border-left-color: #198754;
+        transform: translateX(2px);
+    }
+    
+    /* Nuevo estilo para historial sin timeline */
+    .historial-item {
+        transition: all 0.2s ease;
+        cursor: default;
+    }
+    
+    .historial-item:hover {
+        background-color: #f8f9fa;
     }
 
     .empty-state {
@@ -228,17 +293,11 @@
                                         <option value="GUIA">Guía de Despacho</option>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
-                                    <label for="filterOrigen" class="form-label">Sucursal Origen</label>
-                                    <select id="filterOrigen" class="form-select">
-                                        <option value="">Todas las sucursales</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
+                                <div class="col-md-4">
                                     <label for="filterFechaInicio" class="form-label">Fecha desde</label>
                                     <input type="date" id="filterFechaInicio" class="form-control">
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-4">
                                     <label for="filterFechaFin" class="form-label">Fecha hasta</label>
                                     <input type="date" id="filterFechaFin" class="form-control">
                                 </div>
@@ -291,6 +350,22 @@
                             <li class="mb-2"><span class="text-muted">Pendientes:</span> <strong id="resumenPendientes">0</strong></li>
                             <li class="mb-2"><span class="text-muted">DTE pendientes mes actual:</span> <strong id="resumenPendientesMes">0</strong></li>
                             <li><span class="text-muted">Total unidades:</span> <strong id="resumenUnidades">0</strong></li>
+                            <li id="itemProblemasResumen" style="display:none;" class="mt-3 pt-3 border-top">
+                                <div class="alert alert-warning mb-2 p-2">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                            <strong><span id="resumenProblemas">0</span></strong> productos con problemas
+                                        </div>
+                                    </div>
+                                </div>
+                                <a href="/app/regularizar-recepciones/" class="btn btn-warning btn-sm w-100">
+                                    <i class="bi bi-tools me-1"></i> Ir a Regularización
+                                </a>
+                                <button type="button" class="btn btn-outline-info btn-sm w-100 mt-1" id="btnVerDTEsProblemas">
+                                    <i class="bi bi-eye me-1"></i> Ver DTEs con Problemas
+                                </button>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -309,15 +384,13 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header bg-white">
                         <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Historial reciente</h6>
                     </div>
-                    <div class="card-body">
-                        <div class="timeline" id="historialTimeline">
-                            <div class="timeline-item">
-                                <div class="timeline-content">
-                                    <small class="text-muted">Sin confirmaciones recientes</small>
-                                </div>
+                    <div class="card-body p-2">
+                        <div id="historialTimeline">
+                            <div class="text-center py-3">
+                                <small class="text-muted">Sin confirmaciones recientes</small>
                             </div>
                         </div>
                     </div>
@@ -327,67 +400,261 @@
     </div>
 </div>
 
-<!-- Modal detalle documento -->
+<!-- Modal detalle documento MEJORADO -->
 <div class="modal fade" id="modalDetalleDocumento" tabindex="-1" aria-labelledby="modalDetalleLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalDetalleLabel"><i class="bi bi-file-text me-2"></i>Detalle del Documento</h5>
+                <div>
+                    <h5 class="modal-title mb-1" id="modalDetalleLabel">
+                        <i class="bi bi-file-text me-2"></i>Verificar Recepción - DTE #<span id="detalleNumero">-</span>
+                    </h5>
+                    <small class="text-white-50">Marca los productos según su estado al recibirlos</small>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="card">
-                            <div class= "card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">Información del Documento</h6>
-                                <ul class="list-unstyled mb-0">
-                                    <li class="mb-2"><span class="text-muted">Número:</span> <strong id="detalleNumero">-</strong></li>
-                                    <li class="mb-2"><span class="text-muted">Tipo:</span> <strong id="detalleTipo">-</strong></li>
-                                    <li class="mb-2"><span class="text-muted">Emisor:</span> <strong id="detalleEmisor">-</strong></li>
-                                    <li class="mb-2"><span class="text-muted">Sucursal Origen:</span> <strong id="detalleOrigen">-</strong></li>
-                                    <li class="mb-2"><span class="text-muted">Fecha Emisión:</span> <strong id="detalleFechaEmision">-</strong></li>
-                                    <li class="mb-2"><span class="text-muted">Observaciones:</span> <span id="detalleObservaciones">-</span></li>
-                                    <li><span class="text-muted">Referencia:</span> <span id="detalleReferencia">-</span></li>
-                                </ul>
+                <!-- Info del Documento y Búsqueda -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <div class="row">
+                                    <div class="col-6"><small class="text-muted">Tipo:</small> <strong id="detalleTipo">-</strong></div>
+                                    <div class="col-6"><small class="text-muted">Emisor:</small> <strong id="detalleEmisor">-</strong></div>
+                                    <div class="col-6"><small class="text-muted">Origen:</small> <strong id="detalleOrigen">-</strong></div>
+                                    <div class="col-6"><small class="text-muted">Fecha:</small> <strong id="detalleFechaEmision">-</strong></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-8">
-                        <div class="card">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-2 text-muted">Productos del documento</h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>SKU</th>
-                                                <th>Producto</th>
-                                                <th>Talla</th>
-                                                <th class="text-center">Cantidad</th>
-                                                <th class="text-end">Precio</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="detalleProductosBody">
-                                            <tr>
-                                                <td colspan="5" class="text-center text-muted">Cargando detalle...</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" id="buscarProductoModal" class="form-control" placeholder="Buscar por SKU, descripción...">
+                            <button class="btn btn-outline-secondary" type="button" id="btnLimpiarBusqueda">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Acciones Rápidas -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-success" id="btnMarcarTodosOK">
+                            <i class="bi bi-check-all me-1"></i>Marcar todos OK
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning" id="btnDesmarcarTodos">
+                            <i class="bi bi-x-lg me-1"></i>Desmarcar todos
+                        </button>
+                    </div>
+                    <small class="text-muted">
+                        <span id="contadorProductos">0 de 0</span> productos verificados
+                    </small>
+                </div>
+
+                <!-- Lista de Productos con Scroll -->
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px;" id="listaProductosRecepcion">
+                    <table class="table table-hover mb-0">
+                        <thead class="sticky-top bg-white" style="top: 0; z-index: 10;">
+                            <tr>
+                                <th style="width: 50px;">OK</th>
+                                <th style="width: 120px;">SKU</th>
+                                <th>Producto</th>
+                                <th style="width: 80px;">Talla</th>
+                                <th style="width: 100px;" class="text-center">Esperado</th>
+                                <th style="width: 100px;" class="text-center">Recibido</th>
+                                <th style="width: 80px;">Estado</th>
+                                <th style="width: 50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="productosVerificacionBody">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">Cargando productos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Resumen en Tiempo Real -->
+                <div class="mt-3">
+                    <div class="card border-success">
+                        <div class="card-body py-2">
+                            <div class="row text-center">
+                                <div class="col-3">
+                                    <div class="fw-bold text-success" id="resumenOK">0</div>
+                                    <small class="text-muted">OK ✅</small>
                                 </div>
-                                <div class="d-flex justify-content-end gap-3">
-                                    <div><span class="text-muted">Tallas distintas:</span> <strong id="detalleTotalTallas">0</strong></div>
-                                    <div><span class="text-muted">Unidades totales:</span> <strong id="detalleTotalUnidades">0</strong></div>
-                                    <div><span class="text-muted">Total Neto:</span> <strong id="detalleTotalNeto">$0</strong></div>
+                                <div class="col-3">
+                                    <div class="fw-bold text-warning" id="resumenParcial">0</div>
+                                    <small class="text-muted">Parcial ⚠️</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold text-danger" id="resumenDanado">0</div>
+                                    <small class="text-muted">Dañados 🔴</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold text-secondary" id="resumenFaltante">0</div>
+                                    <small class="text-muted">Faltantes ❌</small>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Observaciones Generales -->
+                <div class="mt-3">
+                    <label class="form-label fw-bold">Observaciones Generales</label>
+                    <textarea id="observacionesGenerales" class="form-control" rows="2" placeholder="Comentarios adicionales sobre la recepción..."></textarea>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle me-1"></i>Cerrar</button>
-                <button type="button" class="btn btn-success" id="btnConfirmarRecepcion"><i class="bi bi-check-circle me-1"></i>Confirmar Recepción</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" id="btnRechazarRecepcion">
+                    <i class="bi bi-x-octagon me-1"></i>Rechazar Recepción
+                </button>
+                <button type="button" class="btn btn-warning" id="btnRecepcionarParcial" style="display:none;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Recepcionar con Problemas
+                </button>
+                <button type="button" class="btn btn-success" id="btnConfirmarRecepcion">
+                    <i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para detallar problemas de un producto -->
+<div class="modal fade" id="modalDetalleProblema" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h6 class="modal-title text-white">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Detallar Problema
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info del Producto -->
+                <div class="alert alert-info mb-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-box-seam fs-3 me-3"></i>
+                        <div>
+                            <strong id="problemaProductoNombre" class="d-block">-</strong>
+                            <small class="text-muted">
+                                SKU: <span id="problemaProductoSKU">-</span> | 
+                                Talla: <span id="problemaProductoTalla">-</span> | 
+                                Esperado: <strong><span id="problemaCantidadEsperada">0</span> unidades</strong>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cantidad Recepcionada (Principal) -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        <i class="bi bi-check-circle text-success me-1"></i>¿Cuántas unidades recibiste?
+                    </label>
+                    <input type="number" id="problemaCantidadRecepcionada" class="form-control form-control-lg" 
+                           min="0" placeholder="Ej: 5">
+                    <small class="text-muted">Ingresa la cantidad que realmente llegó (buenas + dañadas)</small>
+                    <div id="errorCantidadRecepcionada" class="text-danger small mt-1" style="display:none;">
+                        <i class="bi bi-exclamation-circle me-1"></i>La cantidad no puede ser mayor a la esperada
+                    </div>
+                </div>
+                
+                <!-- Cantidad Dañada (Opcional) -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-exclamation-triangle text-warning me-1"></i>¿Cuántas llegaron dañadas? (opcional)
+                    </label>
+                    <input type="number" id="problemaCantidadDanada" class="form-control" 
+                           min="0" value="0" placeholder="0">
+                    <small class="text-muted">Si hay unidades con defectos o problemas</small>
+                    <div id="errorCantidadDanada" class="text-danger small mt-1" style="display:none;">
+                        <i class="bi bi-exclamation-circle me-1"></i>La cantidad dañada no puede ser mayor a la recepcionada
+                    </div>
+                </div>
+                
+                <!-- Auto-cálculo (se muestra solo) -->
+                <div class="alert alert-secondary mb-3" id="resumenAutocalculo">
+                    <small>
+                        📦 <strong>Faltante:</strong> <span id="problemaCantidadFaltanteCalc">0</span> unidades (se calcula automáticamente)<br>
+                        🔄 <strong>Estado:</strong> <span id="problemaEstadoCalc">-</span>
+                    </small>
+                </div>
+                
+                <!-- Observaciones -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">
+                        <i class="bi bi-chat-left-text me-1"></i>Observaciones
+                    </label>
+                    <textarea id="problemaObservaciones" class="form-control" rows="2" 
+                              placeholder="Ej: Caja rota, faltan 3 unidades, etc."></textarea>
+                </div>
+                
+                <!-- Campos hidden para guardar -->
+                <input type="hidden" id="problemaCantidadFaltante">
+                <input type="hidden" id="problemaEstado">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnGuardarProblema">
+                    <i class="bi bi-save me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal DTEs con Problemas -->
+<div class="modal fade" id="modalDTEsProblemas" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-dark">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>DTEs con Productos Problemáticos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Estos DTEs tienen productos con problemas (faltantes, dañados o parciales) que requieren regularización.
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>DTE</th>
+                                <th>Fecha Emisión</th>
+                                <th>Fecha Recepción</th>
+                                <th>Origen</th>
+                                <th>Productos OK</th>
+                                <th>Con Problemas</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaDTEsProblemasBody">
+                            <tr>
+                                <td colspan="8" class="text-center py-3">
+                                    <div class="spinner-border text-warning"></div>
+                                    <p class="text-muted mt-2">Cargando...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <a href="/app/regularizar-recepciones/" class="btn btn-warning">
+                    <i class="bi bi-tools me-1"></i>Ir a Regularización
+                </a>
             </div>
         </div>
     </div>
@@ -421,23 +688,40 @@
 
 <script>
 let modalDetalle = null;
+let modalProblema = null;
 let recepcionesData = [];
 let historialData = [];
 let sucursalDestinoInfo = null;
 let paginaActual = 1;
 let totalPaginas = 1;
 let documentoSeleccionado = null;
+let productosVerificacion = [];  // Array para almacenar estado de verificación
+let productoEditandoIndex = null;  // Índice del producto que se está editando
 
 $(document).ready(function() {
     modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
+    modalProblema = new bootstrap.Modal(document.getElementById('modalDetalleProblema'));
 
     $('#btnRefresh').on('click', () => cargarRecepciones(true));
-    $('#filterTipoDocumento, #filterOrigen, #filterFechaInicio, #filterFechaFin').on('change', () => cargarRecepciones());
+    $('#filterTipoDocumento, #filterFechaInicio, #filterFechaFin').on('change', () => cargarRecepciones());
     $('#btnPrev').on('click', () => cambiarPagina(-1));
     $('#btnNext').on('click', () => cambiarPagina(1));
     $('#btnConfirmarRecepcion').on('click', confirmarRecepcion);
+    $('#btnRecepcionarParcial').on('click', confirmarRecepcionParcial);
+    $('#btnRechazarRecepcion').on('click', rechazarRecepcion);
     $('#btnRangoMesActual').on('click', aplicarRangoMesActual);
     $('#btnSoloHoy').on('click', aplicarRangoHoy);
+    
+    // Nuevos eventos para verificación
+    $('#btnMarcarTodosOK').on('click', marcarTodosOK);
+    $('#btnDesmarcarTodos').on('click', desmarcarTodos);
+    $('#buscarProductoModal').on('input', filtrarProductosModal);
+    $('#btnLimpiarBusqueda').on('click', limpiarBusqueda);
+    $('#btnGuardarProblema').on('click', guardarProblema);
+    $('#btnVerDTEsProblemas').on('click', verDTEsConProblemas);
+    
+    // Auto-cálculo en modal de problemas
+    $('#problemaCantidadRecepcionada, #problemaCantidadDanada').on('input', calcularFaltanteAutomatico);
 
     inicializarReferenciaFechas();
     cargarInfoSucursal();
@@ -504,7 +788,6 @@ function cargarInfoSucursal() {
 function cargarRecepciones(forzarActualizacion = false) {
     const filtros = {
         tipo_documento: $('#filterTipoDocumento').val(),
-        sucursal_origen: $('#filterOrigen').val(),
         fecha_inicio: $('#filterFechaInicio').val(),
         fecha_fin: $('#filterFechaFin').val(),
         pagina: paginaActual
@@ -532,7 +815,6 @@ function cargarRecepciones(forzarActualizacion = false) {
 
         renderTablaRecepciones();
         actualizarResumen(response.resumen || {});
-        cargarOpcionesOrigen(response.origenes || []);
         actualizarPaginacion();
 
         if (forzarActualizacion) {
@@ -600,11 +882,8 @@ function renderTablaRecepciones() {
                 <td class="detalle-tallas">${resumenHtml}</td>
                 <td class="text-center"><span class="badge bg-dark">${doc.total_unidades}</span></td>
                 <td class="text-center">
-                    <button class="btn btn-outline-primary btn-sm" onclick="verDetalle(${doc.id})">
-                        <i class="bi bi-eye me-1"></i>Ver detalle
-                    </button>
-                    <button class="btn btn-success btn-sm ms-1" onclick="abrirConfirmacion(${doc.id})">
-                        <i class="bi bi-check2-circle me-1"></i>Confirmar
+                    <button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})">
+                        <i class="bi bi-eye me-1"></i>Ver Detalle
                     </button>
                 </td>
             </tr>
@@ -634,17 +913,18 @@ function actualizarResumen(resumen) {
     }
 
     $('#resumenPendientesMes').text(pendientesMes !== null ? pendientesMes : '—');
+    
+    // Actualizar contador de problemas
+    const productosConProblemas = resumen.productos_con_problemas || 0;
+    if (productosConProblemas > 0) {
+        $('#resumenProblemas').text(productosConProblemas);
+        $('#itemProblemasResumen').show();
+    } else {
+        $('#itemProblemasResumen').hide();
+    }
 }
 
-function cargarOpcionesOrigen(origenes) {
-    const select = $('#filterOrigen');
-    const valorActual = select.val();
-    select.empty().append('<option value="">Todas las sucursales</option>');
-    origenes.forEach(origen => {
-        select.append(`<option value="${origen.id}">${origen.alias} - ${origen.empresa}</option>`);
-    });
-    select.val(valorActual);
-}
+// Filtro de sucursal origen eliminado - ya no es necesario
 
 function actualizarPaginacion() {
     if (totalPaginas <= 1) {
@@ -676,11 +956,8 @@ function verDetalle(id) {
     modalDetalle.show();
 }
 
-function abrirConfirmacion(id) {
-    verDetalle(id);
-}
-
 function llenarDetalleDocumento(doc) {
+    // Llenar info básica
     $('#detalleNumero').text(doc.numero_documento || '-');
     $('#detalleTipo').html(doc.tipo_documento === 'FACTURA ELECTRONICA'
         ? '<span class="badge bg-primary">Factura</span>'
@@ -688,42 +965,341 @@ function llenarDetalleDocumento(doc) {
     $('#detalleEmisor').text(doc.emisor || '-');
     $('#detalleOrigen').text(doc.sucursal_origen || '-');
     $('#detalleFechaEmision').text(new Date(doc.fecha_emision).toLocaleDateString('es-CL'));
-    $('#detalleObservaciones').text(doc.observaciones || 'Sin observaciones adicionales');
-    $('#detalleReferencia').text(doc.referencias || 'Sin referencias');
-
-    const tbody = $('#detalleProductosBody');
-    tbody.empty();
-
+    
+    // Limpiar búsqueda y observaciones
+    $('#buscarProductoModal').val('');
+    $('#observacionesGenerales').val('');
+    
     if (!doc.detalle || !doc.detalle.length) {
-        tbody.append('<tr><td colspan="5" class="text-center text-muted">Sin detalle de productos disponible.</td></tr>');
-        $('#detalleTotalTallas').text(0);
-        $('#detalleTotalUnidades').text(0);
-        $('#detalleTotalNeto').text('$0');
+        $('#productosVerificacionBody').html('<tr><td colspan="8" class="text-center text-muted">Sin productos</td></tr>');
         return;
     }
+    
+    // Inicializar array de verificación
+    productosVerificacion = doc.detalle.map(item => ({
+        dte_producto_id: item.dte_producto_id,
+        sku: item.sku,
+        descripcion: item.descripcion,
+        talla: item.talla,
+        cantidad_esperada: item.cantidad,
+        cantidad_recepcionada: item.cantidad,  // Por defecto, todo OK
+        cantidad_danada: 0,
+        cantidad_faltante: 0,
+        estado: 'RECEPCIONADO_OK',
+        observaciones: '',
+        marcado_ok: true,  // Por defecto marcado
+        precio: item.precio || 0
+    }));
+    
+    renderizarProductosVerificacion();
+    actualizarResumenVerificacion();
+}
 
-    let totalTallas = 0;
-    let totalUnidades = 0;
-    let totalNeto = 0;
-
-    doc.detalle.forEach(item => {
+function renderizarProductosVerificacion() {
+    const tbody = $('#productosVerificacionBody');
+    tbody.empty();
+    
+    const busqueda = $('#buscarProductoModal').val().toLowerCase();
+    
+    productosVerificacion.forEach((prod, index) => {
+        // Filtrar por búsqueda
+        const coincide = !busqueda || 
+            prod.sku.toLowerCase().includes(busqueda) ||
+            prod.descripcion.toLowerCase().includes(busqueda) ||
+            prod.talla.toLowerCase().includes(busqueda);
+        
+        if (!coincide) return;
+        
+        const tieneProblemas = prod.estado !== 'RECEPCIONADO_OK' || 
+                              prod.cantidad_danada > 0 || 
+                              prod.cantidad_faltante > 0 ||
+                              prod.cantidad_recepcionada !== prod.cantidad_esperada;
+        
+        const rowClass = tieneProblemas ? 'table-warning' : (prod.marcado_ok ? 'table-success' : '');
+        const estadoBadge = getEstadoBadge(prod.estado);
+        
         tbody.append(`
-            <tr>
-                <td>${item.sku || '-'}</td>
-                <td>${item.descripcion || '-'}</td>
-                <td>${item.talla || '-'}</td>
-                <td class="text-center">${item.cantidad || 0}</td>
-                <td class="text-end">$${Number(item.precio || 0).toLocaleString()}</td>
+            <tr class="${rowClass}" data-index="${index}">
+                <td class="text-center">
+                    <input type="checkbox" class="form-check-input producto-checkbox" 
+                           data-index="${index}" ${prod.marcado_ok ? 'checked' : ''}>
+                </td>
+                <td><small class="font-monospace">${prod.sku}</small></td>
+                <td><small>${prod.descripcion}</small></td>
+                <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
+                <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
+                <td class="text-center">
+                    <input type="number" class="form-control form-control-sm text-center cantidad-recepcionada" 
+                           data-index="${index}" value="${prod.cantidad_recepcionada}" 
+                           min="0" max="${prod.cantidad_esperada}" style="width: 70px;">
+                </td>
+                <td>${estadoBadge}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-warning btn-detallar" 
+                            data-index="${index}" title="Detallar problema">
+                        <i class="bi bi-exclamation-circle"></i>
+                    </button>
+                </td>
             </tr>
         `);
-        totalTallas += 1;
-        totalUnidades += item.cantidad || 0;
-        totalNeto += (item.cantidad || 0) * (item.precio || 0);
     });
+    
+    if (tbody.children().length === 0) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron productos</td></tr>');
+    }
+    
+    // Bind events
+    $('.producto-checkbox').on('change', function() {
+        const index = $(this).data('index');
+        toggleProductoOK(index);
+    });
+    
+    $('.cantidad-recepcionada').on('change', function() {
+        const index = $(this).data('index');
+        const cantidad = parseInt($(this).val()) || 0;
+        actualizarCantidadRecepcionada(index, cantidad);
+    });
+    
+    $('.btn-detallar').on('click', function() {
+        const index = $(this).data('index');
+        abrirModalProblema(index);
+    });
+}
 
-    $('#detalleTotalTallas').text(totalTallas);
-    $('#detalleTotalUnidades').text(totalUnidades);
-    $('#detalleTotalNeto').text(`$${Math.round(totalNeto).toLocaleString()}`);
+function getEstadoBadge(estado) {
+    const badges = {
+        'RECEPCIONADO_OK': '<span class="badge bg-success">OK</span>',
+        'RECEPCIONADO_PARCIAL': '<span class="badge bg-warning">Parcial</span>',
+        'RECEPCIONADO_DANADO': '<span class="badge bg-danger">Dañado</span>',
+        'FALTANTE': '<span class="badge bg-secondary">Faltante</span>',
+        'EN_REGULARIZACION': '<span class="badge bg-info">En Reg.</span>'
+    };
+    return badges[estado] || '<span class="badge bg-secondary">-</span>';
+}
+
+function toggleProductoOK(index) {
+    productosVerificacion[index].marcado_ok = !productosVerificacion[index].marcado_ok;
+    
+    if (!productosVerificacion[index].marcado_ok) {
+        // Si se desmarca, abrir modal para detallar problema
+        abrirModalProblema(index);
+    } else {
+        // Si se marca OK, resetear a valores correctos
+        productosVerificacion[index].cantidad_recepcionada = productosVerificacion[index].cantidad_esperada;
+        productosVerificacion[index].cantidad_danada = 0;
+        productosVerificacion[index].cantidad_faltante = 0;
+        productosVerificacion[index].estado = 'RECEPCIONADO_OK';
+        productosVerificacion[index].observaciones = '';
+        renderizarProductosVerificacion();
+        actualizarResumenVerificacion();
+    }
+}
+
+function actualizarCantidadRecepcionada(index, cantidad) {
+    const prod = productosVerificacion[index];
+    
+    // ✅ VALIDACIÓN: No permitir cantidad mayor a la esperada
+    if (cantidad > prod.cantidad_esperada) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Cantidad inválida',
+            text: `No puedes ingresar más de ${prod.cantidad_esperada} unidades (esperadas)`,
+            timer: 2000
+        });
+        // Restablecer al valor anterior
+        renderizarProductosVerificacion();
+        return;
+    }
+    
+    prod.cantidad_recepcionada = cantidad;
+    
+    // Auto-calcular faltante
+    prod.cantidad_faltante = Math.max(0, prod.cantidad_esperada - cantidad - prod.cantidad_danada);
+    
+    // Auto-determinar estado
+    if (cantidad === prod.cantidad_esperada && prod.cantidad_danada === 0) {
+        prod.estado = 'RECEPCIONADO_OK';
+        prod.marcado_ok = true;
+    } else if (cantidad === 0) {
+        prod.estado = 'FALTANTE';
+        prod.marcado_ok = false;
+    } else {
+        prod.estado = 'RECEPCIONADO_PARCIAL';
+        prod.marcado_ok = false;
+    }
+    
+    renderizarProductosVerificacion();
+    actualizarResumenVerificacion();
+}
+
+function marcarTodosOK() {
+    productosVerificacion.forEach(prod => {
+        prod.marcado_ok = true;
+        prod.cantidad_recepcionada = prod.cantidad_esperada;
+        prod.cantidad_danada = 0;
+        prod.cantidad_faltante = 0;
+        prod.estado = 'RECEPCIONADO_OK';
+        prod.observaciones = '';
+    });
+    renderizarProductosVerificacion();
+    actualizarResumenVerificacion();
+}
+
+function desmarcarTodos() {
+    productosVerificacion.forEach(prod => {
+        prod.marcado_ok = false;
+    });
+    renderizarProductosVerificacion();
+    actualizarResumenVerificacion();
+}
+
+function filtrarProductosModal() {
+    renderizarProductosVerificacion();
+}
+
+function limpiarBusqueda() {
+    $('#buscarProductoModal').val('');
+    renderizarProductosVerificacion();
+}
+
+function actualizarResumenVerificacion() {
+    let ok = 0, parcial = 0, danado = 0, faltante = 0;
+    let verificados = 0;
+    
+    productosVerificacion.forEach(prod => {
+        if (prod.marcado_ok) verificados++;
+        
+        switch(prod.estado) {
+            case 'RECEPCIONADO_OK': ok++; break;
+            case 'RECEPCIONADO_PARCIAL': parcial++; break;
+            case 'RECEPCIONADO_DANADO': danado++; break;
+            case 'FALTANTE': faltante++; break;
+        }
+    });
+    
+    $('#resumenOK').text(ok);
+    $('#resumenParcial').text(parcial);
+    $('#resumenDanado').text(danado);
+    $('#resumenFaltante').text(faltante);
+    $('#contadorProductos').text(`${verificados} de ${productosVerificacion.length}`);
+    
+    // Cambiar el texto del botón según el estado
+    const hayProblemas = parcial > 0 || danado > 0 || faltante > 0;
+    
+    if (hayProblemas) {
+        // Ocultar botón de recepción parcial (ya no es necesario)
+        $('#btnRecepcionarParcial').hide();
+        $('#btnConfirmarRecepcion').html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción');
+    } else {
+        $('#btnRecepcionarParcial').hide();
+        $('#btnConfirmarRecepcion').html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa');
+    }
+}
+
+function abrirModalProblema(index) {
+    productoEditandoIndex = index;
+    const prod = productosVerificacion[index];
+    
+    // Llenar datos
+    $('#problemaProductoNombre').text(prod.descripcion);
+    $('#problemaProductoSKU').text(prod.sku);
+    $('#problemaProductoTalla').text(prod.talla);
+    $('#problemaCantidadEsperada').text(prod.cantidad_esperada);
+    $('#problemaCantidadRecepcionada').val(prod.cantidad_recepcionada);
+    $('#problemaCantidadDanada').val(prod.cantidad_danada);
+    $('#problemaObservaciones').val(prod.observaciones);
+    
+    // Calcular y mostrar estado inicial
+    calcularFaltanteAutomatico();
+    
+    modalProblema.show();
+}
+
+function calcularFaltanteAutomatico() {
+    const esperada = parseInt($('#problemaCantidadEsperada').text()) || 0;
+    const recepcionada = parseInt($('#problemaCantidadRecepcionada').val()) || 0;
+    const danada = parseInt($('#problemaCantidadDanada').val()) || 0;
+    
+    // ✅ VALIDACIÓN 1: Cantidad recepcionada no puede ser mayor a la esperada
+    if (recepcionada > esperada) {
+        $('#errorCantidadRecepcionada').show();
+        $('#problemaCantidadRecepcionada').addClass('is-invalid');
+        $('#btnGuardarProblema').prop('disabled', true);
+    } else {
+        $('#errorCantidadRecepcionada').hide();
+        $('#problemaCantidadRecepcionada').removeClass('is-invalid');
+        $('#btnGuardarProblema').prop('disabled', false);
+    }
+    
+    // ✅ VALIDACIÓN 2: Cantidad dañada no puede ser mayor a la recepcionada
+    if (danada > recepcionada) {
+        $('#errorCantidadDanada').show();
+        $('#problemaCantidadDanada').addClass('is-invalid');
+        $('#btnGuardarProblema').prop('disabled', true);
+    } else {
+        $('#errorCantidadDanada').hide();
+        $('#problemaCantidadDanada').removeClass('is-invalid');
+    }
+    
+    // Auto-calcular faltante
+    const faltante = Math.max(0, esperada - recepcionada);
+    const buenas = Math.max(0, recepcionada - danada);
+    
+    $('#problemaCantidadFaltanteCalc').text(faltante);
+    $('#problemaCantidadFaltante').val(faltante);
+    
+    // Auto-determinar estado
+    let estado = '';
+    let estadoTexto = '';
+    
+    if (recepcionada === 0) {
+        estado = 'FALTANTE';
+        estadoTexto = '<span class="badge bg-secondary">❌ FALTANTE</span>';
+    } else if (recepcionada === esperada && danada === 0) {
+        estado = 'RECEPCIONADO_OK';
+        estadoTexto = '<span class="badge bg-success">✅ RECEPCIONADO OK</span>';
+    } else if (danada > 0) {
+        estado = 'RECEPCIONADO_DANADO';
+        estadoTexto = `<span class="badge bg-danger">🔴 ${danada} DAÑADAS</span>`;
+    } else if (faltante > 0) {
+        estado = 'RECEPCIONADO_PARCIAL';
+        estadoTexto = `<span class="badge bg-warning">⚠️ FALTAN ${faltante}</span>`;
+    } else {
+        estado = 'RECEPCIONADO_OK';
+        estadoTexto = '<span class="badge bg-success">✅ OK</span>';
+    }
+    
+    $('#problemaEstado').val(estado);
+    $('#problemaEstadoCalc').html(estadoTexto);
+    
+    // Mostrar resumen visual
+    $('#resumenAutocalculo').removeClass('alert-secondary alert-success alert-warning alert-danger')
+                           .addClass(
+                               estado === 'RECEPCIONADO_OK' ? 'alert-success' :
+                               estado === 'FALTANTE' ? 'alert-secondary' :
+                               estado === 'RECEPCIONADO_DANADO' ? 'alert-danger' : 'alert-warning'
+                           );
+}
+
+function guardarProblema() {
+    if (productoEditandoIndex === null) return;
+    
+    const prod = productosVerificacion[productoEditandoIndex];
+    
+    // Tomar valores del modal
+    prod.cantidad_recepcionada = parseInt($('#problemaCantidadRecepcionada').val()) || 0;
+    prod.cantidad_danada = parseInt($('#problemaCantidadDanada').val()) || 0;
+    prod.cantidad_faltante = parseInt($('#problemaCantidadFaltante').val()) || 0;
+    prod.estado = $('#problemaEstado').val();
+    prod.observaciones = $('#problemaObservaciones').val();
+    prod.marcado_ok = (prod.estado === 'RECEPCIONADO_OK');
+    
+    // Cerrar modal
+    modalProblema.hide();
+    
+    // Actualizar vista principal
+    renderizarProductosVerificacion();
+    actualizarResumenVerificacion();
 }
 
 function confirmarRecepcion() {
@@ -731,62 +1307,347 @@ function confirmarRecepcion() {
         Swal.fire('Sin documento', 'Selecciona un documento para confirmar la recepción.', 'warning');
         return;
     }
+    
+    // Filtrar productos por estado
+    const productosOK = productosVerificacion.filter(p => p.estado === 'RECEPCIONADO_OK');
+    const conProblemas = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK');
+    const hayProblemas = conProblemas.length > 0;
+    
+    // Si hay productos con problemas, solo permitir recepcionar TODO según cantidades ingresadas
+    if (hayProblemas) {
+        // Desglosar los problemas
+        const parciales = conProblemas.filter(p => p.estado === 'RECEPCIONADO_PARCIAL').length;
+        const danados = conProblemas.filter(p => p.estado === 'RECEPCIONADO_DANADO').length;
+        const faltantes = conProblemas.filter(p => p.estado === 'FALTANTE').length;
+        
+        let detalleProblemas = '';
+        if (parciales > 0) detalleProblemas += `<li>${parciales} parcial(es)</li>`;
+        if (danados > 0) detalleProblemas += `<li>${danados} con productos dañados</li>`;
+        if (faltantes > 0) detalleProblemas += `<li>${faltantes} faltante(s) completo(s)</li>`;
+        
+        Swal.fire({
+            title: '⚠️ Recepción con Problemas Detectados',
+            html: `
+                <div class="text-start">
+                    <p>Se detectaron <strong>${conProblemas.length}</strong> producto(s) con problemas:</p>
+                    <ul class="mb-2">
+                        ${detalleProblemas}
+                    </ul>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>¿Qué se va a recepcionar?</strong>
+                        <ul class="mt-2 mb-0">
+                            <li><strong>${productosOK.length}</strong> productos OK → Stock se actualizará normalmente</li>
+                            <li><strong>${conProblemas.length}</strong> productos con problemas → Se actualizará con las cantidades que ingresaste</li>
+                        </ul>
+                    </div>
+                    <div class="alert alert-warning mb-0">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Importante:</strong> El stock se actualizará con las cantidades reales que recepcionaste, 
+                        no con las cantidades esperadas. Los productos con problemas quedarán registrados 
+                        para seguimiento y posible regularización.
+                    </div>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, recepcionar con estas cantidades',
+            cancelButtonText: '<i class="bi bi-x-circle me-1"></i>Cancelar',
+            confirmButtonColor: '#ffc107',
+            width: '700px'
+        }).then(result => {
+            if (result.isConfirmed) {
+                // Recepcionar TODO con las cantidades ingresadas por el usuario
+                procesarRecepcion(true);  // true = incluir TODOS los productos
+            }
+        });
+    } else {
+        // No hay problemas, recepción normal completa
+        Swal.fire({
+            title: '✅ Confirmar Recepción Completa',
+            html: `
+                <div class="text-start">
+                    <p>Vas a recepcionar <strong>${productosOK.length}</strong> productos en perfecto estado.</p>
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle-fill me-2"></i>
+                        Todos los productos están marcados como <strong>OK</strong>
+                    </div>
+                    <p class="text-muted mb-0">El stock se incrementará automáticamente en tu sucursal.</p>
+                </div>
+            `,
+            icon: 'success',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, confirmar recepción',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745'
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            procesarRecepcion(true);  // true = incluir todos (que están OK)
+        });
+    }
+}
 
+function confirmarRecepcionParcial() {
+    if (!documentoSeleccionado) {
+        Swal.fire('Sin documento', 'Selecciona un documento.', 'warning');
+        return;
+    }
+    
+    const productosOK = productosVerificacion.filter(p => p.estado === 'RECEPCIONADO_OK');
+    const conProblemas = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK');
+    
     Swal.fire({
-        title: '¿Confirmar recepción?',
+        title: '⚠️ Recepción Parcial',
         html: `
             <div class="text-start">
-                <p>¿Deseas confirmar la recepción del documento <strong>${documentoSeleccionado.tipo_documento === 'FACTURA ELECTRONICA' ? 'Factura' : 'Guía'} Nº ${documentoSeleccionado.numero_documento}</strong>?</p>
-                <ul class="list-unstyled mb-0">
-                    <li><i class="bi bi-arrow-right-circle text-success me-2"></i>Se actualizará el stock en esta sucursal.</li>
-                    <li><i class="bi bi-arrow-right-circle text-success me-2"></i>El movimiento quedará marcado como completado.</li>
-                    <li><i class="bi bi-arrow-right-circle text-success me-2"></i>Se registrará la fecha y hora de recepción.</li>
+                <p>Vas a recepcionar:</p>
+                <ul class="list-unstyled">
+                    <li class="text-success">✅ ${productosOK.length} productos OK (stock se actualizará)</li>
+                    <li class="text-warning">⚠️ ${conProblemas.length} productos con problemas (quedarán pendientes)</li>
                 </ul>
+                <p class="text-muted small">Los productos con problemas quedarán en estado <strong>EN_REGULARIZACIÓN</strong> para resolverse después.</p>
             </div>
         `,
-        icon: 'question',
+        icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Sí, confirmar recepción',
+        confirmButtonText: 'Sí, recepcionar con problemas',
         cancelButtonText: 'Cancelar'
     }).then(result => {
         if (!result.isConfirmed) return;
-
-        const payload = {
-            dte_id: documentoSeleccionado.id,
-            observaciones_recepcion: $('#observacionesRecepcion').val() || ''
-        };
-
-        $('#btnConfirmarRecepcion').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...');
-
-        $.ajax({
-            url: '/app/dte/confirmar_recepcion/',
-            method: 'POST',
-            contentType: 'application/json',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            data: JSON.stringify(payload)
-        }).done(response => {
-            Swal.fire({
-                icon: 'success',
-                title: 'Recepción confirmada',
-                html: response.message || 'El stock fue actualizado y el documento quedó marcado como recibido.',
-                confirmButtonText: 'Entendido'
-            });
-
-            modalDetalle.hide();
-            cargarRecepciones();
-            cargarHistorial(true);
-        }).fail(xhr => {
-            Swal.fire({
-                icon: 'error',
-                title: 'Error al confirmar recepción',
-                text: xhr.responseJSON ? (xhr.responseJSON.error || 'Error inesperado.') : 'Error de conexión o servidor.'
-            });
-        }).always(() => {
-            $('#btnConfirmarRecepcion').prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción');
-        });
+        procesarRecepcion(true);  // true = incluir todos (con y sin problemas)
     });
+}
+
+function rechazarRecepcion() {
+    if (!documentoSeleccionado) {
+        Swal.fire('Sin documento', 'Selecciona un documento.', 'warning');
+        return;
+    }
+    
+    Swal.fire({
+        title: '❌ Rechazar Recepción',
+        html: `
+            <div class="text-start">
+                <p><strong>¿Estás seguro que deseas rechazar esta recepción?</strong></p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Atención:</strong> Esta acción implica:
+                </div>
+                <ul class="text-muted">
+                    <li>El DTE <strong>#${documentoSeleccionado.numero_documento}</strong> será marcado como rechazado</li>
+                    <li>El stock NO se incrementará en tu sucursal</li>
+                    <li>Debes ingresar un motivo del rechazo</li>
+                </ul>
+            </div>
+            <textarea id="motivoRechazo" class="form-control mt-3" rows="3" placeholder="Ingresa el motivo del rechazo (obligatorio)"></textarea>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, rechazar',
+        confirmButtonColor: '#dc3545',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const motivo = document.getElementById('motivoRechazo').value.trim();
+            if (!motivo) {
+                Swal.showValidationMessage('Debes ingresar un motivo del rechazo');
+                return false;
+            }
+            return motivo;
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        
+        const motivo = result.value;
+        procesarRechazo(motivo);
+    });
+}
+
+function procesarRechazo(motivo) {
+    const payload = {
+        dte_id: documentoSeleccionado.id,
+        motivo_rechazo: motivo,
+        usuario: '{{ user.username }}'
+    };
+    
+    const $btn = $('#btnRechazarRecepcion');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
+    
+    $.ajax({
+        url: '/app/dte/rechazar_recepcion/',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        data: JSON.stringify(payload)
+    }).done(response => {
+        Swal.fire({
+            icon: 'success',
+            title: '❌ Recepción Rechazada',
+            html: `
+                <div class="text-start">
+                    <p>${response.message || 'La recepción ha sido rechazada correctamente'}</p>
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Motivo:</strong> ${motivo}
+                    </div>
+                </div>
+            `,
+            confirmButtonText: 'Entendido'
+        });
+        
+        modalDetalle.hide();
+        cargarRecepciones();
+        cargarHistorial(true);
+    }).fail(xhr => {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error al rechazar',
+            text: xhr.responseJSON ? (xhr.responseJSON.error || 'Error inesperado.') : 'Error de conexión.'
+        });
+    }).always(() => {
+        $btn.prop('disabled', false).html('<i class="bi bi-x-octagon me-1"></i>Rechazar Recepción');
+    });
+}
+
+function procesarRecepcion(incluirProblemas) {
+    const productosARecepcionar = incluirProblemas ? 
+        productosVerificacion : 
+        productosVerificacion.filter(p => p.estado === 'RECEPCIONADO_OK');
+    
+    const payload = {
+        dte_id: documentoSeleccionado.id,
+        productos: productosARecepcionar.map(p => ({
+            dte_producto_id: p.dte_producto_id,
+            cantidad_esperada: p.cantidad_esperada,
+            cantidad_recepcionada: p.cantidad_recepcionada,
+            cantidad_danada: p.cantidad_danada,
+            cantidad_faltante: p.cantidad_faltante,
+            estado: p.estado,
+            observaciones: p.observaciones
+        })),
+        observaciones_generales: $('#observacionesGenerales').val() || '',
+        recepcion_completa: !incluirProblemas
+    };
+    
+    const $btn = incluirProblemas ? $('#btnRecepcionarParcial') : $('#btnConfirmarRecepcion');
+    $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
+    
+    $.ajax({
+        url: '/app/dte/confirmar_recepcion/',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        data: JSON.stringify(payload)
+    }).done(response => {
+        const esCompleto = response.estado_dte === 'RECEPCIONADO_COMPLETO';
+        
+        Swal.fire({
+            icon: esCompleto ? 'success' : 'warning',
+            title: esCompleto ? '✅ Recepción Completa' : '⚠️ Recepción Parcial',
+            html: `
+                <div class="text-start">
+                    <p>${response.message}</p>
+                    <ul class="list-unstyled mt-3">
+                        <li class="text-success">✅ Productos OK: ${response.productos_ok}</li>
+                        ${response.productos_problemas > 0 ? 
+                            `<li class="text-warning">⚠️ Con problemas: ${response.productos_problemas}</li>` : ''}
+                        <li class="text-muted">📦 Total esperado: ${response.total_esperado}</li>
+                        <li class="text-muted">📥 Total recepcionado: ${response.total_recepcionado}</li>
+                    </ul>
+                    ${response.productos_problemas > 0 ? `
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Atención:</strong> ${response.productos_problemas} producto(s) requieren regularización.
+                            <br>
+                            <a href="/app/regularizar-recepciones/" class="btn btn-warning btn-sm mt-2">
+                                <i class="ri-settings-3-line me-1"></i> Ir a Regularización
+                            </a>
+                        </div>
+                    ` : ''}
+                </div>
+            `,
+            confirmButtonText: 'Entendido',
+            width: '600px'
+        });
+        
+        modalDetalle.hide();
+        cargarRecepciones();
+        cargarHistorial(true);
+    }).fail(xhr => {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error al confirmar recepción',
+            text: xhr.responseJSON ? (xhr.responseJSON.error || 'Error inesperado.') : 'Error de conexión.'
+        });
+    }).always(() => {
+        $btn.prop('disabled', false);
+        $('#btnConfirmarRecepcion').html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa');
+        $('#btnRecepcionarParcial').html('<i class="bi bi-exclamation-triangle me-1"></i>Recepcionar con Problemas');
+    });
+}
+
+function verDTEsConProblemas() {
+    $.getJSON('/app/dte/obtener_dtes_con_problemas/')
+        .done(response => {
+            if (!response.success) {
+                Swal.fire('Error', response.error || 'No se pudieron cargar los DTEs', 'error');
+                return;
+            }
+            
+            const items = response.items || [];
+            const tbody = $('#tablaDTEsProblemasBody');
+            tbody.empty();
+            
+            if (items.length === 0) {
+                tbody.html(`
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="bi bi-check-circle-fill text-success display-4"></i>
+                            <p class="text-muted mt-2">¡Excelente! No hay DTEs con productos problemáticos</p>
+                        </td>
+                    </tr>
+                `);
+            } else {
+                items.forEach(dte => {
+                    const porcentajeOK = Math.round((dte.productos_ok / dte.total_productos) * 100);
+                    const estadoBadge = dte.estado_dte === 'RECEPCIONADO_PARCIAL' ? 
+                        '<span class="badge bg-warning">Parcial</span>' : 
+                        '<span class="badge bg-info">En Regularización</span>';
+                    
+                    tbody.append(`
+                        <tr>
+                            <td><strong>#${dte.numero_documento}</strong><br><small class="text-muted">${dte.tipo_documento}</small></td>
+                            <td><small>${new Date(dte.fecha_emision).toLocaleDateString('es-CL')}</small></td>
+                            <td><small>${dte.fecha_recepcion ? new Date(dte.fecha_recepcion).toLocaleDateString('es-CL') : '-'}</small></td>
+                            <td><small>${dte.sucursal_origen}<br><span class="text-muted">${dte.emisor}</span></small></td>
+                            <td>
+                                <span class="badge bg-success">${dte.productos_ok}</span>
+                                <div class="progress mt-1" style="height: 5px;">
+                                    <div class="progress-bar bg-success" style="width: ${porcentajeOK}%"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-warning">${dte.productos_problemas}</span>
+                            </td>
+                            <td>${estadoBadge}</td>
+                            <td>
+                                <a href="/app/regularizar-recepciones/" class="btn btn-sm btn-warning" title="Regularizar">
+                                    <i class="bi bi-tools"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    `);
+                });
+            }
+            
+            new bootstrap.Modal(document.getElementById('modalDTEsProblemas')).show();
+        })
+        .fail(() => {
+            Swal.fire('Error', 'No se pudieron cargar los DTEs con problemas', 'error');
+        });
 }
 
 function cargarHistorial(refrescar = false) {
@@ -809,21 +1670,62 @@ function renderHistorial(items) {
     timeline.empty();
 
     if (!items.length) {
-        timeline.append(`<div class="timeline-item"><div class="timeline-content"><small class="text-muted">Sin recepciones registradas</small></div></div>`);
+        timeline.html(`
+            <div class="text-center py-3">
+                <i class="bi bi-inbox text-muted" style="font-size: 24px;"></i>
+                <p class="text-muted mb-0 mt-2" style="font-size: 12px;">Sin recepciones recientes</p>
+            </div>
+        `);
         return;
     }
 
-    items.forEach(item => {
+    items.forEach((item, index) => {
+        // Formatear fecha
+        let fechaCorta = '';
+        try {
+            const fecha = new Date(item.fecha_recepcion);
+            const hoy = new Date();
+            const ayer = new Date(hoy);
+            ayer.setDate(hoy.getDate() - 1);
+            
+            if (fecha.toDateString() === hoy.toDateString()) {
+                fechaCorta = 'Hoy';
+            } else if (fecha.toDateString() === ayer.toDateString()) {
+                fechaCorta = 'Ayer';
+            } else {
+                const dia = fecha.getDate();
+                const mes = fecha.toLocaleDateString('es-CL', { month: 'short' });
+                fechaCorta = `${dia} ${mes}`;
+            }
+        } catch(e) {
+            fechaCorta = item.fecha_recepcion;
+        }
+        
+        // Tipo de documento
+        const tipoIcon = item.tipo_documento === 'FACTURA ELECTRONICA' ? 
+            '<i class="bi bi-file-earmark-text text-primary"></i>' : 
+            '<i class="bi bi-file-earmark text-info"></i>';
+        
         timeline.append(`
-            <div class="timeline-item">
-                <div class="timeline-content">
-                    <div class="d-flex justify-content-between">
-                        <strong>${item.numero_documento}</strong>
-                        <small class="text-muted">${item.fecha_recepcion}</small>
+            <div class="historial-item ${index < items.length - 1 ? 'border-bottom' : ''} p-2">
+                <div class="d-flex align-items-start">
+                    <div class="me-2 mt-1">
+                        ${tipoIcon}
                     </div>
-                    <div class="text-muted">${item.tipo_documento}</div>
-                    <div><small class="text-muted">${item.sucursal_origen} → ${item.sucursal_destino}</small></div>
-                    <div class="mt-1"><span class="badge bg-success">${item.total_unidades} unidades</span></div>
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong class="d-block" style="font-size: 13px;">#${item.numero_documento}</strong>
+                                <small class="text-muted d-block" style="font-size: 11px; line-height: 1.2;">
+                                    ${item.sucursal_origen}
+                                </small>
+                            </div>
+                            <div class="text-end ms-2">
+                                <small class="text-muted d-block" style="font-size: 11px; white-space: nowrap;">${fechaCorta}</small>
+                                <span class="badge bg-success" style="font-size: 9px;">${item.total_unidades}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `);

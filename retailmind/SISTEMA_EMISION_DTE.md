@@ -42,7 +42,7 @@ Sistema completo para la emisión de Documentos Tributarios Electrónicos (DTE) 
 ```
 retailmind/
 ├── app/
-│   ├── templates/vistas/
+│   ├── templates/vistas/modulo_documentos/
 │   │   └── emisionDTE.html                    # ✅ Nuevo
 │   ├── management/commands/
 │   │   └── inicializar_datos_dte.py          # ✅ Nuevo

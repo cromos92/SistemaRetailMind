@@ -1,0 +1,878 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .solicitud-card {
+        transition: all 0.3s ease;
+        border-left: 4px solid transparent;
+    }
+    
+    .solicitud-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .solicitud-pendiente {
+        border-left-color: #ffc107;
+    }
+    
+    .solicitud-aprobada {
+        border-left-color: #28a745;
+    }
+    
+    .solicitud-rechazada {
+        border-left-color: #dc3545;
+    }
+    
+    .evidencia-thumbnail {
+        max-width: 100px;
+        max-height: 100px;
+        cursor: pointer;
+        border-radius: 8px;
+        border: 2px solid #dee2e6;
+        transition: all 0.2s;
+    }
+    
+    .evidencia-thumbnail:hover {
+        border-color: #20c997;
+        transform: scale(1.05);
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="h3 mb-0">
+                    <i class="bi bi-envelope-paper text-primary"></i> Solicitudes de Regularización Recibidas
+                </h1>
+                <p class="text-muted mb-0">Revisa y aprueba solicitudes de cambio de producto de otras sucursales</p>
+                <small class="text-info">
+                    <i class="bi bi-building"></i> Sucursal: <strong id="infoSucursalActual">-</strong>
+                </small>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-success" onclick="cargarSolicitudes(true)">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                </button>
+            </div>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-warning bg-soft">
+                                    <span class="avatar-title rounded-circle bg-warning">
+                                        <i class="bi bi-clock-history text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Pendientes</p>
+                                <h4 class="fs-4 fw-medium mb-0">
+                                    <span class="counter-value" id="totalPendientes">0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-success bg-soft">
+                                    <span class="avatar-title rounded-circle bg-success">
+                                        <i class="bi bi-check-circle text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Aprobadas</p>
+                                <h4 class="fs-4 fw-medium mb-0">
+                                    <span class="counter-value" id="totalAprobadas">0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-info bg-soft">
+                                    <span class="avatar-title rounded-circle bg-info">
+                                        <i class="bi bi-rocket text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Ejecutadas</p>
+                                <h4 class="fs-4 fw-medium mb-0">
+                                    <span class="counter-value" id="totalEjecutadas">0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-primary bg-soft">
+                                    <span class="avatar-title rounded-circle bg-primary">
+                                        <i class="bi bi-check-all text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Completadas</p>
+                                <h4 class="fs-4 fw-medium mb-0">
+                                    <span class="counter-value" id="totalCompletadas">0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" id="filtroEstado" onchange="cargarSolicitudes()">
+                            <option value="">Todas</option>
+                            <option value="PENDIENTE" selected>Pendientes</option>
+                            <option value="EN_REVISION">En Revisión</option>
+                            <option value="APROBADA">Aprobadas</option>
+                            <option value="EJECUTADA">Ejecutadas</option>
+                            <option value="COMPLETADA">Completadas</option>
+                            <option value="RECHAZADA">Rechazadas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sucursal Solicitante</label>
+                        <select class="form-select" id="filtroSucursal" onchange="cargarSolicitudes()">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Búsqueda</label>
+                        <input type="text" class="form-control" id="buscarSolicitud" 
+                               placeholder="Número solicitud, DTE, SKU...">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-primary w-100" onclick="cargarSolicitudes()">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Solicitudes -->
+        <div class="card shadow-sm">
+            <div class="card-header border-0 bg-light">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-envelope-open text-primary"></i> Solicitudes Recibidas
+                        </h5>
+                    </div>
+                    <div class="col-auto">
+                        <span class="badge bg-warning" id="badgePendientes">0 pendientes</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body pt-0">
+                <div id="listaSolicitudes">
+                    <!-- Se llenará dinámicamente -->
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="text-muted mt-2">Cargando solicitudes...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Revisar Solicitud -->
+<div class="modal fade" id="modalRevisarSolicitud" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-clipboard-check me-2"></i>Revisar Solicitud #<span id="revNumeroSolicitud">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- Información de la Solicitud -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title text-primary">📦 Problema Reportado</h6>
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <th style="width: 140px;">DTE Original:</th>
+                                        <td><strong>#<span id="revDTENumero">-</span></strong></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Sucursal Solicita:</th>
+                                        <td><strong id="revSucursalSolicita">-</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Usuario Solicita:</th>
+                                        <td><span id="revUsuarioSolicita">-</span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Fecha Solicitud:</th>
+                                        <td><span id="revFechaSolicitud">-</span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Tipo Problema:</th>
+                                        <td><span class="badge bg-warning" id="revTipoProblema">-</span></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title text-success">🎯 Solución Solicitada</h6>
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <th style="width: 140px;">Tipo Solución:</th>
+                                        <td><span class="badge bg-info" id="revTipoSolucion">-</span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Producto Original:</th>
+                                        <td><span id="revProductoOriginal">-</span></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Producto Solicitado:</th>
+                                        <td><strong class="text-primary" id="revProductoSolicitado">-</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Cantidad:</th>
+                                        <td><strong id="revCantidad">-</strong> unidades</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Stock Disponible:</th>
+                                        <td><span class="badge bg-success" id="revStockDisponible">-</span></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Descripción del Problema -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="bi bi-chat-left-text me-2"></i>Descripción del Problema
+                        </h6>
+                        <div class="alert alert-light mb-0">
+                            <p class="mb-0" id="revDescripcionProblema">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evidencia Fotográfica -->
+                <div class="card mb-4" id="cardEvidencia" style="display:none;">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="bi bi-camera me-2"></i>Evidencia Fotográfica
+                        </h6>
+                        <div id="contenedorEvidencia"></div>
+                    </div>
+                </div>
+
+                <!-- Opciones de Decisión -->
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-hand-thumbs-up me-2"></i>Tu Decisión
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        
+                        <!-- Radio Buttons para decisión -->
+                        <div class="mb-4">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" name="decisionSolicitud" 
+                                       id="decisionAprobar" value="APROBAR" checked>
+                                <label class="form-check-label fw-bold text-success" for="decisionAprobar">
+                                    <i class="bi bi-check-circle me-1"></i>Aprobar solución solicitada
+                                </label>
+                                <div id="infoAprobar" class="ms-4 mt-2">
+                                    <small class="text-muted">
+                                        Se ejecutará la solución tal como la solicitó el receptor. 
+                                        Deberás emitir los documentos correspondientes.
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" name="decisionSolicitud" 
+                                       id="decisionModificar" value="MODIFICAR">
+                                <label class="form-check-label fw-bold text-info" for="decisionModificar">
+                                    <i class="bi bi-pencil me-1"></i>Aprobar con modificación
+                                </label>
+                                <div id="panelModificar" class="ms-4 mt-2" style="display:none;">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <p class="small mb-2">Proponer producto alternativo:</p>
+                                            <div class="input-group mb-2">
+                                                <input type="text" class="form-control" id="buscarProductoAlternativo" 
+                                                       placeholder="Buscar producto...">
+                                                <button class="btn btn-primary" onclick="buscarProductosAlternativos()">
+                                                    <i class="bi bi-search"></i>
+                                                </button>
+                                            </div>
+                                            <div id="resultadosAlternativos"></div>
+                                            <input type="hidden" id="productoAlternativoId">
+                                            <div id="productoAlternativoSeleccionado"></div>
+                                            
+                                            <div class="mt-2">
+                                                <label class="form-label">Cantidad propuesta:</label>
+                                                <input type="number" class="form-control" id="cantidadAlternativa" min="1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" name="decisionSolicitud" 
+                                       id="decisionNC" value="NOTA_CREDITO">
+                                <label class="form-check-label fw-bold text-warning" for="decisionNC">
+                                    <i class="bi bi-file-earmark-text me-1"></i>Proponer Nota de Crédito en su lugar
+                                </label>
+                                <div id="infoNC" class="ms-4 mt-2" style="display:none;">
+                                    <small class="text-muted">
+                                        Se emitirá una NC y NO se enviará producto de reemplazo.
+                                        El monto será calculado según el producto original.
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="decisionSolicitud" 
+                                       id="decisionRechazar" value="RECHAZAR">
+                                <label class="form-check-label fw-bold text-danger" for="decisionRechazar">
+                                    <i class="bi bi-x-circle me-1"></i>Rechazar solicitud
+                                </label>
+                                <div id="panelRechazar" class="ms-4 mt-2" style="display:none;">
+                                    <div class="card bg-light border-danger">
+                                        <div class="card-body">
+                                            <label class="form-label text-danger">
+                                                Motivo del rechazo <span class="text-danger">*</span>
+                                            </label>
+                                            <textarea class="form-control" id="motivoRechazo" rows="3"
+                                                      placeholder="Explica por qué rechazas esta solicitud..."></textarea>
+                                            <small class="text-muted">Este motivo será visible para el solicitante</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Observaciones generales -->
+                        <div class="mt-3">
+                            <label class="form-label">Observaciones adicionales (opcional)</label>
+                            <textarea class="form-control" id="observacionesDecision" rows="2"
+                                      placeholder="Comentarios adicionales sobre tu decisión..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-success" id="btnGuardarDecision" onclick="guardarDecision()">
+                    <i class="bi bi-check-circle me-1"></i>Confirmar Decisión
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+let solicitudesData = [];
+let solicitudSeleccionada = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    cargarInfoSucursal();
+    cargarSolicitudes();
+    
+    // Event listeners para mostrar/ocultar paneles según decisión
+    document.querySelectorAll('input[name="decisionSolicitud"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            document.getElementById('panelModificar').style.display = 
+                this.value === 'MODIFICAR' ? 'block' : 'none';
+            document.getElementById('panelRechazar').style.display = 
+                this.value === 'RECHAZAR' ? 'block' : 'none';
+            document.getElementById('infoNC').style.display = 
+                this.value === 'NOTA_CREDITO' ? 'block' : 'none';
+            document.getElementById('infoAprobar').style.display = 
+                this.value === 'APROBAR' ? 'block' : 'none';
+        });
+    });
+});
+
+function cargarInfoSucursal() {
+    fetch('/app/debug_session/')
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.alias) {
+                document.getElementById('infoSucursalActual').textContent = data.alias;
+            }
+        })
+        .catch(error => console.warn('No se pudo obtener info de sesión'));
+}
+
+function cargarSolicitudes(mostrarMensaje = false) {
+    const estadoFiltro = document.getElementById('filtroEstado').value;
+    const sucursalFiltro = document.getElementById('filtroSucursal').value;
+    const busqueda = document.getElementById('buscarSolicitud').value;
+    
+    const params = new URLSearchParams();
+    if (estadoFiltro) params.append('estado', estadoFiltro);
+    if (sucursalFiltro) params.append('sucursal', sucursalFiltro);
+    if (busqueda) params.append('buscar', busqueda);
+    
+    fetch(`/app/dte/obtener_solicitudes_recibidas/?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                mostrarError('Error al cargar solicitudes: ' + (data.error || 'Error desconocido'));
+                return;
+            }
+            
+            solicitudesData = data.solicitudes || [];
+            renderizarSolicitudes();
+            actualizarEstadisticas(data.estadisticas || {});
+            
+            if (mostrarMensaje) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Actualizado',
+                    text: 'Lista de solicitudes actualizada',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error de conexión al cargar solicitudes');
+        });
+}
+
+function renderizarSolicitudes() {
+    const contenedor = document.getElementById('listaSolicitudes');
+    
+    if (solicitudesData.length === 0) {
+        contenedor.innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 48px;"></i>
+                <h5 class="text-muted mt-3">No hay solicitudes</h5>
+                <p class="text-muted">Cuando otras sucursales soliciten cambios, aparecerán aquí.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    solicitudesData.forEach(sol => {
+        const estadoBadge = obtenerBadgeEstado(sol.estado);
+        const claseCarta = `solicitud-${sol.estado.toLowerCase()}`;
+        const urgencia = sol.dias_pendiente > 3 ? '<span class="badge bg-danger ms-2">¡Urgente!</span>' : '';
+        
+        html += `
+            <div class="card mb-3 solicitud-card ${claseCarta}">
+                <div class="card-body">
+                    <div class="row align-items-start">
+                        <div class="col-md-8">
+                            <div class="d-flex align-items-center mb-2">
+                                <h5 class="mb-0">
+                                    <i class="bi bi-envelope-paper text-primary me-2"></i>
+                                    #${sol.numero_solicitud}
+                                </h5>
+                                ${urgencia}
+                                ${estadoBadge}
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <small class="text-muted d-block">DTE Original:</small>
+                                    <strong>#${sol.dte_numero}</strong>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted d-block">Solicita:</small>
+                                    <strong>${sol.sucursal_solicita}</strong>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Producto Original:</small><br>
+                                        <code class="small">${sol.producto_original_sku}</code>
+                                        <small class="d-block text-muted">${sol.producto_original_nombre}</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Producto Solicitado:</small><br>
+                                        <code class="small text-primary">${sol.producto_cambio_sku}</code>
+                                        <small class="d-block text-primary"><strong>${sol.producto_cambio_nombre}</strong></small>
+                                        <span class="badge bg-success mt-1">Stock: ${sol.stock_disponible}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3 me-1"></i>${new Date(sol.fecha_solicitud).toLocaleDateString('es-CL', {year: 'numeric', month: 'long', day: 'numeric'})}
+                                    <i class="bi bi-person ms-3 me-1"></i>${sol.usuario_solicita}
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4 text-end">
+                            <div class="d-grid gap-2">
+                                ${sol.estado === 'PENDIENTE' || sol.estado === 'EN_REVISION' ? `
+                                    <button class="btn btn-primary" onclick="abrirModalRevisar(${sol.id})">
+                                        <i class="bi bi-clipboard-check me-1"></i>Revisar y Decidir
+                                    </button>
+                                ` : ''}
+                                
+                                ${sol.estado === 'APROBADA' ? `
+                                    <button class="btn btn-success" onclick="ejecutarSolucion(${sol.id})">
+                                        <i class="bi bi-rocket me-1"></i>Ejecutar Solución
+                                    </button>
+                                ` : ''}
+                                
+                                <button class="btn btn-outline-info btn-sm" onclick="verDetalleSolicitud(${sol.id})">
+                                    <i class="bi bi-eye me-1"></i>Ver Detalles
+                                </button>
+                            </div>
+                            
+                            ${sol.dias_pendiente > 0 && sol.estado === 'PENDIENTE' ? `
+                                <div class="alert alert-warning p-2 mt-2 mb-0">
+                                    <small>
+                                        <i class="bi bi-clock-history"></i>
+                                        ${sol.dias_pendiente} día(s) pendiente
+                                    </small>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    contenedor.innerHTML = html;
+}
+
+function obtenerBadgeEstado(estado) {
+    const badges = {
+        'PENDIENTE': '<span class="badge bg-warning ms-2">⏳ Pendiente</span>',
+        'EN_REVISION': '<span class="badge bg-info ms-2">👁️ En Revisión</span>',
+        'APROBADA': '<span class="badge bg-success ms-2">✅ Aprobada</span>',
+        'RECHAZADA': '<span class="badge bg-danger ms-2">❌ Rechazada</span>',
+        'EJECUTADA': '<span class="badge bg-primary ms-2">🚀 Ejecutada</span>',
+        'COMPLETADA': '<span class="badge bg-success ms-2">✔️ Completada</span>'
+    };
+    return badges[estado] || `<span class="badge bg-secondary ms-2">${estado}</span>`;
+}
+
+function actualizarEstadisticas(stats) {
+    document.getElementById('totalPendientes').textContent = stats.pendientes || 0;
+    document.getElementById('totalAprobadas').textContent = stats.aprobadas || 0;
+    document.getElementById('totalEjecutadas').textContent = stats.ejecutadas || 0;
+    document.getElementById('totalCompletadas').textContent = stats.completadas || 0;
+    document.getElementById('badgePendientes').textContent = `${stats.pendientes || 0} pendientes`;
+}
+
+function abrirModalRevisar(solicitudId) {
+    solicitudSeleccionada = solicitudesData.find(s => s.id === solicitudId);
+    if (!solicitudSeleccionada) {
+        Swal.fire('Error', 'Solicitud no encontrada', 'error');
+        return;
+    }
+    
+    // Llenar datos del modal
+    document.getElementById('revNumeroSolicitud').textContent = solicitudSeleccionada.numero_solicitud;
+    document.getElementById('revDTENumero').textContent = solicitudSeleccionada.dte_numero;
+    document.getElementById('revSucursalSolicita').textContent = solicitudSeleccionada.sucursal_solicita;
+    document.getElementById('revUsuarioSolicita').textContent = solicitudSeleccionada.usuario_solicita;
+    document.getElementById('revFechaSolicitud').textContent = new Date(solicitudSeleccionada.fecha_solicitud).toLocaleString('es-CL');
+    document.getElementById('revTipoProblema').textContent = solicitudSeleccionada.tipo_problema;
+    document.getElementById('revTipoSolucion').textContent = solicitudSeleccionada.tipo_solucion_solicitada;
+    document.getElementById('revProductoOriginal').textContent = `${solicitudSeleccionada.producto_original_sku} - ${solicitudSeleccionada.producto_original_nombre}`;
+    document.getElementById('revProductoSolicitado').textContent = `${solicitudSeleccionada.producto_cambio_sku} - ${solicitudSeleccionada.producto_cambio_nombre}`;
+    document.getElementById('revCantidad').textContent = solicitudSeleccionada.cantidad_cambio_solicitada;
+    document.getElementById('revStockDisponible').textContent = solicitudSeleccionada.stock_disponible;
+    document.getElementById('revDescripcionProblema').textContent = solicitudSeleccionada.descripcion_problema;
+    
+    // Evidencia fotográfica
+    if (solicitudSeleccionada.evidencia_url) {
+        document.getElementById('cardEvidencia').style.display = 'block';
+        document.getElementById('contenedorEvidencia').innerHTML = `
+            <img src="${solicitudSeleccionada.evidencia_url}" class="evidencia-thumbnail" 
+                 onclick="window.open('${solicitudSeleccionada.evidencia_url}', '_blank')">
+        `;
+    } else {
+        document.getElementById('cardEvidencia').style.display = 'none';
+    }
+    
+    // Resetear form
+    document.getElementById('decisionAprobar').checked = true;
+    document.getElementById('observacionesDecision').value = '';
+    document.getElementById('motivoRechazo').value = '';
+    document.getElementById('panelModificar').style.display = 'none';
+    document.getElementById('panelRechazar').style.display = 'none';
+    document.getElementById('infoNC').style.display = 'none';
+    
+    // Abrir modal
+    new bootstrap.Modal(document.getElementById('modalRevisarSolicitud')).show();
+}
+
+function guardarDecision() {
+    if (!solicitudSeleccionada) return;
+    
+    const decision = document.querySelector('input[name="decisionSolicitud"]:checked').value;
+    const observaciones = document.getElementById('observacionesDecision').value.trim();
+    
+    let payload = {
+        solicitud_id: solicitudSeleccionada.id,
+        decision: decision,
+        observaciones: observaciones
+    };
+    
+    // Validaciones específicas
+    if (decision === 'RECHAZAR') {
+        const motivo = document.getElementById('motivoRechazo').value.trim();
+        if (!motivo) {
+            Swal.fire('Error', 'Debes especificar el motivo del rechazo', 'warning');
+            document.getElementById('motivoRechazo').focus();
+            return;
+        }
+        payload.motivo_rechazo = motivo;
+    }
+    
+    if (decision === 'MODIFICAR') {
+        const productoAlt = document.getElementById('productoAlternativoId').value;
+        const cantidadAlt = document.getElementById('cantidadAlternativa').value;
+        
+        if (!productoAlt || !cantidadAlt) {
+            Swal.fire('Error', 'Debes seleccionar producto y cantidad alternativa', 'warning');
+            return;
+        }
+        
+        payload.producto_alternativo_id = parseInt(productoAlt);
+        payload.cantidad_alternativa = parseInt(cantidadAlt);
+    }
+    
+    // Confirmación
+    let mensajeConfirmacion = '';
+    let tituloConfirmacion = '';
+    let iconoConfirmacion = 'question';
+    
+    if (decision === 'APROBAR') {
+        tituloConfirmacion = '✅ Aprobar Solicitud';
+        mensajeConfirmacion = `
+            <p>Aprobarás la solicitud #${solicitudSeleccionada.numero_solicitud}.</p>
+            <p><strong>Deberás ejecutar la solución posteriormente</strong> emitiendo los documentos correspondientes.</p>
+        `;
+    } else if (decision === 'RECHAZAR') {
+        tituloConfirmacion = '❌ Rechazar Solicitud';
+        mensajeConfirmacion = `
+            <p>Rechazarás la solicitud #${solicitudSeleccionada.numero_solicitud}.</p>
+            <p class="text-danger"><strong>El solicitante verá tu motivo del rechazo.</strong></p>
+        `;
+        iconoConfirmacion = 'warning';
+    } else if (decision === 'NOTA_CREDITO') {
+        tituloConfirmacion = '💰 Proponer Nota de Crédito';
+        mensajeConfirmacion = `
+            <p>Propondrás emitir una Nota de Crédito en lugar del cambio de producto.</p>
+            <p><small class="text-muted">El solicitante deberá aceptar esta alternativa.</small></p>
+        `;
+    }
+    
+    Swal.fire({
+        title: tituloConfirmacion,
+        html: mensajeConfirmacion,
+        icon: iconoConfirmacion,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, confirmar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        
+        // Enviar decisión
+        const btnGuardar = document.getElementById('btnGuardarDecision');
+        btnGuardar.disabled = true;
+        btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+        
+        fetch('/app/dte/decidir_solicitud/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ Decisión Registrada',
+                    html: data.message || 'Decisión guardada correctamente',
+                    confirmButtonText: 'Entendido'
+                });
+                
+                bootstrap.Modal.getInstance(document.getElementById('modalRevisarSolicitud')).hide();
+                cargarSolicitudes();
+            } else {
+                Swal.fire('Error', data.error || 'Error al guardar decisión', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error de conexión', 'error');
+        })
+        .finally(() => {
+            btnGuardar.disabled = false;
+            btnGuardar.innerHTML = '<i class="bi bi-check-circle me-1"></i>Confirmar Decisión';
+        });
+    });
+}
+
+function buscarProductosAlternativos() {
+    const query = document.getElementById('buscarProductoAlternativo').value.trim();
+    if (!query || query.length < 2) {
+        Swal.fire('Info', 'Escribe al menos 2 caracteres', 'info');
+        return;
+    }
+    
+    // Usar el mismo endpoint de búsqueda en emisor
+    fetch(`/app/dte/buscar_productos_emisor/?query=${encodeURIComponent(query)}&sucursal_emisor_id={{ request.session.idSucursalActual }}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success || !data.productos || data.productos.length === 0) {
+                document.getElementById('resultadosAlternativos').innerHTML = `
+                    <p class="text-muted text-center small">No se encontraron productos</p>
+                `;
+                return;
+            }
+            
+            let html = '<div class="list-group list-group-flush" style="max-height: 200px; overflow-y: auto;">';
+            data.productos.forEach(prod => {
+                html += `
+                    <button type="button" class="list-group-item list-group-item-action small" 
+                            onclick="seleccionarProductoAlternativo(${prod.id}, '${prod.sku}', '${prod.nombre.replace(/'/g, "\\'")}', ${prod.stock})">
+                        <strong>${prod.nombre}</strong><br>
+                        <small class="text-muted">SKU: ${prod.sku} | Stock: ${prod.stock}</small>
+                    </button>
+                `;
+            });
+            html += '</div>';
+            
+            document.getElementById('resultadosAlternativos').innerHTML = html;
+        });
+}
+
+function seleccionarProductoAlternativo(id, sku, nombre, stock) {
+    document.getElementById('productoAlternativoId').value = id;
+    document.getElementById('productoAlternativoSeleccionado').innerHTML = `
+        <div class="alert alert-success small mt-2">
+            <strong>Seleccionado:</strong> ${nombre} (${sku})<br>
+            <small>Stock: ${stock}</small>
+        </div>
+    `;
+    document.getElementById('cantidadAlternativa').value = solicitudSeleccionada.cantidad_cambio_solicitada;
+    document.getElementById('resultadosAlternativos').innerHTML = '';
+}
+
+function verDetalleSolicitud(solicitudId) {
+    const sol = solicitudesData.find(s => s.id === solicitudId);
+    if (!sol) return;
+    
+    Swal.fire({
+        title: `📋 Solicitud #${sol.numero_solicitud}`,
+        html: `
+            <div class="text-start">
+                <table class="table table-sm">
+                    <tr><th>Estado:</th><td>${obtenerBadgeEstado(sol.estado)}</td></tr>
+                    <tr><th>DTE:</th><td>#${sol.dte_numero}</td></tr>
+                    <tr><th>Solicita:</th><td>${sol.sucursal_solicita}</td></tr>
+                    <tr><th>Usuario:</th><td>${sol.usuario_solicita}</td></tr>
+                    <tr><th>Fecha:</th><td>${new Date(sol.fecha_solicitud).toLocaleString('es-CL')}</td></tr>
+                    <tr><th>Problema:</th><td><span class="badge bg-warning">${sol.tipo_problema}</span></td></tr>
+                    <tr><th>Solución:</th><td>${sol.tipo_solucion_solicitada}</td></tr>
+                </table>
+                <hr>
+                <p class="small"><strong>Descripción:</strong></p>
+                <div class="alert alert-light">${sol.descripcion_problema}</div>
+                ${sol.decision_emisor ? `
+                    <p class="small"><strong>Tu Decisión:</strong></p>
+                    <div class="alert alert-info">${sol.decision_emisor}</div>
+                ` : ''}
+            </div>
+        `,
+        icon: 'info',
+        confirmButtonText: 'Cerrar',
+        width: '600px'
+    });
+}
+
+function mostrarError(mensaje) {
+    document.getElementById('listaSolicitudes').innerHTML = `
+        <div class="text-center py-5">
+            <i class="bi bi-exclamation-triangle text-danger" style="font-size: 48px;"></i>
+            <h5 class="text-danger mt-3">${mensaje}</h5>
+        </div>
+    `;
+}
+
+// Función para ejecutar solución (pendiente de implementar en Fase 4)
+function ejecutarSolucion(solicitudId) {
+    Swal.fire({
+        title: 'Funcionalidad en desarrollo',
+        text: 'La ejecución de soluciones se implementará en la Fase 4',
+        icon: 'info'
+    });
+}
+</script>
+

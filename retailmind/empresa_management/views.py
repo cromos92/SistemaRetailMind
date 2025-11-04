@@ -143,6 +143,60 @@ def lista_empresas(request):
     
     return render(request, 'empresa_management/lista_empresas.html', context)
 
+
+@login_required
+def buscar_empresa_ajax(request):
+    """API para buscar empresa por RUT o nombre para auto-completar en facturas"""
+    try:
+        termino = request.GET.get('q', '').strip()
+        
+        if len(termino) < 3:
+            return JsonResponse({
+                'success': False,
+                'error': 'Ingrese al menos 3 caracteres'
+            })
+        
+        # Buscar empresa por RUT o nombre
+        empresas = Empresa.objects.filter(
+            Q(rut__icontains=termino.replace('.', '').replace('-', '')) |
+            Q(nombre__icontains=termino) |
+            Q(razon_social__icontains=termino) |
+            Q(nombre_fantasia__icontains=termino)
+        )[:10]
+        
+        if empresas.exists():
+            empresa = empresas.first()  # Tomar la primera coincidencia
+            
+            return JsonResponse({
+                'success': True,
+                'empresa': {
+                    'id': empresa.id,
+                    'nombre': empresa.nombre,
+                    'razon_social': empresa.razon_social,
+                    'nombre_fantasia': empresa.nombre_fantasia,
+                    'rut': empresa.rut,
+                    'giro': empresa.giro,
+                    'direccion': empresa.direccion,
+                    'comuna': empresa.comuna,
+                    'ciudad': empresa.ciudad,
+                    'region': empresa.region or '',
+                    'telefono': empresa.telefono or '',
+                    'email': empresa.correoVendedor or empresa.correoAdministrador or '',
+                },
+                'total_encontradas': empresas.count()
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontraron empresas'
+            })
+            
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al buscar empresa: {str(e)}'
+        })
+
 # ========== VISTAS PARA SUCURSALES ==========
 
 @login_required

@@ -47,4 +47,5 @@ urlpatterns = [
     
     # Búsqueda AJAX
     path('clientes/buscar/', views_clientes.buscar_clientes_ajax, name='buscar_clientes_ajax'),
+    path('api/buscar-empresa/', views.buscar_empresa_ajax, name='buscar_empresa_ajax'),
 ] 

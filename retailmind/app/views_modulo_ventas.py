@@ -646,6 +646,10 @@ def crear_ticket(request):
             descuento = data.get('descuento', 0)
             total = subtotal - descuento
             
+            # Formatear RUT del cliente antes de guardar
+            cliente_rut_raw = data.get('cliente_rut', '')
+            cliente_rut_formateado = formatear_rut(cliente_rut_raw) if cliente_rut_raw else ''
+            
             # Crear ticket
             ticket = Ticket.objects.create(
                 correlativo=correlativo,
@@ -657,7 +661,7 @@ def crear_ticket(request):
                 estado='PENDIENTE',
                 observaciones=data.get('observaciones', ''),
                 cliente_nombre=data.get('cliente_nombre', ''),
-                cliente_rut=data.get('cliente_rut', ''),
+                cliente_rut=cliente_rut_formateado,
                 cliente_email=data.get('cliente_email', ''),
                 cliente_telefono=data.get('cliente_telefono', '')
             )
@@ -704,6 +708,16 @@ def crear_ticket(request):
                         ticket=ticket,
                         observaciones=f'Venta ticket #{correlativo}'
                     )
+            
+            # Guardar cliente en la base de datos si tiene datos completos
+            if ticket.cliente_rut and ticket.cliente_nombre:
+                cliente_datos = {
+                    'nombre': ticket.cliente_nombre,
+                    'rut': ticket.cliente_rut,
+                    'email': ticket.cliente_email,
+                    'telefono': ticket.cliente_telefono,
+                }
+                guardar_o_actualizar_cliente(cliente_datos, request.user)
         
         return JsonResponse({
             'success': True,
@@ -764,6 +778,10 @@ def crear_ticket_venta(request):
         descuento = data.get('descuento', 0)
         total = subtotal - descuento
         
+        # Formatear RUT del cliente antes de guardar
+        cliente_rut_raw = data.get('cliente_rut', '')
+        cliente_rut_formateado = formatear_rut(cliente_rut_raw) if cliente_rut_raw else ''
+        
         # Crear ticket
         ticket = Ticket.objects.create(
             correlativo=correlativo,
@@ -776,7 +794,7 @@ def crear_ticket_venta(request):
             fecha_pago=timezone.now(),
             observaciones=data.get('observaciones', ''),
             cliente_nombre=data.get('cliente_nombre', ''),
-            cliente_rut=data.get('cliente_rut', ''),
+            cliente_rut=cliente_rut_formateado,
             cliente_email=data.get('cliente_email', ''),
             cliente_telefono=data.get('cliente_telefono', '')
         )
@@ -817,6 +835,16 @@ def crear_ticket_venta(request):
             referencia=data.get('referencia_pago', ''),
             observaciones=data.get('observaciones_pago', '')
         )
+        
+        # Guardar cliente en la base de datos si tiene datos completos
+        if ticket.cliente_rut and ticket.cliente_nombre:
+            cliente_datos = {
+                'nombre': ticket.cliente_nombre,
+                'rut': ticket.cliente_rut,
+                'email': ticket.cliente_email,
+                'telefono': ticket.cliente_telefono,
+            }
+            guardar_o_actualizar_cliente(cliente_datos, request.user)
         
         return JsonResponse({
             'success': True,
@@ -1023,11 +1051,11 @@ def dashboard_stats(request):
                 'error': 'No hay sucursal seleccionada'
             })
 
-        # Fecha de hoy
-        from datetime import datetime
+        # Fecha de hoy con timezone aware
+        from datetime import datetime, time
         hoy = timezone.now().date()
-        inicio_dia = datetime.combine(hoy, datetime.min.time())
-        fin_dia = datetime.combine(hoy, datetime.max.time())
+        inicio_dia = timezone.make_aware(datetime.combine(hoy, time.min))
+        fin_dia = timezone.make_aware(datetime.combine(hoy, time.max))
 
         # Filtro base por sucursal y fecha
         base_filter = Q(sucursal_id=sucursal_id, created_at__range=[inicio_dia, fin_dia])
@@ -1049,8 +1077,8 @@ def dashboard_stats(request):
         if tickets_pagados > 0:
             promedio_venta = ventas_hoy / tickets_pagados
 
-        # Tickets recientes del día (últimos 20)
-        tickets_recientes = tickets_hoy.select_related('vendedor', 'sucursal').order_by('-created_at')[:20]
+        # Solo tickets PENDIENTES del día (últimos 20)
+        tickets_recientes = tickets_hoy.filter(estado='PENDIENTE').select_related('vendedor', 'sucursal').order_by('-created_at')[:20]
         
         tickets_data = []
         for ticket in tickets_recientes:
@@ -1064,10 +1092,19 @@ def dashboard_stats(request):
                 'estado': ticket.estado,
             })
 
-        # Tickets pendientes para el wizard
-        tickets_pendientes_data = tickets_hoy.filter(estado='PENDIENTE').values(
-            'correlativo', 'cliente_nombre', 'total', 'created_at'
-        )[:10]
+        # Tickets pendientes para el wizard (con más detalles)
+        tickets_pendientes_query = tickets_hoy.filter(estado='PENDIENTE').select_related('vendedor')[:10]
+        tickets_pendientes_data = []
+        for ticket in tickets_pendientes_query:
+            tickets_pendientes_data.append({
+                'correlativo': ticket.correlativo,
+                'cliente_nombre': ticket.cliente_nombre or 'Sin nombre',
+                'cliente_rut': ticket.cliente_rut or '',
+                'vendedor_nombre': ticket.vendedor.nombre if ticket.vendedor else 'Sin vendedor',
+                'total': int(ticket.total or 0),
+                'hora': ticket.created_at.strftime('%H:%M'),
+                'productos_count': ticket.productos.count() if hasattr(ticket, 'productos') else 0
+            })
 
         return JsonResponse({
             'success': True,
@@ -1078,7 +1115,7 @@ def dashboard_stats(request):
                 'promedio_venta': int(promedio_venta),
             },
             'tickets': tickets_data,
-            'tickets_pendientes': list(tickets_pendientes_data)
+            'tickets_pendientes': tickets_pendientes_data
         })
 
     except Exception as e:
@@ -1133,8 +1170,93 @@ def validar_rut_cliente(request):
 
 
 @login_required
+@require_POST
+@csrf_exempt
+def anular_ticket_pendiente(request):
+    """Anular un ticket pendiente (solo si no ha sido pagado)"""
+    try:
+        data = json.loads(request.body)
+        correlativo = data.get('correlativo')
+        motivo = data.get('motivo', 'Sin motivo especificado')
+        
+        if not correlativo:
+            return JsonResponse({
+                'success': False,
+                'error': 'Correlativo de ticket requerido'
+            })
+        
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal seleccionada'
+            })
+        
+        # Buscar el ticket
+        try:
+            ticket = Ticket.objects.get(
+                correlativo=correlativo,
+                sucursal_id=sucursal_id
+            )
+        except Ticket.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Ticket #{correlativo} no encontrado'
+            })
+        
+        # Verificar que esté en estado PENDIENTE
+        if ticket.estado != 'PENDIENTE':
+            return JsonResponse({
+                'success': False,
+                'error': f'Solo se pueden anular tickets pendientes. Estado actual: {ticket.estado}'
+            })
+        
+        with transaction.atomic():
+            # Devolver stock de los productos
+            productos_ticket = Ticket_Productos.objects.filter(idTicket=ticket)
+            
+            for item in productos_ticket:
+                # Crear movimiento de devolución de stock
+                Movimientos_Producto.objects.create(
+                    ProductoTalla=item.ProductoTalla,
+                    cantidad=item.stock,  # Positivo para devolver al inventario
+                    costo=item.ProductoTalla.producto.costo,
+                    precio=int(item.precio),
+                    concepto='ANULACION_TICKET',
+                    tipo_movimiento='INGRESO',
+                    responsable=request.user.username,
+                    observaciones=f'Anulación de ticket #{ticket.correlativo} - Motivo: {motivo}',
+                    referencia_externa=f'ANULACION_{ticket.correlativo}'
+                )
+            
+            # Cambiar estado del ticket a ANULADO
+            ticket.estado = 'ANULADO'
+            ticket.observaciones = (ticket.observaciones or '') + f'\n[ANULADO] {timezone.now().strftime("%Y-%m-%d %H:%M")} - {motivo}'
+            ticket.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Ticket #{correlativo} anulado exitosamente',
+            'ticket_id': ticket.id
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Formato JSON inválido'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al anular ticket: {str(e)}'
+    })
+
+
+@login_required
 def buscar_cliente_rut(request):
-    """API para buscar cliente por RUT"""
+    """API para buscar cliente por RUT en tabla Cliente"""
+    from empresa_management.models import Cliente
+    
     rut = request.GET.get('rut', '').strip()
     
     if not rut:
@@ -1144,33 +1266,72 @@ def buscar_cliente_rut(request):
         })
     
     try:
-        # Buscar en tickets existentes por RUT
-        ticket_con_cliente = Ticket.objects.filter(
-            cliente_rut__icontains=rut.replace('.', '').replace('-', '')
-        ).order_by('-created_at').first()
+        # Limpiar y formatear el RUT
+        rut_limpio = rut.replace('.', '').replace('-', '').strip()
+        rut_formateado = formatear_rut(rut_limpio)
         
-        if ticket_con_cliente:
+        # Buscar primero en la tabla de Clientes
+        cliente = Cliente.objects.filter(
+            Q(rut__iexact=rut_formateado) | 
+            Q(rut__icontains=rut_limpio)
+        ).filter(activo=True).first()
+        
+        if cliente:
+            # Cliente encontrado en la base de datos
             cliente_data = {
-                'nombre': ticket_con_cliente.cliente_nombre,
-                'rut': ticket_con_cliente.cliente_rut,
-                'email': ticket_con_cliente.cliente_email,
-                'telefono': ticket_con_cliente.cliente_telefono,
-                'giro': ticket_con_cliente.cliente_giro,
-                'comuna': ticket_con_cliente.cliente_comuna,
-                'ciudad': ticket_con_cliente.cliente_ciudad,
-                'direccion': ticket_con_cliente.cliente_direccion,
-                'telefono_secundario': ticket_con_cliente.cliente_telefono_secundario,
-                'email_facturacion': ticket_con_cliente.cliente_email_facturacion,
+                'nombre': cliente.nombre_completo,
+                'rut': cliente.rut,
+                'email': cliente.email or '',
+                'telefono': cliente.telefono or cliente.celular or '',
+                'giro': cliente.empresa.giro if cliente.empresa else '',
+                'comuna': cliente.comuna or '',
+                'ciudad': cliente.ciudad or '',
+                'direccion': cliente.direccion or '',
+                'telefono_secundario': cliente.celular if cliente.telefono else '',
+                'email_facturacion': cliente.email or '',
             }
             
             return JsonResponse({
                 'success': True,
-                'cliente': cliente_data
+                'cliente': cliente_data,
+                'mensaje': 'Cliente encontrado en base de datos',
+                'cliente_id': cliente.id
+            })
+        
+        # Si no está en Clientes, buscar en tickets anteriores
+        ticket_con_cliente = Ticket.objects.filter(
+            Q(cliente_rut__iexact=rut_formateado) | 
+            Q(cliente_rut__icontains=rut_limpio)
+        ).exclude(
+            cliente_nombre__isnull=True
+        ).exclude(
+            cliente_nombre__exact=''
+        ).order_by('-created_at').first()
+        
+        if ticket_con_cliente and ticket_con_cliente.cliente_nombre:
+            cliente_data = {
+                'nombre': ticket_con_cliente.cliente_nombre,
+                'rut': ticket_con_cliente.cliente_rut,
+                'email': ticket_con_cliente.cliente_email or '',
+                'telefono': ticket_con_cliente.cliente_telefono or '',
+                'giro': ticket_con_cliente.cliente_giro or '',
+                'comuna': ticket_con_cliente.cliente_comuna or '',
+                'ciudad': ticket_con_cliente.cliente_ciudad or '',
+                'direccion': ticket_con_cliente.cliente_direccion or '',
+                'telefono_secundario': ticket_con_cliente.cliente_telefono_secundario or '',
+                'email_facturacion': ticket_con_cliente.cliente_email_facturacion or '',
+            }
+            
+            return JsonResponse({
+                'success': True,
+                'cliente': cliente_data,
+                'mensaje': 'Cliente encontrado en tickets anteriores'
             })
         else:
             return JsonResponse({
                 'success': False,
-                'error': 'Cliente no encontrado'
+                'error': 'Cliente no encontrado',
+                'rut_formateado': rut_formateado  # Devolver el RUT formateado para pre-llenarlo
             })
             
     except Exception as e:
@@ -1181,7 +1342,7 @@ def buscar_cliente_rut(request):
 
 
 def formatear_rut(rut):
-    """Formatear RUT chileno con puntos y guión"""
+    """Formatear RUT chileno SIN puntos, solo con guión"""
     # Limpiar RUT
     rut_limpio = ''.join(c for c in rut if c.isdigit() or c.lower() == 'k')
     
@@ -1191,14 +1352,82 @@ def formatear_rut(rut):
     cuerpo = rut_limpio[:-1]
     dv = rut_limpio[-1]
     
-    # Agregar puntos cada 3 dígitos desde la derecha
-    cuerpo_formateado = ''
-    for i, digito in enumerate(reversed(cuerpo)):
-        if i > 0 and i % 3 == 0:
-            cuerpo_formateado = '.' + cuerpo_formateado
-        cuerpo_formateado = digito + cuerpo_formateado
+    # Formatear SIN puntos (solo guión)
+    return f"{cuerpo}-{dv}"
+
+
+def guardar_o_actualizar_cliente(datos_cliente, usuario=None):
+    """Guardar o actualizar cliente en la base de datos"""
+    from empresa_management.models import Cliente
     
-    return f"{cuerpo_formateado}-{dv}"
+    try:
+        if not datos_cliente.get('rut') or not datos_cliente.get('nombre'):
+            return None  # No guardar si no hay datos mínimos
+        
+        rut = formatear_rut(datos_cliente['rut'])
+        nombre_completo = datos_cliente['nombre']
+        
+        # Separar nombre y apellido
+        partes_nombre = nombre_completo.split(' ', 1)
+        nombre = partes_nombre[0] if len(partes_nombre) > 0 else nombre_completo
+        apellido = partes_nombre[1] if len(partes_nombre) > 1 else ''
+        
+        # Buscar cliente existente
+        cliente = Cliente.objects.filter(rut=rut).first()
+        
+        if cliente:
+            # Actualizar datos si están vacíos o han cambiado
+            if not cliente.email and datos_cliente.get('email'):
+                cliente.email = datos_cliente['email']
+            if not cliente.telefono and datos_cliente.get('telefono'):
+                cliente.telefono = datos_cliente['telefono']
+            if not cliente.direccion and datos_cliente.get('direccion'):
+                cliente.direccion = datos_cliente['direccion']
+            if not cliente.comuna and datos_cliente.get('comuna'):
+                cliente.comuna = datos_cliente['comuna']
+            if not cliente.ciudad and datos_cliente.get('ciudad'):
+                cliente.ciudad = datos_cliente['ciudad']
+            if not cliente.celular and datos_cliente.get('telefono_secundario'):
+                cliente.celular = datos_cliente['telefono_secundario']
+            
+            # Actualizar nombre si cambió
+            if nombre and apellido:
+                cliente.nombre = nombre
+                cliente.apellido = apellido
+            
+            if usuario:
+                cliente.updated_by = usuario
+            cliente.save()
+            
+        else:
+            # Determinar tipo de cliente basado en los datos
+            tipo_cliente = 'INDIVIDUAL'
+            if datos_cliente.get('giro') and datos_cliente.get('direccion'):
+                tipo_cliente = 'EMPRESARIAL'
+            
+            # Crear nuevo cliente
+            cliente = Cliente.objects.create(
+                nombre=nombre,
+                apellido=apellido,
+                rut=rut,
+                email=datos_cliente.get('email', ''),
+                telefono=datos_cliente.get('telefono', ''),
+                celular=datos_cliente.get('telefono_secundario', ''),
+                direccion=datos_cliente.get('direccion', ''),
+                comuna=datos_cliente.get('comuna', ''),
+                ciudad=datos_cliente.get('ciudad', ''),
+                tipo_cliente=tipo_cliente,
+                activo=True,
+                created_by=usuario,
+                observaciones=f'Creado automáticamente desde venta'
+            )
+        
+        return cliente
+        
+    except Exception as e:
+        # Si hay error, no detener el proceso de venta
+        print(f"Error al guardar cliente: {str(e)}")
+        return None
 
 
 # ========== FUNCIONES TICKET POS ==========
@@ -1368,6 +1597,103 @@ def buscar_ticket_pos(request):
     return _obtener_ticket_para_pos(request, correlativo_int)
 
 
+def generar_dte_desde_ticket(ticket, tipo_documento, usuario):
+    """Generar DTE (Boleta o Factura Electrónica) desde un Ticket"""
+    from decimal import Decimal
+    
+    # Mapear tipo de documento
+    tipo_dte_map = {
+        'BOLETA_ELECTRONICA': 'BOLETA ELECTRONICA',
+        'FACTURA_ELECTRONICA': 'FACTURA ELECTRONICA',
+    }
+    
+    tipo_dte = tipo_dte_map.get(tipo_documento, 'BOLETA ELECTRONICA')
+    
+    # Obtener o crear receptor (cliente)
+    receptor = None
+    if ticket.cliente_rut and ticket.cliente_nombre:
+        # Buscar si ya existe el cliente como Empresa
+        receptor = Empresa.objects.filter(rut=ticket.cliente_rut).first()
+        
+        if not receptor:
+            # Crear empresa/cliente
+            receptor = Empresa.objects.create(
+                nombre=ticket.cliente_nombre,
+                rut=ticket.cliente_rut,
+                razon_social=ticket.cliente_nombre,
+                nombre_fantasia=ticket.cliente_nombre,
+                giro=ticket.cliente_giro or 'Consumidor Final',
+                direccion=ticket.cliente_direccion or 'Sin dirección',
+                comuna=ticket.cliente_comuna or 'Sin comuna',
+                ciudad=ticket.cliente_ciudad or 'Sin ciudad',
+                telefono=ticket.cliente_telefono or '',
+                correoVendedor=ticket.cliente_email or '',
+                correoAdministrador=ticket.cliente_email_facturacion or ticket.cliente_email or '',
+                esProveedor=False,
+                responsable=usuario.username if usuario else 'Sistema'
+            )
+    
+    # Obtener siguiente correlativo para el DTE
+    correlativo_dte = obtener_siguiente_correlativo(ticket.sucursal, tipo_dte)
+    
+    # Calcular montos
+    subtotal = Decimal(ticket.subTotal or ticket.total)
+    descuento = Decimal(ticket.descuento or 0)
+    neto = subtotal - descuento
+    iva = neto * Decimal('0.19')
+    total = neto + iva
+    
+    # Crear DTE con todos los campos requeridos
+    from datetime import timedelta
+    
+    dte = Dte.objects.create(
+        numero_documento=int(correlativo_dte),
+        tipo_documento=tipo_dte,
+        tipo_transaccion='VENTA_PUBLICO',
+        fecha_emision=ticket.fecha,
+        fecha_vencimiento=ticket.fecha + timedelta(days=30),
+        diasCredito=0,
+        bultos=1,
+        unidades_productos=sum(tp.stock for tp in ticket.ticket_productos.all()),
+        emisor=ticket.sucursal.empresa,
+        receptor=receptor,
+        sucursal=ticket.sucursal,
+        vendedor=ticket.vendedor,
+        monto_neto=neto,
+        monto_con_iva=total,
+        descuento=descuento,
+        estado_pago='PAGADO',
+        estado_dte='EMITIDO',
+        responsable=usuario.username if usuario else ticket.responsable,
+        hora=ticket.hora
+    )
+    
+    # Copiar productos del ticket al DTE
+    for tp in ticket.ticket_productos.all():
+        Dte_Productos.objects.create(
+            dte=dte,
+            productoTalla=tp.ProductoTalla,
+            stock=tp.stock,
+            costo=tp.ProductoTalla.producto.costo,
+            sobreprecio=0,
+            precio=tp.precio,
+            descripcion=tp.ProductoTalla.producto.descripcion or tp.ProductoTalla.producto.articulo
+        )
+    
+    # Copiar métodos de pago
+    for pago in ticket.pagos.all():
+        Dte_Detalle_Pago.objects.create(
+            dte=dte,
+            metodo_pago=pago.metodo_pago,
+            monto=pago.monto,
+            tipo_tarjeta=pago.tipo_tarjeta or '',
+            voucher=pago.voucher or '',
+            observaciones=pago.notas or ''
+        )
+    
+    return dte
+
+
 @login_required
 @require_http_methods(["POST"])
 def registrar_pagos_ticket(request, correlativo):
@@ -1398,7 +1724,14 @@ def registrar_pagos_ticket(request, correlativo):
 
     datos_cliente = payload.get('cliente', {})
     ticket.cliente_nombre = datos_cliente.get('nombre') or ''
-    ticket.cliente_rut = datos_cliente.get('rut') or ''
+    
+    # Formatear RUT sin puntos antes de guardar
+    rut_cliente = datos_cliente.get('rut') or ''
+    if rut_cliente:
+        ticket.cliente_rut = formatear_rut(rut_cliente)
+    else:
+        ticket.cliente_rut = ''
+    
     ticket.cliente_giro = datos_cliente.get('giro') or ''
     ticket.cliente_comuna = datos_cliente.get('comuna') or ''
     ticket.cliente_ciudad = datos_cliente.get('ciudad') or ''
@@ -1461,10 +1794,80 @@ def registrar_pagos_ticket(request, correlativo):
 
         if ids_existentes:
             TicketDetallePago.objects.filter(id__in=ids_existentes, ticket=ticket).delete()
+        
+        # Verificar si el ticket cambió de PENDIENTE a PAGADO
+        estado_anterior = Ticket.objects.get(id=ticket.id).estado
+        ticket_se_pago = (estado_anterior == 'PENDIENTE' and ticket.estado == 'PAGADO')
 
         ticket.save()
 
-    return JsonResponse({'success': True, 'ticket': construir_ticket_data(ticket)})
+        # Si el ticket se acaba de pagar, consumir stock FIFO y crear movimientos
+        if ticket_se_pago:
+            for tp in ticket.ticket_productos.all():
+                try:
+                    # Verificar que hay stock disponible
+                    if tp.ProductoTalla.stock < tp.stock:
+                        raise ValidationError(f'Stock insuficiente para {tp.ProductoTalla.sku}. Disponible: {tp.ProductoTalla.stock}, Requerido: {tp.stock}')
+                    
+                    # Consumir stock FIFO (esto crea automáticamente el movimiento de EGRESO)
+                    consumir_stock_fifo(
+                        producto_talla=tp.ProductoTalla,
+                        cantidad_requerida=tp.stock,
+                        responsable=request.user.username,
+                        ticket=ticket,
+                        observaciones=f'Pago de ticket #{ticket.correlativo}',
+                        referencia_externa=f'TICKET_{ticket.correlativo}'
+                    )
+                    print(f"✓ Stock consumido FIFO: {tp.ProductoTalla.sku} -{tp.stock}")
+                except Exception as e:
+                    print(f"Error al consumir stock para {tp.ProductoTalla.sku}: {str(e)}")
+                    # Crear movimiento manual si falla FIFO
+                    Movimientos_Producto.objects.create(
+                        ticket=ticket,
+                        ProductoTalla=tp.ProductoTalla,
+                        cantidad=-tp.stock,  # Negativo para egreso
+                        costo=tp.ProductoTalla.producto.costo,
+                        precio=tp.precio,
+                        concepto='VENTA_DIRECTA',
+                        tipo_movimiento='EGRESO',
+                        responsable=request.user.username,
+                        observaciones=f'Venta ticket #{ticket.correlativo} - Consumo manual (FIFO no disponible)',
+                        referencia_externa=f'TICKET_{ticket.correlativo}'
+                    )
+                    # Actualizar stock manualmente
+                    tp.ProductoTalla.stock -= tp.stock
+                    tp.ProductoTalla.save()
+                    print(f"⚠ Stock consumido manualmente: {tp.ProductoTalla.sku} -{tp.stock}")
+        
+        # Guardar o actualizar cliente en la base de datos si tiene datos
+        if datos_cliente and datos_cliente.get('rut') and datos_cliente.get('nombre'):
+            guardar_o_actualizar_cliente(datos_cliente, request.user)
+        
+        # Generar DTE si el tipo de documento lo requiere
+        tipo_documento_seleccionado = payload.get('tipo_documento', '')
+        dte_generado = None
+        
+        if tipo_documento_seleccionado in ['BOLETA_ELECTRONICA', 'FACTURA_ELECTRONICA'] and ticket.estado == 'PAGADO':
+            try:
+                dte_generado = generar_dte_desde_ticket(ticket, tipo_documento_seleccionado, request.user)
+                print(f"✓ DTE generado: {dte_generado.tipo_documento} #{dte_generado.numero_documento}")
+            except Exception as e:
+                # No fallar el pago si hay error en DTE, solo registrar
+                print(f"⚠ Error al generar DTE: {str(e)}")
+
+    response_data = {
+        'success': True, 
+        'ticket': construir_ticket_data(ticket)
+    }
+    
+    if dte_generado:
+        response_data['dte_generado'] = {
+            'id': dte_generado.id,
+            'numero': dte_generado.numero_documento,
+            'tipo': dte_generado.tipo_documento
+        }
+    
+    return JsonResponse(response_data)
 
 
 @login_required
@@ -1524,26 +1927,23 @@ def listar_documentos_ventas(request):
         fecha_hasta = request.GET.get('fecha_hasta')
         tipo_documento = request.GET.get('tipo_documento')
         estado = request.GET.get('estado')
-        metodo_pago = request.GET.get('metodo_pago')  # Nuevo filtro
+        metodo_pago = request.GET.get('metodo_pago')
         buscar = request.GET.get('buscar', '').strip()
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 20))
 
-        # Construir queryset base - SOLO DTEs (Facturas/Boletas Electrónicas)
+        documentos_data = []
+
+        # === SOLO DTEs (Facturas/Boletas Electrónicas) ===
         dtes_query = Dte.objects.select_related(
             'vendedor', 
             'receptor'
         ).prefetch_related(
             'dte_asociado',
-            'dte_productos__productoTalla__producto__atributo1',  # Marca
-            'dte_productos__productoTalla__producto__atributo2',  # Color
-            'dte_productos__productoTalla__producto__atributo3',  # Género
-            'dte_productos__productoTalla__producto__atributo4',  # Otro
-            'dte_productos__productoTalla'
+            'dte_productos__productoTalla__producto'
         ).filter(
             sucursal_id=sucursal_id,
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'],
-            tipo_documento__in=['FACTURA ELECTRONICA', 'BOLETA ELECTRONICA', 'FACTURA EXENTA']
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
         )
 
         # Aplicar filtros de fecha
@@ -1553,7 +1953,6 @@ def listar_documentos_ventas(request):
             dtes_query = dtes_query.filter(fecha_emision__lte=fecha_hasta)
 
         # Aplicar filtros por tipo de DTE
-        documentos_data = []
         dtes_filtrados = dtes_query
         
         if tipo_documento:
@@ -1584,23 +1983,9 @@ def listar_documentos_ventas(request):
                 Q(numero_documento__icontains=buscar) |
                 Q(receptor__nombre__icontains=buscar) |
                 Q(receptor__rut__icontains=buscar) |
-                Q(receptor__razon_social__icontains=buscar) |
                 Q(vendedor__nombre__icontains=buscar) |
-                Q(responsable__icontains=buscar) |
-                # Búsqueda en productos del DTE
-                Q(dte_productos__descripcion__icontains=buscar) |
                 Q(dte_productos__productoTalla__sku__icontains=buscar) |
-                Q(dte_productos__productoTalla__producto__articulo__icontains=buscar) |
-                Q(dte_productos__productoTalla__producto__descripcion__icontains=buscar) |
-                # Búsqueda en atributos de productos (marca, color, etc.)
-                Q(dte_productos__productoTalla__producto__atributo1__valor__icontains=buscar) |  # Marca
-                Q(dte_productos__productoTalla__producto__atributo2__valor__icontains=buscar) |  # Color
-                Q(dte_productos__productoTalla__producto__atributo3__valor__icontains=buscar) |  # Género
-                Q(dte_productos__productoTalla__producto__atributo4__valor__icontains=buscar) |  # Otro
-                Q(dte_productos__productoTalla__talla__icontains=buscar) |
-                # Búsqueda en métodos de pago
-                Q(dte_asociado__metodo_pago__icontains=buscar) |
-                Q(dte_asociado__voucher__icontains=buscar)
+                Q(dte_productos__productoTalla__producto__articulo__icontains=buscar)
             ).distinct()
         
         # Procesar DTEs filtrados
@@ -1624,7 +2009,7 @@ def listar_documentos_ventas(request):
             for pago in dte.dte_asociado.all():
                 metodos_pago.append({
                     'metodo': pago.metodo_pago,
-                    'metodo_display': pago.metodo_pago,  # DTE no tiene choices definidos
+                    'metodo_display': pago.metodo_pago,
                     'monto': pago.monto,
                     'voucher': pago.voucher or '',
                     'tipo_tarjeta': pago.tipo_tarjeta or '',
@@ -1634,7 +2019,8 @@ def listar_documentos_ventas(request):
             estado_display = 'PAGADO' if dte.estado_dte == 'EMITIDO' else dte.estado_dte
             
             # Crear datetime con zona horaria para DTEs
-            fecha_dt = timezone.datetime.combine(dte.fecha_emision, timezone.datetime.min.time())
+            from datetime import time as dt_time
+            fecha_dt = timezone.datetime.combine(dte.fecha_emision, dt_time.min)
             created_at_dte = timezone.make_aware(fecha_dt) if timezone.is_naive(fecha_dt) else fecha_dt
             
             documentos_data.append({
@@ -1672,20 +2058,30 @@ def listar_documentos_ventas(request):
         fin = inicio + per_page
         documentos_paginados = documentos_data[inicio:fin]
 
-        # Calcular estadísticas
+        # Calcular estadísticas (solo DTEs)
         total_ventas = sum(doc['total'] for doc in documentos_data)
         total_pendientes = len([doc for doc in documentos_data if doc['estado'] == 'PENDIENTE'])
         total_facturas = len([doc for doc in documentos_data if doc['tipo'] == 'FACTURA'])
+        total_boletas = len([doc for doc in documentos_data if doc['tipo'] == 'BOLETA'])
 
         return JsonResponse({
             'success': True,
             'documentos': documentos_paginados,
             'total': total_documentos,
+            'pagination': {
+                'current_page': page,
+                'per_page': per_page,
+                'total_pages': (total_documentos + per_page - 1) // per_page,
+                'total_items': total_documentos,
+                'has_previous': page > 1,
+                'has_next': fin < total_documentos
+            },
             'estadisticas': {
                 'total_documentos': total_documentos,
                 'total_ventas': total_ventas,
                 'total_pendientes': total_pendientes,
                 'total_facturas': total_facturas,
+                'total_boletas': total_boletas,
             }
         })
 
@@ -2031,7 +2427,7 @@ def cuadratura_caja(request):
     context = {
         'sucursal_actual': sucursal_actual,
     }
-    return render(request, 'vistas/modulo_ventas/cuadraturaCaja.html', context)
+    return render(request, 'vistas/modulo_ventas/cuadraturaCaja_v2.html', context)
 
 
 @login_required
@@ -2061,13 +2457,10 @@ def generar_cuadratura_caja(request):
         from datetime import datetime
         fecha_obj = datetime.strptime(fecha_cuadratura, '%Y-%m-%d').date()
         
-        # Crear datetime para filtros
-        inicio_dia = datetime.combine(fecha_obj, datetime.min.time())
-        fin_dia = datetime.combine(fecha_obj, datetime.max.time())
-        
-        # Hacer aware los datetime
-        inicio_dia = timezone.make_aware(inicio_dia)
-        fin_dia = timezone.make_aware(fin_dia)
+        # Crear datetime para filtros con timezone aware
+        from datetime import time as dt_time
+        inicio_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.min))
+        fin_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.max))
         
         # Inicializar totales
         cuadratura_data = {
@@ -2087,6 +2480,7 @@ def generar_cuadratura_caja(request):
             'total_transferencia': 0,
             'total_cheque': 0,
             'total_convenio': 0,
+            'total_credito_trabajador': 0,
             'total_nota_credito': 0,
             'total_webpay': 0,
             'total_mercadolibre': 0,
@@ -2140,6 +2534,8 @@ def generar_cuadratura_caja(request):
                     cuadratura_data['total_cheque'] += monto
                 elif metodo == 'CONVENIO':
                     cuadratura_data['total_convenio'] += monto
+                elif metodo == 'CREDITO_TRABAJADOR':
+                    cuadratura_data['total_credito_trabajador'] += monto
                 elif metodo == 'TARJETA_COMERCIAL':
                     # Aquí podrías mapear por tipo de tarjeta si tienes esa información
                     cuadratura_data['total_visa_mc_amex'] += monto
@@ -2231,6 +2627,470 @@ def generar_cuadratura_caja(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al generar cuadratura: {str(e)}'
+        })
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def guardar_cuadratura_completa(request):
+    """
+    Guardar cuadratura de caja completa con depósitos bancarios
+    Sistema simplificado - prioriza sencillez
+    """
+    try:
+        from datetime import datetime
+        import json
+        
+        # Obtener datos del request
+        fecha = request.POST.get('fecha')
+        efectivo_teorico = int(request.POST.get('efectivo_teorico', 0))
+        efectivo_real = int(request.POST.get('efectivo_real', 0))
+        cierre_pos = int(request.POST.get('cierre_pos', 0))
+        numero_lote = request.POST.get('numero_lote', '')
+        observaciones = request.POST.get('observaciones', '')
+        depositos_json = request.POST.get('depositos', '[]')
+        cuadratura_completa_json = request.POST.get('cuadratura_completa', '{}')
+        
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        # Validaciones
+        if not fecha or not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Fecha y sucursal son requeridos'
+            })
+        
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+        
+        # Parsear JSON
+        depositos_data = json.loads(depositos_json)
+        cuadratura_completa = json.loads(cuadratura_completa_json)
+        
+        # Verificar si ya existe un arqueo para esta fecha
+        arqueo_existente = ArqueoCaja.objects.filter(
+            fecha_arqueo=fecha_obj,
+            sucursal=sucursal
+        ).first()
+        
+        if arqueo_existente:
+            return JsonResponse({
+                'success': False,
+                'error': f'Ya existe una cuadratura para el {fecha_obj}. Elimínala primero si deseas crear una nueva.'
+            })
+        
+        # === CREAR ARQUEO DE CAJA ===
+        arqueo = ArqueoCaja.objects.create(
+            fecha_arqueo=fecha_obj,
+            sucursal=sucursal,
+            usuario_responsable=request.user,
+            
+            # Totales teóricos del sistema
+            total_efectivo_teorico=efectivo_teorico,
+            total_tarjeta_debito_teorico=cuadratura_completa.get('total_tarjeta_debito', 0),
+            total_tarjeta_credito_teorico=cuadratura_completa.get('total_tarjeta_credito', 0),
+            total_transbank_teorico=cuadratura_completa.get('total_transbank', 0),
+            total_visa_mc_amex_teorico=cuadratura_completa.get('total_visa_mc_amex', 0),
+            total_presto_teorico=cuadratura_completa.get('total_presto', 0),
+            total_abcdin_teorico=cuadratura_completa.get('total_abcdin', 0),
+            total_tricot_teorico=cuadratura_completa.get('total_tricot', 0),
+            total_hites_teorico=cuadratura_completa.get('total_hites', 0),
+            total_ripley_teorico=cuadratura_completa.get('total_ripley', 0),
+            total_falabella_teorico=cuadratura_completa.get('total_falabella', 0),
+            total_paris_teorico=cuadratura_completa.get('total_paris', 0),
+            total_tarjetas_comerciales_teorico=cuadratura_completa.get('total_tarjetas_comerciales', 0),
+            total_transferencia_teorico=cuadratura_completa.get('total_transferencia', 0),
+            total_credito_trabajador_teorico=cuadratura_completa.get('total_credito_trabajador', 0),
+            total_webpay_teorico=cuadratura_completa.get('total_webpay', 0),
+            total_mercadolibre_teorico=cuadratura_completa.get('total_mercadolibre', 0),
+            total_mercadopago_teorico=cuadratura_completa.get('total_mercadopago', 0),
+            total_transferencia_internet_teorico=cuadratura_completa.get('total_transferencia_internet', 0),
+            total_venta_internet_teorico=cuadratura_completa.get('total_venta_internet', 0),
+            
+            # Conteo físico (solo efectivo por ahora - simplificado)
+            total_efectivo_fisico=efectivo_real,
+            
+            # Cierre POS
+            cierre_pos_fisico=cierre_pos,
+            numero_lote_pos=numero_lote,
+            diferencia_transbank=cierre_pos - cuadratura_completa.get('total_transbank', 0),
+            
+            # Diferencias
+            diferencia_efectivo=efectivo_real - efectivo_teorico,
+            
+            # Observaciones
+            observaciones=observaciones,
+            
+            # Estado
+            estado='CERRADO' if (efectivo_real - efectivo_teorico) == 0 and (cierre_pos - cuadratura_completa.get('total_transbank', 0)) == 0 else 'CON_DIFERENCIAS',
+            fecha_cierre=timezone.now()
+        )
+        
+        # === CREAR DEPÓSITOS BANCARIOS ===
+        depositos_creados = []
+        for dep in depositos_data:
+            try:
+                fecha_dep = datetime.strptime(dep['fecha'], '%Y-%m-%d').date()
+                deposito = DepositoBancario.objects.create(
+                    arqueo=arqueo,
+                    fecha_deposito=fecha_dep,
+                    monto=int(dep['monto']),
+                    banco=dep.get('banco', 'ESTADO'),
+                    numero_comprobante=dep.get('comprobante', ''),
+                    observaciones=dep.get('observaciones', ''),
+                    registrado_por=request.user
+                )
+                depositos_creados.append({
+                    'id': deposito.id,
+                    'monto': deposito.monto,
+                    'banco': deposito.get_banco_display()
+                })
+            except Exception as e:
+                print(f"Error al crear depósito: {e}")
+                continue
+        
+        return JsonResponse({
+            'success': True,
+            'message': '¡Cuadratura guardada exitosamente!',
+            'arqueo_id': arqueo.id,
+            'depositos_creados': len(depositos_creados),
+            'diferencia': arqueo.diferencia_efectivo,
+            'estado': arqueo.get_estado_display()
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error al guardar cuadratura: {e}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al guardar cuadratura: {str(e)}'
+        })
+
+
+@login_required
+@require_GET
+def verificar_cuadratura_existente(request):
+    """Verificar si ya existe una cuadratura para la fecha dada"""
+    try:
+        from datetime import datetime
+        
+        fecha = request.GET.get('fecha')
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        if not fecha or not sucursal_id:
+            return JsonResponse({
+                'existe': False
+            })
+        
+        fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        
+        arqueo = ArqueoCaja.objects.filter(
+            fecha_arqueo=fecha_obj,
+            sucursal=sucursal
+        ).first()
+        
+        if arqueo:
+            return JsonResponse({
+                'existe': True,
+                'datos': {
+                    'id': arqueo.id,
+                    'fecha_arqueo': arqueo.fecha_arqueo.strftime('%d/%m/%Y'),
+                    'usuario': arqueo.usuario_responsable.get_full_name() or arqueo.usuario_responsable.username,
+                    'estado': arqueo.get_estado_display(),
+                    'diferencia_efectivo': arqueo.diferencia_efectivo,
+                    'efectivo_teorico': arqueo.total_efectivo_teorico,
+                    'efectivo_fisico': arqueo.total_efectivo_fisico
+                }
+            })
+        else:
+            return JsonResponse({
+                'existe': False
+            })
+            
+    except Exception as e:
+        print(f"Error al verificar cuadratura: {e}")
+        return JsonResponse({
+            'existe': False
+        })
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def eliminar_cuadratura(request, arqueo_id):
+    """Eliminar una cuadratura existente"""
+    try:
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        arqueo = get_object_or_404(
+            ArqueoCaja,
+            id=arqueo_id,
+            sucursal_id=sucursal_id
+        )
+        
+        # Guardar info antes de eliminar
+        fecha_arqueo = arqueo.fecha_arqueo.strftime('%d/%m/%Y')
+        
+        # Eliminar (los depósitos se eliminan automáticamente por CASCADE)
+        arqueo.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Cuadratura del {fecha_arqueo} eliminada exitosamente'
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error al eliminar cuadratura: {e}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al eliminar: {str(e)}'
+        })
+
+
+@login_required
+@require_GET
+def listar_cuadraturas(request):
+    """Listar cuadraturas/arqueos con filtros"""
+    try:
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        fecha_filtro = request.GET.get('fecha')
+        
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal seleccionada'
+            })
+        
+        # Query base
+        arqueos = ArqueoCaja.objects.filter(
+            sucursal_id=sucursal_id
+        ).select_related('usuario_responsable', 'sucursal').prefetch_related('depositos')
+        
+        # Aplicar filtro de fecha si existe
+        if fecha_filtro:
+            from datetime import datetime
+            fecha_obj = datetime.strptime(fecha_filtro, '%Y-%m-%d').date()
+            arqueos = arqueos.filter(fecha_arqueo=fecha_obj)
+        else:
+            # Por defecto, mostrar TODO el mes actual
+            hoy = timezone.now().date()
+            primer_dia_mes = hoy.replace(day=1)
+            arqueos = arqueos.filter(
+                fecha_arqueo__gte=primer_dia_mes,
+                fecha_arqueo__lte=hoy
+            )
+        
+        # Ordenar por fecha descendente (de más reciente a más antigua)
+        arqueos = arqueos.order_by('-fecha_arqueo')
+        
+        # Serializar datos
+        datos = []
+        for arqueo in arqueos:
+            total_depositos = sum([d.monto for d in arqueo.depositos.all()])
+            
+            datos.append({
+                'id': arqueo.id,
+                'fecha_arqueo': arqueo.fecha_arqueo.strftime('%d/%m/%Y'),
+                'usuario': arqueo.usuario_responsable.get_full_name() or arqueo.usuario_responsable.username,
+                'efectivo_teorico': arqueo.total_efectivo_teorico,
+                'efectivo_fisico': arqueo.total_efectivo_fisico,
+                'diferencia_efectivo': arqueo.diferencia_efectivo,
+                'total_transbank_teorico': arqueo.total_transbank_teorico,
+                'cierre_pos_fisico': arqueo.cierre_pos_fisico,
+                'numero_lote_pos': arqueo.numero_lote_pos or '',
+                'diferencia_transbank': arqueo.diferencia_transbank,
+                'total_depositos': total_depositos,
+                'estado': arqueo.get_estado_display(),
+                'estado_codigo': arqueo.estado,
+                'observaciones': arqueo.observaciones,
+                'cantidad_depositos': arqueo.depositos.count()
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'arqueos': datos
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error al listar cuadraturas: {e}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        })
+
+
+@login_required
+@require_GET
+def obtener_detalle_arqueo(request, arqueo_id):
+    """Obtener detalle completo de un arqueo específico"""
+    try:
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        arqueo = get_object_or_404(
+            ArqueoCaja.objects.select_related('usuario_responsable', 'sucursal').prefetch_related('depositos'),
+            id=arqueo_id,
+            sucursal_id=sucursal_id
+        )
+        
+        # Serializar depositos
+        depositos_data = []
+        for deposito in arqueo.depositos.all():
+            depositos_data.append({
+                'fecha_deposito': deposito.fecha_deposito.strftime('%d/%m/%Y'),
+                'monto': deposito.monto,
+                'banco': deposito.get_banco_display(),
+                'numero_comprobante': deposito.numero_comprobante,
+                'observaciones': deposito.observaciones
+            })
+        
+        # Calcular venta total (si está disponible)
+        venta_total = 0
+        for field in ['total_efectivo_teorico', 'total_transbank_teorico', 
+                      'total_tarjetas_comerciales_teorico', 'total_venta_internet_teorico']:
+            venta_total += getattr(arqueo, field, 0)
+        
+        arqueo_data = {
+            'id': arqueo.id,
+            'fecha_arqueo': arqueo.fecha_arqueo.strftime('%d/%m/%Y'),
+            'usuario': arqueo.usuario_responsable.get_full_name() or arqueo.usuario_responsable.username,
+            'sucursal': arqueo.sucursal.alias if arqueo.sucursal else 'N/A',
+            'estado': arqueo.estado,
+            'observaciones': arqueo.observaciones,
+            
+            # Totales
+            'venta_total': venta_total,
+            'total_efectivo_teorico': arqueo.total_efectivo_teorico,
+            'total_efectivo_fisico': arqueo.total_efectivo_fisico,
+            'diferencia_efectivo': arqueo.diferencia_efectivo,
+            
+            # Transbank POS
+            'total_transbank_teorico': arqueo.total_transbank_teorico,
+            'cierre_pos_fisico': arqueo.cierre_pos_fisico,
+            'diferencia_transbank': arqueo.diferencia_transbank,
+            'numero_lote_pos': arqueo.numero_lote_pos or '',
+            
+            # Transbank Detalle
+            'total_tarjeta_debito_teorico': arqueo.total_tarjeta_debito_teorico,
+            'total_tarjeta_credito_teorico': arqueo.total_tarjeta_credito_teorico,
+            
+            # Tarjetas Comerciales
+            'total_visa_mc_amex_teorico': arqueo.total_visa_mc_amex_teorico,
+            'total_presto_teorico': arqueo.total_presto_teorico,
+            'total_abcdin_teorico': arqueo.total_abcdin_teorico,
+            'total_tricot_teorico': arqueo.total_tricot_teorico,
+            'total_hites_teorico': arqueo.total_hites_teorico,
+            'total_ripley_teorico': arqueo.total_ripley_teorico,
+            'total_falabella_teorico': arqueo.total_falabella_teorico,
+            'total_paris_teorico': arqueo.total_paris_teorico,
+            'total_tarjetas_comerciales_teorico': arqueo.total_tarjetas_comerciales_teorico,
+            
+            # Venta Internet
+            'total_webpay_teorico': arqueo.total_webpay_teorico,
+            'total_mercadolibre_teorico': arqueo.total_mercadolibre_teorico,
+            'total_mercadopago_teorico': arqueo.total_mercadopago_teorico,
+            'total_transferencia_internet_teorico': arqueo.total_transferencia_internet_teorico,
+            'total_venta_internet_teorico': arqueo.total_venta_internet_teorico,
+            
+            # Otros
+            'total_transferencia_teorico': arqueo.total_transferencia_teorico,
+            'total_credito_trabajador_teorico': arqueo.total_credito_trabajador_teorico,
+            
+            # Depósitos
+            'depositos': depositos_data
+        }
+        
+        return JsonResponse({
+            'success': True,
+            'arqueo': arqueo_data
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error al obtener detalle de arqueo: {e}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error: {str(e)}'
+        })
+
+
+@login_required
+@require_POST
+def editar_cuadratura(request, arqueo_id):
+    """Editar una cuadratura existente"""
+    try:
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        # Obtener el arqueo
+        arqueo = get_object_or_404(
+            ArqueoCaja,
+            id=arqueo_id,
+            sucursal_id=sucursal_id
+        )
+        
+        data = json.loads(request.body)
+        
+        # Actualizar efectivo físico
+        if 'efectivo_real' in data:
+            arqueo.total_efectivo_fisico = data['efectivo_real']
+            arqueo.diferencia_efectivo = arqueo.total_efectivo_fisico - arqueo.total_efectivo_teorico
+        
+        # Actualizar cierre POS
+        if 'cierre_pos' in data:
+            arqueo.cierre_pos_fisico = data['cierre_pos']
+            arqueo.diferencia_transbank = arqueo.cierre_pos_fisico - arqueo.total_transbank_teorico
+        
+        if 'numero_lote' in data:
+            arqueo.numero_lote_pos = data['numero_lote']
+        
+        # Actualizar observaciones
+        if 'observaciones' in data:
+            arqueo.observaciones = data['observaciones']
+        
+        # Actualizar depósitos (eliminar y recrear)
+        if 'depositos' in data:
+            # Eliminar depósitos anteriores
+            arqueo.depositos.all().delete()
+            
+            # Crear nuevos depósitos
+            for dep in data['depositos']:
+                DepositoBancario.objects.create(
+                    arqueo=arqueo,
+                    fecha_deposito=dep['fecha'],
+                    monto=dep['monto'],
+                    banco=dep['banco'],
+                    numero_comprobante=dep.get('comprobante', ''),
+                    observaciones=dep.get('observaciones', ''),
+                    registrado_por=request.user
+                )
+        
+        # Recalcular estado
+        if abs(arqueo.diferencia_efectivo) <= 1000 and abs(arqueo.diferencia_transbank) <= 1000:
+            arqueo.estado = 'CERRADO'
+        else:
+            arqueo.estado = 'CON_DIFERENCIAS'
+        
+        arqueo.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Cuadratura actualizada correctamente'
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error al editar cuadratura: {e}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error: {str(e)}'
         })
 
 
@@ -2358,6 +3218,126 @@ def exportar_cuadratura_excel(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al exportar: {str(e)}'
+        })
+
+
+@login_required
+@csrf_exempt
+def obtener_transacciones_dia(request):
+    """Obtener todas las transacciones del día (tickets, boletas, facturas)"""
+    try:
+        import json
+        from datetime import datetime, time as dt_time
+        
+        data = json.loads(request.body)
+        fecha = data.get('fecha')
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        if not fecha or not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Fecha y sucursal requeridas'
+            })
+        
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
+        
+        # Crear rango de fechas
+        inicio_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.min))
+        fin_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.max))
+        
+        # ========== OBTENER TICKETS ==========
+        tickets_del_dia = Ticket.objects.filter(
+            sucursal=sucursal,
+            created_at__range=[inicio_dia, fin_dia],
+            estado='PAGADO'
+        ).prefetch_related('pagos').order_by('created_at')
+        
+        tickets_data = []
+        for ticket in tickets_del_dia:
+            # Obtener método de pago predominante
+            metodo_pago = 'N/A'
+            if ticket.pagos.exists():
+                primer_pago = ticket.pagos.first()
+                metodo_pago = primer_pago.get_metodo_pago_display() if primer_pago else 'N/A'
+            
+            tickets_data.append({
+                'id': ticket.id,
+                'numero': ticket.correlativo,
+                'hora': ticket.created_at.strftime('%H:%M:%S'),
+                'cliente': ticket.cliente.razon_social if ticket.cliente else 'Cliente General',
+                'metodo_pago': metodo_pago,
+                'total': ticket.total_con_iva,
+                'estado': ticket.estado
+            })
+        
+        # ========== OBTENER BOLETAS ELECTRÓNICAS ==========
+        boletas_del_dia = DocumentoElectronico.objects.filter(
+            sucursal=sucursal,
+            fecha_emision__range=[inicio_dia, fin_dia],
+            tipo_documento__codigo='39',  # Código para Boleta Electrónica
+            estado__in=['EMITIDO', 'ACEPTADO']
+        ).order_by('fecha_emision')
+        
+        boletas_data = []
+        for boleta in boletas_del_dia:
+            boletas_data.append({
+                'id': boleta.id,
+                'folio': boleta.folio,
+                'hora': boleta.fecha_emision.strftime('%H:%M:%S'),
+                'rut_cliente': boleta.receptor_rut or '66666666-6',
+                'razon_social': boleta.receptor_razon_social or 'Cliente General',
+                'monto_neto': boleta.monto_neto,
+                'monto_iva': boleta.monto_iva,
+                'monto_total': boleta.monto_total,
+                'estado': boleta.estado
+            })
+        
+        # ========== OBTENER FACTURAS ELECTRÓNICAS ==========
+        facturas_del_dia = DocumentoElectronico.objects.filter(
+            sucursal=sucursal,
+            fecha_emision__range=[inicio_dia, fin_dia],
+            tipo_documento__codigo__in=['33', '34'],  # 33: Factura, 34: Factura Exenta
+            estado__in=['EMITIDO', 'ACEPTADO']
+        ).order_by('fecha_emision')
+        
+        facturas_data = []
+        for factura in facturas_del_dia:
+            facturas_data.append({
+                'id': factura.id,
+                'folio': factura.folio,
+                'hora': factura.fecha_emision.strftime('%H:%M:%S'),
+                'rut_cliente': factura.receptor_rut or 'N/A',
+                'razon_social': factura.receptor_razon_social or 'Cliente',
+                'monto_neto': factura.monto_neto,
+                'monto_iva': factura.monto_iva,
+                'monto_total': factura.monto_total,
+                'estado': factura.estado,
+                'tipo': 'Factura Exenta' if factura.tipo_documento.codigo == '34' else 'Factura'
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'tickets': tickets_data,
+                'boletas': boletas_data,
+                'facturas': facturas_data,
+                'totales': {
+                    'total_tickets': len(tickets_data),
+                    'total_boletas': len(boletas_data),
+                    'total_facturas': len(facturas_data),
+                    'total_documentos': len(tickets_data) + len(boletas_data) + len(facturas_data)
+                }
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error al obtener transacciones del día: {e}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener transacciones: {str(e)}'
         })
 
 
@@ -4065,16 +5045,25 @@ def crear_cambio_devolucion(request):
     try:
         data = json.loads(request.body)
         
+        print(f"🔍 DEBUG crear_cambio_devolucion - Datos recibidos: {data}")
+        
         # Validar datos requeridos
-        ticket_correlativo = data.get('ticket_correlativo')
+        documento_id = data.get('documento_id')
+        documento_tipo = data.get('documento_tipo', 'TICKET')
+        documento_numero = data.get('documento_numero')
         tipo_operacion = data.get('tipo_operacion')
         motivo_principal = data.get('motivo_principal')
         productos_cambio = data.get('productos', [])
         
-        if not all([ticket_correlativo, tipo_operacion, motivo_principal]):
+        # Retrocompatibilidad con ticket_correlativo
+        if not documento_numero and data.get('ticket_correlativo'):
+            documento_numero = data.get('ticket_correlativo')
+            documento_tipo = 'TICKET'
+        
+        if not all([documento_numero, tipo_operacion, motivo_principal]):
             return JsonResponse({
                 'success': False,
-                'error': 'Ticket, tipo de operación y motivo son requeridos'
+                'error': f'Faltan datos obligatorios. documento_numero: {documento_numero}, tipo_operacion: {tipo_operacion}, motivo: {motivo_principal}'
             })
         
         if not productos_cambio:
@@ -4092,24 +5081,101 @@ def crear_cambio_devolucion(request):
         
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
-        # Buscar ticket original
-        try:
-            ticket_original = Ticket.objects.get(
-                correlativo=ticket_correlativo,
-                sucursal=sucursal
-            )
-        except Ticket.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': f'Ticket #{ticket_correlativo} no encontrado'
-            })
+        # Buscar documento original (Ticket o DTE)
+        ticket_original = None
+        dte_original = None
         
-        # Verificar que el ticket esté pagado
-        if ticket_original.estado != 'PAGADO':
-            return JsonResponse({
-                'success': False,
-                'error': 'Solo se pueden procesar cambios de tickets pagados'
-            })
+        if documento_tipo == 'DTE':
+            # Buscar DTE y crear ticket asociado si no existe
+            try:
+                dte_original = Dte.objects.select_related('receptor', 'vendedor', 'sucursal').get(
+                    numero_documento=documento_numero
+                )
+                
+                print(f"✓ DTE #{documento_numero} encontrado")
+                
+                # Buscar si ya existe un ticket asociado a este DTE
+                # Buscar por observaciones que contienen el número de DTE
+                ticket_original = Ticket.objects.filter(
+                    observaciones__icontains=f'DTE #{documento_numero}'
+                ).first()
+                
+                if not ticket_original:
+                    # Crear ticket de referencia desde el DTE
+                    print(f"  Creando ticket de referencia para DTE #{documento_numero}")
+                    
+                    correlativo_ticket = obtener_siguiente_correlativo(sucursal, 'TICKET')
+                    
+                    # Crear ticket de referencia con solo los campos que existen en el modelo
+                    ticket_original = Ticket.objects.create(
+                        correlativo=correlativo_ticket,
+                        vendedor=dte_original.vendedor,
+                        sucursal=sucursal,
+                        subTotal=int(dte_original.monto_neto),
+                        descuento=int(dte_original.descuento) if dte_original.descuento else 0,
+                        total=int(dte_original.monto_con_iva),
+                        estado='PAGADO',
+                        responsable=dte_original.responsable,
+                        cliente_nombre=dte_original.receptor.razon_social if dte_original.receptor else '',
+                        cliente_rut=dte_original.receptor.rut if dte_original.receptor else '',
+                        cliente_email=dte_original.receptor.correoVendedor if dte_original.receptor else '',
+                        cliente_telefono='',
+                        cliente_giro=dte_original.receptor.giro if dte_original.receptor else '',
+                        cliente_direccion=dte_original.receptor.direccion if dte_original.receptor else '',
+                        cliente_comuna=dte_original.receptor.comuna if dte_original.receptor else '',
+                        cliente_ciudad=dte_original.receptor.ciudad if dte_original.receptor else '',
+                        observaciones=f'Ticket de referencia para DTE #{documento_numero} - {dte_original.tipo_documento}'
+                    )
+                    
+                    print(f"  ✓ Ticket #{correlativo_ticket} creado sin errores")
+                    
+                    # Copiar productos del DTE al ticket y crear mapeo
+                    mapeo_productos = {}  # dte_producto_id → ticket_producto_id
+                    
+                    for dp in dte_original.dte_productos.all():
+                        tp = Ticket_Productos.objects.create(
+                            idTicket=ticket_original,
+                            ProductoTalla=dp.productoTalla,
+                            stock=dp.stock,
+                            precio=dp.precio,
+                            descuento_unitario=0,
+                            subtotal=dp.precio * dp.stock
+                        )
+                        mapeo_productos[dp.id] = tp.id
+                        print(f"    Mapeado: Dte_Producto {dp.id} → Ticket_Producto {tp.id}")
+                    
+                    # Guardar mapeo en la sesión o en el ticket para referencia
+                    ticket_original.observaciones += f"\n[MAPEO_PRODUCTOS: {mapeo_productos}]"
+                    ticket_original.save()
+                    
+                    print(f"  ✓ Ticket #{correlativo_ticket} creado con {len(mapeo_productos)} productos")
+                else:
+                    print(f"  ✓ Ticket asociado encontrado: #{ticket_original.correlativo}")
+                    
+            except Dte.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'DTE #{documento_numero} no encontrado'
+                })
+        else:
+            # Buscar Ticket
+            try:
+                ticket_original = Ticket.objects.get(
+                    correlativo=documento_numero,
+                    sucursal=sucursal
+                )
+            except Ticket.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Ticket #{documento_numero} no encontrado'
+                })
+            
+            # Verificar que el ticket esté pagado
+            if ticket_original.estado != 'PAGADO':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Solo se pueden procesar cambios de tickets pagados'
+                })
         
         # Verificar plazo (30 días por defecto)
         from datetime import timedelta
@@ -4560,9 +5626,9 @@ def completar_cambio_devolucion(request):
             
             # Procesar movimientos de inventario
             for detalle in cambio.detalles.all():
-                # Devolver stock del producto original
+                # 1. DEVOLVER stock del producto original (INGRESO)
                 if detalle.apto_para_venta:
-                    Movimientos_Producto.objects.create(
+                    mov_devolucion = Movimientos_Producto.objects.create(
                         ProductoTalla=detalle.producto_original.ProductoTalla,
                         cantidad=detalle.cantidad_original,  # Positivo para ingreso
                         costo=detalle.producto_original.ProductoTalla.producto.costo,
@@ -4570,24 +5636,51 @@ def completar_cambio_devolucion(request):
                         concepto='DEVOLUCION_CLIENTE',
                         tipo_movimiento='INGRESO',
                         responsable=request.user.username,
-                        observaciones=f'Devolución por cambio {cambio.numero_operacion}',
-                        referencia_externa=cambio.numero_operacion
+                        observaciones=f'Devolución por cambio {cambio.numero_operacion} - Ticket original #{cambio.ticket_original.correlativo}',
+                        referencia_externa=cambio.numero_operacion,
+                        ticket=cambio.ticket_original
                     )
+                    
+                    # Actualizar stock del producto devuelto
+                    detalle.producto_original.ProductoTalla.stock += detalle.cantidad_original
+                    detalle.producto_original.ProductoTalla.save()
+                    
+                    print(f"✓ Devuelto stock: {detalle.producto_original.ProductoTalla.sku} +{detalle.cantidad_original}")
+                else:
+                    # Producto no apto: registrar solo para auditoría sin devolver stock
+                    Movimientos_Producto.objects.create(
+                        ProductoTalla=detalle.producto_original.ProductoTalla,
+                        cantidad=0,  # No devuelve stock
+                        costo=detalle.producto_original.ProductoTalla.producto.costo,
+                        precio=int(detalle.precio_original_unitario),
+                        concepto='DEVOLUCION_CLIENTE',
+                        tipo_movimiento='AJUSTE',
+                        responsable=request.user.username,
+                        observaciones=f'Devolución NO APTA por cambio {cambio.numero_operacion} - Producto en mal estado',
+                        referencia_externa=cambio.numero_operacion,
+                        ticket=cambio.ticket_original
+                    )
+                    print(f"⚠ Producto no apto (no devuelve stock): {detalle.producto_original.ProductoTalla.sku}")
                 
-                # Descontar stock del producto nuevo (si aplica)
+                # 2. DESCONTAR stock del producto nuevo (EGRESO con FIFO)
                 if detalle.producto_nuevo:
                     # Verificar stock disponible
                     if detalle.producto_nuevo.stock < detalle.cantidad_nueva:
-                        raise ValidationError(f'Stock insuficiente para {detalle.producto_nuevo.producto.articulo}')
+                        raise ValidationError(f'Stock insuficiente para {detalle.producto_nuevo.producto.articulo} - Talla {detalle.producto_nuevo.talla}. Disponible: {detalle.producto_nuevo.stock}, Requerido: {detalle.cantidad_nueva}')
                     
-                    # Consumir stock FIFO
-                    consumir_stock_fifo(
-                        producto_talla=detalle.producto_nuevo,
-                        cantidad_requerida=detalle.cantidad_nueva,
-                        responsable=request.user.username,
-                        ticket=cambio.ticket_nuevo,
-                        observaciones=f'Cambio {cambio.numero_operacion}'
-                    )
+                    # Consumir stock FIFO (crea movimiento de EGRESO automáticamente)
+                    try:
+                        consumir_stock_fifo(
+                            producto_talla=detalle.producto_nuevo,
+                            cantidad_requerida=detalle.cantidad_nueva,
+                            responsable=request.user.username,
+                            ticket=cambio.ticket_nuevo,
+                            observaciones=f'Cambio {cambio.numero_operacion} - Nuevo producto para ticket #{cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else "N/A"}',
+                            referencia_externa=cambio.numero_operacion
+                        )
+                        print(f"✓ Consumido stock FIFO: {detalle.producto_nuevo.sku} -{detalle.cantidad_nueva}")
+                    except Exception as e:
+                        raise ValidationError(f'Error al consumir stock FIFO: {str(e)}')
             
             # Procesar pagos si hay diferencia
             if cambio.diferencia_monto != 0:
@@ -4623,11 +5716,21 @@ def completar_cambio_devolucion(request):
                 }
             )
         
+        # Preparar datos del ticket para impresión si se creó uno nuevo
+        ticket_data = None
+        if cambio.ticket_nuevo:
+            ticket_data = construir_ticket_data(cambio.ticket_nuevo)
+        
         return JsonResponse({
             'success': True,
             'message': 'Cambio completado exitosamente',
+            'cambio_id': cambio.id,
+            'numero_operacion': cambio.numero_operacion,
             'ticket_nuevo': cambio.ticket_nuevo.correlativo if cambio.ticket_nuevo else None,
-            'estado_final': cambio.get_estado_display()
+            'estado_final': cambio.get_estado_display(),
+            'ticket_data': ticket_data,  # Datos para imprimir el nuevo ticket
+            'puede_imprimir': cambio.ticket_nuevo is not None,
+            'diferencia_monto': float(cambio.diferencia_monto)
         })
         
     except json.JSONDecodeError:
@@ -4649,8 +5752,244 @@ def completar_cambio_devolucion(request):
 
 @login_required
 @require_GET
+def buscar_documento_cambio(request):
+    """Buscar documento (Ticket o DTE) para iniciar proceso de cambio/devolución"""
+    try:
+        numero = request.GET.get('numero', '').strip()
+        tipo_documento = request.GET.get('tipo_documento', 'dte')
+        fecha_compra = request.GET.get('fecha_compra', '').strip()
+        
+        print(f"🔍 DEBUG buscar_documento_cambio - Parámetros recibidos:")
+        print(f"  numero: '{numero}'")
+        print(f"  tipo_documento: '{tipo_documento}'")
+        print(f"  fecha_compra: '{fecha_compra}'")
+        
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        print(f"  sucursal_id: {sucursal_id}")
+        
+        if not numero:
+            return JsonResponse({
+                'success': False,
+                'error': 'Número de documento requerido'
+            })
+        
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal seleccionada'
+            })
+        
+        # Buscar según el tipo
+        if tipo_documento == 'dte':
+            # Buscar DTE - Primero sin filtros para debugging
+            query_debug = Dte.objects.filter(numero_documento=numero)
+            print(f"🔍 Paso 1 - Total DTEs con número {numero}: {query_debug.count()}")
+            
+            if query_debug.exists():
+                for dte_d in query_debug:
+                    print(f"  → DTE encontrado: ID={dte_d.id}, tipo_doc={dte_d.tipo_documento}, tipo_trans={dte_d.tipo_transaccion}, fecha={dte_d.fecha_emision}, estado={dte_d.estado_dte}, sucursal={dte_d.sucursal_id}")
+            else:
+                print(f"  ❌ No existe ningún DTE con número {numero} en la base de datos")
+            
+            # Buscar DTE con filtros para ventas
+            query = Dte.objects.select_related('vendedor', 'receptor', 'sucursal').prefetch_related(
+                'dte_productos__productoTalla__producto'
+            ).filter(
+                numero_documento=numero
+            )
+            
+            print(f"🔍 Paso 2 - Aplicando filtros...")
+            
+            # Filtrar por tipo de transacción (solo ventas)
+            query = query.filter(tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'])
+            print(f"  Después de filtro tipo_transaccion: {query.count()}")
+            
+            if fecha_compra:
+                query = query.filter(fecha_emision=fecha_compra)
+            
+            dte = query.first()
+            
+            if not dte:
+                # Verificar si existe pero con otro tipo_transaccion
+                dte_otro_tipo = Dte.objects.filter(numero_documento=numero).first()
+                if dte_otro_tipo:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'DTE #{numero} encontrado pero es tipo "{dte_otro_tipo.tipo_transaccion}". Solo se permiten cambios de documentos de VENTA o VENTA_PUBLICO.'
+                    })
+                
+                return JsonResponse({
+                    'success': False,
+                    'error': f'DTE #{numero} no encontrado para la fecha {fecha_compra}. Verifique el número y la fecha.'
+                })
+            
+            # Verificar que esté emitido/pagado
+            if dte.estado_dte not in ['EMITIDO', 'ACEPTADO']:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Solo se pueden procesar cambios de documentos emitidos'
+                })
+            
+            # Convertir DTE a formato compatible
+            from datetime import timedelta
+            fecha_limite = dte.fecha_emision + timedelta(days=30)
+            dentro_del_plazo = timezone.now().date() <= fecha_limite
+            
+            productos_data = []
+            for dp in dte.dte_productos.all():
+                productos_data.append({
+                    'id': dp.id,
+                    'sku': dp.productoTalla.sku if dp.productoTalla else '',
+                    'articulo': dp.productoTalla.producto.articulo if dp.productoTalla and dp.productoTalla.producto else dp.descripcion,
+                    'descripcion': dp.descripcion,
+                    'talla': dp.productoTalla.talla if dp.productoTalla else '',
+                    'cantidad_original': dp.stock,
+                    'cantidad_disponible': dp.stock,  # TODO: verificar si ya se cambió
+                    'precio_unitario': float(dp.precio),
+                    'subtotal': float(dp.precio * dp.stock),
+                })
+            
+            return JsonResponse({
+                'success': True,
+                'documento': {
+                    'id': dte.id,
+                    'tipo': 'DTE',
+                    'numero_documento': dte.numero_documento,
+                    'tipo_documento': dte.tipo_documento,
+                    'fecha': dte.fecha_emision.strftime('%d/%m/%Y'),
+                    'total': float(dte.monto_con_iva),
+                    'vendedor': dte.vendedor.nombre if dte.vendedor else 'Sin vendedor',
+                    'cliente_nombre': dte.receptor.nombre if dte.receptor else 'Sin nombre',
+                    'cliente_rut': dte.receptor.rut if dte.receptor else '',
+                    'fecha_limite_cambio': fecha_limite.strftime('%d/%m/%Y'),
+                    'dentro_del_plazo': dentro_del_plazo,
+                    'dias_transcurridos': (timezone.now().date() - dte.fecha_emision).days,
+                    'productos': productos_data,
+                    'puede_cambiar': dentro_del_plazo and len(productos_data) > 0,
+                }
+            })
+        else:
+            # Buscar Ticket (lógica existente)
+            return buscar_ticket_para_cambio_original(request, numero, fecha_compra, sucursal_id)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al buscar documento: {str(e)}'
+        })
+
+
+def buscar_ticket_para_cambio_original(request, correlativo, fecha_compra, sucursal_id):
+    """Función para buscar tickets (llamada desde buscar_documento_cambio)"""
+    query = Ticket.objects.select_related(
+        'vendedor', 'sucursal'
+    ).prefetch_related(
+        'ticket_productos__ProductoTalla__producto',
+        'cambios_devoluciones'
+    ).filter(
+        correlativo=correlativo,
+        sucursal_id=sucursal_id
+    )
+    
+    if fecha_compra:
+        query = query.filter(fecha=fecha_compra)
+    
+    ticket = query.first()
+    
+    if not ticket:
+        return JsonResponse({
+            'success': False,
+            'error': f'Ticket #{correlativo} no encontrado' + (f' para la fecha {fecha_compra}' if fecha_compra else '')
+        })
+    
+    # Llamar a la función original con toda la lógica
+    return buscar_ticket_para_cambio_response(ticket)
+
+
+def buscar_ticket_para_cambio_response(ticket):
+    """Genera la respuesta con datos del ticket para cambio"""
+    # Verificar que esté pagado
+    if ticket.estado != 'PAGADO':
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo se pueden procesar cambios de tickets pagados'
+        })
+    
+    # Verificar plazo
+    from datetime import timedelta
+    fecha_limite = ticket.fecha + timedelta(days=30)
+    dentro_del_plazo = timezone.now().date() <= fecha_limite
+    
+    # Obtener productos del ticket
+    productos_data = []
+    for tp in ticket.ticket_productos.all():
+        # Verificar si ya fue cambiado/devuelto
+        cantidad_ya_cambiada = CambioDevolucionDetalle.objects.filter(
+            producto_original=tp,
+            cambio_devolucion__estado__in=['APROBADO', 'COMPLETADO']
+        ).aggregate(
+            total=Sum('cantidad_original')
+        )['total'] or 0
+        
+        cantidad_disponible = tp.stock - cantidad_ya_cambiada
+        
+        if cantidad_disponible > 0:
+            productos_data.append({
+                'id': tp.id,
+                'sku': tp.ProductoTalla.sku,
+                'articulo': tp.ProductoTalla.producto.articulo,
+                'descripcion': tp.ProductoTalla.producto.descripcion,
+                'talla': tp.ProductoTalla.talla,
+                'cantidad_original': tp.stock,
+                'cantidad_ya_cambiada': cantidad_ya_cambiada,
+                'cantidad_disponible': cantidad_disponible,
+                'precio_unitario': float(tp.precio),
+                'subtotal': float(tp.subtotal),
+            })
+    
+    # Obtener cambios anteriores
+    cambios_anteriores = []
+    for cambio in ticket.cambios_devoluciones.all():
+        cambios_anteriores.append({
+            'numero_operacion': cambio.numero_operacion,
+            'tipo_operacion': cambio.get_tipo_operacion_display(),
+            'estado': cambio.get_estado_display(),
+            'fecha_solicitud': cambio.fecha_solicitud.strftime('%d/%m/%Y'),
+            'diferencia_monto': float(cambio.diferencia_monto),
+        })
+    
+    ticket_data = {
+        'id': ticket.id,
+        'tipo': 'TICKET',
+        'correlativo': ticket.correlativo,
+        'fecha': ticket.fecha.strftime('%d/%m/%Y'),
+        'hora': ticket.hora.strftime('%H:%M') if ticket.hora else '',
+        'total': float(ticket.total),
+        'estado': ticket.estado,
+        'vendedor': ticket.vendedor.nombre if ticket.vendedor else '',
+        'cliente_nombre': ticket.cliente_nombre or '',
+        'cliente_rut': ticket.cliente_rut or '',
+        'cliente_email': ticket.cliente_email or '',
+        'cliente_telefono': ticket.cliente_telefono or '',
+        'observaciones': ticket.observaciones or '',
+        'fecha_limite_cambio': fecha_limite.strftime('%d/%m/%Y'),
+        'dentro_del_plazo': dentro_del_plazo,
+        'dias_transcurridos': (timezone.now().date() - ticket.fecha).days,
+        'productos': productos_data,
+        'cambios_anteriores': cambios_anteriores,
+        'puede_cambiar': dentro_del_plazo and len(productos_data) > 0,
+    }
+    
+    return JsonResponse({
+        'success': True,
+        'documento': ticket_data  # Cambiar de 'ticket' a 'documento' para compatibilidad
+        })
+
+
+@login_required
+@require_GET
 def buscar_ticket_para_cambio(request):
-    """Buscar ticket para iniciar proceso de cambio/devolución"""
+    """Buscar ticket para iniciar proceso de cambio/devolución (retrocompatibilidad)"""
     try:
         correlativo = request.GET.get('correlativo', '').strip()
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
@@ -4667,21 +6006,25 @@ def buscar_ticket_para_cambio(request):
                 'error': 'No hay sucursal seleccionada'
             })
         
-        try:
-            ticket = Ticket.objects.select_related(
+        query = Ticket.objects.select_related(
                 'vendedor', 'sucursal'
             ).prefetch_related(
                 'ticket_productos__ProductoTalla__producto',
                 'cambios_devoluciones'
-            ).get(
+        ).filter(
                 correlativo=correlativo,
                 sucursal_id=sucursal_id
             )
-        except Ticket.DoesNotExist:
+        
+        ticket = query.first()
+        
+        if not ticket:
             return JsonResponse({
                 'success': False,
                 'error': f'Ticket #{correlativo} no encontrado'
             })
+        
+        return buscar_ticket_para_cambio_response(ticket)
         
         # Verificar que esté pagado
         if ticket.estado != 'PAGADO':
@@ -4820,4 +6163,137 @@ def buscar_productos_para_cambio(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar productos: {str(e)}'
+        })
+
+
+# ========== GESTIÓN DE CLIENTES POS ==========
+
+@require_POST
+@login_required
+def guardar_cliente_pos(request):
+    """Guardar datos del cliente desde el POS"""
+    try:
+        data = json.loads(request.body)
+        
+        nombre = data.get('nombre', '').strip()
+        rut = data.get('rut', '').strip()
+        email = data.get('email', '').strip()
+        telefono = data.get('telefono', '').strip()
+        tipo_documento = data.get('tipo_documento', 'TICKET')
+        
+        # Si no hay datos suficientes, no guardar
+        if not nombre and not rut:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe proporcionar al menos nombre o RUT'
+            })
+        
+        # Buscar o crear empresa/cliente
+        cliente = None
+        if rut:
+            # Buscar por RUT
+            cliente = Empresa.objects.filter(rut=rut).first()
+        
+        if cliente:
+            # Actualizar datos existentes
+            if nombre:
+                cliente.nombre = nombre
+                cliente.razon_social = nombre
+            if email:
+                cliente.correoVendedor = email
+            if telefono:
+                cliente.telefono = telefono
+            
+            # Campos adicionales para facturas
+            if tipo_documento == 'FACTURA_ELECTRONICA':
+                cliente.giro = data.get('giro', cliente.giro or '')
+                cliente.direccion = data.get('direccion', cliente.direccion or '')
+                cliente.comuna = data.get('comuna', cliente.comuna or '')
+                cliente.ciudad = data.get('ciudad', cliente.ciudad or '')
+            
+            cliente.save()
+            
+        else:
+            # Crear nuevo cliente
+            cliente = Empresa.objects.create(
+                nombre=nombre or f'Cliente {rut}',
+                rut=rut or '',
+                nombre_fantasia=nombre or '',
+                razon_social=nombre or '',
+                giro=data.get('giro', ''),
+                direccion=data.get('direccion', ''),
+                comuna=data.get('comuna', ''),
+                ciudad=data.get('ciudad', ''),
+                esProveedor=False,
+                correoVendedor=email or '',
+                telefono=telefono or ''
+            )
+        
+        return JsonResponse({
+            'success': True,
+            'cliente_id': cliente.id,
+            'mensaje': 'Cliente guardado exitosamente'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al guardar cliente: {str(e)}'
+        })
+
+
+@require_POST
+@login_required
+def enviar_ticket_email(request):
+    """Enviar ticket por email al cliente"""
+    try:
+        data = json.loads(request.body)
+        ticket_id = data.get('ticket_id')
+        email = data.get('email', '').strip()
+        
+        if not ticket_id or not email:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe proporcionar ticket_id y email'
+            })
+        
+        # Buscar el ticket
+        ticket = Ticket.objects.filter(correlativo=ticket_id).first()
+        
+        if not ticket:
+            return JsonResponse({
+                'success': False,
+                'error': f'No se encontró el ticket #{ticket_id}'
+            })
+        
+        # TODO: Implementar envío de email
+        # Por ahora, solo simular el envío
+        # En producción, usar Django's send_mail o un servicio de email
+        
+        # from django.core.mail import send_mail
+        # from django.template.loader import render_to_string
+        
+        # asunto = f'Ticket de Venta #{ticket.correlativo}'
+        # mensaje = render_to_string('emails/ticket_venta.html', {'ticket': ticket})
+        # send_mail(asunto, mensaje, 'noreply@retailmind.cl', [email], html_message=mensaje)
+        
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'Ticket enviado exitosamente a {email}'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al enviar email: {str(e)}'
         })

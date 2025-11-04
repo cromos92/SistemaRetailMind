@@ -855,9 +855,6 @@
     </div>
 </div>
 
-
-{% include '../../layout/footer.html' %}
-
 <!-- Scripts JavaScript del Arqueo -->
 <script>
 // Variables globales
@@ -2233,14 +2230,14 @@ function generarContenidoTermica(datos) {
                 Sistema RetailMind v2.0
             </div>
             
-            <script>
+            <scr${''}ipt>
                 // Auto-imprimir al cargar
                 window.onload = function() {
                     setTimeout(function() {
                         window.print();
                     }, 500);
                 };
-            </script>
+            <\/script>
         </body>
         </html>
     `;
@@ -2264,3 +2261,5 @@ console.log('- exportarCuadraturaExcel:', typeof exportarCuadraturaExcel);
 console.log('- imprimirResumenTermica:', typeof imprimirResumenTermica);
 console.log('✅ Todas las funciones del arqueo han sido definidas correctamente');
 </script>
+
+{% include '../../layout/footer.html' %}

@@ -61,8 +61,8 @@
 
 
             <!-- Vendedores -->
-            <div class="row" id="seccionVendedores">
-                <div class="col-12">
+            <div  id="seccionVendedores">
+                <div >
                     <div class="card">
                         <div class="card-header">
                             <h5 class="card-title mb-0 text-center">
@@ -71,35 +71,37 @@
                             </h5>
                         </div>
                         <div class="card-body">
-                            <div class="row">
-                                {% if vendedores %}
-                                    {% for vendedor in vendedores %}
-                                    <div class="col-md-4 mb-3">
-                                        <div class="card bg-secondary text-white vendedor-card" 
-                                             data-vendedor-id="{{ vendedor.id }}"
-                                             data-vendedor-codigo="{{ vendedor.codigo_vendedor }}"
-                                             data-vendedor-nombre="{{ vendedor.nombre }}"
-                                             style="cursor: pointer; transition: all 0.3s;">
-                                            <div class="card-body text-center">
-                                                <div class="style_vendedores mb-2">
-                                                    <strong>{{ vendedor.nombre|default:"Sin nombre" }}</strong>
-                                                </div>
-                                                <div class="style_vendedores">
-                                                    <span>Código: {{ vendedor.codigo_vendedor }}</span>
+                            <div style="border: 1px solid #000; border-radius: 5px; padding: 15px;">
+                                <div class="row">
+                                    {% if vendedores %}
+                                        {% for vendedor in vendedores %}
+                                        <div class="col-md-6 col-lg-4 mb-3">
+                                            <div class="card bg-secondary text-white vendedor-card" 
+                                                 data-vendedor-id="{{ vendedor.id }}"
+                                                 data-vendedor-codigo="{{ vendedor.codigo_vendedor }}"
+                                                 data-vendedor-nombre="{{ vendedor.nombre }}"
+                                                 style="cursor: pointer; transition: all 0.3s;">
+                                                <div class="card-body text-center py-2">
+                                                    <div class="style_vendedores mb-1">
+                                                        <strong>{{ vendedor.nombre|default:"Sin nombre" }}</strong>
+                                                    </div>
+                                                    <div class="style_vendedores">
+                                                        <span>Código: {{ vendedor.codigo_vendedor }}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    {% endfor %}
-                                {% else %}
-                                    <div class="col-12">
-                                        <div class="text-center py-4">
-                                            <i class="ri-user-line text-muted" style="font-size: 3rem;"></i>
-                                            <h6 class="mt-3 text-muted">No hay vendedores registrados</h6>
-                                            <p class="text-muted">Contacta al administrador para registrar vendedores.</p>
+                                        {% endfor %}
+                                    {% else %}
+                                        <div class="col-12">
+                                            <div class="text-center py-4">
+                                                <i class="ri-user-line text-muted" style="font-size: 3rem;"></i>
+                                                <h6 class="mt-3 text-muted">No hay vendedores registrados</h6>
+                                                <p class="text-muted">Contacta al administrador para registrar vendedores.</p>
+                                            </div>
                                         </div>
-                                    </div>
-                                {% endif %}
+                                    {% endif %}
+                                </div>
                             </div>
                             
                             <!-- Controles inferiores -->
@@ -129,7 +131,7 @@
             <div class="row mt-4" id="seccionCrearTicket" style="display: none;">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header bg-success text-white">
+                        <div class="card-header">
                             <h5 class="card-title mb-0 text-center">
                                 <i class="ri-receipt-line me-2"></i>
                                 Crear Ticket de Venta
@@ -311,6 +313,8 @@
     <!-- page-content -->
 </div>
 
+{% include '../../layout/footer.html' %}
+
 <!-- Modal Información Vendedor -->
 
 <!-- Modal Búsqueda de Productos -->
@@ -318,8 +322,8 @@
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="modalBusquedaProductosLabel">
-                    <i class="ri-search-eye-line me-2"></i>
+                <h5 class="modal-title text-white" id="modalBusquedaProductosLabel">
+                    <i class="ri-search-eye-line me-2 text-white"></i>
                     Buscar artículos en sucursal
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -420,19 +424,21 @@ $(document).ready(function() {
     });
 
     // Manejar click en tarjetas de vendedores
-    $('.vendedor-card').on('click', function() {
+    $(document).on('click', '.vendedor-card', function() {
         const vendedorId = $(this).data('vendedor-id');
         const vendedorCodigo = $(this).data('vendedor-codigo');
         const vendedorNombre = $(this).data('vendedor-nombre');
         
-        // Llenar input con el código
-        $('#codigoVendedor').val(vendedorCodigo);
+        console.log('Click en vendedor:', vendedorNombre, 'Código:', vendedorCodigo);
         
         // Resaltar tarjeta seleccionada
         $('.vendedor-card').removeClass('bg-success').addClass('bg-secondary');
         $(this).removeClass('bg-secondary').addClass('bg-success');
         
-        // Buscar información completa del vendedor
+        // Llenar input con el código
+        $('#codigoVendedor').val(vendedorCodigo);
+        
+        // Buscar información completa del vendedor automáticamente
         buscarVendedorPorCodigo();
     });
 
@@ -603,6 +609,43 @@ $(document).ready(function() {
         }
     });
 
+    // Navegación con Enter: Precio -> Cantidad
+    $('#precioProducto').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            const precioOriginal = parseFloat($('#precioOriginal').val()) || 0;
+            const precioIngresado = parseFloat($('#precioProducto').val()) || 0;
+            
+            if (precioIngresado < precioOriginal) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Precio no permitido',
+                    text: `El precio no puede ser menor a $${precioOriginal.toLocaleString()}`,
+                    confirmButtonText: 'Entendido'
+                });
+                $('#precioProducto').val(precioOriginal);
+                return;
+            }
+            $('#cantidadProducto').focus().select();
+        }
+    });
+
+    // Validar precio al cambiar (blur)
+    $('#precioProducto').on('blur', function() {
+        const precioOriginal = parseFloat($('#precioOriginal').val()) || 0;
+        const precioIngresado = parseFloat($(this).val()) || 0;
+        
+        if (precioIngresado < precioOriginal) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Precio ajustado',
+                text: `El precio no puede ser menor a $${precioOriginal.toLocaleString()}. Se ha ajustado al precio mínimo.`,
+                timer: 2000
+            });
+            $(this).val(precioOriginal);
+        }
+    });
+
     function buscarProductoPorSku() {
         const sku = $('#skuProducto').val().trim();
         if (!sku) {
@@ -624,7 +667,7 @@ $(document).ready(function() {
                     $('#precioProducto').val(producto.precio_venta);
                     $('#precioOriginal').val(producto.precio_venta);
                     $('#stockProducto').val(producto.stock);
-                    $('#cantidadProducto').val(1).focus();
+                    $('#precioProducto').focus().select();
                 } else {
                     Swal.fire('Producto no encontrado', response.message, 'warning');
                     limpiarFormularioProducto();
@@ -648,6 +691,7 @@ $(document).ready(function() {
         const marca = $('#marcaProducto').val();
         const talla = $('#tallaProducto').val();
         const precio = parseFloat($('#precioProducto').val()) || 0;
+        const precioOriginal = parseFloat($('#precioOriginal').val()) || 0;
         const cantidad = parseInt($('#cantidadProducto').val()) || 1;
         const stock = parseInt($('#stockProducto').val()) || 0;
 
@@ -667,9 +711,23 @@ $(document).ready(function() {
             return;
         }
 
-        // Verificar si el producto ya está en el ticket
-        const productoExistente = productosTicket.find(p => p.sku === sku);
+        // Validar precio mínimo
+        if (precio < precioOriginal) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Precio no válido',
+                text: `El precio no puede ser menor a $${precioOriginal.toLocaleString()}`,
+                confirmButtonText: 'Entendido'
+            });
+            $('#precioProducto').val(precioOriginal).focus();
+            return;
+        }
+
+        // Verificar si el producto ya está en el ticket con el mismo precio
+        const productoExistente = productosTicket.find(p => p.sku === sku && p.precio === precio);
+        
         if (productoExistente) {
+            // Mismo producto, mismo precio -> Agregar cantidad
             const nuevaCantidad = productoExistente.cantidad + cantidad;
             if (nuevaCantidad > stock) {
                 Swal.fire('Error', `Stock insuficiente. Ya tienes ${productoExistente.cantidad} en el ticket. Máximo disponible: ${stock}`, 'error');
@@ -677,29 +735,67 @@ $(document).ready(function() {
             }
             productoExistente.cantidad = nuevaCantidad;
             productoExistente.subtotal = productoExistente.cantidad * productoExistente.precio;
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Cantidad actualizada',
+                text: `Se agregaron ${cantidad} unidades. Total: ${nuevaCantidad}`,
+                timer: 1500,
+                showConfirmButton: false
+            });
         } else {
-            // Agregar nuevo producto
-            contadorProductos++;
-            const nuevoProducto = {
-                id: contadorProductos,
-                sku: sku,
-                articulo: articulo,
-                descripcion: descripcion,
-                marca: marca,
-                talla: talla,
-                precio: precio,
-                cantidad: cantidad,
-                stock: stock,
-                subtotal: precio * cantidad
-            };
-            productosTicket.push(nuevoProducto);
+            // Verificar si existe el mismo producto con DIFERENTE precio
+            const productoMismoPrecio = productosTicket.find(p => p.sku === sku && p.precio !== precio);
+            
+            if (productoMismoPrecio) {
+                // Alerta: mismo producto, diferente precio
+                Swal.fire({
+                    icon: 'warning',
+                    title: '¿Agregar con diferente precio?',
+                    html: `
+                        <p>Este producto ya está en el ticket con otro precio:</p>
+                        <p><strong>Precio existente:</strong> $${productoMismoPrecio.precio.toLocaleString()}</p>
+                        <p><strong>Nuevo precio:</strong> $${precio.toLocaleString()}</p>
+                        <p>Se creará una línea separada en el ticket.</p>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, agregar',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#3085d6'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock);
+                    }
+                });
+                return;
+            }
+            
+            // Producto nuevo o mismo producto con mismo precio
+            agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock);
         }
 
         actualizarTablaTicket();
         actualizarTotales();
         limpiarFormularioProducto();
         $('#skuProducto').focus();
+    }
 
+    function agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock) {
+        contadorProductos++;
+        const nuevoProducto = {
+            id: contadorProductos,
+            sku: sku,
+            articulo: articulo,
+            descripcion: descripcion,
+            marca: marca,
+            talla: talla,
+            precio: precio,
+            cantidad: cantidad,
+            stock: stock,
+            subtotal: precio * cantidad
+        };
+        productosTicket.push(nuevoProducto);
+        
         Swal.fire({
             icon: 'success',
             title: 'Producto agregado',
@@ -1069,10 +1165,15 @@ $(document).ready(function() {
         $('#precioProducto').val(producto.precio || 0);
         $('#precioOriginal').val(producto.precio || 0);
         $('#stockProducto').val(producto.stock || 0);
-        $('#cantidadProducto').val(1).focus();
+        $('#cantidadProducto').val(1);
 
         // Cerrar modal
-        // $('#modalBusquedaProductos').modal('hide'); // No es necesario cerrar el modal
+        $('#modalBusquedaProductos').modal('hide');
+
+        // Enfocar el input de precio después de cerrar el modal
+        setTimeout(function() {
+            $('#precioProducto').focus().select();
+        }, 500);
 
         Swal.fire({
             icon: 'success',
@@ -1177,16 +1278,26 @@ $(document).ready(function() {
     }
 
     // Función para imprimir en impresora térmica
+    /**
+     * IMPRESIÓN OPTIMIZADA PARA EPSON TM-20
+     * - Ancho: 58mm (optimizado para papel térmico estándar)
+     * - Fuentes: Reducidas para máximo aprovechamiento
+     * - Espaciado: Mínimo necesario para legibilidad
+     * - Código de barras: Compacto (35px altura)
+     */
     function imprimirTicketTermico(ticketData) {
         const ticketHtml = generarHtmlTicket(ticketData);
-        const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+        const ventanaImpresion = window.open('', '_blank', 'width=220,height=600');
         ventanaImpresion.document.write(ticketHtml);
         ventanaImpresion.document.close();
 
-        ventanaImpresion.onload = function() {
+        // Esperar a que se cargue el contenido y se genere el código de barras
+        setTimeout(function() {
+            ventanaImpresion.focus();
             ventanaImpresion.print();
-            ventanaImpresion.close();
-        };
+            // No cerrar automáticamente para que el usuario pueda reimprimir si es necesario
+            // ventanaImpresion.close();
+        }, 1000); // Dar 1 segundo para que se genere el código de barras
     }
 
     function generarHtmlTicket(ticketData) {
@@ -1201,124 +1312,314 @@ $(document).ready(function() {
             return numero.toLocaleString('es-CL');
         };
 
-        const productosHtml = productos.map((producto) => `
-            <tr>
-                <td style="text-align:center;">${producto.cantidad || 0}</td>
-                <td style="padding:2px 4px;">
-                    ${producto.articulo || ''}<br>
-                    <small>${producto.descripcion || ''}</small><br>
-                    <small>SKU: ${producto.sku || ''} | Talla: ${producto.talla || ''}</small>
-                </td>
-                <td style="text-align:right;">$${formatearMoneda(producto.subtotal)}</td>
-            </tr>
-        `).join('');
+        // Función para truncar texto según caracteres disponibles
+        const truncar = (texto, max) => {
+            return String(texto || '').substring(0, max);
+        };
+
+        const productosHtml = productos.map((producto) => {
+            const cant = producto.cantidad || 0;
+            const articulo = truncar(producto.articulo, 22);
+            const desc = truncar(producto.descripcion, 18);
+            const talla = truncar(producto.talla || '-', 4);
+            const precio = formatearMoneda(producto.precio || 0);
+            const subtotal = formatearMoneda(producto.subtotal || 0);
+            
+            return `
+                <div class="item">
+                    <div class="item-line1">
+                        <span class="cant">${cant}x</span>
+                        <span class="nombre">${articulo}</span>
+                    </div>
+                    <div class="item-line2">
+                        <span>${desc} T:${talla}</span>
+                    </div>
+                    <div class="item-line3">
+                        <span>@$${precio}</span>
+                        <span class="subtotal">$${subtotal}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
         return `
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
-                <title>Ticket de Venta</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Ticket #${ticketData.correlativo || ''}</title>
+                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
                 <style>
+                    /* === OPTIMIZADO PARA EPSON TM-20 === */
+                    * { 
+                        margin: 0; 
+                        padding: 0; 
+                        box-sizing: border-box; 
+                    }
+                    
                     body {
-                        font-family: 'Courier New', monospace;
-                        font-size: 12px;
-                        margin: 0;
-                        padding: 10px;
-                        width: 280px;
+                        font-family: 'Courier New', Courier, monospace;
+                        font-size: 9px;
+                        width: 58mm;
+                        max-width: 58mm;
+                        padding: 2mm 3mm;
                         background: #fff;
+                        color: #000;
+                        line-height: 1.3;
                     }
-                    .header, .footer {
+                    
+                    /* Código de barras */
+                    .barcode-container {
                         text-align: center;
-                        margin-bottom: 10px;
+                        margin: 3px 0 5px 0;
+                        padding-bottom: 5px;
+                        border-bottom: 1px dashed #000;
                     }
+                    
+                    .barcode-container svg {
+                        max-width: 100%;
+                        height: 35px;
+                    }
+                    
+                    /* Header */
                     .header {
+                        text-align: center;
+                        margin-bottom: 5px;
+                        padding-bottom: 5px;
                         border-bottom: 1px dashed #000;
-                        padding-bottom: 10px;
                     }
-                    .footer {
-                        border-top: 1px dashed #000;
-                        padding-top: 10px;
-                        font-size: 10px;
+                    
+                    .header strong {
+                        font-size: 11px;
+                        font-weight: bold;
+                        display: block;
+                        margin-bottom: 2px;
                     }
+                    
+                    .header div {
+                        font-size: 8px;
+                        line-height: 1.3;
+                        margin: 1px 0;
+                    }
+                    
+                    /* Información general */
                     .info {
-                        font-size: 11px;
-                        margin-bottom: 10px;
+                        font-size: 8px;
+                        margin-bottom: 5px;
+                        line-height: 1.4;
                     }
-                    .info div {
-                        margin: 2px 0;
-                    }
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 10px 0;
-                    }
-                    th, td {
-                        padding: 2px;
-                        font-size: 10px;
-                    }
-                    th {
-                        border-bottom: 1px dashed #000;
-                    }
-                    .totales {
-                        border-top: 1px dashed #000;
-                        padding-top: 10px;
-                        margin-top: 10px;
-                        font-size: 11px;
-                    }
-                    .totales div {
+                    
+                    .info-row {
                         display: flex;
                         justify-content: space-between;
-                        margin: 3px 0;
+                        margin: 1px 0;
                     }
-                    .totales div span:last-child {
+                    
+                    .info-row strong {
+                        min-width: 50px;
+                    }
+                    
+                    .separador {
+                        border-top: 1px dashed #000;
+                        margin: 5px 0;
+                        height: 0;
+                    }
+                    
+                    /* Items/Productos */
+                    .items {
+                        margin: 5px 0;
+                    }
+                    
+                    .item {
+                        margin-bottom: 5px;
+                        font-size: 8px;
+                    }
+                    
+                    .item-line1 {
+                        display: flex;
+                        gap: 3px;
                         font-weight: bold;
+                        margin-bottom: 1px;
+                        font-size: 9px;
+                    }
+                    
+                    .item-line1 .cant {
+                        min-width: 18px;
+                        flex-shrink: 0;
+                    }
+                    
+                    .item-line1 .nombre {
+                        flex: 1;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    }
+                    
+                    .item-line2 {
+                        margin-left: 20px;
+                        font-size: 8px;
+                        color: #222;
+                        margin-bottom: 1px;
+                    }
+                    
+                    .item-line3 {
+                        margin-left: 20px;
+                        display: flex;
+                        justify-content: space-between;
+                        font-size: 8px;
+                    }
+                    
+                    .item-line3 .subtotal {
+                        font-weight: bold;
+                    }
+                    
+                    /* Totales */
+                    .totales {
+                        border-top: 1px solid #000;
+                        padding-top: 5px;
+                        margin-top: 5px;
+                        font-size: 9px;
+                    }
+                    
+                    .totales-row {
+                        display: flex;
+                        justify-content: space-between;
+                        margin: 2px 0;
+                    }
+                    
+                    .totales .total-final {
+                        font-size: 11px;
+                        font-weight: bold;
+                        border-top: 1px solid #000;
+                        padding-top: 4px;
+                        margin-top: 4px;
+                    }
+                    
+                    /* Footer */
+                    .footer {
+                        text-align: center;
+                        margin-top: 6px;
+                        padding-top: 5px;
+                        border-top: 1px dashed #000;
+                        font-size: 7px;
+                        line-height: 1.5;
+                    }
+                    
+                    .footer div {
+                        margin: 2px 0;
+                    }
+                    
+                    /* Optimizaciones para impresión */
+                    @media print {
+                        body { 
+                            width: 58mm;
+                            padding: 0mm 2mm;
+                        }
+                        @page { 
+                            size: 80mm auto; 
+                            margin: 0;
+                        }
                     }
                 </style>
             </head>
             <body>
+                <!-- Código de barras del ticket -->
+                <div class="barcode-container">
+                    <svg id="barcode"></svg>
+                </div>
+                
+                <!-- Encabezado empresa/sucursal -->
                 <div class="header">
-                    <strong>${sucursal.empresa || 'SUCURSAL'}</strong><br>
-                    ${sucursal.alias || ''}<br>
-                    ${sucursal.direccion || ''}<br>
-                    ${sucursal.rut_empresa ? `RUT: ${sucursal.rut_empresa}` : ''}
+                    <strong>${sucursal.empresa || 'SUCURSAL'}</strong>
+                    <div>${sucursal.alias || ''}</div>
+                    ${sucursal.direccion ? '<div>' + sucursal.direccion + '</div>' : ''}
+                    ${sucursal.rut_empresa ? '<div>RUT: ' + sucursal.rut_empresa + '</div>' : ''}
                 </div>
 
+                <!-- Información del ticket -->
                 <div class="info">
-                    <div><strong>Documento:</strong> ${ticketData.tipo_documento || 'TICKET'}</div>
-                    <div><strong>Ticket N°:</strong> ${ticketData.ticket_id || ''}</div>
-                    <div><strong>Fecha:</strong> ${ticketData.fecha || ''} ${ticketData.hora || ''}</div>
-                    <div><strong>Vendedor:</strong> ${vendedor.nombre || ''} (${vendedor.codigo || ''})</div>
-                    ${cliente.nombre || cliente.rut ? `<div><strong>Cliente:</strong> ${cliente.nombre || ''} ${cliente.rut ? `- ${cliente.rut}` : ''}</div>` : ''}
+                    <div class="info-row">
+                        <strong>Ticket:</strong>
+                        <span>#${ticketData.correlativo || ticketData.ticket_id || ''}</span>
+                    </div>
+                    <div class="info-row">
+                        <strong>Fecha:</strong>
+                        <span>${ticketData.fecha || new Date().toLocaleDateString('es-CL')}</span>
+                    </div>
+                    <div class="info-row">
+                        <strong>Hora:</strong>
+                        <span>${ticketData.hora || new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'})}</span>
+                    </div>
+                    ${vendedor.nombre ? '<div class="info-row"><strong>Vendedor:</strong><span>' + truncar(vendedor.nombre, 20) + '</span></div>' : ''}
+                    ${cliente.nombre ? '<div class="info-row"><strong>Cliente:</strong><span>' + truncar(cliente.nombre, 20) + '</span></div>' : ''}
+                    ${cliente.rut && !cliente.nombre ? '<div class="info-row"><strong>RUT:</strong><span>' + cliente.rut + '</span></div>' : ''}
                 </div>
 
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width:15%; text-align:center;">Cant</th>
-                            <th>Detalle</th>
-                            <th style="width:25%; text-align:right;">Precio</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${productosHtml || '<tr><td colspan="3" style="text-align:center;">Sin productos</td></tr>'}
-                    </tbody>
-                </table>
+                <div class="separador"></div>
 
+                <!-- Productos -->
+                <div class="items">
+                    ${productosHtml || '<div style="text-align:center;font-size:8px;">Sin productos</div>'}
+                </div>
+
+                <!-- Totales -->
                 <div class="totales">
-                    <div><span>Items</span><span>${totales.items || 0}</span></div>
-                    <div><span>Subtotal</span><span>$${formatearMoneda(totales.subtotal)}</span></div>
-                    ${totales.descuento ? `<div><span>Descuento</span><span>-$${formatearMoneda(totales.descuento)}</span></div>` : ''}
-                    <div><span>Total</span><span>$${formatearMoneda(totales.total)}</span></div>
+                    <div class="totales-row">
+                        <span>Items:</span>
+                        <span>${totales.items || 0}</span>
+                    </div>
+                    ${totales.subtotal && totales.descuento ? '<div class="totales-row"><span>Subtotal:</span><span>$' + formatearMoneda(totales.subtotal) + '</span></div>' : ''}
+                    ${totales.descuento ? '<div class="totales-row"><span>Descuento:</span><span>-$' + formatearMoneda(totales.descuento) + '</span></div>' : ''}
+                    <div class="totales-row total-final">
+                        <span>TOTAL:</span>
+                        <span>$${formatearMoneda(totales.total)}</span>
+                    </div>
                 </div>
 
+                <!-- Footer -->
                 <div class="footer">
-                    <div>¡GRACIAS POR SU COMPRA!</div>
-                    <div>CAMBIOS HASTA 15 DÍAS</div>
-                    <div>*NO SE REALIZA DEVOLUCIÓN DE DINERO</div>
-                    <br>
-                    <div>Sistema RetailMind</div>
+                    <div><strong>¡GRACIAS POR SU COMPRA!</strong></div>
+                    ${sucursal.politica_cambios ? '<div>' + sucursal.politica_cambios + '</div>' : '<div>Cambios hasta 15 días</div>'}
+                    <div>* Sin devolución de dinero</div>
+                    ${sucursal.telefono ? '<div>Tel: ' + sucursal.telefono + '</div>' : ''}
+                    <div style="margin-top:3px;font-size:6px;">RetailMind POS</div>
                 </div>
+                
+                <script>
+                    var ticketId = "${ticketData.correlativo || ticketData.ticket_id || '000000'}";
+                    function generarCodigoBarras() {
+                        if (typeof JsBarcode !== "undefined") {
+                            try {
+                                JsBarcode("#barcode", ticketId, {
+                                    format: "CODE128",
+                                    width: 1.5,
+                                    height: 35,
+                                    displayValue: true,
+                                    fontSize: 12,
+                                    margin: 5,
+                                    marginTop: 2,
+                                    marginBottom: 2
+                                });
+                                console.log("Código de barras generado");
+                            } catch (e) {
+                                console.error("Error generando código de barras:", e);
+                                document.getElementById("barcode").innerHTML = "<p style=\\"font-size:12px;font-weight:bold;\\">" + ticketId + "<\\/p>";
+                            }
+                        } else {
+                            console.warn("JsBarcode no está disponible");
+                            document.getElementById("barcode").innerHTML = "<p style=\\"font-size:16px; font-weight:bold;\\">Ticket #" + ticketId + "<\\/p>";
+                        }
+                    }
+                    if (document.readyState === "loading") {
+                        document.addEventListener("DOMContentLoaded", generarCodigoBarras);
+                    } else {
+                        generarCodigoBarras();
+                    }
+                    window.addEventListener("load", function() {
+                        setTimeout(generarCodigoBarras, 100);
+                    });
+                <\/script>
             </body>
             </html>
         `;
@@ -1326,5 +1627,3 @@ $(document).ready(function() {
 
 });
 </script>
-
-{% include '../../layout/footer.html' %}

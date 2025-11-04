@@ -142,6 +142,9 @@
                             <button id="btn-auto-detect" class="btn btn-success btn-pos">
                                 <i class="fas fa-search mr-2"></i>Auto-Detectar Terminales
                             </button>
+                            <button id="btn-test-getports" class="btn btn-outline-success btn-pos">
+                                <i class="fas fa-plug mr-2"></i>Probar getPorts()
+                            </button>
                             <button id="btn-load-keys" class="btn btn-warning btn-pos" disabled>
                                 <i class="fas fa-key mr-2"></i>Cargar Llaves
                             </button>
@@ -153,6 +156,20 @@
                             <button id="btn-refresh-terminals" class="btn btn-outline-info btn-pos">
                                 <i class="fas fa-sync mr-2"></i>Actualizar Lista
                             </button>
+                            <button id="btn-diagnose-sdk" class="btn btn-outline-secondary btn-pos">
+                                <i class="fas fa-stethoscope mr-2"></i>Diagnosticar SDK
+                            </button>
+                        </div>
+                        <div class="btn-group-vertical d-inline-block">
+                            <div class="form-check mt-2 ml-3">
+                                <input class="form-check-input" type="checkbox" id="auto-polling-enabled">
+                                <label class="form-check-label" for="auto-polling-enabled">
+                                    <i class="fas fa-clock mr-1"></i>Polling Automático
+                                </label>
+                            </div>
+                            <div class="ml-3 mt-1 small text-muted" id="polling-info" style="display: none;">
+                                Cada <span id="polling-interval">30</span> seg
+                            </div>
                         </div>
                     </div>
 
@@ -328,6 +345,84 @@
             this.currentTerminal = null;
             this.transactionCounter = 1;
             this.csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Configuración de polling automático
+            this.pollingEnabled = false;
+            this.pollingInterval = 30000; // 30 segundos por defecto
+            this.pollingTimer = null;
+            this.lastPollingResult = null;
+        }
+        
+        // Iniciar polling automático de puertos
+        startAutoPolling() {
+            if (this.pollingTimer) {
+                this.stopAutoPolling();
+            }
+            
+            this.pollingEnabled = true;
+            this.log(`🔄 Polling automático iniciado (cada ${this.pollingInterval / 1000}s)`, 'info');
+            
+            // Ejecutar primera vez inmediatamente
+            this.executePolling();
+            
+            // Configurar intervalo
+            this.pollingTimer = setInterval(() => {
+                this.executePolling();
+            }, this.pollingInterval);
+        }
+        
+        // Detener polling automático
+        stopAutoPolling() {
+            if (this.pollingTimer) {
+                clearInterval(this.pollingTimer);
+                this.pollingTimer = null;
+                this.pollingEnabled = false;
+                this.log('⏸️ Polling automático detenido', 'info');
+            }
+        }
+        
+        // Ejecutar una iteración de polling
+        async executePolling() {
+            try {
+                // Verificar SDK antes de hacer polling
+                if (typeof Transbank === 'undefined' || !Transbank.POS || 
+                    typeof Transbank.POS.getPorts !== 'function') {
+                    return;
+                }
+                
+                const result = await Transbank.POS.getPorts();
+                
+                // Procesar resultado
+                let ports = [];
+                if (Array.isArray(result)) {
+                    ports = result;
+                } else if (result && typeof result === 'object') {
+                    if (Array.isArray(result.ports)) ports = result.ports;
+                    else if (Array.isArray(result.data)) ports = result.data;
+                }
+                
+                // Verificar si cambió desde el último polling
+                const portsStr = ports.join(',');
+                const changed = this.lastPollingResult !== portsStr;
+                
+                if (changed) {
+                    this.log(`🔄 Polling: ${ports.length} terminal(es) detectado(s)`, 'info');
+                    this.lastPollingResult = portsStr;
+                    
+                    // Actualizar badge si existe
+                    const badge = document.getElementById('terminal-count');
+                    if (badge && ports.length > 0) {
+                        badge.textContent = `${ports.length} Terminal(es) Detectado(s)`;
+                        badge.className = 'badge badge-success';
+                    }
+                }
+                
+            } catch (error) {
+                // Error silencioso en polling - solo registrar en log
+                if (this.pollingEnabled) {
+                    this.log(`⚠️ Polling error: ${error.message}`, 'warning');
+                }
+            }
         }
 
         // Logging
@@ -618,42 +713,78 @@
                     throw new Error('Módulo POS no está disponible en el SDK de Transbank');
                 }
                 
-                // 1. Conectar al agente POS
-                this.log('🔗 Conectando al agente POS...');
-                await Transbank.POS.connect();
-                this.log('✅ Conectado al agente POS Transbank');
+                // 1. Conectar al agente POS (con manejo de reconexión)
+                this.log('🔗 Verificando conexión con el agente POS...');
+                try {
+                    await Transbank.POS.connect();
+                    this.log('✅ Conectado al agente POS Transbank');
+                    
+                    // Esperar un momento para que el SDK se estabilice después de conectar
+                    this.log('⏳ Esperando estabilización del SDK...');
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    
+                } catch (connectError) {
+                    this.log(`⚠️ Advertencia al conectar: ${connectError.message}`, 'warning');
+                    // Continuar de todos modos - el agente podría ya estar conectado
+                    this.log('🔄 Continuando con la detección de puertos...', 'info');
+                }
                 
                 // 2. Verificar que getPorts existe
                 if (typeof Transbank.POS.getPorts !== 'function') {
                     throw new Error('Método getPorts() no está disponible en esta versión del SDK');
                 }
                 
-                // 3. Obtener puertos disponibles con timeout
-                this.log('🔍 Obteniendo lista de puertos...');
+                // 3. Obtener puertos disponibles con timeout extendido
+                this.log('🔍 Obteniendo lista de puertos del agente...');
                 const portsPromise = Transbank.POS.getPorts();
                 const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Timeout: getPorts() tardó más de 10 segundos')), 10000)
+                    setTimeout(() => reject(new Error('Timeout: getPorts() tardó más de 15 segundos')), 15000)
                 );
                 
-                const ports = await Promise.race([portsPromise, timeoutPromise]);
+                const portsResponse = await Promise.race([portsPromise, timeoutPromise]);
                 
-                this.log(`📋 Respuesta de getPorts(): ${JSON.stringify(ports)}`);
+                this.log(`📋 Respuesta cruda de getPorts(): ${JSON.stringify(portsResponse)}`, 'info');
+                
+                // Procesar la respuesta - puede ser un array o un objeto con propiedad 'ports'
+                let ports = null;
+                
+                if (Array.isArray(portsResponse)) {
+                    // Respuesta directa como array
+                    ports = portsResponse;
+                } else if (portsResponse && typeof portsResponse === 'object') {
+                    // Respuesta como objeto - intentar extraer puertos
+                    if (Array.isArray(portsResponse.ports)) {
+                        ports = portsResponse.ports;
+                    } else if (Array.isArray(portsResponse.data)) {
+                        ports = portsResponse.data;
+                    } else if (portsResponse.port) {
+                        // Un solo puerto
+                        ports = [portsResponse.port];
+                    } else {
+                        this.log(`⚠️ Estructura de respuesta inesperada: ${JSON.stringify(portsResponse)}`, 'warning');
+                        // Intentar extraer todas las propiedades que parezcan puertos
+                        ports = Object.values(portsResponse).filter(v => 
+                            typeof v === 'string' && (v.startsWith('COM') || v.startsWith('/dev/'))
+                        );
+                    }
+                }
                 
                 if (!ports) {
-                    throw new Error('getPorts() devolvió null/undefined. Verifique que el agente POS esté ejecutándose.');
+                    throw new Error('getPorts() devolvió null/undefined. Verifique que el agente POS esté ejecutándose y que haya terminales conectados.');
                 }
                 
                 if (!Array.isArray(ports)) {
-                    throw new Error(`getPorts() devolvió un tipo inesperado: ${typeof ports}. Se esperaba un array.`);
+                    throw new Error(`No se pudo extraer array de puertos. Tipo recibido: ${typeof ports}`);
                 }
                 
                 this.log(`🔌 Puertos detectados: [${ports.join(', ')}]`);
                 
                 if (ports.length === 0) {
-                    throw new Error('No se detectaron terminales POS conectados. Verifique las conexiones físicas.');
+                    throw new Error('No se detectaron terminales POS conectados. Verifique las conexiones físicas y que los terminales estén encendidos.');
                 }
                 
-                // 3. Guardar terminales detectados en Django
+                // 4. Guardar terminales detectados en Django
+                this.log(`💾 Guardando ${ports.length} terminal(es) detectado(s) en la base de datos...`);
                 const response = await fetch('/app/pos/detectar-terminales/', {
                     method: 'POST',
                     headers: {
@@ -671,10 +802,10 @@
                     this.log(`✅ Detección completada: ${data.total_detectados} terminales`, 'success');
                     this.updateOperationStatus(data.message, 'success');
                     
-                    // 4. Actualizar selector de terminales
+                    // 5. Actualizar selector de terminales
                     await this.refreshTerminalSelector();
                     
-                    // 5. Mostrar resultado
+                    // 6. Mostrar resultado
                     this.showResult({
                         success: true,
                         message: `Auto-detección exitosa: ${data.total_detectados} terminales encontrados`,
@@ -692,14 +823,249 @@
                 
             } catch (error) {
                 this.log(`❌ Error en auto-detección: ${error.message}`, 'error');
-                this.updateOperationStatus('Error en auto-detección', 'error');
+                this.updateOperationStatus('Error en auto-detección - Usando modo simulado', 'error');
+                
+                // Fallback: Usar puertos simulados para desarrollo
+                this.log('🔄 Intentando con puertos simulados para desarrollo...', 'info');
+                return await this.simulatePortDetection(error.message);
+            }
+        }
+
+        // Simular detección de puertos para desarrollo/testing
+        async simulatePortDetection(originalError) {
+            try {
+                const simulatedPorts = ['COM1', 'COM2', '/dev/ttyUSB0'];
+                this.log(`🎭 Usando puertos simulados: [${simulatedPorts.join(', ')}]`, 'info');
+                
+                // Guardar puertos simulados en Django
+                const response = await fetch('/app/pos/detectar-terminales/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.csrfToken
+                    },
+                    body: JSON.stringify({
+                        puertos_detectados: simulatedPorts,
+                        simulado: true
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.log(`✅ Simulación completada: ${data.total_detectados} terminales simulados`, 'success');
+                    this.updateOperationStatus('Detección simulada completada', 'success');
+                    
+                    await this.refreshTerminalSelector();
+                    
+                    this.showResult({
+                        success: true,
+                        message: `Modo simulado: ${data.total_detectados} terminales creados`,
+                        warning: `Error original: ${originalError}`,
+                        terminals: simulatedPorts
+                    });
+                    
+                    return {
+                        success: true,
+                        simulated: true,
+                        terminals: simulatedPorts,
+                        data: data
+                    };
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (simError) {
+                this.log(`❌ Error en simulación: ${simError.message}`, 'error');
                 this.showResult({ 
                     success: false, 
-                    error: error.message,
-                    suggestion: 'Verifique que el agente POS esté ejecutándose y los terminales estén conectados'
+                    error: `Auto-detección falló: ${originalError}. Simulación falló: ${simError.message}`,
+                    suggestion: 'Use el modo demostración o configure terminales manualmente'
                 });
+                return { success: false, error: simError.message };
+            }
+        }
+
+        // Probar solo getPorts() sin guardar (para pruebas rápidas)
+        async testGetPorts() {
+            try {
+                this.log('🧪 Probando getPorts() directamente...', 'info');
+                this.updateOperationStatus('Probando detección de puertos...', 'info');
+                
+                // Verificar SDK
+                if (typeof Transbank === 'undefined' || !Transbank.POS) {
+                    throw new Error('SDK de Transbank no disponible');
+                }
+                
+                if (typeof Transbank.POS.getPorts !== 'function') {
+                    throw new Error('Método getPorts() no disponible');
+                }
+                
+                // Intentar conectar primero (si no está conectado)
+                try {
+                    this.log('🔗 Asegurando conexión al agente...', 'info');
+                    await Transbank.POS.connect();
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } catch (e) {
+                    this.log(`⚠️ Advertencia de conexión: ${e.message}`, 'warning');
+                }
+                
+                // Ejecutar getPorts()
+                this.log('🔍 Ejecutando getPorts()...', 'info');
+                const startTime = Date.now();
+                
+                const portsPromise = Transbank.POS.getPorts();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout: 15 segundos')), 15000)
+                );
+                
+                const result = await Promise.race([portsPromise, timeoutPromise]);
+                const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+                
+                this.log(`⏱️ getPorts() completado en ${elapsedTime}s`, 'info');
+                this.log(`📋 Respuesta cruda: ${JSON.stringify(result)}`, 'info');
+                
+                // Procesar resultado
+                let ports = [];
+                if (Array.isArray(result)) {
+                    ports = result;
+                } else if (result && typeof result === 'object') {
+                    if (Array.isArray(result.ports)) ports = result.ports;
+                    else if (Array.isArray(result.data)) ports = result.data;
+                    else if (result.port) ports = [result.port];
+                }
+                
+                if (ports.length > 0) {
+                    this.log(`✅ ${ports.length} puerto(s) detectado(s): [${ports.join(', ')}]`, 'success');
+                    this.updateOperationStatus(`${ports.length} puerto(s) encontrado(s)`, 'success');
+                    
+                    this.showResult({
+                        success: true,
+                        message: `getPorts() exitoso: ${ports.length} terminal(es) detectado(s)`,
+                        ports: ports,
+                        elapsed_time: `${elapsedTime}s`,
+                        note: 'Esto es solo una prueba. Use "Auto-Detectar Terminales" para guardar en BD.'
+                    });
+                } else {
+                    this.log('⚠️ getPorts() devolvió respuesta vacía', 'warning');
+                    this.updateOperationStatus('Sin terminales detectados', 'warning');
+                    
+                    this.showResult({
+                        success: false,
+                        message: 'No se detectaron terminales',
+                        raw_response: result,
+                        suggestion: 'Verifique que los terminales estén conectados y encendidos'
+                    });
+                }
+                
+                return { success: ports.length > 0, ports: ports };
+                
+            } catch (error) {
+                this.log(`❌ Error probando getPorts(): ${error.message}`, 'error');
+                this.updateOperationStatus('Error en getPorts()', 'error');
+                
+                this.showResult({
+                    success: false,
+                    error: error.message,
+                    suggestion: 'Verifique que el agente Transbank esté ejecutándose'
+                });
+                
                 return { success: false, error: error.message };
             }
+        }
+
+        // Diagnosticar SDK de Transbank
+        async diagnoseTransbankSDK() {
+            this.log('🔍 Diagnosticando SDK de Transbank...', 'info');
+            
+            const diagnostics = {
+                sdkLoaded: typeof Transbank !== 'undefined',
+                posModule: typeof Transbank !== 'undefined' && !!Transbank.POS,
+                connectMethod: false,
+                getPortsMethod: false,
+                agentRunning: false,
+                canConnect: false,
+                getPortsWorks: false,
+                portsFound: []
+            };
+            
+            if (diagnostics.posModule) {
+                diagnostics.connectMethod = typeof Transbank.POS.connect === 'function';
+                diagnostics.getPortsMethod = typeof Transbank.POS.getPorts === 'function';
+            }
+            
+            this.log(`📊 Diagnóstico básico del SDK:`, 'info');
+            this.log(`   - SDK cargado: ${diagnostics.sdkLoaded ? '✅' : '❌'}`, 'info');
+            this.log(`   - Módulo POS: ${diagnostics.posModule ? '✅' : '❌'}`, 'info');
+            this.log(`   - Método connect(): ${diagnostics.connectMethod ? '✅' : '❌'}`, 'info');
+            this.log(`   - Método getPorts(): ${diagnostics.getPortsMethod ? '✅' : '❌'}`, 'info');
+            
+            // Prueba avanzada: intentar conectar y obtener puertos
+            if (diagnostics.connectMethod && diagnostics.getPortsMethod) {
+                this.log('🔬 Realizando pruebas avanzadas...', 'info');
+                
+                // Prueba 1: Conectar al agente
+                try {
+                    this.log('   ▶ Probando conexión al agente...', 'info');
+                    await Transbank.POS.connect();
+                    diagnostics.canConnect = true;
+                    diagnostics.agentRunning = true;
+                    this.log('   ✅ Conexión al agente exitosa', 'success');
+                    
+                    // Esperar estabilización
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                } catch (connectError) {
+                    this.log(`   ⚠️ Error al conectar: ${connectError.message}`, 'warning');
+                    diagnostics.canConnect = false;
+                }
+                
+                // Prueba 2: Obtener puertos (incluso si la conexión falló)
+                try {
+                    this.log('   ▶ Probando getPorts()...', 'info');
+                    const portsPromise = Transbank.POS.getPorts();
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Timeout: 10 segundos')), 10000)
+                    );
+                    
+                    const result = await Promise.race([portsPromise, timeoutPromise]);
+                    
+                    this.log(`   📋 Respuesta de getPorts(): ${JSON.stringify(result)}`, 'info');
+                    
+                    // Procesar resultado
+                    if (Array.isArray(result)) {
+                        diagnostics.portsFound = result;
+                        diagnostics.getPortsWorks = true;
+                    } else if (result && typeof result === 'object') {
+                        // Intentar extraer puertos del objeto
+                        if (Array.isArray(result.ports)) {
+                            diagnostics.portsFound = result.ports;
+                        } else if (Array.isArray(result.data)) {
+                            diagnostics.portsFound = result.data;
+                        }
+                        diagnostics.getPortsWorks = diagnostics.portsFound.length > 0;
+                    }
+                    
+                    this.log(`   ✅ getPorts() funciona: ${diagnostics.portsFound.length} puerto(s) encontrado(s)`, 'success');
+                    
+                } catch (getPortsError) {
+                    this.log(`   ❌ Error en getPorts(): ${getPortsError.message}`, 'error');
+                    diagnostics.getPortsWorks = false;
+                }
+            }
+            
+            // Resumen final
+            this.log('', 'info');
+            this.log('📊 RESUMEN DEL DIAGNÓSTICO:', 'info');
+            this.log(`   SDK y Módulos: ${diagnostics.sdkLoaded && diagnostics.posModule ? '✅ OK' : '❌ FALLO'}`, 'info');
+            this.log(`   Agente POS: ${diagnostics.agentRunning ? '✅ ACTIVO' : '❌ NO DETECTADO'}`, 'info');
+            this.log(`   Detección de Puertos: ${diagnostics.getPortsWorks ? '✅ FUNCIONA' : '❌ NO FUNCIONA'}`, 'info');
+            if (diagnostics.portsFound.length > 0) {
+                this.log(`   Puertos: [${diagnostics.portsFound.join(', ')}]`, 'success');
+            } else {
+                this.log(`   Puertos: Sin terminales detectados`, 'warning');
+            }
+            
+            return diagnostics;
         }
 
         // Actualizar selector de terminales
@@ -822,6 +1188,37 @@
             }
         });
 
+        // Probar solo getPorts() sin guardar
+        document.getElementById('btn-test-getports').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-test-getports');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Probando...';
+                btn.disabled = true;
+                
+                await posManager.testGetPorts();
+            } catch (error) {
+                posManager.log(`Error probando getPorts(): ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Control de polling automático
+        document.getElementById('auto-polling-enabled').addEventListener('change', function() {
+            const pollingInfo = document.getElementById('polling-info');
+            
+            if (this.checked) {
+                posManager.startAutoPolling();
+                pollingInfo.style.display = 'block';
+            } else {
+                posManager.stopAutoPolling();
+                pollingInfo.style.display = 'none';
+            }
+        });
+
         // Actualizar lista de terminales
         document.getElementById('btn-refresh-terminals').addEventListener('click', async () => {
             const btn = document.getElementById('btn-refresh-terminals');
@@ -835,6 +1232,41 @@
                 posManager.log('Lista de terminales actualizada', 'success');
             } catch (error) {
                 posManager.log(`Error actualizando lista: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // Diagnóstico del SDK
+        document.getElementById('btn-diagnose-sdk').addEventListener('click', async () => {
+            const btn = document.getElementById('btn-diagnose-sdk');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Diagnosticando...';
+                btn.disabled = true;
+                
+                const diagnostics = await posManager.diagnoseTransbankSDK();
+                
+                let message = 'Diagnóstico completado. Ver log para detalles.';
+                if (!diagnostics.sdkLoaded) {
+                    message = 'SDK no cargado. Verifique la conexión a internet.';
+                } else if (!diagnostics.posModule) {
+                    message = 'Módulo POS no disponible en el SDK.';
+                } else if (!diagnostics.getPortsMethod) {
+                    message = 'Método getPorts() no disponible. Versión de SDK incompatible.';
+                } else if (diagnostics.getPortsWorks) {
+                    message = `✅ Todo funciona correctamente. ${diagnostics.portsFound.length} terminal(es) detectado(s).`;
+                }
+                
+                posManager.showResult({
+                    success: diagnostics.sdkLoaded && diagnostics.posModule,
+                    message: message,
+                    diagnostics: diagnostics
+                });
+            } catch (error) {
+                posManager.log(`Error en diagnóstico: ${error.message}`, 'error');
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
@@ -920,17 +1352,28 @@
             posManager.activateDemoMode();
         });
 
-        posManager.log('Sistema de POS iniciado. Use "Auto-Detectar Terminales" para buscar terminales conectados.', 'info');
+        posManager.log('Sistema de POS iniciado. Ejecutando diagnóstico inicial...', 'info');
         
-        // Auto-detectar terminales al cargar la página (opcional)
+        // Diagnóstico inicial del SDK
         setTimeout(async () => {
-            try {
-                posManager.log('🔍 Iniciando auto-detección automática...', 'info');
-                await posManager.autoDetectTerminals();
-            } catch (error) {
-                posManager.log('ℹ️ Auto-detección automática falló. Use el botón "Auto-Detectar Terminales" manualmente.', 'info');
+            const diagnostics = await posManager.diagnoseTransbankSDK();
+            
+            if (diagnostics.sdkLoaded && diagnostics.posModule && diagnostics.getPortsMethod) {
+                posManager.log('✅ SDK verificado correctamente. Iniciando auto-detección...', 'success');
+                
+                // Auto-detectar terminales si el SDK está OK
+                setTimeout(async () => {
+                    try {
+                        await posManager.autoDetectTerminals();
+                    } catch (error) {
+                        posManager.log('ℹ️ Auto-detección automática falló. Use el botón "Auto-Detectar Terminales" manualmente.', 'info');
+                    }
+                }, 1000);
+            } else {
+                posManager.log('⚠️ Problemas detectados en el SDK. Use "Diagnosticar SDK" para más detalles.', 'error');
+                posManager.log('💡 Puede usar el "Modo Demo" para probar sin hardware real.', 'info');
             }
-        }, 2000); // Esperar 2 segundos después de cargar
+        }, 1000); // Esperar 1 segundo para que cargue todo
     });
 </script>
 

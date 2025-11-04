@@ -12,6 +12,7 @@ from .views_modulo_ventas import (
     registrar_pagos_ticket,
     ticket_pago_pos,
     buscar_ticket_pos,
+    anular_ticket_pendiente,
     # Funciones Gestión Documentos
     gestion_ventas_documentos,
     listar_documentos_ventas,
@@ -21,7 +22,14 @@ from .views_modulo_ventas import (
     # Funciones Cuadratura y Arqueo
     cuadratura_caja,
     generar_cuadratura_caja,
+    guardar_cuadratura_completa,
+    verificar_cuadratura_existente,
+    eliminar_cuadratura,
+    listar_cuadraturas,
+    obtener_detalle_arqueo,
+    editar_cuadratura,
     exportar_cuadratura_excel,
+    obtener_transacciones_dia,
     listar_arqueos,
     crear_arqueo,
     guardar_conteo_fisico,
@@ -47,7 +55,11 @@ from .views_modulo_ventas import (
     aprobar_cambio_devolucion,
     completar_cambio_devolucion,
     buscar_ticket_para_cambio,
+    buscar_documento_cambio,
     buscar_productos_para_cambio,
+    # Funciones Clientes POS
+    guardar_cliente_pos,
+    enviar_ticket_email,
 )
 from .views_modulo_creditos import (
     # Gestión de Créditos
@@ -64,8 +76,29 @@ from .views_modulo_creditos import (
     # Utilidades
     obtener_trabajadores_credito,
     reporte_creditos_trabajadores,
+    # Voucher e Integración POS
+    imprimir_voucher_credito,
+    validar_codigo_credito,
+    usar_credito_en_venta,
 )
 from . import views_modulo_documentos
+from .views_modulo_cotizaciones import (
+    # Vistas principales
+    gestion_cotizaciones,
+    # APIs de listado
+    listar_cotizaciones,
+    detalle_cotizacion,
+    # APIs de creación y edición
+    crear_cotizacion,
+    editar_cotizacion,
+    # APIs de acciones
+    anular_cotizacion,
+    convertir_cotizacion_factura,
+    # APIs de búsqueda
+    buscar_productos_cotizacion,
+    # APIs de clientes
+    crear_cliente_cotizacion,
+)
 from django.urls import path
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
@@ -205,6 +238,16 @@ urlpatterns = [
     path('dte/recepciones_pendientes/', views.recepciones_pendientes_api, name='recepciones_pendientes_api'),
     path('dte/historial_recepciones/', views.historial_recepciones_api, name='historial_recepciones_api'),
     path('dte/confirmar_recepcion/', views.confirmar_recepcion_api, name='confirmar_recepcion_api'),
+    path('dte/rechazar_recepcion/', views.rechazar_recepcion_api, name='rechazar_recepcion_api'),
+    path('regularizar-recepciones/', views.regularizar_recepciones, name='regularizar_recepciones'),
+    path('solicitudes-regularizacion/', views.solicitudes_regularizacion_recibidas, name='solicitudes_regularizacion_recibidas'),
+    path('dte/obtener_productos_regularizar/', views.obtener_productos_regularizar, name='obtener_productos_regularizar'),
+    path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),
+    path('dte/obtener_solicitud_producto/<int:producto_id>/', views.obtener_solicitud_producto, name='obtener_solicitud_producto'),
+    path('dte/decidir_solicitud/', views.decidir_solicitud_api, name='decidir_solicitud_api'),
+    path('dte/buscar_productos_emisor/', views.buscar_productos_emisor, name='buscar_productos_emisor'),
+    path('dte/regularizar_producto/', views.regularizar_producto_api, name='regularizar_producto_api'),
+    path('dte/obtener_dtes_con_problemas/', views.obtener_dtes_con_problemas, name='obtener_dtes_con_problemas'),
     path('debug_session/', views.debug_session, name='debug_session'),
     path('debug_user_empresas/', views.debug_user_empresas, name='debug_user_empresas'),  # Temporal para debug
     path('empresas_clientes/', views.empresas_clientes, name='empresas_clientes'),
@@ -234,6 +277,7 @@ urlpatterns = [
     path('api/tickets/<int:correlativo>/', obtener_ticket_por_correlativo, name='obtener_ticket_por_correlativo'),
     path('api/tickets/buscar/', buscar_ticket_pos, name='buscar_ticket_pos'),
     path('api/tickets/<int:correlativo>/pagos/', registrar_pagos_ticket, name='registrar_pagos_ticket'),
+    path('api/tickets/anular/', anular_ticket_pendiente, name='anular_ticket_pendiente'),
     path('ticket-pago-pos/', ticket_pago_pos, name='ticket_pago_pos'),
 
     # ========== NUEVO POS DASHBOARD ==========
@@ -242,6 +286,8 @@ urlpatterns = [
     path('api/correlativos/verificar/', verificar_correlativos_disponibles, name='verificar_correlativos_disponibles'),
     path('api/validar-rut/', validar_rut_cliente, name='validar_rut_cliente'),
     path('api/buscar-cliente/', buscar_cliente_rut, name='buscar_cliente_rut'),
+    path('api/guardar-cliente-pos/', guardar_cliente_pos, name='guardar_cliente_pos'),
+    path('api/enviar-ticket-email/', enviar_ticket_email, name='enviar_ticket_email'),
     
     # === GESTIÓN DE DOCUMENTOS DE VENTAS ===
     path('ventas/documentos/', gestion_ventas_documentos, name='gestion_ventas_documentos'),
@@ -253,7 +299,14 @@ urlpatterns = [
     # === CUADRATURA Y ARQUEO DE CAJA ===
     path('ventas/cuadratura-caja/', cuadratura_caja, name='cuadratura_caja'),
     path('api/cuadratura/generar/', generar_cuadratura_caja, name='generar_cuadratura_caja'),
+    path('api/cuadratura/guardar/', guardar_cuadratura_completa, name='guardar_cuadratura_completa'),
+    path('api/cuadratura/verificar-existente/', verificar_cuadratura_existente, name='verificar_cuadratura_existente'),
+    path('api/cuadratura/eliminar/<int:arqueo_id>/', eliminar_cuadratura, name='eliminar_cuadratura'),
+    path('api/cuadratura/listar/', listar_cuadraturas, name='listar_cuadraturas'),
+    path('api/cuadratura/detalle/<int:arqueo_id>/', obtener_detalle_arqueo, name='obtener_detalle_arqueo'),
+    path('api/cuadratura/editar/<int:arqueo_id>/', editar_cuadratura, name='editar_cuadratura'),
     path('api/cuadratura/exportar/', exportar_cuadratura_excel, name='exportar_cuadratura_excel'),
+    path('api/cuadratura/transacciones-dia/', obtener_transacciones_dia, name='obtener_transacciones_dia'),
     
     # URLs para arqueo mejorado
     path('api/arqueos/', listar_arqueos, name='listar_arqueos'),
@@ -291,6 +344,9 @@ urlpatterns = [
     path('api/creditos/firma/', registrar_firma_credito, name='registrar_firma_credito'),
     path('api/creditos/trabajadores/', obtener_trabajadores_credito, name='obtener_trabajadores_credito'),
     path('api/creditos/reporte/', reporte_creditos_trabajadores, name='reporte_creditos_trabajadores'),
+    path('api/creditos/imprimir-voucher/<int:credito_id>/', imprimir_voucher_credito, name='imprimir_voucher_credito'),
+    path('api/creditos/validar-codigo/', validar_codigo_credito, name='validar_codigo_credito'),
+    path('api/creditos/usar-en-venta/', usar_credito_en_venta, name='usar_credito_en_venta'),
 
     # ========== MÓDULO POS TRANSBANK ==========
     # Vista principal
@@ -324,6 +380,29 @@ urlpatterns = [
     
     # APIs de búsqueda
     path('ventas/api/buscar-ticket-cambio/', buscar_ticket_para_cambio, name='buscar_ticket_para_cambio'),
+    path('ventas/api/buscar-documento-cambio/', buscar_documento_cambio, name='buscar_documento_cambio'),
     path('ventas/api/buscar-productos-cambio/', buscar_productos_para_cambio, name='buscar_productos_para_cambio'),
+
+    # ========== MÓDULO DE COTIZACIONES ==========
+    # Vista principal
+    path('cotizaciones/', gestion_cotizaciones, name='gestion_cotizaciones'),
+    
+    # APIs de listado y consulta
+    path('api/cotizaciones/', listar_cotizaciones, name='listar_cotizaciones'),
+    path('api/cotizaciones/<int:cotizacion_id>/', detalle_cotizacion, name='detalle_cotizacion'),
+    
+    # APIs de creación y edición
+    path('api/cotizaciones/crear/', crear_cotizacion, name='crear_cotizacion'),
+    path('api/cotizaciones/<int:cotizacion_id>/editar/', editar_cotizacion, name='editar_cotizacion'),
+    
+    # APIs de acciones
+    path('api/cotizaciones/anular/', anular_cotizacion, name='anular_cotizacion'),
+    path('api/cotizaciones/convertir-factura/', convertir_cotizacion_factura, name='convertir_cotizacion_factura'),
+    
+    # APIs de búsqueda
+    path('api/cotizaciones/buscar-productos/', buscar_productos_cotizacion, name='buscar_productos_cotizacion'),
+    
+    # APIs de clientes
+    path('api/cotizaciones/crear-cliente/', crear_cliente_cotizacion, name='crear_cliente_cotizacion'),
 
 ]

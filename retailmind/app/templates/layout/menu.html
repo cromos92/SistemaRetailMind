@@ -531,6 +531,11 @@
                                 <ul class="nav nav-sm flex-column">
 
                                     <li class="nav-item">
+                                        <a href="{% url 'ticket_venta' %}" class="nav-link" data-key="t-ticket-venta">
+                                            <i class="mdi mdi-receipt me-1"></i> Ticket de Venta
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
                                         <a href="{% url 'gestion_cambios_devoluciones' %}" class="nav-link" data-key="t-cambios-devoluciones">
                                             <i class="ri-exchange-line me-1"></i> Cambios y Devoluciones
                                         </a>
@@ -583,13 +588,19 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a href="/app/actualizar_documentos/" class="nav-link" data-key="t-update-docs">
-                                <i class="bi bi-check-circle me-1"></i> Actualizar Documentos
+                            <a href="{% url 'regularizar_recepciones' %}" class="nav-link" data-key="t-regularizar">
+                                <i class="ri-settings-3-line me-1 text-warning"></i> Regularizar Recepciones
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a href="{% url 'solicitudes_regularizacion_recibidas' %}" class="nav-link" data-key="t-solicitudes-recibidas">
+                                <i class="bi bi-envelope-paper me-1 text-primary"></i> Solicitudes Recibidas
+                            </a>
+                        </li>
+                      
                                     <li class="nav-item">
-                                        <a href="charts-chartjs.html" class="nav-link" data-key="t-chartjs"> Gestion
-                                            Cotizaciones
+                                        <a href="{% url 'gestion_cotizaciones' %}" class="nav-link" data-key="t-cotizaciones">
+                                            <i class="ri-file-text-line me-1"></i> Gestión Cotizaciones
                                         </a>
                                     </li>
                                     <li class="nav-item">
@@ -597,11 +608,7 @@
                                             <i class="ri-file-list-3-line me-1"></i> Gestión Correlativos
                                         </a>
                                     </li>
-                                    <li class="nav-item">
-                                        <a href="charts-echarts.html" class="nav-link" data-key="t-echarts"> Actualizar
-                                            Documentos
-                                        </a>
-                                    </li>
+                                  
                                     <li class="nav-item">
                                         <a href="/app/documentos/gestion-creditos/" class="nav-link" data-key="t-gestion-creditos">
                                             <i class="ri-bank-card-line me-1"></i> Gestión Créditos

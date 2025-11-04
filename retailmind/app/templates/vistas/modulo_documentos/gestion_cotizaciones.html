@@ -1,0 +1,1431 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="h3 mb-0">
+                    <i class="ri-file-text-line text-primary"></i> Gestión de Cotizaciones
+                </h1>
+                <p class="text-muted mb-0">Gestiona cotizaciones a empresas con control de validez y facturación</p>
+                <small class="text-info">
+                    <i class="ri-information-line"></i> Crea, administra y convierte cotizaciones en facturas
+                </small>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#modalNuevaCotizacion">
+                    <i class="ri-add-line me-1"></i> Nueva Cotización
+                </button>
+            </div>
+        </div>
+
+        <!-- Estadísticas Rápidas -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-primary bg-soft">
+                                    <span class="avatar-title rounded-circle bg-primary">
+                                        <i class="ri-file-text-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Total Cotizaciones</p>
+                                <h4 class="fs-4 fw-medium mb-0" id="totalCotizaciones">
+                                    <span class="counter-value">0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-success bg-soft">
+                                    <span class="avatar-title rounded-circle bg-success">
+                                        <i class="ri-checkbox-circle-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Vigentes</p>
+                                <h4 class="fs-4 fw-medium mb-0" id="totalVigentes">
+                                    <span class="counter-value">0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-info bg-soft">
+                                    <span class="avatar-title rounded-circle bg-info">
+                                        <i class="ri-money-dollar-circle-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Monto Total</p>
+                                <h4 class="fs-4 fw-medium mb-0" id="montoTotal">
+                                    <span class="counter-value">$0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-warning bg-soft">
+                                    <span class="avatar-title rounded-circle bg-warning">
+                                        <i class="ri-file-list-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Facturadas</p>
+                                <h4 class="fs-4 fw-medium mb-0" id="totalFacturadas">
+                                    <span class="counter-value">0</span>
+                                </h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros y Controles -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Fecha Desde</label>
+                        <input type="date" class="form-control" id="fechaDesde">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Fecha Hasta</label>
+                        <input type="date" class="form-control" id="fechaHasta">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" id="estadoCotizacion">
+                            <option value="">Todos</option>
+                            <option value="VIGENTE">Vigente</option>
+                            <option value="VENCIDA">Vencida</option>
+                            <option value="FACTURADA">Facturada</option>
+                            <option value="ANULADA">Anulada</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Cliente</label>
+                        <select class="form-select" id="filtroCliente">
+                            <option value="">Todos los clientes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button class="btn btn-primary" onclick="filtrarCotizaciones()">
+                                <i class="ri-search-line"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="ri-search-line"></i>
+                            </span>
+                            <input type="text" class="form-control" id="buscarTexto" 
+                                   placeholder="Buscar por número, cliente, producto, descripción...">
+                            <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="ri-refresh-line"></i> Limpiar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-success" onclick="exportarCotizaciones()">
+                            <i class="ri-file-excel-line"></i> Exportar Excel
+                        </button>
+                        <button class="btn btn-info" onclick="actualizarListado()">
+                            <i class="ri-refresh-line"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Cotizaciones -->
+        <div class="card shadow-sm">
+            <div class="card-header border-0">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-file-list-line text-primary"></i> Listado de Cotizaciones
+                        </h5>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body pt-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle table-nowrap mb-0" id="tablaCotizaciones">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">N° Cotización</th>
+                                <th scope="col">Fecha</th>
+                                <th scope="col">Cliente</th>
+                                <th scope="col">Válida Hasta</th>
+                                <th scope="col">Días Rest.</th>
+                                <th scope="col">Items</th>
+                                <th scope="col">Monto</th>
+                                <th scope="col">Estado</th>
+                                <th scope="col">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyCotizaciones">
+                            <tr>
+                                <td colspan="9" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                    <p class="text-muted mt-2">Cargando cotizaciones...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Paginación -->
+                <div class="row mt-3">
+                    <div class="col-sm-6">
+                        <div class="dataTables_info">
+                            Mostrando <span id="infoInicio">0</span> a <span id="infoFin">0</span> 
+                            de <span id="infoTotal">0</span> cotizaciones
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="dataTables_paginate paging_simple_numbers float-end">
+                            <ul class="pagination pagination-rounded mb-0" id="paginacion">
+                                <!-- Paginación dinámica -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nueva/Editar Cotización -->
+<div class="modal fade" id="modalNuevaCotizacion" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="ri-file-add-line me-2"></i> Nueva Cotización
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formCotizacion">
+                    <!-- Información General -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <h6 class="text-uppercase text-muted mb-3">
+                                <i class="ri-information-line me-1"></i> Información General
+                            </h6>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Cliente / Empresa <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <select class="form-select" id="clienteCotizacion" required>
+                                    <option value="">Seleccione cliente...</option>
+                                </select>
+                                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente" title="Crear nuevo cliente">
+                                    <i class="ri-add-line"></i> Nuevo
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Fecha Emisión <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fechaEmisionCotizacion" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Días de Validez <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="diasValidez" min="1" value="30" required>
+                            <small class="text-muted">Días que la cotización estará vigente</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Descripción General</label>
+                            <textarea class="form-control" id="descripcionCotizacion" rows="2" 
+                                      placeholder="Descripción general de la cotización..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Items de la Cotización -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <h6 class="text-uppercase text-muted mb-3">
+                                <i class="ri-shopping-cart-line me-1"></i> Items de la Cotización
+                            </h6>
+                            <button type="button" class="btn btn-sm btn-success mb-3" onclick="agregarItemCotizacion()">
+                                <i class="ri-add-line"></i> Agregar Item
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.25rem;">
+                        <table class="table table-bordered mb-0" id="tablaItemsCotizacion">
+                            <thead class="table-primary" style="position: sticky; top: 0; z-index: 10;">
+                                <tr>
+                                    <th style="width: 5%">#</th>
+                                    <th style="width: 25%">Descripción <span class="text-danger">*</span></th>
+                                    <th style="width: 10%">Cantidad <span class="text-danger">*</span></th>
+                                    <th style="width: 15%">Precio Unit. <span class="text-danger">*</span></th>
+                                    <th style="width: 15%">Subtotal</th>
+                                    <th style="width: 20%">Producto Asociado</th>
+                                    <th style="width: 10%">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyItemsCotizacion">
+                                <!-- Items dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="bg-light p-2 border border-top-0 rounded-bottom">
+                        <div class="row">
+                            <div class="col text-end">
+                                <h5 class="mb-0">
+                                    <span class="text-muted">Total:</span>
+                                    <span class="text-primary fw-bold ms-2" id="totalCotizacion">$0</span>
+                                </h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observacionesCotizacion" rows="2" 
+                                      placeholder="Condiciones de pago, notas adicionales..."></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="guardarCotizacion()">
+                    <i class="ri-save-line me-1"></i> Guardar Cotización
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalle Cotización -->
+<div class="modal fade" id="modalDetalleCotizacion" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="tituloDetalleCotizacion">
+                    <i class="ri-file-text-line me-2"></i> Detalle de Cotización
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="contenidoDetalleCotizacion">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="text-muted mt-2">Cargando detalles...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cerrar
+                </button>
+                <button type="button" class="btn btn-info" onclick="imprimirCotizacion()">
+                    <i class="ri-printer-line me-1"></i> Imprimir
+                </button>
+                <button type="button" class="btn btn-success" onclick="descargarPDF()">
+                    <i class="ri-download-line me-1"></i> Descargar PDF
+                </button>
+                <button type="button" class="btn btn-warning" id="btnConvertirFactura" onclick="convertirAFactura()">
+                    <i class="ri-file-list-3-line me-1"></i> Convertir a Factura
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Buscar Producto -->
+<div class="modal fade" id="modalBuscarProducto" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-search-line me-2"></i> Buscar Producto
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="buscarProductoInput" 
+                           placeholder="Buscar por SKU, nombre, marca...">
+                    <button class="btn btn-primary" onclick="buscarProductos()">
+                        <i class="ri-search-line"></i> Buscar
+                    </button>
+                </div>
+                <div id="resultadosBusquedaProductos" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Resultados dinámicos -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Cliente/Empresa -->
+<div class="modal fade" id="modalNuevoCliente" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="ri-building-add-line me-2"></i> Nuevo Cliente / Empresa
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNuevoCliente">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">RUT <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="clienteRut" required 
+                                   placeholder="Ej: 12.345.678-9">
+                            <small class="text-muted">Formato: 12.345.678-9</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre / Razón Social <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="clienteNombre" required 
+                                   placeholder="Nombre de la empresa">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre Fantasía</label>
+                            <input type="text" class="form-control" id="clienteNombreFantasia" 
+                                   placeholder="Nombre comercial">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Giro <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="clienteGiro" required 
+                                   placeholder="Actividad comercial">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Dirección <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="clienteDireccion" required 
+                                   placeholder="Dirección completa">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Comuna <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="clienteComuna" required 
+                                   placeholder="Comuna">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Ciudad <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="clienteCiudad" required 
+                                   placeholder="Ciudad">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Email Intercambio</label>
+                            <input type="email" class="form-control" id="clienteCorreoIntercambio" 
+                                   placeholder="email@empresa.cl">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email Vendedor</label>
+                            <input type="email" class="form-control" id="clienteCorreoVendedor" 
+                                   placeholder="ventas@empresa.cl">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email Administrador</label>
+                            <input type="email" class="form-control" id="clienteCorreoAdmin" 
+                                   placeholder="admin@empresa.cl">
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="ri-information-line me-1"></i>
+                        <strong>Nota:</strong> Este cliente se creará como empresa NO proveedora (cliente).
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success" onclick="guardarNuevoCliente()">
+                    <i class="ri-save-line me-1"></i> Guardar Cliente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Estilos personalizados */
+.table th {
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-estado {
+    font-size: 11px;
+    padding: 4px 8px;
+}
+
+.btn-action {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.counter-value {
+    font-weight: 700;
+}
+
+.bg-soft {
+    background-color: rgba(13, 110, 253, 0.1) !important;
+}
+
+.avatar-sm {
+    width: 40px;
+    height: 40px;
+}
+
+.avatar-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.pagination-rounded .page-link {
+    border-radius: 50px;
+    margin: 0 2px;
+}
+
+.item-producto-hover:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+
+.dias-restantes-alerta {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.dias-restantes-warning {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.dias-restantes-ok {
+    color: #198754;
+}
+
+/* Estilos para tabla de items con scroll */
+#tablaItemsCotizacion thead th {
+    background-color: #0d6efd !important;
+    color: white !important;
+    border-color: #0a58ca !important;
+}
+
+/* Scroll personalizado para la tabla */
+.table-responsive::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Asegurar que el modal sea scrolleable */
+#modalNuevaCotizacion .modal-body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+/* Mejorar visualización de items */
+#tbodyItemsCotizacion tr:hover {
+    background-color: #f8f9fa;
+}
+
+#tbodyItemsCotizacion textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+</style>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables globales
+    let cotizacionesData = [];
+    let paginaActual = 1;
+    let cotizacionesPorPagina = 20;
+    let totalCotizaciones = 0;
+    let itemCounter = 0;
+    let itemIndexForProducto = null;
+    let cotizacionActual = null;
+
+    // URLs de API
+    const apiUrls = {
+        listarCotizaciones: '{% url "listar_cotizaciones" %}',
+        crearCotizacion: '{% url "crear_cotizacion" %}',
+        detalleCotizacion: (id) => `{% url "detalle_cotizacion" cotizacion_id=0 %}`.replace('/0/', `/${id}/`),
+        editarCotizacion: (id) => `{% url "editar_cotizacion" cotizacion_id=0 %}`.replace('/0/', `/${id}/`),
+        anularCotizacion: '{% url "anular_cotizacion" %}',
+        convertirFactura: '{% url "convertir_cotizacion_factura" %}',
+        buscarProductos: '{% url "buscar_productos_cotizacion" %}',
+        listarClientes: '{% url "empresas_clientes" %}',
+        crearCliente: '{% url "crear_cliente_cotizacion" %}',
+    };
+
+    // Inicialización
+    inicializarFechas();
+    cargarClientes();
+    cargarCotizaciones();
+    configurarEventos();
+
+    // === FUNCIONES DE INICIALIZACIÓN ===
+    
+    function inicializarFechas() {
+        const hoy = new Date();
+        const hace30Dias = new Date();
+        hace30Dias.setDate(hoy.getDate() - 30);
+        
+        document.getElementById('fechaDesde').value = hace30Dias.toISOString().split('T')[0];
+        document.getElementById('fechaHasta').value = hoy.toISOString().split('T')[0];
+        document.getElementById('fechaEmisionCotizacion').value = hoy.toISOString().split('T')[0];
+    }
+
+    function configurarEventos() {
+        // Búsqueda en tiempo real
+        let timeout;
+        document.getElementById('buscarTexto').addEventListener('input', function() {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                paginaActual = 1;
+                cargarCotizaciones();
+            }, 500);
+        });
+    }
+
+    // === FUNCIONES DE CARGA DE DATOS ===
+    
+    function cargarClientes() {
+        fetch(apiUrls.listarClientes)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Respuesta clientes:', data);
+                
+                // Manejar diferentes formatos de respuesta
+                let clientes = [];
+                if (Array.isArray(data)) {
+                    clientes = data;
+                } else if (data.success && data.clientes) {
+                    clientes = data.clientes;
+                } else if (data.success && Array.isArray(data.empresas)) {
+                    clientes = data.empresas;
+                } else if (Array.isArray(data)) {
+                    clientes = data;
+                }
+                
+                const selectCliente = document.getElementById('clienteCotizacion');
+                const selectFiltro = document.getElementById('filtroCliente');
+                
+                clientes.forEach(cliente => {
+                    const nombre = cliente.razon_social || cliente.nombre || 'Sin nombre';
+                    const rut = cliente.rut || '';
+                    const option = new Option(`${nombre} - ${rut}`, cliente.id);
+                    selectCliente.add(option.cloneNode(true));
+                    selectFiltro.add(option.cloneNode(true));
+                });
+                
+                console.log(`✅ ${clientes.length} clientes cargados`);
+            })
+            .catch(error => console.error('Error al cargar clientes:', error));
+    }
+
+    function cargarCotizaciones() {
+        const filtros = obtenerFiltros();
+        
+        fetch(apiUrls.listarCotizaciones + '?' + new URLSearchParams(filtros))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    cotizacionesData = data.cotizaciones;
+                    totalCotizaciones = data.total;
+                    actualizarTabla();
+                    actualizarEstadisticas(data.estadisticas);
+                    actualizarPaginacion();
+                } else {
+                    mostrarError('Error al cargar cotizaciones: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarError('Error al cargar cotizaciones');
+            });
+    }
+
+    function obtenerFiltros() {
+        return {
+            fecha_desde: document.getElementById('fechaDesde').value,
+            fecha_hasta: document.getElementById('fechaHasta').value,
+            estado: document.getElementById('estadoCotizacion').value,
+            cliente_id: document.getElementById('filtroCliente').value,
+            buscar: document.getElementById('buscarTexto').value,
+            page: paginaActual,
+            per_page: cotizacionesPorPagina
+        };
+    }
+
+    // === FUNCIONES DE ACTUALIZACIÓN DE UI ===
+    
+    function actualizarTabla() {
+        const tbody = document.getElementById('tbodyCotizaciones');
+        
+        if (cotizacionesData.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center py-4">
+                        <i class="ri-inbox-line display-4 text-muted"></i>
+                        <p class="text-muted mt-2">No se encontraron cotizaciones</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = cotizacionesData.map(cot => {
+            const diasRestantes = calcularDiasRestantes(cot.fecha_validez);
+            const clasesDias = diasRestantes < 0 ? 'dias-restantes-alerta' : 
+                              diasRestantes <= 7 ? 'dias-restantes-warning' : 'dias-restantes-ok';
+            
+            return `
+                <tr>
+                    <td>
+                        <span class="fw-medium">#${cot.numero_cotizacion}</span>
+                    </td>
+                    <td>${formatearFecha(cot.fecha_emision)}</td>
+                    <td>
+                        <div>
+                            <h6 class="mb-0 fs-14">${cot.cliente_nombre}</h6>
+                            <small class="text-muted">${cot.cliente_rut}</small>
+                        </div>
+                    </td>
+                    <td>${formatearFecha(cot.fecha_validez)}</td>
+                    <td>
+                        <span class="${clasesDias}">
+                            ${diasRestantes < 0 ? 'Vencida' : diasRestantes + ' días'}
+                        </span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-light text-dark">${cot.total_items} items</span>
+                    </td>
+                    <td>
+                        <span class="fw-medium">${formatearMoneda(cot.monto_total)}</span>
+                    </td>
+                    <td>
+                        <span class="badge ${obtenerClaseEstado(cot.estado)}">${cot.estado}</span>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-primary btn-action" onclick="verDetalle(${cot.id})" title="Ver Detalle">
+                                <i class="ri-eye-line"></i>
+                            </button>
+                            ${cot.estado === 'VIGENTE' ? `
+                                <button class="btn btn-success btn-action" onclick="editarCotizacion(${cot.id})" title="Editar">
+                                    <i class="ri-edit-line"></i>
+                                </button>
+                                <button class="btn btn-danger btn-action" onclick="anularCotizacion(${cot.id})" title="Anular">
+                                    <i class="ri-close-line"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function actualizarEstadisticas(stats) {
+        document.getElementById('totalCotizaciones').querySelector('.counter-value').textContent = stats.total || 0;
+        document.getElementById('totalVigentes').querySelector('.counter-value').textContent = stats.vigentes || 0;
+        document.getElementById('montoTotal').querySelector('.counter-value').textContent = formatearMoneda(stats.monto_total || 0);
+        document.getElementById('totalFacturadas').querySelector('.counter-value').textContent = stats.facturadas || 0;
+    }
+
+    function actualizarPaginacion() {
+        const totalPaginas = Math.ceil(totalCotizaciones / cotizacionesPorPagina);
+        const paginacion = document.getElementById('paginacion');
+        
+        let html = `
+            <li class="page-item ${paginaActual === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="cambiarPagina(${paginaActual - 1})">Anterior</a>
+            </li>
+        `;
+        
+        for (let i = 1; i <= totalPaginas; i++) {
+            if (i === 1 || i === totalPaginas || (i >= paginaActual - 2 && i <= paginaActual + 2)) {
+                html += `
+                    <li class="page-item ${i === paginaActual ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="cambiarPagina(${i})">${i}</a>
+                    </li>
+                `;
+            } else if (i === paginaActual - 3 || i === paginaActual + 3) {
+                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+        
+        html += `
+            <li class="page-item ${paginaActual === totalPaginas ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="cambiarPagina(${paginaActual + 1})">Siguiente</a>
+            </li>
+        `;
+        
+        paginacion.innerHTML = html;
+        
+        const inicio = (paginaActual - 1) * cotizacionesPorPagina + 1;
+        const fin = Math.min(paginaActual * cotizacionesPorPagina, totalCotizaciones);
+        
+        document.getElementById('infoInicio').textContent = inicio;
+        document.getElementById('infoFin').textContent = fin;
+        document.getElementById('infoTotal').textContent = totalCotizaciones;
+    }
+
+    // === FUNCIONES DE ITEMS ===
+    
+    window.agregarItemCotizacion = function() {
+        itemCounter++;
+        const tbody = document.getElementById('tbodyItemsCotizacion');
+        const tr = document.createElement('tr');
+        tr.id = `item-${itemCounter}`;
+        tr.innerHTML = `
+            <td>${itemCounter}</td>
+            <td>
+                <textarea class="form-control item-descripcion" rows="2" required
+                          placeholder="Descripción del item..."></textarea>
+            </td>
+            <td>
+                <input type="number" class="form-control item-cantidad" min="1" value="1" required
+                       onchange="calcularSubtotalItem(${itemCounter})">
+            </td>
+            <td>
+                <input type="number" class="form-control item-precio" min="0" step="0.01" required
+                       onchange="calcularSubtotalItem(${itemCounter})">
+            </td>
+            <td>
+                <input type="text" class="form-control item-subtotal" readonly>
+            </td>
+            <td>
+                <button type="button" class="btn btn-sm btn-info" onclick="abrirBuscarProducto(${itemCounter})">
+                    <i class="ri-search-line"></i> Buscar
+                </button>
+                <input type="hidden" class="item-producto-id">
+                <small class="item-producto-nombre text-muted d-block"></small>
+            </td>
+            <td>
+                <button type="button" class="btn btn-sm btn-danger" onclick="eliminarItem(${itemCounter})">
+                    <i class="ri-delete-bin-line"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    };
+
+    window.calcularSubtotalItem = function(itemId) {
+        const row = document.getElementById(`item-${itemId}`);
+        const cantidad = parseFloat(row.querySelector('.item-cantidad').value) || 0;
+        const precio = parseFloat(row.querySelector('.item-precio').value) || 0;
+        const subtotal = cantidad * precio;
+        
+        row.querySelector('.item-subtotal').value = formatearMoneda(subtotal);
+        calcularTotalCotizacion();
+    };
+
+    function calcularTotalCotizacion() {
+        let total = 0;
+        document.querySelectorAll('#tbodyItemsCotizacion tr').forEach(row => {
+            const cantidad = parseFloat(row.querySelector('.item-cantidad').value) || 0;
+            const precio = parseFloat(row.querySelector('.item-precio').value) || 0;
+            total += cantidad * precio;
+        });
+        
+        document.getElementById('totalCotizacion').textContent = formatearMoneda(total);
+    }
+
+    window.eliminarItem = function(itemId) {
+        document.getElementById(`item-${itemId}`).remove();
+        calcularTotalCotizacion();
+    };
+
+    window.abrirBuscarProducto = function(itemId) {
+        itemIndexForProducto = itemId;
+        new bootstrap.Modal(document.getElementById('modalBuscarProducto')).show();
+    };
+
+    window.buscarProductos = function() {
+        const query = document.getElementById('buscarProductoInput').value;
+        if (!query) return;
+        
+        fetch(apiUrls.buscarProductos + '?q=' + encodeURIComponent(query))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarResultadosProductos(data.productos);
+                }
+            })
+            .catch(error => console.error('Error:', error));
+    };
+
+    function mostrarResultadosProductos(productos) {
+        const contenedor = document.getElementById('resultadosBusquedaProductos');
+        
+        if (productos.length === 0) {
+            contenedor.innerHTML = '<p class="text-muted text-center py-3">No se encontraron productos</p>';
+            return;
+        }
+        
+        contenedor.innerHTML = productos.map(prod => `
+            <div class="border-bottom p-2 item-producto-hover" onclick="seleccionarProducto(${prod.id}, '${prod.nombre}', ${prod.precio})">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <strong>${prod.nombre}</strong>
+                        <br>
+                        <small class="text-muted">SKU: ${prod.sku} | Marca: ${prod.marca}</small>
+                        <br>
+                        <small class="text-info">Stock: ${prod.stock} unidades</small>
+                    </div>
+                    <div class="text-end">
+                        <strong class="text-primary">${formatearMoneda(prod.precio)}</strong>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    window.seleccionarProducto = function(productoId, nombre, precio) {
+        if (itemIndexForProducto) {
+            const row = document.getElementById(`item-${itemIndexForProducto}`);
+            row.querySelector('.item-producto-id').value = productoId;
+            row.querySelector('.item-producto-nombre').textContent = nombre;
+            row.querySelector('.item-precio').value = precio;
+            calcularSubtotalItem(itemIndexForProducto);
+            
+            bootstrap.Modal.getInstance(document.getElementById('modalBuscarProducto')).hide();
+        }
+    };
+
+    // === FUNCIONES DE ACCIONES ===
+    
+    window.guardarCotizacion = function() {
+        // Validar formulario
+        const cliente = document.getElementById('clienteCotizacion').value;
+        if (!cliente) {
+            mostrarError('Debe seleccionar un cliente');
+            return;
+        }
+
+        const items = [];
+        let valid = true;
+        
+        document.querySelectorAll('#tbodyItemsCotizacion tr').forEach((row, index) => {
+            const descripcion = row.querySelector('.item-descripcion').value;
+            const cantidad = row.querySelector('.item-cantidad').value;
+            const precio = row.querySelector('.item-precio').value;
+            
+            if (!descripcion || !cantidad || !precio) {
+                valid = false;
+                return;
+            }
+            
+            items.push({
+                descripcion: descripcion,
+                cantidad: parseInt(cantidad),
+                precio_unitario: parseFloat(precio),
+                producto_id: row.querySelector('.item-producto-id').value || null
+            });
+        });
+
+        if (!valid) {
+            mostrarError('Complete todos los campos requeridos de los items');
+            return;
+        }
+
+        if (items.length === 0) {
+            mostrarError('Debe agregar al menos un item');
+            return;
+        }
+
+        const formData = {
+            cliente_id: cliente,
+            fecha_emision: document.getElementById('fechaEmisionCotizacion').value,
+            dias_validez: document.getElementById('diasValidez').value,
+            descripcion: document.getElementById('descripcionCotizacion').value,
+            observaciones: document.getElementById('observacionesCotizacion').value,
+            items: items
+        };
+
+        fetch(apiUrls.crearCotizacion, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarExito('Cotización creada exitosamente');
+                bootstrap.Modal.getInstance(document.getElementById('modalNuevaCotizacion')).hide();
+                limpiarFormularioCotizacion();
+                cargarCotizaciones();
+            } else {
+                mostrarError('Error al crear cotización: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error al crear cotización');
+        });
+    };
+
+    function limpiarFormularioCotizacion() {
+        document.getElementById('formCotizacion').reset();
+        document.getElementById('tbodyItemsCotizacion').innerHTML = '';
+        itemCounter = 0;
+        inicializarFechas();
+    }
+
+    window.verDetalle = function(cotizacionId) {
+        fetch(apiUrls.detalleCotizacion(cotizacionId))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    cotizacionActual = data.cotizacion;
+                    mostrarDetalleCotizacion(data.cotizacion);
+                } else {
+                    mostrarError('Error al cargar detalle: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarError('Error al cargar detalle');
+            });
+    };
+
+    function mostrarDetalleCotizacion(cot) {
+        document.getElementById('tituloDetalleCotizacion').innerHTML = `
+            <i class="ri-file-text-line me-2"></i> Cotización #${cot.numero_cotizacion} - ${cot.cliente_nombre}
+        `;
+
+        const diasRestantes = calcularDiasRestantes(cot.fecha_validez);
+        
+        const html = `
+            <!-- Encabezado -->
+            <div class="bg-light border-bottom p-4">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h4 class="mb-1">Cotización #${cot.numero_cotizacion}</h4>
+                        <p class="text-muted mb-0">
+                            <i class="ri-calendar-line me-1"></i> Emitida: ${formatearFecha(cot.fecha_emision)}
+                            <span class="badge ${obtenerClaseEstado(cot.estado)} ms-2">${cot.estado}</span>
+                        </p>
+                        <p class="text-muted mb-0">
+                            <i class="ri-time-line me-1"></i> Válida hasta: ${formatearFecha(cot.fecha_validez)}
+                            ${diasRestantes >= 0 ? `<span class="ms-2">(${diasRestantes} días restantes)</span>` : '<span class="text-danger ms-2">(VENCIDA)</span>'}
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <h3 class="text-primary mb-1">${formatearMoneda(cot.monto_total)}</h3>
+                        <p class="text-muted mb-0">Monto Total</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cliente -->
+            <div class="p-4 border-bottom">
+                <h6 class="text-uppercase text-muted mb-3">
+                    <i class="ri-building-line me-1"></i> Información del Cliente
+                </h6>
+                <div class="card border-0 bg-light">
+                    <div class="card-body">
+                        <h6 class="mb-2">${cot.cliente_nombre}</h6>
+                        <p class="text-muted mb-1"><strong>RUT:</strong> ${cot.cliente_rut}</p>
+                        ${cot.cliente_email ? `<p class="text-muted mb-1"><strong>Email:</strong> ${cot.cliente_email}</p>` : ''}
+                        ${cot.cliente_telefono ? `<p class="text-muted mb-0"><strong>Teléfono:</strong> ${cot.cliente_telefono}</p>` : ''}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Descripción -->
+            ${cot.descripcion ? `
+            <div class="p-4 border-bottom">
+                <h6 class="text-uppercase text-muted mb-2">Descripción</h6>
+                <p class="mb-0">${cot.descripcion}</p>
+            </div>
+            ` : ''}
+
+            <!-- Items -->
+            <div class="p-4 border-bottom">
+                <h6 class="text-uppercase text-muted mb-3">
+                    <i class="ri-shopping-cart-line me-1"></i> Items (${cot.items.length})
+                </h6>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Descripción</th>
+                                <th>Producto Asociado</th>
+                                <th class="text-center">Cantidad</th>
+                                <th class="text-end">Precio Unit.</th>
+                                <th class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${cot.items.map((item, index) => `
+                                <tr>
+                                    <td>${index + 1}</td>
+                                    <td>${item.descripcion}</td>
+                                    <td>
+                                        ${item.producto_nombre ? 
+                                            `<span class="badge bg-info">${item.producto_nombre}</span>` : 
+                                            '<span class="text-muted">Sin asignar</span>'}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary">${item.cantidad}</span>
+                                    </td>
+                                    <td class="text-end">${formatearMoneda(item.precio_unitario)}</td>
+                                    <td class="text-end">
+                                        <strong>${formatearMoneda(item.cantidad * item.precio_unitario)}</strong>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                        <tfoot class="table-dark">
+                            <tr>
+                                <th colspan="5" class="text-end">TOTAL:</th>
+                                <th class="text-end">${formatearMoneda(cot.monto_total)}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Observaciones -->
+            ${cot.observaciones ? `
+            <div class="p-4 bg-light">
+                <h6 class="text-muted mb-2">Observaciones</h6>
+                <p class="mb-0">${cot.observaciones}</p>
+            </div>
+            ` : ''}
+        `;
+
+        document.getElementById('contenidoDetalleCotizacion').innerHTML = html;
+        
+        // Mostrar/ocultar botón de facturar
+        const btnFacturar = document.getElementById('btnConvertirFactura');
+        if (cot.estado === 'VIGENTE') {
+            btnFacturar.style.display = 'inline-block';
+        } else {
+            btnFacturar.style.display = 'none';
+        }
+        
+        new bootstrap.Modal(document.getElementById('modalDetalleCotizacion')).show();
+    };
+
+    window.convertirAFactura = function() {
+        if (!cotizacionActual) return;
+        
+        if (confirm('¿Desea convertir esta cotización en factura?')) {
+            fetch(apiUrls.convertirFactura, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ cotizacion_id: cotizacionActual.id })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarExito('Cotización convertida a factura exitosamente');
+                    bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion')).hide();
+                    cargarCotizaciones();
+                } else {
+                    mostrarError('Error al convertir: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarError('Error al convertir cotización');
+            });
+        }
+    };
+
+    window.anularCotizacion = function(cotizacionId) {
+        if (confirm('¿Está seguro de anular esta cotización?')) {
+            fetch(apiUrls.anularCotizacion, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ cotizacion_id: cotizacionId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarExito('Cotización anulada exitosamente');
+                    cargarCotizaciones();
+                } else {
+                    mostrarError('Error al anular: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarError('Error al anular cotización');
+            });
+        }
+    };
+
+    // === FUNCIONES DE UTILIDAD ===
+    
+    function formatearMoneda(valor) {
+        return '$' + parseInt(valor || 0).toLocaleString('es-CL');
+    }
+
+    function formatearFecha(fecha) {
+        return new Date(fecha).toLocaleDateString('es-CL');
+    }
+
+    function calcularDiasRestantes(fechaValidez) {
+        const hoy = new Date();
+        const validez = new Date(fechaValidez);
+        const diff = validez - hoy;
+        return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }
+
+    function obtenerClaseEstado(estado) {
+        const clases = {
+            'VIGENTE': 'bg-success',
+            'VENCIDA': 'bg-danger',
+            'FACTURADA': 'bg-info',
+            'ANULADA': 'bg-secondary'
+        };
+        return clases[estado] || 'bg-secondary';
+    }
+
+    function mostrarExito(mensaje) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'Éxito',
+                text: mensaje,
+                timer: 3000,
+                showConfirmButton: false
+            });
+        } else {
+            alert(mensaje);
+        }
+    }
+
+    function mostrarError(mensaje) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: mensaje
+            });
+        } else {
+            alert(mensaje);
+        }
+    }
+
+    // === FUNCIÓN PARA CREAR NUEVO CLIENTE ===
+    
+    window.guardarNuevoCliente = function() {
+        // Validar campos requeridos
+        const rut = document.getElementById('clienteRut').value.trim();
+        const nombre = document.getElementById('clienteNombre').value.trim();
+        const giro = document.getElementById('clienteGiro').value.trim();
+        const direccion = document.getElementById('clienteDireccion').value.trim();
+        const comuna = document.getElementById('clienteComuna').value.trim();
+        const ciudad = document.getElementById('clienteCiudad').value.trim();
+        
+        if (!rut || !nombre || !giro || !direccion || !comuna || !ciudad) {
+            mostrarError('Complete todos los campos obligatorios');
+            return;
+        }
+        
+        const formData = {
+            rut: rut,
+            nombre: nombre,
+            nombre_fantasia: document.getElementById('clienteNombreFantasia').value.trim() || nombre,
+            razon_social: nombre,
+            giro: giro,
+            direccion: direccion,
+            comuna: comuna,
+            ciudad: ciudad,
+            correoIntercambio: document.getElementById('clienteCorreoIntercambio').value.trim() || '',
+            correoVendedor: document.getElementById('clienteCorreoVendedor').value.trim() || '',
+            correoAdministrador: document.getElementById('clienteCorreoAdmin').value.trim() || '',
+            esProveedor: false
+        };
+        
+        fetch(apiUrls.crearCliente, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarExito('Cliente creado exitosamente');
+                
+                // Cerrar modal
+                bootstrap.Modal.getInstance(document.getElementById('modalNuevoCliente')).hide();
+                
+                // Limpiar formulario
+                document.getElementById('formNuevoCliente').reset();
+                
+                // Recargar lista de clientes
+                cargarClientes();
+                
+                // Seleccionar el nuevo cliente
+                setTimeout(() => {
+                    document.getElementById('clienteCotizacion').value = data.cliente_id;
+                }, 500);
+            } else {
+                mostrarError('Error al crear cliente: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error al crear cliente');
+        });
+    };
+    
+    // === FUNCIONES PÚBLICAS ===
+    
+    window.filtrarCotizaciones = function() {
+        paginaActual = 1;
+        cargarCotizaciones();
+    };
+
+    window.limpiarFiltros = function() {
+        document.getElementById('estadoCotizacion').value = '';
+        document.getElementById('filtroCliente').value = '';
+        document.getElementById('buscarTexto').value = '';
+        inicializarFechas();
+        filtrarCotizaciones();
+    };
+
+    window.actualizarListado = function() {
+        cargarCotizaciones();
+    };
+
+    window.cambiarPagina = function(pagina) {
+        if (pagina >= 1 && pagina <= Math.ceil(totalCotizaciones / cotizacionesPorPagina)) {
+            paginaActual = pagina;
+            cargarCotizaciones();
+        }
+    };
+
+    window.exportarCotizaciones = function() {
+        const filtros = obtenerFiltros();
+        window.open('/api/cotizaciones/exportar/?' + new URLSearchParams(filtros));
+    };
+
+    window.imprimirCotizacion = function() {
+        if (cotizacionActual) {
+            window.print();
+        }
+    };
+
+    window.descargarPDF = function() {
+        if (cotizacionActual) {
+            window.open(`/api/cotizaciones/${cotizacionActual.id}/pdf/`);
+        }
+    };
+
+    // Agregar primer item al abrir modal
+    document.getElementById('modalNuevaCotizacion').addEventListener('shown.bs.modal', function() {
+        if (document.querySelectorAll('#tbodyItemsCotizacion tr').length === 0) {
+            agregarItemCotizacion();
+        }
+    });
+});
+</script>
+

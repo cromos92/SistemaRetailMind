@@ -54,8 +54,8 @@ class Empresa(models.Model):
         verbose_name="RUT",
         validators=[
             RegexValidator(
-                regex=r'^\d{1,2}\.\d{3}\.\d{3}-[\dkK]$',
-                message='Formato de RUT inválido. Use formato: 12.345.678-9'
+                regex=r'^(\d{1,2}\.\d{3}\.\d{3}-[\dkK]|\d{7,8}-[\dkK])$',
+                message='Formato de RUT inválido. Use formato: 12345678-9 o 12.345.678-9'
             )
         ]
     )
@@ -245,8 +245,8 @@ class Cliente(models.Model):
         verbose_name="RUT",
         validators=[
             RegexValidator(
-                regex=r'^\d{1,2}\.\d{3}\.\d{3}-[\dkK]$',
-                message='Formato de RUT inválido. Use formato: 12.345.678-9'
+                regex=r'^(\d{1,2}\.\d{3}\.\d{3}-[\dkK]|\d{7,8}-[\dkK])$',
+                message='Formato de RUT inválido. Use formato: 12345678-9 o 12.345.678-9'
             )
         ],
         blank=True, null=True

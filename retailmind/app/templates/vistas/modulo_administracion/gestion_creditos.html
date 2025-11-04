@@ -837,6 +837,10 @@ $(document).ready(function() {
                                     <li><a class="dropdown-item" href="#" onclick="verDetalle(${credito.id})">
                                         <i class="ri-eye-line me-2"></i>Ver Detalle
                                     </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="imprimirVoucher(${credito.id})">
+                                        <i class="ri-printer-line me-2"></i>Imprimir Voucher
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
                                     ${credito.estado === 'PENDIENTE' ? `
                                         <li><a class="dropdown-item text-success" href="#" onclick="aprobarCredito(${credito.id})">
                                             <i class="ri-check-line me-2"></i>Aprobar
@@ -990,7 +994,30 @@ $(document).ready(function() {
             success: function(response) {
                 if (response.success) {
                     $('#modal-credito').modal('hide');
-                    showSuccess('Crédito creado exitosamente');
+                    
+                    // Mostrar modal de éxito con opción de imprimir
+                    Swal.fire({
+                        icon: 'success',
+                        title: '✅ Crédito Creado',
+                        html: `
+                            <div class="text-center">
+                                <h4 class="text-success mb-3">${response.numero_credito}</h4>
+                                <p class="mb-2"><strong>Trabajador:</strong> ${response.trabajador}</p>
+                                <p class="mb-4"><strong>Monto:</strong> ${formatCurrency(response.monto_aprobado)}</p>
+                                <div class="alert alert-info">
+                                    <i class="ri-information-line"></i> 
+                                    El crédito está ACTIVO y listo para usar
+                                </div>
+                                <button type="button" class="btn btn-primary btn-lg mt-3" onclick="imprimirVoucher(${response.credito_id})">
+                                    <i class="ri-printer-line"></i> Imprimir Voucher
+                                </button>
+                            </div>
+                        `,
+                        showConfirmButton: true,
+                        confirmButtonText: 'Cerrar',
+                        width: '600px'
+                    });
+                    
                     loadCreditos();
                     loadEstadisticas();
                 } else {
@@ -1321,6 +1348,12 @@ $(document).ready(function() {
             text: message
         });
     }
+    
+    // Función global para imprimir voucher
+    window.imprimirVoucher = function(creditoId) {
+        const url = `/app/api/creditos/imprimir-voucher/${creditoId}/`;
+        window.open(url, '_blank', 'width=350,height=650');
+    };
 });
 </script>
 

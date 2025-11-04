@@ -78,13 +78,14 @@ def crear_credito_trabajador(request):
                 'error': 'Monto inválido'
             }, status=400)
         
-        # Crear crédito
+        # Crear crédito directamente ACTIVO (sin aprobación)
         credito = CreditoTrabajador.objects.create(
             trabajador=trabajador,
             empresa_origen=empresa,
             sucursal=sucursal,
             tipo_credito=tipo_credito,
             monto_solicitado=monto_solicitado,
+            monto_aprobado=monto_solicitado,  # Auto-aprobado por el mismo monto
             fecha_vencimiento=fecha_vencimiento,
             motivo_solicitud=motivo_solicitud,
             observaciones_solicitud=data.get('observaciones_solicitud', ''),
@@ -95,7 +96,10 @@ def crear_credito_trabajador(request):
             aval_rut=data.get('aval_rut', ''),
             aval_telefono=data.get('aval_telefono', ''),
             solicitado_por=request.user,
-            fecha_primer_pago=data.get('fecha_primer_pago')
+            autorizado_por=request.user,  # Auto-autorizado
+            fecha_primer_pago=data.get('fecha_primer_pago'),
+            estado='ACTIVO',  # Directamente ACTIVO
+            fecha_aprobacion=timezone.now()  # Fecha de aprobación inmediata
         )
         
         # Crear registro de firma
@@ -103,9 +107,12 @@ def crear_credito_trabajador(request):
         
         return JsonResponse({
             'success': True,
-            'message': 'Crédito creado exitosamente',
+            'message': 'Crédito creado y activado exitosamente',
             'credito_id': credito.id,
-            'numero_credito': credito.numero_credito
+            'numero_credito': credito.numero_credito,
+            'monto_aprobado': float(credito.monto_aprobado),
+            'trabajador': credito.trabajador.nombre,
+            'imprimir_url': f'/app/api/creditos/imprimir-voucher/{credito.id}/'
         })
         
     except json.JSONDecodeError:
@@ -818,4 +825,502 @@ def reporte_creditos_trabajadores(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al generar reporte: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_GET
+def imprimir_voucher_credito(request, credito_id):
+    """Generar voucher térmico de crédito con código de barras y espacios para firmas"""
+    try:
+        credito = get_object_or_404(CreditoTrabajador, id=credito_id)
+        
+        # Generar HTML para impresión térmica (80mm)
+        html_template = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voucher Crédito {credito.numero_credito}</title>
+    <style>
+        @page {{
+            size: 80mm auto;
+            margin: 0;
+        }}
+        
+        * {{
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }}
+        
+        body {{
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 14px;
+            margin: 0;
+            padding: 5mm 4mm;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+        }}
+        
+        .center {{ text-align: center; }}
+        .bold {{ font-weight: 900; }}
+        .large {{ font-size: 20px; font-weight: 900; }}
+        .xlarge {{ font-size: 24px; font-weight: 900; }}
+        .medium {{ font-size: 16px; font-weight: 700; }}
+        .small {{ font-size: 12px; }}
+        
+        .header {{
+            text-align: center;
+            margin-bottom: 10px;
+        }}
+        
+        .barcode-container {{
+            text-align: center;
+            margin: 12px 0;
+            padding: 8px 0;
+            border-top: 3px solid #000;
+            border-bottom: 3px solid #000;
+        }}
+        
+        .barcode {{
+            margin: 8px auto;
+        }}
+        
+        .separator {{
+            border-top: 2px solid #000;
+            margin: 12px 0;
+        }}
+        
+        .separator-light {{
+            border-top: 1px dashed #000;
+            margin: 8px 0;
+        }}
+        
+        .info-row {{
+            margin: 8px 0;
+            font-size: 15px;
+            line-height: 1.6;
+        }}
+        
+        .info-label {{
+            font-weight: 700;
+            display: inline-block;
+            width: 45%;
+        }}
+        
+        .info-value {{
+            font-weight: 900;
+            display: inline-block;
+            width: 53%;
+            text-align: right;
+        }}
+        
+        .monto-destacado {{
+            text-align: center;
+            font-size: 28px;
+            font-weight: 900;
+            margin: 15px 0;
+            padding: 15px;
+            border: 4px double #000;
+            background: #f5f5f5;
+        }}
+        
+        .firma-section {{
+            margin-top: 15px;
+            page-break-inside: avoid;
+        }}
+        
+        .firma-box {{
+            border: 3px solid #000;
+            padding: 12px;
+            margin: 12px 0;
+            min-height: 70px;
+            background: #fff;
+        }}
+        
+        .firma-titulo {{
+            font-size: 13px;
+            font-weight: 900;
+            margin-bottom: 5px;
+        }}
+        
+        .firma-linea {{
+            border-top: 2px solid #000;
+            margin-top: 50px;
+            padding-top: 8px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.5;
+        }}
+        
+        .footer {{
+            margin-top: 15px;
+            text-align: center;
+            font-size: 10px;
+            color: #000;
+            font-weight: 600;
+        }}
+        
+        @media print {{
+            body {{
+                padding: 5mm 3mm;
+            }}
+            .no-print {{
+                display: none;
+            }}
+        }}
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+</head>
+<body>
+    <!-- HEADER -->
+    <div class="header">
+        <div class="xlarge">{credito.empresa_origen.nombre.upper()}</div>
+        <div class="medium" style="margin-top: 5px;">{credito.sucursal.alias}</div>
+        <div class="separator"></div>
+        <div class="large" style="margin: 8px 0;">VOUCHER CRÉDITO</div>
+        <div class="large" style="margin: 5px 0;">TRABAJADOR</div>
+    </div>
+    
+    <!-- CÓDIGO DE BARRAS -->
+    <div class="barcode-container">
+        <svg id="barcode"></svg>
+        <div class="xlarge" style="margin-top: 8px; letter-spacing: 2px;">{credito.numero_credito}</div>
+    </div>
+    
+    <!-- INFORMACIÓN DEL TRABAJADOR -->
+    <div class="separator"></div>
+    <div class="large center" style="margin: 12px 0;">DATOS TRABAJADOR</div>
+    
+    <div class="info-row">
+        <span class="info-label">Nombre:</span>
+        <span class="info-value">{credito.trabajador.nombre}</span>
+    </div>
+    
+    <div class="info-row">
+        <span class="info-label">RUT:</span>
+        <span class="info-value">{credito.trabajador.rut or 'N/A'}</span>
+    </div>
+    
+    <div class="info-row">
+        <span class="info-label">Código:</span>
+        <span class="info-value">{credito.trabajador.codigo_vendedor}</span>
+    </div>
+    
+    <!-- INFORMACIÓN DEL CRÉDITO -->
+    <div class="separator"></div>
+    <div class="large center" style="margin: 12px 0;">DETALLES CRÉDITO</div>
+    
+    <div class="info-row">
+        <span class="info-label">Tipo:</span><br>
+        <span class="info-value">{credito.get_tipo_credito_display()}</span>
+    </div>
+    
+    <div class="info-row">
+        <span class="info-label">Emisión:</span><br>
+        <span class="info-value">{credito.fecha_solicitud.strftime('%d/%m/%Y')}</span>
+    </div>
+    
+    <div class="info-row">
+        <span class="info-label">Vencimiento:</span><br>
+        <span class="info-value bold">{credito.fecha_vencimiento.strftime('%d/%m/%Y')}</span>
+    </div>
+    
+    <div class="info-row">
+        <span class="info-label">Cuotas:</span><br>
+        <span class="info-value">{credito.numero_cuotas}</span>
+    </div>
+    
+    {f'''<div class="info-row">
+        <span class="info-label">Interés:</span><br>
+        <span class="info-value">{float(credito.tasa_interes):.1f}%</span>
+    </div>''' if credito.tasa_interes > 0 else ''}
+    
+    <!-- MONTO -->
+    <div class="separator"></div>
+    <div class="monto-destacado">
+        MONTO APROBADO<br>
+        <span style="font-size: 36px;">${credito.monto_aprobado:,.0f}</span>
+    </div>
+    
+    <!-- MOTIVO -->
+    <div class="separator-light"></div>
+    <div class="bold" style="font-size: 14px; margin-bottom: 5px;">MOTIVO:</div>
+    <div style="margin: 5px 0; font-size: 13px; line-height: 1.4;">
+        {credito.motivo_solicitud[:180]}
+    </div>
+    
+    <!-- SECCIÓN DE FIRMAS -->
+    <div class="separator"></div>
+    <div class="firma-section">
+        <div class="large center" style="margin-bottom: 12px;">FIRMAS</div>
+        
+        <!-- Firma Autorizador -->
+        <div class="firma-box">
+            <div class="firma-titulo">AUTORIZADO POR:</div>
+            <div class="firma-linea">
+                {credito.autorizado_por.get_full_name() or credito.autorizado_por.username}<br>
+                <strong>FIRMA Y TIMBRE</strong>
+            </div>
+        </div>
+        
+        <!-- Firma Trabajador -->
+        <div class="firma-box">
+            <div class="firma-titulo">RECIBÍ CONFORME:</div>
+            <div class="firma-linea">
+                <strong>{credito.trabajador.nombre}</strong><br>
+                RUT: {credito.trabajador.rut or 'N/A'}<br>
+                <strong>FIRMA TRABAJADOR</strong>
+            </div>
+        </div>
+        
+        {f'''<!-- Firma Aval -->
+        <div class="firma-box">
+            <div class="firma-titulo">AVAL GARANTE:</div>
+            <div class="firma-linea">
+                <strong>{credito.aval_nombre}</strong><br>
+                RUT: {credito.aval_rut}<br>
+                <strong>FIRMA AVAL</strong>
+            </div>
+        </div>''' if credito.requiere_aval else ''}
+    </div>
+    
+    <!-- CONDICIONES -->
+    <div class="separator-light"></div>
+    <div style="margin-top: 10px; font-size: 11px;">
+        <div class="bold center" style="font-size: 13px; margin-bottom: 8px;">CONDICIONES:</div>
+        <div style="margin: 5px 0; padding: 0 8px; line-height: 1.5;">
+            • Compromiso de pago del trabajador<br>
+            • Descuentos vía nómina mensual<br>
+            • Documento con validez legal<br>
+            • Firmado por ambas partes
+        </div>
+    </div>
+    
+    <!-- FOOTER -->
+    <div class="separator-light"></div>
+    <div class="footer">
+        <div style="margin: 4px 0;"><strong>{timezone.now().strftime('%d/%m/%Y %H:%M')}</strong></div>
+        <div style="margin: 4px 0;">Usuario: <strong>{request.user.username}</strong></div>
+        <div style="margin: 4px 0;">Doc ID: <strong>{credito.numero_credito}</strong></div>
+    </div>
+    
+    <script>
+        // Generar código de barras más grande
+        JsBarcode("#barcode", "{credito.numero_credito}", {{
+            format: "CODE128",
+            width: 3,
+            height: 80,
+            displayValue: false,
+            margin: 5,
+            fontSize: 18,
+            fontOptions: "bold"
+        }});
+        
+        // Auto-imprimir al cargar
+        window.onload = function() {{
+            // Esperar a que el código de barras se genere
+            setTimeout(function() {{
+                window.print();
+            }}, 500);
+        }};
+    </script>
+    
+    <!-- Botón para reimprimir (solo en pantalla) -->
+    <div class="no-print" style="text-align: center; margin-top: 20px;">
+        <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
+            🖨️ Reimprimir
+        </button>
+        <button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">
+            ✖ Cerrar
+        </button>
+    </div>
+</body>
+</html>
+        """
+        
+        return HttpResponse(html_template, content_type='text/html')
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar voucher: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def validar_codigo_credito(request):
+    """Validar código de crédito desde el POS"""
+    try:
+        data = json.loads(request.body)
+        codigo_credito = data.get('codigo_credito', '').strip().upper()
+        
+        if not codigo_credito:
+            return JsonResponse({
+                'success': False,
+                'error': 'Código de crédito requerido'
+            }, status=400)
+        
+        # Buscar crédito por código
+        try:
+            credito = CreditoTrabajador.objects.select_related(
+                'trabajador', 'empresa_origen', 'sucursal'
+            ).get(numero_credito=codigo_credito)
+        except CreditoTrabajador.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Código de crédito no encontrado',
+                'codigo_invalido': True
+            }, status=404)
+        
+        # Validar que el crédito esté activo
+        if credito.estado != 'ACTIVO':
+            return JsonResponse({
+                'success': False,
+                'error': f'Crédito en estado: {credito.get_estado_display()}. Debe estar ACTIVO',
+                'estado_invalido': True
+            }, status=400)
+        
+        # Validar que tenga saldo disponible
+        if credito.saldo_pendiente <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'El crédito no tiene saldo disponible',
+                'sin_saldo': True
+            }, status=400)
+        
+        # Validar que no esté vencido
+        if credito.esta_vencido:
+            return JsonResponse({
+                'success': False,
+                'error': f'Crédito vencido desde el {credito.fecha_vencimiento.strftime("%d/%m/%Y")}',
+                'vencido': True
+            }, status=400)
+        
+        # Retornar datos del crédito
+        return JsonResponse({
+            'success': True,
+            'message': 'Crédito válido',
+            'credito': {
+                'id': credito.id,
+                'numero_credito': credito.numero_credito,
+                'trabajador': {
+                    'id': credito.trabajador.id,
+                    'nombre': credito.trabajador.nombre,
+                    'rut': credito.trabajador.rut or 'N/A',
+                    'codigo_vendedor': credito.trabajador.codigo_vendedor
+                },
+                'monto_aprobado': float(credito.monto_aprobado),
+                'monto_usado': float(credito.monto_pagado),
+                'saldo_disponible': float(credito.saldo_pendiente),
+                'fecha_vencimiento': credito.fecha_vencimiento.strftime('%d/%m/%Y'),
+                'dias_para_vencimiento': credito.dias_para_vencimiento,
+                'numero_cuotas': credito.numero_cuotas,
+                'tipo_credito': credito.get_tipo_credito_display()
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al validar crédito: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def usar_credito_en_venta(request):
+    """Registrar uso de crédito en una venta del POS"""
+    try:
+        data = json.loads(request.body)
+        
+        credito_id = data.get('credito_id')
+        monto_usado = data.get('monto_usado')
+        ticket_id = data.get('ticket_id')  # Opcional al crear
+        
+        if not all([credito_id, monto_usado]):
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de crédito y monto son requeridos'
+            }, status=400)
+        
+        # Validar monto
+        try:
+            monto_usado = Decimal(str(monto_usado))
+            if monto_usado <= 0:
+                raise ValueError("El monto debe ser mayor a 0")
+        except (ValueError, TypeError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Monto inválido'
+            }, status=400)
+        
+        # Obtener crédito
+        credito = get_object_or_404(CreditoTrabajador, id=credito_id)
+        
+        # Validar estado
+        if credito.estado != 'ACTIVO':
+            return JsonResponse({
+                'success': False,
+                'error': f'El crédito está en estado: {credito.get_estado_display()}'
+            }, status=400)
+        
+        # Validar saldo disponible
+        if monto_usado > credito.saldo_pendiente:
+            return JsonResponse({
+                'success': False,
+                'error': f'Monto excede el saldo disponible (${credito.saldo_pendiente:,.0f})',
+                'saldo_disponible': float(credito.saldo_pendiente)
+            }, status=400)
+        
+        # Registrar el uso del crédito
+        with transaction.atomic():
+            # Actualizar monto pagado (usado)
+            credito.monto_pagado += monto_usado
+            
+            # Si se pagó todo, cambiar estado a PAGADO
+            if credito.saldo_pendiente <= 0:
+                credito.estado = 'PAGADO'
+            
+            credito.save()
+            
+            # Registrar como pago
+            from .models import PagoCreditoTrabajador
+            pago = PagoCreditoTrabajador.objects.create(
+                credito=credito,
+                monto_pago=monto_usado,
+                fecha_pago=timezone.now().date(),
+                metodo_pago='CREDITO_TRABAJADOR',
+                observaciones=f'Compra en POS{f" - Ticket #{ticket_id}" if ticket_id else ""}',
+                registrado_por=request.user
+            )
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Crédito usado exitosamente',
+            'nuevo_saldo': float(credito.saldo_pendiente),
+            'estado_credito': credito.estado,
+            'estado_display': credito.get_estado_display(),
+            'pago_id': pago.id,
+            'credito_pagado_completo': credito.estado == 'PAGADO'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al usar crédito: {str(e)}'
         }, status=500)

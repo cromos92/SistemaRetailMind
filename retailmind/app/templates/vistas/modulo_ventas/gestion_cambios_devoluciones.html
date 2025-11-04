@@ -12,10 +12,34 @@
 <link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
 <style>
     .card-stats {
-        background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 15px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+    
+    .card-stats:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    
+    .bg-soft {
+        background-color: rgba(13, 110, 253, 0.1) !important;
+    }
+    
+    .avatar-sm {
+        height: 3rem;
+        width: 3rem;
+    }
+    
+    .avatar-title {
+        align-items: center;
+        display: flex;
+        font-size: 1rem;
+        font-weight: 500;
+        height: 100%;
+        justify-content: center;
+        width: 100%;
     }
     
     .status-badge {
@@ -67,17 +91,39 @@
     }
     
     .total-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 15px;
+        background: #ffffff;
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        padding: 20px;
         text-align: center;
         margin: 10px 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     
-    .diferencia-positiva { color: #dc3545; font-weight: bold; }
-    .diferencia-negativa { color: #28a745; font-weight: bold; }
-    .diferencia-cero { color: #6c757d; font-weight: bold; }
+    .diferencia-positiva { 
+        color: #dc3545 !important; 
+        font-weight: bold;
+    }
+    .diferencia-negativa { 
+        color: #28a745 !important; 
+        font-weight: bold;
+    }
+    .diferencia-cero { 
+        color: #6c757d !important; 
+        font-weight: bold;
+    }
+    
+    #card-diferencia.bg-danger { background-color: #fff5f5 !important; }
+    #card-diferencia.bg-danger #label-diferencia { color: #dc3545; }
+    #card-diferencia.bg-danger #resumen-diferencia { color: #dc3545 !important; }
+    
+    #card-diferencia.bg-success { background-color: #f0fdf4 !important; }
+    #card-diferencia.bg-success #label-diferencia { color: #16a34a; }
+    #card-diferencia.bg-success #resumen-diferencia { color: #16a34a !important; }
+    
+    #card-diferencia.bg-secondary { background-color: #f8f9fa !important; }
+    #card-diferencia.bg-secondary #label-diferencia { color: #6c757d; }
+    #card-diferencia.bg-secondary #resumen-diferencia { color: #6c757d !important; }
     
     .timeline {
         position: relative;
@@ -141,62 +187,78 @@
     </div>
 
     <!-- Estadísticas -->
-    <div class="row mb-4" id="estadisticas-cards">
+    <div class="row mb-4 g-3" id="estadisticas-cards">
         <div class="col-md-3">
-            <div class="card card-stats">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <p class="card-category">Total Cambios</p>
-                            <h3 class="card-title" id="stat-total">0</h3>
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-primary bg-soft">
+                                <span class="avatar-title rounded-circle bg-primary">
+                                    <i class="ri-exchange-line text-white fs-4"></i>
+                                </span>
+                            </div>
                         </div>
-                        <div class="card-icon">
-                            <i class="fas fa-exchange-alt fa-2x"></i>
+                        <div class="flex-grow-1 ms-3">
+                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Total Cambios</p>
+                            <h3 class="fs-3 fw-bold mb-0" id="stat-total">0</h3>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card card-stats">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <p class="card-category">Pendientes</p>
-                            <h3 class="card-title" id="stat-pendientes">0</h3>
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-warning bg-soft">
+                                <span class="avatar-title rounded-circle bg-warning">
+                                    <i class="ri-time-line text-white fs-4"></i>
+                                </span>
+                            </div>
                         </div>
-                        <div class="card-icon">
-                            <i class="fas fa-clock fa-2x"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card card-stats">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <p class="card-category">Completados</p>
-                            <h3 class="card-title" id="stat-completados">0</h3>
-                        </div>
-                        <div class="card-icon">
-                            <i class="fas fa-check-circle fa-2x"></i>
+                        <div class="flex-grow-1 ms-3">
+                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Pendientes</p>
+                            <h3 class="fs-3 fw-bold mb-0" id="stat-pendientes">0</h3>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card card-stats">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <p class="card-category">Diferencia Total</p>
-                            <h3 class="card-title" id="stat-diferencia">$0</h3>
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-success bg-soft">
+                                <span class="avatar-title rounded-circle bg-success">
+                                    <i class="ri-check-double-line text-white fs-4"></i>
+                                </span>
+                            </div>
                         </div>
-                        <div class="card-icon">
-                            <i class="fas fa-dollar-sign fa-2x"></i>
+                        <div class="flex-grow-1 ms-3">
+                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Completados</p>
+                            <h3 class="fs-3 fw-bold mb-0" id="stat-completados">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm rounded-circle bg-info bg-soft">
+                                <span class="avatar-title rounded-circle bg-info">
+                                    <i class="ri-money-dollar-circle-line text-white fs-4"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Diferencia Total</p>
+                            <h3 class="fs-3 fw-bold mb-0" id="stat-diferencia">$0</h3>
                         </div>
                     </div>
                 </div>
@@ -299,18 +361,36 @@
                 <button type="button" class="btn-close" data-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <!-- Paso 1: Buscar Ticket -->
+                <!-- Paso 1: Buscar DTE Original -->
                 <div id="paso-buscar-ticket">
-                    <h6 class="mb-3">📋 Paso 1: Buscar Ticket Original</h6>
+                    <h6 class="mb-3">📋 Paso 1: Buscar Documento de Venta</h6>
+                    <div class="alert alert-info">
+                        <i class="ri-information-line"></i> 
+                        Ingrese el <strong>número de DTE</strong> (Factura o Boleta Electrónica) y la <strong>fecha de compra</strong>
+                    </div>
                     <div class="row">
                         <div class="col-md-4">
-                            <label class="form-label">Número de Ticket</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control" id="input-ticket-correlativo" placeholder="Ingrese número de ticket">
-                                <button class="btn btn-primary" onclick="buscarTicketParaCambio()">
+                            <label class="form-label fw-bold">Fecha de Compra *</label>
+                            <input type="date" class="form-control form-control-lg" id="input-fecha-compra" required>
+                            <small class="text-danger">Campo obligatorio</small>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">Número de DTE (Factura/Boleta) *</label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text">
+                                    <i class="ri-file-list-line"></i>
+                                </span>
+                                <input type="text" class="form-control" id="input-ticket-correlativo" placeholder="Ej: 12345" required>
+                                <button class="btn btn-primary" onclick="buscarDocumentoParaCambio()">
                                     <i class="fas fa-search"></i> Buscar
                                 </button>
                             </div>
+                            <small class="text-muted">Número del documento tributario electrónico</small>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-outline-secondary w-100" onclick="limpiarBusqueda()">
+                                <i class="ri-refresh-line"></i> Limpiar
+                            </button>
                         </div>
                     </div>
                     
@@ -463,22 +543,28 @@
                     
                     <div class="row">
                         <div class="col-md-4">
-                            <div class="total-section">
-                                <h6>Monto Original</h6>
-                                <h4 id="resumen-monto-original">$0</h4>
+                            <div class="card bg-light border-0 shadow-sm">
+                                <div class="card-body text-center p-4">
+                                    <small class="text-muted text-uppercase fw-bold d-block mb-2">Monto Original</small>
+                                    <h3 class="mb-0 fw-bold text-dark" id="resumen-monto-original">$0</h3>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="total-section">
-                                <h6>Monto Nuevo</h6>
-                                <h4 id="resumen-monto-nuevo">$0</h4>
+                            <div class="card bg-light border-0 shadow-sm">
+                                <div class="card-body text-center p-4">
+                                    <small class="text-muted text-uppercase fw-bold d-block mb-2">Monto Nuevo</small>
+                                    <h3 class="mb-0 fw-bold text-primary" id="resumen-monto-nuevo">$0</h3>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="total-section">
-                                <h6>Diferencia</h6>
-                                <h4 id="resumen-diferencia">$0</h4>
-                                <small id="resumen-diferencia-texto">-</small>
+                            <div class="card border-0 shadow-sm bg-light" id="card-diferencia">
+                                <div class="card-body text-center p-4">
+                                    <small class="text-uppercase fw-bold d-block mb-2" id="label-diferencia">Diferencia</small>
+                                    <h2 class="mb-1 fw-bold" id="resumen-diferencia">$0</h2>
+                                    <span class="badge bg-secondary" id="resumen-diferencia-texto">Sin diferencia</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -738,10 +824,10 @@ function configurarEventos() {
     // Filtros en tiempo real
     $('#filtro-buscar').on('input', debounce(aplicarFiltros, 500));
     
-    // Enter en búsqueda de ticket
-    $('#input-ticket-correlativo').on('keypress', function(e) {
+    // Enter en búsqueda de documento
+    $('#input-ticket-correlativo, #input-fecha-compra').on('keypress', function(e) {
         if (e.which === 13) {
-            buscarTicketParaCambio();
+            buscarDocumentoParaCambio();
         }
     });
     
@@ -779,7 +865,7 @@ function cargarCambiosDevoluciones(page = 1) {
         per_page: 20
     };
     
-    $.get('/ventas/api/cambios-devoluciones/', filtros)
+    $.get('/app/ventas/api/cambios-devoluciones/', filtros)
         .done(function(response) {
             if (response.success) {
                 cambiosData = response.cambios;
@@ -954,39 +1040,122 @@ function resetearFormularioNuevoCambio() {
     $('#textarea-obs-vendedor').val('');
 }
 
-function buscarTicketParaCambio() {
-    const correlativo = $('#input-ticket-correlativo').val();
+function buscarDocumentoParaCambio() {
+    const numero = $('#input-ticket-correlativo').val().trim();
+    const fecha = $('#input-fecha-compra').val();
     
-    if (!correlativo) {
-        mostrarError('Ingrese el número de ticket');
+    // Validar campos obligatorios
+    if (!fecha) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Fecha requerida',
+            text: 'La fecha de compra es obligatoria para buscar el documento'
+        });
+        $('#input-fecha-compra').focus();
         return;
     }
     
-    mostrarLoading('Buscando ticket...');
+    if (!numero) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Número requerido',
+            text: 'Ingrese el número del DTE (Factura o Boleta)'
+        });
+        $('#input-ticket-correlativo').focus();
+        return;
+    }
     
-    $.get('/ventas/api/buscar-ticket-cambio/', { correlativo: correlativo })
+    mostrarLoading('Buscando DTE...');
+    
+    const params = {
+        numero: numero,
+        tipo_documento: 'dte',  // Siempre buscar por DTE
+        fecha_compra: fecha
+    };
+    
+    $.get('/app/ventas/api/buscar-documento-cambio/', params)
         .done(function(response) {
             ocultarLoading();
             
             if (response.success) {
-                ticketActual = response.ticket;
-                mostrarInformacionTicket(response.ticket);
+                ticketActual = response.documento;
+                mostrarInformacionDocumento(response.documento);
                 
-                if (response.ticket.puede_cambiar) {
+                if (response.documento.puede_cambiar) {
                     $('#btn-siguiente').show();
                 } else {
-                    mostrarError('Este ticket no puede ser cambiado. Verifique el plazo y estado.');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'No se puede cambiar',
+                        text: 'Este documento no puede ser cambiado. Verifique el plazo (30 días) y que esté pagado.'
+                    });
                 }
             } else {
-                mostrarError(response.error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Documento no encontrado',
+                    html: `
+                        <p>${response.error}</p>
+                        <hr>
+                        <p class="small text-muted">
+                            Verifique que:
+                            <br>• El número de DTE sea correcto
+                            <br>• La fecha de compra coincida
+                            <br>• El documento pertenezca a esta sucursal
+                        </p>
+                    `
+                });
             }
         })
         .fail(function() {
             ocultarLoading();
-            mostrarError('Error de conexión al buscar ticket');
+            mostrarError('Error de conexión al buscar documento');
         });
 }
 
+function limpiarBusqueda() {
+    $('#input-ticket-correlativo').val('');
+    $('#input-fecha-compra').val('');
+    $('#info-ticket').hide();
+    $('#paso-seleccionar-productos').hide();
+    $('#btn-siguiente').hide();
+    ticketActual = null;
+    productosOriginales = [];
+    productosNuevos = [];
+}
+
+// Mantener compatibilidad con función anterior
+function buscarTicketParaCambio() {
+    buscarDocumentoParaCambio();
+}
+
+function mostrarInformacionDocumento(documento) {
+    // Determinar si es ticket o DTE
+    const esTicket = documento.tipo === 'TICKET' || documento.correlativo !== undefined;
+    const numero = esTicket ? documento.correlativo : documento.numero_documento;
+    const tipoTexto = esTicket ? 'Ticket' : documento.tipo_documento;
+    
+    $('#ticket-correlativo').text(`${tipoTexto} #${numero}`);
+    $('#ticket-fecha').text(documento.fecha);
+    $('#ticket-cliente').text(documento.cliente_nombre || 'Sin nombre');
+    $('#ticket-total').text('$' + formatearNumero(documento.total));
+    $('#ticket-vendedor').text(documento.vendedor);
+    $('#ticket-dias').text(documento.dias_transcurridos);
+    $('#ticket-fecha-limite').text(documento.fecha_limite_cambio);
+    $('#ticket-estado-plazo').html(
+        documento.dentro_del_plazo 
+            ? '<span class="badge bg-success">Dentro del plazo</span>' 
+            : '<span class="badge bg-danger">Fuera del plazo</span>'
+    );
+    
+    $('#info-ticket').show();
+    $('#paso-seleccionar-productos').show();
+    
+    // Cargar productos originales
+    cargarProductosOriginales();
+}
+
+// Mantener compatibilidad
 function mostrarInformacionTicket(ticket) {
     $('#ticket-correlativo').text('#' + ticket.correlativo);
     $('#ticket-fecha').text(ticket.fecha);
@@ -1084,13 +1253,17 @@ function cambiarTipoOperacion() {
 function buscarProductosParaCambio() {
     const termino = $('#input-buscar-producto').val();
     
-    if (!termino) {
-        mostrarError('Ingrese un término de búsqueda');
+    if (!termino || termino.length < 2) {
+        mostrarError('Ingrese al menos 2 caracteres');
         return;
     }
     
-    $.get('/ventas/api/buscar-productos-cambio/', { termino: termino })
+    mostrarLoading('Buscando productos...');
+    
+    $.get('/app/ventas/api/buscar-productos-cambio/', { termino: termino })
         .done(function(response) {
+            ocultarLoading();
+            
             if (response.success) {
                 mostrarResultadosBusquedaProductos(response.productos);
             } else {
@@ -1098,13 +1271,164 @@ function buscarProductosParaCambio() {
             }
         })
         .fail(function() {
+            ocultarLoading();
             mostrarError('Error al buscar productos');
         });
 }
 
 function mostrarResultadosBusquedaProductos(productos) {
-    // Implementar modal de búsqueda de productos
-    // Similar al modal existente en el HTML de ejemplo
+    const container = $('#tbody-productos-busqueda');
+    
+    if (!productos || productos.length === 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin resultados',
+            text: 'No se encontraron productos con ese término'
+        });
+        return;
+    }
+    
+    // Mostrar modal con los productos encontrados
+    Swal.fire({
+        title: 'Seleccionar Producto',
+        html: `
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>SKU</th>
+                            <th>Producto</th>
+                            <th>Talla</th>
+                            <th>Stock</th>
+                            <th>Precio</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${productos.map(p => `
+                            <tr>
+                                <td><code>${p.sku}</code></td>
+                                <td>
+                                    <div><strong>${p.articulo}</strong></div>
+                                    <small class="text-muted">${p.descripcion || ''}</small>
+                                </td>
+                                <td><span class="badge bg-info">${p.talla}</span></td>
+                                <td><span class="badge bg-success">${p.stock_disponible}</span></td>
+                                <td><strong>$${formatearNumero(p.precio_venta)}</strong></td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" 
+                                            onclick="agregarProductoNuevo(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                                        <i class="ri-add-line"></i> Agregar
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `,
+        width: '800px',
+        showConfirmButton: false,
+        showCloseButton: true
+    });
+}
+
+function agregarProductoNuevo(producto) {
+    // Verificar si ya está agregado
+    const existe = productosNuevos.find(p => p.id === producto.id);
+    if (existe) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Producto ya agregado',
+            text: 'Este producto ya está en la lista. Modifique la cantidad si es necesario.',
+            timer: 2000
+        });
+        return;
+    }
+    
+    // Agregar producto a la lista
+    productosNuevos.push({
+        ...producto,
+        cantidad: 1
+    });
+    
+    actualizarTablaProductosNuevos();
+    Swal.close();
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'Producto agregado',
+        text: `${producto.articulo} agregado a la lista`,
+        timer: 1500,
+        showConfirmButton: false
+    });
+}
+
+function actualizarTablaProductosNuevos() {
+    const tbody = $('#tbody-productos-nuevos');
+    tbody.empty();
+    
+    if (productosNuevos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="8" class="text-center text-muted">
+                    No hay productos nuevos seleccionados
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    productosNuevos.forEach((producto, index) => {
+        const subtotal = producto.cantidad * producto.precio_venta;
+        tbody.append(`
+            <tr>
+                <td><code>${producto.sku}</code></td>
+                <td>
+                    <div><strong>${producto.articulo}</strong></div>
+                    <small>${producto.descripcion || ''}</small>
+                </td>
+                <td>${producto.marca || '-'}</td>
+                <td><span class="badge bg-info">${producto.talla}</span></td>
+                <td><span class="badge bg-success">${producto.stock_disponible}</span></td>
+                <td>$${formatearNumero(producto.precio_venta)}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" 
+                           min="1" max="${producto.stock_disponible}" 
+                           value="${producto.cantidad}"
+                           onchange="cambiarCantidadProductoNuevo(${index}, this.value)"
+                           style="width: 70px;">
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarProductoNuevo(${index})">
+                        <i class="ri-delete-bin-line"></i>
+                    </button>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function cambiarCantidadProductoNuevo(index, nuevaCantidad) {
+    nuevaCantidad = parseInt(nuevaCantidad) || 1;
+    
+    if (productosNuevos[index]) {
+        if (nuevaCantidad > productosNuevos[index].stock_disponible) {
+            mostrarError(`Stock insuficiente. Máximo: ${productosNuevos[index].stock_disponible}`);
+            actualizarTablaProductosNuevos();
+            return;
+        }
+        
+        productosNuevos[index].cantidad = nuevaCantidad;
+        actualizarTablaProductosNuevos();
+    }
+}
+
+function eliminarProductoNuevo(index) {
+    if (confirm('¿Eliminar este producto de la lista?')) {
+        productosNuevos.splice(index, 1);
+        actualizarTablaProductosNuevos();
+    }
 }
 
 function validarSeleccionProductos() {
@@ -1130,8 +1454,16 @@ function validarSeleccionProductos() {
     });
     
     if (productosSeleccionados === 0) {
-        mostrarError('Debe seleccionar al menos un producto');
+        mostrarError('Debe seleccionar al menos un producto original a devolver/cambiar');
         return false;
+    }
+    
+    // Si es cambio, validar que haya productos nuevos
+    if (tipoOperacion === 'CAMBIO_SIMPLE' || tipoOperacion === 'CAMBIO_CON_DIFERENCIA') {
+        if (productosNuevos.length === 0) {
+            mostrarError('Debe agregar al menos un producto nuevo para el cambio');
+            return false;
+        }
     }
     
     return true;
@@ -1142,31 +1474,51 @@ function generarResumen() {
     let montoOriginal = 0;
     let montoNuevo = 0;
     
-    // Implementar cálculos de resumen
-    // ...
+    // Calcular monto original de productos seleccionados
+    ticketActual.productos.forEach((producto, index) => {
+        if ($(`#check-producto-${index}`).is(':checked')) {
+            const cantidad = parseInt($(`#cantidad-${index}`).val()) || 0;
+            montoOriginal += cantidad * producto.precio_unitario;
+        }
+    });
+    
+    // Calcular monto nuevo de productos de cambio
+    productosNuevos.forEach(producto => {
+        montoNuevo += (producto.cantidad || 0) * (producto.precio_venta || 0);
+    });
     
     const diferencia = montoNuevo - montoOriginal;
     
+    // Actualizar montos
     $('#resumen-monto-original').text('$' + formatearNumero(montoOriginal));
     $('#resumen-monto-nuevo').text('$' + formatearNumero(montoNuevo));
     $('#resumen-diferencia').text('$' + formatearNumero(Math.abs(diferencia)));
     
+    // Limpiar clases anteriores
+    $('#resumen-diferencia').removeClass('diferencia-positiva diferencia-negativa diferencia-cero text-danger text-success text-secondary');
+    $('#card-diferencia').removeClass('bg-danger bg-success bg-secondary').addClass('bg-light');
+    $('#resumen-diferencia-texto').removeClass('badge-danger badge-success badge-secondary').addClass('badge');
+    
+    // Aplicar estilos según la diferencia
     if (diferencia > 0) {
-        $('#resumen-diferencia').addClass('diferencia-positiva');
-        $('#resumen-diferencia-texto').text('Cliente debe pagar');
+        $('#resumen-diferencia').addClass('diferencia-positiva text-danger');
+        $('#card-diferencia').removeClass('bg-light').addClass('bg-danger');
+        $('#resumen-diferencia-texto').removeClass('bg-secondary').addClass('bg-danger').text('Cliente debe pagar');
     } else if (diferencia < 0) {
-        $('#resumen-diferencia').addClass('diferencia-negativa');
-        $('#resumen-diferencia-texto').text('Se devuelve al cliente');
+        $('#resumen-diferencia').addClass('diferencia-negativa text-success');
+        $('#card-diferencia').removeClass('bg-light').addClass('bg-success');
+        $('#resumen-diferencia-texto').removeClass('bg-secondary').addClass('bg-success').text('Se devuelve al cliente');
     } else {
-        $('#resumen-diferencia').addClass('diferencia-cero');
-        $('#resumen-diferencia-texto').text('Sin diferencia');
+        $('#resumen-diferencia').addClass('diferencia-cero text-secondary');
+        $('#card-diferencia').removeClass('bg-danger bg-success').addClass('bg-secondary');
+        $('#resumen-diferencia-texto').addClass('bg-secondary').text('Sin diferencia');
     }
 }
 
 function crearCambioDevolucion() {
     // Recopilar datos del formulario
     const datos = {
-        ticket_correlativo: ticketActual.correlativo,
+        ticket_correlativo: ticketActual.correlativo,  // Usar correlativo del ticket (puede ser de referencia)
         tipo_operacion: $('#select-tipo-operacion').val(),
         motivo_principal: $('#select-motivo-principal').val(),
         observaciones_cliente: $('#textarea-obs-cliente').val(),
@@ -1174,23 +1526,39 @@ function crearCambioDevolucion() {
         productos: []
     };
     
-    // Recopilar productos seleccionados
+    console.log('📋 DEBUG - Datos a enviar:', datos);
+    console.log('📋 ticketActual completo:', ticketActual);
+    
+    // Recopilar productos originales seleccionados
     ticketActual.productos.forEach((producto, index) => {
         if ($(`#check-producto-${index}`).is(':checked')) {
-            datos.productos.push({
+            const productoData = {
                 ticket_producto_id: producto.id,
                 cantidad: parseInt($(`#cantidad-${index}`).val()),
                 condicion_producto: $(`#condicion-${index}`).val(),
-                apto_para_venta: $(`#condicion-${index}`).val() !== 'NO_APTO',
-                // Agregar productos nuevos si aplica
-            });
+                apto_para_venta: $(`#condicion-${index}`).val() !== 'NO_APTO'
+            };
+            
+            // Si es cambio, buscar el producto nuevo correspondiente
+            if (datos.tipo_operacion === 'CAMBIO_SIMPLE' || datos.tipo_operacion === 'CAMBIO_CON_DIFERENCIA') {
+                // Por ahora, asignar el primer producto nuevo si existe
+                // TODO: Mejorar para permitir mapeo específico 1 a 1
+                if (productosNuevos.length > 0) {
+                    const productoNuevo = productosNuevos[index % productosNuevos.length];
+                    productoData.producto_nuevo_id = productoNuevo.id;
+                    productoData.cantidad_nueva = productoNuevo.cantidad;
+                    productoData.precio_nuevo = productoNuevo.precio_venta;
+                }
+            }
+            
+            datos.productos.push(productoData);
         }
     });
     
-    mostrarLoading('Creando solicitud...');
+    mostrarLoading('Creando solicitud de cambio...');
     
     $.ajax({
-        url: '/ventas/api/crear-cambio-devolucion/',
+        url: '/app/ventas/api/crear-cambio-devolucion/',
         method: 'POST',
         data: JSON.stringify(datos),
         contentType: 'application/json',
@@ -1198,16 +1566,33 @@ function crearCambioDevolucion() {
             ocultarLoading();
             
             if (response.success) {
-                mostrarExito('Solicitud creada exitosamente: ' + response.numero_operacion);
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Solicitud Creada!',
+                    html: `
+                        <p><strong>Número de operación:</strong> ${response.numero_operacion}</p>
+                        <p><strong>Diferencia de monto:</strong> $${Math.abs(response.diferencia_monto).toLocaleString()}</p>
+                        ${response.diferencia_monto > 0 ? 
+                            '<p class="text-danger">Cliente debe pagar la diferencia</p>' :
+                            response.diferencia_monto < 0 ?
+                            '<p class="text-success">A favor del cliente</p>' :
+                            '<p class="text-info">Cambio sin diferencia</p>'
+                        }
+                        <hr>
+                        <p class="small text-muted">La solicitud requiere aprobación antes de completarse</p>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
                 $('#modalNuevoCambio').modal('hide');
                 cargarCambiosDevoluciones();
             } else {
                 mostrarError(response.error);
             }
         },
-        error: function() {
+        error: function(xhr) {
             ocultarLoading();
-            mostrarError('Error de conexión al crear solicitud');
+            const error = xhr.responseJSON?.error || 'Error de conexión al crear solicitud';
+            mostrarError(error);
         }
     });
 }
@@ -1360,7 +1745,7 @@ function confirmarDecision() {
     mostrarLoading('Procesando...');
     
     $.ajax({
-        url: '/ventas/api/aprobar-cambio-devolucion/',
+        url: '/app/ventas/api/aprobar-cambio-devolucion/',
         method: 'POST',
         data: JSON.stringify(datos),
         contentType: 'application/json',
@@ -1433,7 +1818,7 @@ function completarCambioDevolucion() {
     mostrarLoading('Completando cambio...');
     
     $.ajax({
-        url: '/ventas/api/completar-cambio-devolucion/',
+        url: '/app/ventas/api/completar-cambio-devolucion/',
         method: 'POST',
         data: JSON.stringify(datos),
         contentType: 'application/json',
@@ -1441,10 +1826,45 @@ function completarCambioDevolucion() {
             ocultarLoading();
             
             if (response.success) {
-                mostrarExito(response.message);
+                // Mostrar mensaje de éxito con opciones
                 if (response.ticket_nuevo) {
-                    mostrarExito('Nuevo ticket generado: #' + response.ticket_nuevo);
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Cambio Completado!',
+                        html: `
+                            <div class="text-start">
+                                <p class="mb-2"><strong>Operación:</strong> ${response.numero_operacion || ''}</p>
+                                <p class="mb-2"><strong>Nuevo Ticket:</strong> #${response.ticket_nuevo}</p>
+                                ${response.diferencia_monto > 0 ? 
+                                    `<p class="mb-2 text-danger"><strong>Diferencia a pagar:</strong> $${Math.abs(response.diferencia_monto).toLocaleString()}</p>` :
+                                    response.diferencia_monto < 0 ?
+                                    `<p class="mb-2 text-success"><strong>Diferencia a favor:</strong> $${Math.abs(response.diferencia_monto).toLocaleString()}</p>` :
+                                    '<p class="mb-2 text-info"><strong>Cambio sin diferencia</strong></p>'
+                                }
+                            </div>
+                        `,
+                        showCancelButton: response.puede_imprimir,
+                        confirmButtonText: response.puede_imprimir ? '<i class="ri-printer-line"></i> Imprimir Ticket' : 'Aceptar',
+                        cancelButtonText: 'Cerrar',
+                        confirmButtonColor: '#198754',
+                        cancelButtonColor: '#6c757d'
+                    }).then((result) => {
+                        if (result.isConfirmed && response.ticket_data) {
+                            imprimirTicketCambio(response.ticket_data);
+                        }
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Devolución Completada!',
+                        html: `
+                            <p>Operación: ${response.numero_operacion || ''}</p>
+                            <p class="text-success">Devolución procesada exitosamente</p>
+                        `,
+                        confirmButtonText: 'Aceptar'
+                    });
                 }
+                
                 $('#modalCompletarCambio').modal('hide');
                 $('#modalDetalleCambio').modal('hide');
                 cargarCambiosDevoluciones();
@@ -1459,6 +1879,289 @@ function completarCambioDevolucion() {
     });
 }
 
+// Función para imprimir ticket de cambio
+function imprimirTicketCambio(ticketData) {
+    const ticketHtml = generarHtmlTicket(ticketData);
+    const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+    ventanaImpresion.document.write(ticketHtml);
+    ventanaImpresion.document.close();
+
+    ventanaImpresion.onload = function() {
+        ventanaImpresion.print();
+        // No cerrar automáticamente para que el usuario pueda reimprimir si es necesario
+    };
+}
+
+// Generar HTML para ticket térmico 80mm (igual que en ticket_venta.html)
+function generarHtmlTicket(ticketData) {
+    const productos = ticketData.productos || [];
+    const sucursal = ticketData.sucursal || {};
+    const vendedor = ticketData.vendedor || {};
+    const cliente = ticketData.cliente || {};
+    const totales = ticketData.totales || {};
+
+    const formatearMoneda = (valor) => {
+        const numero = parseInt(valor, 10) || 0;
+        return numero.toLocaleString('es-CL');
+    };
+
+    const productosHtml = productos.map((producto) => {
+        const cant = String(producto.cantidad || 0).padEnd(4);
+        const articulo = String(producto.articulo || '').substring(0, 20);
+        const desc = String(producto.descripcion || '').substring(0, 20);
+        const talla = String(producto.talla || '-').substring(0, 3);
+        const precio = formatearMoneda(producto.precio || 0);
+        const subtotal = formatearMoneda(producto.subtotal || 0);
+        
+        return `
+            <div class="item">
+                <div class="item-header">
+                    <span class="item-cant">${cant}x</span>
+                    <span class="item-nombre">${articulo}</span>
+                </div>
+                <div class="item-desc">${desc} - Talla: ${talla}</div>
+                <div class="item-precio">
+                    <span>@$${precio}</span>
+                    <span class="item-total">$${subtotal}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Ticket de Cambio</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                
+                body {
+                    font-family: 'Courier New', 'Consolas', monospace;
+                    font-size: 11px;
+                    width: 80mm;
+                    max-width: 80mm;
+                    padding: 5mm;
+                    background: #fff;
+                    color: #000;
+                }
+                
+                .header {
+                    text-align: center;
+                    margin-bottom: 8px;
+                    padding-bottom: 8px;
+                    border-bottom: 1px dashed #000;
+                }
+                
+                .header strong {
+                    font-size: 13px;
+                    display: block;
+                    margin-bottom: 3px;
+                }
+                
+                .header div {
+                    font-size: 10px;
+                    line-height: 1.4;
+                }
+                
+                .cambio-notice {
+                    background: #f0f0f0;
+                    padding: 8px;
+                    text-align: center;
+                    margin-bottom: 8px;
+                    border: 1px solid #000;
+                    font-weight: bold;
+                }
+                
+                .info {
+                    font-size: 10px;
+                    margin-bottom: 8px;
+                    line-height: 1.5;
+                }
+                
+                .info div {
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 2px 0;
+                }
+                
+                .info strong {
+                    min-width: 70px;
+                }
+                
+                .separador {
+                    border-top: 1px dashed #000;
+                    margin: 8px 0;
+                }
+                
+                .items {
+                    margin: 8px 0;
+                }
+                
+                .item {
+                    margin-bottom: 8px;
+                    padding-bottom: 5px;
+                    font-size: 10px;
+                }
+                
+                .item-header {
+                    display: flex;
+                    gap: 5px;
+                    font-weight: bold;
+                    margin-bottom: 2px;
+                }
+                
+                .item-cant {
+                    min-width: 30px;
+                }
+                
+                .item-nombre {
+                    flex: 1;
+                }
+                
+                .item-desc {
+                    font-size: 9px;
+                    color: #333;
+                    margin-left: 35px;
+                    margin-bottom: 2px;
+                }
+                
+                .item-precio {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-left: 35px;
+                    font-size: 10px;
+                }
+                
+                .item-total {
+                    font-weight: bold;
+                }
+                
+                .totales {
+                    border-top: 1px solid #000;
+                    padding-top: 8px;
+                    margin-top: 8px;
+                    font-size: 11px;
+                }
+                
+                .totales div {
+                    display: flex;
+                    justify-content: space-between;
+                    margin: 4px 0;
+                }
+                
+                .totales .total-final {
+                    font-size: 13px;
+                    font-weight: bold;
+                    border-top: 1px solid #000;
+                    padding-top: 5px;
+                    margin-top: 5px;
+                }
+                
+                .footer {
+                    text-align: center;
+                    margin-top: 10px;
+                    padding-top: 8px;
+                    border-top: 1px dashed #000;
+                    font-size: 9px;
+                    line-height: 1.6;
+                }
+                
+                .footer div {
+                    margin: 3px 0;
+                }
+                
+                @media print {
+                    body { width: 80mm; }
+                    @page { 
+                        size: 80mm auto; 
+                        margin: 0;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <strong>${sucursal.empresa || 'SUCURSAL'}</strong>
+                <div>${sucursal.alias || ''}</div>
+                <div>${sucursal.direccion || ''}</div>
+                <div>${sucursal.rut_empresa ? `RUT: ${sucursal.rut_empresa}` : ''}</div>
+            </div>
+
+            <div class="cambio-notice">
+                *** TICKET DE CAMBIO ***
+            </div>
+
+            <div class="info">
+                <div>
+                    <strong>Documento:</strong>
+                    <span>${ticketData.tipo_documento || 'TICKET'}</span>
+                </div>
+                <div>
+                    <strong>Ticket N°:</strong>
+                    <span>${ticketData.ticket_id || ''}</span>
+                </div>
+                <div>
+                    <strong>Fecha:</strong>
+                    <span>${ticketData.fecha || ''}</span>
+                </div>
+                <div>
+                    <strong>Hora:</strong>
+                    <span>${ticketData.hora || ''}</span>
+                </div>
+                <div>
+                    <strong>Vendedor:</strong>
+                    <span>${vendedor.nombre || ''}</span>
+                </div>
+                ${cliente.nombre || cliente.rut ? `
+                    <div>
+                        <strong>Cliente:</strong>
+                        <span>${cliente.nombre || cliente.rut || ''}</span>
+                    </div>
+                ` : ''}
+            </div>
+
+            <div class="separador"></div>
+
+            <div class="items">
+                ${productosHtml || '<div style="text-align:center;">Sin productos</div>'}
+            </div>
+
+            <div class="totales">
+                <div>
+                    <span>Items:</span>
+                    <span>${totales.items || 0}</span>
+                </div>
+                ${totales.descuento ? `
+                    <div>
+                        <span>Subtotal:</span>
+                        <span>$${formatearMoneda(totales.subtotal)}</span>
+                    </div>
+                    <div>
+                        <span>Descuento:</span>
+                        <span>-$${formatearMoneda(totales.descuento)}</span>
+                    </div>
+                ` : ''}
+                <div class="total-final">
+                    <span>TOTAL:</span>
+                    <span>$${formatearMoneda(totales.total)}</span>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div><strong>TICKET DE CAMBIO</strong></div>
+                <div>Ticket original: ${ticketData.ticket_original || ''}</div>
+                <div>¡GRACIAS POR SU COMPRA!</div>
+                <div>Cambios hasta 15 días</div>
+                <div>* No se realizan devoluciones de dinero</div>
+                <div style="margin-top: 5px;">Sistema RetailMind</div>
+            </div>
+        </body>
+        </html>
+    `;
+}
+
 // ========== UTILIDADES ==========
 
 function formatearNumero(numero) {
@@ -1466,22 +2169,56 @@ function formatearNumero(numero) {
 }
 
 function mostrarLoading(mensaje = 'Cargando...') {
-    $('#loading-message').text(mensaje);
-    $('#modalLoading').modal('show');
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: mensaje,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    } else {
+        $('#loading-message').text(mensaje);
+        $('#modalLoading').modal('show');
+    }
 }
 
 function ocultarLoading() {
-    $('#modalLoading').modal('hide');
+    if (typeof Swal !== 'undefined') {
+        Swal.close();
+    } else {
+        $('#modalLoading').modal('hide');
+    }
 }
 
 function mostrarExito(mensaje) {
-    // Implementar notificación de éxito
-    alert('✅ ' + mensaje);
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: '¡Éxito!',
+            text: mensaje,
+            timer: 3000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        });
+    } else {
+        alert('✅ ' + mensaje);
+    }
 }
 
 function mostrarError(mensaje) {
-    // Implementar notificación de error
-    alert('❌ ' + mensaje);
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: mensaje,
+            confirmButtonText: 'Entendido'
+        });
+    } else {
+        alert('❌ ' + mensaje);
+    }
 }
 
 function mostrarInfo(mensaje) {

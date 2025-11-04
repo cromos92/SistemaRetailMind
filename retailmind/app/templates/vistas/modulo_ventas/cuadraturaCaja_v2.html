@@ -1,0 +1,2957 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .step-wizard {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+        color: white;
+    }
+    
+    .step-item {
+        display: inline-block;
+        position: relative;
+        padding: 10px 20px;
+        margin: 0 10px;
+    }
+    
+    .step-item.active {
+        background: rgba(255,255,255,0.3);
+        border-radius: 10px;
+    }
+    
+    .step-item.completed {
+        opacity: 0.7;
+    }
+    
+    .card-simple {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .card-simple:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .monto-grande {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    
+    .diferencia-ok {
+        color: #28a745;
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    
+    .diferencia-error {
+        color: #dc3545;
+        font-size: 2rem;
+        font-weight: bold;
+    }
+    
+    .input-monto {
+        font-size: 1.5rem;
+        font-weight: bold;
+        text-align: center;
+        padding: 15px;
+        border: 3px solid #667eea;
+        border-radius: 10px;
+    }
+    
+    .btn-mega {
+        padding: 15px 30px;
+        font-size: 1.2rem;
+        border-radius: 10px;
+        font-weight: bold;
+    }
+    
+    .deposito-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        border-left: 4px solid #667eea;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-left: 40px;
+        padding-bottom: 20px;
+        border-left: 2px solid #e9ecef;
+    }
+    
+    .timeline-item:last-child {
+        border-left: none;
+    }
+    
+    .timeline-icon {
+        position: absolute;
+        left: -12px;
+        top: 0;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #667eea;
+        color: white;
+        text-align: center;
+        line-height: 24px;
+        font-size: 12px;
+    }
+    
+    /* ========== ESTILOS PARA IMPRESIÓN TÉRMICA ========== */
+    @media print {
+        /* Ocultar todo menos el modal */
+        body * {
+            visibility: hidden;
+        }
+        
+        #modalDetalleArqueo, 
+        #modalDetalleArqueo *,
+        #modalCuadraturaDiaria,
+        #modalCuadraturaDiaria * {
+            visibility: visible;
+        }
+        
+        #modalDetalleArqueo,
+        #modalCuadraturaDiaria {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 80mm !important;
+            max-width: 80mm !important;
+        }
+        
+        /* Ocultar elementos innecesarios */
+        .modal-header,
+        .modal-footer,
+        .btn,
+        .modal-backdrop {
+            display: none !important;
+        }
+        
+        .modal-dialog {
+            max-width: 80mm !important;
+            width: 80mm !important;
+            margin: 0 !important;
+        }
+        
+        .modal-content {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        
+        .modal-body {
+            max-height: none !important;
+            overflow: visible !important;
+            padding: 5mm !important;
+            font-family: 'Courier New', monospace !important;
+            font-size: 10pt !important;
+            line-height: 1.3 !important;
+        }
+        
+        /* Formato térmica - sin colores */
+        .card {
+            border: 1px solid #000 !important;
+            box-shadow: none !important;
+            page-break-inside: avoid;
+            margin-bottom: 3mm !important;
+        }
+        
+        .card-header {
+            background: #000 !important;
+            color: #fff !important;
+            padding: 2mm !important;
+            font-weight: bold !important;
+            text-align: center !important;
+        }
+        
+        .card-body {
+            padding: 2mm !important;
+        }
+        
+        /* Tablas optimizadas */
+        table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 9pt !important;
+        }
+        
+        table th,
+        table td {
+            padding: 1mm !important;
+            border-bottom: 1px dashed #000 !important;
+        }
+        
+        table thead th {
+            border-bottom: 1px solid #000 !important;
+            font-weight: bold !important;
+        }
+        
+        table tfoot td {
+            border-top: 1px solid #000 !important;
+            font-weight: bold !important;
+        }
+        
+        /* Badges */
+        .badge {
+            border: 1px solid #000 !important;
+            background: #fff !important;
+            color: #000 !important;
+            padding: 1mm !important;
+        }
+        
+        /* Alertas */
+        .alert {
+            border: 1px solid #000 !important;
+            background: #fff !important;
+            color: #000 !important;
+            padding: 2mm !important;
+        }
+        
+        /* Títulos */
+        h6 {
+            font-size: 11pt !important;
+            font-weight: bold !important;
+            text-align: center !important;
+            margin: 2mm 0 !important;
+            padding: 1mm 0 !important;
+            border-bottom: 2px solid #000 !important;
+        }
+        
+        /* Separadores */
+        hr {
+            border: none !important;
+            border-top: 1px dashed #000 !important;
+            margin: 2mm 0 !important;
+        }
+        
+        /* Grid responsive para térmica */
+        .row {
+            display: block !important;
+        }
+        
+        .col-md-3,
+        .col-md-4,
+        .col-md-6,
+        .col-md-12 {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0 !important;
+        }
+        
+        /* Header de ticket térmico */
+        .print-header {
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 3mm;
+            margin-bottom: 3mm;
+        }
+        
+        .print-header h5 {
+            font-size: 14pt !important;
+            font-weight: bold !important;
+            margin: 0 !important;
+        }
+        
+        /* Footer de ticket */
+        .print-footer {
+            text-align: center;
+            border-top: 2px solid #000;
+            padding-top: 3mm;
+            margin-top: 5mm;
+            font-size: 8pt;
+        }
+        
+        /* Forzar saltos de página */
+        .page-break {
+            page-break-after: always;
+        }
+        
+        /* Texto en negrita para totales */
+        .fw-bold,
+        strong {
+            font-weight: bold !important;
+        }
+        
+        /* Alineación de texto */
+        .text-end {
+            text-align: right !important;
+        }
+        
+        .text-center {
+            text-align: center !important;
+        }
+        
+        /* Espaciado entre secciones */
+        .mb-4,
+        .mb-3 {
+            margin-bottom: 3mm !important;
+        }
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-1">💰 Cuadratura de Caja Simplificada</h3>
+                        <p class="text-muted mb-0">Sistema intuitivo para cajeras y supervisores</p>
+                    </div>
+                    <div class="text-end">
+                        <label class="form-label mb-1 small text-muted">Fecha de cuadratura:</label>
+                        <div class="input-group" style="width: 250px;">
+                            <input type="date" class="form-control" id="fechaCuadraturaSelector" onchange="cambiarFechaCuadratura()">
+                            <button class="btn btn-outline-primary" onclick="irAHoy()" title="Ir a hoy">
+                                <i class="ri-calendar-todo-line"></i> Hoy
+                            </button>
+                        </div>
+                        <small class="text-muted" id="diasAtras"></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wizard de Pasos -->
+        <div class="step-wizard">
+            <div class="text-center">
+                <div class="step-item" id="step1" onclick="irAPaso(1)">
+                    <i class="ri-computer-line"></i> 1. Totales Sistema
+                </div>
+                <span style="opacity:0.5">→</span>
+                <div class="step-item" id="step2" onclick="irAPaso(2)">
+                    <i class="ri-money-dollar-circle-line"></i> 2. Conteo Efectivo
+                </div>
+                <span style="opacity:0.5">→</span>
+                <div class="step-item" id="step3" onclick="irAPaso(3)">
+                    <i class="ri-bank-line"></i> 3. Depósitos
+                </div>
+                <span style="opacity:0.5">→</span>
+                <div class="step-item" id="step4" onclick="irAPaso(4)">
+                    <i class="ri-check-double-line"></i> 4. Revisión
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 1: Totales del Sistema -->
+        <div id="paso1" class="paso-content">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <h4><i class="ri-computer-line text-primary"></i> Paso 1: Totales Registrados en el Sistema</h4>
+                    <p class="text-muted">Estos son los valores que el sistema registró en ventas del día</p>
+                </div>
+                
+                <!-- Resumen Visual -->
+                <div class="col-md-3 mb-3">
+                    <div class="card card-simple bg-success text-white">
+                        <div class="card-body text-center">
+                            <i class="ri-money-dollar-circle-line" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2">Efectivo Teórico</h6>
+                            <div class="monto-grande text-white" id="efectivoTeorico">$0</div>
+                            <small>Lo que debería haber en caja</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-3">
+                    <div class="card card-simple bg-primary text-white">
+                        <div class="card-body text-center">
+                            <i class="ri-bank-card-line" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2">Transbank/Tarjetas</h6>
+                            <div class="monto-grande text-white" id="totalTarjetas">$0</div>
+                            <small>Pagos con tarjeta</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-3">
+                    <div class="card card-simple bg-info text-white">
+                        <div class="card-body text-center">
+                            <i class="ri-shopping-cart-line" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2">Venta Internet</h6>
+                            <div class="monto-grande text-white" id="totalInternet">$0</div>
+                            <small>Webpay, Mercadopago, etc</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-3">
+                    <div class="card card-simple bg-dark text-white">
+                        <div class="card-body text-center">
+                            <i class="ri-calculator-line" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2">Venta Total</h6>
+                            <div class="monto-grande text-white" id="ventaTotal">$0</div>
+                            <small>Total del día</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Detalle de Métodos de Pago -->
+                <div class="col-md-6">
+                    <div class="card card-simple">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="ri-list-check"></i> Detalle de Efectivo</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>💵 Efectivo directo</td>
+                                    <td class="text-end fw-bold" id="detalleEfectivo">$0</td>
+                                </tr>
+                                <tr>
+                                    <td>🏦 Transferencias</td>
+                                    <td class="text-end" id="detalleTransferencia">$0</td>
+                                </tr>
+                                <tr>
+                                    <td>📄 Notas de Crédito</td>
+                                    <td class="text-end" id="detalleNC">$0</td>
+                                </tr>
+                                <tr class="table-success fw-bold">
+                                    <td>TOTAL EFECTIVO TEÓRICO</td>
+                                    <td class="text-end" id="detalleTotal">$0</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card card-simple">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="ri-file-list-3-line"></i> Documentos Emitidos</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td>🎫 Tickets</td>
+                                    <td class="text-end" id="totalTickets">$0</td>
+                                </tr>
+                                <tr>
+                                    <td>📜 Boletas Electrónicas</td>
+                                    <td class="text-end" id="totalBoletas">$0</td>
+                                </tr>
+                                <tr>
+                                    <td>📄 Facturas</td>
+                                    <td class="text-end" id="totalFacturas">$0</td>
+                                </tr>
+                                <tr>
+                                    <td>❌ Notas de Crédito</td>
+                                    <td class="text-end text-danger" id="totalNC">$0</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-12 text-center mt-4">
+                    <button class="btn btn-primary btn-mega" onclick="siguientePaso()">
+                        Siguiente: Contar Efectivo <i class="ri-arrow-right-line ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 2: Conteo de Efectivo -->
+        <div id="paso2" class="paso-content" style="display:none;">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <h4><i class="ri-money-dollar-circle-line text-success"></i> Paso 2: Conteo de Caja</h4>
+                    <p class="text-muted">Ingresa el efectivo contado y el cierre de la máquina POS</p>
+                </div>
+                
+                <!-- CONTEO DE EFECTIVO -->
+                <div class="col-md-6 mb-4">
+                    <div class="card card-simple h-100">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="ri-money-dollar-circle-line"></i> A. Conteo de Efectivo</h6>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="mb-3">
+                                <small class="text-muted">Efectivo que debería haber:</small>
+                                <div class="alert alert-info mb-0">
+                                    <h4 class="mb-0" id="recordatorioTeorico">$0</h4>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-3">
+                            
+                            <h6 class="mb-3">Ingresa el efectivo real contado:</h6>
+                            <div class="input-group input-group-lg mb-3">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control input-monto" id="efectivoReal" 
+                                       placeholder="0" onchange="calcularDiferencias()">
+                            </div>
+                            
+                            <!-- Diferencia Instantánea -->
+                            <div id="resultadoDiferenciaEfectivo" style="display:none;" class="mt-3">
+                                <h6>Diferencia:</h6>
+                                <div id="montoDiferenciaEfectivo"></div>
+                                <small class="text-muted" id="textoDiferenciaEfectivo"></small>
+                            </div>
+                            
+                            <!-- Botón Desglose Opcional -->
+                            <div class="mt-3">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#desglose">
+                                    <i class="ri-list-check"></i> Desglosar billetes/monedas (Opcional)
+                                </button>
+                            </div>
+                            
+                            <!-- Desglose Colapsable -->
+                            <div class="collapse mt-3" id="desglose">
+                                <div class="card card-body bg-light">
+                                    <div class="row text-start">
+                                        <div class="col-6">
+                                            <h6>Billetes:</h6>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$20.000 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="b20000" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$10.000 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="b10000" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$5.000 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="b5000" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$2.000 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="b2000" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$1.000 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="b1000" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                        </div>
+                                        <div class="col-6">
+                                            <h6>Monedas:</h6>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$500 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="m500" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$100 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="m100" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$50 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="m50" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small">$10 x</label>
+                                                <input type="number" class="form-control form-control-sm" id="m10" min="0" onchange="calcularDesglose()">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-success mt-2 mb-0">
+                                        Total desglosado: <strong id="totalDesglose">$0</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- CIERRE POS/TARJETAS -->
+                <div class="col-md-6 mb-4">
+                    <div class="card card-simple h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="ri-bank-card-line"></i> B. Cierre de Máquina POS</h6>
+                        </div>
+                        <div class="card-body text-center p-4">
+                            <div class="mb-3">
+                                <small class="text-muted">Total según sistema:</small>
+                                <div class="alert alert-info mb-0">
+                                    <h4 class="mb-0" id="recordatorioTarjetas">$0</h4>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-3">
+                            
+                            <h6 class="mb-3">Monto del cierre POS/Transbank:</h6>
+                            <div class="input-group input-group-lg mb-3">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control input-monto" id="cierrePOS" 
+                                       placeholder="0" onchange="calcularDiferencias()">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">N° de Lote (Opcional)</label>
+                                <input type="text" class="form-control" id="numeroLote" placeholder="Ej: 123456">
+                            </div>
+                            
+                            <!-- Diferencia POS -->
+                            <div id="resultadoDiferenciaPOS" style="display:none;" class="mt-3">
+                                <h6>Diferencia:</h6>
+                                <div id="montoDiferenciaPOS"></div>
+                                <small class="text-muted" id="textoDiferenciaPOS"></small>
+                            </div>
+                            
+                            <div class="alert alert-warning mt-3">
+                                <small><strong>💡 Tip:</strong> Revisa el cierre en la máquina Transbank para obtener el monto exacto del día.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-12 text-center mt-4">
+                    <button class="btn btn-outline-secondary btn-lg me-2" onclick="anteriorPaso()">
+                        <i class="ri-arrow-left-line"></i> Anterior
+                    </button>
+                    <button class="btn btn-success btn-mega" onclick="siguientePaso()">
+                        Siguiente: Registrar Depósitos <i class="ri-arrow-right-line ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 3: Depósitos Bancarios -->
+        <div id="paso3" class="paso-content" style="display:none;">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <h4><i class="ri-bank-line text-info"></i> Paso 3: Depósitos Realizados al Banco</h4>
+                    <p class="text-muted">Registra los depósitos que se hicieron durante el día</p>
+                </div>
+                
+                <div class="col-md-8">
+                    <!-- Formulario de Depósito -->
+                    <div class="card card-simple">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="ri-add-circle-line"></i> Agregar Depósito</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label class="form-label">Fecha del Depósito</label>
+                                    <input type="date" class="form-control" id="fechaDeposito">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Monto Depositado</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="montoDeposito" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Banco</label>
+                                    <select class="form-select" id="bancoDeposito">
+                                        <option value="ESTADO">BancoEstado</option>
+                                        <option value="CHILE">Banco de Chile</option>
+                                        <option value="SANTANDER">Santander</option>
+                                        <option value="BCI">BCI</option>
+                                        <option value="SCOTIABANK">Scotiabank</option>
+                                        <option value="ITAU">Itaú</option>
+                                        <option value="SECURITY">Banco Security</option>
+                                        <option value="FALABELLA">Banco Falabella</option>
+                                        <option value="RIPLEY">Banco Ripley</option>
+                                        <option value="OTRO">Otro</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">N° Comprobante</label>
+                                    <input type="text" class="form-control" id="comprobanteDeposito" placeholder="Opcional">
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <label class="form-label">Observaciones (Opcional)</label>
+                                    <input type="text" class="form-control" id="obsDeposito" placeholder="Ej: Depósito del día anterior">
+                                </div>
+                            </div>
+                            <div class="mt-3 text-end">
+                                <button class="btn btn-primary" onclick="agregarDeposito()">
+                                    <i class="ri-add-line"></i> Agregar Depósito
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lista de Depósitos -->
+                    <div class="mt-3" id="listaDepositos">
+                        <h6 class="mb-3">Depósitos Registrados Hoy:</h6>
+                        <div id="depositosContainer">
+                            <div class="text-center text-muted py-4">
+                                <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                                <p class="mt-2">No hay depósitos registrados</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <!-- Resumen de Efectivo -->
+                    <div class="card card-simple">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="ri-calculator-line"></i> Resumen de Efectivo</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <small class="text-muted">Efectivo Contado:</small>
+                                <h5 class="text-success" id="resumenEfectivoContado">$0</h5>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted">Depósitos Realizados:</small>
+                                <h5 class="text-danger" id="resumenDepositoTotal">- $0</h5>
+                            </div>
+                            <hr>
+                            <div>
+                                <small class="text-muted">Efectivo que queda en caja:</small>
+                                <h4 class="text-primary" id="resumenEfectivoFinal">$0</h4>
+                            </div>
+                            <hr>
+                            <div>
+                                <small class="text-muted">Efectivo teórico del sistema:</small>
+                                <h5 id="resumenEfectivoTeorico">$0</h5>
+                            </div>
+                            
+                            <div class="alert alert-warning mt-3">
+                                <strong>Nota:</strong> Los depósitos se restan del efectivo contado para saber cuánto queda en caja.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-12 text-center mt-4">
+                    <button class="btn btn-outline-secondary btn-lg me-2" onclick="anteriorPaso()">
+                        <i class="ri-arrow-left-line"></i> Anterior
+                    </button>
+                    <button class="btn btn-info btn-mega" onclick="siguientePaso()">
+                        Siguiente: Ver Resultado <i class="ri-arrow-right-line ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASO 4: Revisión y Resultado -->
+        <div id="paso4" class="paso-content" style="display:none;">
+            <div class="row">
+                <div class="col-12 mb-3">
+                    <h4><i class="ri-check-double-line text-primary"></i> Paso 4: Revisión y Resultado Final</h4>
+                    <p class="text-muted">Resumen completo de la cuadratura</p>
+                </div>
+                
+                <!-- Resultado Final -->
+                <div class="col-md-6 offset-md-3 mb-4">
+                    <div class="card card-simple" id="cardResultado">
+                        <div class="card-body text-center p-5">
+                            <div id="iconoResultado"></div>
+                            <h3 class="mt-3" id="tituloResultado"></h3>
+                            <div id="montoResultado" class="my-4"></div>
+                            <div id="mensajeResultado"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Detalle Completo -->
+                <div class="col-md-10 offset-md-1">
+                    <div class="card card-simple">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="ri-file-list-3-line"></i> Detalle Completo de la Cuadratura</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-primary mb-3">💻 Datos del Sistema</h6>
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td>💵 Efectivo teórico:</td>
+                                            <td class="text-end fw-bold" id="finalEfectivoTeorico">$0</td>
+                                        </tr>
+                                        <tr>
+                                            <td>💳 Tarjetas/POS:</td>
+                                            <td class="text-end" id="finalTarjetas">$0</td>
+                                        </tr>
+                                        <tr>
+                                            <td>🌐 Venta Internet:</td>
+                                            <td class="text-end" id="finalInternet">$0</td>
+                                        </tr>
+                                        <tr class="table-primary fw-bold">
+                                            <td>VENTA TOTAL:</td>
+                                            <td class="text-end" id="finalVentaTotal">$0</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-success mb-3">💵 Datos Reales (Conteo)</h6>
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td>💵 Efectivo contado:</td>
+                                            <td class="text-end fw-bold" id="finalEfectivoReal">$0</td>
+                                        </tr>
+                                        <tr>
+                                            <td>💳 Cierre POS:</td>
+                                            <td class="text-end fw-bold" id="finalCierrePOS">$0</td>
+                                        </tr>
+                                        <tr>
+                                            <td>🏦 Depósitos realizados:</td>
+                                            <td class="text-end text-danger" id="finalDepositosTotal">- $0</td>
+                                        </tr>
+                                        <tr class="table-success">
+                                            <td>Efectivo final en caja:</td>
+                                            <td class="text-end fw-bold" id="finalEfectivoEnCaja">$0</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Diferencias Destacadas -->
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="alert alert-light border">
+                                        <strong>Diferencia Efectivo:</strong>
+                                        <span id="finalDiferenciaEfectivo" class="float-end">$0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="alert alert-light border">
+                                        <strong>Diferencia POS:</strong>
+                                        <span id="finalDiferenciaPOS" class="float-end">$0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Depósitos Detallados -->
+                            <div class="mt-4" id="detalleDepositosFinales">
+                                <h6 class="text-info mb-3">🏦 Depósitos del Día</h6>
+                                <div id="depositosFinalesLista"></div>
+                            </div>
+                            
+                            <!-- Observaciones -->
+                            <div class="mt-4">
+                                <label class="form-label fw-bold">📝 Observaciones del Arqueo:</label>
+                                <textarea class="form-control" id="observacionesFinales" rows="3" 
+                                          placeholder="Agrega cualquier comentario sobre la cuadratura..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Acciones Finales -->
+                <div class="col-12 text-center mt-4">
+                    <button class="btn btn-outline-secondary btn-lg me-2" onclick="anteriorPaso()">
+                        <i class="ri-arrow-left-line"></i> Anterior
+                    </button>
+                    <button class="btn btn-primary btn-lg me-2" onclick="verCuadraturaDiaria()">
+                        <i class="ri-file-list-3-line me-2"></i> Ver Cuadratura Diaria
+                    </button>
+                    <button class="btn btn-success btn-mega me-2" onclick="guardarCuadratura()">
+                        <i class="ri-save-line me-2"></i> Guardar Cuadratura
+                    </button>
+                    <button class="btn btn-info btn-lg" onclick="imprimirCuadratura()">
+                        <i class="ri-printer-line"></i> Imprimir
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historial de Cuadraturas -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card card-simple">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="ri-history-line"></i> Historial de Cuadraturas</h6>
+                        <div>
+                            <input type="date" class="form-control form-control-sm d-inline-block" style="width:auto;" id="filtroFecha" placeholder="Filtrar por fecha">
+                            <button class="btn btn-sm btn-primary" onclick="cargarHistorial()">
+                                <i class="ri-search-line"></i> Buscar
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="limpiarFiltroFecha()" title="Ver todas">
+                                <i class="ri-refresh-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Cajera/Usuario</th>
+                                        <th>Efectivo</th>
+                                        <th>Cierre POS</th>
+                                        <th>Depósitos</th>
+                                        <th>Diferencia</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historialTabla">
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted">
+                                            <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                                            <p class="mt-2">No hay cuadraturas registradas</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// Variables globales
+let pasoActual = 1;
+let datosArqueo = {
+    efectivoTeorico: 0,
+    efectivoReal: 0,
+    tarjetasTeorico: 0,
+    cierrePOS: 0,
+    numeroLote: '',
+    depositos: [],
+    cuadratura: {}
+};
+
+// Inicialización
+$(document).ready(function() {
+    console.log('🚀 Iniciando sistema simplificado de cuadratura...');
+    
+    // Establecer fecha actual
+    const hoy = new Date();
+    const hoyStr = hoy.toISOString().split('T')[0];
+    
+    // Configurar selector de fecha
+    $('#fechaCuadraturaSelector').val(hoyStr);
+    configurarLimitesFecha();
+    
+    $('#fechaDeposito').val(hoyStr);
+    // NO inicializar filtroFecha - dejar vacío para que muestre todas
+    // $('#filtroFecha').val(hoyStr);
+    
+    // Cargar datos del sistema
+    cargarDatosDelSistema();
+    
+    // Cargar historial (sin filtro = muestra todas)
+    cargarHistorial();
+    
+    // Activar paso 1
+    irAPaso(1);
+});
+
+function configurarLimitesFecha() {
+    const hoy = new Date();
+    const hace60Dias = new Date();
+    hace60Dias.setDate(hace60Dias.getDate() - 60);
+    
+    // Establecer límites en el input date
+    $('#fechaCuadraturaSelector').attr('min', hace60Dias.toISOString().split('T')[0]);
+    $('#fechaCuadraturaSelector').attr('max', hoy.toISOString().split('T')[0]);
+}
+
+function cambiarFechaCuadratura() {
+    const fechaSeleccionada = $('#fechaCuadraturaSelector').val();
+    if(!fechaSeleccionada) return;
+    
+    // Validar fecha
+    const fecha = new Date(fechaSeleccionada + 'T00:00:00');
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    const diferenciaDias = Math.floor((hoy - fecha) / (1000 * 60 * 60 * 24));
+    
+    // Validación: no fechas futuras
+    if(fecha > hoy) {
+        Swal.fire({
+            icon: 'error',
+            title: '❌ Fecha Inválida',
+            text: 'No puedes hacer cuadratura de fechas futuras',
+            confirmButtonText: 'Entendido'
+        });
+        $('#fechaCuadraturaSelector').val(hoy.toISOString().split('T')[0]);
+        return;
+    }
+    
+    // Validación: máximo 60 días
+    if(diferenciaDias > 60) {
+        Swal.fire({
+            icon: 'error',
+            title: '❌ Fecha Muy Antigua',
+            html: `
+                <p>Solo puedes hacer cuadratura de los últimos <strong>60 días</strong></p>
+                <p class="text-muted small">La fecha seleccionada es de hace ${diferenciaDias} días</p>
+            `,
+            confirmButtonText: 'Entendido'
+        });
+        $('#fechaCuadraturaSelector').val(hoy.toISOString().split('T')[0]);
+        return;
+    }
+    
+    // Mostrar días de diferencia
+    if(diferenciaDias === 0) {
+        $('#diasAtras').html('<span class="badge bg-success">📅 Cuadratura de hoy</span>');
+    } else if(diferenciaDias === 1) {
+        $('#diasAtras').html('<span class="badge bg-warning">⚠️ Cuadratura de ayer</span>');
+    } else {
+        $('#diasAtras').html(`<span class="badge bg-warning">⚠️ Hace ${diferenciaDias} días</span>`);
+    }
+    
+    // Advertencia si no es hoy
+    if(diferenciaDias > 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Cuadratura de Día Anterior',
+            html: `
+                <p>Estás por hacer la cuadratura de:</p>
+                <h5 class="text-primary">${new Date(fechaSeleccionada + 'T00:00:00').toLocaleDateString('es-CL', { 
+                    weekday: 'long', 
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                })}</h5>
+                <p class="text-muted small mt-3">(Hace ${diferenciaDias} ${diferenciaDias === 1 ? 'día' : 'días'})</p>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, continuar',
+            cancelButtonText: 'No, volver a hoy',
+            confirmButtonColor: '#0d6efd'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Cargar datos de esa fecha
+                cargarDatosDelSistemaReal(fechaSeleccionada);
+            } else {
+                // Volver a hoy
+                irAHoy();
+            }
+        });
+    } else {
+        // Es hoy, cargar normalmente
+        cargarDatosDelSistema();
+    }
+}
+
+function irAHoy() {
+    const hoy = new Date().toISOString().split('T')[0];
+    $('#fechaCuadraturaSelector').val(hoy);
+    $('#diasAtras').html('<span class="badge bg-success">📅 Cuadratura de hoy</span>');
+    cargarDatosDelSistema();
+}
+
+// ========== NAVEGACIÓN ENTRE PASOS ==========
+
+function irAPaso(paso) {
+    // Ocultar todos los pasos
+    $('.paso-content').hide();
+    
+    // Mostrar paso seleccionado
+    $(`#paso${paso}`).show();
+    
+    // Actualizar wizard
+    $('.step-item').removeClass('active completed');
+    for(let i = 1; i < paso; i++) {
+        $(`#step${i}`).addClass('completed');
+    }
+    $(`#step${paso}`).addClass('active');
+    
+    pasoActual = paso;
+    
+    // Actualizar datos según el paso
+    if(paso === 2) {
+        $('#recordatorioTeorico').text(formatearMoneda(datosArqueo.efectivoTeorico));
+        $('#recordatorioTarjetas').text(formatearMoneda(datosArqueo.tarjetasTeorico));
+    }
+    if(paso === 3) {
+        actualizarResumenEfectivo();
+    }
+    if(paso === 4) {
+        mostrarResultadoFinal();
+    }
+}
+
+function siguientePaso() {
+    if(validarPaso(pasoActual)) {
+        irAPaso(pasoActual + 1);
+    }
+}
+
+function anteriorPaso() {
+    if(pasoActual > 1) {
+        irAPaso(pasoActual - 1);
+    }
+}
+
+function validarPaso(paso) {
+    if(paso === 2) {
+        const efectivo = parseFloat($('#efectivoReal').val()) || 0;
+        if(efectivo <= 0) {
+            Swal.fire('Atención', 'Debes ingresar el monto de efectivo contado', 'warning');
+            return false;
+        }
+        datosArqueo.efectivoReal = efectivo;
+        datosArqueo.cierrePOS = parseFloat($('#cierrePOS').val()) || 0;
+        datosArqueo.numeroLote = $('#numeroLote').val();
+    }
+    return true;
+}
+
+// ========== CARGAR DATOS DEL SISTEMA ==========
+
+function cargarDatosDelSistema() {
+    const fechaSeleccionada = $('#fechaCuadraturaSelector').val() || new Date().toISOString().split('T')[0];
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Cargando datos...',
+        text: 'Obteniendo información del sistema',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Primero verificar si ya existe una cuadratura
+    verificarCuadraturaExistente(fechaSeleccionada, function(existe, datosExistentes) {
+        if(existe) {
+            // Ya existe una cuadratura
+            Swal.close();
+            mostrarAlertaCuadraturaExistente(datosExistentes);
+        } else {
+            // No existe, continuar cargando datos
+            cargarDatosDelSistemaReal(fechaSeleccionada);
+        }
+    });
+}
+
+function verificarCuadraturaExistente(fecha, callback) {
+    $.ajax({
+        url: '/app/api/cuadratura/verificar-existente/',
+        method: 'GET',
+        data: { fecha: fecha },
+        success: function(response) {
+            if(response.existe) {
+                callback(true, response.datos);
+            } else {
+                callback(false, null);
+            }
+        },
+        error: function() {
+            // Si hay error, asumir que no existe y continuar
+            callback(false, null);
+        }
+    });
+}
+
+function mostrarAlertaCuadraturaExistente(datos) {
+    Swal.fire({
+        icon: 'info',
+        title: '⚠️ Cuadratura Ya Existe',
+        html: `
+            <div class="text-start">
+                <p>Ya existe una cuadratura para el día de hoy:</p>
+                <hr>
+                <p><strong>Fecha:</strong> ${datos.fecha_arqueo}</p>
+                <p><strong>Usuario:</strong> ${datos.usuario}</p>
+                <p><strong>Estado:</strong> ${datos.estado}</p>
+                <p><strong>Diferencia:</strong> ${formatearMoneda(datos.diferencia_efectivo)}</p>
+                <hr>
+                <p class="text-muted small">¿Qué deseas hacer?</p>
+            </div>
+        `,
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: '🔄 Crear Nueva (Reemplazar)',
+        denyButtonText: '📅 Seleccionar Otra Fecha',
+        cancelButtonText: '← Volver',
+        confirmButtonColor: '#dc3545',
+        denyButtonColor: '#0d6efd'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Confirmar reemplazo
+            confirmarReemplazo(datos.id);
+        } else if (result.isDenied) {
+            // Mostrar selector de fecha
+            seleccionarOtraFecha();
+        }
+    });
+}
+
+function confirmarReemplazo(arqueoId) {
+    Swal.fire({
+        icon: 'warning',
+        title: '⚠️ ¿Estás seguro?',
+        text: 'Esto eliminará la cuadratura existente y crearás una nueva.',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, reemplazar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            eliminarYCrearNueva(arqueoId);
+        }
+    });
+}
+
+function eliminarYCrearNueva(arqueoId) {
+    Swal.fire({
+        title: 'Eliminando cuadratura anterior...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: `/app/api/cuadratura/eliminar/${arqueoId}/`,
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            if(response.success) {
+                Swal.close();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Cuadratura eliminada',
+                    text: 'Ahora puedes crear una nueva',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    // Recargar datos
+                    const fechaSeleccionada = $('#fechaCuadraturaSelector').val() || new Date().toISOString().split('T')[0];
+                    cargarDatosDelSistemaReal(fechaSeleccionada);
+                });
+            } else {
+                Swal.close();
+                mostrarError('Error al eliminar: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+function seleccionarOtraFecha() {
+    Swal.fire({
+        title: 'Selecciona una fecha',
+        html: '<input type="date" id="swal-fecha-input" class="swal2-input" style="width:80%">',
+        showCancelButton: true,
+        confirmButtonText: 'Cargar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            const fecha = document.getElementById('swal-fecha-input').value;
+            if (!fecha) {
+                Swal.showValidationMessage('Debes seleccionar una fecha');
+                return false;
+            }
+            return fecha;
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            cargarDatosDelSistemaReal(result.value);
+        }
+    });
+}
+
+function cargarDatosDelSistemaReal(fecha) {
+    // Mostrar loading
+    Swal.fire({
+        title: 'Cargando datos...',
+        text: 'Obteniendo información del sistema',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: '/app/api/cuadratura/generar/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        data: new FormData($('<form><input name="fecha" value="' + fecha + '"></form>')[0]),
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            Swal.close();
+            
+            if(response.success) {
+                const c = response.cuadratura;
+                datosArqueo.cuadratura = c;
+                datosArqueo.cuadratura.fecha_seleccionada = fecha;
+                
+                // Totales principales
+                $('#efectivoTeorico').text(formatearMoneda(c.total_efectivo || 0));
+                $('#totalTarjetas').text(formatearMoneda((c.total_transbank || 0) + (c.total_tarjetas_comerciales || 0)));
+                $('#totalInternet').text(formatearMoneda(c.total_venta_internet || 0));
+                $('#ventaTotal').text(formatearMoneda(c.venta_total || 0));
+                
+                // Detalles
+                $('#detalleEfectivo').text(formatearMoneda(c.total_efectivo || 0));
+                $('#detalleTransferencia').text(formatearMoneda(c.total_transferencia || 0));
+                $('#detalleNC').text(formatearMoneda(c.total_notas_credito || 0));
+                $('#detalleTotal').text(formatearMoneda(c.total_efectivo || 0));
+                
+                // Documentos
+                $('#totalTickets').text(formatearMoneda(c.total_tickets || 0));
+                $('#totalBoletas').text(formatearMoneda(c.total_boletas_electronicas || 0));
+                $('#totalFacturas').text(formatearMoneda(c.total_facturas || 0));
+                $('#totalNC').text(formatearMoneda(c.total_notas_credito || 0));
+                
+                datosArqueo.efectivoTeorico = c.total_efectivo || 0;
+                datosArqueo.tarjetasTeorico = (c.total_transbank || 0) + (c.total_tarjetas_comerciales || 0);
+                
+                // Mostrar alerta si no hay ventas
+                if(c.venta_total === 0) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Sin ventas registradas',
+                        text: `No hay ventas registradas para el ${new Date(fecha + 'T00:00:00').toLocaleDateString('es-CL')}`,
+                        confirmButtonText: 'Entendido'
+                    });
+                }
+                
+                console.log('✅ Datos del sistema cargados:', c);
+            } else {
+                mostrarError('Error al cargar datos: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
+}
+
+// ========== PASO 2: CONTEO DE EFECTIVO Y POS ==========
+
+function calcularDiferencias() {
+    calcularDiferenciaEfectivo();
+    calcularDiferenciaPOS();
+}
+
+function calcularDiferenciaEfectivo() {
+    const efectivoReal = parseFloat($('#efectivoReal').val()) || 0;
+    const efectivoTeorico = datosArqueo.efectivoTeorico;
+    const diferencia = efectivoReal - efectivoTeorico;
+    
+    if(efectivoReal > 0) {
+        $('#resultadoDiferenciaEfectivo').show();
+        
+        if(diferencia === 0) {
+            $('#montoDiferenciaEfectivo').html('<div class="diferencia-ok">✓ $0</div>');
+            $('#textoDiferenciaEfectivo').text('¡Perfecto! El efectivo cuadra exactamente');
+        } else if(diferencia > 0) {
+            $('#montoDiferenciaEfectivo').html(`<div class="diferencia-ok">+ ${formatearMoneda(diferencia)}</div>`);
+            $('#textoDiferenciaEfectivo').text('Hay más efectivo del esperado (sobrante)');
+        } else {
+            $('#montoDiferenciaEfectivo').html(`<div class="diferencia-error">- ${formatearMoneda(Math.abs(diferencia))}</div>`);
+            $('#textoDiferenciaEfectivo').text('Falta efectivo (faltante)');
+        }
+    } else {
+        $('#resultadoDiferenciaEfectivo').hide();
+    }
+}
+
+function calcularDiferenciaPOS() {
+    const cierrePOS = parseFloat($('#cierrePOS').val()) || 0;
+    const tarjetasTeorico = datosArqueo.tarjetasTeorico;
+    const diferencia = cierrePOS - tarjetasTeorico;
+    
+    if(cierrePOS > 0) {
+        $('#resultadoDiferenciaPOS').show();
+        
+        if(diferencia === 0) {
+            $('#montoDiferenciaPOS').html('<div class="diferencia-ok">✓ $0</div>');
+            $('#textoDiferenciaPOS').text('¡Perfecto! El cierre POS coincide');
+        } else if(diferencia > 0) {
+            $('#montoDiferenciaPOS').html(`<div class="diferencia-ok">+ ${formatearMoneda(diferencia)}</div>`);
+            $('#textoDiferenciaPOS').text('El cierre POS es mayor al sistema (revisar)');
+        } else {
+            $('#montoDiferenciaPOS').html(`<div class="diferencia-error">- ${formatearMoneda(Math.abs(diferencia))}</div>`);
+            $('#textoDiferenciaPOS').text('El cierre POS es menor al sistema (revisar)');
+        }
+    } else {
+        $('#resultadoDiferenciaPOS').hide();
+    }
+}
+
+function calcularDesglose() {
+    const total = 
+        (parseInt($('#b20000').val()) || 0) * 20000 +
+        (parseInt($('#b10000').val()) || 0) * 10000 +
+        (parseInt($('#b5000').val()) || 0) * 5000 +
+        (parseInt($('#b2000').val()) || 0) * 2000 +
+        (parseInt($('#b1000').val()) || 0) * 1000 +
+        (parseInt($('#m500').val()) || 0) * 500 +
+        (parseInt($('#m100').val()) || 0) * 100 +
+        (parseInt($('#m50').val()) || 0) * 50 +
+        (parseInt($('#m10').val()) || 0) * 10;
+    
+    $('#totalDesglose').text(formatearMoneda(total));
+    $('#efectivoReal').val(total);
+    calcularDiferenciaEfectivo();
+}
+
+// ========== PASO 3: DEPÓSITOS ==========
+
+function agregarDeposito() {
+    const fecha = $('#fechaDeposito').val();
+    const monto = parseFloat($('#montoDeposito').val()) || 0;
+    const banco = $('#bancoDeposito').val();
+    const bancoNombre = $('#bancoDeposito option:selected').text();
+    const comprobante = $('#comprobanteDeposito').val();
+    const observaciones = $('#obsDeposito').val();
+    
+    if(!fecha) {
+        Swal.fire('Atención', 'Selecciona la fecha del depósito', 'warning');
+        return;
+    }
+    
+    if(monto <= 0) {
+        Swal.fire('Atención', 'Ingresa un monto válido', 'warning');
+        return;
+    }
+    
+    const deposito = {
+        id: Date.now(),
+        fecha: fecha,
+        monto: monto,
+        banco: banco,
+        banco_nombre: bancoNombre,
+        comprobante: comprobante,
+        observaciones: observaciones
+    };
+    
+    datosArqueo.depositos.push(deposito);
+    
+    // Limpiar formulario
+    $('#montoDeposito').val('');
+    $('#comprobanteDeposito').val('');
+    $('#obsDeposito').val('');
+    $('#bancoDeposito').val('ESTADO');
+    
+    // Actualizar lista
+    mostrarDepositos();
+    actualizarResumenEfectivo();
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'Depósito agregado',
+        text: `Se agregó el depósito de ${formatearMoneda(monto)} en ${bancoNombre}`,
+        timer: 2000,
+        showConfirmButton: false
+    });
+}
+
+function mostrarDepositos() {
+    if(datosArqueo.depositos.length === 0) {
+        $('#depositosContainer').html(`
+            <div class="text-center text-muted py-4">
+                <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                <p class="mt-2">No hay depósitos registrados</p>
+            </div>
+        `);
+        return;
+    }
+    
+    let html = '';
+    datosArqueo.depositos.forEach(d => {
+        html += `
+            <div class="deposito-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">
+                            <i class="ri-bank-line text-info"></i> ${formatearMoneda(d.monto)}
+                        </h6>
+                        <small class="text-muted">
+                            🏦 ${d.banco_nombre || d.banco} | 
+                            📅 ${new Date(d.fecha).toLocaleDateString('es-CL')}
+                            ${d.comprobante ? ' | Comp: ' + d.comprobante : ''}
+                        </small>
+                        ${d.observaciones ? `<p class="mb-0 mt-1"><small>${d.observaciones}</small></p>` : ''}
+                    </div>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarDeposito(${d.id})">
+                        <i class="ri-delete-bin-line"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    $('#depositosContainer').html(html);
+}
+
+function eliminarDeposito(id) {
+    Swal.fire({
+        title: '¿Eliminar depósito?',
+        text: 'Esta acción no se puede deshacer',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            datosArqueo.depositos = datosArqueo.depositos.filter(d => d.id !== id);
+            mostrarDepositos();
+            actualizarResumenEfectivo();
+        }
+    });
+}
+
+function actualizarResumenEfectivo() {
+    const efectivoContado = datosArqueo.efectivoReal || 0;
+    const totalDepositos = datosArqueo.depositos.reduce((sum, d) => sum + d.monto, 0);
+    const efectivoFinal = efectivoContado - totalDepositos;
+    
+    $('#resumenEfectivoContado').text(formatearMoneda(efectivoContado));
+    $('#resumenDepositoTotal').text('- ' + formatearMoneda(totalDepositos));
+    $('#resumenEfectivoFinal').text(formatearMoneda(efectivoFinal));
+    $('#resumenEfectivoTeorico').text(formatearMoneda(datosArqueo.efectivoTeorico));
+}
+
+// ========== PASO 4: RESULTADO FINAL ==========
+
+function mostrarResultadoFinal() {
+    const efectivoTeorico = datosArqueo.efectivoTeorico;
+    const efectivoReal = datosArqueo.efectivoReal;
+    const totalDepositos = datosArqueo.depositos.reduce((sum, d) => sum + d.monto, 0);
+    const efectivoEnCaja = efectivoReal - totalDepositos;
+    const diferenciaEfectivo = efectivoEnCaja - efectivoTeorico;
+    
+    const tarjetasTeorico = datosArqueo.tarjetasTeorico;
+    const cierrePOS = datosArqueo.cierrePOS || 0;
+    const diferenciaPOS = cierrePOS - tarjetasTeorico;
+    
+    const diferenciaTotal = diferenciaEfectivo + diferenciaPOS;
+    
+    // Actualizar resultado visual principal
+    if(Math.abs(diferenciaTotal) <= 100) {
+        $('#iconoResultado').html('<i class="ri-checkbox-circle-line text-success" style="font-size: 5rem;"></i>');
+        $('#tituloResultado').html('<span class="text-success">✅ ¡Cuadratura Excelente!</span>');
+        $('#montoResultado').html(`<div class="diferencia-ok">Diferencia Total: ${formatearMoneda(Math.abs(diferenciaTotal))}</div>`);
+        $('#mensajeResultado').html('<div class="alert alert-success">La caja está prácticamente cuadrada. Excelente trabajo.</div>');
+    } else if(diferenciaTotal > 0) {
+        $('#iconoResultado').html('<i class="ri-arrow-up-circle-line text-warning" style="font-size: 5rem;"></i>');
+        $('#tituloResultado').html('<span class="text-warning">⚠️ Sobrante en Caja</span>');
+        $('#montoResultado').html(`<div class="diferencia-ok">+ ${formatearMoneda(diferenciaTotal)}</div>`);
+        $('#mensajeResultado').html('<div class="alert alert-warning">Hay más dinero del esperado. Verifica el conteo y los depósitos.</div>');
+    } else {
+        $('#iconoResultado').html('<i class="ri-arrow-down-circle-line text-danger" style="font-size: 5rem;"></i>');
+        $('#tituloResultado').html('<span class="text-danger">❌ Faltante en Caja</span>');
+        $('#montoResultado').html(`<div class="diferencia-error">- ${formatearMoneda(Math.abs(diferenciaTotal))}</div>`);
+        $('#mensajeResultado').html('<div class="alert alert-danger">Falta dinero. Revisa el conteo, depósitos y ventas del día.</div>');
+    }
+    
+    // Actualizar detalle
+    const c = datosArqueo.cuadratura;
+    $('#finalEfectivoTeorico').text(formatearMoneda(efectivoTeorico));
+    $('#finalTarjetas').text(formatearMoneda(tarjetasTeorico));
+    $('#finalInternet').text(formatearMoneda(c.total_venta_internet || 0));
+    $('#finalVentaTotal').text(formatearMoneda(c.venta_total || 0));
+    
+    $('#finalEfectivoReal').text(formatearMoneda(efectivoReal));
+    $('#finalCierrePOS').text(formatearMoneda(cierrePOS));
+    $('#finalDepositosTotal').text('- ' + formatearMoneda(totalDepositos));
+    $('#finalEfectivoEnCaja').text(formatearMoneda(efectivoEnCaja));
+    
+    // Mostrar diferencias con colores
+    if(diferenciaEfectivo === 0) {
+        $('#finalDiferenciaEfectivo').html('<span class="text-success fw-bold">✅ $0</span>');
+    } else if(diferenciaEfectivo > 0) {
+        $('#finalDiferenciaEfectivo').html(`<span class="text-warning fw-bold">⚠️ +${formatearMoneda(diferenciaEfectivo)}</span>`);
+    } else {
+        $('#finalDiferenciaEfectivo').html(`<span class="text-danger fw-bold">❌ ${formatearMoneda(diferenciaEfectivo)}</span>`);
+    }
+    
+    if(cierrePOS === 0) {
+        $('#finalDiferenciaPOS').html('<span class="text-muted">No ingresado</span>');
+    } else if(diferenciaPOS === 0) {
+        $('#finalDiferenciaPOS').html('<span class="text-success fw-bold">✅ $0</span>');
+    } else if(diferenciaPOS > 0) {
+        $('#finalDiferenciaPOS').html(`<span class="text-warning fw-bold">⚠️ +${formatearMoneda(diferenciaPOS)}</span>`);
+    } else {
+        $('#finalDiferenciaPOS').html(`<span class="text-danger fw-bold">❌ ${formatearMoneda(diferenciaPOS)}</span>`);
+    }
+    
+    // Mostrar depósitos
+    if(datosArqueo.depositos.length > 0) {
+        let htmlDepositos = '';
+        datosArqueo.depositos.forEach(d => {
+            htmlDepositos += `
+                <div class="deposito-item">
+                    <i class="ri-bank-line text-info"></i>
+                    <strong>${formatearMoneda(d.monto)}</strong> - 
+                    🏦 ${d.banco_nombre || d.banco} - 
+                    ${new Date(d.fecha).toLocaleDateString('es-CL')}
+                    ${d.comprobante ? ' (Comp: ' + d.comprobante + ')' : ''}
+                </div>
+            `;
+        });
+        $('#depositosFinalesLista').html(htmlDepositos);
+    } else {
+        $('#detalleDepositosFinales').hide();
+    }
+}
+
+// ========== GUARDAR CUADRATURA ==========
+
+function guardarCuadratura() {
+    const observaciones = $('#observacionesFinales').val();
+    const fechaSeleccionada = $('#fechaCuadraturaSelector').val() || new Date().toISOString().split('T')[0];
+    
+    // Preparar datos para enviar
+    const formData = new FormData();
+    formData.append('fecha', fechaSeleccionada);
+    formData.append('efectivo_teorico', datosArqueo.efectivoTeorico);
+    formData.append('efectivo_real', datosArqueo.efectivoReal);
+    formData.append('observaciones', observaciones);
+    formData.append('depositos', JSON.stringify(datosArqueo.depositos));
+    formData.append('cuadratura_completa', JSON.stringify(datosArqueo.cuadratura));
+    
+    Swal.fire({
+        title: '¿Guardar cuadratura?',
+        html: `
+            <div class="text-start">
+                <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-CL')}</p>
+                <p><strong>Efectivo teórico:</strong> ${formatearMoneda(datosArqueo.efectivoTeorico)}</p>
+                <p><strong>Efectivo contado:</strong> ${formatearMoneda(datosArqueo.efectivoReal)}</p>
+                <p><strong>Depósitos:</strong> ${datosArqueo.depositos.length} registrado(s)</p>
+                <p><strong>Diferencia:</strong> ${formatearMoneda(datosArqueo.efectivoReal - datosArqueo.efectivoTeorico)}</p>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, guardar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#28a745'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Mostrar loading
+            Swal.fire({
+                title: 'Guardando...',
+                text: 'Guardando cuadratura en el sistema',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Enviar datos al servidor
+            $.ajax({
+                url: '/app/api/cuadratura/guardar/',
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    Swal.close();
+                    
+                    if(response.success) {
+                        // Recargar historial inmediatamente
+                        cargarHistorial();
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: '¡Cuadratura Guardada!',
+                            html: `
+                                <div class="text-start">
+                                    <p>${response.message}</p>
+                                    <p><strong>Arqueo ID:</strong> ${response.arqueo_id}</p>
+                                    <p><strong>Depósitos creados:</strong> ${response.depositos_creados}</p>
+                                    <p><strong>Estado:</strong> ${response.estado}</p>
+                                    <hr>
+                                    <p class="text-muted small">✅ Ya aparece en el historial abajo</p>
+                                </div>
+                            `,
+                            confirmButtonText: 'Nueva Cuadratura',
+                            confirmButtonColor: '#28a745'
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error al guardar',
+                            text: response.error
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error de conexión',
+                        text: 'No se pudo guardar la cuadratura: ' + xhr.responseText
+                    });
+                }
+            });
+        }
+    });
+}
+
+function imprimirCuadratura() {
+    window.print();
+}
+
+function cargarHistorial() {
+    const fecha = $('#filtroFecha').val();
+    
+    console.log('📋 Cargando historial del MES... Fecha filtro:', fecha || 'Todo el mes actual');
+    
+    // Mostrar loading en la tabla
+    $('#historialTabla').html(`
+        <tr>
+            <td colspan="8" class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2 text-muted">Cargando historial...</p>
+            </td>
+        </tr>
+    `);
+    
+    $.ajax({
+        url: '/app/api/cuadratura/listar/',
+        method: 'GET',
+        data: { fecha: fecha },
+        success: function(response) {
+            console.log('📊 Historial recibido:', response);
+            
+            if(response.success && response.arqueos.length > 0) {
+                let html = '';
+                response.arqueos.forEach(arqueo => {
+                    const diferencia = arqueo.diferencia_efectivo || 0;
+                    const diferenciaTransbank = arqueo.diferencia_transbank || 0;
+                    
+                    // Clase de estado
+                    let estadoClass = '';
+                    let estadoIcon = '';
+                    if(arqueo.estado_codigo === 'CERRADO') {
+                        estadoClass = 'bg-success';
+                        estadoIcon = '✅';
+                    } else if(arqueo.estado_codigo === 'CON_DIFERENCIAS') {
+                        estadoClass = 'bg-warning';
+                        estadoIcon = '⚠️';
+                    } else {
+                        estadoClass = 'bg-info';
+                        estadoIcon = '📝';
+                    }
+                    
+                    // Clase de diferencia total
+                    const diferenciaTotal = diferencia + diferenciaTransbank;
+                    let diferenciaHtml = '';
+                    if(diferenciaTotal === 0) {
+                        diferenciaHtml = '<span class="text-success fw-bold">$0 ✅</span>';
+                    } else if(diferenciaTotal > 0) {
+                        diferenciaHtml = '<span class="text-warning fw-bold">+' + formatearMoneda(diferenciaTotal) + ' ⚠️</span>';
+                    } else {
+                        diferenciaHtml = '<span class="text-danger fw-bold">' + formatearMoneda(diferenciaTotal) + ' ❌</span>';
+                    }
+                    
+                    // Formatear cierre POS
+                    let cierrePOSHtml = '';
+                    if(arqueo.cierre_pos_fisico) {
+                        const difPOS = diferenciaTransbank;
+                        if(difPOS === 0) {
+                            cierrePOSHtml = `<small class="text-muted">Teórico: ${formatearMoneda(arqueo.total_transbank_teorico)}</small><br>
+                                           <strong class="text-success">${formatearMoneda(arqueo.cierre_pos_fisico)} ✅</strong>`;
+                        } else {
+                            cierrePOSHtml = `<small class="text-muted">Teórico: ${formatearMoneda(arqueo.total_transbank_teorico)}</small><br>
+                                           <strong class="text-${difPOS > 0 ? 'warning' : 'danger'}">${formatearMoneda(arqueo.cierre_pos_fisico)} (${difPOS >= 0 ? '+' : ''}${formatearMoneda(difPOS)})</strong>`;
+                        }
+                        if(arqueo.numero_lote_pos) {
+                            cierrePOSHtml += `<br><small class="text-muted">Lote: ${arqueo.numero_lote_pos}</small>`;
+                        }
+                    } else {
+                        cierrePOSHtml = '<span class="text-muted">-</span>';
+                    }
+                    
+                    html += `
+                        <tr>
+                            <td><strong>${arqueo.fecha_arqueo}</strong></td>
+                            <td>${arqueo.usuario}</td>
+                            <td>
+                                <small class="text-muted">Teórico: ${formatearMoneda(arqueo.efectivo_teorico)}</small><br>
+                                <strong>${formatearMoneda(arqueo.efectivo_fisico)}</strong>
+                                ${diferencia !== 0 ? `<br><small class="${diferencia > 0 ? 'text-warning' : 'text-danger'}">(${diferencia >= 0 ? '+' : ''}${formatearMoneda(diferencia)})</small>` : ''}
+                            </td>
+                            <td>${cierrePOSHtml}</td>
+                            <td>
+                                <strong>${formatearMoneda(arqueo.total_depositos)}</strong>
+                                ${arqueo.cantidad_depositos > 0 ? '<br><small class="text-muted">' + arqueo.cantidad_depositos + ' depósito(s)</small>' : ''}
+                            </td>
+                            <td>${diferenciaHtml}</td>
+                            <td>
+                                <span class="badge ${estadoClass}">${estadoIcon} ${arqueo.estado}</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="verDetalleArqueo(${arqueo.id})" title="Ver detalle completo">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                                <button class="btn btn-sm btn-warning" onclick="editarArqueo(${arqueo.id})" title="Editar cuadratura">
+                                    <i class="ri-edit-line"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                $('#historialTabla').html(html);
+                console.log('✅ Historial cargado: ' + response.arqueos.length + ' registros del mes');
+            } else {
+                const mensajeVacio = fecha 
+                    ? `No hay cuadraturas para el ${new Date(fecha + 'T00:00:00').toLocaleDateString('es-CL')}`
+                    : 'No hay cuadraturas registradas en el mes actual';
+                    
+                $('#historialTabla').html(`
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                            <p class="mt-2">${mensajeVacio}</p>
+                            ${fecha ? '<button class="btn btn-sm btn-primary" onclick="limpiarFiltroFecha()">Ver todas</button>' : ''}
+                        </td>
+                    </tr>
+                `);
+                console.log('ℹ️ No hay arqueos para mostrar');
+            }
+        },
+        error: function(xhr) {
+            console.error('Error al cargar historial:', xhr);
+            $('#historialTabla').html(`
+                <tr>
+                    <td colspan="8" class="text-center text-danger">
+                        <i class="ri-alert-line" style="font-size: 2rem;"></i>
+                        <p class="mt-2">Error al cargar historial</p>
+                    </td>
+                </tr>
+            `);
+        }
+    });
+}
+
+function verDetalleArqueo(arqueoId) {
+    console.log('📋 Cargando detalle de arqueo:', arqueoId);
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Cargando detalle...',
+        text: 'Obteniendo información completa',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: `/app/api/cuadratura/detalle/${arqueoId}/`,
+        method: 'GET',
+        success: function(response) {
+            Swal.close();
+            
+            if(response.success) {
+                mostrarModalDetalleArqueo(response.arqueo);
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: response.error
+                });
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo cargar el detalle del arqueo'
+            });
+        }
+    });
+}
+
+function mostrarModalDetalleArqueo(arqueo) {
+    // Calcular diferencias
+    const diferenciaEfectivo = arqueo.total_efectivo_fisico - arqueo.total_efectivo_teorico;
+    const totalDepositos = arqueo.depositos.reduce((sum, d) => sum + d.monto, 0);
+    
+    // Determinar estado visual
+    let estadoBadge = '';
+    if(arqueo.estado === 'CERRADO') {
+        estadoBadge = '<span class="badge bg-success">✅ Cerrado</span>';
+    } else if(arqueo.estado === 'CON_DIFERENCIAS') {
+        estadoBadge = '<span class="badge bg-warning">⚠️ Con Diferencias</span>';
+    } else {
+        estadoBadge = '<span class="badge bg-info">📝 ' + arqueo.estado + '</span>';
+    }
+    
+    const html = `
+        <div class="modal fade" id="modalDetalleArqueo" tabindex="-1" style="display: block;">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="ri-file-list-3-line"></i> Detalle de Cuadratura
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="cerrarModalDetalle()"></button>
+                    </div>
+                    <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                        
+                        <!-- Header para impresión térmica -->
+                        <div class="print-header d-none d-print-block">
+                            <h5>CUADRATURA DE CAJA</h5>
+                            <p style="margin: 2mm 0;">================================</p>
+                        </div>
+                        
+                        <!-- Header Info -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="text-primary">📅 Información General</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>Fecha:</strong></td>
+                                        <td>${arqueo.fecha_arqueo}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Usuario:</strong></td>
+                                        <td>${arqueo.usuario}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Estado:</strong></td>
+                                        <td>${estadoBadge}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Sucursal:</strong></td>
+                                        <td>${arqueo.sucursal || 'N/A'}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-success">💰 Resumen Financiero</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td><strong>Venta Total:</strong></td>
+                                        <td class="text-end">${formatearMoneda(arqueo.venta_total || 0)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Efectivo Teórico:</strong></td>
+                                        <td class="text-end">${formatearMoneda(arqueo.total_efectivo_teorico)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Efectivo Real:</strong></td>
+                                        <td class="text-end">${formatearMoneda(arqueo.total_efectivo_fisico)}</td>
+                                    </tr>
+                                    <tr class="${diferenciaEfectivo === 0 ? 'table-success' : 'table-warning'}">
+                                        <td><strong>Diferencia:</strong></td>
+                                        <td class="text-end fw-bold">
+                                            ${diferenciaEfectivo >= 0 ? '+' : ''}${formatearMoneda(diferenciaEfectivo)}
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Detalle de Métodos de Pago -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">💳 Detalle de Métodos de Pago</h6>
+                            </div>
+                            
+                            <!-- Efectivo -->
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <strong>💵 Efectivo</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm mb-0">
+                                            <tr>
+                                                <td>Teórico:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_efectivo_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Real contado:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_efectivo_fisico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Transferencias:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_transferencia_teorico)}</td>
+                                            </tr>
+                                            <tr class="table-light fw-bold">
+                                                <td>Diferencia:</td>
+                                                <td class="text-end ${diferenciaEfectivo >= 0 ? 'text-success' : 'text-danger'}">
+                                                    ${diferenciaEfectivo >= 0 ? '+' : ''}${formatearMoneda(diferenciaEfectivo)}
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tarjetas Transbank -->
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <strong>💳 Transbank</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm mb-0">
+                                            <tr>
+                                                <td>Débito:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_tarjeta_debito_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Crédito:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_tarjeta_credito_teorico)}</td>
+                                            </tr>
+                                            <tr class="table-light fw-bold">
+                                                <td>Total Transbank:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_transbank_teorico)}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Crédito Trabajador -->
+                            ${arqueo.total_credito_trabajador_teorico > 0 ? `
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-warning">
+                                    <div class="card-header bg-warning text-dark">
+                                        <strong>👷 Crédito Trabajador</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm mb-0">
+                                            <tr class="table-light fw-bold">
+                                                <td>Total Crédito:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_credito_trabajador_teorico)}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            ` : ''}
+                            
+                            <!-- Venta Internet -->
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-info">
+                                    <div class="card-header bg-info text-white">
+                                        <strong>🌐 Venta Internet</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm mb-0">
+                                            <tr>
+                                                <td>Webpay:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_webpay_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>MercadoLibre:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_mercadolibre_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>MercadoPago:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_mercadopago_teorico)}</td>
+                                            </tr>
+                                            <tr class="table-light fw-bold">
+                                                <td>Total Internet:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_venta_internet_teorico)}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tarjetas Comerciales -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">🏪 Tarjetas Comerciales</h6>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <strong>Tarjetas Casa Comercial</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm mb-0">
+                                            <tr>
+                                                <td>Visa/MC/Amex:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_visa_mc_amex_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Presto:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_presto_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>ABCDin:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_abcdin_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Tricot:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_tricot_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Hites:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_hites_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Ripley:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_ripley_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Falabella:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_falabella_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Paris:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_paris_teorico)}</td>
+                                            </tr>
+                                            <tr class="fw-bold">
+                                                <td>TOTAL:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_tarjetas_comerciales_teorico)}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Depósitos Bancarios -->
+                        ${arqueo.depositos.length > 0 ? `
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">🏦 Depósitos Bancarios</h6>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <strong>Depósitos Realizados</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Fecha</th>
+                                                    <th>Banco</th>
+                                                    <th class="text-end">Monto</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${arqueo.depositos.map(d => `
+                                                    <tr>
+                                                        <td>${d.fecha_deposito}</td>
+                                                        <td>${d.banco}</td>
+                                                        <td class="text-end">${formatearMoneda(d.monto)}</td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="fw-bold">
+                                                    <td colspan="2">TOTAL DEPOSITADO:</td>
+                                                    <td class="text-end">${formatearMoneda(totalDepositos)}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        ` : '<div class="alert alert-info">No hay depósitos registrados</div>'}
+                        
+                        <!-- Observaciones -->
+                        ${arqueo.observaciones ? `
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6 class="text-primary mb-3">📝 Observaciones</h6>
+                                <div class="alert alert-light">
+                                    ${arqueo.observaciones}
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Footer para impresión térmica -->
+                        <div class="print-footer d-none d-print-block">
+                            <p style="margin: 0;">================================</p>
+                            <p style="margin: 2mm 0;">Impreso: ${new Date().toLocaleDateString('es-CL')} ${new Date().toLocaleTimeString('es-CL')}</p>
+                            <p style="margin: 2mm 0; font-size: 7pt;">Sistema RetailMind - Cuadratura v2.0</p>
+                        </div>
+                        
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="cerrarModalDetalle()">
+                            <i class="ri-close-line"></i> Cerrar
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="imprimirDetalleArqueo()">
+                            <i class="ri-printer-line"></i> Imprimir Térmica
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    `;
+    
+    // Agregar modal al body
+    $('body').append(html);
+    $('#modalDetalleArqueo').addClass('show');
+}
+
+function cerrarModalDetalle() {
+    $('#modalDetalleArqueo').remove();
+    $('.modal-backdrop').remove();
+}
+
+function imprimirDetalleArqueo() {
+    window.print();
+}
+
+function editarArqueo(arqueoId) {
+    console.log('✏️ Editando arqueo:', arqueoId);
+    
+    // Cargar datos del arqueo
+    Swal.fire({
+        title: 'Cargando...',
+        text: 'Obteniendo datos de la cuadratura',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: `/app/api/cuadratura/detalle/${arqueoId}/`,
+        method: 'GET',
+        success: function(response) {
+            Swal.close();
+            
+            if(response.success) {
+                mostrarModalEdicion(response.arqueo);
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: response.error
+                });
+            }
+        },
+        error: function() {
+            Swal.close();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo cargar la cuadratura'
+            });
+        }
+    });
+}
+
+function mostrarModalEdicion(arqueo) {
+    Swal.fire({
+        title: `<i class="ri-edit-line"></i> Editar Cuadratura`,
+        html: `
+            <div class="text-start">
+                <p class="mb-3"><strong>Fecha:</strong> ${arqueo.fecha_arqueo}</p>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">💵 Efectivo Físico Contado</label>
+                    <p class="text-muted small">Teórico: ${formatearMoneda(arqueo.total_efectivo_teorico)}</p>
+                    <input type="number" id="edit_efectivo" class="form-control" value="${arqueo.total_efectivo_fisico}" step="1">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">💳 Cierre POS (Transbank)</label>
+                    <p class="text-muted small">Teórico: ${formatearMoneda(arqueo.total_transbank_teorico)}</p>
+                    <input type="number" id="edit_cierre_pos" class="form-control" value="${arqueo.cierre_pos_fisico || arqueo.total_transbank_teorico}" step="1">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">N° de Lote POS</label>
+                    <input type="text" id="edit_numero_lote" class="form-control" value="${arqueo.numero_lote_pos}" placeholder="Número de lote (opcional)">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Observaciones</label>
+                    <textarea id="edit_observaciones" class="form-control" rows="3">${arqueo.observaciones || ''}</textarea>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <small><i class="ri-information-line"></i> Los depósitos NO se pueden editar desde aquí. Elimine y vuelva a crear la cuadratura si necesita modificar depósitos.</small>
+                </div>
+            </div>
+        `,
+        width: '600px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-save-line"></i> Guardar Cambios',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#28a745',
+        preConfirm: () => {
+            const efectivo = parseInt($('#edit_efectivo').val()) || 0;
+            const cierrePOS = parseInt($('#edit_cierre_pos').val()) || 0;
+            const numeroLote = $('#edit_numero_lote').val();
+            const observaciones = $('#edit_observaciones').val();
+            
+            if(efectivo < 0 || cierrePOS < 0) {
+                Swal.showValidationMessage('Los montos no pueden ser negativos');
+                return false;
+            }
+            
+            return {
+                efectivo_real: efectivo,
+                cierre_pos: cierrePOS,
+                numero_lote: numeroLote,
+                observaciones: observaciones
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            guardarEdicionCuadratura(arqueo.id, result.value);
+        }
+    });
+}
+
+function guardarEdicionCuadratura(arqueoId, datos) {
+    Swal.fire({
+        title: 'Guardando cambios...',
+        text: 'Actualizando cuadratura',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: `/app/api/cuadratura/editar/${arqueoId}/`,
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify(datos),
+        success: function(response) {
+            if(response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ Cuadratura Actualizada',
+                    text: response.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                // Recargar historial
+                cargarHistorial();
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: response.error
+                });
+            }
+        },
+        error: function(xhr) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se pudo actualizar la cuadratura'
+            });
+        }
+    });
+}
+
+function eliminarArqueo(arqueoId) {
+    Swal.fire({
+        icon: 'warning',
+        title: '¿Eliminar cuadratura?',
+        text: 'Esta acción no se puede deshacer',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/app/api/cuadratura/eliminar/${arqueoId}/`,
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                success: function(response) {
+                    if(response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Eliminado',
+                            text: response.message,
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                        // Recargar historial y limpiar filtro de fecha
+                        $('#filtroFecha').val('');
+                        cargarHistorial();
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: response.error
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'No se pudo eliminar la cuadratura'
+                    });
+                }
+            });
+        }
+    });
+}
+
+function limpiarFiltroFecha() {
+    $('#filtroFecha').val('');
+    cargarHistorial();
+}
+
+// ========== FUNCIONES AUXILIARES ==========
+
+function formatearMoneda(valor) {
+    const numero = parseInt(valor || 0);
+    return '$' + numero.toLocaleString('es-CL');
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function mostrarError(mensaje) {
+    Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: mensaje
+    });
+}
+
+// ========== FUNCIÓN PARA VER CUADRATURA DIARIA ==========
+function verCuadraturaDiaria() {
+    const fecha = datosArqueo.cuadratura?.fecha_seleccionada;
+    
+    if (!fecha) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Atención',
+            text: 'Primero debes generar una cuadratura para ver el detalle diario'
+        });
+        return;
+    }
+    
+    console.log('📊 Cargando cuadratura diaria completa para:', fecha);
+    
+    Swal.fire({
+        title: 'Cargando...',
+        text: 'Obteniendo todas las transacciones del día',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Obtener transacciones del día
+    $.ajax({
+        url: '/app/api/cuadratura/transacciones-dia/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        data: JSON.stringify({
+            fecha: fecha
+        }),
+        contentType: 'application/json',
+        success: function(response) {
+            Swal.close();
+            
+            if (response.success) {
+                mostrarModalCuadraturaDiaria(response.data, fecha);
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: response.error || 'No se pudieron cargar las transacciones'
+                });
+            }
+        },
+        error: function(xhr, status, error) {
+            Swal.close();
+            console.error('❌ Error al cargar transacciones:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de conexión',
+                text: 'No se pudo conectar con el servidor'
+            });
+        }
+    });
+}
+
+function mostrarModalCuadraturaDiaria(data, fecha) {
+    const cuadratura = datosArqueo.cuadratura || {};
+    
+    // Construir HTML del modal
+    const html = `
+        <div class="modal fade" id="modalCuadraturaDiaria" tabindex="-1" style="display: block;">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <h5 class="modal-title text-white">
+                            <i class="ri-file-list-3-line"></i> Cuadratura Diaria Completa - ${formatearFecha(fecha)}
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" onclick="cerrarModalCuadraturaDiaria()"></button>
+                    </div>
+                    <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
+                        
+                        <!-- Resumen General -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <h5 class="mb-3"><i class="ri-information-line"></i> Resumen del Día</h5>
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <strong>📅 Fecha:</strong><br>
+                                            <span class="fs-5">${formatearFecha(fecha)}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong>💰 Venta Total:</strong><br>
+                                            <span class="fs-5 text-success fw-bold">${formatearMoneda(cuadratura.venta_total || 0)}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong>📝 Total Documentos:</strong><br>
+                                            <span class="fs-5 fw-bold">${(data.tickets?.length || 0) + (data.boletas?.length || 0) + (data.facturas?.length || 0)}</span>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <strong>💵 Efectivo Teórico:</strong><br>
+                                            <span class="fs-5 text-primary fw-bold">${formatearMoneda(cuadratura.total_efectivo || 0)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabs para diferentes tipos de transacciones -->
+                        <ul class="nav nav-tabs mb-3" id="transaccionesTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="tickets-tab" data-bs-toggle="tab" data-bs-target="#tickets" type="button">
+                                    🎫 Tickets (${data.tickets?.length || 0})
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="boletas-tab" data-bs-toggle="tab" data-bs-target="#boletas" type="button">
+                                    📄 Boletas (${data.boletas?.length || 0})
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="facturas-tab" data-bs-toggle="tab" data-bs-target="#facturas" type="button">
+                                    📋 Facturas (${data.facturas?.length || 0})
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="resumen-tab" data-bs-toggle="tab" data-bs-target="#resumen" type="button">
+                                    📊 Resumen por Método de Pago
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="transaccionesTabContent">
+                            <!-- Tab Tickets -->
+                            <div class="tab-pane fade show active" id="tickets" role="tabpanel">
+                                ${generarTablaTickets(data.tickets || [])}
+                            </div>
+                            
+                            <!-- Tab Boletas -->
+                            <div class="tab-pane fade" id="boletas" role="tabpanel">
+                                ${generarTablaDTE(data.boletas || [], 'Boleta')}
+                            </div>
+                            
+                            <!-- Tab Facturas -->
+                            <div class="tab-pane fade" id="facturas" role="tabpanel">
+                                ${generarTablaDTE(data.facturas || [], 'Factura')}
+                            </div>
+                            
+                            <!-- Tab Resumen -->
+                            <div class="tab-pane fade" id="resumen" role="tabpanel">
+                                ${generarResumenMetodosPago(cuadratura)}
+                            </div>
+                        </div>
+                        
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="cerrarModalCuadraturaDiaria()">
+                            <i class="ri-close-line"></i> Cerrar
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="imprimirCuadraturaDiaria()">
+                            <i class="ri-printer-line"></i> Imprimir
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="exportarCuadraturaDiariaExcel()">
+                            <i class="ri-file-excel-line"></i> Exportar Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    `;
+    
+    $('body').append(html);
+    $('#modalCuadraturaDiaria').addClass('show');
+}
+
+function generarTablaTickets(tickets) {
+    if (!tickets || tickets.length === 0) {
+        return '<div class="alert alert-warning">No hay tickets registrados para este día</div>';
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Hora</th>
+                        <th>N° Ticket</th>
+                        <th>Cliente</th>
+                        <th>Método de Pago</th>
+                        <th class="text-end">Monto</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    tickets.forEach((ticket, index) => {
+        const hora = ticket.hora || 'N/A';
+        const numero = ticket.numero || 'N/A';
+        const cliente = ticket.cliente || 'Cliente General';
+        const metodoPago = ticket.metodo_pago || 'N/A';
+        const monto = ticket.total || 0;
+        const estado = ticket.estado || 'N/A';
+        
+        let badgeEstado = '';
+        if (estado === 'PAGADO') {
+            badgeEstado = '<span class="badge bg-success">Pagado</span>';
+        } else if (estado === 'PENDIENTE') {
+            badgeEstado = '<span class="badge bg-warning">Pendiente</span>';
+        } else {
+            badgeEstado = '<span class="badge bg-secondary">' + estado + '</span>';
+        }
+        
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${hora}</td>
+                <td><strong>${numero}</strong></td>
+                <td>${cliente}</td>
+                <td>${metodoPago}</td>
+                <td class="text-end fw-bold">${formatearMoneda(monto)}</td>
+                <td>${badgeEstado}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="5" class="text-end">TOTAL TICKETS:</td>
+                        <td class="text-end">${formatearMoneda(tickets.reduce((sum, t) => sum + (t.total || 0), 0))}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+    
+    return html;
+}
+
+function generarTablaDTE(documentos, tipo) {
+    if (!documentos || documentos.length === 0) {
+        return `<div class="alert alert-warning">No hay ${tipo.toLowerCase()}s registradas para este día</div>`;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Hora</th>
+                        <th>Folio</th>
+                        <th>RUT Cliente</th>
+                        <th>Razón Social</th>
+                        <th class="text-end">Neto</th>
+                        <th class="text-end">IVA</th>
+                        <th class="text-end">Total</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    documentos.forEach((doc, index) => {
+        const hora = doc.hora || 'N/A';
+        const folio = doc.folio || 'N/A';
+        const rut = doc.rut_cliente || 'N/A';
+        const razon = doc.razon_social || 'Cliente General';
+        const neto = doc.monto_neto || 0;
+        const iva = doc.monto_iva || 0;
+        const total = doc.monto_total || 0;
+        const estado = doc.estado || 'N/A';
+        
+        let badgeEstado = '';
+        if (estado === 'EMITIDO' || estado === 'ACEPTADO') {
+            badgeEstado = '<span class="badge bg-success">Emitido</span>';
+        } else if (estado === 'RECHAZADO') {
+            badgeEstado = '<span class="badge bg-danger">Rechazado</span>';
+        } else {
+            badgeEstado = '<span class="badge bg-secondary">' + estado + '</span>';
+        }
+        
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${hora}</td>
+                <td><strong>${folio}</strong></td>
+                <td>${rut}</td>
+                <td>${razon}</td>
+                <td class="text-end">${formatearMoneda(neto)}</td>
+                <td class="text-end">${formatearMoneda(iva)}</td>
+                <td class="text-end fw-bold">${formatearMoneda(total)}</td>
+                <td>${badgeEstado}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="5" class="text-end">TOTAL ${tipo.toUpperCase()}S:</td>
+                        <td class="text-end">${formatearMoneda(documentos.reduce((sum, d) => sum + (d.monto_neto || 0), 0))}</td>
+                        <td class="text-end">${formatearMoneda(documentos.reduce((sum, d) => sum + (d.monto_iva || 0), 0))}</td>
+                        <td class="text-end">${formatearMoneda(documentos.reduce((sum, d) => sum + (d.monto_total || 0), 0))}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+    
+    return html;
+}
+
+function generarResumenMetodosPago(cuadratura) {
+    return `
+        <div class="row">
+            <!-- Efectivo y Transferencias -->
+            <div class="col-md-6 mb-3">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <strong><i class="ri-money-dollar-circle-line"></i> Efectivo y Transferencias</strong>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td>💵 Efectivo:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_efectivo || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🔄 Transferencias:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_transferencia || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>👷 Crédito Trabajador:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_credito_trabajador || 0)}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td><strong>TOTAL:</strong></td>
+                                <td class="text-end fw-bold">${formatearMoneda((cuadratura.total_efectivo || 0) + (cuadratura.total_transferencia || 0) + (cuadratura.total_credito_trabajador || 0))}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Transbank -->
+            <div class="col-md-6 mb-3">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <strong><i class="ri-bank-card-line"></i> Transbank</strong>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td>💳 Débito:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_tarjeta_debito || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>💳 Crédito:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_tarjeta_credito || 0)}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td><strong>TOTAL TRANSBANK:</strong></td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_transbank || 0)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Venta Internet -->
+            <div class="col-md-6 mb-3">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <strong><i class="ri-global-line"></i> Venta Internet</strong>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td>🌐 Webpay:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_webpay || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🛒 MercadoLibre:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_mercadolibre || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>💙 MercadoPago:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_mercadopago || 0)}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td><strong>TOTAL INTERNET:</strong></td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_venta_internet || 0)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tarjetas Comerciales -->
+            <div class="col-md-6 mb-3">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <strong><i class="ri-shopping-bag-line"></i> Tarjetas Comerciales</strong>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td>💳 Visa/MC/Amex:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_visa_mc_amex || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏪 Presto:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_presto || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏪 ABCDin:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_abcdin || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏪 Tricot:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_tricot || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏪 Hites:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_hites || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏪 Ripley:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_ripley || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏪 Falabella:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_falabella || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏪 Paris:</td>
+                                <td class="text-end">${formatearMoneda(cuadratura.total_paris || 0)}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td><strong>TOTAL COMERCIALES:</strong></td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_tarjetas_comerciales || 0)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Gran Total -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="alert alert-success">
+                    <h5 class="mb-0">
+                        <i class="ri-money-dollar-circle-fill"></i> 
+                        VENTA TOTAL DEL DÍA: 
+                        <span class="float-end fw-bold fs-4">${formatearMoneda(cuadratura.venta_total || 0)}</span>
+                    </h5>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function cerrarModalCuadraturaDiaria() {
+    $('#modalCuadraturaDiaria').remove();
+    $('.modal-backdrop').remove();
+}
+
+function imprimirCuadraturaDiaria() {
+    window.print();
+}
+
+function exportarCuadraturaDiariaExcel() {
+    const fecha = datosArqueo.cuadratura?.fecha_seleccionada;
+    
+    if (!fecha) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Atención',
+            text: 'No hay datos para exportar'
+        });
+        return;
+    }
+    
+    // Redirigir a la URL de exportación
+    window.location.href = `/app/api/cuadratura/exportar/?fecha=${fecha}`;
+}
+
+function formatearFecha(fecha) {
+    if (!fecha) return 'N/A';
+    const partes = fecha.split('-');
+    if (partes.length !== 3) return fecha;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+</script>
+
+{% include '../../layout/footer.html' %}
+

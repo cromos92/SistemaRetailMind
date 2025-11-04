@@ -517,7 +517,7 @@ def historial_correlativo(request, correlativo_id):
 @login_required
 def emision_dte(request):
     """Vista principal para emisión de DTEs"""
-    return render(request, 'vistas/modulo_administracion/emisionDTE.html')
+    return render(request, 'vistas/modulo_documentos/emisionDTE.html')
 
 
 @login_required

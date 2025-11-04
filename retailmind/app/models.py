@@ -141,9 +141,48 @@ ESTADO_PAGO_CHOICES = [
 
 ESTADO_DTE_CHOICES = [
     ('EMITIDO', 'Emitido'),
+    ('ACEPTADO', 'Aceptado'),  # Mantener por compatibilidad
+    ('RECEPCIONADO_COMPLETO', 'Recepcionado Completo'),
+    ('RECEPCIONADO_PARCIAL', 'Recepcionado Parcial'),
+    ('EN_REGULARIZACION', 'En Regularización'),
     ('RECHAZADO', 'Rechazado'),
-    ('ACEPTADO', 'Aceptado'),
-     ('ANULADO', 'Anulado'),
+    ('ANULADO', 'Anulado'),
+]
+
+ESTADO_RECEPCION_PRODUCTO_CHOICES = [
+    ('PENDIENTE', 'Pendiente de Recepción'),
+    ('RECEPCIONADO_OK', 'Recepcionado OK'),
+    ('RECEPCIONADO_PARCIAL', 'Recepcionado Parcial'),
+    ('RECEPCIONADO_DANADO', 'Recepcionado con Daños'),
+    ('FALTANTE', 'Faltante'),
+    ('EN_REGULARIZACION', 'En Regularización'),
+    ('EN_SOLICITUD_REGULARIZACION', 'En Solicitud de Regularización'),  # NUEVO
+    ('REGULARIZADO', 'Regularizado'),
+]
+
+# Nuevos choices para Solicitudes de Regularización
+TIPO_PROBLEMA_CHOICES = [
+    ('FALTANTE', 'Faltante'),
+    ('DANADO', 'Dañado'),
+    ('PARCIAL', 'Recepción Parcial'),
+    ('INCORRECTO', 'Producto Incorrecto'),
+]
+
+TIPO_SOLUCION_CHOICES = [
+    ('NOTA_CREDITO', 'Nota de Crédito'),
+    ('REENVIO', 'Reenvío del mismo producto'),
+    ('CAMBIO_PRODUCTO', 'Cambio por otro producto'),
+    ('AJUSTE_CANTIDAD', 'Ajustar solo cantidad'),
+]
+
+ESTADO_SOLICITUD_CHOICES = [
+    ('PENDIENTE', 'Pendiente de Revisión'),
+    ('EN_REVISION', 'En Revisión por Emisor'),
+    ('APROBADA', 'Aprobada'),
+    ('RECHAZADA', 'Rechazada'),
+    ('EJECUTADA', 'Solución Ejecutada'),
+    ('COMPLETADA', 'Completada y Confirmada'),
+    ('CANCELADA', 'Cancelada'),
 ]
 METODO_PAGO_TICKET_CHOICES = [
     ('EFECTIVO', 'Efectivo'),
@@ -184,7 +223,7 @@ class Dte(models.Model):
     monto_con_iva = models.DecimalField(max_digits=12, decimal_places=2)
     monto_neto = models.DecimalField(max_digits=12, decimal_places=2)
     estado_pago = models.CharField(max_length=20, choices=ESTADO_PAGO_CHOICES)
-    estado_dte = models.CharField(max_length=20, choices=ESTADO_DTE_CHOICES)
+    estado_dte = models.CharField(max_length=30, choices=ESTADO_DTE_CHOICES)  # Aumentado para nuevos estados
     responsable = models.CharField(max_length=100)   
     fecha_emision = models.DateField()
     fecha_vencimiento = models.DateField()
@@ -203,9 +242,33 @@ class Dte(models.Model):
         ('TRASPASO', 'Traspaso')
     ])
     referencias = models.TextField(blank=True, null=True)
+    
+    # Campos para Notas de Crédito
+    es_nota_credito = models.BooleanField(default=False, help_text="Indica si es una Nota de Crédito")
+    documento_afectado = models.ForeignKey(
+        'self', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='notas_credito_relacionadas',
+        help_text="DTE original que se está corrigiendo (solo para NC)"
+    )
+    motivo_nc = models.TextField(
+        blank=True, 
+        null=True,
+        help_text="Motivo de la Nota de Crédito"
+    )
 
     def __str__(self):
         return f"DTE {self.numero_documento} - {self.tipo_documento}"
+    
+    def es_misma_empresa_check(self):
+        """Verifica si emisor y receptor son la misma empresa"""
+        return self.emisor_id == self.receptor_id if self.receptor else False
+    
+    def requiere_nota_credito_check(self):
+        """Determina si requiere NC para regularización (empresas diferentes)"""
+        return not self.es_misma_empresa_check() and self.tipo_transaccion == 'TRASPASO'
 class Dte_Detalle_Pago(models.Model):
     dte = models.ForeignKey(Dte, related_name='dte_asociado', on_delete=models.PROTECT)
     metodo_pago = models.CharField(max_length=100 )
@@ -366,6 +429,7 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     ('RECEPCION_COMPRA', 'Recepción de Compra'),
     ('DEVOLUCION_CLIENTE', 'Devolución de Cliente'),
     ('TRASPASO_ENTRADA', 'Traspaso Entrada'),
+    ('REGULARIZACION_TRASPASO', 'Regularización de Traspaso'),
     ('AJUSTE_POSITIVO', 'Ajuste Positivo'),
     ('DONACION_RECIBIDA', 'Donación Recibida'),
     
@@ -389,6 +453,7 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
 
 ESTADO_MOVIMIENTO_CHOICES = [
     ('PENDIENTE', 'Pendiente'),
+    ('PENDIENTE_RECEPCION', 'Pendiente de Recepción'),
     ('APROBADO', 'Aprobado'),
     ('RECHAZADO', 'Rechazado'),
     ('ANULADO', 'Anulado'),
@@ -639,6 +704,8 @@ class Dte_Productos(models.Model):
   
     def __str__(self):
         return f"Dte_Producto   {self.dte} - {self.productoTalla}"
+
+
 class Compras(models.Model):
     empresa =   models.ForeignKey(Empresa,   on_delete=models.CASCADE)
     nombre=   models.CharField(max_length=200)
@@ -671,14 +738,345 @@ class Compras_Producto_Talla(models.Model):
     def __str__(self):
         return f"Compras_Producto_Talla   {self.compra_producto} - {self.stock}"
 class Productos_Recepcionados(models.Model):
-    compra_producto_talla =   models.ForeignKey(Compras_Producto_Talla,   on_delete=models.CASCADE)
+    """
+    Modelo unificado para recepciones de productos.
+    Sirve para:
+    - Recepciones de compras (compra_producto_talla)
+    - Recepciones de traspasos internos (dte + dte_producto)
+    """
+    # Para compras (legacy - mantener compatibilidad)
+    compra_producto_talla = models.ForeignKey(
+        Compras_Producto_Talla, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        help_text="Para recepciones de compras"
+    )
+    
+    # Para traspasos internos (nuevo)
+    dte = models.ForeignKey(
+        Dte, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='recepciones',
+        help_text="DTE de traspaso interno"
+    )
+    dte_producto = models.ForeignKey(
+        Dte_Productos, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='recepcion',
+        help_text="Producto específico del DTE"
+    )
+    
+    # Común para ambos
     producto_talla = models.ForeignKey(Producto_Talla, on_delete=models.CASCADE, null=True, blank=True)
-
-    dte = models.ForeignKey(Dte, on_delete=models.SET_NULL, null=True, blank=True, related_name='recepciones')  # <- Aquí va
-    stockArribado=   models.IntegerField()
-    fecha =   models.DateField( auto_now=True)
+    
+    # Cantidades
+    stockArribado = models.IntegerField(help_text="Cantidad recepcionada (nombre legacy)")
+    cantidad_esperada = models.IntegerField(default=0, help_text="Cantidad original esperada")
+    cantidad_danada = models.IntegerField(default=0, help_text="Cantidad con daños")
+    cantidad_faltante = models.IntegerField(default=0, help_text="Cantidad que no llegó")
+    
+    # Estado de recepción (nuevo)
+    estado = models.CharField(
+        max_length=30,
+        choices=ESTADO_RECEPCION_PRODUCTO_CHOICES,
+        default='RECEPCIONADO_OK',
+        help_text="Estado de la recepción"
+    )
+    observaciones = models.TextField(blank=True, null=True, help_text="Observaciones o problemas")
+    
+    # Auditoría
+    fecha = models.DateField(auto_now=True)
+    fecha_recepcion = models.DateTimeField(null=True, blank=True)
+    recepcionado_por = models.CharField(max_length=100, blank=True, null=True)
+    fecha_regularizacion = models.DateTimeField(null=True, blank=True)
+    regularizado_por = models.CharField(max_length=100, blank=True, null=True)
+    
+    class Meta:
+        verbose_name = 'Producto Recepcionado'
+        verbose_name_plural = 'Productos Recepcionados'
+        indexes = [
+            models.Index(fields=['dte', 'estado']),
+            models.Index(fields=['estado']),
+            models.Index(fields=['fecha']),
+        ]
+    
     def __str__(self):
-        return f"Productos_Recepcionados   {self.compra_producto_talla} - {self.stockArribado}"
+        if self.dte:
+            return f"Recepción DTE #{self.dte.numero_documento} - {self.producto_talla.sku if self.producto_talla else 'N/A'}"
+        return f"Recepción Compra - {self.compra_producto_talla} - {self.stockArribado}"
+    
+    @property
+    def tiene_problemas(self):
+        """Indica si este producto tiene problemas en la recepción"""
+        return self.estado in ['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION']
+    
+    @property
+    def esta_ok(self):
+        """Indica si el producto fue recepcionado correctamente"""
+        return self.estado == 'RECEPCIONADO_OK' and self.stockArribado == self.cantidad_esperada
+    
+    @property
+    def es_recepcion_traspaso(self):
+        """Indica si es una recepción de traspaso interno"""
+        return self.dte is not None and self.dte_producto is not None
+    
+    @property
+    def es_recepcion_compra(self):
+        """Indica si es una recepción de compra"""
+        return self.compra_producto_talla is not None
+
+
+class Solicitud_Regularizacion(models.Model):
+    """
+    Modelo para gestionar solicitudes de regularización entre empresas diferentes.
+    El RECEPTOR crea la solicitud, el EMISOR la aprueba y ejecuta.
+    """
+    # Identificación
+    numero_solicitud = models.CharField(
+        max_length=20, 
+        unique=True,
+        help_text="Número único de la solicitud (ej: SOL-001)"
+    )
+    fecha_solicitud = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Fecha y hora de creación de la solicitud"
+    )
+    
+    # Relaciones con DTE y Producto
+    dte_original = models.ForeignKey(
+        Dte,
+        on_delete=models.CASCADE,
+        related_name='solicitudes_regularizacion',
+        help_text="DTE original que tiene el problema"
+    )
+    producto_recepcionado = models.ForeignKey(
+        Productos_Recepcionados,
+        on_delete=models.CASCADE,
+        related_name='solicitudes',
+        help_text="Producto recepcionado con problema"
+    )
+    
+    # Partes involucradas
+    sucursal_solicitante = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='solicitudes_enviadas',
+        help_text="Sucursal que SOLICITA (receptor del DTE original)"
+    )
+    sucursal_emisora = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='solicitudes_recibidas',
+        help_text="Sucursal que debe APROBAR (emisor del DTE original)"
+    )
+    usuario_solicita = models.CharField(
+        max_length=100,
+        help_text="Usuario que crea la solicitud"
+    )
+    
+    # Problema detectado
+    tipo_problema = models.CharField(
+        max_length=50,
+        choices=TIPO_PROBLEMA_CHOICES,
+        help_text="Tipo de problema detectado"
+    )
+    cantidad_problema = models.IntegerField(
+        help_text="Cantidad de unidades con problema"
+    )
+    descripcion_problema = models.TextField(
+        help_text="Descripción detallada del problema"
+    )
+    evidencia_foto = models.FileField(
+        upload_to='evidencias_problemas/',
+        null=True,
+        blank=True,
+        help_text="Foto de evidencia (opcional)"
+    )
+    
+    # Solución solicitada por RECEPTOR
+    tipo_solucion_solicitada = models.CharField(
+        max_length=50,
+        choices=TIPO_SOLUCION_CHOICES,
+        help_text="Tipo de solución que solicita el receptor"
+    )
+    
+    # Para caso de CAMBIO_PRODUCTO o REENVIO
+    producto_cambio_solicitado = models.ForeignKey(
+        'Producto_Talla',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='solicitudes_como_reemplazo',
+        help_text="Producto que solicita como reemplazo (para CAMBIO_PRODUCTO)"
+    )
+    cantidad_cambio_solicitada = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Cantidad solicitada del producto de cambio"
+    )
+    
+    # Respuesta del EMISOR
+    estado = models.CharField(
+        max_length=50,
+        choices=ESTADO_SOLICITUD_CHOICES,
+        default='PENDIENTE',
+        help_text="Estado actual de la solicitud"
+    )
+    
+    fecha_revision = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que el emisor revisó la solicitud"
+    )
+    usuario_revisa = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Usuario del emisor que revisa"
+    )
+    decision_emisor = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Observaciones del emisor sobre su decisión"
+    )
+    
+    # Solución alternativa propuesta/aprobada por EMISOR
+    tipo_solucion_aprobada = models.CharField(
+        max_length=50,
+        choices=TIPO_SOLUCION_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Tipo de solución finalmente aprobada (puede diferir de la solicitada)"
+    )
+    producto_cambio_aprobado = models.ForeignKey(
+        'Producto_Talla',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='solicitudes_aprobadas',
+        help_text="Producto finalmente aprobado (puede diferir del solicitado)"
+    )
+    cantidad_cambio_aprobada = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Cantidad finalmente aprobada"
+    )
+    
+    # Ejecución de la solución
+    fecha_ejecucion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que se ejecutó la solución (emisión de documentos)"
+    )
+    dte_solucion = models.ForeignKey(
+        Dte,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='es_solucion_de',
+        help_text="DTE emitido como solución (NC o nuevo DTE con producto de cambio)"
+    )
+    nota_credito = models.ForeignKey(
+        Dte,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='nc_de_solicitud',
+        help_text="Nota de crédito emitida (si aplica)"
+    )
+    
+    # Confirmación del RECEPTOR
+    fecha_confirmacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que el receptor confirmó la solución"
+    )
+    usuario_confirma = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Usuario que confirmó la recepción de la solución"
+    )
+    conformidad = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Si el receptor quedó conforme con la solución"
+    )
+    observaciones_finales = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Observaciones finales del receptor"
+    )
+    
+    class Meta:
+        db_table = 'solicitudes_regularizacion'
+        verbose_name = 'Solicitud de Regularización'
+        verbose_name_plural = 'Solicitudes de Regularización'
+        ordering = ['-fecha_solicitud']
+        indexes = [
+            models.Index(fields=['sucursal_emisora', 'estado']),
+            models.Index(fields=['sucursal_solicitante', 'estado']),
+            models.Index(fields=['estado']),
+            models.Index(fields=['fecha_solicitud']),
+            models.Index(fields=['numero_solicitud']),
+        ]
+    
+    def __str__(self):
+        return f"Solicitud #{self.numero_solicitud} - {self.sucursal_solicitante.alias} → {self.sucursal_emisora.alias}"
+    
+    @property
+    def esta_pendiente(self):
+        """Indica si la solicitud está pendiente de revisión"""
+        return self.estado in ['PENDIENTE', 'EN_REVISION']
+    
+    @property
+    def puede_ejecutarse(self):
+        """Indica si la solicitud puede ejecutarse"""
+        return self.estado == 'APROBADA'
+    
+    @property
+    def esta_completada(self):
+        """Indica si todo el ciclo está completo"""
+        return self.estado == 'COMPLETADA'
+    
+    @property
+    def dias_pendiente(self):
+        """Días que lleva pendiente la solicitud"""
+        if self.esta_pendiente:
+            from django.utils import timezone
+            return (timezone.now() - self.fecha_solicitud).days
+        return 0
+    
+    @property
+    def producto_original_info(self):
+        """Información del producto original con problema"""
+        if self.producto_recepcionado and self.producto_recepcionado.producto_talla:
+            return {
+                'sku': self.producto_recepcionado.producto_talla.sku,
+                'nombre': self.producto_recepcionado.producto_talla.producto.articulo if self.producto_recepcionado.producto_talla.producto else 'N/A',
+                'talla': self.producto_recepcionado.producto_talla.talla,
+            }
+        return None
+    
+    @property
+    def producto_solucion_info(self):
+        """Información del producto de solución"""
+        producto = self.producto_cambio_aprobado or self.producto_cambio_solicitado
+        if producto:
+            return {
+                'sku': producto.sku,
+                'nombre': producto.producto.articulo if producto.producto else 'N/A',
+                'talla': producto.talla,
+                'stock_disponible': producto.stock,
+            }
+        return None
+
+
 class Cotizacion(models.Model):
     correlativo=   models.IntegerField()
     vendedor =   models.ForeignKey(Vendedor,   on_delete=models.CASCADE)
@@ -879,6 +1277,7 @@ class ArqueoCaja(models.Model):
     total_transferencia_teorico = models.IntegerField(default=0)
     total_cheque_teorico = models.IntegerField(default=0)
     total_convenio_teorico = models.IntegerField(default=0)
+    total_credito_trabajador_teorico = models.IntegerField(default=0)
     
     # Documentos
     total_tickets_teorico = models.IntegerField(default=0)
@@ -917,6 +1316,11 @@ class ArqueoCaja(models.Model):
     
     # === DIFERENCIAS ===
     diferencia_efectivo = models.IntegerField(default=0)  # físico - teórico
+    
+    # === CIERRE POS (TRANSBANK) ===
+    cierre_pos_fisico = models.IntegerField(default=0, help_text="Monto real del cierre de máquina POS")
+    numero_lote_pos = models.CharField(max_length=50, blank=True, help_text="Número de lote del cierre POS")
+    diferencia_transbank = models.IntegerField(default=0, help_text="Diferencia entre cierre POS físico y teórico")
     
     # === CONTROL Y ESTADO ===
     estado = models.CharField(max_length=20, choices=ESTADO_ARQUEO_CHOICES, default='ABIERTO')
@@ -1011,6 +1415,79 @@ class ArqueoCaja(models.Model):
     def requiere_supervision(self):
         """Determina si requiere supervisión (diferencia > $1000 o > 1%)"""
         return self.diferencia_absoluta > 1000 or self.porcentaje_diferencia > 1.0
+
+
+# ========== MODELO PARA DEPÓSITOS BANCARIOS ==========
+
+BANCO_CHOICES = [
+    ('ESTADO', 'BancoEstado'),
+    ('CHILE', 'Banco de Chile'),
+    ('SANTANDER', 'Santander'),
+    ('BCI', 'BCI'),
+    ('SCOTIABANK', 'Scotiabank'),
+    ('ITAU', 'Itaú'),
+    ('SECURITY', 'Banco Security'),
+    ('FALABELLA', 'Banco Falabella'),
+    ('RIPLEY', 'Banco Ripley'),
+    ('OTRO', 'Otro'),
+]
+
+class DepositoBancario(models.Model):
+    """
+    Modelo simple para registrar depósitos bancarios realizados
+    Relacionado con el arqueo de caja del día
+    """
+    # === RELACIÓN CON ARQUEO ===
+    arqueo = models.ForeignKey(
+        ArqueoCaja, 
+        on_delete=models.CASCADE, 
+        related_name='depositos',
+        help_text="Arqueo de caja al que pertenece este depósito"
+    )
+    
+    # === DATOS DEL DEPÓSITO ===
+    fecha_deposito = models.DateField(
+        help_text="Fecha en que se realizó el depósito bancario"
+    )
+    monto = models.IntegerField(
+        default=0,
+        help_text="Monto depositado en pesos chilenos"
+    )
+    banco = models.CharField(
+        max_length=20, 
+        choices=BANCO_CHOICES,
+        default='ESTADO',
+        help_text="Banco donde se realizó el depósito"
+    )
+    numero_comprobante = models.CharField(
+        max_length=50, 
+        blank=True,
+        help_text="Número del comprobante bancario (opcional)"
+    )
+    observaciones = models.TextField(
+        blank=True,
+        help_text="Observaciones adicionales sobre el depósito"
+    )
+    
+    # === METADATOS ===
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.PROTECT,
+        help_text="Usuario que registró el depósito"
+    )
+    fecha_registro = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Fecha y hora en que se registró el depósito"
+    )
+    
+    class Meta:
+        db_table = 'deposito_bancario'
+        ordering = ['-fecha_deposito']
+        verbose_name = 'Depósito Bancario'
+        verbose_name_plural = 'Depósitos Bancarios'
+    
+    def __str__(self):
+        return f"Depósito {self.fecha_deposito} - {self.get_banco_display()} - ${self.monto:,}"
 
 
 # ========== MÓDULO DE CRÉDITOS A TRABAJADORES ==========
@@ -1133,25 +1610,74 @@ class CreditoTrabajador(models.Model):
         # Generar número de crédito si no existe
         if not self.numero_credito:
             from django.utils import timezone
-            fecha = timezone.now()
-            ultimo_numero = CreditoTrabajador.objects.filter(
-                empresa_origen=self.empresa_origen,
-                fecha_solicitud__year=fecha.year
-            ).count()
-            self.numero_credito = f"CR-{fecha.year}-{ultimo_numero + 1:04d}"
-        
-        # Calcular valor de cuota si está aprobado
-        if self.estado == 'APROBADO' and self.monto_aprobado and self.numero_cuotas > 0:
-            if self.tasa_interes > 0:
-                # Cálculo con interés compuesto
-                tasa_mensual = float(self.tasa_interes) / 100
-                factor = (1 + tasa_mensual) ** self.numero_cuotas
-                self.valor_cuota = (float(self.monto_aprobado) * tasa_mensual * factor) / (factor - 1)
-            else:
-                # Sin interés
-                self.valor_cuota = float(self.monto_aprobado) / self.numero_cuotas
-        
-        super().save(*args, **kwargs)
+            from django.db import transaction, IntegrityError
+            
+            max_intentos = 10
+            for intento in range(max_intentos):
+                try:
+                    with transaction.atomic():
+                        fecha = timezone.now()
+                        
+                        # Buscar el último crédito del año para esta empresa
+                        # Usar select_for_update() para bloquear y evitar race conditions
+                        ultimo_credito = CreditoTrabajador.objects.filter(
+                            empresa_origen=self.empresa_origen,
+                            numero_credito__startswith=f"CR-{fecha.year}"
+                        ).select_for_update().order_by('-numero_credito').first()
+                        
+                        if ultimo_credito:
+                            try:
+                                # Extraer el número del último crédito (formato: CR-2025-0001)
+                                ultimo_num = int(ultimo_credito.numero_credito.split('-')[-1])
+                                nuevo_numero = ultimo_num + 1
+                            except (ValueError, IndexError):
+                                # Si hay error al parsear, buscar siguiente disponible
+                                nuevo_numero = 1
+                        else:
+                            nuevo_numero = 1
+                        
+                        # Verificar que no exista (doble check)
+                        while CreditoTrabajador.objects.filter(
+                            numero_credito=f"CR-{fecha.year}-{nuevo_numero:04d}"
+                        ).exists():
+                            nuevo_numero += 1
+                            if nuevo_numero > 9999:
+                                raise ValueError(f"No hay números disponibles para el año {fecha.year}")
+                        
+                        self.numero_credito = f"CR-{fecha.year}-{nuevo_numero:04d}"
+                        
+                        # Calcular valor de cuota si está aprobado
+                        if self.estado == 'APROBADO' and self.monto_aprobado and self.numero_cuotas > 0:
+                            if self.tasa_interes > 0:
+                                # Cálculo con interés compuesto
+                                tasa_mensual = float(self.tasa_interes) / 100
+                                factor = (1 + tasa_mensual) ** self.numero_cuotas
+                                self.valor_cuota = (float(self.monto_aprobado) * tasa_mensual * factor) / (factor - 1)
+                            else:
+                                # Sin interés
+                                self.valor_cuota = float(self.monto_aprobado) / self.numero_cuotas
+                        
+                        super().save(*args, **kwargs)
+                        break  # Si llegó aquí, el save fue exitoso
+                        
+                except IntegrityError as e:
+                    if 'numero_credito' in str(e) and intento < max_intentos - 1:
+                        # Si el error es por número duplicado, reintentar
+                        continue
+                    else:
+                        # Si es otro error o ya no hay más intentos, lanzar la excepción
+                        raise
+        else:
+            # Si ya tiene numero_credito, solo calcular cuota si es necesario
+            if self.estado == 'APROBADO' and self.monto_aprobado and self.numero_cuotas > 0:
+                if self.tasa_interes > 0:
+                    tasa_mensual = float(self.tasa_interes) / 100
+                    factor = (1 + tasa_mensual) ** self.numero_cuotas
+                    self.valor_cuota = (float(self.monto_aprobado) * tasa_mensual * factor) / (factor - 1)
+                else:
+                    self.valor_cuota = float(self.monto_aprobado) / self.numero_cuotas
+            
+            super().save(*args, **kwargs)
     
     @property
     def saldo_pendiente(self):
@@ -2174,3 +2700,450 @@ class HistorialCambioDevolucion(models.Model):
     def __str__(self):
         return f"{self.accion} - {self.cambio_devolucion.numero_operacion} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
 
+
+# ========== MODELOS PARA COTIZACIONES ==========
+
+class Cotizacion_Empresa(models.Model):
+    """
+    Modelo para gestionar cotizaciones a empresas
+    """
+    # === ESTADOS DE COTIZACIÓN ===
+    ESTADO_VIGENTE = 'VIGENTE'
+    ESTADO_VENCIDA = 'VENCIDA'
+    ESTADO_FACTURADA = 'FACTURADA'
+    ESTADO_ANULADA = 'ANULADA'
+    
+    ESTADOS_COTIZACION = [
+        (ESTADO_VIGENTE, 'Vigente'),
+        (ESTADO_VENCIDA, 'Vencida'),
+        (ESTADO_FACTURADA, 'Facturada'),
+        (ESTADO_ANULADA, 'Anulada'),
+    ]
+    
+    # === RELACIONES ===
+    sucursal = models.ForeignKey(
+        Sucursal, 
+        on_delete=models.CASCADE,
+        related_name='cotizaciones'
+    )
+    cliente = models.ForeignKey(
+        Empresa, 
+        on_delete=models.CASCADE,
+        related_name='cotizaciones_recibidas',
+        help_text="Cliente/Empresa que recibe la cotización"
+    )
+    vendedor = models.ForeignKey(
+        Vendedor, 
+        on_delete=models.SET_NULL, 
+        null=True, blank=True,
+        related_name='cotizaciones'
+    )
+    usuario_creador = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='cotizaciones_creadas'
+    )
+    
+    # === INFORMACIÓN DE LA COTIZACIÓN ===
+    numero_cotizacion = models.CharField(
+        max_length=20, 
+        unique=True,
+        help_text="Número único de cotización"
+    )
+    fecha_emision = models.DateField(
+        default=timezone.now,
+        help_text="Fecha de emisión de la cotización"
+    )
+    fecha_validez = models.DateField(
+        help_text="Fecha hasta la cual la cotización es válida"
+    )
+    dias_validez = models.IntegerField(
+        default=30,
+        help_text="Días de validez de la cotización"
+    )
+    
+    # === DESCRIPCIÓN Y DETALLES ===
+    descripcion = models.TextField(
+        blank=True, null=True,
+        help_text="Descripción general de la cotización"
+    )
+    observaciones = models.TextField(
+        blank=True, null=True,
+        help_text="Observaciones, condiciones de pago, notas adicionales"
+    )
+    
+    # === MONTOS ===
+    subtotal = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        help_text="Subtotal de la cotización sin impuestos"
+    )
+    descuento = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        help_text="Descuento aplicado"
+    )
+    impuesto = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        help_text="Impuestos (IVA)"
+    )
+    total = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        help_text="Total de la cotización"
+    )
+    
+    # === ESTADO Y FACTURACIÓN ===
+    estado = models.CharField(
+        max_length=20, 
+        choices=ESTADOS_COTIZACION, 
+        default=ESTADO_VIGENTE
+    )
+    facturada = models.BooleanField(
+        default=False,
+        help_text="Indica si la cotización fue convertida en factura"
+    )
+    numero_factura = models.CharField(
+        max_length=20, 
+        blank=True, null=True,
+        help_text="Número de factura si fue facturada"
+    )
+    fecha_facturacion = models.DateTimeField(
+        blank=True, null=True,
+        help_text="Fecha en que se facturó"
+    )
+    
+    # === ARCHIVOS ADJUNTOS ===
+    archivo_pdf = models.FileField(
+        upload_to='cotizaciones/pdfs/', 
+        blank=True, null=True,
+        help_text="PDF de la cotización"
+    )
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    anulada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cotizaciones_anuladas'
+    )
+    fecha_anulacion = models.DateTimeField(
+        blank=True, null=True
+    )
+    motivo_anulacion = models.TextField(
+        blank=True, null=True
+    )
+    
+    class Meta:
+        ordering = ['-fecha_emision', '-numero_cotizacion']
+        verbose_name = 'Cotización'
+        verbose_name_plural = 'Cotizaciones'
+        indexes = [
+            models.Index(fields=['numero_cotizacion']),
+            models.Index(fields=['sucursal', 'fecha_emision']),
+            models.Index(fields=['cliente', 'estado']),
+            models.Index(fields=['fecha_validez', 'estado']),
+        ]
+    
+    def __str__(self):
+        return f"Cotización {self.numero_cotizacion} - {self.cliente.nombre}"
+    
+    def save(self, *args, **kwargs):
+        # Calcular fecha de validez si no está definida
+        if not self.fecha_validez and self.fecha_emision and self.dias_validez:
+            from datetime import timedelta
+            self.fecha_validez = self.fecha_emision + timedelta(days=self.dias_validez)
+        
+        # Actualizar estado según validez
+        if self.fecha_validez and not self.facturada and self.estado == self.ESTADO_VIGENTE:
+            from datetime import date
+            if self.fecha_validez < date.today():
+                self.estado = self.ESTADO_VENCIDA
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def esta_vigente(self):
+        """Verifica si la cotización está vigente"""
+        from datetime import date
+        return (
+            self.estado == self.ESTADO_VIGENTE and 
+            self.fecha_validez >= date.today() and 
+            not self.facturada
+        )
+    
+    @property
+    def dias_restantes(self):
+        """Calcula los días restantes de validez"""
+        from datetime import date
+        if self.fecha_validez:
+            delta = self.fecha_validez - date.today()
+            return delta.days
+        return 0
+    
+    @property
+    def porcentaje_vigencia(self):
+        """Calcula el porcentaje de vigencia restante"""
+        from datetime import date
+        if self.dias_validez > 0:
+            dias_transcurridos = (date.today() - self.fecha_emision).days
+            return max(0, min(100, ((self.dias_validez - dias_transcurridos) / self.dias_validez) * 100))
+        return 0
+    
+    def calcular_totales(self):
+        """Calcula los totales de la cotización basándose en sus items"""
+        items = self.items.all()
+        self.subtotal = sum(item.subtotal for item in items)
+        # Calcular IVA (19% en Chile)
+        self.impuesto = self.subtotal * 0.19
+        self.total = self.subtotal + self.impuesto - self.descuento
+        self.save()
+    
+    def anular(self, usuario, motivo=""):
+        """Anula la cotización"""
+        self.estado = self.ESTADO_ANULADA
+        self.anulada_por = usuario
+        self.fecha_anulacion = timezone.now()
+        self.motivo_anulacion = motivo
+        self.save()
+    
+    def marcar_como_facturada(self, numero_factura):
+        """Marca la cotización como facturada"""
+        self.facturada = True
+        self.estado = self.ESTADO_FACTURADA
+        self.numero_factura = numero_factura
+        self.fecha_facturacion = timezone.now()
+        self.save()
+
+
+class Cotizacion_Empresa_Detalle(models.Model):
+    """
+    Detalle de items de la cotización
+    Permite asociar productos existentes o productos pendientes de crear
+    """
+    # === RELACIONES ===
+    cotizacion = models.ForeignKey(
+        Cotizacion_Empresa, 
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    
+    # === PRODUCTO ASOCIADO (OPCIONAL) ===
+    producto_existente = models.ForeignKey(
+        'Producto_Talla', 
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cotizaciones_asociadas',
+        help_text="Producto existente en inventario"
+    )
+    
+    # === INFORMACIÓN DEL PRODUCTO PENDIENTE ===
+    # Estos campos se usan si el producto aún no existe
+    es_producto_pendiente = models.BooleanField(
+        default=False,
+        help_text="Indica si el producto aún no está creado en el sistema"
+    )
+    nombre_producto_pendiente = models.CharField(
+        max_length=255, 
+        blank=True, null=True,
+        help_text="Nombre del producto pendiente"
+    )
+    descripcion_producto_pendiente = models.TextField(
+        blank=True, null=True,
+        help_text="Descripción del producto pendiente"
+    )
+    sku_producto_pendiente = models.CharField(
+        max_length=100, 
+        blank=True, null=True,
+        help_text="SKU esperado del producto pendiente"
+    )
+    
+    # === INFORMACIÓN DEL ITEM ===
+    numero_linea = models.IntegerField(
+        help_text="Número de línea del item"
+    )
+    descripcion = models.TextField(
+        help_text="Descripción del item en la cotización"
+    )
+    cantidad = models.IntegerField(
+        default=1,
+        help_text="Cantidad cotizada"
+    )
+    precio_unitario = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="Precio unitario comprometido en la cotización"
+    )
+    
+    # === CÁLCULOS ===
+    descuento_porcentaje = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        help_text="Porcentaje de descuento aplicado"
+    )
+    descuento_monto = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        help_text="Monto de descuento"
+    )
+    subtotal = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2,
+        help_text="Subtotal del item (cantidad * precio - descuento)"
+    )
+    
+    # === STOCK Y DISPONIBILIDAD ===
+    stock_disponible = models.IntegerField(
+        default=0,
+        help_text="Stock disponible al momento de la cotización"
+    )
+    fecha_llegada_estimada = models.DateField(
+        blank=True, null=True,
+        help_text="Fecha estimada de llegada si es producto pendiente"
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones = models.TextField(
+        blank=True, null=True,
+        help_text="Observaciones específicas del item"
+    )
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['cotizacion', 'numero_linea']
+        verbose_name = 'Detalle de Cotización'
+        verbose_name_plural = 'Detalles de Cotización'
+        indexes = [
+            models.Index(fields=['cotizacion', 'numero_linea']),
+            models.Index(fields=['producto_existente']),
+            models.Index(fields=['es_producto_pendiente']),
+        ]
+    
+    def __str__(self):
+        if self.producto_existente:
+            producto_nombre = getattr(self.producto_existente, 'producto', None)
+            if producto_nombre:
+                return f"{self.cotizacion.numero_cotizacion} - {producto_nombre.articulo}"
+        return f"{self.cotizacion.numero_cotizacion} - {self.descripcion[:50]}"
+    
+    def save(self, *args, **kwargs):
+        # Calcular subtotal
+        subtotal_antes_descuento = self.cantidad * self.precio_unitario
+        
+        # Aplicar descuento
+        if self.descuento_porcentaje > 0:
+            self.descuento_monto = subtotal_antes_descuento * (self.descuento_porcentaje / 100)
+        
+        self.subtotal = subtotal_antes_descuento - self.descuento_monto
+        
+        # Obtener stock si hay producto existente
+        if self.producto_existente and not self.es_producto_pendiente:
+            # Aquí podrías calcular el stock real desde el inventario
+            # Por ahora dejamos el valor que se asigne manualmente
+            pass
+        
+        super().save(*args, **kwargs)
+        
+        # Recalcular totales de la cotización
+        self.cotizacion.calcular_totales()
+    
+    @property
+    def tiene_stock_suficiente(self):
+        """Verifica si hay stock suficiente"""
+        if self.es_producto_pendiente:
+            return False
+        if self.producto_existente:
+            return self.stock_disponible >= self.cantidad
+        return False
+    
+    @property
+    def precio_total(self):
+        """Precio total del item"""
+        return self.subtotal
+    
+    @property
+    def nombre_producto(self):
+        """Retorna el nombre del producto (existente o pendiente)"""
+        if self.producto_existente and self.producto_existente.producto:
+            return self.producto_existente.producto.articulo
+        return self.nombre_producto_pendiente or "Producto sin nombre"
+    
+    @property
+    def sku_producto(self):
+        """Retorna el SKU del producto (existente o pendiente)"""
+        if self.producto_existente and self.producto_existente.producto:
+            return str(self.producto_existente.producto.sku)
+        return self.sku_producto_pendiente or "N/A"
+
+
+class Historial_Cotizacion(models.Model):
+    """
+    Historial de cambios y acciones en cotizaciones
+    """
+    # === RELACIONES ===
+    cotizacion = models.ForeignKey(
+        Cotizacion_Empresa, 
+        on_delete=models.CASCADE,
+        related_name='historial'
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='acciones_cotizacion'
+    )
+    
+    # === INFORMACIÓN DEL CAMBIO ===
+    accion = models.CharField(
+        max_length=50,
+        choices=[
+            ('CREADA', 'Cotización Creada'),
+            ('MODIFICADA', 'Cotización Modificada'),
+            ('ANULADA', 'Cotización Anulada'),
+            ('FACTURADA', 'Convertida a Factura'),
+            ('ENVIADA', 'Enviada al Cliente'),
+            ('VENCIDA', 'Marcada como Vencida'),
+            ('ITEM_AGREGADO', 'Item Agregado'),
+            ('ITEM_MODIFICADO', 'Item Modificado'),
+            ('ITEM_ELIMINADO', 'Item Eliminado'),
+        ]
+    )
+    descripcion = models.TextField(
+        help_text="Descripción de la acción realizada"
+    )
+    datos_anteriores = models.JSONField(
+        blank=True, null=True,
+        help_text="Datos antes del cambio (JSON)"
+    )
+    datos_nuevos = models.JSONField(
+        blank=True, null=True,
+        help_text="Datos después del cambio (JSON)"
+    )
+    
+    # === METADATA ===
+    timestamp = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(
+        blank=True, null=True,
+        help_text="Dirección IP desde donde se realizó la acción"
+    )
+    
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Historial de Cotización'
+        verbose_name_plural = 'Historiales de Cotización'
+    
+    def __str__(self):
+        return f"{self.cotizacion.numero_cotizacion} - {self.accion} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
+
+        
