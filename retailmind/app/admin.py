@@ -3,7 +3,8 @@ from .models import (
     Solicitud_Regularizacion, 
     Productos_Recepcionados,
     CambioPrecioPendiente,
-    NotificacionCambioPrecio
+    NotificacionCambioPrecio,
+    HistorialCambioPrecio
 )
 
 # Register your models here.
@@ -94,3 +95,38 @@ class NotificacionCambioPrecioAdmin(admin.ModelAdmin):
     def mensaje_corto(self, obj):
         return obj.mensaje[:80] + '...' if len(obj.mensaje) > 80 else obj.mensaje
     mensaje_corto.short_description = 'Mensaje'
+
+
+@admin.register(HistorialCambioPrecio)
+class HistorialCambioPrecioAdmin(admin.ModelAdmin):
+    list_display = ['id', 'producto_nombre', 'precio_anterior', 'precio_nuevo', 'porcentaje_cambio', 'tipo_cambio', 'usuario', 'fecha_cambio', 'tallas_afectadas']
+    list_filter = ['tipo_cambio', 'fecha_cambio', 'usuario']
+    search_fields = ['producto__articulo', 'motivo']
+    readonly_fields = ['fecha_cambio', 'diferencia', 'porcentaje_cambio', 'ip_address']
+    date_hierarchy = 'fecha_cambio'
+    
+    fieldsets = (
+        ('Producto', {
+            'fields': ('producto',)
+        }),
+        ('Cambio de Precio', {
+            'fields': ('precio_anterior', 'precio_nuevo', 'diferencia', 'porcentaje_cambio', 'tipo_cambio')
+        }),
+        ('Contexto', {
+            'fields': ('motivo',)
+        }),
+        ('Auditoría', {
+            'fields': ('usuario', 'fecha_cambio', 'ip_address')
+        }),
+        ('Impacto', {
+            'fields': ('tallas_afectadas', 'lotes_afectados')
+        }),
+    )
+    
+    def producto_nombre(self, obj):
+        return obj.producto.articulo
+    producto_nombre.short_description = 'Producto'
+    
+    def has_add_permission(self, request):
+        # No permitir crear manualmente (se crea automáticamente)
+        return False

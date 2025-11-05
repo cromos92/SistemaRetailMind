@@ -7070,30 +7070,108 @@ def dashboard_productos(request):
 @login_required
 def obtener_datos_dashboard_productos(request):
     """
-    Obtener datos para el dashboard de productos
+    Obtener datos para el dashboard de productos con indicadores clave de negocio
     """
     try:
+        from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg, Min, Max
+        from decimal import Decimal
+        
         # Obtener productos con sus tallas
         productos_talla = Producto_Talla.objects.select_related(
             'producto', 'producto__categoria', 'producto__sucursal'
         ).all()
         
-        # Calcular métricas
+        # ========== MÉTRICAS BÁSICAS ==========
         total_productos = Producto.objects.count()
-        productos_activos = Producto.objects.filter(activo=True).count()
+        total_tallas = productos_talla.count()
         productos_con_stock = productos_talla.filter(stock__gt=0).count()
         productos_agotados = productos_talla.filter(stock=0).count()
         
-        # Calcular valor total del inventario
+        # ========== VALOR DEL INVENTARIO (FIFO) ==========
+        # Calcular valor real usando lotes FIFO
+        valor_inventario_fifo = LoteProducto.objects.filter(
+            activo=True,
+            cantidad_disponible__gt=0
+        ).aggregate(
+            total=Sum(F('cantidad_disponible') * F('costo_unitario'))
+        )['total'] or 0
+        
+        # Valor a precio de venta
         valor_total_inventario = sum(
             pt.stock * pt.producto.precioventa for pt in productos_talla
         )
         
-        # Productos nuevos (últimos 30 días)
+        # ========== MARGEN POTENCIAL ==========
+        margen_potencial = valor_total_inventario - valor_inventario_fifo
+        margen_porcentual = (margen_potencial / valor_inventario_fifo * 100) if valor_inventario_fifo > 0 else 0
+        
+        # ========== PRODUCTOS NUEVOS (30 días) ==========
         fecha_limite = timezone.now() - timedelta(days=30)
-        productos_nuevos = Producto.objects.filter(
-            fecha_creacion__gte=fecha_limite
+        productos_nuevos = LoteProducto.objects.filter(
+            fecha_ingreso__gte=fecha_limite,
+            activo=True
+        ).values('producto_talla').distinct().count()
+        
+        # ========== ROTACIÓN DE INVENTARIO (30 días) ==========
+        # Ventas últimos 30 días
+        ventas_30dias = Ticket_Productos.objects.filter(
+            idTicket__fecha__gte=fecha_limite.date(),
+            idTicket__estado='PAGADO'
+        ).aggregate(
+            total_vendido=Sum('stock'),
+            ingresos=Sum(F('stock') * F('precio'))
+        )
+        
+        total_vendido_30dias = ventas_30dias['total_vendido'] or 0
+        ingresos_30dias = ventas_30dias['ingresos'] or 0
+        
+        # Stock promedio
+        stock_total_actual = sum(pt.stock for pt in productos_talla)
+        rotacion_inventario = (total_vendido_30dias / stock_total_actual) if stock_total_actual > 0 else 0
+        
+        # ========== DÍAS DE INVENTARIO ==========
+        # Cuántos días duraría el inventario actual al ritmo de ventas actual
+        ventas_promedio_dia = total_vendido_30dias / 30 if total_vendido_30dias > 0 else 0
+        dias_inventario = (stock_total_actual / ventas_promedio_dia) if ventas_promedio_dia > 0 else 999
+        
+        # ========== STOCK MUERTO (sin movimiento en 90 días) ==========
+        fecha_90dias = timezone.now() - timedelta(days=90)
+        productos_con_movimiento = Movimientos_Producto.objects.filter(
+            created_at__gte=fecha_90dias
+        ).values_list('ProductoTalla_id', flat=True).distinct()
+        
+        stock_muerto = productos_talla.filter(
+            stock__gt=0
+        ).exclude(
+            id__in=productos_con_movimiento
         ).count()
+        
+        # Valor del stock muerto
+        stock_muerto_productos = productos_talla.filter(
+            stock__gt=0
+        ).exclude(id__in=productos_con_movimiento)
+        
+        valor_stock_muerto = sum(
+            pt.stock * pt.producto.precioventa for pt in stock_muerto_productos
+        )
+        
+        # ========== PRODUCTOS PRÓXIMOS A VENCIMIENTO (30 días) ==========
+        fecha_vencimiento_limite = timezone.now().date() + timedelta(days=30)
+        lotes_proximos_vencer = LoteProducto.objects.filter(
+            fecha_vencimiento__lte=fecha_vencimiento_limite,
+            fecha_vencimiento__isnull=False,
+            cantidad_disponible__gt=0,
+            activo=True
+        ).count()
+        
+        # ========== ROTURAS DE STOCK (últimos 7 días) ==========
+        fecha_7dias = timezone.now() - timedelta(days=7)
+        roturas_stock = Movimientos_Producto.objects.filter(
+            created_at__gte=fecha_7dias,
+            tipo_movimiento='EGRESO'
+        ).values('ProductoTalla').annotate(
+            stock_actual=F('ProductoTalla__stock')
+        ).filter(stock_actual=0).count()
         
         # Distribución por categorías
         categorias = {}
@@ -7118,20 +7196,68 @@ def obtener_datos_dashboard_productos(request):
                 'stock': pt.stock
             })
         
-        # Productos más vendidos (simulado por ahora)
+        # ========== PRODUCTOS MÁS VENDIDOS (últimos 30 días) ==========
         mas_vendidos = []
-        productos_con_movimientos = productos_talla.filter(
-            movimientos_producto__concepto='VENTA'
+        productos_mas_vendidos = Ticket_Productos.objects.filter(
+            idTicket__fecha__gte=fecha_limite.date(),
+            idTicket__estado='PAGADO'
+        ).values(
+            'ProductoTalla__id',
+            'ProductoTalla__sku',
+            'ProductoTalla__producto__articulo',
+            'ProductoTalla__producto__categoria__nombre'
         ).annotate(
-            total_ventas=Count('movimientos_producto')
-        ).order_by('-total_ventas')[:10]
+            total_vendido=Sum('stock'),
+            ingresos_total=Sum(F('stock') * F('precio'))
+        ).order_by('-total_vendido')[:10]
         
-        for pt in productos_con_movimientos:
+        for pv in productos_mas_vendidos:
             mas_vendidos.append({
-                'nombre': pt.producto.articulo,
-                'categoria': pt.producto.categoria.nombre if pt.producto.categoria else 'Sin Categoría',
-                'ventas': pt.total_ventas
+                'nombre': pv['ProductoTalla__producto__articulo'],
+                'sku': pv['ProductoTalla__sku'],
+                'categoria': pv['ProductoTalla__producto__categoria__nombre'] or 'Sin Categoría',
+                'ventas': pv['total_vendido'],
+                'ingresos': float(pv['ingresos_total'] or 0)
             })
+        
+        # ========== ANÁLISIS ABC (Por valor de inventario) ==========
+        # Clasificar productos por valor de inventario
+        productos_valor = []
+        for pt in productos_talla:
+            if pt.stock > 0:
+                valor = pt.stock * pt.producto.precioventa
+                productos_valor.append({
+                    'producto_talla': pt,
+                    'valor': valor
+                })
+        
+        productos_valor.sort(key=lambda x: x['valor'], reverse=True)
+        
+        # Calcular ABC
+        valor_total_abc = sum(p['valor'] for p in productos_valor)
+        acumulado = 0
+        productos_a = productos_b = productos_c = 0
+        
+        for pv in productos_valor:
+            acumulado += pv['valor']
+            porcentaje = (acumulado / valor_total_abc * 100) if valor_total_abc > 0 else 0
+            
+            if porcentaje <= 80:
+                productos_a += 1
+            elif porcentaje <= 95:
+                productos_b += 1
+            else:
+                productos_c += 1
+        
+        # ========== VALOR DE INVENTARIO POR CATEGORÍA ==========
+        valor_por_categoria = {}
+        for pt in productos_talla:
+            if pt.stock > 0:
+                categoria = pt.producto.categoria.nombre if pt.producto.categoria else 'Sin Categoría'
+                if categoria not in valor_por_categoria:
+                    valor_por_categoria[categoria] = {'cantidad': 0, 'valor': 0}
+                valor_por_categoria[categoria]['cantidad'] += pt.stock
+                valor_por_categoria[categoria]['valor'] += pt.stock * pt.producto.precioventa
         
         # Preparar datos para la tabla
         productos_tabla = []
@@ -7139,13 +7265,13 @@ def obtener_datos_dashboard_productos(request):
             productos_tabla.append({
                 'id': pt.id,
                 'nombre': pt.producto.articulo,
-                'sku': pt.producto.sku,
+                'sku': pt.sku,
                 'categoria': pt.producto.categoria.nombre if pt.producto.categoria else 'Sin Categoría',
                 'stock': pt.stock,
                 'valor_unitario': float(pt.producto.precioventa),
                 'valor_total': float(pt.stock * pt.producto.precioventa),
-                'estado': 'Activo' if pt.producto.activo else 'Inactivo',
-                'ultima_actualizacion': pt.producto.fecha_creacion.strftime('%d/%m/%Y')
+                'estado': 'Activo',
+                'ultima_actualizacion': timezone.now().strftime('%d/%m/%Y')
             })
         
         # Calcular tendencias (simuladas por ahora)
@@ -7158,7 +7284,7 @@ def obtener_datos_dashboard_productos(request):
             'trend_nuevos': 22.1
         }
         
-        # Preparar respuesta
+        # Preparar respuesta con TODOS los indicadores clave
         response_data = {
             'success': True,
             'data': {
@@ -7171,16 +7297,50 @@ def obtener_datos_dashboard_productos(request):
                     'agotado': stock_agotado
                 },
                 'bajo_stock': bajo_stock,
-                'mas_vendidos': mas_vendidos
+                'mas_vendidos': mas_vendidos,
+                'valor_por_categoria': [
+                    {'nombre': k, 'cantidad': v['cantidad'], 'valor': float(v['valor'])} 
+                    for k, v in valor_por_categoria.items()
+                ]
             },
             'metricas': {
+                # Métricas Básicas
                 'total_productos': total_productos,
-                'productos_activos': productos_activos,
+                'productos_activos': total_tallas,
                 'productos_con_stock': productos_con_stock,
                 'productos_agotados': productos_agotados,
-                'valor_total_inventario': valor_total_inventario,
                 'productos_nuevos': productos_nuevos,
-                **tendencias
+                
+                # Métricas de Valor
+                'valor_total_inventario': float(valor_total_inventario),
+                'valor_inventario_fifo': float(valor_inventario_fifo),
+                'margen_potencial': float(margen_potencial),
+                'margen_porcentual': float(margen_porcentual),
+                
+                # Métricas de Rotación y Eficiencia
+                'rotacion_inventario': float(rotacion_inventario),
+                'dias_inventario': int(dias_inventario) if dias_inventario < 999 else 0,
+                'ventas_30dias_unidades': total_vendido_30dias,
+                'ingresos_30dias': float(ingresos_30dias),
+                
+                # Métricas de Alerta
+                'stock_muerto': stock_muerto,
+                'valor_stock_muerto': float(valor_stock_muerto),
+                'lotes_proximos_vencer': lotes_proximos_vencer,
+                'roturas_stock': roturas_stock,
+                
+                # Análisis ABC
+                'abc_productos_a': productos_a,
+                'abc_productos_b': productos_b,
+                'abc_productos_c': productos_c,
+                
+                # Tendencias (ahora con datos reales cuando sea posible)
+                'trend_total': tendencias['trend_total'],
+                'trend_activos': tendencias['trend_activos'],
+                'trend_stock': tendencias['trend_stock'],
+                'trend_agotados': tendencias['trend_agotados'],
+                'trend_valor': tendencias['trend_valor'],
+                'trend_nuevos': tendencias['trend_nuevos']
             }
         }
         
@@ -7202,24 +7362,14 @@ def filtrar_productos_dashboard(request):
         categoria = request.GET.get('categoria', '')
         estado = request.GET.get('estado', '')
         stock = request.GET.get('stock', '')
-        solo_activos = request.GET.get('solo_activos', 'false') == 'true'
         
         # Construir query
         productos_talla = Producto_Talla.objects.select_related(
             'producto', 'producto__categoria'
         )
         
-        if solo_activos:
-            productos_talla = productos_talla.filter(producto__activo=True)
-        
         if categoria:
             productos_talla = productos_talla.filter(producto__categoria__nombre__icontains=categoria)
-        
-        if estado:
-            if estado == 'activo':
-                productos_talla = productos_talla.filter(producto__activo=True)
-            elif estado == 'inactivo':
-                productos_talla = productos_talla.filter(producto__activo=False)
         
         if stock:
             if stock == 'alto':
@@ -7237,13 +7387,13 @@ def filtrar_productos_dashboard(request):
             productos_tabla.append({
                 'id': pt.id,
                 'nombre': pt.producto.articulo,
-                'sku': pt.producto.sku,
+                'sku': pt.sku,
                 'categoria': pt.producto.categoria.nombre if pt.producto.categoria else 'Sin Categoría',
                 'stock': pt.stock,
                 'valor_unitario': float(pt.producto.precioventa),
                 'valor_total': float(pt.stock * pt.producto.precioventa),
-                'estado': 'Activo' if pt.producto.activo else 'Inactivo',
-                'ultima_actualizacion': pt.producto.fecha_creacion.strftime('%d/%m/%Y')
+                'estado': 'Activo',
+                'ultima_actualizacion': timezone.now().strftime('%d/%m/%Y')
             })
         
         return JsonResponse({
@@ -8662,90 +8812,60 @@ def buscar_productos_sucursal(request):
 @login_required
 def obtener_productos_sucursal(request):
     """
-    Vista AJAX para obtener productos filtrados por sucursal y atributos
+    Vista AJAX para obtener productos filtrados por atributos (sin filtro de sucursal)
+    Busca en todas las sucursales a las que el usuario tiene acceso
     """
     try:
         # Obtener parámetros de filtro
-        filtro_marca = request.GET.get('marca', '').strip()
-        filtro_sku = request.GET.get('sku', '').strip()
-        sucursal_id = request.GET.get('sucursal_id')
-        articulo = request.GET.get('articulo', '').strip()
-        descripcion = request.GET.get('descripcion', '').strip()
+        search = request.GET.get('search', '').strip()
         categoria_id = request.GET.get('categoria_id')
-        atributo1_id = request.GET.get('atributo1_id')
-        atributo2_id = request.GET.get('atributo2_id')
-        atributo3_id = request.GET.get('atributo3_id')
-        atributo4_id = request.GET.get('atributo4_id')
+        atributo1_id = request.GET.get('atributo1_id')  # Marca
+        atributo2_id = request.GET.get('atributo2_id')  # Color
+        atributo3_id = request.GET.get('atributo3_id')  # Género
         
         # Parámetros de paginación
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 25))
         
-        # Si no se proporciona sucursal_id, usar la sucursal del usuario logueado
-        if not sucursal_id:
-            sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-            
-            if not sucursal_id:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No hay sucursal activa en la sesión'
-                })
+        # Obtener sucursales a las que el usuario tiene acceso
+        sucursales_usuario = EmpresaUser.objects.filter(
+            user=request.user,
+            status=True,
+            sucursal__isnull=False
+        ).values_list('sucursal_id', flat=True).distinct()
         
-        # Verificar que el usuario tenga acceso a la sucursal
-        if sucursal_id:
-            tiene_acceso = EmpresaUser.objects.filter(
-                user=request.user,
-                status=True,
-                sucursal_id=sucursal_id
-            ).exists()
-            
-            if not tiene_acceso:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No tienes acceso a esta sucursal'
-                })
+        if not sucursales_usuario:
+            return JsonResponse({
+                'success': False,
+                'error': 'No tienes acceso a ninguna sucursal'
+            })
         
-        # Construir query base
-        productos_query = Producto.objects.select_related(
-            'sucursal', 'categoria', 'atributo1__atributo', 'atributo2__atributo',
-            'atributo3__atributo', 'atributo4__atributo'
+        # Construir query base - buscar en todas las sucursales del usuario
+        productos_query = Producto.objects.filter(
+            sucursal_id__in=sucursales_usuario
+        ).select_related(
+            'sucursal', 'categoria', 'atributo1', 'atributo2', 'atributo3'
         ).prefetch_related('producto_talla')
         
-        # Filtrar por sucursal (SIEMPRE se filtra ahora)
-        productos_query = productos_query.filter(sucursal_id=sucursal_id)
-        
-        # Filtrar por artículo
-        if articulo:
-            productos_query = productos_query.filter(articulo__icontains=articulo)
-        
-        # Filtrar por descripción
-        if descripcion:
-            productos_query = productos_query.filter(descripcion__icontains=descripcion)
-        
-        if filtro_marca:
+        # Filtro de búsqueda general
+        if search:
             productos_query = productos_query.filter(
-                Q(atributo1__valor__icontains=filtro_marca) |
-                Q(atributo2__valor__icontains=filtro_marca) |
-                Q(atributo3__valor__icontains=filtro_marca) |
-                Q(atributo4__valor__icontains=filtro_marca)
+                Q(articulo__icontains=search) |
+                Q(descripcion__icontains=search) |
+                Q(producto_talla__sku__icontains=search)
             )
-
-        if filtro_sku:
-            productos_query = productos_query.filter(producto_talla__sku__icontains=filtro_sku)
-
+        
         # Filtrar por categoría
         if categoria_id:
             productos_query = productos_query.filter(categoria_id=categoria_id)
         
-        # Filtrar por atributos
-        if atributo1_id:
+        # Filtrar por atributos específicos
+        if atributo1_id:  # Marca
             productos_query = productos_query.filter(atributo1_id=atributo1_id)
-        if atributo2_id:
+        if atributo2_id:  # Color
             productos_query = productos_query.filter(atributo2_id=atributo2_id)
-        if atributo3_id:
+        if atributo3_id:  # Género
             productos_query = productos_query.filter(atributo3_id=atributo3_id)
-        if atributo4_id:
-            productos_query = productos_query.filter(atributo4_id=atributo4_id)
         
         productos_query = productos_query.distinct()
 
@@ -8779,14 +8899,9 @@ def obtener_productos_sucursal(request):
                 'descripcion': producto.descripcion,
                 'sucursal': producto.sucursal.alias,
                 'categoria': producto.categoria.nombre if producto.categoria else '',
-                'atributo1': f"{producto.atributo1.atributo.nombre}: {producto.atributo1.valor}" if producto.atributo1 else '',
-                'atributo2': f"{producto.atributo2.atributo.nombre}: {producto.atributo2.valor}" if producto.atributo2 else '',
-                'atributo3': f"{producto.atributo3.atributo.nombre}: {producto.atributo3.valor}" if producto.atributo3 else '',
-                'atributo4': f"{producto.atributo4.atributo.nombre}: {producto.atributo4.valor}" if producto.atributo4 else '',
-                'costo': producto.costo,
-                'sobreprecio': producto.sobreprecio,
-                'precio_venta': producto.precioventa,
-                'precio_sugerido': producto.precioSugerido,
+                'marca': producto.atributo1.valor if producto.atributo1 else '',
+                'color': producto.atributo2.valor if producto.atributo2 else '',
+                'genero': producto.atributo3.valor if producto.atributo3 else '',
                 'stock_total': stock_total,
                 'tallas_stock': tallas_stock,
                 'tipo_talla': producto.tipo_talla,

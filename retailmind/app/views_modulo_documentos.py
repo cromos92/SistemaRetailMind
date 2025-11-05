@@ -933,3 +933,567 @@ def debug_user_empresas(request):
 def gestion_creditos_documentos(request):
     """Vista principal para gestión de créditos a trabajadores desde módulo documentos"""
     return render(request, 'vistas/modulo_administracion/gestion_creditos.html')
+
+
+@login_required
+def interfaz_prueba_acepta(request):
+    """Interfaz de prueba para generador de archivos TXT Acepta"""
+    return render(request, 'vistas/modulo_administracion/interfaz_prueba_acepta.html')
+
+
+# ========== MÓDULO DE GENERACIÓN DE ARCHIVOS TXT PARA ACEPTA ==========
+
+def formatear_rut(rut):
+    """
+    Formatea un RUT al formato requerido por Acepta: XXXXXXXX-X
+    
+    Args:
+        rut (str): RUT en cualquier formato (con o sin puntos/guión)
+        
+    Returns:
+        str: RUT formateado como XXXXXXXX-X
+    """
+    if not rut:
+        return ''
+    
+    # Eliminar puntos, guiones y espacios
+    rut = str(rut).replace('.', '').replace('-', '').replace(' ', '').upper()
+    
+    # Separar cuerpo y dígito verificador
+    if len(rut) >= 2:
+        cuerpo = rut[:-1]
+        dv = rut[-1]
+        return f"{cuerpo}-{dv}"
+    
+    return rut
+
+
+def formatear_fecha(fecha):
+    """
+    Formatea una fecha al formato requerido por Acepta: YYYY-MM-DD
+    
+    Args:
+        fecha: Objeto date, datetime o string
+        
+    Returns:
+        str: Fecha en formato YYYY-MM-DD
+    """
+    if not fecha:
+        return ''
+    
+    if isinstance(fecha, str):
+        return fecha
+    
+    # Si es date o datetime
+    return fecha.strftime('%Y-%m-%d')
+
+
+def formatear_timestamp(fecha_hora):
+    """
+    Formatea un timestamp al formato requerido por Acepta: YYYY-MM-DDTHH:MM:SS
+    
+    Args:
+        fecha_hora: Objeto datetime o string
+        
+    Returns:
+        str: Timestamp en formato YYYY-MM-DDTHH:MM:SS
+    """
+    if not fecha_hora:
+        return ''
+    
+    if isinstance(fecha_hora, str):
+        return fecha_hora
+    
+    return fecha_hora.strftime('%Y-%m-%dT%H:%M:%S')
+
+
+def formatear_monto(monto):
+    """
+    Formatea un monto eliminando separadores de miles y usando punto decimal
+    
+    Args:
+        monto: Número decimal o string
+        
+    Returns:
+        str: Monto formateado sin separadores de miles
+    """
+    if monto is None:
+        return '0'
+    
+    # Convertir a Decimal para precisión
+    if isinstance(monto, str):
+        monto = Decimal(monto.replace(',', ''))
+    else:
+        monto = Decimal(str(monto))
+    
+    # Formatear sin separadores de miles
+    return str(int(monto))
+
+
+def formatear_decimal(numero, enteros=12, decimales=6):
+    """
+    Formatea un número decimal con cantidad específica de decimales
+    
+    Args:
+        numero: Número a formatear
+        enteros (int): Cantidad de enteros
+        decimales (int): Cantidad de decimales
+        
+    Returns:
+        str: Número formateado
+    """
+    if numero is None:
+        return '0.' + '0' * decimales
+    
+    if isinstance(numero, str):
+        numero = Decimal(numero)
+    else:
+        numero = Decimal(str(numero))
+    
+    # Formatear con decimales especificados
+    formato = f"{{:.{decimales}f}}"
+    return formato.format(numero)
+
+
+def limpiar_texto(texto, max_length=None):
+    """
+    Limpia un texto eliminando caracteres especiales problemáticos
+    
+    Args:
+        texto (str): Texto a limpiar
+        max_length (int): Longitud máxima permitida
+        
+    Returns:
+        str: Texto limpio
+    """
+    if not texto:
+        return ''
+    
+    # Convertir a string
+    texto = str(texto)
+    
+    # Reemplazar caracteres problemáticos
+    texto = texto.replace('|', '')  # El pipe es el separador
+    texto = texto.replace('\n', ' ')
+    texto = texto.replace('\r', ' ')
+    texto = texto.replace('\t', ' ')
+    
+    # Truncar si es necesario
+    if max_length and len(texto) > max_length:
+        texto = texto[:max_length]
+    
+    return texto.strip()
+
+
+def validar_datos_dte_acepta(datos):
+    """
+    Valida que los datos mínimos requeridos estén presentes
+    
+    Args:
+        datos (dict): Diccionario con los datos del DTE
+        
+    Returns:
+        tuple: (bool, str) - (es_válido, mensaje_error)
+    """
+    # Validar datos del documento
+    if 'documento' not in datos:
+        return False, "Falta la sección 'documento'"
+    
+    doc = datos['documento']
+    if not doc.get('tipo_documento'):
+        return False, "Falta el tipo de documento"
+    if not doc.get('folio'):
+        return False, "Falta el folio"
+    if not doc.get('fecha_emision'):
+        return False, "Falta la fecha de emisión"
+    
+    # Validar datos del emisor
+    if 'emisor' not in datos:
+        return False, "Falta la sección 'emisor'"
+    
+    emisor = datos['emisor']
+    if not emisor.get('rut'):
+        return False, "Falta el RUT del emisor"
+    if not emisor.get('razon_social'):
+        return False, "Falta la razón social del emisor"
+    if not emisor.get('giro'):
+        return False, "Falta el giro del emisor"
+    
+    # Validar datos del receptor
+    if 'receptor' not in datos:
+        return False, "Falta la sección 'receptor'"
+    
+    receptor = datos['receptor']
+    if not receptor.get('rut'):
+        return False, "Falta el RUT del receptor"
+    if not receptor.get('razon_social'):
+        return False, "Falta la razón social del receptor"
+    
+    # Validar totales
+    if 'totales' not in datos:
+        return False, "Falta la sección 'totales'"
+    
+    totales = datos['totales']
+    if totales.get('monto_total') is None:
+        return False, "Falta el monto total"
+    
+    # Validar productos
+    if 'detalle' not in datos or not datos['detalle']:
+        return False, "Debe incluir al menos un producto en el detalle"
+    
+    for i, item in enumerate(datos['detalle']):
+        if not item.get('nombre'):
+            return False, f"Falta el nombre del producto en línea {i+1}"
+        if item.get('cantidad') is None:
+            return False, f"Falta la cantidad en línea {i+1}"
+        if item.get('precio_unitario') is None:
+            return False, f"Falta el precio unitario en línea {i+1}"
+    
+    return True, "OK"
+
+
+def generar_txt_dte_acepta(datos):
+    """
+    Genera el contenido de un archivo TXT para el sistema Acepta
+    
+    Args:
+        datos (dict): Diccionario con la estructura completa del DTE
+        
+    Estructura esperada del diccionario:
+    {
+        'documento': {
+            'tipo_documento': int (33, 34, 39, 52, 61),
+            'folio': int,
+            'fecha_emision': date/str,
+            'ind_no_rebaja': int (opcional),
+            'tipo_despacho': int (opcional),
+            'ind_traslado': int (opcional),
+            'forma_pago': int (opcional, 1=Contado, 2=Crédito, 3=Sin costo),
+            'fecha_vencimiento': date/str (opcional),
+            'ind_servicio': int (opcional),
+            'timestamp': datetime/str (opcional)
+        },
+        'emisor': {
+            'rut': str,
+            'razon_social': str,
+            'giro': str,
+            'acteco': str (opcional),
+            'sucursal': str (opcional),
+            'codigo_sucursal': str (opcional),
+            'direccion': str (opcional),
+            'comuna': str (opcional),
+            'ciudad': str (opcional),
+            'codigo_vendedor': str (opcional),
+            'telefono': str (opcional)
+        },
+        'receptor': {
+            'rut': str,
+            'codigo_interno': str (opcional),
+            'razon_social': str,
+            'giro': str (opcional),
+            'contacto': str (opcional),
+            'direccion': str (opcional),
+            'comuna': str (opcional),
+            'ciudad': str (opcional)
+        },
+        'transporte': {  # Opcional, para guías de despacho
+            'patente': str (opcional),
+            'rut_transportista': str (opcional),
+            'direccion_destino': str (opcional),
+            'comuna_destino': str (opcional),
+            'ciudad_destino': str (opcional)
+        },
+        'totales': {
+            'monto_neto': Decimal,
+            'monto_exento': Decimal (opcional),
+            'tasa_iva': Decimal (default 19.00),
+            'iva': Decimal,
+            'monto_total': Decimal,
+            'timestamp': datetime/str (opcional)
+        },
+        'detalle': [
+            {
+                'indicador_exencion': int (opcional, 1-6),
+                'nombre': str,
+                'descripcion': str (opcional),
+                'cantidad': Decimal,
+                'unidad': str (UN, KG, etc),
+                'precio_unitario': Decimal,
+                'descuento_pct': Decimal (opcional),
+                'monto_descuento': Decimal (opcional),
+                'monto_item': Decimal
+            }
+        ]
+    }
+    
+    Returns:
+        str: Contenido del archivo TXT con formato Acepta
+    """
+    # Validar datos
+    es_valido, mensaje = validar_datos_dte_acepta(datos)
+    if not es_valido:
+        raise ValidationError(f"Error en validación de datos: {mensaje}")
+    
+    separador = '|'
+    lineas = []
+    
+    # ===== LÍNEA 1: IDENTIFICACIÓN DEL DOCUMENTO =====
+    doc = datos['documento']
+    linea1 = [
+        str(doc.get('tipo_documento', '')),
+        str(doc.get('folio', '')),
+        formatear_fecha(doc.get('fecha_emision', '')),
+        str(doc.get('ind_no_rebaja', '')),
+        str(doc.get('tipo_despacho', '')),
+        str(doc.get('ind_traslado', '')),
+        str(doc.get('forma_pago', '')),
+        formatear_fecha(doc.get('fecha_vencimiento', '')),
+        str(doc.get('ind_servicio', '')),
+        '',  # Campo reservado
+        formatear_timestamp(doc.get('timestamp', ''))
+    ]
+    lineas.append(separador.join(linea1))
+    
+    # ===== LÍNEA 2: DATOS DEL EMISOR =====
+    emisor = datos['emisor']
+    linea2 = [
+        formatear_rut(emisor.get('rut', '')),
+        limpiar_texto(emisor.get('razon_social', ''), 100),
+        limpiar_texto(emisor.get('giro', ''), 80),
+        str(emisor.get('acteco', '')),
+        limpiar_texto(emisor.get('sucursal', ''), 20),
+        str(emisor.get('codigo_sucursal', '')),
+        limpiar_texto(emisor.get('direccion', ''), 60),
+        limpiar_texto(emisor.get('comuna', ''), 20),
+        limpiar_texto(emisor.get('ciudad', ''), 20),
+        limpiar_texto(emisor.get('codigo_vendedor', ''), 60),
+        limpiar_texto(emisor.get('telefono', ''), 20),
+        '',  # Teléfono 2
+        ''   # Campo reservado
+    ]
+    lineas.append(separador.join(linea2))
+    
+    # ===== LÍNEA 3: DATOS DEL RECEPTOR =====
+    receptor = datos['receptor']
+    linea3 = [
+        formatear_rut(receptor.get('rut', '')),
+        limpiar_texto(receptor.get('codigo_interno', ''), 20),
+        limpiar_texto(receptor.get('razon_social', ''), 100),
+        limpiar_texto(receptor.get('giro', ''), 40),
+        limpiar_texto(receptor.get('contacto', ''), 80),
+        limpiar_texto(receptor.get('direccion', ''), 70),
+        limpiar_texto(receptor.get('comuna', ''), 20),
+        limpiar_texto(receptor.get('ciudad', ''), 20),
+        ''  # Ciudad postal
+    ]
+    lineas.append(separador.join(linea3))
+    
+    # ===== LÍNEA 4: DATOS DE TRANSPORTE (Opcional) =====
+    transporte = datos.get('transporte', {})
+    linea4 = [
+        limpiar_texto(transporte.get('patente', ''), 8),
+        formatear_rut(transporte.get('rut_transportista', '')),
+        limpiar_texto(transporte.get('direccion_destino', ''), 70),
+        limpiar_texto(transporte.get('comuna_destino', ''), 20),
+        limpiar_texto(transporte.get('ciudad_destino', ''), 20)
+    ]
+    lineas.append(separador.join(linea4))
+    
+    # ===== LÍNEA 5: TOTALES =====
+    totales = datos['totales']
+    linea5 = [
+        formatear_monto(totales.get('monto_neto', 0)),
+        formatear_monto(totales.get('monto_exento', '')),
+        formatear_decimal(totales.get('tasa_iva', 19.00), 3, 2),
+        formatear_monto(totales.get('iva', 0)),
+        formatear_monto(totales.get('monto_total', 0)),
+        formatear_timestamp(totales.get('timestamp', '')),
+        '',  # IVA No Retenido
+        '',  # Monto No Facturable
+        '',  # Total Período
+        '',  # Saldo Anterior
+        '',  # Valor a Pagar
+        '',  # Campos adicionales (21 campos vacíos)
+        '', '', '', '', '', '', '', '', '', '', 
+        '', '', '', '', '', '', '', '', '', ''
+    ]
+    lineas.append(separador.join(linea5))
+    
+    # ===== LÍNEAS 6+: DETALLE DE PRODUCTOS =====
+    for item in datos['detalle']:
+        linea_detalle = [
+            str(item.get('indicador_exencion', '')),
+            limpiar_texto(item.get('nombre', ''), 80),
+            limpiar_texto(item.get('descripcion', ''), 1000),
+            formatear_decimal(item.get('cantidad', 0)),
+            limpiar_texto(item.get('unidad', 'UN'), 4),
+            formatear_decimal(item.get('precio_unitario', 0)),
+            formatear_decimal(item.get('descuento_pct', ''), 3, 2) if item.get('descuento_pct') else '',
+            formatear_monto(item.get('monto_descuento', 0)),
+            formatear_monto(item.get('monto_item', 0))
+        ]
+        lineas.append(separador.join(linea_detalle))
+    
+    # Unir todas las líneas con salto de línea
+    contenido_txt = '\n'.join(lineas)
+    
+    return contenido_txt
+
+
+@require_POST
+@login_required
+def generar_txt_acepta_api(request):
+    """
+    API endpoint para generar archivo TXT de Acepta desde datos JSON
+    
+    Recibe:
+        JSON con estructura de datos del DTE
+        
+    Retorna:
+        - Success: Archivo TXT descargable
+        - Error: JSON con detalles del error
+    """
+    try:
+        # Parsear datos del request
+        datos = json.loads(request.body)
+        
+        # Generar contenido TXT
+        contenido_txt = generar_txt_dte_acepta(datos)
+        
+        # Crear nombre del archivo
+        tipo_doc = datos['documento'].get('tipo_documento', 'XX')
+        folio = datos['documento'].get('folio', '0000')
+        fecha = formatear_fecha(datos['documento'].get('fecha_emision', timezone.now().date()))
+        nombre_archivo = f"dte_{tipo_doc}_{folio}_{fecha.replace('-', '')}.txt"
+        
+        # Retornar como archivo descargable
+        response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+        
+        return response
+        
+    except ValidationError as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'JSON inválido'
+        }, status=400)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar archivo TXT: {str(e)}'
+        }, status=500)
+
+
+@require_POST
+@login_required
+def generar_txt_desde_dte_existente(request):
+    """
+    Genera un archivo TXT de Acepta a partir de un DTE existente en la base de datos
+    
+    Recibe:
+        JSON con { dte_id: int }
+        
+    Retorna:
+        Archivo TXT descargable
+    """
+    try:
+        data = json.loads(request.body)
+        dte_id = data.get('dte_id')
+        
+        if not dte_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de DTE requerido'
+            }, status=400)
+        
+        # Obtener el DTE
+        dte = get_object_or_404(Dte, id=dte_id)
+        
+        # Verificar permisos
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        if dte.emisor_id != empresa_actual_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para este DTE'
+            }, status=403)
+        
+        # Construir diccionario de datos desde el DTE
+        datos = {
+            'documento': {
+                'tipo_documento': dte.tipo_documento,
+                'folio': dte.numero_dte,
+                'fecha_emision': dte.fecha_emision,
+                'fecha_vencimiento': dte.fecha_vencimiento,
+                'forma_pago': 1 if dte.fecha_vencimiento == dte.fecha_emision else 2,  # 1=Contado, 2=Crédito
+                'timestamp': timezone.now()
+            },
+            'emisor': {
+                'rut': dte.emisor.rut,
+                'razon_social': dte.emisor.nombre,
+                'giro': dte.emisor.giro or '',
+                'direccion': dte.emisor.direccion or '',
+                'comuna': dte.emisor.comuna or '',
+                'ciudad': dte.emisor.ciudad or '',
+                'telefono': dte.emisor.telefono or ''
+            },
+            'receptor': {
+                'rut': dte.receptor.rut,
+                'razon_social': dte.receptor.nombre,
+                'giro': dte.receptor.giro or '',
+                'direccion': dte.receptor.direccion or '',
+                'comuna': dte.receptor.comuna or '',
+                'ciudad': dte.receptor.ciudad or ''
+            },
+            'totales': {
+                'monto_neto': dte.subtotal - (dte.descuento_global or 0),
+                'monto_exento': 0,
+                'tasa_iva': Decimal('19.00'),
+                'iva': dte.iva,
+                'monto_total': dte.total
+            },
+            'detalle': []
+        }
+        
+        # Agregar productos
+        for dte_producto in dte.dte_productos.select_related('productoTalla__producto', 'productoTalla__talla'):
+            datos['detalle'].append({
+                'nombre': dte_producto.productoTalla.producto.nombre,
+                'descripcion': f"{dte_producto.productoTalla.producto.nombre} - Talla {dte_producto.productoTalla.talla.nombre if dte_producto.productoTalla.talla else 'Única'}",
+                'cantidad': dte_producto.cantidad,
+                'unidad': 'UN',
+                'precio_unitario': dte_producto.precio_unitario,
+                'descuento_pct': 0,
+                'monto_descuento': dte_producto.descuento_unitario * dte_producto.cantidad,
+                'monto_item': dte_producto.cantidad * (dte_producto.precio_unitario - dte_producto.descuento_unitario)
+            })
+        
+        # Generar TXT
+        contenido_txt = generar_txt_dte_acepta(datos)
+        
+        # Crear nombre del archivo
+        nombre_archivo = f"dte_{dte.tipo_documento}_{dte.numero_dte}_{dte.fecha_emision.strftime('%Y%m%d')}.txt"
+        
+        # Retornar como archivo descargable
+        response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+        
+        return response
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'JSON inválido'
+        }, status=400)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar archivo TXT: {str(e)}'
+        }, status=500)

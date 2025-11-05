@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from .models import (
     Producto, Producto_Talla, LoteProducto, Categoria, AtributoOpcion,
     Sucursal, Movimientos_Producto, Ticket_Productos, Ticket,
-    CambioPrecioPendiente, NotificacionCambioPrecio
+    CambioPrecioPendiente, NotificacionCambioPrecio, HistorialCambioPrecio
 )
 
 
@@ -244,6 +244,18 @@ def buscar_productos(request):
                 if fecha_ingreso_mas_antiguo.year != int(anio):
                     continue
             
+            # Buscar último cambio de precio
+            ultimo_cambio = HistorialCambioPrecio.objects.filter(
+                producto=producto
+            ).select_related('usuario').first()
+            
+            # Buscar productos similares en otras sucursales
+            productos_similares_count = Producto.objects.filter(
+                articulo=producto.articulo,
+                atributo1=producto.atributo1,
+                atributo2=producto.atributo2
+            ).exclude(sucursal=producto.sucursal).count()
+            
             # Agregar a resultados
             productos_data.append({
                 'id': producto.id,  # ID del producto (no de la talla)
@@ -258,7 +270,13 @@ def buscar_productos(request):
                 'stock': stock_total,
                 'dias_inventario': dias_inventario,
                 'margen': float(margen),
-                'cantidad_tallas': len(tallas_list)
+                'cantidad_tallas': len(tallas_list),
+                'ultimo_cambio': {
+                    'usuario': ultimo_cambio.usuario.username if ultimo_cambio and ultimo_cambio.usuario else None,
+                    'fecha': ultimo_cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M') if ultimo_cambio else None,
+                    'hace_cuanto': ultimo_cambio.hace_cuanto if ultimo_cambio else None
+                } if ultimo_cambio else None,
+                'sucursales_similares': productos_similares_count
             })
         
         # Paginación manual
@@ -527,11 +545,13 @@ def obtener_recomendaciones(request, producto_id):
 @login_required
 @transaction.atomic
 def actualizar_precio(request):
-    """Actualizar precio de un producto (todas las tallas)"""
+    """Actualizar precio de un producto (todas las tallas) y registrar en historial"""
     try:
         data = json.loads(request.body)
         producto_id = data.get('producto_id')
         nuevo_precio = data.get('nuevo_precio')
+        motivo = data.get('motivo', 'Cambio manual de precio')
+        tipo_cambio = data.get('tipo_cambio', 'MANUAL')
         
         if not producto_id or not nuevo_precio:
             return JsonResponse({
@@ -543,6 +563,15 @@ def actualizar_precio(request):
         nuevo_precio = int(nuevo_precio)
         
         producto = Producto.objects.get(id=producto_id)
+        precio_anterior = producto.precioventa
+        
+        # Solo registrar si el precio realmente cambió
+        if precio_anterior == nuevo_precio:
+            return JsonResponse({
+                'success': True,
+                'message': 'Sin cambios (precio igual)',
+                'sin_cambios': True
+            })
         
         # Actualizar precio base del producto
         producto.precioventa = nuevo_precio
@@ -558,11 +587,33 @@ def actualizar_precio(request):
         # Contar tallas actualizadas
         tallas_actualizadas = producto.producto_talla.count()
         
+        # === REGISTRAR EN HISTORIAL ===
+        diferencia = nuevo_precio - precio_anterior
+        porcentaje = (diferencia / precio_anterior * 100) if precio_anterior > 0 else 0
+        
+        # Obtener IP del usuario
+        ip_address = request.META.get('REMOTE_ADDR')
+        
+        HistorialCambioPrecio.objects.create(
+            producto=producto,
+            precio_anterior=precio_anterior,
+            precio_nuevo=nuevo_precio,
+            diferencia=diferencia,
+            porcentaje_cambio=porcentaje,
+            motivo=motivo,
+            tipo_cambio=tipo_cambio,
+            usuario=request.user,
+            ip_address=ip_address,
+            tallas_afectadas=tallas_actualizadas,
+            lotes_afectados=lotes_actualizados
+        )
+        
         return JsonResponse({
             'success': True,
             'message': f'Precio actualizado para {tallas_actualizadas} tallas',
             'lotes_actualizados': lotes_actualizados,
-            'tallas_actualizadas': tallas_actualizadas
+            'tallas_actualizadas': tallas_actualizadas,
+            'historial_registrado': True
         })
         
     except Producto.DoesNotExist:
@@ -931,6 +982,121 @@ def listar_sucursales(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al listar sucursales: {str(e)}'
+        })
+
+
+@require_GET
+@login_required
+def obtener_historial_precio(request, producto_id):
+    """Obtener historial de cambios de precio de un producto"""
+    try:
+        producto = Producto.objects.get(id=producto_id)
+        
+        historial = HistorialCambioPrecio.objects.filter(
+            producto=producto
+        ).select_related('usuario').order_by('-fecha_cambio')[:10]
+        
+        historial_data = []
+        for cambio in historial:
+            historial_data.append({
+                'id': cambio.id,
+                'precio_anterior': cambio.precio_anterior,
+                'precio_nuevo': cambio.precio_nuevo,
+                'diferencia': cambio.diferencia,
+                'porcentaje_cambio': float(cambio.porcentaje_cambio),
+                'motivo': cambio.motivo or 'Sin motivo',
+                'tipo_cambio': cambio.get_tipo_cambio_display(),
+                'usuario': cambio.usuario.username if cambio.usuario else 'Sistema',
+                'fecha_cambio': cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M'),
+                'hace_cuanto': cambio.hace_cuanto,
+                'tallas_afectadas': cambio.tallas_afectadas
+            })
+        
+        # Último cambio
+        ultimo_cambio = historial.first()
+        
+        return JsonResponse({
+            'success': True,
+            'historial': historial_data,
+            'ultimo_cambio': {
+                'usuario': ultimo_cambio.usuario.username if ultimo_cambio and ultimo_cambio.usuario else None,
+                'fecha': ultimo_cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M') if ultimo_cambio else None,
+                'hace_cuanto': ultimo_cambio.hace_cuanto if ultimo_cambio else None,
+                'precio': ultimo_cambio.precio_nuevo if ultimo_cambio else producto.precioventa
+            } if ultimo_cambio else None
+        })
+        
+    except Producto.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Producto no encontrado'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener historial: {str(e)}'
+        })
+
+
+@require_GET
+@login_required
+def buscar_productos_similares_sucursales(request, producto_id):
+    """Buscar productos similares en otras sucursales"""
+    try:
+        producto = Producto.objects.select_related('atributo1', 'atributo2', 'sucursal').get(id=producto_id)
+        
+        # Buscar productos con mismo nombre y atributos en OTRAS sucursales
+        productos_similares = Producto.objects.filter(
+            articulo=producto.articulo,
+            atributo1=producto.atributo1,
+            atributo2=producto.atributo2
+        ).exclude(
+            sucursal=producto.sucursal
+        ).select_related('sucursal').distinct()
+        
+        sucursales_data = []
+        for prod in productos_similares:
+            # Calcular stock total
+            stock_total = sum(pt.stock for pt in prod.producto_talla.all())
+            
+            # Obtener último cambio
+            ultimo_cambio = HistorialCambioPrecio.objects.filter(
+                producto=prod
+            ).select_related('usuario').first()
+            
+            sucursales_data.append({
+                'sucursal_id': prod.sucursal.id,
+                'sucursal': prod.sucursal.alias,
+                'precio_actual': prod.precioventa,
+                'stock_total': stock_total,
+                'tallas_count': prod.producto_talla.count(),
+                'ultimo_cambio': {
+                    'usuario': ultimo_cambio.usuario.username if ultimo_cambio and ultimo_cambio.usuario else None,
+                    'fecha': ultimo_cambio.fecha_cambio.strftime('%d/%m/%Y') if ultimo_cambio else None,
+                    'hace_cuanto': ultimo_cambio.hace_cuanto if ultimo_cambio else None
+                } if ultimo_cambio else None
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'sucursal_actual': {
+                'id': producto.sucursal.id,
+                'nombre': producto.sucursal.alias,
+                'precio': producto.precioventa
+            },
+            'otras_sucursales': sucursales_data,
+            'total_sucursales': len(sucursales_data)
+        })
+        
+    except Producto.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Producto no encontrado'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al buscar sucursales: {str(e)}'
         })
 
 

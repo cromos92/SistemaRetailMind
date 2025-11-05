@@ -72,78 +72,77 @@
 }
 </style>
 
-<div class="main-content">
-    <div class="page-content">
-        <div class="container-fluid">
-        
-        <!-- Header del Dashboard -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h2 class="mb-1">📊 Dashboard Estratégico de Compras</h2>
-                        <p class="text-muted mb-0">Análisis integral de cumplimiento y rendimiento</p>
-                    </div>
-                    <div class="btn-group">
-                        <button class="btn btn-outline-primary" onclick="exportarReporte()">
-                            <i class="bi bi-download me-1"></i>Exportar
-                        </button>
-                        <button class="btn btn-primary" onclick="actualizarDashboard()">
-                            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
-                        </button>
-                    </div>
+<!-- Contenedor Principal -->
+<div class="container-fluid">
+
+    <!-- Header del Dashboard -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">📊 Dashboard Estratégico de Compras</h2>
+                    <p class="text-muted mb-0">Análisis integral de cumplimiento y rendimiento</p>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary" onclick="exportarReporte()">
+                        <i class="bi bi-download me-1"></i>Exportar
+                    </button>
+                    <button class="btn btn-primary" onclick="actualizarDashboard()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                    </button>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Alerta de datos de ejemplo -->
-        <div class="alert alert-info alert-dismissible fade show" role="alert" id="alertaDatosEjemplo" style="display: none;">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong>Nota:</strong> Se están mostrando datos de ejemplo para demostración. Los datos reales aparecerán cuando tengas compras registradas en el sistema.
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
+    <!-- Alerta de datos de ejemplo -->
+    <div class="alert alert-info alert-dismissible fade show" role="alert" id="alertaDatosEjemplo" style="display: none;">
+        <i class="bi bi-info-circle me-2"></i>
+        <strong>Nota:</strong> Se están mostrando datos de ejemplo para demostración. Los datos reales aparecerán cuando tengas compras registradas en el sistema.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 
-        <!-- Filtros -->
-        <div class="filter-section">
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label">Año</label>
-                    <select class="form-select" id="filtroAnio">
-                        <option value="2025">2025</option>
-                        <option value="2024">2024</option>
-                        <option value="2023">2023</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Temporada</label>
-                    <select class="form-select" id="filtroTemporada">
-                        <option value="">Todas</option>
-                        <option value="Invierno">Invierno</option>
-                        <option value="Verano">Verano</option>
-                        <option value="Otoño">Otoño</option>
-                        <option value="Primavera">Primavera</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Proveedor</label>
-                    <select class="form-select" id="filtroProveedor">
-                        <option value="">Todos</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Responsable</label>
-                    <select class="form-select" id="filtroResponsable">
-                        <option value="">Todos</option>
-                    </select>
-                </div>
+    <!-- Filtros -->
+    <div class="filter-section">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Año</label>
+                <select class="form-select" id="filtroAnio">
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Temporada</label>
+                <select class="form-select" id="filtroTemporada">
+                    <option value="">Todas</option>
+                    <option value="Invierno">Invierno</option>
+                    <option value="Verano">Verano</option>
+                    <option value="Otoño">Otoño</option>
+                    <option value="Primavera">Primavera</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Proveedor</label>
+                <select class="form-select" id="filtroProveedor">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Responsable</label>
+                <select class="form-select" id="filtroResponsable">
+                    <option value="">Todos</option>
+                </select>
             </div>
         </div>
+    </div>
 
-        <!-- KPIs Principales -->
-        <div class="kpi-grid">
-            <!-- Cumplimiento General -->
-            <div class="card dashboard-card border-0">
-                <div class="card-body text-center">
+    <!-- KPIs Principales -->
+    <div class="kpi-grid">
+        <!-- Cumplimiento General -->
+        <div class="card dashboard-card border-0">
+            <div class="card-body text-center">
                     <div class="metric-value text-primary" id="cumplimientoGeneral">0%</div>
                     <div class="metric-label">Cumplimiento General</div>
                     <div class="trend-indicator trend-positive mt-2" id="trendCumplimiento">
@@ -183,14 +182,74 @@
                         <i class="bi bi-arrow-down"></i> -2.1%
                     </div>
                 </div>
-            </div>
         </div>
+    </div>
 
-        <!-- Gráficos y Análisis -->
-        <div class="row mb-4">
-            <!-- Cumplimiento por Proveedor -->
-            <div class="col-lg-6">
-                <div class="card dashboard-card border-0">
+    <!-- Métricas Adicionales de Compras -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card dashboard-card border-0 bg-light">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Total Compras</h6>
+                        <h3 class="mb-0" id="totalCompras">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card dashboard-card border-0 bg-light">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Productos Distintos</h6>
+                        <h3 class="mb-0" id="totalProductos">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card dashboard-card border-0 bg-light">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Unidades Esperadas</h6>
+                        <h3 class="mb-0" id="unidadesEsperadas">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card dashboard-card border-0 bg-light">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Unidades Recepcionadas</h6>
+                        <h3 class="mb-0" id="unidadesRecepcionadas">0</h3>
+                    </div>
+                </div>
+        </div>
+    </div>
+
+    <!-- Inversión y Valor Esperado -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-3">
+            <div class="card dashboard-card border-0 border-start border-primary border-4">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">
+                            <i class="bi bi-cash-stack me-2"></i>Inversión Total en Compras
+                        </h6>
+                        <h2 class="mb-0 text-primary" id="inversionTotal">$0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6 mb-3">
+                <div class="card dashboard-card border-0 border-start border-success border-4">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">
+                            <i class="bi bi-graph-up-arrow me-2"></i>Valor Venta Esperado
+                        </h6>
+                        <h2 class="mb-0 text-success" id="valorVentaEsperado">$0</h2>
+                    </div>
+                </div>
+        </div>
+    </div>
+
+    <!-- Gráficos y Análisis -->
+    <div class="row mb-4">
+        <!-- Cumplimiento por Proveedor -->
+        <div class="col-lg-6">
+            <div class="card dashboard-card border-0">
                     <div class="card-header bg-transparent border-0">
                         <h5 class="card-title mb-0">
                             <i class="bi bi-graph-up me-2"></i>Cumplimiento por Proveedor
@@ -218,17 +277,17 @@
                         </div>
                     </div>
                 </div>
-            </div>
         </div>
+    </div>
 
-        <!-- Tabla de Rendimiento Detallado -->
-        <div class="card dashboard-card border-0">
-            <div class="card-header bg-transparent border-0">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-table me-2"></i>Rendimiento Detallado por Compra
-                </h5>
-            </div>
-            <div class="card-body">
+    <!-- Tabla de Rendimiento Detallado -->
+    <div class="card dashboard-card border-0">
+        <div class="card-header bg-transparent border-0">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-table me-2"></i>Rendimiento Detallado por Compra
+            </h5>
+        </div>
+        <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-hover" id="tablaRendimiento">
                         <thead class="table-light">
@@ -248,13 +307,13 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
         </div>
+    </div>
 
-        <!-- Alertas y Recomendaciones -->
-        <div class="row mt-4">
-            <div class="col-lg-6">
-                <div class="card dashboard-card border-0 border-start border-warning border-4">
+    <!-- Alertas y Recomendaciones -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="card dashboard-card border-0 border-start border-warning border-4">
                     <div class="card-header bg-transparent border-0">
                         <h6 class="card-title mb-0 text-warning">
                             <i class="bi bi-exclamation-triangle me-2"></i>Alertas
@@ -280,31 +339,13 @@
                         </ul>
                     </div>
                 </div>
-            </div>
         </div>
-
     </div>
+
 </div>
+<!-- Fin Contenedor Principal -->
 
 {% include 'layout/footer.html' %}
-
-<!-- Footer personalizado sin CKEditor para evitar errores -->
-<footer class="footer">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-sm-6">
-                <script>
-                    document.write(new Date().getFullYear())
-                </script> © <span class="fw-bold" style="font-size: 1.2em;">AllConnected.</span>
-            </div>
-            <div class="col-sm-6">
-                <div class="text-sm-end d-none d-sm-block" style="font-size: 1.2em;">
-                    Diseñado y Desarrollado Por <a href="https://webappsolutions.cl/">Webappsolutions</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</footer>
 
 <!-- JAVASCRIPT -->
 <script src="{% static 'js/jquery-3.5.1.min.js' %}"></script>
@@ -435,12 +476,11 @@ function actualizarDashboard() {
             actualizarAlertas();
             actualizarRecomendaciones();
             
-            // Mostrar alerta si hay datos de ejemplo
-            if (data.rendimiento_detallado && data.rendimiento_detallado.length > 0) {
-                const primerItem = data.rendimiento_detallado[0];
-                if (primerItem.nombre && primerItem.nombre.includes('Compra Invierno 2025')) {
-                    $('#alertaDatosEjemplo').show();
-                }
+            // Ocultar alerta de datos de ejemplo si hay datos reales
+            if (data.metricas_adicionales && data.metricas_adicionales.total_compras > 0) {
+                $('#alertaDatosEjemplo').hide();
+            } else {
+                $('#alertaDatosEjemplo').show();
             }
             
             hideGlobalLoader();
@@ -467,6 +507,24 @@ function actualizarKPIs() {
     actualizarTendencia('trendROI', data.trend_roi);
     actualizarTendencia('trendRotacion', data.trend_rotacion);
     actualizarTendencia('trendPrecision', data.trend_precision);
+    
+    // Actualizar métricas adicionales
+    if (data.metricas_adicionales) {
+        const metricas = data.metricas_adicionales;
+        $('#totalCompras').text(metricas.total_compras.toLocaleString());
+        $('#totalProductos').text(metricas.total_productos.toLocaleString());
+        $('#unidadesEsperadas').text(metricas.total_unidades_esperadas.toLocaleString());
+        $('#unidadesRecepcionadas').text(metricas.total_unidades_recepcionadas.toLocaleString());
+        
+        // Formatear montos
+        $('#inversionTotal').text('$' + formatMoney(metricas.inversion_total));
+        $('#valorVentaEsperado').text('$' + formatMoney(metricas.valor_venta_esperado));
+    }
+}
+
+// Formatear dinero
+function formatMoney(amount) {
+    return Math.round(amount).toLocaleString('es-CL');
 }
 
 // Actualizar indicador de tendencia

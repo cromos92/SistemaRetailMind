@@ -118,6 +118,8 @@ from .views_modulo_gestion_precios import (
     listar_categorias,
     listar_atributos,
     listar_sucursales,
+    obtener_historial_precio,
+    buscar_productos_similares_sucursales,
     # Sistema de aprobación
     proponer_cambio_precio,
     obtener_indicadores_precios_pendientes,
@@ -504,6 +506,8 @@ urlpatterns = [
     path('api/categorias/listar/', listar_categorias, name='listar_categorias'),
     path('api/atributos/listar/', listar_atributos, name='listar_atributos'),
     path('api/sucursales/listar/', listar_sucursales, name='listar_sucursales'),
+    path('gestion-precios/historial/<int:producto_id>/', obtener_historial_precio, name='obtener_historial_precio'),
+    path('gestion-precios/sucursales-similares/<int:producto_id>/', buscar_productos_similares_sucursales, name='buscar_productos_similares_sucursales'),
     
     # ========== SISTEMA DE APROBACIÓN DE CAMBIOS DE PRECIOS ==========
     path('gestion-precios/proponer-cambio/', proponer_cambio_precio, name='proponer_cambio_precio'),
@@ -514,5 +518,10 @@ urlpatterns = [
     path('gestion-precios/rechazar-cambio/', rechazar_cambio_precio, name='rechazar_cambio_precio'),
     path('gestion-precios/notificaciones/', obtener_notificaciones_precio, name='obtener_notificaciones_precio'),
     path('gestion-precios/marcar-notificacion/', marcar_notificacion_leida, name='marcar_notificacion_leida'),
+
+    # ========== MÓDULO DE GENERACIÓN DE ARCHIVOS TXT ACEPTA ==========
+    path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),
+    path('documentos/generar-txt-acepta/', views_modulo_documentos.generar_txt_acepta_api, name='generar_txt_acepta_api'),
+    path('documentos/generar-txt-desde-dte/', views_modulo_documentos.generar_txt_desde_dte_existente, name='generar_txt_desde_dte_existente'),
 
 ]

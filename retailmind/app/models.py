@@ -3377,4 +3377,94 @@ class NotificacionCambioPrecio(models.Model):
             self.fecha_lectura = timezone.now()
             self.save()
 
+
+class HistorialCambioPrecio(models.Model):
+    """
+    Modelo para registrar todos los cambios de precio
+    Auditoría completa de quién, cuándo y por qué cambió cada precio
+    """
+    # === RELACIONES ===
+    producto = models.ForeignKey(
+        Producto,
+        on_delete=models.CASCADE,
+        related_name='historial_precios'
+    )
+    
+    # === DATOS DEL CAMBIO ===
+    precio_anterior = models.IntegerField(
+        help_text="Precio antes del cambio"
+    )
+    precio_nuevo = models.IntegerField(
+        help_text="Precio después del cambio"
+    )
+    diferencia = models.IntegerField(
+        help_text="Diferencia en pesos"
+    )
+    porcentaje_cambio = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Porcentaje de cambio"
+    )
+    
+    # === CONTEXTO ===
+    motivo = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Motivo del cambio"
+    )
+    tipo_cambio = models.CharField(
+        max_length=50,
+        choices=[
+            ('MANUAL', 'Cambio Manual'),
+            ('RECOMENDACION', 'Por Recomendación'),
+            ('MASIVO', 'Cambio Masivo'),
+            ('SINCRONIZACION', 'Sincronización'),
+            ('APROBACION', 'Por Aprobación'),
+        ],
+        default='MANUAL'
+    )
+    
+    # === USUARIO Y FECHA ===
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='cambios_precio_realizados',
+        help_text="Usuario que realizó el cambio"
+    )
+    fecha_cambio = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(
+        blank=True,
+        null=True,
+        help_text="IP desde donde se realizó el cambio"
+    )
+    
+    # === METADATA ===
+    tallas_afectadas = models.IntegerField(
+        default=0,
+        help_text="Cantidad de tallas actualizadas"
+    )
+    lotes_afectados = models.IntegerField(
+        default=0,
+        help_text="Cantidad de lotes actualizados"
+    )
+    
+    class Meta:
+        ordering = ['-fecha_cambio']
+        verbose_name = 'Historial de Cambio de Precio'
+        verbose_name_plural = 'Historial de Cambios de Precios'
+        indexes = [
+            models.Index(fields=['producto', '-fecha_cambio']),
+            models.Index(fields=['usuario', '-fecha_cambio']),
+        ]
+    
+    def __str__(self):
+        return f"{self.producto.articulo} - {self.precio_anterior} → {self.precio_nuevo} - {self.fecha_cambio.strftime('%d/%m/%Y')}"
+    
+    @property
+    def hace_cuanto(self):
+        """Retorna hace cuánto tiempo fue el cambio"""
+        from django.utils.timesince import timesince
+        return timesince(self.fecha_cambio)
+
         

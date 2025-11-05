@@ -1,0 +1,638 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interfaz de Prueba - Generador TXT Acepta</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .main-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .form-section {
+            padding: 30px;
+        }
+        .tipo-doc-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .tipo-doc-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+        }
+        .tipo-doc-card.active {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+        .producto-row {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+        .alert-info {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border: 1px solid #667eea;
+            color: #495057;
+        }
+        .badge-custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .section-title {
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-card">
+            <!-- Header -->
+            <div class="header-section">
+                <h1><i class="fas fa-file-invoice"></i> Interfaz de Prueba - Generador TXT Acepta</h1>
+                <p class="mb-0">Genera archivos TXT para el sistema de facturación electrónica Acepta</p>
+            </div>
+
+            <!-- Alert de información -->
+            <div class="form-section">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Instrucciones:</strong> Selecciona el tipo de documento, completa los datos y genera el archivo TXT para Acepta.
+                </div>
+
+                <!-- Tipo de Documento -->
+                <h4 class="section-title"><i class="fas fa-file-alt"></i> Tipo de Documento</h4>
+                <div class="row mb-4">
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="tipo-doc-card" data-tipo="33">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="fas fa-file-invoice"></i> Factura Electrónica</h5>
+                                    <small class="text-muted">Tipo 33 - Venta B2B con IVA</small>
+                                </div>
+                                <span class="badge-custom">33</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="tipo-doc-card" data-tipo="39">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="fas fa-receipt"></i> Boleta Electrónica</h5>
+                                    <small class="text-muted">Tipo 39 - Consumidor Final</small>
+                                </div>
+                                <span class="badge-custom">39</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="tipo-doc-card" data-tipo="52">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="fas fa-truck"></i> Guía de Despacho</h5>
+                                    <small class="text-muted">Tipo 52 - Traslado</small>
+                                </div>
+                                <span class="badge-custom">52</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="tipo-doc-card" data-tipo="61">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="fas fa-undo"></i> Nota de Crédito</h5>
+                                    <small class="text-muted">Tipo 61 - Anulación</small>
+                                </div>
+                                <span class="badge-custom">61</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="tipo-doc-card" data-tipo="34">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="fas fa-file-invoice"></i> Factura Exenta</h5>
+                                    <small class="text-muted">Tipo 34 - Sin IVA</small>
+                                </div>
+                                <span class="badge-custom">34</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="tipo-doc-card" data-tipo="41">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="fas fa-receipt"></i> Boleta Exenta</h5>
+                                    <small class="text-muted">Tipo 41 - Sin IVA</small>
+                                </div>
+                                <span class="badge-custom">41</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Datos del Documento -->
+                <h4 class="section-title"><i class="fas fa-info-circle"></i> Datos del Documento</h4>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label">Folio <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="folio" placeholder="Ej: 12345" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Fecha Emisión <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="fecha_emision" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Forma de Pago</label>
+                        <select class="form-control" id="forma_pago">
+                            <option value="1">Contado</option>
+                            <option value="2">Crédito</option>
+                            <option value="3">Sin Costo</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Datos del Emisor -->
+                <h4 class="section-title"><i class="fas fa-building"></i> Datos del Emisor</h4>
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">RUT Emisor <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="emisor_rut" placeholder="Ej: 76.123.456-7" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Razón Social <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="emisor_razon_social" placeholder="Ej: MI EMPRESA LTDA" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Giro <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="emisor_giro" placeholder="Ej: COMERCIO AL POR MENOR" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">ACTECO</label>
+                        <input type="text" class="form-control" id="emisor_acteco" placeholder="Ej: 521000">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Dirección</label>
+                        <input type="text" class="form-control" id="emisor_direccion" placeholder="Ej: AV. PRINCIPAL 123">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Comuna</label>
+                        <input type="text" class="form-control" id="emisor_comuna" placeholder="Ej: SANTIAGO">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Ciudad</label>
+                        <input type="text" class="form-control" id="emisor_ciudad" placeholder="Ej: SANTIAGO">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Teléfono</label>
+                        <input type="text" class="form-control" id="emisor_telefono" placeholder="Ej: +56912345678">
+                    </div>
+                </div>
+
+                <!-- Datos del Receptor -->
+                <h4 class="section-title"><i class="fas fa-user"></i> Datos del Receptor</h4>
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">RUT Receptor <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="receptor_rut" placeholder="Ej: 77.654.321-K" required>
+                        <small class="text-muted">Para consumidor final usar: 66.666.666-6</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Razón Social <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="receptor_razon_social" placeholder="Ej: CLIENTE EJEMPLO S.A." required>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Giro</label>
+                        <input type="text" class="form-control" id="receptor_giro" placeholder="Ej: COMERCIO">
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Dirección</label>
+                        <input type="text" class="form-control" id="receptor_direccion" placeholder="Ej: CALLE COMERCIO 456">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Comuna</label>
+                        <input type="text" class="form-control" id="receptor_comuna" placeholder="Ej: PROVIDENCIA">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Ciudad</label>
+                        <input type="text" class="form-control" id="receptor_ciudad" placeholder="Ej: SANTIAGO">
+                    </div>
+                </div>
+
+                <!-- Productos -->
+                <h4 class="section-title"><i class="fas fa-shopping-cart"></i> Productos / Servicios</h4>
+                <div id="productos-container" class="mb-4">
+                    <!-- Los productos se agregarán dinámicamente aquí -->
+                </div>
+                <button type="button" class="btn btn-outline-primary mb-4" onclick="agregarProducto()">
+                    <i class="fas fa-plus"></i> Agregar Producto
+                </button>
+
+                <!-- Totales (calculados automáticamente) -->
+                <h4 class="section-title"><i class="fas fa-calculator"></i> Totales</h4>
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <label class="form-label">Subtotal Neto</label>
+                        <input type="text" class="form-control" id="total_neto" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">IVA (19%)</label>
+                        <input type="text" class="form-control" id="total_iva" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Total</label>
+                        <input type="text" class="form-control" id="total_total" readonly>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-secondary w-100 mt-4" onclick="calcularTotales()">
+                            <i class="fas fa-calculator"></i> Calcular
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="d-flex gap-2 justify-content-end">
+                    <button type="button" class="btn btn-outline-secondary" onclick="limpiarFormulario()">
+                        <i class="fas fa-eraser"></i> Limpiar
+                    </button>
+                    <button type="button" class="btn btn-outline-info" onclick="cargarEjemplo()">
+                        <i class="fas fa-file-import"></i> Cargar Ejemplo
+                    </button>
+                    <button type="button" class="btn btn-primary btn-lg" onclick="generarTXT()">
+                        <i class="fas fa-file-download"></i> Generar Archivo TXT
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'js/generador_txt_acepta.js' %}" onerror="console.error('Error al cargar generador_txt_acepta.js'); alert('Error: No se pudo cargar el módulo de generación. Verifique que los archivos estáticos estén configurados correctamente.')"></script>
+    <script>
+        // Verificar que el script se haya cargado
+        if (typeof GeneradorTXTAcepta === 'undefined') {
+            console.error('GeneradorTXTAcepta no está definido. El script no se cargó correctamente.');
+            console.log('Ruta esperada del script:', '{% static "js/generador_txt_acepta.js" %}');
+            
+            // Mostrar alerta al usuario
+            window.addEventListener('DOMContentLoaded', function() {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                alertDiv.style.zIndex = '9999';
+                alertDiv.innerHTML = `
+                    <strong>⚠️ Error de Configuración:</strong> 
+                    El módulo JavaScript no se cargó correctamente.
+                    <br><small>Ejecute: <code>python manage.py collectstatic</code> o configure DEBUG=True en settings.py</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.body.prepend(alertDiv);
+            });
+        }
+    </script>
+    <script>
+        let tipoDocumentoSeleccionado = 33; // Default: Factura Electrónica
+        let contadorProductos = 0;
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', function() {
+            // Fecha actual por defecto
+            document.getElementById('fecha_emision').valueAsDate = new Date();
+            
+            // Seleccionar primer tipo de documento
+            document.querySelector('.tipo-doc-card').classList.add('active');
+            
+            // Agregar primer producto
+            agregarProducto();
+        });
+
+        // Selección de tipo de documento
+        document.querySelectorAll('.tipo-doc-card').forEach(card => {
+            card.addEventListener('click', function() {
+                document.querySelectorAll('.tipo-doc-card').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                tipoDocumentoSeleccionado = parseInt(this.dataset.tipo);
+                
+                // Ajustar campos según tipo de documento
+                ajustarCamposPorTipo(tipoDocumentoSeleccionado);
+            });
+        });
+
+        function ajustarCamposPorTipo(tipo) {
+            // Para boletas, sugerir RUT genérico
+            if (tipo === 39 || tipo === 41) {
+                if (!document.getElementById('receptor_rut').value) {
+                    document.getElementById('receptor_rut').value = '66.666.666-6';
+                    document.getElementById('receptor_razon_social').value = 'CONSUMIDOR FINAL';
+                }
+            }
+        }
+
+        function agregarProducto() {
+            contadorProductos++;
+            const container = document.getElementById('productos-container');
+            const productoHtml = `
+                <div class="producto-row" id="producto-${contadorProductos}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-box"></i> Producto #${contadorProductos}</h6>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarProducto(${contadorProductos})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control producto-nombre" placeholder="Ej: PRODUCTO A" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Cantidad <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control producto-cantidad" placeholder="10" min="1" value="1" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Unidad</label>
+                            <select class="form-control producto-unidad">
+                                <option value="UN">UN</option>
+                                <option value="KG">KG</option>
+                                <option value="LT">LT</option>
+                                <option value="MT">MT</option>
+                                <option value="CAJA">CAJA</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Precio Unit. <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control producto-precio" placeholder="15000" min="0" required>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Descuento %</label>
+                            <input type="number" class="form-control producto-descuento" placeholder="0" min="0" max="100" value="0">
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', productoHtml);
+        }
+
+        function eliminarProducto(id) {
+            const producto = document.getElementById(`producto-${id}`);
+            if (producto) {
+                producto.remove();
+            }
+        }
+
+        function calcularTotales() {
+            let subtotal = 0;
+            
+            document.querySelectorAll('.producto-row').forEach(row => {
+                const cantidad = parseFloat(row.querySelector('.producto-cantidad').value) || 0;
+                const precio = parseFloat(row.querySelector('.producto-precio').value) || 0;
+                const descuento = parseFloat(row.querySelector('.producto-descuento').value) || 0;
+                
+                const montoItem = cantidad * precio * (1 - descuento / 100);
+                subtotal += montoItem;
+            });
+            
+            const iva = Math.round(subtotal * 0.19);
+            const total = subtotal + iva;
+            
+            document.getElementById('total_neto').value = subtotal.toLocaleString('es-CL');
+            document.getElementById('total_iva').value = iva.toLocaleString('es-CL');
+            document.getElementById('total_total').value = total.toLocaleString('es-CL');
+        }
+
+        function recopilarProductos() {
+            const productos = [];
+            document.querySelectorAll('.producto-row').forEach(row => {
+                const cantidad = parseFloat(row.querySelector('.producto-cantidad').value) || 0;
+                const precio = parseFloat(row.querySelector('.producto-precio').value) || 0;
+                const descuento = parseFloat(row.querySelector('.producto-descuento').value) || 0;
+                const descuentoUnitario = precio * (descuento / 100);
+                
+                productos.push({
+                    nombre: row.querySelector('.producto-nombre').value || 'PRODUCTO SIN NOMBRE',
+                    cantidad: cantidad,
+                    unidad: row.querySelector('.producto-unidad').value,
+                    precio_unitario: precio,
+                    descuento_pct: descuento,
+                    descuento_unitario: descuentoUnitario
+                });
+            });
+            return productos;
+        }
+
+        async function generarTXT() {
+            try {
+                // Validar campos obligatorios
+                if (!document.getElementById('folio').value) {
+                    alert('Por favor ingrese el folio');
+                    return;
+                }
+                if (!document.getElementById('emisor_rut').value) {
+                    alert('Por favor ingrese el RUT del emisor');
+                    return;
+                }
+                if (!document.getElementById('receptor_rut').value) {
+                    alert('Por favor ingrese el RUT del receptor');
+                    return;
+                }
+
+                // Recopilar productos
+                const productos = recopilarProductos();
+                if (productos.length === 0) {
+                    alert('Debe agregar al menos un producto');
+                    return;
+                }
+
+                // Crear datos según tipo de documento
+                let datos;
+                
+                if (tipoDocumentoSeleccionado === 33 || tipoDocumentoSeleccionado === 34) {
+                    // Factura
+                    datos = GeneradorTXTAcepta.crearFacturaElectronica({
+                        folio: parseInt(document.getElementById('folio').value),
+                        fechaEmision: document.getElementById('fecha_emision').value,
+                        formaPago: parseInt(document.getElementById('forma_pago').value),
+                        emisor: {
+                            rut: document.getElementById('emisor_rut').value,
+                            razon_social: document.getElementById('emisor_razon_social').value,
+                            giro: document.getElementById('emisor_giro').value,
+                            acteco: document.getElementById('emisor_acteco').value,
+                            direccion: document.getElementById('emisor_direccion').value,
+                            comuna: document.getElementById('emisor_comuna').value,
+                            ciudad: document.getElementById('emisor_ciudad').value,
+                            telefono: document.getElementById('emisor_telefono').value
+                        },
+                        receptor: {
+                            rut: document.getElementById('receptor_rut').value,
+                            razon_social: document.getElementById('receptor_razon_social').value,
+                            giro: document.getElementById('receptor_giro').value,
+                            direccion: document.getElementById('receptor_direccion').value,
+                            comuna: document.getElementById('receptor_comuna').value,
+                            ciudad: document.getElementById('receptor_ciudad').value
+                        },
+                        productos: productos
+                    });
+                    
+                    if (tipoDocumentoSeleccionado === 34) {
+                        datos.documento.tipo_documento = 34; // Factura Exenta
+                    }
+                } else if (tipoDocumentoSeleccionado === 39 || tipoDocumentoSeleccionado === 41) {
+                    // Boleta
+                    datos = GeneradorTXTAcepta.crearBoletaElectronica({
+                        folio: parseInt(document.getElementById('folio').value),
+                        fechaEmision: document.getElementById('fecha_emision').value,
+                        formaPago: parseInt(document.getElementById('forma_pago').value),
+                        emisor: {
+                            rut: document.getElementById('emisor_rut').value,
+                            razon_social: document.getElementById('emisor_razon_social').value,
+                            giro: document.getElementById('emisor_giro').value
+                        },
+                        receptor: {
+                            rut: document.getElementById('receptor_rut').value,
+                            razon_social: document.getElementById('receptor_razon_social').value
+                        },
+                        productos: productos
+                    });
+                    
+                    if (tipoDocumentoSeleccionado === 41) {
+                        datos.documento.tipo_documento = 41; // Boleta Exenta
+                    }
+                } else if (tipoDocumentoSeleccionado === 61) {
+                    // Nota de Crédito
+                    datos = GeneradorTXTAcepta.crearNotaCredito({
+                        folio: parseInt(document.getElementById('folio').value),
+                        fechaEmision: document.getElementById('fecha_emision').value,
+                        emisor: {
+                            rut: document.getElementById('emisor_rut').value,
+                            razon_social: document.getElementById('emisor_razon_social').value,
+                            giro: document.getElementById('emisor_giro').value
+                        },
+                        receptor: {
+                            rut: document.getElementById('receptor_rut').value,
+                            razon_social: document.getElementById('receptor_razon_social').value
+                        },
+                        productos: productos
+                    });
+                }
+
+                // Validar datos
+                const validacion = GeneradorTXTAcepta.validarDatos(datos);
+                if (!validacion.valido) {
+                    alert('Errores de validación:\n' + validacion.errores.join('\n'));
+                    return;
+                }
+
+                // Generar TXT
+                const resultado = await GeneradorTXTAcepta.generarTXT(datos);
+                
+                if (resultado.success) {
+                    alert('✅ Archivo TXT generado exitosamente!\n\nEl archivo se ha descargado automáticamente.');
+                } else {
+                    alert('❌ Error al generar archivo:\n' + resultado.error);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error inesperado:\n' + error.message);
+            }
+        }
+
+        function cargarEjemplo() {
+            // Cargar datos de ejemplo
+            document.getElementById('folio').value = '12345';
+            document.getElementById('fecha_emision').valueAsDate = new Date();
+            document.getElementById('forma_pago').value = '1';
+            
+            document.getElementById('emisor_rut').value = '76.123.456-7';
+            document.getElementById('emisor_razon_social').value = 'EMPRESA DEMO LTDA';
+            document.getElementById('emisor_giro').value = 'COMERCIO AL POR MENOR';
+            document.getElementById('emisor_acteco').value = '521000';
+            document.getElementById('emisor_direccion').value = 'AV. PRINCIPAL 123';
+            document.getElementById('emisor_comuna').value = 'SANTIAGO';
+            document.getElementById('emisor_ciudad').value = 'SANTIAGO';
+            document.getElementById('emisor_telefono').value = '+56912345678';
+            
+            document.getElementById('receptor_rut').value = '77.654.321-K';
+            document.getElementById('receptor_razon_social').value = 'CLIENTE EJEMPLO S.A.';
+            document.getElementById('receptor_giro').value = 'COMERCIO';
+            document.getElementById('receptor_direccion').value = 'CALLE COMERCIO 456';
+            document.getElementById('receptor_comuna').value = 'PROVIDENCIA';
+            document.getElementById('receptor_ciudad').value = 'SANTIAGO';
+            
+            // Limpiar productos existentes
+            document.getElementById('productos-container').innerHTML = '';
+            contadorProductos = 0;
+            
+            // Agregar productos de ejemplo
+            agregarProducto();
+            document.querySelector('.producto-nombre').value = 'PRODUCTO EJEMPLO A';
+            document.querySelector('.producto-cantidad').value = '10';
+            document.querySelector('.producto-precio').value = '15000';
+            
+            agregarProducto();
+            const productos = document.querySelectorAll('.producto-row');
+            const ultimoProducto = productos[productos.length - 1];
+            ultimoProducto.querySelector('.producto-nombre').value = 'PRODUCTO EJEMPLO B';
+            ultimoProducto.querySelector('.producto-cantidad').value = '5';
+            ultimoProducto.querySelector('.producto-precio').value = '8500';
+            ultimoProducto.querySelector('.producto-descuento').value = '5';
+            
+            calcularTotales();
+            
+            alert('✅ Datos de ejemplo cargados correctamente');
+        }
+
+        function limpiarFormulario() {
+            if (confirm('¿Está seguro de limpiar todos los datos?')) {
+                document.querySelectorAll('input').forEach(input => {
+                    if (input.type !== 'date') {
+                        input.value = '';
+                    }
+                });
+                document.getElementById('productos-container').innerHTML = '';
+                contadorProductos = 0;
+                agregarProducto();
+                calcularTotales();
+            }
+        }
+    </script>
+</body>
+</html>
+

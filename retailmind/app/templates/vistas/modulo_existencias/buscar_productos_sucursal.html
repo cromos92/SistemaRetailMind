@@ -14,12 +14,12 @@
                     <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                         <h4 class="mb-sm-0">
                             <i class="ri-search-line text-primary me-2"></i>
-                            Búsqueda de Productos por Sucursal
+                            Búsqueda General de Productos
                         </h4>
                         <div class="page-title-right">
                             <ol class="breadcrumb m-0">
                                 <li class="breadcrumb-item"><a href="javascript: void(0);">Productos</a></li>
-                                <li class="breadcrumb-item active">Búsqueda por Sucursal</li>
+                                <li class="breadcrumb-item active">Búsqueda General</li>
                             </ol>
                         </div>
                     </div>
@@ -40,40 +40,71 @@
                         <div class="card-body">
                             <form id="filtrosForm">
                                 <div class="row">
-                                    <!-- Sucursal -->
-                                    <div class="col-md-3 mb-3">
-                                        <label for="sucursal_select" class="form-label">
-                                            <i class="ri-building-line text-primary me-1"></i>
-                                            Sucursal
+                                    <!-- Búsqueda General -->
+                                    <div class="col-md-12 mb-3">
+                                        <label for="search_input" class="form-label">
+                                            <i class="ri-search-line text-primary me-1"></i>
+                                            Búsqueda General
                                         </label>
-                                        <select class="form-select" id="sucursal_select" name="sucursal_id">
-                                            <option value="" selected>Todas las sucursales</option>
-                                            {% for sucursal in sucursales %}
-                                            <option value="{{ sucursal.id }}">
-                                                {{ sucursal.alias }}
-                                            </option>
+                                        <input type="text" class="form-control form-control-lg" id="search_input" 
+                                               name="search" placeholder="Buscar por artículo, descripción, SKU...">
+                                    </div>
+                                </div>
+
+                                <!-- Filtros Específicos -->
+                                <div class="row">
+                                    <!-- Marca -->
+                                    <div class="col-md-3 mb-3">
+                                        <label for="marca_select" class="form-label">
+                                            <i class="ri-award-line text-primary me-1"></i>
+                                            Marca
+                                        </label>
+                                        <select class="form-select" id="marca_select" name="atributo1_id">
+                                            <option value="">Todas las marcas</option>
+                                            {% for atributo in atributos %}
+                                                {% if atributo.nombre == 'Marca' %}
+                                                    {% for opcion in atributo.opciones.all %}
+                                                    <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
+                                                    {% endfor %}
+                                                {% endif %}
                                             {% endfor %}
                                         </select>
                                     </div>
 
-                                    <!-- Artículo -->
+                                    <!-- Color -->
                                     <div class="col-md-3 mb-3">
-                                        <label for="articulo_input" class="form-label">
-                                            <i class="ri-barcode-line text-success me-1"></i>
-                                            Artículo
+                                        <label for="color_select" class="form-label">
+                                            <i class="ri-palette-line text-success me-1"></i>
+                                            Color
                                         </label>
-                                        <input type="text" class="form-control" id="articulo_input" 
-                                               name="articulo" placeholder="Buscar por artículo...">
+                                        <select class="form-select" id="color_select" name="atributo2_id">
+                                            <option value="">Todos los colores</option>
+                                            {% for atributo in atributos %}
+                                                {% if atributo.nombre == 'Color' %}
+                                                    {% for opcion in atributo.opciones.all %}
+                                                    <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
                                     </div>
 
-                                    <!-- Descripción -->
+                                    <!-- Género -->
                                     <div class="col-md-3 mb-3">
-                                        <label for="descripcion_input" class="form-label">
-                                            <i class="ri-file-text-line text-warning me-1"></i>
-                                            Descripción
+                                        <label for="genero_select" class="form-label">
+                                            <i class="ri-user-3-line text-info me-1"></i>
+                                            Género
                                         </label>
-                                        <input type="text" class="form-control" id="descripcion_input" 
-                                               name="descripcion" placeholder="Buscar por descripción...">
+                                        <select class="form-select" id="genero_select" name="atributo3_id">
+                                            <option value="">Todos los géneros</option>
+                                            {% for atributo in atributos %}
+                                                {% if atributo.nombre == 'Género' %}
+                                                    {% for opcion in atributo.opciones.all %}
+                                                    <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
                                     </div>
 
                                     <!-- Categoría -->
@@ -89,27 +120,6 @@
                                             {% endfor %}
                                         </select>
                                     </div>
-                                </div>
-
-                                <!-- Filtros de Atributos -->
-                                <div class="row">
-                                    {% for atributo in atributos %}
-                                    <div class="col-md-3 mb-3">
-                                        <label for="atributo{{ forloop.counter }}_select" class="form-label">
-                                            <i class="ri-settings-3-line text-info me-1"></i>
-                                            {{ atributo.nombre }}
-                                        </label>
-                                        <select class="form-select atributo-select" 
-                                                id="atributo{{ forloop.counter }}_select" 
-                                                name="atributo{{ forloop.counter }}_id"
-                                                data-atributo-id="{{ atributo.id }}">
-                                            <option value="">Todos los {{ atributo.nombre|lower }}</option>
-                                            {% for opcion in atributo.opciones.all %}
-                                            <option value="{{ opcion.id }}">{{ opcion.valor }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    {% endfor %}
                                 </div>
 
                                 <div class="row">
@@ -165,12 +175,12 @@
                                         <tr>
                                             <th>Artículo</th>
                                             <th>Descripción</th>
-                                            <th>Sucursal</th>
+                                            <th>Marca</th>
+                                            <th>Color</th>
+                                            <th>Género</th>
                                             <th>Categoría</th>
-                                            <th>Atributos</th>
-                                            <th>Precios</th>
                                             <th>Stock</th>
-                                            <th>Tallas</th>
+                                            <th>Sucursal</th>
                                             <th>Acciones</th>
                                         </tr>
                                     </thead>
@@ -377,7 +387,7 @@ $(document).ready(function() {
         const tbody = $('#productosTableBody');
         tbody.empty();
         
-        $('#totalProductos').text(response.total_productos);
+        $('#totalProductos').text(response.pagination.total_items);
         
         if (response.productos.length === 0) {
             tbody.append(`
@@ -392,32 +402,6 @@ $(document).ready(function() {
         }
         
         response.productos.forEach(function(producto) {
-            // Construir atributos
-            const atributos = [
-                producto.atributo1,
-                producto.atributo2,
-                producto.atributo3,
-                producto.atributo4
-            ].filter(attr => attr !== '').join('<br>');
-            
-            // Construir precios
-            const precios = `
-                <small class="text-muted">Costo:</small> $${producto.costo.toLocaleString()}<br>
-                <small class="text-muted">Sobreprecio:</small> $${producto.sobreprecio.toLocaleString()}<br>
-                <strong>Venta:</strong> $${producto.precio_venta.toLocaleString()}
-                ${producto.precio_sugerido ? '<br><small class="text-info">Sugerido: $' + producto.precio_sugerido.toLocaleString() + '</small>' : ''}
-            `;
-            
-            // Construir tallas
-            let tallasHtml = '';
-            if (producto.tallas_stock.length > 0) {
-                tallasHtml = producto.tallas_stock.map(t => 
-                    `<span class="badge ${t.stock > 0 ? 'bg-success' : 'bg-secondary'} me-1 mb-1">
-                        ${t.talla}: ${t.stock}
-                    </span>`
-                ).join('');
-            }
-            
             // Color del stock
             let stockClass = 'text-success';
             if (producto.stock_total === 0) stockClass = 'text-danger';
@@ -430,23 +414,22 @@ $(document).ready(function() {
                         <br><small class="text-muted">ID: ${producto.id}</small>
                     </td>
                     <td>${producto.descripcion}</td>
+                    <td>${producto.marca || '<span class="text-muted">-</span>'}</td>
+                    <td>${producto.color || '<span class="text-muted">-</span>'}</td>
+                    <td>${producto.genero || '<span class="text-muted">-</span>'}</td>
+                    <td>${producto.categoria || '<span class="text-muted">-</span>'}</td>
+                    <td>
+                        <span class="fw-bold ${stockClass}">${producto.stock_total}</span>
+                    </td>
                     <td>
                         <span class="badge bg-info">${producto.sucursal}</span>
                     </td>
-                    <td>${producto.categoria || '<span class="text-muted">Sin categoría</span>'}</td>
-                    <td><small>${atributos || '<span class="text-muted">Sin atributos</span>'}</small></td>
-                    <td><small>${precios}</small></td>
-                    <td>
-                        <span class="fw-bold ${stockClass}">${producto.stock_total}</span>
-                        <br><small class="text-muted">${producto.tipo_talla}</small>
-                    </td>
-                    <td>${tallasHtml}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-outline-primary btn-ver-tallas" 
                                 data-producto='${JSON.stringify(producto)}' 
                                 title="Ver detalle de tallas">
                             <i class="ri-t-shirt-line me-1"></i>
-                            Tallas
+                            Ver Tallas
                         </button>
                     </td>
                 </tr>
@@ -459,7 +442,9 @@ $(document).ready(function() {
         const paginacion = $('#paginacion');
         paginacion.empty();
         
-        if (response.total_paginas <= 1) {
+        const pagination = response.pagination;
+        
+        if (pagination.total_pages <= 1) {
             $('#paginacionContainer').hide();
             return;
         }
@@ -467,10 +452,10 @@ $(document).ready(function() {
         $('#paginacionContainer').show();
         
         // Botón anterior
-        if (response.tiene_anterior) {
+        if (pagination.current_page > 1) {
             paginacion.append(`
                 <li class="page-item">
-                    <a class="page-link" href="#" data-page="${response.pagina_actual - 1}">
+                    <a class="page-link" href="#" data-page="${pagination.current_page - 1}">
                         <i class="ri-arrow-left-line"></i>
                     </a>
                 </li>
@@ -478,22 +463,22 @@ $(document).ready(function() {
         }
         
         // Números de página
-        const inicio = Math.max(1, response.pagina_actual - 2);
-        const fin = Math.min(response.total_paginas, response.pagina_actual + 2);
+        const inicio = Math.max(1, pagination.current_page - 2);
+        const fin = Math.min(pagination.total_pages, pagination.current_page + 2);
         
         for (let i = inicio; i <= fin; i++) {
             paginacion.append(`
-                <li class="page-item ${i === response.pagina_actual ? 'active' : ''}">
+                <li class="page-item ${i === pagination.current_page ? 'active' : ''}">
                     <a class="page-link" href="#" data-page="${i}">${i}</a>
                 </li>
             `);
         }
         
         // Botón siguiente
-        if (response.tiene_siguiente) {
+        if (pagination.current_page < pagination.total_pages) {
             paginacion.append(`
                 <li class="page-item">
-                    <a class="page-link" href="#" data-page="${response.pagina_actual + 1}">
+                    <a class="page-link" href="#" data-page="${pagination.current_page + 1}">
                         <i class="ri-arrow-right-line"></i>
                     </a>
                 </li>

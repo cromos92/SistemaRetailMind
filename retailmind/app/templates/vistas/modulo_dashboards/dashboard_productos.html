@@ -134,11 +134,11 @@
                     </div>
                 </div>
 
-                <!-- Productos Activos -->
+                <!-- Total SKUs/Tallas -->
                 <div class="card dashboard-card border-0">
                     <div class="card-body text-center">
                         <div class="metric-value text-success" id="productosActivos">0</div>
-                        <div class="metric-label">Productos Activos</div>
+                        <div class="metric-label">Total SKUs (Tallas)</div>
                         <div class="trend-indicator trend-positive mt-2" id="trendActivos">
                             <i class="bi bi-arrow-up"></i> +8.3%
                         </div>
@@ -171,10 +171,28 @@
                 <div class="card dashboard-card border-0">
                     <div class="card-body text-center">
                         <div class="metric-value text-primary" id="valorTotalInventario">$0</div>
-                        <div class="metric-label">Valor Total Inventario</div>
+                        <div class="metric-label">Valor Total (Venta)</div>
                         <div class="trend-indicator trend-positive mt-2" id="trendValor">
                             <i class="bi bi-arrow-up"></i> +15.7%
                         </div>
+                    </div>
+                </div>
+
+                <!-- Valor Inventario FIFO -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-info" id="valorInventarioFIFO">$0</div>
+                        <div class="metric-label">Valor FIFO (Costo)</div>
+                        <small class="text-muted">Costo Real</small>
+                    </div>
+                </div>
+
+                <!-- Margen Potencial -->
+                <div class="card dashboard-card border-0">
+                    <div class="card-body text-center">
+                        <div class="metric-value text-success" id="margenPotencial">$0</div>
+                        <div class="metric-label">Margen Potencial</div>
+                        <small class="text-muted"><span id="margenPorcentual">0</span>%</small>
                     </div>
                 </div>
 
@@ -186,6 +204,135 @@
                         <div class="trend-indicator trend-positive mt-2" id="trendNuevos">
                             <i class="bi bi-arrow-up"></i> +22.1%
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== MÉTRICAS DE ROTACIÓN Y EFICIENCIA ========== -->
+            <div class="row mb-4 mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3"><i class="bi bi-speedometer2 me-2"></i>Rotación y Eficiencia</h5>
+                </div>
+            </div>
+            
+            <div class="kpi-grid">
+                <!-- Rotación de Inventario -->
+                <div class="card dashboard-card border-0 border-start border-4 border-primary">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="metric-label mb-1">Rotación Inventario</div>
+                                <div class="metric-value text-primary" style="font-size: 1.8rem;" id="rotacionInventario">0.0</div>
+                                <small class="text-muted">veces en 30 días</small>
+                            </div>
+                            <i class="bi bi-arrow-repeat text-primary" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Días de Inventario -->
+                <div class="card dashboard-card border-0 border-start border-4 border-warning">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="metric-label mb-1">Días de Inventario</div>
+                                <div class="metric-value text-warning" style="font-size: 1.8rem;" id="diasInventario">0</div>
+                                <small class="text-muted">días restantes</small>
+                            </div>
+                            <i class="bi bi-calendar3 text-warning" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ventas 30 Días -->
+                <div class="card dashboard-card border-0 border-start border-4 border-success">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="metric-label mb-1">Ventas (30 días)</div>
+                                <div class="metric-value text-success" style="font-size: 1.8rem;" id="ventas30Dias">0</div>
+                                <small class="text-muted">unidades</small>
+                            </div>
+                            <i class="bi bi-cart-check text-success" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ingresos 30 Días -->
+                <div class="card dashboard-card border-0 border-start border-4 border-info">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="metric-label mb-1">Ingresos (30 días)</div>
+                                <div class="metric-value text-info" style="font-size: 1.8rem;" id="ingresos30Dias">$0</div>
+                                <small class="text-muted">total vendido</small>
+                            </div>
+                            <i class="bi bi-currency-dollar text-info" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== ALERTAS Y PROBLEMAS ========== -->
+            <div class="row mb-4 mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Alertas y Problemas Potenciales</h5>
+                </div>
+            </div>
+            
+            <div class="kpi-grid">
+                <!-- Stock Muerto -->
+                <div class="card dashboard-card border-0 bg-danger bg-opacity-10">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="metric-label mb-1">Stock Muerto (90d)</div>
+                                <div class="metric-value text-danger" style="font-size: 1.8rem;" id="stockMuerto">0</div>
+                                <small class="text-muted">Valor: <span id="valorStockMuerto">$0</span></small>
+                            </div>
+                            <i class="bi bi-hourglass-bottom text-danger" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Próximos a Vencer -->
+                <div class="card dashboard-card border-0 bg-warning bg-opacity-10">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="metric-label mb-1">Próximos a Vencer</div>
+                                <div class="metric-value text-warning" style="font-size: 1.8rem;" id="lotesProximosVencer">0</div>
+                                <small class="text-muted">lotes en 30 días</small>
+                            </div>
+                            <i class="bi bi-clock-history text-warning" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Roturas de Stock -->
+                <div class="card dashboard-card border-0 bg-danger bg-opacity-10">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="metric-label mb-1">Roturas Stock (7d)</div>
+                                <div class="metric-value text-danger" style="font-size: 1.8rem;" id="roturasStock">0</div>
+                                <small class="text-muted">productos agotados</small>
+                            </div>
+                            <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Análisis ABC -->
+                <div class="card dashboard-card border-0 border-start border-4 border-primary">
+                    <div class="card-body">
+                        <div class="metric-label mb-2">Clasificación ABC</div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="badge bg-success">A: <span id="abcProductosA">0</span></span>
+                            <span class="badge bg-warning">B: <span id="abcProductosB">0</span></span>
+                            <span class="badge bg-secondary">C: <span id="abcProductosC">0</span></span>
+                        </div>
+                        <small class="text-muted">Por valor de inventario</small>
                     </div>
                 </div>
             </div>
@@ -455,20 +602,61 @@ function cargarDatosDashboard() {
 
 // Función para actualizar métricas
 function actualizarMetricas(metricas) {
-    $('#totalProductos').text(metricas.total_productos);
-    $('#productosActivos').text(metricas.productos_activos);
-    $('#productosConStock').text(metricas.productos_con_stock);
-    $('#productosAgotados').text(metricas.productos_agotados);
-    $('#valorTotalInventario').text('$' + metricas.valor_total_inventario.toLocaleString());
-    $('#productosNuevos').text(metricas.productos_nuevos);
+    // ========== MÉTRICAS BÁSICAS ==========
+    $('#totalProductos').text(metricas.total_productos || 0);
+    $('#productosActivos').text(metricas.productos_activos || 0);
+    $('#productosConStock').text(metricas.productos_con_stock || 0);
+    $('#productosAgotados').text(metricas.productos_agotados || 0);
+    $('#productosNuevos').text(metricas.productos_nuevos || 0);
     
-    // Actualizar tendencias
+    // ========== MÉTRICAS DE VALOR ==========
+    $('#valorTotalInventario').text('$' + (metricas.valor_total_inventario || 0).toLocaleString('es-CL'));
+    $('#valorInventarioFIFO').text('$' + (metricas.valor_inventario_fifo || 0).toLocaleString('es-CL'));
+    $('#margenPotencial').text('$' + (metricas.margen_potencial || 0).toLocaleString('es-CL'));
+    $('#margenPorcentual').text((metricas.margen_porcentual || 0).toFixed(1));
+    
+    // ========== MÉTRICAS DE ROTACIÓN ==========
+    $('#rotacionInventario').text((metricas.rotacion_inventario || 0).toFixed(2));
+    $('#diasInventario').text(metricas.dias_inventario || 0);
+    $('#ventas30Dias').text((metricas.ventas_30dias_unidades || 0).toLocaleString('es-CL'));
+    $('#ingresos30Dias').text('$' + (metricas.ingresos_30dias || 0).toLocaleString('es-CL'));
+    
+    // ========== ALERTAS ==========
+    $('#stockMuerto').text(metricas.stock_muerto || 0);
+    $('#valorStockMuerto').text('$' + (metricas.valor_stock_muerto || 0).toLocaleString('es-CL'));
+    $('#lotesProximosVencer').text(metricas.lotes_proximos_vencer || 0);
+    $('#roturasStock').text(metricas.roturas_stock || 0);
+    
+    // ========== ANÁLISIS ABC ==========
+    $('#abcProductosA').text(metricas.abc_productos_a || 0);
+    $('#abcProductosB').text(metricas.abc_productos_b || 0);
+    $('#abcProductosC').text(metricas.abc_productos_c || 0);
+    
+    // ========== TENDENCIAS ==========
     actualizarTendencia('#trendTotal', metricas.trend_total);
     actualizarTendencia('#trendActivos', metricas.trend_activos);
     actualizarTendencia('#trendStock', metricas.trend_stock);
     actualizarTendencia('#trendAgotados', metricas.trend_agotados);
     actualizarTendencia('#trendValor', metricas.trend_valor);
     actualizarTendencia('#trendNuevos', metricas.trend_nuevos);
+    
+    // ========== ALERTAS VISUALES ==========
+    // Rotación baja
+    if ((metricas.rotacion_inventario || 0) < 0.5) {
+        $('#rotacionInventario').closest('.card').addClass('border-danger');
+    }
+    
+    // Días de inventario críticos
+    if ((metricas.dias_inventario || 0) < 15 && (metricas.dias_inventario || 0) > 0) {
+        $('#diasInventario').closest('.card').addClass('border-danger');
+    }
+    
+    // Stock muerto alto
+    if ((metricas.stock_muerto || 0) > 10) {
+        $('#stockMuerto').closest('.card').addClass('border-3');
+    }
+    
+    console.log('✅ Métricas actualizadas:', metricas);
 }
 
 // Función para actualizar tendencias
@@ -663,24 +851,26 @@ function actualizarListaMasVendidos() {
     const container = $('#listaMasVendidos');
     container.empty();
     
-    if (dashboardData.mas_vendidos.length === 0) {
+    if (!dashboardData.mas_vendidos || dashboardData.mas_vendidos.length === 0) {
         container.html('<p class="text-muted text-center">No hay datos de ventas disponibles</p>');
         return;
     }
     
     dashboardData.mas_vendidos.forEach(function(producto, index) {
+        const ingresos = producto.ingresos ? '$' + producto.ingresos.toLocaleString('es-CL') : 'N/A';
         const item = `
             <div class="d-flex justify-content-between align-items-center mb-2 p-2 border-bottom">
                 <div class="d-flex align-items-center">
                     <span class="badge bg-primary me-2">#${index + 1}</span>
                     <div>
                         <strong>${producto.nombre}</strong>
-                        <br><small class="text-muted">${producto.categoria}</small>
+                        <br><small class="text-muted">${producto.categoria || 'Sin Categoría'}</small>
+                        ${producto.sku ? '<br><small class="text-muted">SKU: ' + producto.sku + '</small>' : ''}
                     </div>
                 </div>
                 <div class="text-end">
-                    <span class="badge bg-success">${producto.ventas}</span>
-                    <br><small class="text-muted">Ventas</small>
+                    <span class="badge bg-success">${producto.ventas} unid.</span>
+                    <br><small class="text-muted">${ingresos}</small>
                 </div>
             </div>
         `;

@@ -85,24 +85,24 @@ def obtener_compras_por_anio(request):
         empresa_id = request.GET.get('empresa_id')
         
         queryset = Compras.objects.filter(
-            fecha_compra__year=anio
+            fecha__year=anio
         ).select_related('empresa')
         
         if empresa_id:
             queryset = queryset.filter(empresa_id=empresa_id)
         
-        compras = queryset.order_by('-fecha_compra')
+        compras = queryset.order_by('-fecha')
         
         compras_data = []
         for compra in compras:
             compras_data.append({
                 'id': compra.id,
+                'nombre': compra.nombre,
                 'empresa': compra.empresa.nombre,
-                'fecha_compra': compra.fecha_compra.strftime('%d/%m/%Y'),
-                'numero_factura': compra.numero_factura,
-                'total': float(compra.total),
-                'estado': compra.estado,
-                'observaciones': compra.observaciones or ''
+                'fecha': compra.fecha.strftime('%d/%m/%Y'),
+                'temporada': compra.temporada,
+                'responsable': compra.responsable,
+                'correlativo': compra.correlativo
             })
         
         return JsonResponse({
@@ -487,8 +487,7 @@ def empresas_proveedoras(request):
     """Obtener lista de empresas proveedoras"""
     try:
         empresas = Empresa.objects.filter(
-            es_proveedor=True,
-            activo=True
+            esProveedor=True
         ).order_by('nombre')
         
         empresas_data = []
@@ -496,15 +495,10 @@ def empresas_proveedoras(request):
             empresas_data.append({
                 'id': empresa.id,
                 'nombre': empresa.nombre,
-                'rut': empresa.rut,
-                'email': empresa.email or '',
-                'telefono': empresa.telefono or ''
+                'rut': empresa.rut
             })
         
-        return JsonResponse({
-            'success': True,
-            'empresas': empresas_data
-        })
+        return JsonResponse(empresas_data, safe=False)
         
     except Exception as e:
         return JsonResponse({
@@ -867,89 +861,281 @@ def eliminar_dte(request, dte_id):
 
 @require_GET
 def dashboard_compras_estrategico(request):
-    """Dashboard estratégico de compras con métricas avanzadas"""
+    """Dashboard estratégico de compras con métricas avanzadas basado en datos reales"""
     try:
+        from datetime import datetime
+        from django.db.models import TruncMonth
+        
         # Parámetros de filtro
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
+        anio = request.GET.get('anio', datetime.now().year)
+        temporada = request.GET.get('temporada', '')
+        proveedor_id = request.GET.get('proveedor', '')
+        responsable = request.GET.get('responsable', '')
         
-        if not fecha_inicio or not fecha_fin:
-            # Por defecto últimos 30 días
-            fecha_fin = timezone.now().date()
-            fecha_inicio = fecha_fin - timezone.timedelta(days=30)
+        # Query base para compras
+        compras_query = Compras.objects.filter(fecha__year=anio)
         
-        # Métricas básicas
-        compras_periodo = Compras.objects.filter(
-            fecha_compra__range=[fecha_inicio, fecha_fin]
+        if temporada:
+            compras_query = compras_query.filter(temporada__icontains=temporada)
+        if proveedor_id:
+            compras_query = compras_query.filter(empresa_id=proveedor_id)
+        if responsable:
+            compras_query = compras_query.filter(responsable=responsable)
+        
+        # Obtener IDs de compras para filtrar
+        compras_ids = list(compras_query.values_list('id', flat=True))
+        
+        # ===== CÁLCULO DE MÉTRICAS REALES =====
+        
+        # 1. Total de compras y unidades
+        total_compras = compras_query.count()
+        
+        # 2. Productos y tallas de las compras
+        productos_compras = Compras_Producto.objects.filter(compras__in=compras_ids)
+        total_productos = productos_compras.count()
+        
+        tallas_compras = Compras_Producto_Talla.objects.filter(
+            compra_producto__compras__in=compras_ids
         )
         
-        total_compras = compras_periodo.count()
-        monto_total = compras_periodo.aggregate(
-            total=Sum('total')
+        # 3. Total de unidades esperadas
+        total_unidades_esperadas = tallas_compras.aggregate(
+            total=Sum('stock')
         )['total'] or 0
         
-        # Compras por proveedor
-        compras_por_proveedor = compras_periodo.values(
-            'empresa__nombre'
-        ).annotate(
-            total_compras=Count('id'),
-            monto_total=Sum('total')
-        ).order_by('-monto_total')[:10]
-        
-        # Evolución mensual
-        from django.db.models import TruncMonth
-        evolucion_mensual = compras_periodo.annotate(
-            mes=TruncMonth('fecha_compra')
-        ).values('mes').annotate(
-            total_compras=Count('id'),
-            monto_total=Sum('total')
-        ).order_by('mes')
-        
-        # DTEs pendientes de pago
-        dtes_pendientes = Dte.objects.filter(
-            tipo_transaccion='COMPRA',
-            estado_dte='EMITIDO'
-        ).aggregate(
-            cantidad=Count('id'),
-            monto_total=Sum('total')
+        # 4. Total de unidades recepcionadas
+        recepciones = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__compra_producto__compras__in=compras_ids
         )
+        total_unidades_recepcionadas = recepciones.aggregate(
+            total=Sum('stockArribado')
+        )['total'] or 0
         
-        dashboard_data = {
-            'metricas_generales': {
-                'total_compras': total_compras,
-                'monto_total': float(monto_total),
-                'promedio_compra': float(monto_total / total_compras) if total_compras > 0 else 0,
-                'dtes_pendientes': dtes_pendientes['cantidad'] or 0,
-                'monto_pendiente': float(dtes_pendientes['monto_total'] or 0)
-            },
-            'compras_por_proveedor': [
-                {
-                    'proveedor': item['empresa__nombre'],
-                    'total_compras': item['total_compras'],
-                    'monto_total': float(item['monto_total'])
-                }
-                for item in compras_por_proveedor
-            ],
-            'evolucion_mensual': [
-                {
-                    'mes': item['mes'].strftime('%Y-%m'),
-                    'total_compras': item['total_compras'],
-                    'monto_total': float(item['monto_total'])
-                }
-                for item in evolucion_mensual
-            ]
+        # 5. Cálculo de cumplimiento (% recepcionado vs esperado)
+        cumplimiento_general = 0
+        if total_unidades_esperadas > 0:
+            cumplimiento_general = round((total_unidades_recepcionadas / total_unidades_esperadas) * 100, 1)
+        
+        # 6. Cálculo de inversión total (costo)
+        inversion_total = productos_compras.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        # 7. Valor esperado de venta (precio sugerido)
+        valor_venta_esperado = productos_compras.aggregate(
+            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        # 8. Cálculo de ROI promedio (basado en precio sugerido vs costo)
+        roi_promedio = 0
+        if inversion_total > 0:
+            ganancia_esperada = valor_venta_esperado - inversion_total
+            roi_promedio = round((ganancia_esperada / inversion_total) * 100, 1)
+        
+        # 9. Rotación de inventario (estimada - productos con recepciones)
+        productos_con_recepcion = recepciones.values('producto_talla').distinct().count()
+        rotacion_inventario = round(productos_con_recepcion / max(total_productos, 1), 2)
+        
+        # 10. Precisión de pronóstico (% de cumplimiento de recepciones)
+        precision_pronostico = cumplimiento_general  # Similar al cumplimiento
+        
+        # ===== CUMPLIMIENTO POR PROVEEDOR =====
+        cumplimiento_proveedores = []
+        proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
+        
+        for proveedor in proveedores:
+            compras_proveedor = compras_query.filter(empresa_id=proveedor['empresa__id'])
+            compras_proveedor_ids = list(compras_proveedor.values_list('id', flat=True))
+            
+            tallas_proveedor = Compras_Producto_Talla.objects.filter(
+                compra_producto__compras__in=compras_proveedor_ids
+            )
+            esperadas_proveedor = tallas_proveedor.aggregate(total=Sum('stock'))['total'] or 0
+            
+            recepciones_proveedor = Productos_Recepcionados.objects.filter(
+                compra_producto_talla__compra_producto__compras__in=compras_proveedor_ids
+            )
+            recepcionadas_proveedor = recepciones_proveedor.aggregate(total=Sum('stockArribado'))['total'] or 0
+            
+            cumplimiento = 0
+            if esperadas_proveedor > 0:
+                cumplimiento = round((recepcionadas_proveedor / esperadas_proveedor) * 100, 1)
+            
+            cumplimiento_proveedores.append({
+                'proveedor': proveedor['empresa__nombre'],
+                'cumplimiento': cumplimiento
+            })
+        
+        # ===== ROI POR TEMPORADA =====
+        roi_temporadas = []
+        temporadas = compras_query.values('temporada').distinct()
+        
+        for temp in temporadas:
+            if not temp['temporada']:
+                continue
+                
+            compras_temporada = compras_query.filter(temporada=temp['temporada'])
+            compras_temp_ids = list(compras_temporada.values_list('id', flat=True))
+            
+            productos_temp = Compras_Producto.objects.filter(compras__in=compras_temp_ids)
+            
+            inversion_temp = productos_temp.aggregate(
+                total=Sum(F('costo') * F('compras_producto_talla__stock'))
+            )['total'] or 0
+            
+            valor_temp = productos_temp.aggregate(
+                total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+            )['total'] or 0
+            
+            roi_temp = 0
+            if inversion_temp > 0:
+                ganancia_temp = valor_temp - inversion_temp
+                roi_temp = round((ganancia_temp / inversion_temp) * 100, 1)
+            
+            roi_temporadas.append({
+                'temporada': temp['temporada'],
+                'roi': roi_temp
+            })
+        
+        # ===== RENDIMIENTO DETALLADO POR COMPRA =====
+        rendimiento_detallado = []
+        
+        for compra in compras_query[:10]:  # Limitar a las primeras 10
+            # Unidades de esta compra
+            tallas_compra = Compras_Producto_Talla.objects.filter(
+                compra_producto__compras=compra
+            )
+            unidades_esperadas = tallas_compra.aggregate(total=Sum('stock'))['total'] or 0
+            
+            # Recepciones de esta compra
+            recepciones_compra = Productos_Recepcionados.objects.filter(
+                compra_producto_talla__compra_producto__compras=compra
+            )
+            unidades_recibidas = recepciones_compra.aggregate(total=Sum('stockArribado'))['total'] or 0
+            
+            # Cumplimiento
+            cumplimiento_compra = 0
+            if unidades_esperadas > 0:
+                cumplimiento_compra = round((unidades_recibidas / unidades_esperadas) * 100, 1)
+            
+            # ROI de la compra
+            productos_compra = Compras_Producto.objects.filter(compras=compra)
+            inversion_compra = productos_compra.aggregate(
+                total=Sum(F('costo') * F('compras_producto_talla__stock'))
+            )['total'] or 0
+            
+            valor_compra = productos_compra.aggregate(
+                total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+            )['total'] or 0
+            
+            roi_compra = 0
+            if inversion_compra > 0:
+                ganancia_compra = valor_compra - inversion_compra
+                roi_compra = round((ganancia_compra / inversion_compra) * 100, 1)
+            
+            # Determinar estado
+            estado = 'Pendiente'
+            if cumplimiento_compra >= 100:
+                estado = 'Completado'
+            elif cumplimiento_compra >= 80:
+                estado = 'Pendiente'
+            else:
+                estado = 'Retrasado'
+            
+            rendimiento_detallado.append({
+                'nombre': compra.nombre,
+                'proveedor': compra.empresa.nombre,
+                'temporada': compra.temporada,
+                'cumplimiento': cumplimiento_compra,
+                'roi': roi_compra,
+                'rotacion': round(unidades_recibidas / max(unidades_esperadas, 1), 2),
+                'precision': cumplimiento_compra,
+                'estado': estado
+            })
+        
+        # ===== ALERTAS =====
+        alertas = []
+        
+        if cumplimiento_general < 80:
+            alertas.append({
+                'mensaje': f'Cumplimiento general bajo ({cumplimiento_general}%). Revisar procesos de recepción.'
+            })
+        
+        compras_sin_recepcion = compras_query.count() - Compras.objects.filter(
+            id__in=compras_ids,
+            compras_producto__compras_producto_talla__productos_recepcionados__isnull=False
+        ).distinct().count()
+        
+        if compras_sin_recepcion > 0:
+            alertas.append({
+                'mensaje': f'{compras_sin_recepcion} compra(s) sin recepción registrada.'
+            })
+        
+        if roi_promedio < 15:
+            alertas.append({
+                'mensaje': f'ROI promedio bajo ({roi_promedio}%). Revisar precios y costos.'
+            })
+        
+        # ===== RECOMENDACIONES =====
+        recomendaciones = []
+        
+        if cumplimiento_general < 90:
+            recomendaciones.append({
+                'mensaje': 'Implementar seguimiento más estricto de recepciones para mejorar cumplimiento.'
+            })
+        
+        if rotacion_inventario < 0.5:
+            recomendaciones.append({
+                'mensaje': 'Optimizar gestión de inventario para aumentar rotación de productos.'
+            })
+        
+        if len(cumplimiento_proveedores) > 0:
+            proveedores_bajo_cumplimiento = [p for p in cumplimiento_proveedores if p['cumplimiento'] < 80]
+            if proveedores_bajo_cumplimiento:
+                recomendaciones.append({
+                    'mensaje': f'Revisar desempeño de {len(proveedores_bajo_cumplimiento)} proveedor(es) con bajo cumplimiento.'
+                })
+        
+        # ===== TENDENCIAS (simuladas por ahora) =====
+        tendencias = {
+            'trend_cumplimiento': 5.2 if cumplimiento_general >= 80 else -3.5,
+            'trend_roi': 8.5 if roi_promedio >= 20 else -2.1,
+            'trend_rotacion': 0,
+            'trend_precision': 2.3 if precision_pronostico >= 80 else -4.2
         }
         
-        return JsonResponse({
-            'success': True,
-            'dashboard': dashboard_data
-        })
+        # ===== RESPUESTA FINAL =====
+        response_data = {
+            'cumplimiento_general': cumplimiento_general,
+            'roi_promedio': roi_promedio,
+            'rotacion_inventario': rotacion_inventario,
+            'precision_pronostico': precision_pronostico,
+            'cumplimiento_proveedores': cumplimiento_proveedores,
+            'roi_temporadas': roi_temporadas,
+            'rendimiento_detallado': rendimiento_detallado,
+            'alertas': alertas,
+            'recomendaciones': recomendaciones,
+            **tendencias,
+            # Métricas adicionales
+            'metricas_adicionales': {
+                'total_compras': total_compras,
+                'total_productos': total_productos,
+                'total_unidades_esperadas': total_unidades_esperadas,
+                'total_unidades_recepcionadas': total_unidades_recepcionadas,
+                'inversion_total': float(inversion_total) if inversion_total else 0,
+                'valor_venta_esperado': float(valor_venta_esperado) if valor_venta_esperado else 0
+            }
+        }
+        
+        return JsonResponse(response_data)
         
     except Exception as e:
+        import traceback
         return JsonResponse({
             'success': False,
-            'error': f'Error al generar dashboard: {str(e)}'
-        })
+            'error': f'Error al generar dashboard: {str(e)}',
+            'traceback': traceback.format_exc()
+        }, status=500)
 
 
 @require_GET
