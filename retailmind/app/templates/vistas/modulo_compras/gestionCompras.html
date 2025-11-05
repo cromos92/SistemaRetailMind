@@ -414,7 +414,8 @@
             </div>
             <div class="modal-body">
                 <form id="formProductoManual">
-
+                    <input type="hidden" id="compraIdManual" name="compra_id">
+                    
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">DTE (Factura/Guía de Compra)</label>
@@ -591,10 +592,17 @@ const GestionCompras = (function() {
         cargarComprasPorAnio(anioActual, 1, '');
 
         // Cargar DTEs disponibles al abrir el modal de producto manual
-        $('#modalProductoManual').on('show.bs.modal', function() {
-            cargarDtesDisponiblesManual();
+        $('#modalProductoManual').on('show.bs.modal', function(e) {
+            const button = $(e.relatedTarget);
+            const compraId = button.data('id');
+            
+            $('#compraIdManual').val(compraId);
             $('#proveedorManual').val('');
             $('#selectDteManual').val('').trigger('change');
+            $('#formProductoManual')[0].reset();
+            $('#compraIdManual').val(compraId); // Volver a setear después del reset
+            
+            cargarDtesDisponiblesManual();
         });
 
         // Al seleccionar un DTE, mostrar el proveedor asociado
@@ -1170,21 +1178,29 @@ $('#btnCargarCSV').on('click', function () {
         showGlobalLoader();
         const filas = todosLosRegistrosCSV.map(cols => {
             const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+            
+            // Parsear valores numéricos con validación
+            const costo = parseFloat((costoStr || '0').toString().replace(/\./g, '').replace(',', '.')) || 0;
+            const precioSugerido = parseFloat((precioStr || '0').toString().replace(/\./g, '').replace(',', '.')) || 0;
+            const stock = parseInt((stockStr || '0').toString().replace(/\./g, '')) || 0;
+            
             return {
                 nombre,
                 descripcion,
                 atributo1: marca,
                 atributo2: color,
                 atributo3: genero,
-                costo: parseFloat((costoStr || '').toString().replace(/\./g, '').replace(',', '.')),
-                precioSugerido: parseFloat((precioStr || '').toString().replace(/\./g, '').replace(',', '.')),
-                stock: parseInt((stockStr || '').toString().replace(/\./g, '')),
+                atributo4: '',  // Agregamos atributo4 que faltaba
+                costo: costo,
+                precioSugerido: precioSugerido,
+                stock: stock,
                 talla
             };
         });
 
         if (filas.length === 0) {
-            showError('No hay datos para importar.');
+            GestionCompras.showError('No hay datos para importar.');
+            hideGlobalLoader();
             return;
         }
 
@@ -1195,18 +1211,26 @@ $('#btnCargarCSV').on('click', function () {
             data: JSON.stringify({ compra_id: $("#globalIDCompra").val(), filas: filas }),
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function(data) {
+                hideGlobalLoader();
                 if (data.success) {
-                    hideGlobalLoader();
-                    showSuccess('Importación exitosa.');
-                    cargarComprasPorAnio(anioActual);
+                    GestionCompras.showSuccess('Importación exitosa.');
                     $('#modalImportarCSV').modal('hide');
+                    // Limpiar la vista previa
+                    todosLosRegistrosCSV = [];
+                    $('#csvPreview').hide();
+                    $('#totalPares').text('0');
+                    $('#totalCosto').text('$0');
+                    // Recargar la tabla de compras
+                    cargarComprasPorAnio(anioActual, 1, '');
                 } else {
-                    showError('Error al importar: ' + (data.error || 'Error desconocido.'));
+                    GestionCompras.showError('Error al importar: ' + (data.error || 'Error desconocido.'));
                 }
             },
             error: function(xhr) {
+                hideGlobalLoader();
                 console.error(xhr);
-                showError('Error en la petición.');
+                const errorMsg = xhr.responseJSON?.error || xhr.statusText || 'Error en la petición.';
+                GestionCompras.showError('Error al importar: ' + errorMsg);
             }
         });
     });
@@ -1308,35 +1332,44 @@ $('#btnCargarCSV').on('click', function () {
     $('#formProductoManual').on('submit', function (e) {
         e.preventDefault();
 
+        // Validar DTE obligatorio
+        if (!$('#selectDteManual').val()) {
+            GestionCompras.showError('Debes seleccionar un DTE para asociar el producto.');
+            return false;
+        }
+
+        // Validar que haya compra_id
+        const compraId = $('#compraIdManual').val();
+        if (!compraId) {
+            GestionCompras.showError('No se pudo identificar la compra. Cierra y vuelve a abrir el modal.');
+            return false;
+        }
+
         const form = $(this);
         const data = form.serialize();
 
+        GestionCompras.showLoading();
+        
         // Usar las funciones exportadas del módulo GestionCompras
         GestionCompras.ajaxPost(GestionCompras.urls.agregarProductoManual, data, function (res) {
+            GestionCompras.hideLoading();
             if (res.success) {
-                GestionCompras.showSuccess('Producto ingresado correctamente');
+                GestionCompras.showSuccess('Producto agregado correctamente');
                 $('#modalProductoManual').modal('hide');
                 form[0].reset();
-                // O refrescar tabla si querés
+                
+                // Si el modal de recepción está abierto, recargarlo
+                if ($('#modalRecepcionProductos').hasClass('show')) {
+                    cargarDatosRecepcion(compraId, 1, '');
+                }
             } else {
                 GestionCompras.showError(res.error || 'No se pudo guardar.');
             }
         }, function (err) {
-            GestionCompras.showError('Algo salió mal en el servidor');
+            GestionCompras.hideLoading();
+            const errorMsg = err.responseJSON?.error || 'Algo salió mal en el servidor';
+            GestionCompras.showError(errorMsg);
         });
-    });
-
-    // Validar DTE obligatorio al guardar producto manual
-    $('#formProductoManual').on('submit', function(e) {
-        if (!$('#selectDteManual').val()) {
-            e.preventDefault();
-            Swal.fire({
-                icon: 'error',
-                title: 'Campos incompletos',
-                text: 'Debes seleccionar un DTE para asociar el producto.'
-            });
-            return false;
-        }
     });
 
     // Descargar formato CSV de compra

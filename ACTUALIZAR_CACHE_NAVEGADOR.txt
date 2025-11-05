@@ -1,0 +1,126 @@
+===============================================
+ ✅ URLS CORREGIDAS - ACTUALIZAR CACHÉ
+===============================================
+
+✅ CAMBIOS APLICADOS:
+
+Se han corregido las URLs en el archivo JavaScript:
+
+Antes:
+------
+fetch('/documentos/generar-txt-acepta/', ...)
+fetch('/documentos/generar-txt-desde-dte/', ...)
+
+Ahora:
+------
+fetch('/app/documentos/generar-txt-acepta/', ...)
+fetch('/app/documentos/generar-txt-desde-dte/', ...)
+
+===============================================
+ 🔄 ACCIÓN REQUERIDA (HACER AHORA)
+===============================================
+
+OPCIÓN 1: Limpiar Caché del Navegador
+--------------------------------------
+En la página de la interfaz:
+
+Ctrl + Shift + R (Windows/Linux)
+Cmd + Shift + R (Mac)
+
+Esto fuerza la recarga del archivo JavaScript
+
+
+OPCIÓN 2: Hacer Hard Refresh
+-----------------------------
+1. Presiona F12 (DevTools)
+2. Haz clic derecho en el botón de recargar
+3. Selecciona "Vaciar caché y recargar enérgicamente"
+
+
+OPCIÓN 3: Borrar Caché Completamente
+-------------------------------------
+1. En el navegador: Ctrl + Shift + Delete
+2. Marca "Archivos e imágenes en caché"
+3. Selecciona "Todo el tiempo"
+4. Haz clic en "Borrar datos"
+5. Cierra y abre el navegador
+6. Accede de nuevo a la interfaz
+
+===============================================
+ ✅ VERIFICAR QUE FUNCIONA
+===============================================
+
+Después de limpiar la caché:
+
+1. Accede a:
+   http://localhost:8000/app/configuracion/interfaz-prueba-acepta/
+
+2. Presiona F12 → Pestaña Network
+
+3. Recarga la página (F5)
+
+4. Busca "generador_txt_acepta.js"
+   - Debe aparecer en la lista
+   - Código de estado: 200 (verde)
+   - Tamaño: ~14 KB
+
+5. Haz clic en "Cargar Ejemplo"
+
+6. Haz clic en "Generar Archivo TXT"
+
+7. En la pestaña Network busca la petición a:
+   "generar-txt-acepta"
+   
+8. Debe tener:
+   - Código: 200
+   - Type: text/plain
+   - Respuesta: contenido del archivo TXT
+
+9. ✅ El archivo debería descargarse automáticamente
+
+===============================================
+ 🎯 PRUEBA RÁPIDA
+===============================================
+
+Después de limpiar caché:
+
+1. Abre consola (F12)
+2. Escribe: GeneradorTXTAcepta.TIPOS_DOCUMENTO
+3. Deberías ver: {FACTURA_ELECTRONICA: 33, ...}
+4. Haz clic en "Cargar Ejemplo"
+5. Haz clic en "Generar Archivo TXT"
+6. ✅ Archivo descargado!
+
+===============================================
+ ⚠️ IMPORTANTE
+===============================================
+
+El navegador guarda en caché los archivos JavaScript.
+
+Debes FORZAR la recarga con Ctrl+Shift+R para que
+cargue la versión actualizada del archivo.
+
+===============================================
+ 📝 ARCHIVOS CORREGIDOS
+===============================================
+
+✅ settings.py - DEBUG = True
+✅ settings.py - STATICFILES_DIRS con app/static
+✅ generador_txt_acepta.js - URLs corregidas con /app/
+✅ menu.html - Link agregado en Configuración
+
+===============================================
+ 🚀 SI TODO ESTÁ BIEN
+===============================================
+
+Después de Ctrl+Shift+R deberías poder:
+
+1. Ver la interfaz sin errores
+2. Cargar el ejemplo
+3. Generar el archivo TXT
+4. Descargarlo automáticamente
+
+Si funciona = ✅ ¡Listo para usar!
+
+===============================================
+

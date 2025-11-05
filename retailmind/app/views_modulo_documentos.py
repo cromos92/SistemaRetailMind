@@ -1017,11 +1017,14 @@ def formatear_monto(monto):
     Returns:
         str: Monto formateado sin separadores de miles
     """
-    if monto is None:
+    if monto is None or monto == '':
         return '0'
     
     # Convertir a Decimal para precisión
     if isinstance(monto, str):
+        monto = monto.strip()
+        if not monto:
+            return '0'
         monto = Decimal(monto.replace(',', ''))
     else:
         monto = Decimal(str(monto))
@@ -1042,10 +1045,13 @@ def formatear_decimal(numero, enteros=12, decimales=6):
     Returns:
         str: Número formateado
     """
-    if numero is None:
+    if numero is None or numero == '':
         return '0.' + '0' * decimales
     
     if isinstance(numero, str):
+        numero = numero.strip()
+        if not numero:
+            return '0.' + '0' * decimales
         numero = Decimal(numero)
     else:
         numero = Decimal(str(numero))
@@ -1250,7 +1256,8 @@ def generar_txt_dte_acepta(datos):
         formatear_fecha(doc.get('fecha_vencimiento', '')),
         str(doc.get('ind_servicio', '')),
         '',  # Campo reservado
-        formatear_timestamp(doc.get('timestamp', ''))
+        formatear_timestamp(doc.get('timestamp', '')),
+        ''   # Campo extra al final
     ]
     lineas.append(separador.join(linea1))
     
@@ -1269,7 +1276,8 @@ def generar_txt_dte_acepta(datos):
         limpiar_texto(emisor.get('codigo_vendedor', ''), 60),
         limpiar_texto(emisor.get('telefono', ''), 20),
         '',  # Teléfono 2
-        ''   # Campo reservado
+        '',  # Campo reservado
+        ''   # Campo extra al final
     ]
     lineas.append(separador.join(linea2))
     
@@ -1284,7 +1292,8 @@ def generar_txt_dte_acepta(datos):
         limpiar_texto(receptor.get('direccion', ''), 70),
         limpiar_texto(receptor.get('comuna', ''), 20),
         limpiar_texto(receptor.get('ciudad', ''), 20),
-        ''  # Ciudad postal
+        '',  # Ciudad postal
+        ''   # Campo extra al final
     ]
     lineas.append(separador.join(linea3))
     
@@ -1295,7 +1304,8 @@ def generar_txt_dte_acepta(datos):
         formatear_rut(transporte.get('rut_transportista', '')),
         limpiar_texto(transporte.get('direccion_destino', ''), 70),
         limpiar_texto(transporte.get('comuna_destino', ''), 20),
-        limpiar_texto(transporte.get('ciudad_destino', ''), 20)
+        limpiar_texto(transporte.get('ciudad_destino', ''), 20),
+        ''   # Campo extra al final
     ]
     lineas.append(separador.join(linea4))
     

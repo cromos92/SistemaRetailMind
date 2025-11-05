@@ -11,7 +11,33 @@ Este error indica que el archivo JavaScript `generador_txt_acepta.js` no se est�
 
 ## ✅ SOLUCIONES (Prueba en orden)
 
-### Solución 1: Verificar DEBUG = True (Desarrollo)
+### Solución 1: Configurar STATICFILES_DIRS (PRINCIPAL) ⭐
+
+**Este es el problema más común en este proyecto.**
+
+El archivo `settings.py` debe incluir la ruta `app/static`:
+
+```python
+# En retailmind/retailmind/settings.py
+STATICFILES_DIRS = [
+    BASE_DIR / 'retailmind' / 'static',
+    BASE_DIR / 'app' / 'static',  # ← Esta línea debe estar presente
+]
+```
+
+**Pasos:**
+1. Abre `retailmind/retailmind/settings.py`
+2. Busca `STATICFILES_DIRS`
+3. Agrega la línea `BASE_DIR / 'app' / 'static',`
+4. **REINICIA el servidor Django** (Ctrl+C y vuelve a iniciar)
+5. Limpia caché del navegador (Ctrl+Shift+R)
+6. Recarga la interfaz
+
+**IMPORTANTE:** El servidor DEBE reiniciarse para que los cambios surtan efecto.
+
+---
+
+### Solución 2: Verificar DEBUG = True (Desarrollo)
 
 1. Abre el archivo `settings.py` de tu proyecto:
 ```python

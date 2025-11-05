@@ -3772,59 +3772,44 @@ def agregar_producto_manual(request):
         if not dte_id:
             return JsonResponse({'success': False, 'error': 'Debe seleccionar un DTE'}, status=400)
         
+        # Validar que se proporcione la compra
+        compra_id = request.POST.get('compra_id')
+        if not compra_id:
+            return JsonResponse({'success': False, 'error': 'Debe tener una compra activa'}, status=400)
+        
         # Verificar que el DTE existe y es válido
         try:
             dte = Dte.objects.get(id=dte_id, tipo_transaccion='COMPRA')
         except Dte.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'DTE no válido'}, status=400)
         
-        # Obtener datos de sesión
-        sucursal_id = request.session.get('idSucursalActual')
-        responsable = request.session.get('nombreUsuario', 'Sistema')
+        # Verificar que la compra existe
+        try:
+            compra = Compras.objects.get(id=compra_id)
+        except Compras.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Compra no válida'}, status=400)
         
-        if not sucursal_id:
-            return JsonResponse({'success': False, 'error': 'No hay sucursal activa'}, status=400)
-        
-        sucursal = Sucursal.objects.get(id=sucursal_id)
-        
-        # Crear el producto directamente (sin compra)
-        producto = Producto.objects.create(
-            articulo=request.POST['nombre'],
+        # Crear el producto de compra (esto aparecerá en la recepción)
+        compra_producto = Compras_Producto.objects.create(
+            compras=compra,
+            nombre=request.POST['nombre'],
             descripcion=request.POST.get('descripcion', ''),
-            atributo1=request.POST['atributo1'],
-            atributo2=request.POST['atributo2'],
-            atributo3=request.POST['atributo3'],
+            atributo1=request.POST.get('atributo1', ''),
+            atributo2=request.POST.get('atributo2', ''),
+            atributo3=request.POST.get('atributo3', ''),
             atributo4=request.POST.get('atributo4', ''),
-            sucursal=sucursal,
             costo=int(request.POST['costo']),
-            sobreprecio=int(request.POST['costo']),  # Mismo valor que costo por defecto
-            precioventa=int(request.POST['precioSugerido']),
             precioSugerido=int(request.POST['precioSugerido'])
         )
         
-        # Crear la talla del producto
-        producto_talla = Producto_Talla.objects.create(
-            producto=producto,
-            sku=obtener_siguiente_sku(),
-            talla=request.POST['talla'],
-            stock=int(request.POST['stock'])
+        # Crear la talla del producto de compra
+        Compras_Producto_Talla.objects.create(
+            compra_producto=compra_producto,
+            stock=int(request.POST['stock']),
+            talla=request.POST['talla']
         )
         
-        # Registrar el movimiento de ingreso asociado al DTE
-        Movimientos_Producto.objects.create(
-            ProductoTalla=producto_talla,
-            dte=dte,  # Asociar al DTE seleccionado
-            cantidad=int(request.POST['stock']),
-            costo=int(request.POST['costo']),
-            sobreprecio=int(request.POST['costo']),
-            precio=int(request.POST['precioSugerido']),
-            concepto='Ingreso Manual',
-            tipo_movimiento='INGRESO',
-            responsable=responsable,
-            sucursal_origen=sucursal
-        )
-        
-        return JsonResponse({'success': True})
+        return JsonResponse({'success': True, 'message': 'Producto agregado a la compra correctamente'})
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

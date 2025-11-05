@@ -28,7 +28,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u6k00%6(jlc5r(j2l34j7d=1mn8&_xaam4^t_*c3=oa7%_e-_7')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+# DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+DEBUG = True  # Forzado a True para desarrollo local - CAMBIAR A False en producción
 
 # ALLOWED_HOSTS configuration
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
@@ -179,6 +180,7 @@ SESSION_COOKIE_DOMAIN = None  # o simplemente no lo pongas
 
 STATICFILES_DIRS = [
     BASE_DIR / 'retailmind' / 'static',
+    BASE_DIR / 'app' / 'static',  # Archivos estáticos de la app
 ]
 
 STATIC_ROOT = BASE_DIR / "staticfiles"

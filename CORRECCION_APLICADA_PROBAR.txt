@@ -1,0 +1,150 @@
+===============================================
+ ✅ CORRECCIÓN APLICADA - PROBAR AHORA
+===============================================
+
+Se han corregido las funciones de formateo para manejar
+correctamente valores vacíos y strings.
+
+===============================================
+ 🔄 PASOS PARA APLICAR (EN ORDEN)
+===============================================
+
+PASO 1: REINICIAR EL SERVIDOR DJANGO (SI AÚN CORRE)
+---------------------------------------------------
+Si el servidor está corriendo:
+
+1. Ve a la terminal del servidor
+2. Presiona Ctrl+C
+3. Espera a que se detenga
+4. Reinicia con:
+
+   cd C:\DjangoProyects\retailmind\SistemaRetailMind\retailmind
+   python manage.py runserver
+
+   O:
+   py manage.py runserver
+
+
+PASO 2: LIMPIAR CACHÉ DEL NAVEGADOR (OBLIGATORIO)
+--------------------------------------------------
+El navegador tiene guardada la versión antigua del JavaScript.
+
+En la página de la interfaz:
+
+   Ctrl + Shift + R
+
+O:
+1. F12 (DevTools)
+2. Clic derecho en botón Recargar
+3. "Vaciar caché y recargar enérgicamente"
+
+
+PASO 3: PROBAR LA INTERFAZ
+---------------------------
+1. Accede a:
+   http://localhost:8000/app/configuracion/interfaz-prueba-acepta/
+
+2. Haz clic en "Cargar Ejemplo"
+   (Esto carga datos válidos automáticamente)
+
+3. Haz clic en "Calcular"
+   (Verás los totales)
+
+4. Haz clic en "Generar Archivo TXT"
+   (El archivo debería descargarse)
+
+===============================================
+ 🔍 VERIFICACIÓN DETALLADA
+===============================================
+
+ANTES de hacer clic en "Generar Archivo TXT":
+
+1. Presiona F12 (DevTools)
+
+2. Ve a la pestaña "Network"
+
+3. Haz clic en "Generar Archivo TXT"
+
+4. En Network, busca la petición "generar-txt-acepta"
+
+5. Verifica:
+   - Estado: 200 OK (verde) = ✅ FUNCIONA
+   - Estado: 400/500 (rojo) = ❌ Error
+   
+6. Si es rojo, haz clic en la petición y ve:
+   - Pestaña "Response" para ver el error
+   - Copia el mensaje de error
+
+===============================================
+ ✅ CORRECCIONES APLICADAS
+===============================================
+
+Archivo: views_modulo_documentos.py
+
+Función: formatear_monto()
+--------------------------
+✅ Ahora maneja strings vacíos ''
+✅ Ahora maneja None
+✅ Ahora hace .strip() antes de convertir
+
+Función: formatear_decimal()
+----------------------------
+✅ Ahora maneja strings vacíos ''
+✅ Ahora maneja None
+✅ Ahora hace .strip() antes de convertir
+
+Archivo: generador_txt_acepta.js
+---------------------------------
+✅ URLs corregidas con /app/ prefijo
+✅ fetch('/app/documentos/generar-txt-acepta/')
+✅ fetch('/app/documentos/generar-txt-desde-dte/')
+
+Archivo: settings.py
+--------------------
+✅ DEBUG = True (forzado para desarrollo)
+✅ STATICFILES_DIRS incluye app/static
+
+===============================================
+ 🎯 RESULTADO ESPERADO
+===============================================
+
+Después de seguir TODOS los pasos:
+
+1. ✅ La interfaz se carga sin errores
+2. ✅ "Cargar Ejemplo" funciona
+3. ✅ "Calcular" muestra totales
+4. ✅ "Generar Archivo TXT" descarga el archivo
+5. ✅ El archivo es un TXT válido para Acepta
+
+===============================================
+ 📝 SI AÚN HAY ERROR
+===============================================
+
+Si después de:
+- Reiniciar servidor
+- Limpiar caché (Ctrl+Shift+R)
+- Cargar ejemplo
+- Generar TXT
+
+Todavía hay error:
+
+1. Presiona F12
+2. Ve a Network
+3. Haz clic en la petición fallida
+4. Copia el mensaje de error completo
+5. Copia el JSON del Request (pestaña Payload)
+6. Avísame ambos
+
+===============================================
+ ⚡ RESUMEN RÁPIDO
+===============================================
+
+1. Ctrl+C en servidor
+2. python manage.py runserver
+3. Ctrl+Shift+R en navegador
+4. Cargar Ejemplo
+5. Generar TXT
+6. ✅ ¡Debería funcionar!
+
+===============================================
+
