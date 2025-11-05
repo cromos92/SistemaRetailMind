@@ -1314,7 +1314,7 @@ def generar_txt_dte_acepta(datos):
     linea5 = [
         formatear_monto(totales.get('monto_neto', 0)),
         formatear_monto(totales.get('monto_exento', '')),
-        formatear_decimal(totales.get('tasa_iva', 19.00), 3, 2),
+        formatear_decimal(totales.get('tasa_iva', 19.00), 3, 2) if totales.get('monto_neto', 0) else '',
         formatear_monto(totales.get('iva', 0)),
         formatear_monto(totales.get('monto_total', 0)),
         formatear_timestamp(totales.get('timestamp', '')),
@@ -1323,14 +1323,17 @@ def generar_txt_dte_acepta(datos):
         '',  # Total Período
         '',  # Saldo Anterior
         '',  # Valor a Pagar
-        '',  # Campos adicionales (21 campos vacíos)
+        '',  # Campos adicionales (hasta completar ~30 campos)
         '', '', '', '', '', '', '', '', '', '', 
-        '', '', '', '', '', '', '', '', '', ''
+        '', '', '', '', '', '', '', '', '', '',
+        ''   # Campo extra final
     ]
     lineas.append(separador.join(linea5))
     
     # ===== LÍNEAS 6+: DETALLE DE PRODUCTOS =====
     for item in datos['detalle']:
+        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35)
+        
         linea_detalle = [
             str(item.get('indicador_exencion', '')),
             limpiar_texto(item.get('nombre', ''), 80),
@@ -1340,9 +1343,39 @@ def generar_txt_dte_acepta(datos):
             formatear_decimal(item.get('precio_unitario', 0)),
             formatear_decimal(item.get('descuento_pct', ''), 3, 2) if item.get('descuento_pct') else '',
             formatear_monto(item.get('monto_descuento', 0)),
-            formatear_monto(item.get('monto_item', 0))
+            formatear_monto(item.get('monto_item', 0)),
+            '',  # Recargo porcentaje
+            '',  # Monto recargo
+            codigo_item,  # Código del producto/SKU
+            '',  # Tipo precio
+            ''   # Campo reservado final
         ]
         lineas.append(separador.join(linea_detalle))
+    
+    # ===== LÍNEA SEPARADOR =====
+    lineas.append('~')
+    
+    # ===== LÍNEA INFORMACIÓN ADICIONAL (OPCIONAL) =====
+    # Código vendedor, total en palabras, etc.
+    vendedor_codigo = datos.get('emisor', {}).get('codigo_vendedor', '')
+    info_adicional = [
+        vendedor_codigo,
+        '',  # Reservado
+        '',  # Reservado
+        '',  # Total en palabras (opcional)
+        '',  # Observaciones adicionales
+        '',  # Reservado
+        '',  # Reservado
+        '',  # Reservado
+        '',  # Impresora
+        '',  # Número de copias
+        ''   # Campo final
+    ]
+    lineas.append(separador.join(info_adicional))
+    
+    # ===== LÍNEAS FINALES =====
+    lineas.append('~')
+    lineas.append('\\')
     
     # Unir todas las líneas con salto de línea
     contenido_txt = '\n'.join(lineas)
@@ -1481,7 +1514,9 @@ def generar_txt_desde_dte_existente(request):
                 'precio_unitario': dte_producto.precio_unitario,
                 'descuento_pct': 0,
                 'monto_descuento': dte_producto.descuento_unitario * dte_producto.cantidad,
-                'monto_item': dte_producto.cantidad * (dte_producto.precio_unitario - dte_producto.descuento_unitario)
+                'monto_item': dte_producto.cantidad * (dte_producto.precio_unitario - dte_producto.descuento_unitario),
+                'sku': dte_producto.productoTalla.sku,  # Agregar SKU
+                'codigo': dte_producto.productoTalla.sku  # Código del producto
             })
         
         # Generar TXT
