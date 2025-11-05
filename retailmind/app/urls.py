@@ -45,6 +45,7 @@ from .views_modulo_ventas import (
     probar_conexion_pos,
     iniciar_venta_pos,
     guardar_venta_pos,
+    validar_password_usuario,
     completar_transaccion_pos,
     obtener_transacciones_pos,
     anular_transaccion_pos,
@@ -55,6 +56,7 @@ from .views_modulo_ventas import (
     crear_cambio_devolucion,
     obtener_detalle_cambio,
     aprobar_cambio_devolucion,
+    cancelar_cambio_devolucion,
     completar_cambio_devolucion,
     buscar_ticket_para_cambio,
     buscar_documento_cambio,
@@ -62,6 +64,18 @@ from .views_modulo_ventas import (
     # Funciones Clientes POS
     guardar_cliente_pos,
     enviar_ticket_email,
+    # Funciones Dashboard de Ventas
+    dashboard_ventas,
+    obtener_indicadores_globales_ventas,
+    obtener_ventas_por_vendedor,
+    obtener_ventas_por_sucursal,
+    obtener_sucursales_dashboard,
+    obtener_ventas_por_metodo_pago,
+    obtener_analisis_cambios_devoluciones,
+    obtener_estado_cuadraturas,
+    obtener_productos_mas_vendidos,
+    obtener_tendencias_ventas,
+    exportar_dashboard_ventas_excel,
 )
 from .views_modulo_creditos import (
     # Gestión de Créditos
@@ -82,6 +96,37 @@ from .views_modulo_creditos import (
     imprimir_voucher_credito,
     validar_codigo_credito,
     usar_credito_en_venta,
+)
+from .views_modulo_gestion_precios import (
+    # Vistas principales
+    gestion_precios_view,
+    revisar_cambios_precios_view,
+    edicion_rapida_precios_view,
+    # Estadísticas
+    obtener_estadisticas,
+    # Búsqueda y filtrado
+    buscar_productos,
+    # Recomendaciones
+    obtener_recomendaciones,
+    # Actualización de precios
+    actualizar_precio,
+    modificacion_masiva,
+    sincronizar_sucursales,
+    # Análisis
+    analisis_inventario_antiguo,
+    # Endpoints auxiliares
+    listar_categorias,
+    listar_atributos,
+    listar_sucursales,
+    # Sistema de aprobación
+    proponer_cambio_precio,
+    obtener_indicadores_precios_pendientes,
+    listar_cambios_pendientes,
+    revisar_cambio_precio,
+    aprobar_cambio_precio,
+    rechazar_cambio_precio,
+    obtener_notificaciones_precio,
+    marcar_notificacion_leida,
 )
 from . import views_modulo_documentos
 from .views_modulo_cotizaciones import (
@@ -245,6 +290,7 @@ urlpatterns = [
     path('solicitudes-regularizacion/', views.solicitudes_regularizacion_recibidas, name='solicitudes_regularizacion_recibidas'),
     path('dte/obtener_productos_regularizar/', views.obtener_productos_regularizar, name='obtener_productos_regularizar'),
     path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),
+    path('dte/documento-regularizacion/<int:recepcion_id>/', views.documento_regularizacion, name='documento_regularizacion'),
     path('dte/obtener_solicitud_producto/<int:producto_id>/', views.obtener_solicitud_producto, name='obtener_solicitud_producto'),
     path('dte/decidir_solicitud/', views.decidir_solicitud_api, name='decidir_solicitud_api'),
     path('dte/buscar_productos_emisor/', views.buscar_productos_emisor, name='buscar_productos_emisor'),
@@ -372,16 +418,20 @@ urlpatterns = [
     
     # APIs de logs
     path('pos/logs/<int:configuracion_id>/', obtener_logs_pos, name='obtener_logs_pos'),
+    
+    # API de validación
+    path('api/validar-password/', validar_password_usuario, name='validar_password_usuario'),
 
     # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
     # Vista principal
     path('ventas/cambios-devoluciones/', gestion_cambios_devoluciones, name='gestion_cambios_devoluciones'),
     
-    # APIs de gestión
+    # APIs de gestión de cambios y devoluciones
     path('ventas/api/cambios-devoluciones/', listar_cambios_devoluciones, name='listar_cambios_devoluciones'),
     path('ventas/api/crear-cambio-devolucion/', crear_cambio_devolucion, name='crear_cambio_devolucion'),
     path('ventas/api/cambio-detalle/<int:cambio_id>/', obtener_detalle_cambio, name='obtener_detalle_cambio'),
     path('ventas/api/aprobar-cambio-devolucion/', aprobar_cambio_devolucion, name='aprobar_cambio_devolucion'),
+    path('ventas/api/cancelar-cambio-devolucion/', cancelar_cambio_devolucion, name='cancelar_cambio_devolucion'),
     path('ventas/api/completar-cambio-devolucion/', completar_cambio_devolucion, name='completar_cambio_devolucion'),
     
     # APIs de búsqueda
@@ -410,5 +460,59 @@ urlpatterns = [
     
     # APIs de clientes
     path('api/cotizaciones/crear-cliente/', crear_cliente_cotizacion, name='crear_cliente_cotizacion'),
+
+    # ========== DASHBOARD DE VENTAS ==========
+    # Vista principal del dashboard
+    path('ventas/dashboard/', dashboard_ventas, name='dashboard_ventas'),
+    
+    # APIs de indicadores y métricas
+    path('api/ventas/indicadores-globales/', obtener_indicadores_globales_ventas, name='obtener_indicadores_globales_ventas'),
+    path('api/ventas/por-vendedor/', obtener_ventas_por_vendedor, name='obtener_ventas_por_vendedor'),
+    path('api/ventas/por-sucursal/', obtener_ventas_por_sucursal, name='obtener_ventas_por_sucursal'),
+    path('api/ventas/sucursales-dashboard/', obtener_sucursales_dashboard, name='obtener_sucursales_dashboard'),
+    path('api/ventas/por-metodo-pago/', obtener_ventas_por_metodo_pago, name='obtener_ventas_por_metodo_pago'),
+    path('api/ventas/analisis-cambios/', obtener_analisis_cambios_devoluciones, name='obtener_analisis_cambios_devoluciones'),
+    path('api/ventas/estado-cuadraturas/', obtener_estado_cuadraturas, name='obtener_estado_cuadraturas'),
+    path('api/ventas/productos-mas-vendidos/', obtener_productos_mas_vendidos, name='obtener_productos_mas_vendidos'),
+    path('api/ventas/tendencias/', obtener_tendencias_ventas, name='obtener_tendencias_ventas'),
+    
+    # API de exportación
+    path('api/ventas/exportar-dashboard/', exportar_dashboard_ventas_excel, name='exportar_dashboard_ventas_excel'),
+
+    # ========== MÓDULO DE GESTIÓN DE PRECIOS ==========
+    # Vistas principales
+    path('gestion-precios/', gestion_precios_view, name='gestion_precios'),
+    path('gestion-precios/edicion-rapida/', edicion_rapida_precios_view, name='edicion_rapida_precios'),
+    path('gestion-precios/revisar-pendientes/', revisar_cambios_precios_view, name='revisar_cambios_precios'),
+    
+    # APIs de estadísticas y análisis
+    path('gestion-precios/estadisticas/', obtener_estadisticas, name='gestion_precios_estadisticas'),
+    path('gestion-precios/inventario-antiguo/', analisis_inventario_antiguo, name='analisis_inventario_antiguo'),
+    
+    # APIs de búsqueda y filtrado
+    path('gestion-precios/buscar/', buscar_productos, name='buscar_productos_precios'),
+    
+    # APIs de recomendaciones
+    path('gestion-precios/recomendaciones/<int:producto_id>/', obtener_recomendaciones, name='obtener_recomendaciones_precio'),
+    
+    # APIs de actualización de precios
+    path('gestion-precios/actualizar-precio/', actualizar_precio, name='actualizar_precio'),
+    path('gestion-precios/modificacion-masiva/', modificacion_masiva, name='modificacion_masiva_precios'),
+    path('gestion-precios/sincronizar-sucursales/', sincronizar_sucursales, name='sincronizar_precios_sucursales'),
+    
+    # APIs auxiliares
+    path('api/categorias/listar/', listar_categorias, name='listar_categorias'),
+    path('api/atributos/listar/', listar_atributos, name='listar_atributos'),
+    path('api/sucursales/listar/', listar_sucursales, name='listar_sucursales'),
+    
+    # ========== SISTEMA DE APROBACIÓN DE CAMBIOS DE PRECIOS ==========
+    path('gestion-precios/proponer-cambio/', proponer_cambio_precio, name='proponer_cambio_precio'),
+    path('gestion-precios/indicadores-pendientes/', obtener_indicadores_precios_pendientes, name='indicadores_precios_pendientes'),
+    path('gestion-precios/listar-cambios/', listar_cambios_pendientes, name='listar_cambios_pendientes'),
+    path('gestion-precios/revisar-cambio/', revisar_cambio_precio, name='revisar_cambio_precio'),
+    path('gestion-precios/aprobar-cambio/', aprobar_cambio_precio, name='aprobar_cambio_precio'),
+    path('gestion-precios/rechazar-cambio/', rechazar_cambio_precio, name='rechazar_cambio_precio'),
+    path('gestion-precios/notificaciones/', obtener_notificaciones_precio, name='obtener_notificaciones_precio'),
+    path('gestion-precios/marcar-notificacion/', marcar_notificacion_leida, name='marcar_notificacion_leida'),
 
 ]

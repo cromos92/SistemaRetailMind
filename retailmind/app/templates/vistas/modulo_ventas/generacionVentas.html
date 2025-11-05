@@ -624,10 +624,28 @@
                                                     <span class="fw-bold">Transfer.</span>
                                                 </button>
                                             </div>
-                                            <div class="col-12">
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-secondary w-100 py-3" onclick="pagarConVentaInternet()">
+                                                    <i class="ri-shopping-cart-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">Venta Internet</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-danger w-100 py-3" onclick="pagarConPOSTransbank()" id="btn-pos-transbank">
+                                                    <i class="ri-bank-card-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">POS Transbank</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
                                                 <button class="btn btn-outline-danger w-100 py-3" onclick="activarCreditoTrabajador()" style="border: 2px dashed;">
                                                     <i class="ri-vip-crown-line fs-4 d-block mb-1"></i>
                                                     <span class="fw-bold">CRÉDITO TRABAJADOR</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-info w-100 py-3" onclick="pagarConCreditoExterno()" style="border: 2px dashed;">
+                                                    <i class="ri-bank-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">CRÉDITO EXTERNO</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -916,22 +934,27 @@
                     <div class="btn-group w-100" role="group">
                         <input type="radio" class="btn-check" name="tipoDescuentoProducto" id="descProductoPorcentaje" value="PORCENTAJE" checked>
                         <label class="btn btn-outline-warning" for="descProductoPorcentaje">
-                            <i class="ri-percent-line"></i> Porcentaje
+                            <i class="ri-percent-line"></i> %
                         </label>
                         
                         <input type="radio" class="btn-check" name="tipoDescuentoProducto" id="descProductoMonto" value="MONTO">
                         <label class="btn btn-outline-warning" for="descProductoMonto">
-                            <i class="ri-money-dollar-circle-line"></i> Monto Fijo
+                            <i class="ri-money-dollar-circle-line"></i> Descuento
+                        </label>
+                        
+                        <input type="radio" class="btn-check" name="tipoDescuentoProducto" id="descProductoPrecioFinal" value="PRECIO_FINAL">
+                        <label class="btn btn-outline-success" for="descProductoPrecioFinal">
+                            <i class="ri-price-tag-line"></i> Precio Final
                         </label>
                     </div>
                 </div>
 
                 <!-- Input de valor -->
                 <div class="mb-3">
-                    <label class="form-label fw-bold">Valor del Descuento</label>
+                    <label class="form-label fw-bold" id="labelValorDescuento">Valor del Descuento</label>
                     <div class="input-group">
                         <span class="input-group-text" id="descuentoSimbolo">%</span>
-                        <input type="number" class="form-control form-control-lg" id="valorDescuentoProducto" placeholder="0" min="0" step="0.01">
+                        <input type="number" class="form-control form-control-lg" id="valorDescuentoProducto" placeholder="0" min="0" step="1" oninput="actualizarPreviewDescuento()">
                     </div>
                     <small class="text-muted" id="descuentoAyuda">Ingrese el porcentaje de descuento (0-100)</small>
                 </div>
@@ -954,13 +977,29 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Campo de Contraseña para Autorización -->
+                <div class="mt-3">
+                    <div class="alert alert-warning mb-2">
+                        <i class="ri-shield-check-line"></i>
+                        <strong>Autorización Requerida</strong>
+                    </div>
+                    <label class="form-label fw-bold">
+                        <i class="ri-lock-password-line"></i> Ingrese su contraseña para autorizar:
+                    </label>
+                    <input type="password" class="form-control form-control-lg" id="passwordDescuento" 
+                           placeholder="Contraseña" 
+                           autocomplete="off"
+                           style="font-size: 1.1rem; border: 2px solid #ffc107;">
+                    <small class="text-muted">Se validará con su contraseña de inicio de sesión</small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-danger" onclick="quitarDescuentoProducto()">
                     <i class="ri-close-line"></i> Quitar Descuento
                 </button>
-                <button type="button" class="btn btn-warning" onclick="confirmarDescuentoProducto()">
+                <button type="button" class="btn btn-warning btn-lg" onclick="confirmarDescuentoProducto()">
                     <i class="ri-check-line"></i> Aplicar Descuento
                 </button>
             </div>
@@ -1618,7 +1657,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         <button class="btn btn-outline-warning" onclick="mostrarModalDescuento(${index})" title="Aplicar Descuento">
                             <i class="ri-price-tag-3-line"></i>
                         </button>
-                        <button class="btn btn-outline-danger" onclick="eliminarProductoTicket(${index})" title="Eliminar">
+                        <!-- Botón de eliminar deshabilitado -->
+                        <button class="btn btn-outline-secondary" disabled title="Eliminar producto no permitido">
                             <i class="ri-delete-bin-line"></i>
                         </button>
                     </div>
@@ -2017,12 +2057,38 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        container.innerHTML = pagosActuales.map((pago, index) => `
-            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 ${pago.metodo_pago === 'CREDITO_TRABAJADOR' ? 'border-warning bg-warning bg-opacity-10' : ''}">
+        container.innerHTML = pagosActuales.map((pago, index) => {
+            // Parsear datos de crédito externo si existen
+            let datosConvenio = null;
+            if (pago.metodo_pago === 'CREDITO_EXTERNO' && pago.notas) {
+                try {
+                    datosConvenio = JSON.parse(pago.notas);
+                } catch (e) {
+                    datosConvenio = null;
+                }
+            }
+            
+            return `
+            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 ${pago.metodo_pago === 'CREDITO_TRABAJADOR' ? 'border-warning bg-warning bg-opacity-10' : ''} ${pago.metodo_pago === 'VENTA_INTERNET' ? 'border-secondary bg-light' : ''} ${pago.metodo_pago === 'CREDITO_EXTERNO' ? 'border-info bg-info bg-opacity-10' : ''}">
                 <div>
                     <strong>${obtenerNombreMetodoPago(pago.metodo_pago)}</strong>
                     ${pago.metodo_pago === 'CREDITO_TRABAJADOR' && pago.trabajador_nombre ? `
                         <br><small class="text-muted"><i class="ri-user-line"></i> ${pago.trabajador_nombre}</small>
+                    ` : ''}
+                    ${pago.metodo_pago === 'VENTA_INTERNET' && pago.tipo_tarjeta ? `
+                        <br><small class="text-muted"><i class="ri-store-line"></i> ${pago.tipo_tarjeta}</small>
+                    ` : ''}
+                    ${pago.metodo_pago === 'VENTA_INTERNET' && pago.voucher ? `
+                        <br><small class="text-muted"><i class="ri-ticket-line"></i> ${pago.voucher}</small>
+                    ` : ''}
+                    ${pago.metodo_pago === 'CREDITO_EXTERNO' && pago.tipo_tarjeta ? `
+                        <br><small class="text-muted"><i class="ri-building-line"></i> ${pago.tipo_tarjeta}</small>
+                    ` : ''}
+                    ${pago.metodo_pago === 'CREDITO_EXTERNO' && pago.voucher ? `
+                        <br><small class="text-muted"><i class="ri-file-list-line"></i> Folio: ${pago.voucher}</small>
+                    ` : ''}
+                    ${pago.metodo_pago === 'CREDITO_EXTERNO' && datosConvenio && datosConvenio.nombre ? `
+                        <br><small class="text-muted"><i class="ri-user-3-line"></i> ${datosConvenio.nombre} - ${datosConvenio.rut}</small>
                     ` : ''}
                     <br>
                     <small class="text-muted fw-bold">${formatearMoneda(pago.monto)}</small>
@@ -2031,7 +2097,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="ri-delete-bin-line"></i>
                 </button>
             </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     function eliminarPago(index) {
@@ -2346,6 +2413,18 @@ document.addEventListener('DOMContentLoaded', function() {
         radiosPorcentaje.onchange = actualizarPreviewDescuento;
         radiosMonto.onchange = actualizarPreviewDescuento;
 
+        // Limpiar campos
+        document.getElementById('valorDescuentoProducto').value = '';
+        document.getElementById('passwordDescuento').value = '';  // Limpiar contraseña
+        
+        // Configurar listeners para cambio de tipo
+        document.querySelectorAll('input[name="tipoDescuentoProducto"]').forEach(radio => {
+            radio.addEventListener('change', actualizarPreviewDescuento);
+        });
+        
+        // Resetear a porcentaje por defecto
+        document.getElementById('descProductoPorcentaje').checked = true;
+        
         // Mostrar modal
         actualizarPreviewDescuento();
         new bootstrap.Modal(document.getElementById('modalDescuento')).show();
@@ -2362,22 +2441,39 @@ document.addEventListener('DOMContentLoaded', function() {
         const valorInput = parseFloat(document.getElementById('valorDescuentoProducto').value) || 0;
 
         let montoDescuento = 0;
+        let precioFinal = precioOriginal;
         
-        // Actualizar símbolo y ayuda
+        // Actualizar símbolo, ayuda y label
         const simbolo = document.getElementById('descuentoSimbolo');
         const ayuda = document.getElementById('descuentoAyuda');
+        const label = document.getElementById('labelValorDescuento');
         
         if (tipoDescuento === 'PORCENTAJE') {
+            // OPCIÓN 1: Porcentaje
             simbolo.textContent = '%';
+            label.textContent = 'Porcentaje de Descuento';
             ayuda.textContent = 'Ingrese el porcentaje de descuento (0-100)';
             montoDescuento = Math.round((precioOriginal * Math.min(valorInput, 100)) / 100);
-        } else {
+            precioFinal = precioOriginal - montoDescuento;
+            
+        } else if (tipoDescuento === 'MONTO') {
+            // OPCIÓN 2: Monto de Descuento
             simbolo.textContent = '$';
+            label.textContent = 'Monto de Descuento';
             ayuda.textContent = 'Ingrese el monto de descuento en pesos';
-            montoDescuento = Math.min(valorInput, precioOriginal);
+            montoDescuento = Math.min(Math.round(valorInput), precioOriginal);
+            precioFinal = precioOriginal - montoDescuento;
+            
+        } else if (tipoDescuento === 'PRECIO_FINAL') {
+            // OPCIÓN 3: Precio Final (NUEVA)
+            simbolo.textContent = '$';
+            label.textContent = 'Precio Final Deseado';
+            ayuda.textContent = `Ingrese el precio final deseado (máx: ${formatearMoneda(precioOriginal)})`;
+            
+            // El usuario ingresa el precio final, calculamos el descuento
+            precioFinal = Math.max(0, Math.min(Math.round(valorInput), precioOriginal));
+            montoDescuento = precioOriginal - precioFinal;
         }
-
-        const precioFinal = precioOriginal - montoDescuento;
 
         // Actualizar preview
         document.getElementById('descuentoPreviewOriginal').textContent = formatearMoneda(precioOriginal);
@@ -2385,7 +2481,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('descuentoPreviewFinal').textContent = formatearMoneda(precioFinal);
     }
 
-    function confirmarDescuentoProducto() {
+    async function confirmarDescuentoProducto() {
         if (productoDescuentoIndex === null || !ticketActual || !ticketActual.productos[productoDescuentoIndex]) {
             mostrarNotificacion('Error al aplicar descuento', 'error');
             return;
@@ -2397,37 +2493,105 @@ document.addEventListener('DOMContentLoaded', function() {
         const valorInput = parseFloat(document.getElementById('valorDescuentoProducto').value) || 0;
 
         let montoDescuento = 0;
+        let tipoDescuentoTexto = '';
 
         if (tipoDescuento === 'PORCENTAJE') {
+            // OPCIÓN 1: Porcentaje
             if (valorInput < 0 || valorInput > 100) {
                 mostrarNotificacion('El porcentaje debe estar entre 0 y 100', 'warning');
                 return;
             }
             montoDescuento = Math.round((precioOriginal * valorInput) / 100);
-        } else {
+            tipoDescuentoTexto = `${valorInput}%`;
+            
+        } else if (tipoDescuento === 'MONTO') {
+            // OPCIÓN 2: Monto de Descuento
             if (valorInput < 0 || valorInput > precioOriginal) {
                 mostrarNotificacion('El monto de descuento no puede ser mayor al precio', 'warning');
                 return;
             }
             montoDescuento = Math.round(valorInput);
+            tipoDescuentoTexto = formatearMoneda(valorInput);
+            
+        } else if (tipoDescuento === 'PRECIO_FINAL') {
+            // OPCIÓN 3: Precio Final (NUEVA)
+            if (valorInput < 0) {
+                mostrarNotificacion('El precio final no puede ser negativo', 'warning');
+                return;
+            }
+            if (valorInput > precioOriginal) {
+                mostrarNotificacion('El precio final no puede ser mayor al precio original', 'warning');
+                return;
+            }
+            // Calcular descuento a partir del precio final deseado
+            const precioFinalDeseado = Math.round(valorInput);
+            montoDescuento = precioOriginal - precioFinalDeseado;
+            tipoDescuentoTexto = `Precio final: ${formatearMoneda(precioFinalDeseado)}`;
+        }
+        
+        if (montoDescuento <= 0) {
+            mostrarNotificacion('Ingrese un descuento válido (el precio final debe ser menor al original)', 'warning');
+            return;
         }
 
-        // Aplicar descuento al producto
-        producto.descuento_unitario = montoDescuento;
-        producto.precio_original = precioOriginal;
-        producto.subtotal = (precioOriginal - montoDescuento) * producto.cantidad;
+        // ========== OBTENER CONTRASEÑA DEL CAMPO DEL MODAL ==========
+        const password = document.getElementById('passwordDescuento').value.trim();
+        
+        if (!password) {
+            mostrarNotificacion('Debe ingresar su contraseña para autorizar el descuento', 'warning');
+            document.getElementById('passwordDescuento').focus();
+            return;
+        }
+        
+        // Validar contraseña con el backend
+        try {
+            const response = await fetch('/app/api/validar-password/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    password: password
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                // Contraseña incorrecta
+                mostrarNotificacion('❌ Contraseña incorrecta. Intente nuevamente.', 'error');
+                document.getElementById('passwordDescuento').value = '';
+                document.getElementById('passwordDescuento').focus();
+                return;
+            }
+            
+            // ✅ Contraseña correcta - Aplicar descuento
+            producto.descuento_unitario = montoDescuento;
+            producto.precio_original = precioOriginal;
+            producto.subtotal = (precioOriginal - montoDescuento) * producto.cantidad;
+            producto.usuario_descuento = data.usuario;  // Guardar quién autorizó
+            producto.fecha_descuento = new Date().toISOString();
 
-        // Recalcular totales
-        recalcularTotalesTicket();
+            // Recalcular totales
+            recalcularTotalesTicket();
 
-        // Actualizar UI
-        cargarProductosTicket(ticketActual.productos);
-        actualizarResumenVenta();
+            // Actualizar UI
+            cargarProductosTicket(ticketActual.productos);
+            actualizarResumenVenta();
 
-        // Cerrar modal
-        bootstrap.Modal.getInstance(document.getElementById('modalDescuento')).hide();
-        mostrarNotificacion(`Descuento de ${formatearMoneda(montoDescuento)} aplicado al producto`, 'success');
-        productoDescuentoIndex = null;
+            // Cerrar modal
+            bootstrap.Modal.getInstance(document.getElementById('modalDescuento')).hide();
+            
+            // Mostrar confirmación
+            mostrarNotificacion(`✅ Descuento de ${formatearMoneda(montoDescuento)} aplicado (${data.usuario})`, 'success');
+            
+            productoDescuentoIndex = null;
+            
+        } catch (error) {
+            console.error('Error validando contraseña:', error);
+            mostrarNotificacion('Error al validar la contraseña. Intente nuevamente.', 'error');
+        }
     }
 
     function quitarDescuentoProducto() {
@@ -3040,7 +3204,13 @@ document.addEventListener('DOMContentLoaded', function() {
             'TARJETA_DEBITO': 'Tarjeta Débito',
             'TARJETA_CREDITO': 'Tarjeta Crédito',
             'TRANSFERENCIA': 'Transferencia',
-            'CREDITO_TRABAJADOR': 'Crédito Trabajador'
+            'CREDITO_TRABAJADOR': 'Crédito Trabajador',
+            'CREDITO_EXTERNO': 'Crédito Externo',
+            'TBK_POS_INTEGRADO': 'POS Transbank',
+            'TBK_DEBITO_POS': 'POS Transbank Débito',
+            'TBK_CREDITO_POS': 'POS Transbank Crédito',
+            'TBK_PREPAGO_POS': 'POS Transbank Prepago',
+            'VENTA_INTERNET': 'Venta Internet'
         };
         return nombres[metodo] || metodo;
     }
@@ -3611,5 +3781,833 @@ document.addEventListener('DOMContentLoaded', function() {
     // Exponer funciones globales
     window.activarCreditoTrabajador = activarCreditoTrabajador;
     window.creditoTrabajadorActivo = null;
+    
+    // ========== INTEGRACIÓN VENTA INTERNET ==========
+    
+    window.pagarConVentaInternet = async function() {
+        // Verificar que haya un ticket activo
+        if (!ticketActual) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin Ticket',
+                text: 'Debe buscar o crear un ticket primero'
+            });
+            return;
+        }
+        
+        // Verificar saldo pendiente
+        const saldoPendiente = calcularSaldoPendiente();
+        if (saldoPendiente <= 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Ticket Pagado',
+                text: 'El ticket ya está completamente pagado'
+            });
+            return;
+        }
+        
+        // Mostrar modal para capturar datos
+        const { value: formValues } = await Swal.fire({
+            title: 'Venta por Internet',
+            html: `
+                <div class="text-start mb-3">
+                    <p><strong>Saldo pendiente:</strong> <span class="text-danger fs-5">${formatearMoneda(saldoPendiente)}</span></p>
+                    <hr>
+                </div>
+                
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">Plataforma:</label>
+                    <select id="plataforma-internet" class="form-select">
+                        <option value="">Seleccione una plataforma</option>
+                        <option value="Paris">Paris</option>
+                        <option value="Ripley">Ripley</option>
+                        <option value="Mercado Pago">Mercado Pago</option>
+                        <option value="Shopify">Shopify</option>
+                        <option value="Walmart">Walmart</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">Número de Pedido:</label>
+                    <input type="text" id="numero-pedido" class="form-control" 
+                           placeholder="Ej: ORD-123456" maxlength="100">
+                </div>
+                
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">Monto a pagar:</label>
+                    <input type="number" id="monto-internet" class="form-control" 
+                           placeholder="Monto" 
+                           value="${saldoPendiente}" 
+                           min="1" 
+                           max="${saldoPendiente}"
+                           style="font-size: 1.2rem; font-weight: bold;">
+                    <small class="text-muted">Máximo: ${formatearMoneda(saldoPendiente)}</small>
+                </div>
+                
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">Notas (opcional):</label>
+                    <textarea id="notas-internet" class="form-control" 
+                              rows="2" maxlength="500"
+                              placeholder="Información adicional..."></textarea>
+                </div>
+            `,
+            width: '600px',
+            showCancelButton: true,
+            confirmButtonText: '✅ Registrar Pago',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745',
+            preConfirm: () => {
+                const plataforma = document.getElementById('plataforma-internet').value;
+                const numeroPedido = document.getElementById('numero-pedido').value.trim();
+                const monto = parseInt(document.getElementById('monto-internet').value);
+                const notas = document.getElementById('notas-internet').value.trim();
+                
+                if (!plataforma) {
+                    Swal.showValidationMessage('Debe seleccionar una plataforma');
+                    return false;
+                }
+                
+                if (!numeroPedido) {
+                    Swal.showValidationMessage('Debe ingresar el número de pedido');
+                    return false;
+                }
+                
+                if (!monto || monto < 1) {
+                    Swal.showValidationMessage('El monto debe ser mayor a $0');
+                    return false;
+                }
+                
+                if (monto > saldoPendiente) {
+                    Swal.showValidationMessage('El monto no puede ser mayor al saldo pendiente');
+                    return false;
+                }
+                
+                return { plataforma, numeroPedido, monto, notas };
+            }
+        });
+        
+        // Si canceló, salir
+        if (!formValues) {
+            return;
+        }
+        
+        // Agregar el pago
+        const pago = {
+            metodo_pago: 'VENTA_INTERNET',
+            tipo_tarjeta: formValues.plataforma,  // Guardamos la plataforma en tipo_tarjeta
+            voucher: formValues.numeroPedido,     // Guardamos el número de pedido en voucher
+            monto: formValues.monto,
+            notas: formValues.notas || `Venta ${formValues.plataforma} - Pedido: ${formValues.numeroPedido}`
+        };
+        
+        pagosActuales.push(pago);
+        actualizarListaPagos();
+        actualizarResumenVenta();
+        
+        // Verificar si el ticket se pagó completo
+        const nuevoSaldo = calcularSaldoPendiente();
+        const ticketCompletado = nuevoSaldo <= 0;
+        
+        const mensaje = ticketCompletado ? 
+            '✅ Pago registrado - Ticket completamente pagado' : 
+            `Pago parcial registrado - Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`;
+        
+        mostrarNotificacion(mensaje, 'success');
+    };
+    
+    // ========== INTEGRACIÓN CRÉDITO EXTERNO ==========
+    
+    window.pagarConCreditoExterno = async function() {
+        // Verificar que haya un ticket activo
+        if (!ticketActual) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin Ticket',
+                text: 'Debe buscar o crear un ticket primero'
+            });
+            return;
+        }
+        
+        // Verificar saldo pendiente
+        const saldoPendiente = calcularSaldoPendiente();
+        if (saldoPendiente <= 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Ticket Pagado',
+                text: 'El ticket ya está completamente pagado'
+            });
+            return;
+        }
+        
+        // Mostrar modal para capturar datos del convenio externo
+        const { value: formValues } = await Swal.fire({
+            title: 'Crédito Externo - Convenio',
+            html: `
+                <div class="text-start mb-3">
+                    <p><strong>Saldo pendiente:</strong> <span class="text-danger fs-5">${formatearMoneda(saldoPendiente)}</span></p>
+                    <hr>
+                </div>
+                
+                <div class="row">
+                    <div class="col-6 mb-3 text-start">
+                        <label class="form-label fw-bold">Folio:</label>
+                        <input type="text" id="folio-convenio" class="form-control" 
+                               placeholder="Ej: CONV-2024-001" maxlength="100">
+                    </div>
+                    
+                    <div class="col-6 mb-3 text-start">
+                        <label class="form-label fw-bold">Empresa:</label>
+                        <input type="text" id="empresa-convenio" class="form-control" 
+                               placeholder="Nombre de la empresa" maxlength="100">
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-6 mb-3 text-start">
+                        <label class="form-label fw-bold">Nombre:</label>
+                        <input type="text" id="nombre-convenio" class="form-control" 
+                               placeholder="Nombre completo" maxlength="200">
+                    </div>
+                    
+                    <div class="col-6 mb-3 text-start">
+                        <label class="form-label fw-bold">RUT:</label>
+                        <input type="text" id="rut-convenio" class="form-control" 
+                               placeholder="12.345.678-9" maxlength="12">
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-6 mb-3 text-start">
+                        <label class="form-label fw-bold">Fecha Convenio:</label>
+                        <input type="date" id="fecha-convenio" class="form-control">
+                    </div>
+                    
+                    <div class="col-6 mb-3 text-start">
+                        <label class="form-label fw-bold">Monto del Convenio:</label>
+                        <input type="number" id="monto-total-convenio" class="form-control" 
+                               placeholder="Monto total del convenio" min="1">
+                    </div>
+                </div>
+                
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">Monto a pagar ahora:</label>
+                    <input type="number" id="monto-pago-convenio" class="form-control" 
+                           placeholder="Monto a aplicar" 
+                           value="${saldoPendiente}" 
+                           min="1" 
+                           max="${saldoPendiente}"
+                           style="font-size: 1.2rem; font-weight: bold;">
+                    <small class="text-muted">Máximo: ${formatearMoneda(saldoPendiente)}</small>
+                </div>
+                
+                <div class="mb-3 text-start">
+                    <label class="form-label fw-bold">Observaciones (opcional):</label>
+                    <textarea id="observaciones-convenio" class="form-control" 
+                              rows="2" maxlength="500"
+                              placeholder="Información adicional del convenio..."></textarea>
+                </div>
+            `,
+            width: '700px',
+            showCancelButton: true,
+            confirmButtonText: '✅ Registrar Crédito Externo',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#17a2b8',
+            preConfirm: () => {
+                const folio = document.getElementById('folio-convenio').value.trim();
+                const empresa = document.getElementById('empresa-convenio').value.trim();
+                const nombre = document.getElementById('nombre-convenio').value.trim();
+                const rut = document.getElementById('rut-convenio').value.trim();
+                const fechaConvenio = document.getElementById('fecha-convenio').value;
+                const montoTotalConvenio = parseInt(document.getElementById('monto-total-convenio').value);
+                const montoPago = parseInt(document.getElementById('monto-pago-convenio').value);
+                const observaciones = document.getElementById('observaciones-convenio').value.trim();
+                
+                // Validaciones
+                if (!folio) {
+                    Swal.showValidationMessage('Debe ingresar el folio del convenio');
+                    return false;
+                }
+                
+                if (!empresa) {
+                    Swal.showValidationMessage('Debe ingresar el nombre de la empresa');
+                    return false;
+                }
+                
+                if (!nombre) {
+                    Swal.showValidationMessage('Debe ingresar el nombre');
+                    return false;
+                }
+                
+                if (!rut) {
+                    Swal.showValidationMessage('Debe ingresar el RUT');
+                    return false;
+                }
+                
+                if (!fechaConvenio) {
+                    Swal.showValidationMessage('Debe ingresar la fecha del convenio');
+                    return false;
+                }
+                
+                if (!montoTotalConvenio || montoTotalConvenio < 1) {
+                    Swal.showValidationMessage('Debe ingresar el monto total del convenio');
+                    return false;
+                }
+                
+                if (!montoPago || montoPago < 1) {
+                    Swal.showValidationMessage('El monto a pagar debe ser mayor a $0');
+                    return false;
+                }
+                
+                if (montoPago > saldoPendiente) {
+                    Swal.showValidationMessage('El monto a pagar no puede ser mayor al saldo pendiente');
+                    return false;
+                }
+                
+                return { 
+                    folio, 
+                    empresa, 
+                    nombre, 
+                    rut, 
+                    fechaConvenio, 
+                    montoTotalConvenio, 
+                    montoPago, 
+                    observaciones 
+                };
+            }
+        });
+        
+        // Si canceló, salir
+        if (!formValues) {
+            return;
+        }
+        
+        // Crear objeto con datos del convenio para guardar en notas (JSON)
+        const datosConvenio = {
+            nombre: formValues.nombre,
+            rut: formValues.rut,
+            fecha_convenio: formValues.fechaConvenio,
+            monto_total_convenio: formValues.montoTotalConvenio,
+            observaciones: formValues.observaciones
+        };
+        
+        // Agregar el pago
+        const pago = {
+            metodo_pago: 'CREDITO_EXTERNO',
+            tipo_tarjeta: formValues.empresa,      // Guardamos la empresa en tipo_tarjeta
+            voucher: formValues.folio,             // Guardamos el folio en voucher
+            monto: formValues.montoPago,
+            notas: JSON.stringify(datosConvenio)   // Guardamos el resto en JSON
+        };
+        
+        pagosActuales.push(pago);
+        actualizarListaPagos();
+        actualizarResumenVenta();
+        
+        // Verificar si el ticket se pagó completo
+        const nuevoSaldo = calcularSaldoPendiente();
+        const ticketCompletado = nuevoSaldo <= 0;
+        
+        const mensaje = ticketCompletado ? 
+            '✅ Crédito Externo registrado - Ticket completamente pagado' : 
+            `Crédito Externo registrado - Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`;
+        
+        mostrarNotificacion(mensaje, 'success');
+    };
+    
+    // ========== INTEGRACIÓN POS TRANSBANK ==========
+    
+    window.pagarConPOSTransbank = async function() {
+        // Verificar que haya un ticket activo
+        if (!ticketActual) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin Ticket',
+                text: 'Debe buscar o crear un ticket primero'
+            });
+            return;
+        }
+        
+        // Calcular saldo pendiente
+        const saldoPendiente = calcularSaldoPendiente();
+        
+        if (saldoPendiente <= 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Ticket Pagado',
+                text: 'El ticket ya está completamente pagado'
+            });
+            return;
+        }
+        
+        // Verificar que el SDK esté disponible
+        if (typeof Transbank === 'undefined' || !Transbank.POS) {
+            Swal.fire({
+                icon: 'error',
+                title: 'SDK No Disponible',
+                html: `
+                    <p>El SDK de Transbank no está cargado.</p>
+                    <p class="small">Esto puede deberse a:</p>
+                    <ul class="text-start small">
+                        <li>Falta de conexión a internet</li>
+                        <li>Bloqueador de scripts activo</li>
+                    </ul>
+                `,
+                footer: '<a href="/app/pos/transbank/" target="_blank">Abrir configuración POS Transbank</a>'
+            });
+            return;
+        }
+        
+        // PREGUNTAR MONTO A COBRAR (permite pagos parciales)
+        const { value: montoCobrar } = await Swal.fire({
+            title: 'Pago con POS Transbank',
+            html: `
+                <div class="text-start mb-3">
+                    <p><strong>Saldo pendiente:</strong> <span class="text-danger fs-5">${formatearMoneda(saldoPendiente)}</span></p>
+                    <hr>
+                    <p class="text-muted small">Ingrese el monto a cobrar con el POS (puede ser parcial):</p>
+                </div>
+                <input type="number" id="monto-pos-input" class="swal2-input" 
+                       placeholder="Monto a cobrar" 
+                       value="${saldoPendiente}" 
+                       min="50" 
+                       max="${saldoPendiente}"
+                       style="font-size: 1.5rem; text-align: center; font-weight: bold;">
+                <p class="small text-muted mt-2">
+                    <i class="ri-information-line"></i> 
+                    Mínimo: $50 | Máximo: ${formatearMoneda(saldoPendiente)}
+                </p>
+                <div class="alert alert-warning mt-3 small">
+                    <strong>⚠️ IMPORTANTE:</strong> El cliente debe:
+                    <ol class="mb-0 mt-2 text-start">
+                        <li>Pasar la tarjeta</li>
+                        <li><strong>Seleccionar rápido</strong> Débito/Crédito</li>
+                        <li>Ingresar cuotas si aplica</li>
+                    </ol>
+                    <p class="mb-0 mt-2"><i class="ri-timer-line"></i> <strong>Debe hacerlo en menos de 60 segundos</strong></p>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '✅ Cliente listo - Continuar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745',
+            width: '600px',
+            preConfirm: () => {
+                const monto = parseInt(document.getElementById('monto-pos-input').value);
+                if (!monto || monto < 50) {
+                    Swal.showValidationMessage('El monto mínimo es $50');
+                    return false;
+                }
+                if (monto > saldoPendiente) {
+                    Swal.showValidationMessage('El monto no puede ser mayor al saldo pendiente');
+                    return false;
+                }
+                return monto;
+            }
+        });
+        
+        // Si canceló, salir
+        if (!montoCobrar) {
+            return;
+        }
+        
+        // Mostrar modal de procesamiento
+        Swal.fire({
+            title: 'Procesando Pago con POS',
+            html: `
+                <div class="text-center">
+                    <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <h5>Conectando al POS Transbank...</h5>
+                    <p class="text-muted">Monto a cobrar: <strong>${formatearMoneda(montoCobrar)}</strong></p>
+                    <p class="text-muted small">Espere mientras se establece la conexión...</p>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        try {
+            // 1. Conectar al agente Transbank con timeout extendido
+            // IMPORTANTE: Configurar timeout antes de conectar
+            if (Transbank.POS.setConnectionTimeout) {
+                Transbank.POS.setConnectionTimeout(90000); // 90 segundos
+            }
+            
+            await Transbank.POS.connect();
+            
+            // Actualizar mensaje
+            Swal.update({
+                html: `
+                    <div class="text-center">
+                        <div class="spinner-border text-success mb-3" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <h5 class="text-success">✅ Conectado al POS</h5>
+                        <p class="text-muted">Monto a cobrar: <strong>${formatearMoneda(montoCobrar)}</strong></p>
+                        <p class="text-muted small">Saldo total: ${formatearMoneda(saldoPendiente)}</p>
+                        <hr>
+                        <h4 class="mt-3 text-primary">PASO 1: Pase la tarjeta</h4>
+                        <h5 class="mt-2 text-warning">PASO 2: Seleccione Débito/Crédito</h5>
+                        <h5 class="mt-2 text-info">PASO 3: Ingrese cuotas (si aplica)</h5>
+                        <p class="text-muted small mt-3">⏳ Tiempo máximo: 90 segundos</p>
+                    </div>
+                `
+            });
+            
+            // 2. Generar ticket ID único con timestamp
+            const timestamp = Date.now().toString().slice(-6);
+            const ticketIdPOS = `B:${ticketActual.ticket_id}-${timestamp}`;
+            
+            // 3. Callback para mostrar mensajes de estado  
+            let lastStatusMessage = '';
+            const statusCallback = (statusMessage) => {
+                let mensajeTexto = 'Procesando...';
+                let icono = '🔄';
+                
+                try {
+                    console.log('Status POS completo:', statusMessage);
+                    
+                    // Extraer mensaje si es objeto
+                    if (typeof statusMessage === 'string') {
+                        mensajeTexto = statusMessage;
+                    } else if (statusMessage && typeof statusMessage === 'object') {
+                        mensajeTexto = statusMessage.message || statusMessage.status || statusMessage.text || JSON.stringify(statusMessage);
+                    } else {
+                        mensajeTexto = String(statusMessage || 'Procesando...');
+                    }
+                    
+                    lastStatusMessage = mensajeTexto;
+                    
+                    // Determinar ícono según mensaje
+                    if (mensajeTexto.includes('tarjeta') || mensajeTexto.includes('card')) {
+                        icono = '💳';
+                    } else if (mensajeTexto.includes('pin') || mensajeTexto.includes('clave')) {
+                        icono = '🔢';
+                    } else if (mensajeTexto.includes('autoriz') || mensajeTexto.includes('approv')) {
+                        icono = '✅';
+                    }
+                    
+                    // Actualizar mensaje en el Swal
+                    Swal.update({
+                        html: `
+                            <div class="text-center">
+                                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <h5>Procesando transacción...</h5>
+                                <p class="text-muted">Monto: <strong>${formatearMoneda(montoCobrar)}</strong></p>
+                                <hr>
+                                <h6 class="text-primary">${icono} ${mensajeTexto}</h6>
+                                <p class="small text-muted mt-2">Cliente debe completar en el POS...</p>
+                            </div>
+                        `
+                    });
+                } catch (callbackError) {
+                    console.warn('Error en callback:', callbackError);
+                    // No hacer nada, no romper el flujo
+                }
+            };
+            
+            // 4. Ejecutar venta en el POS con sendStatus habilitado
+            console.log('Iniciando doSale con monto:', montoCobrar);
+            const saleResponse = await Transbank.POS.doSale(
+                parseInt(montoCobrar),
+                ticketIdPOS,
+                statusCallback,
+                true  // sendStatus = true (para recibir actualizaciones)
+            );
+            
+            console.log('Respuesta POS:', saleResponse);
+            
+            // 5. Procesar respuesta
+            if (saleResponse.responseCode === 0) {
+                // VENTA APROBADA
+                
+                // Determinar método de pago según tipo de tarjeta
+                let metodoPago = 'TBK_POS_INTEGRADO';
+                if (saleResponse.cardType === 'DB') {
+                    metodoPago = 'TBK_DEBITO_POS';
+                } else if (saleResponse.cardType === 'CR') {
+                    metodoPago = 'TBK_CREDITO_POS';
+                }
+                
+                // Agregar pago a la lista
+                const pago = {
+                    metodo_pago: metodoPago,
+                    monto: saleResponse.amount,
+                    tipo_tarjeta: saleResponse.cardBrand || saleResponse.cardType,
+                    voucher: saleResponse.authorizationCode,
+                    notas: `Terminal: ${saleResponse.terminalId} | Op: ${saleResponse.operationNumber} | ${saleResponse.realDate} ${saleResponse.realTime}`
+                };
+                
+                pagosActuales.push(pago);
+                actualizarListaPagos();
+                actualizarResumenVenta();
+                
+                // Guardar en BD
+                await guardarVentaPOSEnBackend(saleResponse, ticketActual.ticket_id, montoCobrar);
+                
+                // Calcular nuevo saldo después del pago
+                const nuevoSaldo = calcularSaldoPendiente();
+                const ticketCompletado = nuevoSaldo <= 0;
+                
+                // Mostrar resultado exitoso
+                Swal.fire({
+                    icon: 'success',
+                    title: '🎉 Venta Aprobada',
+                    html: `
+                        <div class="text-start">
+                            <h5 class="text-center mb-3 text-success">
+                                ${ticketCompletado ? '✅ Ticket Completamente Pagado' : `⚠️ Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`}
+                            </h5>
+                            <hr>
+                            <p><strong>Monto cobrado:</strong> $${saleResponse.amount.toLocaleString()}</p>
+                            <p><strong>Tarjeta:</strong> ${saleResponse.cardBrand || saleResponse.cardType} ${saleResponse.cardType === 'DB' ? 'Débito' : 'Crédito'}</p>
+                            <p><strong>Últimos 4 dígitos:</strong> ${saleResponse.last4Digits}</p>
+                            <p><strong>Código autorización:</strong> ${saleResponse.authorizationCode}</p>
+                            <p><strong>Operación:</strong> ${saleResponse.operationNumber}</p>
+                            <p><strong>Terminal:</strong> ${saleResponse.terminalId}</p>
+                            <hr>
+                            ${ticketCompletado ? 
+                                '<p class="text-success text-center mb-0"><i class="ri-check-double-line"></i> Puede finalizar la venta</p>' : 
+                                '<p class="text-warning text-center mb-0"><i class="ri-alert-line"></i> Puede agregar más pagos si es necesario</p>'
+                            }
+                        </div>
+                    `,
+                    confirmButtonText: 'OK'
+                });
+                
+                const mensaje = ticketCompletado ? 
+                    'Pago con POS Transbank registrado - Ticket completamente pagado' : 
+                    `Pago parcial registrado - Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`;
+                mostrarNotificacion(mensaje, 'success');
+                
+            } else {
+                // VENTA RECHAZADA
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Venta Rechazada',
+                    html: `
+                        <p><strong>Código:</strong> ${saleResponse.responseCode}</p>
+                        <p><strong>Mensaje:</strong> ${saleResponse.responseMessage || 'Transacción rechazada'}</p>
+                        <hr>
+                        <p class="small text-muted">Puede intentar nuevamente o usar otro método de pago</p>
+                    `,
+                    confirmButtonText: 'Intentar de nuevo',
+                    showCancelButton: true,
+                    cancelButtonText: 'Usar otro método'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Reintentar con POS
+                        setTimeout(() => pagarConPOSTransbank(), 500);
+                    }
+                });
+            }
+            
+        } catch (error) {
+            console.error('Error POS Transbank completo:', error);
+            console.error('Error type:', typeof error);
+            console.error('Error message:', error?.message);
+            
+            // RECUPERACIÓN: A veces el error es prematuro pero la venta SÍ se completa
+            // Mostrar modal de verificación
+            Swal.fire({
+                title: 'Verificando transacción...',
+                html: `
+                    <div class="text-center">
+                        <div class="spinner-border text-warning mb-3" role="status">
+                            <span class="visually-hidden">Verificando...</span>
+                        </div>
+                        <p>Se detectó un error pero la venta puede haberse completado.</p>
+                        <p class="small">Verificando última venta en el POS...</p>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => Swal.showLoading()
+            });
+            
+            try {
+                // Esperar 3 segundos para que termine la transacción
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // Intentar obtener la última venta
+                const lastSale = await Transbank.POS.getLastSale();
+                console.log('Última venta recuperada:', lastSale);
+                
+                // Verificar si fue aprobada
+                if (lastSale && lastSale.responseCode === 0) {
+                    // ¡LA VENTA SÍ SE COMPLETÓ!
+                    
+                    // Determinar método de pago
+                    let metodoPago = 'TBK_POS_INTEGRADO';
+                    if (lastSale.cardType === 'DB') {
+                        metodoPago = 'TBK_DEBITO_POS';
+                    } else if (lastSale.cardType === 'CR') {
+                        metodoPago = 'TBK_CREDITO_POS';
+                    }
+                    
+                    // Agregar pago a la lista
+                    const pago = {
+                        metodo_pago: metodoPago,
+                        monto: lastSale.amount,
+                        tipo_tarjeta: lastSale.cardBrand || lastSale.cardType,
+                        voucher: lastSale.authorizationCode,
+                        notas: `Terminal: ${lastSale.terminalId} | Op: ${lastSale.operationNumber} | ${lastSale.realDate} ${lastSale.realTime}`
+                    };
+                    
+                    pagosActuales.push(pago);
+                    actualizarListaPagos();
+                    actualizarResumenVenta();
+                    
+                    // Guardar en BD
+                    await guardarVentaPOSEnBackend(lastSale, ticketActual.ticket_id, montoCobrar);
+                    
+                    // Calcular nuevo saldo
+                    const nuevoSaldo = calcularSaldoPendiente();
+                    const ticketCompletado = nuevoSaldo <= 0;
+                    
+                    // Mostrar éxito (RECUPERADO)
+                    Swal.fire({
+                        icon: 'success',
+                        title: '✅ Venta Recuperada Exitosamente',
+                        html: `
+                            <div class="alert alert-success">
+                                <strong>La venta SÍ se completó correctamente</strong>
+                            </div>
+                            <div class="text-start">
+                                <h5 class="text-center mb-3 text-success">
+                                    ${ticketCompletado ? '✅ Ticket Completamente Pagado' : `⚠️ Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`}
+                                </h5>
+                                <hr>
+                                <p><strong>Monto cobrado:</strong> $${lastSale.amount.toLocaleString()}</p>
+                                <p><strong>Tarjeta:</strong> ${lastSale.cardBrand || lastSale.cardType} ${lastSale.cardType === 'DB' ? 'Débito' : 'Crédito'}</p>
+                                <p><strong>Últimos 4 dígitos:</strong> ${lastSale.last4Digits}</p>
+                                <p><strong>Código autorización:</strong> ${lastSale.authorizationCode}</p>
+                                <p><strong>Operación:</strong> ${lastSale.operationNumber}</p>
+                                <p><strong>Terminal:</strong> ${lastSale.terminalId}</p>
+                                <hr>
+                                ${ticketCompletado ? 
+                                    '<p class="text-success text-center mb-0"><i class="ri-check-double-line"></i> Puede finalizar la venta</p>' : 
+                                    '<p class="text-warning text-center mb-0"><i class="ri-alert-line"></i> Puede agregar más pagos si es necesario</p>'
+                                }
+                            </div>
+                        `,
+                        confirmButtonText: 'OK'
+                    });
+                    
+                    const mensaje = ticketCompletado ? 
+                        'Pago con POS Transbank registrado - Ticket completamente pagado' : 
+                        `Pago parcial registrado - Saldo pendiente: ${formatearMoneda(nuevoSaldo)}`;
+                    mostrarNotificacion(mensaje, 'success');
+                    
+                    return; // Salir exitosamente
+                    
+                } else {
+                    // La última venta no fue aprobada
+                    throw new Error('La transacción fue rechazada o no se completó');
+                }
+                
+            } catch (recoveryError) {
+                // No se pudo recuperar - mostrar error original
+                console.error('No se pudo recuperar:', recoveryError);
+                
+                let errorMessage = error?.message || 'Error desconocido';
+                let errorDetail = '';
+                
+                if (errorMessage.includes('undefined')) {
+                    errorDetail = '⚠️ La transacción no se completó. Posibles causas:<br>- Cliente canceló en el POS<br>- Timeout esperando tarjeta<br>- Tarjeta retirada antes de tiempo';
+                }
+                
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Transacción no completada',
+                    html: `
+                        <div class="text-center mb-3">
+                            <i class="ri-error-warning-line" style="font-size: 3rem; color: #ffc107;"></i>
+                        </div>
+                        ${errorDetail || `<p class="text-muted">${errorMessage}</p>`}
+                        <hr>
+                        <p class="small text-muted"><strong>Razones comunes:</strong></p>
+                        <ul class="text-start small text-muted">
+                            <li>Cliente presionó <strong>"Cancelar"</strong> en el POS</li>
+                            <li>No se pasó la tarjeta a tiempo</li>
+                            <li>Tarjeta retirada antes de completar</li>
+                        </ul>
+                        <div class="alert alert-info mt-3 small">
+                            <strong>Sugerencia:</strong> Puede intentar nuevamente o usar otro método de pago
+                        </div>
+                    `,
+                    confirmButtonText: 'Intentar de nuevo',
+                    showCancelButton: true,
+                    cancelButtonText: 'Usar otro método',
+                    confirmButtonColor: '#28a745'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        setTimeout(() => pagarConPOSTransbank(), 500);
+                    }
+                });
+            }
+        }
+    };
+    
+    // Función auxiliar para guardar en backend
+    async function guardarVentaPOSEnBackend(saleResponse, ticketId, monto) {
+        try {
+            const response = await fetch('/app/pos/guardar-venta/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    sale_response: saleResponse,
+                    ticket_id: ticketId,
+                    monto: monto
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                console.error('Error guardando en BD:', data.error);
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Error al guardar:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
 });
+</script>
+
+<!-- SDK Transbank POS Web v3 -->
+<script src="https://unpkg.com/transbank-pos-sdk-web@3/dist/pos.js"></script>
+
+<script>
+// Configuración global del SDK Transbank al cargar
+if (typeof Transbank !== 'undefined' && Transbank.POS) {
+    // Intentar configurar timeouts más largos
+    if (Transbank.POS.autoconnect) {
+        Transbank.POS.autoconnect = false; // Desactivar autoconexión
+    }
+    
+    // Configurar timeout de ACK (acknowledgment) - CRÍTICO
+    if (Transbank.POS.setTimeout) {
+        Transbank.POS.setTimeout(90000); // 90 segundos
+    }
+    
+    // Configurar timeout de transacción
+    if (Transbank.POS.setTransactionTimeout) {
+        Transbank.POS.setTransactionTimeout(90000); // 90 segundos
+    }
+    
+    console.log('✅ SDK Transbank configurado con timeouts extendidos');
+}
 </script>

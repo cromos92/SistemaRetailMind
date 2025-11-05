@@ -464,8 +464,8 @@
                                 <ul class="nav nav-sm flex-column">
 
                                     <li class="nav-item">
-                                        <a href="charts-chartjs.html" class="nav-link" data-key="t-chartjs">Dashboard
-                                            Ventas
+                                        <a href="{% url 'dashboard_ventas' %}" class="nav-link" data-key="t-dashboard-ventas">
+                                            <i class="ri-dashboard-line me-1"></i> Dashboard Ventas
                                         </a>
                                     </li>
                                     <li class="nav-item">
@@ -627,17 +627,30 @@
                                 <ul class="nav nav-sm flex-column">
 
                                     <li class="nav-item">
-                                        <a href="/app/verGestionProducto/" class="nav-link" data-key="t-chartjs"> Gestion
-                                            Producto </a>
+                                        <a href="/app/verGestionProducto/" class="nav-link" data-key="t-chartjs">
+                                            <i class="ri-box-3-line me-1"></i> Gestión Producto
+                                        </a>
                                     </li>
                                     
                                     <li class="nav-item">
-                                        <a href="charts-chartjs.html" class="nav-link" data-key="t-chartjs"> Gestion
-                                            Precios </a>
+                                        <a href="{% url 'gestion_precios' %}" class="nav-link" data-key="t-gestion-precios">
+                                            <i class="ri-price-tag-3-line me-1"></i> Gestión Precios
+                                        </a>
                                     </li>
                                     <li class="nav-item">
-                                        <a href="/app/verMovimientosProducto/" class="nav-link" data-key="t-echarts"> Movimientos
-                                            Por Sucursal </a>
+                                        <a href="{% url 'edicion_rapida_precios' %}" class="nav-link" data-key="t-edicion-rapida">
+                                            <i class="ri-flashlight-line me-1"></i> Edición Rápida Precios
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{% url 'revisar_cambios_precios' %}" class="nav-link" data-key="t-revisar-precios">
+                                            <i class="ri-task-line me-1"></i> Revisar Cambios Precios
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="/app/verMovimientosProducto/" class="nav-link" data-key="t-echarts">
+                                            <i class="ri-arrow-left-right-line me-1"></i> Movimientos Por Sucursal
+                                        </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="charts-echarts.html" class="nav-link" data-key="t-echarts"> Movimientos

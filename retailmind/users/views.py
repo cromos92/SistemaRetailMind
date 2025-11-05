@@ -189,6 +189,8 @@ def listar_usuarios(request):
                 'telefono': usuario.telefono,
                 'empresa': usuario.empresa,
                 'cargo': usuario.cargo,
+                'rol': usuario.rol,
+                'rol_display': usuario.get_rol_display(),
                 'es_activo': usuario.es_activo,
                 'fecha_creacion': usuario.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
                 'fecha_ultimo_acceso': usuario.fecha_ultimo_acceso.strftime('%d/%m/%Y %H:%M') if usuario.fecha_ultimo_acceso else 'Nunca',
@@ -269,6 +271,7 @@ def crear_usuario(request):
             empresa=data.get('empresa', '').strip(),
             cargo=data.get('cargo', '').strip(),
             departamento=data.get('departamento', '').strip(),
+            rol=data.get('rol', 'vendedor'),
             fecha_nacimiento=data.get('fecha_nacimiento'),
             es_activo=data.get('es_activo', True),
             puede_crear_usuarios=data.get('puede_crear_usuarios', False),
@@ -360,6 +363,7 @@ def editar_usuario(request, usuario_id):
         usuario.empresa = data.get('empresa', usuario.empresa).strip() if data.get('empresa') else usuario.empresa
         usuario.cargo = data.get('cargo', usuario.cargo).strip() if data.get('cargo') else usuario.cargo
         usuario.departamento = data.get('departamento', usuario.departamento).strip() if data.get('departamento') else usuario.departamento
+        usuario.rol = data.get('rol', usuario.rol)
         
         # Actualizar permisos solo si el usuario actual tiene permisos de superuser
         if request.user.is_superuser:
@@ -468,6 +472,7 @@ def obtener_usuario(request, usuario_id):
                 'empresa': usuario.empresa or '',
                 'cargo': usuario.cargo or '',
                 'departamento': usuario.departamento or '',
+                'rol': usuario.rol,
                 'es_activo': usuario.es_activo,
                 'puede_crear_usuarios': usuario.puede_crear_usuarios,
                 'puede_editar_usuarios': usuario.puede_editar_usuarios,
@@ -556,7 +561,7 @@ def exportar_usuarios(request):
         writer = csv.writer(response)
         writer.writerow([
             'ID', 'Usuario', 'Nombre', 'Apellido', 'Email', 'RUT', 'Teléfono',
-            'Empresa', 'Cargo', 'Departamento', 'Estado', 'Fecha Creación',
+            'Empresa', 'Cargo', 'Rol', 'Departamento', 'Estado', 'Fecha Creación',
             'Último Acceso', 'Permisos'
         ])
         
@@ -585,6 +590,7 @@ def exportar_usuarios(request):
                 usuario.telefono or '',
                 usuario.empresa or '',
                 usuario.cargo or '',
+                usuario.get_rol_display(),
                 usuario.departamento or '',
                 'Activo' if usuario.es_activo else 'Inactivo',
                 usuario.fecha_creacion.strftime('%d/%m/%Y %H:%M'),

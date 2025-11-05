@@ -481,6 +481,8 @@ def buscar_productos_cotizacion(request):
         query = request.GET.get('q', '').strip()
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         
+        print(f"🔍 Búsqueda de productos - Query: '{query}', Sucursal: {sucursal_id}")
+        
         if not query or len(query) < 2:
             return JsonResponse({
                 'success': True,
@@ -488,32 +490,60 @@ def buscar_productos_cotizacion(request):
             })
         
         # Buscar productos
+        # Nota: producto usa atributo1 para marca, no hay campo 'marca' directo
         productos = Producto_Talla.objects.filter(
+            Q(sku__icontains=query) |
             Q(producto__sku__icontains=query) |
             Q(producto__articulo__icontains=query) |
-            Q(producto__marca__nombre__icontains=query)
-        ).select_related('producto', 'producto__marca')[:20]
+            Q(producto__descripcion__icontains=query) |
+            Q(producto__atributo1__valor__icontains=query)  # Marca está en atributo1
+        ).select_related(
+            'producto', 
+            'producto__atributo1',  # Marca
+            'producto__atributo2',  # Color
+            'producto__categoria'
+        ).distinct()[:20]
+        
+        print(f"✅ Productos encontrados: {productos.count()}")
         
         # Serializar
         productos_data = []
         for pt in productos:
             # Obtener stock del producto
-            stock = pt.stock if hasattr(pt, 'stock') else 0
+            stock = pt.stock if pt.stock else 0
             
-            # Obtener precio (necesitarás ajustar según tu lógica de precios)
+            # Obtener precio (el campo es 'precioventa', sin guión bajo)
             precio = 0
-            if hasattr(pt.producto, 'precio_venta'):
-                precio = float(pt.producto.precio_venta)
+            if pt.producto and hasattr(pt.producto, 'precioventa'):
+                precio = float(pt.producto.precioventa)
             
-            productos_data.append({
+            # Obtener marca desde atributo1
+            marca = 'Sin marca'
+            if pt.producto and pt.producto.atributo1:
+                marca = pt.producto.atributo1.valor
+            
+            # Obtener color desde atributo2
+            color = ''
+            if pt.producto and pt.producto.atributo2:
+                color = pt.producto.atributo2.valor
+            
+            # Construir nombre descriptivo
+            nombre = pt.producto.articulo if pt.producto else 'Sin nombre'
+            if color:
+                nombre = f"{nombre} - {color}"
+            
+            producto_info = {
                 'id': pt.id,
-                'nombre': pt.producto.articulo if pt.producto else 'Sin nombre',
-                'sku': str(pt.producto.sku) if pt.producto else 'N/A',
-                'marca': pt.producto.marca.nombre if (pt.producto and pt.producto.marca) else 'Sin marca',
+                'nombre': nombre,
+                'sku': str(pt.sku),
+                'marca': marca,
                 'talla': pt.talla if pt.talla else 'N/A',
                 'precio': precio,
                 'stock': stock,
-            })
+            }
+            
+            productos_data.append(producto_info)
+            print(f"📦 Producto: {producto_info['nombre']} - SKU: {producto_info['sku']} - Stock: {stock}")
         
         return JsonResponse({
             'success': True,
@@ -521,7 +551,9 @@ def buscar_productos_cotizacion(request):
         })
         
     except Exception as e:
-        print(f"Error en buscar_productos_cotizacion: {str(e)}")
+        print(f"❌ Error en buscar_productos_cotizacion: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'success': False,
             'error': str(e)

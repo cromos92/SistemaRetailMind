@@ -585,6 +585,123 @@ def solicitudes_regularizacion_recibidas(request):
 
 
 @login_required
+def documento_regularizacion(request, recepcion_id):
+    """Genera documento imprimible de regularización"""
+    try:
+        from .models import Productos_Recepcionados
+        
+        recepcion = get_object_or_404(Productos_Recepcionados, id=recepcion_id)
+        
+        if not recepcion.dte:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontró el DTE asociado'
+            }, status=404)
+        
+        dte_original = recepcion.dte
+        
+        # Determinar tipo de regularización
+        tipo_regularizacion = 'NC'  # Por defecto
+        nc_generada = None
+        dte_cambio = None
+        producto_cambio = None
+        
+        # Buscar NC generada para este producto
+        nc_generada_obj = Dte.objects.filter(
+            es_nota_credito=True,
+            documento_afectado=dte_original,
+            referencias__icontains=f'regularización'
+        ).order_by('-fecha_emision').first()
+        
+        # Buscar DTE de cambio
+        dte_cambio_obj = Dte.objects.filter(
+            tipo_transaccion='TRASPASO',
+            referencias__icontains=f'DTE #{dte_original.numero_documento}'
+        ).filter(
+            Q(referencias__icontains='cambio') | Q(referencias__icontains='Cambio')
+        ).exclude(es_nota_credito=True).order_by('-fecha_emision').first()
+        
+        if dte_cambio_obj:
+            tipo_regularizacion = 'CAMBIO'
+            # Obtener producto de cambio
+            producto_cambio_obj = dte_cambio_obj.dte_productos.first()
+            if producto_cambio_obj:
+                producto_cambio = {
+                    'sku': producto_cambio_obj.productoTalla.sku,
+                    'nombre': producto_cambio_obj.descripcion,
+                    'talla': producto_cambio_obj.productoTalla.talla,
+                    'cantidad': producto_cambio_obj.stock,
+                    'precio_unitario': producto_cambio_obj.precio,
+                    'total': producto_cambio_obj.stock * producto_cambio_obj.precio
+                }
+        
+        if nc_generada_obj:
+            iva_nc = nc_generada_obj.monto_con_iva - nc_generada_obj.monto_neto
+            nc_generada = {
+                'numero_documento': nc_generada_obj.numero_documento,
+                'fecha_emision': nc_generada_obj.fecha_emision,
+                'monto_neto': nc_generada_obj.monto_neto,
+                'iva': iva_nc,
+                'monto_con_iva': nc_generada_obj.monto_con_iva
+            }
+        
+        if dte_cambio_obj:
+            iva_cambio = dte_cambio_obj.monto_con_iva - dte_cambio_obj.monto_neto
+            dte_cambio = {
+                'numero_documento': dte_cambio_obj.numero_documento,
+                'tipo_documento': dte_cambio_obj.tipo_documento,
+                'fecha_emision': dte_cambio_obj.fecha_emision,
+                'monto_neto': dte_cambio_obj.monto_neto,
+                'iva': iva_cambio,
+                'monto_con_iva': dte_cambio_obj.monto_con_iva
+            }
+        
+        # Determinar tipo de problema
+        tipo_problema = 'PROBLEMA'
+        if recepcion.estado == 'FALTANTE' or recepcion.cantidad_faltante > 0:
+            tipo_problema = 'FALTANTE'
+        elif recepcion.estado == 'RECEPCIONADO_DANADO' or recepcion.cantidad_danada > 0:
+            tipo_problema = 'DAÑADO'
+        elif recepcion.estado == 'RECEPCIONADO_PARCIAL':
+            tipo_problema = 'PARCIAL'
+        
+        cantidad_problema = recepcion.cantidad_danada or recepcion.cantidad_faltante or 0
+        
+        context = {
+            'empresa': dte_original.emisor,
+            'numero_documento': nc_generada_obj.numero_documento if nc_generada_obj else dte_cambio_obj.numero_documento if dte_cambio_obj else '-',
+            'fecha_emision': timezone.now().strftime('%d/%m/%Y %H:%M'),
+            'responsable': recepcion.regularizado_por or request.user.username,
+            'tipo_regularizacion': tipo_regularizacion,
+            'dte_original': dte_original,
+            'producto_original': {
+                'sku': recepcion.producto_talla.sku if recepcion.producto_talla else '-',
+                'nombre': recepcion.producto_talla.producto.articulo if recepcion.producto_talla and recepcion.producto_talla.producto else '-',
+                'talla': recepcion.producto_talla.talla if recepcion.producto_talla else '-',
+                'cantidad_esperada': recepcion.cantidad_esperada,
+                'cantidad_recibida': recepcion.stockArribado,
+                'cantidad_problema': cantidad_problema,
+                'tipo_problema': tipo_problema,
+                'precio_unitario': recepcion.dte_producto.precio if recepcion.dte_producto else 0
+            },
+            'producto_cambio': producto_cambio,
+            'nc_generada': nc_generada,
+            'dte_cambio': dte_cambio,
+            'motivo': recepcion.observaciones or 'Regularización de productos con problemas'
+        }
+        
+        return render(request, 'vistas/modulo_compras/documento_regularizacion.html', context)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar documento: {str(e)}'
+        }, status=500)
+
+
+@login_required
 @require_GET
 def obtener_productos_regularizar(request):
     """Obtiene lista de productos que requieren regularización"""
@@ -603,13 +720,19 @@ def obtener_productos_regularizar(request):
         proveedor_filtro = request.GET.get('proveedor', '')
         busqueda = request.GET.get('buscar', '')
         
-        # ✅ IMPORTANTE: Solo productos que ESTA SUCURSAL RECEPCIONÓ
-        # No mostrar productos que esta sucursal ENVIÓ
-        # El receptor ve sus problemas, el emisor ve solicitudes recibidas en otro panel
+        # ✅ MOSTRAR DOS TIPOS DE PRODUCTOS CON PROBLEMAS:
+        # 1. Productos que ESTA SUCURSAL RECEPCIONÓ con problemas → Para solicitar solución
+        # 2. Productos que ESTA SUCURSAL ENVIÓ y fueron recepcionados con problemas → Para DAR solución
         queryset = Productos_Recepcionados.objects.filter(
-            dte__isnull=False,  # Solo traspasos/DTEs
-            dte__receptor__sucursales__id=sucursal_id,  # Solo DTEs donde esta sucursal es DESTINO/RECEPTOR
-            estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION', 'REGULARIZADO']
+            Q(dte__isnull=False) &  # Solo traspasos/DTEs
+            (
+                # Caso 1: Productos que YO RECIBÍ (están en mi inventario)
+                Q(producto_talla__producto__sucursal_id=sucursal_id) |
+                # Caso 2: Productos que YO ENVIÉ (soy el emisor del DTE)
+                Q(dte__sucursal_id=sucursal_id)
+            ) &
+            Q(estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE', 'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION'])
+            # NOTA: Excluimos 'REGULARIZADO' para que no aparezcan productos ya resueltos
         ).select_related(
             'dte',
             'dte__emisor',
@@ -617,8 +740,9 @@ def obtener_productos_regularizar(request):
             'dte__sucursal',
             'producto_talla',
             'producto_talla__producto',
+            'producto_talla__producto__sucursal',
             'dte_producto'
-        ).order_by('-fecha_recepcion')
+        ).distinct().order_by('-fecha_recepcion')
         
         if estado_filtro:
             queryset = queryset.filter(estado=estado_filtro)
@@ -653,15 +777,73 @@ def obtener_productos_regularizar(request):
                 requiere_nc = recepcion.dte.requiere_nota_credito_check()
                 tipo_regularizacion_texto = 'Nota de Crédito' if requiere_nc else 'Ajuste Interno'
             
-            # Obtener información del emisor
+            # Obtener información del emisor y receptor
             emisor_nombre = recepcion.dte.emisor.nombre if recepcion.dte and recepcion.dte.emisor else '-'
+            receptor_nombre = recepcion.dte.receptor.nombre if recepcion.dte and recepcion.dte.receptor else '-'
             sucursal_origen = recepcion.dte.sucursal.alias if recepcion.dte and recepcion.dte.sucursal else '-'
             sucursal_origen_id = recepcion.dte.sucursal.id if recepcion.dte and recepcion.dte.sucursal else None
+            
+            # Determinar el ROL del usuario actual en este caso
+            # SOY EMISOR si el DTE fue emitido por mi sucursal
+            soy_emisor = (recepcion.dte and recepcion.dte.sucursal_id == sucursal_id)
+            
+            # SOY RECEPTOR si:
+            # - Tengo movimientos de ENTRADA donde yo soy el destino, O
+            # - El producto pertenece a mi inventario PERO yo NO soy el emisor
+            tiene_movimiento_entrada = False
+            if recepcion.dte:
+                tiene_movimiento_entrada = recepcion.dte.dte_movimientos.filter(
+                    concepto__in=['TRASPASO_ENTRADA', 'TRASPASO_SALIDA'],
+                    sucursal_destino_id=sucursal_id
+                ).exists()
+            
+            soy_receptor = tiene_movimiento_entrada and not soy_emisor
+            
+            # DEBUG: Log para entender la lógica
+            if recepcion.dte:
+                print(f"📊 DTE #{recepcion.dte.numero_documento}:")
+                print(f"   - dte.sucursal_id: {recepcion.dte.sucursal_id}, sucursal_actual: {sucursal_id}")
+                print(f"   - soy_emisor: {soy_emisor}")
+                print(f"   - tiene_movimiento_entrada: {tiene_movimiento_entrada}")
+                print(f"   - soy_receptor: {soy_receptor}")
+                print(f"   - producto_talla.producto.sucursal_id: {recepcion.producto_talla.producto.sucursal_id if recepcion.producto_talla and recepcion.producto_talla.producto else 'N/A'}")
             
             # Obtener precio del producto original del DTE
             precio_unitario = 0
             if recepcion.dte_producto:
                 precio_unitario = recepcion.dte_producto.precio or 0
+            
+            # Buscar si ya tiene NC o DTE de cambio generado
+            nc_numero = None
+            dte_cambio_numero = None
+            solucion_aplicada = None
+            
+            if recepcion.dte and recepcion.estado == 'REGULARIZADO':
+                # Buscar NC generada
+                nc_obj = Dte.objects.filter(
+                    es_nota_credito=True,
+                    documento_afectado=recepcion.dte,
+                    referencias__icontains='regularización'
+                ).order_by('-fecha_emision').first()
+                
+                if nc_obj:
+                    nc_numero = nc_obj.numero_documento
+                    solucion_aplicada = f'NC #{nc_numero}'
+                
+                # Buscar DTE de cambio
+                dte_cambio_obj = Dte.objects.filter(
+                    tipo_transaccion='TRASPASO',
+                    referencias__icontains=f'DTE #{recepcion.dte.numero_documento}'
+                ).filter(
+                    Q(referencias__icontains='cambio') | Q(referencias__icontains='Cambio')
+                ).exclude(es_nota_credito=True).order_by('-fecha_emision').first()
+                
+                if dte_cambio_obj:
+                    dte_cambio_numero = dte_cambio_obj.numero_documento
+                    if nc_numero:
+                        solucion_aplicada = f'NC #{nc_numero} + Cambio DTE #{dte_cambio_numero}'
+                    else:
+                        solucion_aplicada = f'Cambio DTE #{dte_cambio_numero}'
             
             productos.append({
                 'id': recepcion.id,
@@ -683,10 +865,18 @@ def obtener_productos_regularizar(request):
                 'recepcionado_por': recepcion.recepcionado_por or '-',
                 # NUEVO: Información del emisor para solicitudes
                 'emisor': emisor_nombre,
+                'receptor': receptor_nombre,
                 'sucursal_origen': sucursal_origen,
                 'sucursal_origen_id': sucursal_origen_id,
                 # NUEVO: Información de precios para cálculo de NC
-                'precio_unitario': precio_unitario
+                'precio_unitario': precio_unitario,
+                # NUEVO: Determinar ROL del usuario actual
+                'soy_emisor': soy_emisor,  # True si yo envié este DTE
+                'soy_receptor': soy_receptor,  # True si yo recepcioné este DTE
+                # NUEVO: Información de solución aplicada
+                'nc_numero': nc_numero,
+                'dte_cambio_numero': dte_cambio_numero,
+                'solucion_aplicada': solucion_aplicada
             })
         
         return JsonResponse({
@@ -1146,13 +1336,23 @@ def regularizar_producto_api(request):
                 
                 cantidad_problema = recepcion.cantidad_faltante or recepcion.cantidad_danada or recepcion.cantidad_esperada
                 
+                # Obtener sucursal solicitante (receptora) y sucursal emisora
+                # La sucursal solicitante es la que recepcionó (destino del movimiento)
+                movimiento = recepcion.dte.dte_movimientos.filter(
+                    concepto='TRASPASO_SALIDA',
+                    tipo_movimiento='EGRESO'
+                ).first() if recepcion.dte else None
+                
+                sucursal_solicitante = movimiento.sucursal_destino if movimiento else None
+                sucursal_emisora = recepcion.dte.sucursal if recepcion.dte else None  # La sucursal del DTE es la emisora
+                
                 # Crear solicitud de NC
                 solicitud = Solicitud_Regularizacion.objects.create(
                     numero_solicitud=numero_solicitud,
                     dte_original=recepcion.dte,
                     producto_recepcionado=recepcion,
-                    sucursal_solicitante=recepcion.dte.sucursal if recepcion.dte else None,
-                    sucursal_emisora=recepcion.dte.emisor.sucursales.first() if recepcion.dte and recepcion.dte.emisor else None,
+                    sucursal_solicitante=sucursal_solicitante,
+                    sucursal_emisora=sucursal_emisora,
                     usuario_solicita=usuario,
                     tipo_problema=tipo_problema,
                     cantidad_problema=cantidad_problema,
@@ -1181,6 +1381,285 @@ def regularizar_producto_api(request):
                     'requiere_aprobacion': True,
                     'estado_solicitud': 'PENDIENTE'
                 })
+            
+            # NUEVO: Emitir NC directamente (emisor ejecuta)
+            if tipo_regularizacion == 'EMITIR_NC' or data.get('ejecutar_nc'):
+                motivo_nc = data.get('motivo_nc', '')
+                cantidad_nc = int(data.get('cantidad_nc', 0))
+                
+                if not motivo_nc:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'El motivo de la NC es obligatorio'
+                    }, status=400)
+                
+                if not recepcion.dte or not recepcion.dte_producto:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'No se encontró el DTE original'
+                    }, status=400)
+                
+                # Generar la NC automáticamente
+                try:
+                    # obtener_siguiente_correlativo está en este mismo módulo (views.py)
+                    
+                    dte_original = recepcion.dte
+                    
+                    # Calcular montos
+                    precio_unitario = recepcion.dte_producto.precio  # Este es NETO
+                    total_neto = cantidad_nc * precio_unitario
+                    iva = total_neto * Decimal('0.19')
+                    total_con_iva = total_neto + iva
+                    
+                    print(f"💰 DEBUG Cálculo NC:")
+                    print(f"   - Cantidad NC: {cantidad_nc}")
+                    print(f"   - Precio unitario NETO (del DTE original): ${precio_unitario}")
+                    print(f"   - Total NETO: ${total_neto}")
+                    print(f"   - IVA (19%): ${iva}")
+                    print(f"   - Total CON IVA: ${total_con_iva}")
+                    print(f"   - DTE original monto_neto: ${dte_original.monto_neto}")
+                    print(f"   - DTE original monto_con_iva: ${dte_original.monto_con_iva}")
+                    
+                    # Obtener correlativo para NC
+                    numero_nc = obtener_siguiente_correlativo(dte_original.sucursal, 'NOTA DE CREDITO')
+                    
+                    # Crear Nota de Crédito
+                    nota_credito = Dte.objects.create(
+                        emisor=dte_original.emisor,
+                        receptor=dte_original.receptor,
+                        numero_documento=numero_nc,
+                        tipo_documento='NOTA DE CREDITO',
+                        monto_neto=total_neto,
+                        monto_con_iva=total_con_iva,
+                        estado_pago='PENDIENTE',
+                        estado_dte='EMITIDO',
+                        responsable=usuario,
+                        fecha_emision=hoy.date(),
+                        fecha_vencimiento=hoy.date(),
+                        diasCredito=0,
+                        bultos=1,
+                        unidades_productos=cantidad_nc,
+                        tipo_transaccion='TRASPASO',
+                        sucursal=dte_original.sucursal,
+                        es_nota_credito=True,
+                        documento_afectado=dte_original,
+                        motivo_nc=motivo_nc,
+                        referencias=f"NC por regularización DTE #{dte_original.numero_documento}. {motivo_nc}"
+                    )
+                    
+                    # Crear detalle de la NC
+                    from .models import Dte_Productos
+                    Dte_Productos.objects.create(
+                        dte=nota_credito,
+                        productoTalla=recepcion.dte_producto.productoTalla,
+                        descripcion=f"NC: {recepcion.dte_producto.descripcion}",
+                        costo=recepcion.dte_producto.costo,
+                        sobreprecio=recepcion.dte_producto.sobreprecio,
+                        precio=recepcion.dte_producto.precio,
+                        stock=cantidad_nc,
+                        activo=True
+                    )
+                    
+                    # Actualizar estado del producto recepcionado
+                    recepcion.estado = 'REGULARIZADO'
+                    recepcion.fecha_regularizacion = hoy
+                    recepcion.regularizado_por = usuario
+                    recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] REGULARIZADO - NC #{numero_nc} emitida por {cantidad_nc} unidades. {motivo_nc}"
+                    recepcion.save()
+                    
+                    print(f"✓ NC #{numero_nc} generada - DTE original #{dte_original.numero_documento}")
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': f'Nota de Crédito #{numero_nc} generada correctamente',
+                        'tipo': 'NC_GENERADA',
+                        'numero_nc': numero_nc,
+                        'monto_nc': float(total_con_iva),
+                        'documento_url': f'/app/dte/documento-regularizacion/{recepcion.id}/'
+                    })
+                    
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Error al generar NC: {str(e)}'
+                    }, status=500)
+            
+            # NUEVO: Enviar producto de cambio (emisor ejecuta)
+            if tipo_regularizacion == 'ENVIAR_CAMBIO' or data.get('ejecutar_envio'):
+                producto_envio_id = int(data.get('producto_envio_id', 0))
+                cantidad_envio = int(data.get('cantidad_envio', 0))
+                motivo_envio = data.get('motivo_envio', '')
+                
+                if not producto_envio_id or not cantidad_envio or not motivo_envio:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Faltan datos para enviar producto de cambio'
+                    }, status=400)
+                
+                if not recepcion.dte or not recepcion.dte_producto:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'No se encontró el DTE original'
+                    }, status=400)
+                
+                try:
+                    # obtener_siguiente_correlativo está en este mismo módulo (views.py)
+                    from .models import Dte_Productos, Producto_Talla
+                    
+                    dte_original = recepcion.dte
+                    producto_cambio = get_object_or_404(Producto_Talla, id=producto_envio_id)
+                    
+                    # Verificar stock disponible
+                    if producto_cambio.stock < cantidad_envio:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Stock insuficiente. Disponible: {producto_cambio.stock}'
+                        }, status=400)
+                    
+                    # Obtener sucursal destino (receptor original)
+                    movimiento_original = dte_original.dte_movimientos.filter(
+                        concepto='TRASPASO_SALIDA'
+                    ).first()
+                    sucursal_destino = movimiento_original.sucursal_destino if movimiento_original else None
+                    
+                    if not sucursal_destino:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'No se pudo identificar la sucursal destino'
+                        }, status=400)
+                    
+                    # 1. Generar NC por producto original dañado
+                    precio_unitario_original = recepcion.dte_producto.precio
+                    cantidad_problema = recepcion.cantidad_danada or recepcion.cantidad_faltante or 1
+                    total_neto_nc = cantidad_problema * precio_unitario_original
+                    iva_nc = total_neto_nc * Decimal('0.19')
+                    total_con_iva_nc = total_neto_nc + iva_nc
+                    
+                    numero_nc = obtener_siguiente_correlativo(dte_original.sucursal, 'NOTA DE CREDITO')
+                    
+                    nota_credito = Dte.objects.create(
+                        emisor=dte_original.emisor,
+                        receptor=dte_original.receptor,
+                        numero_documento=numero_nc,
+                        tipo_documento='NOTA DE CREDITO',
+                        monto_neto=total_neto_nc,
+                        monto_con_iva=total_con_iva_nc,
+                        estado_pago='PENDIENTE',
+                        estado_dte='EMITIDO',
+                        responsable=usuario,
+                        fecha_emision=hoy.date(),
+                        fecha_vencimiento=hoy.date(),
+                        diasCredito=0,
+                        bultos=1,
+                        unidades_productos=cantidad_problema,
+                        tipo_transaccion='TRASPASO',
+                        sucursal=dte_original.sucursal,
+                        es_nota_credito=True,
+                        documento_afectado=dte_original,
+                        motivo_nc=f"NC por producto dañado - Envío de reemplazo. {motivo_envio}",
+                        referencias=f"NC por regularización DTE #{dte_original.numero_documento}"
+                    )
+                    
+                    Dte_Productos.objects.create(
+                        dte=nota_credito,
+                        productoTalla=recepcion.dte_producto.productoTalla,
+                        descripcion=f"NC: {recepcion.dte_producto.descripcion}",
+                        costo=recepcion.dte_producto.costo,
+                        sobreprecio=recepcion.dte_producto.sobreprecio,
+                        precio=recepcion.dte_producto.precio,
+                        stock=cantidad_problema,
+                        activo=True
+                    )
+                    
+                    # 2. Crear nuevo DTE con producto de cambio
+                    precio_cambio = producto_cambio.producto.precioventa if producto_cambio.producto else 0
+                    costo_cambio = producto_cambio.producto.costo if producto_cambio.producto else 0
+                    total_neto_cambio = cantidad_envio * precio_cambio
+                    iva_cambio = total_neto_cambio * Decimal('0.19')
+                    total_con_iva_cambio = total_neto_cambio + iva_cambio
+                    
+                    numero_dte_cambio = obtener_siguiente_correlativo(dte_original.sucursal, 'GUIA')
+                    
+                    dte_cambio = Dte.objects.create(
+                        emisor=dte_original.emisor,
+                        receptor=dte_original.receptor,
+                        numero_documento=numero_dte_cambio,
+                        tipo_documento='GUIA',
+                        monto_neto=total_neto_cambio,
+                        monto_con_iva=total_con_iva_cambio,
+                        estado_pago='PENDIENTE',
+                        estado_dte='EMITIDO',
+                        responsable=usuario,
+                        fecha_emision=hoy.date(),
+                        fecha_vencimiento=hoy.date(),
+                        diasCredito=0,
+                        bultos=1,
+                        unidades_productos=cantidad_envio,
+                        tipo_transaccion='TRASPASO',
+                        sucursal=dte_original.sucursal,
+                        referencias=f"Producto de cambio por DTE #{dte_original.numero_documento}. NC #{numero_nc}. {motivo_envio}"
+                    )
+                    
+                    Dte_Productos.objects.create(
+                        dte=dte_cambio,
+                        productoTalla=producto_cambio,
+                        descripcion=f"CAMBIO: {producto_cambio.producto.articulo} - Talla {producto_cambio.talla}",
+                        costo=costo_cambio,
+                        sobreprecio=producto_cambio.producto.sobreprecio if producto_cambio.producto else 0,
+                        precio=precio_cambio,
+                        stock=cantidad_envio,
+                        activo=True
+                    )
+                    
+                    # 3. Restar stock del emisor
+                    producto_cambio.stock -= cantidad_envio
+                    producto_cambio.save()
+                    
+                    # 4. Crear movimiento de salida
+                    Movimientos_Producto.objects.create(
+                        dte=dte_cambio,
+                        ProductoTalla=producto_cambio,
+                        sucursal_origen=dte_original.sucursal,
+                        sucursal_destino=sucursal_destino,
+                        cantidad=-cantidad_envio,
+                        costo=costo_cambio,
+                        sobreprecio=producto_cambio.producto.sobreprecio if producto_cambio.producto else 0,
+                        precio=precio_cambio,
+                        concepto='TRASPASO_SALIDA',
+                        tipo_movimiento='EGRESO',
+                        estado='PENDIENTE_RECEPCION',
+                        responsable=usuario,
+                        observaciones=f'Producto de cambio por regularización - DTE original #{dte_original.numero_documento}'
+                    )
+                    
+                    # 5. Actualizar estado del producto recepcionado
+                    recepcion.estado = 'REGULARIZADO'
+                    recepcion.fecha_regularizacion = hoy
+                    recepcion.regularizado_por = usuario
+                    recepcion.observaciones = (recepcion.observaciones or '') + f"\n[{hoy.strftime('%Y-%m-%d %H:%M')}] REGULARIZADO - NC #{numero_nc} + DTE Cambio #{numero_dte_cambio} emitidos. {motivo_envio}"
+                    recepcion.save()
+                    
+                    print(f"✓ Producto de cambio enviado - NC #{numero_nc}, DTE #{numero_dte_cambio}")
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': f'Producto de cambio enviado correctamente',
+                        'tipo': 'CAMBIO_ENVIADO',
+                        'numero_nc': numero_nc,
+                        'numero_dte_cambio': numero_dte_cambio,
+                        'producto_cambio': f"{producto_cambio.sku} - {producto_cambio.producto.articulo}",
+                        'documento_url': f'/app/dte/documento-regularizacion/{recepcion.id}/'
+                    })
+                    
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Error al enviar producto de cambio: {str(e)}'
+                    }, status=500)
             
             if tipo_regularizacion == 'AJUSTAR':
                 # Ajustar cantidad recibida
@@ -1285,13 +1764,22 @@ def regularizar_producto_api(request):
                     else:
                         tipo_problema = 'INCORRECTO'
                     
+                    # Obtener sucursal solicitante (receptora) y sucursal emisora
+                    movimiento = recepcion.dte.dte_movimientos.filter(
+                        concepto='TRASPASO_SALIDA',
+                        tipo_movimiento='EGRESO'
+                    ).first() if recepcion.dte else None
+                    
+                    sucursal_solicitante = movimiento.sucursal_destino if movimiento else None
+                    sucursal_emisora = recepcion.dte.sucursal if recepcion.dte else None  # La sucursal del DTE es la emisora
+                    
                     # Crear solicitud con la cantidad especificada
                     solicitud = Solicitud_Regularizacion.objects.create(
                         numero_solicitud=numero_solicitud,
                         dte_original=recepcion.dte,
                         producto_recepcionado=recepcion,
-                        sucursal_solicitante=recepcion.dte.sucursal if recepcion.dte else None,  # Receptor
-                        sucursal_emisora=recepcion.dte.emisor.sucursales.first() if recepcion.dte and recepcion.dte.emisor else None,  # Emisor
+                        sucursal_solicitante=sucursal_solicitante,  # Receptor
+                        sucursal_emisora=sucursal_emisora,  # Emisor
                         usuario_solicita=usuario,
                         tipo_problema=tipo_problema,
                         cantidad_problema=cantidad_problema,
@@ -4230,7 +4718,8 @@ def obtener_movimientos_producto(request):
 
     total_count = movimientos.count()
     offset = (page - 1) * page_size
-    movimientos = movimientos.order_by('-fecha')[offset:offset+page_size]
+    # ✅ ORDEN: Más recientes primero (fecha + hora descendente)
+    movimientos = movimientos.order_by('-fecha', '-hora')[offset:offset+page_size]
 
     data = []
     for m in movimientos:
@@ -8513,8 +9002,8 @@ def buscar_productos_bodega(request):
     Buscar productos en bodega para emisión DTE con estructura correcta de atributos
     """
     try:
-        # Obtener parámetros de búsqueda
-        search = request.GET.get('search', '').strip()
+        # Obtener parámetros de búsqueda (acepta tanto 'q' como 'search')
+        search = request.GET.get('q', '').strip() or request.GET.get('search', '').strip()
         marca_id = request.GET.get('marca', '')
         categoria_id = request.GET.get('categoria', '')
         tipo_talla = request.GET.get('tipo_talla', '')
@@ -8569,12 +9058,13 @@ def buscar_productos_bodega(request):
         if tipo_talla:
             productos_query = productos_query.filter(tipo_talla=tipo_talla)
         
-        # Paginación
+        # Paginación (con order_by para evitar warning)
         from django.core.paginator import Paginator
+        productos_query = productos_query.order_by('-id')  # Ordenar por ID descendente
         paginator = Paginator(productos_query, page_size)
         page_obj = paginator.get_page(page)
         
-        # Construir respuesta
+        # Construir respuesta - Aplanar tallas como productos individuales
         productos_data = []
         for producto in page_obj:
             # Obtener atributos correctamente
@@ -8583,37 +9073,25 @@ def buscar_productos_bodega(request):
             sexo = producto.atributo3.valor if producto.atributo3 else '-'
             otro = producto.atributo4.valor if producto.atributo4 else '-'
             
-            # Calcular stock total y obtener tallas
-            tallas_disponibles = []
-            stock_total = 0
-            
+            # Aplanar cada talla como un producto individual
             for talla in producto.producto_talla.all():
                 if talla.stock > 0:  # Solo incluir tallas con stock
-                    tallas_disponibles.append({
-                        'id': talla.id,
+                    productos_data.append({
+                        'id': talla.id,  # ID de la talla para selección
+                        'sku': str(talla.sku),
+                        'nombre': producto.articulo,
+                        'descripcion': producto.descripcion,
                         'talla': talla.talla,
-                        'sku': talla.sku,
-                        'stock': talla.stock
+                        'stock': talla.stock,
+                        'precio': producto.precioventa,
+                        'costo': producto.costo,
+                        'marca': marca,
+                        'color': color,
+                        'sexo': sexo,
+                        'categoria': producto.categoria.nombre if producto.categoria else '-',
+                        'producto_id': producto.id,
+                        'sucursal_id': producto.sucursal_id
                     })
-                    stock_total += talla.stock
-            
-            productos_data.append({
-                'id': producto.id,
-                'articulo': producto.articulo,
-                'descripcion': producto.descripcion,
-                'marca': marca,
-                'color': color,
-                'sexo': sexo,
-                'otro': otro,
-                'categoria': producto.categoria.nombre if producto.categoria else '-',
-                'costo': producto.costo,
-                'precio_venta': producto.precioventa,
-                'sobreprecio': producto.sobreprecio,
-                'stock_total': stock_total,
-                'tipo_talla': producto.tipo_talla,
-                'tallas_disponibles': tallas_disponibles,
-                'sucursal_id': producto.sucursal_id
-            })
         
         return JsonResponse({
             'success': True,

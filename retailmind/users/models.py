@@ -9,6 +9,14 @@ class Usuario(AbstractUser):
     Modelo de Usuario personalizado para RetailMind
     Migrado desde olagreetings_user_management
     """
+    # Definición de roles
+    ROLES = [
+        ('administrador', 'Administrador'),
+        ('jefe_local', 'Jefe Local'),
+        ('cajero', 'Cajero'),
+        ('vendedor', 'Vendedor'),
+    ]
+    
     # Campos básicos
     rut = models.CharField(max_length=12, unique=True, null=True, blank=True, verbose_name="RUT")
     telefono = models.CharField(max_length=15, null=True, blank=True, verbose_name="Teléfono")
@@ -19,6 +27,7 @@ class Usuario(AbstractUser):
     empresa = models.CharField(max_length=100, null=True, blank=True, verbose_name="Empresa")
     cargo = models.CharField(max_length=100, null=True, blank=True, verbose_name="Cargo")
     departamento = models.CharField(max_length=100, null=True, blank=True, verbose_name="Departamento")
+    rol = models.CharField(max_length=50, choices=ROLES, default='vendedor', verbose_name="Rol")
     
     # Campos de estado
     es_activo = models.BooleanField(default=True, verbose_name="Usuario Activo")

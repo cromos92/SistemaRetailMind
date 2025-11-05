@@ -522,22 +522,22 @@ def obtener_movimientos_producto(request):
         
         # Construir queryset
         queryset = Movimientos_Producto.objects.select_related(
-            'producto_talla__producto', 'responsable', 'sucursal_origen', 'sucursal_destino'
+            'ProductoTalla__producto', 'sucursal_origen', 'sucursal_destino'
         )
         
         # Aplicar filtros
         if fecha_inicio:
             fecha_inicio_parsed = parse_fecha_ddmmyyyy(fecha_inicio)
             if fecha_inicio_parsed:
-                queryset = queryset.filter(fecha_creacion__date__gte=fecha_inicio_parsed)
+                queryset = queryset.filter(fecha__gte=fecha_inicio_parsed)
         
         if fecha_fin:
             fecha_fin_parsed = parse_fecha_ddmmyyyy(fecha_fin)
             if fecha_fin_parsed:
-                queryset = queryset.filter(fecha_creacion__date__lte=fecha_fin_parsed)
+                queryset = queryset.filter(fecha__lte=fecha_fin_parsed)
         
         if producto_id:
-            queryset = queryset.filter(producto_talla__producto_id=producto_id)
+            queryset = queryset.filter(ProductoTalla__producto_id=producto_id)
         
         if concepto:
             queryset = queryset.filter(concepto=concepto)
@@ -547,8 +547,8 @@ def obtener_movimientos_producto(request):
                 Q(sucursal_origen_id=sucursal_id) | Q(sucursal_destino_id=sucursal_id)
             )
         
-        # Ordenar por fecha descendente
-        queryset = queryset.order_by('-fecha_creacion')
+        # ✅ ORDEN: Más recientes primero (fecha + hora descendente)
+        queryset = queryset.order_by('-fecha', '-hora')
         
         # Paginación
         page = int(request.GET.get('page', 1))
@@ -559,17 +559,19 @@ def obtener_movimientos_producto(request):
         # Serializar datos
         movimientos_data = []
         for mov in movimientos_page:
+            # Combinar fecha y hora para mostrar
+            fecha_hora = f"{mov.fecha.strftime('%d/%m/%Y')} {mov.hora.strftime('%H:%M')}" if mov.hora else mov.fecha.strftime('%d/%m/%Y')
             movimientos_data.append({
                 'id': mov.id,
-                'fecha_creacion': mov.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
+                'fecha_creacion': fecha_hora,
                 'concepto': mov.concepto,
                 'tipo_movimiento': mov.tipo_movimiento,
-                'producto_nombre': mov.producto_talla.producto.nombre,
-                'sku': mov.producto_talla.sku,
+                'producto_nombre': mov.ProductoTalla.producto.articulo,
+                'sku': mov.ProductoTalla.sku,
                 'cantidad': mov.cantidad,
-                'responsable': mov.responsable.username if mov.responsable else '',
-                'sucursal_origen': mov.sucursal_origen.nombre if mov.sucursal_origen else '',
-                'sucursal_destino': mov.sucursal_destino.nombre if mov.sucursal_destino else '',
+                'responsable': mov.responsable,
+                'sucursal_origen': mov.sucursal_origen.alias if mov.sucursal_origen else '',
+                'sucursal_destino': mov.sucursal_destino.alias if mov.sucursal_destino else '',
                 'observaciones': mov.observaciones or '',
                 'referencia_externa': mov.referencia_externa or ''
             })

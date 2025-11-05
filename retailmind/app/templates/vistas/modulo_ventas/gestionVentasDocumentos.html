@@ -1120,7 +1120,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         <tr>
                             <th>Método de Pago</th>
                             <th>Voucher/Referencia</th>
-                            <th>Tipo Tarjeta</th>
+                            <th>Tipo Tarjeta/Empresa</th>
+                            <th>Detalles</th>
                             <th class="text-end">Monto</th>
                         </tr>
                     </thead>
@@ -1130,6 +1131,16 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalPagos = 0;
         pagos.forEach(pago => {
             totalPagos += pago.monto;
+            
+            // Parsear datos adicionales si es CREDITO_EXTERNO
+            let datosConvenio = null;
+            if (pago.metodo === 'CREDITO_EXTERNO' && pago.notas) {
+                try {
+                    datosConvenio = JSON.parse(pago.notas);
+                } catch (e) {
+                    datosConvenio = null;
+                }
+            }
             
             html += `
                 <tr>
@@ -1141,6 +1152,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     </td>
                     <td>
                         <small class="text-muted">${pago.tipo_tarjeta || '-'}</small>
+                    </td>
+                    <td>
+                        ${datosConvenio ? `
+                            <small class="text-muted">
+                                <strong>${datosConvenio.nombre}</strong><br>
+                                RUT: ${datosConvenio.rut}<br>
+                                Fecha: ${datosConvenio.fecha_convenio ? new Date(datosConvenio.fecha_convenio).toLocaleDateString('es-CL') : '-'}<br>
+                                Monto Convenio: ${formatearMoneda(datosConvenio.monto_total_convenio || 0)}
+                                ${datosConvenio.observaciones ? `<br><em>${datosConvenio.observaciones}</em>` : ''}
+                            </small>
+                        ` : '<small class="text-muted">-</small>'}
                     </td>
                     <td class="text-end">
                         <strong>${formatearMoneda(pago.monto)}</strong>

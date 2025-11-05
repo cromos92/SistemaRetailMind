@@ -402,13 +402,14 @@
             <div class="modal-body">
                 <div class="input-group mb-3">
                     <input type="text" class="form-control" id="buscarProductoInput" 
-                           placeholder="Buscar por SKU, nombre, marca...">
+                           placeholder="Buscar por SKU, nombre, marca..."
+                           onkeypress="if(event.key === 'Enter') { event.preventDefault(); buscarProductos(); }">
                     <button class="btn btn-primary" onclick="buscarProductos()">
                         <i class="ri-search-line"></i> Buscar
                     </button>
                 </div>
                 <div id="resultadosBusquedaProductos" style="max-height: 400px; overflow-y: auto;">
-                    <!-- Resultados dinámicos -->
+                    <p class="text-muted text-center py-3">Ingrese un término de búsqueda...</p>
                 </div>
             </div>
         </div>
@@ -931,43 +932,90 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     window.buscarProductos = function() {
-        const query = document.getElementById('buscarProductoInput').value;
-        if (!query) return;
+        const query = document.getElementById('buscarProductoInput').value.trim();
+        const contenedor = document.getElementById('resultadosBusquedaProductos');
+        
+        if (!query || query.length < 2) {
+            contenedor.innerHTML = '<p class="text-warning text-center py-3"><i class="ri-alert-line me-1"></i>Ingrese al menos 2 caracteres para buscar</p>';
+            return;
+        }
+        
+        // Mostrar loading
+        contenedor.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Buscando...</span>
+                </div>
+                <p class="text-muted mt-2">Buscando productos...</p>
+            </div>
+        `;
+        
+        console.log('🔍 Buscando productos:', query);
         
         fetch(apiUrls.buscarProductos + '?q=' + encodeURIComponent(query))
-            .then(response => response.json())
+            .then(response => {
+                console.log('📡 Respuesta recibida:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('📦 Datos recibidos:', data);
                 if (data.success) {
                     mostrarResultadosProductos(data.productos);
+                } else {
+                    contenedor.innerHTML = `<p class="text-danger text-center py-3"><i class="ri-error-warning-line me-1"></i>Error: ${data.error || 'Error desconocido'}</p>`;
                 }
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => {
+                console.error('❌ Error:', error);
+                contenedor.innerHTML = `<p class="text-danger text-center py-3"><i class="ri-error-warning-line me-1"></i>Error al buscar productos: ${error.message}</p>`;
+            });
     };
 
     function mostrarResultadosProductos(productos) {
         const contenedor = document.getElementById('resultadosBusquedaProductos');
         
-        if (productos.length === 0) {
-            contenedor.innerHTML = '<p class="text-muted text-center py-3">No se encontraron productos</p>';
+        if (!productos || productos.length === 0) {
+            contenedor.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="ri-inbox-line display-4 text-muted"></i>
+                    <p class="text-muted mt-2">No se encontraron productos</p>
+                    <small class="text-muted">Intente con otro término de búsqueda</small>
+                </div>
+            `;
             return;
         }
         
-        contenedor.innerHTML = productos.map(prod => `
-            <div class="border-bottom p-2 item-producto-hover" onclick="seleccionarProducto(${prod.id}, '${prod.nombre}', ${prod.precio})">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <strong>${prod.nombre}</strong>
-                        <br>
-                        <small class="text-muted">SKU: ${prod.sku} | Marca: ${prod.marca}</small>
-                        <br>
-                        <small class="text-info">Stock: ${prod.stock} unidades</small>
-                    </div>
-                    <div class="text-end">
-                        <strong class="text-primary">${formatearMoneda(prod.precio)}</strong>
+        console.log(`✅ Mostrando ${productos.length} productos`);
+        
+        contenedor.innerHTML = productos.map(prod => {
+            // Escapar comillas para evitar errores en onclick
+            const nombreEscapado = (prod.nombre || 'Sin nombre').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            
+            return `
+                <div class="border-bottom p-2 item-producto-hover" onclick="seleccionarProducto(${prod.id}, '${nombreEscapado}', ${prod.precio})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <strong>${prod.nombre || 'Sin nombre'}</strong>
+                            <br>
+                            <small class="text-muted">
+                                <i class="ri-barcode-line"></i> SKU: ${prod.sku || 'N/A'} | 
+                                <i class="ri-price-tag-3-line"></i> ${prod.marca || 'Sin marca'} |
+                                <i class="ri-t-shirt-line"></i> Talla: ${prod.talla || 'N/A'}
+                            </small>
+                            <br>
+                            <small class="${prod.stock > 0 ? 'text-success' : 'text-danger'}">
+                                <i class="ri-inbox-line"></i> Stock: ${prod.stock} unidades
+                            </small>
+                        </div>
+                        <div class="text-end ms-2">
+                            <strong class="text-primary">${formatearMoneda(prod.precio)}</strong>
+                            <br>
+                            <small class="text-muted">Precio Unit.</small>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     window.seleccionarProducto = function(productoId, nombre, precio) {
@@ -1425,6 +1473,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (document.querySelectorAll('#tbodyItemsCotizacion tr').length === 0) {
             agregarItemCotizacion();
         }
+    });
+    
+    // Limpiar y enfocar input al abrir modal de búsqueda de productos
+    document.getElementById('modalBuscarProducto').addEventListener('shown.bs.modal', function() {
+        const input = document.getElementById('buscarProductoInput');
+        input.value = '';
+        input.focus();
+        document.getElementById('resultadosBusquedaProductos').innerHTML = '<p class="text-muted text-center py-3">Ingrese un término de búsqueda...</p>';
     });
 });
 </script>

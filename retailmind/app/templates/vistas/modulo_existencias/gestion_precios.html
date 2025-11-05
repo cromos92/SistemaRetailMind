@@ -1,0 +1,1634 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+<style>
+    .price-management-container {
+        padding: 20px;
+    }
+
+    .filters-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+
+    .filters-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .filter-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        margin-bottom: 5px;
+    }
+
+    .filter-group input,
+    .filter-group select {
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 14px;
+    }
+
+    .filter-group input[type="text"].search-filter {
+        border: 2px solid #3498db;
+        background: #f0f8ff;
+    }
+
+    .filter-group input[type="text"].search-filter:focus {
+        outline: none;
+        border-color: #2980b9;
+        background: white;
+    }
+
+    .filter-group select[size] {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .btn-search {
+        background: #3498db;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .btn-search:hover {
+        background: #2980b9;
+    }
+
+    .btn-clear {
+        background: #95a5a6;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .results-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .results-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .results-count {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .bulk-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-bulk {
+        padding: 8px 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .btn-bulk-edit {
+        background: #f39c12;
+        color: white;
+    }
+
+    .btn-bulk-sync {
+        background: #9b59b6;
+        color: white;
+    }
+
+    .btn-recommendations {
+        background: #1abc9c;
+        color: white;
+    }
+
+    .products-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+    .products-table th {
+        background: #34495e;
+        color: white;
+        padding: 12px;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+    }
+
+    .products-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #ecf0f1;
+        font-size: 13px;
+    }
+
+    .products-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+
+    .checkbox-cell {
+        width: 40px;
+        text-align: center;
+    }
+
+    .editable-price {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 3px;
+        padding: 5px 8px;
+        width: 100px;
+        text-align: right;
+    }
+
+    .margin-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .margin-good {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .margin-warning {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .margin-danger {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .stock-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .stock-high {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .stock-medium {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .stock-low {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .age-badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .age-new {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+
+    .age-old {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .recommendation-icon {
+        cursor: pointer;
+        color: #1abc9c;
+        font-size: 18px;
+        transition: transform 0.2s;
+    }
+
+    .recommendation-icon:hover {
+        transform: scale(1.2);
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+        background-color: white;
+        margin: 5% auto;
+        padding: 0;
+        border-radius: 10px;
+        width: 90%;
+        max-width: 800px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px 10px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 22px;
+    }
+
+    .close {
+        color: white;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        background: none;
+        border: none;
+    }
+
+    .close:hover {
+        opacity: 0.8;
+    }
+
+    .modal-body {
+        padding: 25px;
+    }
+
+    .recommendation-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #1abc9c;
+    }
+
+    .recommendation-section h3 {
+        margin-top: 0;
+        color: #2c3e50;
+        font-size: 16px;
+    }
+
+    .recommendation-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .recommendation-item:last-child {
+        border-bottom: none;
+    }
+
+    .recommendation-label {
+        font-weight: 600;
+        color: #555;
+    }
+
+    .recommendation-value {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1abc9c;
+    }
+
+    .price-suggestion {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+        margin-top: 20px;
+    }
+
+    .price-suggestion h3 {
+        margin: 0 0 10px 0;
+    }
+
+    .suggested-price {
+        font-size: 36px;
+        font-weight: 700;
+        margin: 10px 0;
+    }
+
+    .apply-suggestion-btn {
+        background: white;
+        color: #667eea;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 15px;
+        transition: transform 0.2s;
+    }
+
+    .apply-suggestion-btn:hover {
+        transform: scale(1.05);
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .stat-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #3498db;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .stat-label {
+        font-size: 12px;
+        color: #7f8c8d;
+        margin-bottom: 5px;
+    }
+
+    .stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #2c3e50;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #7f8c8d;
+    }
+
+    .loading-spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 15px;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #95a5a6;
+    }
+
+    .empty-state i {
+        font-size: 64px;
+        margin-bottom: 15px;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #ecf0f1;
+    }
+
+    .pagination button {
+        padding: 8px 15px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .pagination button:hover:not(:disabled) {
+        background: #3498db;
+        color: white;
+    }
+
+    .pagination button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .pagination .page-info {
+        font-size: 14px;
+        color: #7f8c8d;
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+<div class="price-management-container">
+    <!-- Header -->
+    <div style="margin-bottom: 20px;">
+        <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
+            <i class="fas fa-tags"></i> Gestión de Precios
+        </h1>
+        <p style="color: #7f8c8d; margin: 0;">Administra precios de productos con recomendaciones inteligentes</p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <div class="stat-label">Total Productos</div>
+            <div class="stat-value" id="statTotalProducts">-</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #2ecc71;">
+            <div class="stat-label">Valor Inventario</div>
+            <div class="stat-value" id="statTotalValue">-</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #f39c12;">
+            <div class="stat-label">Margen Promedio</div>
+            <div class="stat-value" id="statAvgMargin">-</div>
+        </div>
+        <div class="stat-card" style="border-left-color: #e74c3c;">
+            <div class="stat-label">Inventario Antiguo</div>
+            <div class="stat-value" id="statOldInventory">-</div>
+        </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="filters-card">
+        <h3 style="margin-top: 0; color: #2c3e50;">
+            <i class="fas fa-filter"></i> Filtros de Búsqueda
+        </h3>
+        
+        <div class="filters-grid">
+            <div class="filter-group">
+                <label>Búsqueda</label>
+                <input type="text" id="searchTerm" placeholder="Nombre, SKU, código...">
+            </div>
+
+            <div class="filter-group">
+                <label>Categoría</label>
+                <input type="text" id="searchCategoria" class="search-filter" placeholder="🔍 Buscar categoría..." 
+                       style="margin-bottom: 5px;" oninput="filtrarSelect('searchCategoria', 'filterCategoria')">
+                <select id="filterCategoria" size="1" onchange="cerrarSelectDespuesSeleccion('searchCategoria', 'filterCategoria')">
+                    <option value="">Todas las categorías</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Marca (Atributo 1)</label>
+                <input type="text" id="searchMarca" class="search-filter" placeholder="🔍 Buscar marca..." 
+                       style="margin-bottom: 5px;" oninput="filtrarSelect('searchMarca', 'filterMarca')">
+                <select id="filterMarca" size="1" onchange="cerrarSelectDespuesSeleccion('searchMarca', 'filterMarca')">
+                    <option value="">Todas las marcas</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Sucursal</label>
+                <select id="filterSucursal">
+                    <option value="">Todas las sucursales</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Precio Venta (Min)</label>
+                <input type="number" id="filterPrecioMin" placeholder="0">
+            </div>
+
+            <div class="filter-group">
+                <label>Precio Venta (Max)</label>
+                <input type="number" id="filterPrecioMax" placeholder="999999">
+            </div>
+
+            <div class="filter-group">
+                <label>Margen (Min %)</label>
+                <input type="number" id="filterMargenMin" placeholder="0">
+            </div>
+
+            <div class="filter-group">
+                <label>Stock (Min)</label>
+                <input type="number" id="filterStockMin" placeholder="0">
+            </div>
+
+            <div class="filter-group">
+                <label>Antigüedad</label>
+                <select id="filterAntiguedad">
+                    <option value="">Todas</option>
+                    <option value="nuevo">Nuevo (< 6 meses)</option>
+                    <option value="medio">Medio (6-12 meses)</option>
+                    <option value="antiguo">Antiguo (> 12 meses)</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Año de Ingreso</label>
+                <select id="filterAnio">
+                    <option value="">Todos los años</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-search" onclick="buscarProductos()">
+                <i class="fas fa-search"></i> Buscar Productos
+            </button>
+            <button class="btn-clear" onclick="limpiarFiltros()">
+                <i class="fas fa-eraser"></i> Limpiar Filtros
+            </button>
+        </div>
+    </div>
+
+    <!-- Results Card -->
+    <div class="results-card">
+        <div class="results-header">
+            <div class="results-count" id="resultsCount">
+                0 productos encontrados
+            </div>
+            <div class="bulk-actions">
+                <button class="btn-bulk btn-bulk-edit" onclick="abrirModificacionMasiva()" disabled id="btnBulkEdit">
+                    <i class="fas fa-edit"></i> Modificar Seleccionados
+                </button>
+                <button class="btn-bulk btn-bulk-sync" onclick="abrirSincronizacion()" disabled id="btnBulkSync">
+                    <i class="fas fa-sync"></i> Sincronizar Sucursales
+                </button>
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="loading" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Cargando productos...</p>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+            <i class="fas fa-search"></i>
+            <h3>Realiza una búsqueda</h3>
+            <p>Utiliza los filtros para encontrar productos y gestionar sus precios</p>
+        </div>
+
+        <div id="resultsTable" style="display: none;">
+            <div style="overflow-x: auto;">
+                <table class="products-table">
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                            </th>
+                            <th>SKU</th>
+                            <th>Producto</th>
+                            <th>Talla</th>
+                            <th>Categoría</th>
+                            <th>Marca</th>
+                            <th>Sucursal</th>
+                            <th>Costo</th>
+                            <th>Precio Venta</th>
+                            <th>Margen %</th>
+                            <th>Markup %</th>
+                            <th>Stock</th>
+                            <th>Antigüedad</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTableBody">
+                        <!-- Rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination" id="paginationControls">
+                <button id="btnPrevPage" onclick="cambiarPagina(-1)">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </button>
+                <span class="page-info" id="pageInfo">Página 1 de 1</span>
+                <button id="btnNextPage" onclick="cambiarPagina(1)">
+                    Siguiente <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Recomendaciones -->
+<div id="modalRecommendations" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-lightbulb"></i> Recomendaciones de Precio</h2>
+            <span class="close" onclick="cerrarModal('modalRecommendations')">&times;</span>
+        </div>
+        <div class="modal-body" id="recommendationsContent">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Modificación Masiva -->
+<div id="modalBulkEdit" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-edit"></i> Modificación Masiva de Precios</h2>
+            <span class="close" onclick="cerrarModal('modalBulkEdit')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div style="margin-bottom: 20px;">
+                <p><strong>Productos seleccionados: <span id="selectedCount">0</span></strong></p>
+            </div>
+
+            <!-- Información de productos editados -->
+            <div id="productosEditadosInfo" style="display: none;">
+                <!-- Se llenará dinámicamente -->
+            </div>
+
+            <div class="filter-group" style="margin-bottom: 20px;">
+                <label>Tipo de Modificación</label>
+                <select id="bulkEditType" onchange="actualizarCamposModificacion()">
+                    <option value="fixed">Precio Fijo</option>
+                    <option value="percentage">Incremento/Decremento (%)</option>
+                    <option value="amount">Incremento/Decremento ($)</option>
+                    <option value="margin">Por Margen de Ganancia (%)</option>
+                </select>
+            </div>
+
+            <div class="filter-group" id="fixedPriceField" style="margin-bottom: 20px;">
+                <label>Nuevo Precio de Venta</label>
+                <input type="number" id="bulkFixedPrice" placeholder="Ej: 9990">
+            </div>
+
+            <div class="filter-group" id="percentageField" style="margin-bottom: 20px; display: none;">
+                <label>Porcentaje (usar negativo para descuento)</label>
+                <input type="number" id="bulkPercentage" placeholder="Ej: 10 o -15" step="0.1">
+            </div>
+
+            <div class="filter-group" id="amountField" style="margin-bottom: 20px; display: none;">
+                <label>Monto en Pesos (usar negativo para descuento)</label>
+                <input type="number" id="bulkAmount" placeholder="Ej: 1000 o -500">
+            </div>
+
+            <div class="filter-group" id="marginField" style="margin-bottom: 20px; display: none;">
+                <label>Margen de Ganancia Objetivo (%)</label>
+                <input type="number" id="bulkMargin" placeholder="Ej: 35" step="0.1">
+            </div>
+
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <p style="margin: 0; color: #856404;">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Importante:</strong> Esta acción modificará los precios de todos los productos seleccionados.
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn-clear" onclick="cerrarModal('modalBulkEdit')">
+                    Cancelar
+                </button>
+                <button class="btn-search" onclick="aplicarModificacionMasiva()">
+                    <i class="fas fa-check"></i> Aplicar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Sincronización Multi-Sucursal -->
+<div id="modalSync" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-sync"></i> Sincronización Multi-Sucursal</h2>
+            <span class="close" onclick="cerrarModal('modalSync')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Sincronizar precios de productos similares en otras sucursales</p>
+            
+            <div class="filter-group" style="margin-bottom: 20px;">
+                <label>Sucursales Destino</label>
+                <div id="sucursalesCheckboxes">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <div class="filter-group" style="margin-bottom: 20px;">
+                <label>Ajuste de Precio por Zona (%)</label>
+                <input type="number" id="syncPriceAdjustment" placeholder="0" step="0.1" value="0">
+                <small style="color: #7f8c8d;">Ej: 10 para aumentar 10%, -5 para disminuir 5%</small>
+            </div>
+
+            <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <p style="margin: 0; color: #0c5460;">
+                    <i class="fas fa-info-circle"></i> 
+                    Se buscarán productos con el mismo nombre y atributos en las sucursales seleccionadas.
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn-clear" onclick="cerrarModal('modalSync')">
+                    Cancelar
+                </button>
+                <button class="btn-search" onclick="aplicarSincronizacion()">
+                    <i class="fas fa-sync"></i> Sincronizar Precios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+
+<script>
+// Variables globales
+let productosActuales = [];
+let paginaActual = 1;
+let totalPaginas = 1;
+const itemsPorPagina = 50;
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    cargarFiltrosIniciales();
+    cargarEstadisticas();
+});
+
+// Cargar filtros iniciales
+async function cargarFiltrosIniciales() {
+    try {
+        // Cargar categorías
+        const respCategorias = await fetch('/app/api/categorias/listar/');
+        const dataCategorias = await respCategorias.json();
+        const selectCategoria = document.getElementById('filterCategoria');
+        dataCategorias.categorias.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.nombre;
+            option.dataset.text = cat.nombre.toLowerCase(); // Para búsqueda
+            selectCategoria.appendChild(option);
+        });
+
+        // Cargar marcas (atributos)
+        const respMarcas = await fetch('/app/api/atributos/listar/?tipo=marca');
+        const dataMarcas = await respMarcas.json();
+        const selectMarca = document.getElementById('filterMarca');
+        dataMarcas.opciones.forEach(marca => {
+            const option = document.createElement('option');
+            option.value = marca.id;
+            option.textContent = marca.valor;
+            option.dataset.text = marca.valor.toLowerCase(); // Para búsqueda
+            selectMarca.appendChild(option);
+        });
+
+        // Cargar sucursales
+        const respSucursales = await fetch('/app/api/sucursales/listar/');
+        const dataSucursales = await respSucursales.json();
+        const selectSucursal = document.getElementById('filterSucursal');
+        dataSucursales.sucursales.forEach(suc => {
+            const option = document.createElement('option');
+            option.value = suc.id;
+            option.textContent = suc.alias;
+            selectSucursal.appendChild(option);
+        });
+
+        // Cargar años disponibles
+        const selectAnio = document.getElementById('filterAnio');
+        const anioActual = new Date().getFullYear();
+        for (let i = anioActual; i >= anioActual - 10; i--) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            selectAnio.appendChild(option);
+        }
+    } catch (error) {
+        console.error('Error cargando filtros:', error);
+    }
+}
+
+// Función para filtrar opciones del select basado en búsqueda
+function filtrarSelect(searchInputId, selectId) {
+    const searchInput = document.getElementById(searchInputId);
+    const select = document.getElementById(selectId);
+    const searchText = searchInput.value.toLowerCase();
+    
+    // Obtener todas las opciones
+    const options = select.getElementsByTagName('option');
+    let visibleCount = 0;
+    
+    // Filtrar opciones
+    for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        const optionText = option.textContent.toLowerCase();
+        
+        if (optionText.includes(searchText) || option.value === '') {
+            option.style.display = '';
+            visibleCount++;
+        } else {
+            option.style.display = 'none';
+        }
+    }
+    
+    // Si hay coincidencias, abrir el select automáticamente
+    if (searchText.length > 0) {
+        select.size = Math.min(visibleCount, 8); // Mostrar hasta 8 opciones visibles
+    } else {
+        select.size = 1; // Volver a modo normal
+    }
+}
+
+// Cerrar select después de seleccionar una opción
+function cerrarSelectDespuesSeleccion(searchInputId, selectId) {
+    const select = document.getElementById(selectId);
+    const searchInput = document.getElementById(searchInputId);
+    
+    // Volver a tamaño normal
+    select.size = 1;
+    
+    // Limpiar campo de búsqueda
+    searchInput.value = '';
+    
+    // Mostrar todas las opciones nuevamente
+    const options = select.getElementsByTagName('option');
+    for (let i = 0; i < options.length; i++) {
+        options[i].style.display = '';
+    }
+}
+
+// Cargar estadísticas
+async function cargarEstadisticas() {
+    try {
+        const response = await fetch('/app/gestion-precios/estadisticas/');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('statTotalProducts').textContent = data.total_productos;
+            document.getElementById('statTotalValue').textContent = formatearMoneda(data.valor_inventario);
+            document.getElementById('statAvgMargin').textContent = data.margen_promedio.toFixed(1) + '%';
+            document.getElementById('statOldInventory').textContent = data.inventario_antiguo;
+        }
+    } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+    }
+}
+
+// Buscar productos
+async function buscarProductos() {
+    mostrarCargando(true);
+    document.getElementById('emptyState').style.display = 'none';
+    
+    const filtros = {
+        search: document.getElementById('searchTerm').value,
+        categoria: document.getElementById('filterCategoria').value,
+        marca: document.getElementById('filterMarca').value,
+        sucursal: document.getElementById('filterSucursal').value,
+        precio_min: document.getElementById('filterPrecioMin').value,
+        precio_max: document.getElementById('filterPrecioMax').value,
+        margen_min: document.getElementById('filterMargenMin').value,
+        stock_min: document.getElementById('filterStockMin').value,
+        antiguedad: document.getElementById('filterAntiguedad').value,
+        anio: document.getElementById('filterAnio').value,
+        page: paginaActual,
+        per_page: itemsPorPagina
+    };
+
+    try {
+        const queryString = new URLSearchParams(filtros).toString();
+        const response = await fetch(`/app/gestion-precios/buscar/?${queryString}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            productosActuales = data.productos;
+            totalPaginas = data.pagination.total_pages;
+            renderizarTabla(data.productos);
+            actualizarPaginacion(data.pagination);
+            document.getElementById('resultsCount').textContent = 
+                `${data.pagination.total_items} productos encontrados`;
+        } else {
+            mostrarError('Error al buscar productos: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError('Error al realizar la búsqueda');
+    } finally {
+        mostrarCargando(false);
+    }
+}
+
+// Renderizar tabla de productos
+function renderizarTabla(productos) {
+    const tbody = document.getElementById('productsTableBody');
+    tbody.innerHTML = '';
+    
+    if (productos.length === 0) {
+        document.getElementById('resultsTable').style.display = 'none';
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('emptyState').innerHTML = `
+            <i class="fas fa-inbox"></i>
+            <h3>No se encontraron productos</h3>
+            <p>Intenta ajustar los filtros de búsqueda</p>
+        `;
+        return;
+    }
+    
+    document.getElementById('resultsTable').style.display = 'block';
+    
+    productos.forEach(producto => {
+        const margen = calcularMargen(producto.costo, producto.precio_venta);
+        const markup = calcularMarkup(producto.costo, producto.precio_venta);
+        const margenClass = margen > 30 ? 'margin-good' : (margen > 15 ? 'margin-warning' : 'margin-danger');
+        const markupClass = markup > 40 ? 'margin-good' : (markup > 20 ? 'margin-warning' : 'margin-danger');
+        const stockClass = producto.stock > 10 ? 'stock-high' : (producto.stock > 3 ? 'stock-medium' : 'stock-low');
+        const ageClass = producto.dias_inventario < 180 ? 'age-new' : 'age-old';
+        
+        const row = document.createElement('tr');
+        row.id = `row-${producto.id}`;
+        row.innerHTML = `
+            <td class="checkbox-cell">
+                <input type="checkbox" class="product-checkbox" data-id="${producto.id}">
+            </td>
+            <td><strong>${producto.sku}</strong></td>
+            <td>${producto.nombre}</td>
+            <td>${producto.talla || 'N/A'}</td>
+            <td>${producto.categoria || '-'}</td>
+            <td>${producto.marca || '-'}</td>
+            <td><span class="badge" style="background: #e3f2fd; color: #1976d2; padding: 3px 8px; border-radius: 3px; font-size: 11px;">${producto.sucursal}</span></td>
+            <td id="costo-${producto.id}" data-costo="${producto.costo}">${formatearMoneda(producto.costo)}</td>
+            <td>
+                <input type="number" 
+                       class="editable-price" 
+                       value="${producto.precio_venta}"
+                       data-id="${producto.id}"
+                       data-original="${producto.precio_venta}"
+                       data-costo="${producto.costo}"
+                       oninput="recalcularMargenes(this)">
+            </td>
+            <td><span class="margin-badge ${margenClass}" id="margen-${producto.id}">${margen.toFixed(1)}%</span></td>
+            <td><span class="margin-badge ${markupClass}" id="markup-${producto.id}">${markup.toFixed(1)}%</span></td>
+            <td><span class="stock-badge ${stockClass}">${producto.stock}</span></td>
+            <td><span class="age-badge ${ageClass}">${formatearAntiguedad(producto.dias_inventario)}</span></td>
+            <td>
+                <i class="fas fa-lightbulb recommendation-icon" 
+                   onclick="mostrarRecomendaciones(${producto.id})"
+                   title="Ver recomendaciones"></i>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Mostrar recomendaciones de precio
+async function mostrarRecomendaciones(productoId) {
+    try {
+        const response = await fetch(`/app/gestion-precios/recomendaciones/${productoId}/`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const content = document.getElementById('recommendationsContent');
+            const rec = data.recomendaciones;
+            
+            content.innerHTML = `
+                <div style="margin-bottom: 20px;">
+                    <h3 style="margin-top: 0;">${rec.producto_nombre} - ${rec.sku}</h3>
+                    <p style="color: #7f8c8d;">Análisis inteligente de precio basado en múltiples factores</p>
+                </div>
+
+                <div class="recommendation-section">
+                    <h3>📊 Análisis Actual</h3>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Precio Actual:</span>
+                        <span class="recommendation-value">${formatearMoneda(rec.precio_actual)}</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Costo Promedio:</span>
+                        <span>${formatearMoneda(rec.costo_promedio)}</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Margen Actual:</span>
+                        <span>${rec.margen_actual.toFixed(1)}%</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Stock Disponible:</span>
+                        <span>${rec.stock_actual} unidades</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Antigüedad Promedio:</span>
+                        <span>${rec.dias_promedio_inventario} días</span>
+                    </div>
+                </div>
+
+                <div class="recommendation-section">
+                    <h3>💡 Análisis de Rotación</h3>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Ventas (30 días):</span>
+                        <span>${rec.ventas_30_dias} unidades</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Velocidad de Rotación:</span>
+                        <span>${rec.velocidad_rotacion}</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Tendencia:</span>
+                        <span>${rec.tendencia_ventas}</span>
+                    </div>
+                </div>
+
+                <div class="recommendation-section">
+                    <h3>🎯 Factores de Ajuste</h3>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Factor Antigüedad:</span>
+                        <span>${rec.factor_antiguedad > 0 ? '+' : ''}${(rec.factor_antiguedad * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Factor Rotación:</span>
+                        <span>${rec.factor_rotacion > 0 ? '+' : ''}${(rec.factor_rotacion * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="recommendation-item">
+                        <span class="recommendation-label">Factor Stock:</span>
+                        <span>${rec.factor_stock > 0 ? '+' : ''}${(rec.factor_stock * 100).toFixed(1)}%</span>
+                    </div>
+                </div>
+
+                <div class="price-suggestion">
+                    <h3>💰 Precio Recomendado</h3>
+                    <div class="suggested-price">${formatearMoneda(rec.precio_recomendado)}</div>
+                    <p style="margin: 10px 0;">
+                        Margen proyectado: <strong>${rec.margen_recomendado.toFixed(1)}%</strong>
+                    </p>
+                    <p style="font-size: 13px; opacity: 0.9; margin: 5px 0;">
+                        ${rec.justificacion}
+                    </p>
+                    <button class="apply-suggestion-btn" onclick="aplicarPrecioRecomendado(${productoId}, ${rec.precio_recomendado})">
+                        Aplicar Precio Recomendado
+                    </button>
+                </div>
+            `;
+            
+            document.getElementById('modalRecommendations').style.display = 'block';
+        } else {
+            mostrarError('Error al obtener recomendaciones: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError('Error al obtener recomendaciones');
+    }
+}
+
+// Aplicar precio recomendado
+async function aplicarPrecioRecomendado(productoId, precioRecomendado) {
+    // MODO SIMPLE: Solo confirmar y aplicar inmediatamente
+    if (!confirm(`¿Aplicar precio de ${formatearMoneda(precioRecomendado)} a todas las tallas?`)) {
+        return;
+    }
+    
+    aplicarPrecioDirecto(productoId, precioRecomendado);
+    
+    /* MODO CON APROBACIÓN (comentado por defecto):
+    
+    // Preguntar si aplicar inmediatamente o enviar a aprobación
+    const opcion = confirm(
+        `¿Cómo deseas proceder con el precio de ${formatearMoneda(precioRecomendado)}?\n\n` +
+        `OK = Aplicar INMEDIATAMENTE (sin aprobación)\n` +
+        `Cancelar = Enviar a APROBACIÓN (requiere revisar)`
+    );
+    
+    if (opcion) {
+        aplicarPrecioDirecto(productoId, precioRecomendado);
+    } else {
+        proponeprCambioParaAprobacion(productoId, precioRecomendado);
+    }
+    */
+}
+
+// Aplicar precio directamente (sin aprobación)
+async function aplicarPrecioDirecto(productoId, precioNuevo) {
+    try {
+        const response = await fetch('/app/gestion-precios/actualizar-precio/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                producto_id: productoId,
+                nuevo_precio: precioNuevo
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarExito(`Precio actualizado para ${data.tallas_actualizadas} tallas`);
+            cerrarModal('modalRecommendations');
+            buscarProductos(); // Recargar tabla
+        } else {
+            mostrarError('Error al actualizar precio: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError('Error al actualizar precio');
+    }
+}
+
+// Proponer cambio para aprobación
+async function proponeprCambioParaAprobacion(productoId, precioNuevo) {
+    try {
+        const response = await fetch('/app/gestion-precios/proponer-cambio/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                producto_id: productoId,
+                nuevo_precio: precioNuevo,
+                tipo_cambio: 'RECOMENDACION',
+                motivo: 'Aplicación de recomendación del sistema',
+                prioridad: 'MEDIA',
+                dias_vencimiento: 7
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarExito(`Cambio propuesto. ${data.notificaciones_enviadas} usuarios notificados. Esperando aprobación.`);
+            cerrarModal('modalRecommendations');
+            // No recargar tabla porque el precio no ha cambiado aún
+        } else {
+            mostrarError('Error al proponer cambio: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError('Error al proponer cambio');
+    }
+}
+
+// Modificación masiva
+function abrirModificacionMasiva() {
+    const seleccionados = document.querySelectorAll('.product-checkbox:checked');
+    
+    if (seleccionados.length === 0) {
+        mostrarError('Selecciona al menos un producto');
+        return;
+    }
+    
+    // Verificar si hay precios editados
+    let productosEditados = [];
+    seleccionados.forEach(checkbox => {
+        const productoId = checkbox.dataset.id;
+        const inputPrecio = document.querySelector(`input.editable-price[data-id="${productoId}"]`);
+        
+        if (inputPrecio) {
+            const precioActual = parseFloat(inputPrecio.value);
+            const precioOriginal = parseFloat(inputPrecio.dataset.original);
+            
+            if (precioActual !== precioOriginal) {
+                productosEditados.push({
+                    id: productoId,
+                    precioNuevo: precioActual,
+                    precioOriginal: precioOriginal
+                });
+            }
+        }
+    });
+    
+    // Mostrar información de productos editados
+    document.getElementById('selectedCount').textContent = seleccionados.length;
+    
+    const infoEditados = document.getElementById('productosEditadosInfo');
+    if (productosEditados.length > 0) {
+        infoEditados.innerHTML = `
+            <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #28a745;">
+                <strong>✓ ${productosEditados.length} productos con precios editados en la tabla</strong><br>
+                <small>Puedes aplicar estos cambios directamente o usar modificación por criterio</small>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <button class="btn-search" onclick="aplicarPreciosEditados()" style="width: 100%;">
+                    <i class="fas fa-check-double"></i> Aplicar Precios Editados (${productosEditados.length})
+                </button>
+            </div>
+            <div style="text-align: center; margin: 15px 0; color: #7f8c8d;">
+                <strong>— O usa modificación por criterio —</strong>
+            </div>
+        `;
+        infoEditados.style.display = 'block';
+    } else {
+        infoEditados.style.display = 'none';
+    }
+    
+    document.getElementById('modalBulkEdit').style.display = 'block';
+}
+
+function actualizarCamposModificacion() {
+    const tipo = document.getElementById('bulkEditType').value;
+    
+    document.getElementById('fixedPriceField').style.display = tipo === 'fixed' ? 'block' : 'none';
+    document.getElementById('percentageField').style.display = tipo === 'percentage' ? 'block' : 'none';
+    document.getElementById('amountField').style.display = tipo === 'amount' ? 'block' : 'none';
+    document.getElementById('marginField').style.display = tipo === 'margin' ? 'block' : 'none';
+}
+
+// Aplicar precios editados directamente desde la tabla
+async function aplicarPreciosEditados() {
+    const seleccionados = document.querySelectorAll('.product-checkbox:checked');
+    
+    // Recopilar productos con precios editados
+    let cambios = [];
+    seleccionados.forEach(checkbox => {
+        const productoId = parseInt(checkbox.dataset.id);
+        const inputPrecio = document.querySelector(`input.editable-price[data-id="${productoId}"]`);
+        
+        if (inputPrecio) {
+            const precioNuevo = parseFloat(inputPrecio.value);
+            const precioOriginal = parseFloat(inputPrecio.dataset.original);
+            
+            if (precioNuevo !== precioOriginal) {
+                cambios.push({
+                    producto_id: productoId,
+                    precio_nuevo: precioNuevo
+                });
+            }
+        }
+    });
+    
+    if (cambios.length === 0) {
+        mostrarError('No hay cambios de precio para aplicar');
+        return;
+    }
+    
+    if (!confirm(`¿Aplicar ${cambios.length} cambios de precio editados en la tabla?`)) {
+        return;
+    }
+    
+    // Aplicar cada cambio
+    let exitosos = 0;
+    let errores = 0;
+    
+    for (const cambio of cambios) {
+        try {
+            const response = await fetch('/app/gestion-precios/actualizar-precio/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(cambio)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                exitosos++;
+            } else {
+                errores++;
+            }
+        } catch (error) {
+            errores++;
+        }
+    }
+    
+    if (exitosos > 0) {
+        mostrarExito(`✓ ${exitosos} productos actualizados correctamente` + (errores > 0 ? ` (${errores} errores)` : ''));
+    } else {
+        mostrarError(`✗ Error: No se pudo actualizar ningún producto`);
+    }
+    
+    cerrarModal('modalBulkEdit');
+    buscarProductos(); // Recargar tabla
+}
+
+async function aplicarModificacionMasiva() {
+    const seleccionados = Array.from(document.querySelectorAll('.product-checkbox:checked'))
+        .map(cb => parseInt(cb.dataset.id));
+    
+    if (seleccionados.length === 0) {
+        mostrarError('No hay productos seleccionados');
+        return;
+    }
+    
+    const tipo = document.getElementById('bulkEditType').value;
+    let valor;
+    
+    switch(tipo) {
+        case 'fixed':
+            valor = parseFloat(document.getElementById('bulkFixedPrice').value);
+            break;
+        case 'percentage':
+            valor = parseFloat(document.getElementById('bulkPercentage').value);
+            break;
+        case 'amount':
+            valor = parseFloat(document.getElementById('bulkAmount').value);
+            break;
+        case 'margin':
+            valor = parseFloat(document.getElementById('bulkMargin').value);
+            break;
+    }
+    
+    if (isNaN(valor)) {
+        mostrarError('Ingrese un valor válido');
+        return;
+    }
+    
+    if (!confirm(`¿Modificar precios de ${seleccionados.length} productos?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/app/gestion-precios/modificacion-masiva/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                productos: seleccionados,
+                tipo_modificacion: tipo,
+                valor: valor
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarExito(`${data.productos_actualizados} productos actualizados (${data.tallas_actualizadas} tallas)`);
+            cerrarModal('modalBulkEdit');
+            buscarProductos(); // Recargar tabla
+        } else {
+            mostrarError('Error en modificación masiva: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError('Error al realizar la modificación masiva');
+    }
+}
+
+// Sincronización multi-sucursal
+async function abrirSincronizacion() {
+    const seleccionados = document.querySelectorAll('.product-checkbox:checked');
+    
+    if (seleccionados.length === 0) {
+        mostrarError('Seleccione al menos un producto');
+        return;
+    }
+    
+    // Cargar sucursales para checkboxes
+    try {
+        const response = await fetch('/app/api/sucursales/listar/');
+        const data = await response.json();
+        
+        const container = document.getElementById('sucursalesCheckboxes');
+        container.innerHTML = '';
+        
+        data.sucursales.forEach(suc => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '8px';
+            div.innerHTML = `
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" name="sucursal_sync" value="${suc.id}" style="margin-right: 8px;">
+                    <span>${suc.alias}</span>
+                </label>
+            `;
+            container.appendChild(div);
+        });
+        
+        document.getElementById('modalSync').style.display = 'block';
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError('Error al cargar sucursales');
+    }
+}
+
+async function aplicarSincronizacion() {
+    const seleccionados = Array.from(document.querySelectorAll('.product-checkbox:checked'))
+        .map(cb => parseInt(cb.dataset.id));
+    const sucursales = Array.from(document.querySelectorAll('input[name="sucursal_sync"]:checked'))
+        .map(cb => parseInt(cb.value));
+    const ajuste = parseFloat(document.getElementById('syncPriceAdjustment').value) || 0;
+    
+    if (sucursales.length === 0) {
+        mostrarError('Seleccione al menos una sucursal destino');
+        return;
+    }
+    
+    if (!confirm(`¿Sincronizar precios en ${sucursales.length} sucursales?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/app/gestion-precios/sincronizar-sucursales/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                productos: seleccionados,
+                sucursales_destino: sucursales,
+                ajuste_porcentual: ajuste
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarExito(`${data.productos_sincronizados} productos sincronizados en ${data.sucursales_afectadas} sucursales`);
+            cerrarModal('modalSync');
+        } else {
+            mostrarError('Error en sincronización: ' + data.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarError('Error al sincronizar');
+    }
+}
+
+// Utilidades
+function calcularMargen(costo, precio) {
+    if (precio === 0) return 0;
+    // Margen = (Precio - Costo) / Precio * 100
+    return ((precio - costo) / precio) * 100;
+}
+
+function calcularMarkup(costo, precio) {
+    if (costo === 0) return 0;
+    // Markup = (Precio - Costo) / Costo * 100
+    return ((precio - costo) / costo) * 100;
+}
+
+// Recalcular margen y markup en tiempo real al editar precio
+function recalcularMargenes(input) {
+    const productoId = input.dataset.id;
+    const costo = parseFloat(input.dataset.costo);
+    const precioNuevo = parseFloat(input.value) || 0;
+    
+    // Calcular nuevo margen y markup
+    const nuevoMargen = calcularMargen(costo, precioNuevo);
+    const nuevoMarkup = calcularMarkup(costo, precioNuevo);
+    
+    // Actualizar badges de margen
+    const margenBadge = document.getElementById(`margen-${productoId}`);
+    const markupBadge = document.getElementById(`markup-${productoId}`);
+    
+    if (margenBadge) {
+        margenBadge.textContent = nuevoMargen.toFixed(1) + '%';
+        // Actualizar clase según valor
+        margenBadge.className = 'margin-badge ' + 
+            (nuevoMargen > 30 ? 'margin-good' : (nuevoMargen > 15 ? 'margin-warning' : 'margin-danger'));
+    }
+    
+    if (markupBadge) {
+        markupBadge.textContent = nuevoMarkup.toFixed(1) + '%';
+        // Actualizar clase según valor
+        markupBadge.className = 'margin-badge ' + 
+            (nuevoMarkup > 40 ? 'margin-good' : (nuevoMarkup > 20 ? 'margin-warning' : 'margin-danger'));
+    }
+    
+    // Marcar si cambió
+    if (precioNuevo !== parseFloat(input.dataset.original)) {
+        input.style.borderColor = '#27ae60';
+        input.style.fontWeight = '700';
+        input.style.background = '#d4edda';
+    } else {
+        input.style.borderColor = '#ffc107';
+        input.style.fontWeight = '400';
+        input.style.background = '#fff3cd';
+    }
+}
+
+function formatearMoneda(valor) {
+    return '$' + Number(valor).toLocaleString('es-CL');
+}
+
+function formatearAntiguedad(dias) {
+    if (dias < 30) return `${dias}d`;
+    if (dias < 365) return `${Math.floor(dias / 30)}m`;
+    return `${Math.floor(dias / 365)}a`;
+}
+
+function toggleSelectAll(checkbox) {
+    document.querySelectorAll('.product-checkbox').forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+    actualizarBotonesMasivos();
+}
+
+function actualizarBotonesMasivos() {
+    const seleccionados = document.querySelectorAll('.product-checkbox:checked').length;
+    document.getElementById('btnBulkEdit').disabled = seleccionados === 0;
+    document.getElementById('btnBulkSync').disabled = seleccionados === 0;
+}
+
+// Event listener para checkboxes
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('product-checkbox')) {
+        actualizarBotonesMasivos();
+    }
+});
+
+function limpiarFiltros() {
+    document.getElementById('searchTerm').value = '';
+    document.getElementById('filterCategoria').value = '';
+    document.getElementById('filterMarca').value = '';
+    document.getElementById('filterSucursal').value = '';
+    document.getElementById('filterPrecioMin').value = '';
+    document.getElementById('filterPrecioMax').value = '';
+    document.getElementById('filterMargenMin').value = '';
+    document.getElementById('filterStockMin').value = '';
+    document.getElementById('filterAntiguedad').value = '';
+    document.getElementById('filterAnio').value = '';
+}
+
+function cambiarPagina(direccion) {
+    paginaActual += direccion;
+    buscarProductos();
+}
+
+function actualizarPaginacion(paginacion) {
+    document.getElementById('pageInfo').textContent = 
+        `Página ${paginacion.current_page} de ${paginacion.total_pages}`;
+    document.getElementById('btnPrevPage').disabled = !paginacion.has_previous;
+    document.getElementById('btnNextPage').disabled = !paginacion.has_next;
+}
+
+function mostrarCargando(mostrar) {
+    document.getElementById('loadingIndicator').style.display = mostrar ? 'block' : 'none';
+}
+
+function cerrarModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Cerrar modal al hacer click fuera
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function mostrarExito(mensaje) {
+    alert('✓ ' + mensaje);
+}
+
+function mostrarError(mensaje) {
+    alert('✗ ' + mensaje);
+}
+</script>
+
+{% include 'layout/footer.html' %}

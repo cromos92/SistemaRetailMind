@@ -200,6 +200,7 @@ METODO_PAGO_TICKET_CHOICES = [
     ('VENTA_INTERNET', 'Venta por Internet'),
     ('ORDEN_COMPRA', 'Orden de Compra'),
     ('CREDITO_TRABAJADOR', 'Crédito Trabajador'),
+    ('CREDITO_EXTERNO', 'Crédito Externo'),
     ('CONVENIO', 'Convenio'),
     ('MULTIPLE', 'Pagos Combinados'),
 ]
@@ -275,6 +276,7 @@ class Dte_Detalle_Pago(models.Model):
     tipo_tarjeta =   models.CharField(max_length=100,null=True)
     voucher =  models.CharField(max_length=50,null=True)
     monto = models.IntegerField()
+    notas = models.TextField(blank=True, null=True)
     
     def __str__(self):
         return f"Dte_Detalle_Pago {self.metodo_pago} - {self.monto}"
@@ -1249,25 +1251,19 @@ class ArqueoCaja(models.Model):
     usuario_responsable = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='arqueos_realizados')
     
     # === TOTALES TEÓRICOS (CALCULADOS AUTOMÁTICAMENTE) ===
-    # Tarjetas Comerciales
-    total_visa_mc_amex_teorico = models.IntegerField(default=0)
-    total_presto_teorico = models.IntegerField(default=0)
-    total_abcdin_teorico = models.IntegerField(default=0)
-    total_tricot_teorico = models.IntegerField(default=0)
+    # Tarjetas Comerciales (solo Hites)
     total_hites_teorico = models.IntegerField(default=0)
-    total_ripley_teorico = models.IntegerField(default=0)
-    total_falabella_teorico = models.IntegerField(default=0)
-    total_paris_teorico = models.IntegerField(default=0)
     total_tarjetas_comerciales_teorico = models.IntegerField(default=0)
     
     # Efectivo
     total_efectivo_teorico = models.IntegerField(default=0)
     
-    # Venta Internet
-    total_webpay_teorico = models.IntegerField(default=0)
-    total_mercadolibre_teorico = models.IntegerField(default=0)
+    # Venta Internet (Falabella, Paris, Ripley, MercadoPago, Klap)
+    total_falabella_teorico = models.IntegerField(default=0)
+    total_paris_teorico = models.IntegerField(default=0)
+    total_ripley_teorico = models.IntegerField(default=0)
     total_mercadopago_teorico = models.IntegerField(default=0)
-    total_transferencia_internet_teorico = models.IntegerField(default=0)
+    total_klap_teorico = models.IntegerField(default=0)
     total_venta_internet_teorico = models.IntegerField(default=0)
     
     # Otros métodos
@@ -2412,7 +2408,7 @@ class CambioDevolucion(models.Model):
         return (
             self.estado == 'APROBADO' and 
             self.dentro_del_plazo and
-            self.detalles.filter(estado_producto__in=['PERFECTO', 'BUENO']).exists()
+            self.detalles.filter(condicion_producto__in=['PERFECTO', 'BUENO']).exists()
         )
     
     @property
@@ -3145,5 +3141,240 @@ class Historial_Cotizacion(models.Model):
     
     def __str__(self):
         return f"{self.cotizacion.numero_cotizacion} - {self.accion} - {self.timestamp.strftime('%d/%m/%Y %H:%M')}"
+
+
+# ========== SISTEMA DE APROBACIÓN DE CAMBIOS DE PRECIOS ==========
+
+ESTADO_CAMBIO_PRECIO_CHOICES = [
+    ('PENDIENTE', 'Pendiente de Revisión'),
+    ('REVISADO', 'Revisado'),
+    ('APROBADO', 'Aprobado'),
+    ('RECHAZADO', 'Rechazado'),
+    ('APLICADO', 'Aplicado'),
+    ('CANCELADO', 'Cancelado'),
+]
+
+TIPO_CAMBIO_PRECIO_CHOICES = [
+    ('INDIVIDUAL', 'Cambio Individual'),
+    ('MASIVO', 'Cambio Masivo'),
+    ('SINCRONIZACION', 'Sincronización Multi-Sucursal'),
+    ('RECOMENDACION', 'Por Recomendación del Sistema'),
+]
+
+
+class CambioPrecioPendiente(models.Model):
+    """
+    Modelo para almacenar cambios de precios pendientes de aprobación
+    Permite workflow: Proponer → Revisar → Aprobar/Rechazar → Aplicar
+    """
+    # === RELACIONES ===
+    producto_talla = models.ForeignKey(
+        Producto_Talla,
+        on_delete=models.CASCADE,
+        related_name='cambios_precio_pendientes'
+    )
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='cambios_precio_pendientes',
+        help_text="Sucursal afectada por el cambio"
+    )
+    
+    # === DATOS DEL CAMBIO ===
+    precio_anterior = models.IntegerField(
+        help_text="Precio antes del cambio"
+    )
+    precio_nuevo = models.IntegerField(
+        help_text="Precio propuesto"
+    )
+    diferencia = models.IntegerField(
+        help_text="Diferencia en pesos (nuevo - anterior)"
+    )
+    porcentaje_cambio = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Porcentaje de cambio"
+    )
+    
+    # === TIPO Y ESTADO ===
+    tipo_cambio = models.CharField(
+        max_length=20,
+        choices=TIPO_CAMBIO_PRECIO_CHOICES,
+        default='INDIVIDUAL'
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CAMBIO_PRECIO_CHOICES,
+        default='PENDIENTE'
+    )
+    
+    # === JUSTIFICACIÓN ===
+    motivo = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Motivo del cambio de precio"
+    )
+    recomendacion_sistema = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="Datos de la recomendación del sistema (si aplica)"
+    )
+    
+    # === USUARIOS INVOLUCRADOS ===
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='cambios_precio_creados',
+        help_text="Usuario que propuso el cambio"
+    )
+    revisado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cambios_precio_revisados',
+        help_text="Usuario que revisó el cambio"
+    )
+    aprobado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cambios_precio_aprobados',
+        help_text="Usuario que aprobó/rechazó el cambio"
+    )
+    
+    # === FECHAS ===
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_revision = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que fue revisado"
+    )
+    fecha_aprobacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que fue aprobado/rechazado"
+    )
+    fecha_aplicacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que se aplicó el cambio"
+    )
+    fecha_vencimiento = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha límite para aprobar/aplicar"
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones_revision = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Observaciones al revisar"
+    )
+    observaciones_aprobacion = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Observaciones al aprobar/rechazar"
+    )
+    
+    # === METADATA ===
+    notificado = models.BooleanField(
+        default=False,
+        help_text="Si se notificó a la sucursal"
+    )
+    prioridad = models.CharField(
+        max_length=10,
+        choices=[
+            ('BAJA', 'Baja'),
+            ('MEDIA', 'Media'),
+            ('ALTA', 'Alta'),
+            ('URGENTE', 'Urgente'),
+        ],
+        default='MEDIA'
+    )
+    
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Cambio de Precio Pendiente'
+        verbose_name_plural = 'Cambios de Precios Pendientes'
+        indexes = [
+            models.Index(fields=['estado', 'sucursal']),
+            models.Index(fields=['fecha_creacion']),
+        ]
+    
+    def __str__(self):
+        return f"{self.producto_talla.sku} - {self.get_estado_display()} - {self.sucursal.alias}"
+    
+    @property
+    def dias_pendiente(self):
+        """Calcula cuántos días lleva pendiente"""
+        if self.estado in ['APLICADO', 'CANCELADO', 'RECHAZADO']:
+            return 0
+        return (timezone.now() - self.fecha_creacion).days
+    
+    @property
+    def esta_vencido(self):
+        """Verifica si el cambio está vencido"""
+        if not self.fecha_vencimiento:
+            return False
+        return timezone.now() > self.fecha_vencimiento and self.estado == 'PENDIENTE'
+    
+    @property
+    def requiere_atencion(self):
+        """Determina si requiere atención urgente"""
+        return self.prioridad in ['ALTA', 'URGENTE'] or self.dias_pendiente > 7
+
+
+class NotificacionCambioPrecio(models.Model):
+    """
+    Modelo para notificaciones de cambios de precios
+    """
+    cambio_precio = models.ForeignKey(
+        CambioPrecioPendiente,
+        on_delete=models.CASCADE,
+        related_name='notificaciones'
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_precio'
+    )
+    
+    # === DATOS DE LA NOTIFICACIÓN ===
+    tipo = models.CharField(
+        max_length=20,
+        choices=[
+            ('NUEVA', 'Nuevo Cambio Propuesto'),
+            ('REVISION', 'Cambio Revisado'),
+            ('APROBACION', 'Cambio Aprobado'),
+            ('RECHAZO', 'Cambio Rechazado'),
+            ('APLICACION', 'Cambio Aplicado'),
+            ('VENCIMIENTO', 'Cambio Próximo a Vencer'),
+        ]
+    )
+    mensaje = models.TextField()
+    
+    # === ESTADO ===
+    leida = models.BooleanField(default=False)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_lectura = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Notificación de Cambio de Precio'
+        verbose_name_plural = 'Notificaciones de Cambios de Precios'
+    
+    def __str__(self):
+        return f"{self.usuario.username} - {self.get_tipo_display()}"
+    
+    def marcar_leida(self):
+        """Marca la notificación como leída"""
+        if not self.leida:
+            self.leida = True
+            self.fecha_lectura = timezone.now()
+            self.save()
 
         

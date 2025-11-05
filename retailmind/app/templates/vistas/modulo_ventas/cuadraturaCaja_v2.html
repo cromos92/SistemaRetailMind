@@ -2052,6 +2052,27 @@ function mostrarModalDetalleArqueo(arqueo) {
                             </div>
                             ` : ''}
                             
+                            <!-- Tarjetas Comerciales -->
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-warning">
+                                    <div class="card-header bg-warning text-dark">
+                                        <strong>🏪 Tarjetas Comerciales</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm mb-0">
+                                            <tr>
+                                                <td>Hites:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_hites_teorico)}</td>
+                                            </tr>
+                                            <tr class="table-light fw-bold">
+                                                <td>TOTAL:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_tarjetas_comerciales_teorico)}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <!-- Venta Internet -->
                             <div class="col-md-4 mb-3">
                                 <div class="card border-info">
@@ -2061,64 +2082,6 @@ function mostrarModalDetalleArqueo(arqueo) {
                                     <div class="card-body">
                                         <table class="table table-sm mb-0">
                                             <tr>
-                                                <td>Webpay:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_webpay_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>MercadoLibre:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_mercadolibre_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>MercadoPago:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_mercadopago_teorico)}</td>
-                                            </tr>
-                                            <tr class="table-light fw-bold">
-                                                <td>Total Internet:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_venta_internet_teorico)}</td>
-                                            </tr>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Tarjetas Comerciales -->
-                        <div class="row mb-4">
-                            <div class="col-12">
-                                <h6 class="text-primary mb-3">🏪 Tarjetas Comerciales</h6>
-                            </div>
-                            <div class="col-md-12">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <strong>Tarjetas Casa Comercial</strong>
-                                    </div>
-                                    <div class="card-body">
-                                        <table class="table table-sm mb-0">
-                                            <tr>
-                                                <td>Visa/MC/Amex:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_visa_mc_amex_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Presto:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_presto_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>ABCDin:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_abcdin_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Tricot:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_tricot_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Hites:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_hites_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>Ripley:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_ripley_teorico)}</td>
-                                            </tr>
-                                            <tr>
                                                 <td>Falabella:</td>
                                                 <td class="text-end">${formatearMoneda(arqueo.total_falabella_teorico)}</td>
                                             </tr>
@@ -2126,9 +2089,21 @@ function mostrarModalDetalleArqueo(arqueo) {
                                                 <td>Paris:</td>
                                                 <td class="text-end">${formatearMoneda(arqueo.total_paris_teorico)}</td>
                                             </tr>
-                                            <tr class="fw-bold">
-                                                <td>TOTAL:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_tarjetas_comerciales_teorico)}</td>
+                                            <tr>
+                                                <td>Ripley:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_ripley_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>MercadoPago:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_mercadopago_teorico)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Klap:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_klap_teorico)}</td>
+                                            </tr>
+                                            <tr class="table-light fw-bold">
+                                                <td>Total Internet:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_venta_internet_teorico)}</td>
                                             </tr>
                                         </table>
                                     </div>
@@ -2893,35 +2868,6 @@ function generarResumenMetodosPago(cuadratura) {
                 </div>
             </div>
             
-            <!-- Venta Internet -->
-            <div class="col-md-6 mb-3">
-                <div class="card border-info">
-                    <div class="card-header bg-info text-white">
-                        <strong><i class="ri-global-line"></i> Venta Internet</strong>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-sm mb-0">
-                            <tr>
-                                <td>🌐 Webpay:</td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_webpay || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>🛒 MercadoLibre:</td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_mercadolibre || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>💙 MercadoPago:</td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_mercadopago || 0)}</td>
-                            </tr>
-                            <tr class="table-light">
-                                <td><strong>TOTAL INTERNET:</strong></td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_venta_internet || 0)}</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Tarjetas Comerciales -->
             <div class="col-md-6 mb-3">
                 <div class="card border-warning">
@@ -2931,40 +2877,49 @@ function generarResumenMetodosPago(cuadratura) {
                     <div class="card-body">
                         <table class="table table-sm mb-0">
                             <tr>
-                                <td>💳 Visa/MC/Amex:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_visa_mc_amex || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>🏪 Presto:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_presto || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>🏪 ABCDin:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_abcdin || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>🏪 Tricot:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_tricot || 0)}</td>
-                            </tr>
-                            <tr>
                                 <td>🏪 Hites:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_hites || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>🏪 Ripley:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_ripley || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>🏪 Falabella:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_falabella || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>🏪 Paris:</td>
-                                <td class="text-end">${formatearMoneda(cuadratura.total_paris || 0)}</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_hites || 0)}</td>
                             </tr>
                             <tr class="table-light">
                                 <td><strong>TOTAL COMERCIALES:</strong></td>
                                 <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_tarjetas_comerciales || 0)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Venta Internet -->
+            <div class="col-md-6 mb-3">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <strong><i class="ri-global-line"></i> Venta Internet</strong>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td>🏬 Falabella:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_falabella || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏬 Paris:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_paris || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>🏬 Ripley:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_ripley || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>💙 MercadoPago:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_mercadopago || 0)}</td>
+                            </tr>
+                            <tr>
+                                <td>⚡ Klap:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_klap || 0)}</td>
+                            </tr>
+                            <tr class="table-light">
+                                <td><strong>TOTAL INTERNET:</strong></td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_venta_internet || 0)}</td>
                             </tr>
                         </table>
                     </div>
