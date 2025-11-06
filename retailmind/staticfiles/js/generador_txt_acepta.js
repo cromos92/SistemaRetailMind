@@ -283,7 +283,7 @@ const GeneradorTXTAcepta = {
      */
     async generarTXT(datos) {
         try {
-            const response = await fetch('/documentos/generar-txt-acepta/', {
+            const response = await fetch('/app/documentos/generar-txt-acepta/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -321,7 +321,7 @@ const GeneradorTXTAcepta = {
      */
     async generarTXTDesdeDTE(dteId) {
         try {
-            const response = await fetch('/documentos/generar-txt-desde-dte/', {
+            const response = await fetch('/app/documentos/generar-txt-desde-dte/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

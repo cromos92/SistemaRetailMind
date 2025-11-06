@@ -1,0 +1,439 @@
+<!-- ========== MODAL: EDICIÓN DE PRODUCTO ========== -->
+<div class="modal fade" id="modalEdicionProducto" tabindex="-1" aria-labelledby="modalEdicionProductoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEdicionProductoLabel">
+                    <i class="bi bi-pencil-square"></i> Editar Producto
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit_producto_id">
+                
+                <!-- TABS DE NAVEGACIÓN -->
+                <ul class="nav nav-tabs" id="tabsEdicionProducto" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="tab-datos-generales" data-bs-toggle="tab" href="#contenido-datos-generales" role="tab">
+                            <i class="bi bi-info-circle"></i> Datos Generales
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="tab-variaciones" data-bs-toggle="tab" href="#contenido-variaciones" role="tab">
+                            <i class="bi bi-list-ul"></i> Variaciones / Tallas
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- CONTENIDO DE TABS -->
+                <div class="tab-content" id="contenidoTabsEdicion">
+                    
+                    <!-- TAB: DATOS GENERALES -->
+                    <div class="tab-pane fade show active" id="contenido-datos-generales" role="tabpanel">
+                        <div class="p-3">
+                            
+                            <!-- INFORMACIÓN BÁSICA -->
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <h6 class="border-bottom pb-2 mb-3">Información Básica</h6>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="edit_articulo">Nombre del Producto <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" id="edit_articulo" placeholder="Ej: Zapatilla Nike Air Max">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="edit_categoria_id">Categoría</label>
+                                        <select class="form-control select2" id="edit_categoria_id">
+                                            <option value="">Seleccionar categoría...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label for="edit_descripcion">Descripción</label>
+                                        <textarea class="form-control" id="edit_descripcion" rows="3" placeholder="Descripción del producto"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- ATRIBUTOS -->
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <h6 class="border-bottom pb-2 mb-3 mt-3">Atributos</h6>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="edit_atributo1_id">Marca</label>
+                                        <select class="form-control select2" id="edit_atributo1_id">
+                                            <option value="">Seleccionar marca...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="edit_atributo2_id">Color</label>
+                                        <select class="form-control select2" id="edit_atributo2_id">
+                                            <option value="">Seleccionar color...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="edit_atributo3_id">Género</label>
+                                        <select class="form-control select2" id="edit_atributo3_id">
+                                            <option value="">Seleccionar género...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="edit_atributo4_id">Otro Atributo</label>
+                                        <select class="form-control select2" id="edit_atributo4_id">
+                                            <option value="">Seleccionar...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- PRECIOS -->
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <h6 class="border-bottom pb-2 mb-3 mt-3">Precios Base</h6>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="edit_costo">Costo <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text">$</span>
+                                            </div>
+                                            <input type="number" class="form-control" id="edit_costo" min="0" placeholder="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="edit_sobreprecio">Sobreprecio</label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text">$</span>
+                                            </div>
+                                            <input type="number" class="form-control" id="edit_sobreprecio" min="0" placeholder="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="edit_precioventa">Precio Venta <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text">$</span>
+                                            </div>
+                                            <input type="number" class="form-control" id="edit_precioventa" min="1" placeholder="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label for="edit_precioSugerido">Precio Sugerido</label>
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <span class="input-group-text">$</span>
+                                            </div>
+                                            <input type="number" class="form-control" id="edit_precioSugerido" min="0" placeholder="0">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                    
+                    <!-- TAB: VARIACIONES -->
+                    <div class="tab-pane fade" id="contenido-variaciones" role="tabpanel">
+                        <div class="p-3">
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>Gestión de Variaciones:</strong> Desde aquí puedes ajustar el stock de cada talla y ver su historial de movimientos.
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover" id="tablaVariacionesEdicion">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th>Talla</th>
+                                            <th>SKU</th>
+                                            <th>Stock</th>
+                                            <th>Ajustar Stock</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">
+                                                <i class="fas fa-spinner fa-spin"></i> Cargando variaciones...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="guardarProductoBase()">
+                    <i class="bi bi-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL: AJUSTAR STOCK ========== -->
+<div class="modal fade" id="modalAjustarStock" tabindex="-1" aria-labelledby="modalAjustarStockLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalAjustarStockLabel">
+                    <i class="bi bi-box-seam"></i> Ajustar Stock
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="ajuste_variacion_id">
+                
+                <!-- INFORMACIÓN DE LA VARIACIÓN -->
+                <div class="alert alert-light border">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Talla:</strong> <span id="ajuste_talla_nombre" class="badge badge-primary"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Stock Actual:</strong> 
+                            <span id="ajuste_stock_actual" class="badge badge-info"></span> unidades
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- TIPO DE AJUSTE -->
+                <div class="form-group">
+                    <label class="font-weight-bold">Tipo de Ajuste <span class="text-danger">*</span></label>
+                    <div class="custom-control custom-radio">
+                        <input type="radio" id="tipo_entrada" name="tipo_ajuste" class="custom-control-input" value="ENTRADA" checked>
+                        <label class="custom-control-label" for="tipo_entrada">
+                            <i class="bi bi-arrow-up-circle text-success"></i> <strong>Entrada</strong> (Incrementar stock)
+                        </label>
+                    </div>
+                    <div class="custom-control custom-radio">
+                        <input type="radio" id="tipo_salida" name="tipo_ajuste" class="custom-control-input" value="SALIDA">
+                        <label class="custom-control-label" for="tipo_salida">
+                            <i class="bi bi-arrow-down-circle text-danger"></i> <strong>Salida</strong> (Decrementar stock)
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- CANTIDAD -->
+                <div class="form-group">
+                    <label for="ajuste_cantidad">Cantidad <span class="text-danger">*</span></label>
+                    <input type="number" class="form-control form-control-lg" id="ajuste_cantidad" min="1" placeholder="Ingrese la cantidad">
+                </div>
+                
+                <!-- CAMPOS ESPECÍFICOS PARA ENTRADA -->
+                <div id="campos_entrada">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        <strong>Campos requeridos para ajustes de ENTRADA:</strong>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="ajuste_costo_unitario">Costo Unitario <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">$</span>
+                                    </div>
+                                    <input type="number" class="form-control" id="ajuste_costo_unitario" min="0" step="0.01" placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="ajuste_sobreprecio_unitario">Sobreprecio Unitario</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">$</span>
+                                    </div>
+                                    <input type="number" class="form-control" id="ajuste_sobreprecio_unitario" min="0" step="0.01" placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="ajuste_precio_venta_unitario">Precio Venta <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">$</span>
+                                    </div>
+                                    <input type="number" class="form-control" id="ajuste_precio_venta_unitario" min="0" step="0.01" placeholder="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="ajuste_numero_lote">Número de Lote (opcional)</label>
+                        <input type="text" class="form-control" id="ajuste_numero_lote" placeholder="Ej: LOTE-2024-001">
+                        <small class="form-text text-muted">Si no se especifica, se generará automáticamente</small>
+                    </div>
+                </div>
+                
+                <!-- MOTIVO -->
+                <div class="form-group">
+                    <label for="ajuste_motivo">Motivo del Ajuste <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="ajuste_motivo" rows="3" placeholder="Describa el motivo del ajuste (mínimo 10 caracteres)"></textarea>
+                    <small class="form-text text-muted">Mínimo 10 caracteres</small>
+                </div>
+                
+                <!-- STOCK RESULTANTE -->
+                <div class="alert alert-secondary">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <strong>Stock Resultante:</strong>
+                        </div>
+                        <div class="col-md-6 text-right">
+                            <h3 class="mb-0">
+                                <span id="ajuste_stock_resultante" class="badge badge-lg badge-success">0</span> 
+                                <small>unidades</small>
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-info" onclick="guardarAjusteStock()">
+                    <i class="bi bi-check-circle"></i> Confirmar Ajuste
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== MODAL: HISTORIAL DE MOVIMIENTOS ========== -->
+<div class="modal fade" id="modalHistorialMovimientos" tabindex="-1" aria-labelledby="modalHistorialMovimientosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title" id="modalHistorialMovimientosLabel">
+                    <i class="bi bi-clock-history"></i> Historial de Movimientos
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                
+                <div class="mb-3">
+                    <strong>Talla:</strong> <span id="historial_talla_nombre" class="badge badge-primary"></span>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover table-sm" id="tablaHistorialMovimientos">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Concepto</th>
+                                <th>Cantidad</th>
+                                <th>Responsable</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Cargando historial...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Estilos adicionales para los modales */
+.modal-xl .modal-dialog {
+    max-width: 1200px;
+}
+
+.badge-lg {
+    font-size: 1.5rem;
+    padding: 0.5rem 1rem;
+}
+
+#campos_entrada {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+}
+
+.custom-radio {
+    padding: 10px;
+    margin-bottom: 5px;
+}
+
+.custom-radio:hover {
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+#tablaVariacionesEdicion tbody tr:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+
+#tablaHistorialMovimientos tbody tr {
+    transition: background-color 0.2s;
+}
+
+#tablaHistorialMovimientos tbody tr:hover {
+    background-color: #e9ecef;
+}
+</style>
+

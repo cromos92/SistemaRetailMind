@@ -1,6 +1,7 @@
 from retailmind import settings
 from . import views
 from django.shortcuts import render
+from . import views_modulo_compras
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -148,6 +149,16 @@ from .views_modulo_cotizaciones import (
     # APIs de clientes
     crear_cliente_cotizacion,
 )
+from .views_edicion_productos import (
+    # Edición de productos
+    obtener_producto_edicion,
+    actualizar_producto,
+    actualizar_variacion,
+    ajustar_stock,
+    obtener_historial_movimientos,
+    eliminar_variacion,
+    obtener_producto_desde_talla,
+)
 from django.urls import path
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
@@ -159,11 +170,11 @@ urlpatterns = [
      path('verResetPassword/', views.ver_resetPassword, name='verResetPassword'),
      #Modulo Compras
      path('verGestionCompras/', views.verGestionCompras, name='verGestionCompras'),
-     path('dashboard_compras_estrategico/', views.dashboard_compras_estrategico, name='dashboard_compras_estrategico'),
-         path('exportar_dashboard_compras/', views.exportar_dashboard_compras, name='exportar_dashboard_compras'),
-    path('verDashboardCompras/', views.verDashboardCompras, name='verDashboardCompras'),
-    path('diagnostico_datos_compras/', views.diagnostico_datos_compras, name='diagnostico_datos_compras'),
-    path('verDiagnosticoCompras/', views.verDiagnosticoCompras, name='verDiagnosticoCompras'),
+     path('dashboard_compras_estrategico/', views_modulo_compras.dashboard_compras_estrategico, name='dashboard_compras_estrategico'),
+         path('exportar_dashboard_compras/', views_modulo_compras.exportar_dashboard_compras, name='exportar_dashboard_compras'),
+    path('verDashboardCompras/', views_modulo_compras.verDashboardCompras, name='verDashboardCompras'),
+    path('diagnostico_datos_compras/', views_modulo_compras.diagnostico_datos_compras, name='diagnostico_datos_compras'),
+    path('verDiagnosticoCompras/', views_modulo_compras.verDiagnosticoCompras, name='verDiagnosticoCompras'),
      path('obtenerDetalleComprasPorParametros/', views.obtenerDetalleComprasPorParametros, name='obtenerDetalleComprasPorParametros'),
      path('crear_compra/', views.crear_compra, name='crear_compra'),
      path('obtener_compras/', views.obtener_compras_por_anio, name='obtener_compras'),
@@ -172,7 +183,8 @@ urlpatterns = [
      path('compra/recepcionar/', views.recepcionar_compra, name='recepcionar_compra'),
      path('verGestionDteCompras/', views.verGestionDteCompras, name='verGestionDteCompras'),
      path('crearDteCompras/', views.crearDteCompras, name='crearDteCompras'),
-     path('empresas_proveedoras/', views.empresas_proveedoras, name='empresas_proveedoras'),
+     path('actualizarDteCompras/<int:dte_id>/', views.actualizarDteCompras, name='actualizarDteCompras'),
+     path('empresas_proveedoras/', views_modulo_compras.empresas_proveedoras, name='empresas_proveedoras'),
      path('cargarDteCompra/', views.cargarDteCompra, name='cargarDteCompra'),
      path('registrarPagoDTE/', views.registrarPagoDTE, name='registrarPagoDTE'),
      path('obtenerDetallePago/<int:dte_id>/', views.obtenerDetallePago, name='obtenerDetallePago'),
@@ -209,9 +221,18 @@ urlpatterns = [
      path('app/sku_para_talla/', views.sku_para_talla, name='sku_para_talla'),
      path('verMovimientosProducto/', views.verMovimientosProducto, name='verMovimientosProducto'),
      path('obtener_movimientos_producto/', views.obtener_movimientos_producto, name='obtener_movimientos_producto'),
-     path('obtener_productos/', views.obtener_productos, name='obtener_productos'),
-     
-     # ========== NUEVAS URLs PARA MOVIMIENTOS ==========
+    path('obtener_productos/', views.obtener_productos, name='obtener_productos'),
+    
+    # ========== URLs PARA EDICIÓN DE PRODUCTOS Y STOCK ==========
+    path('productos/obtener-para-editar/<int:producto_id>/', obtener_producto_edicion, name='obtener_producto_edicion'),
+    path('productos/obtener-producto-desde-talla/<int:talla_id>/', obtener_producto_desde_talla, name='obtener_producto_desde_talla'),
+    path('productos/actualizar/<int:producto_id>/', actualizar_producto, name='actualizar_producto'),
+    path('productos/variacion/actualizar/<int:variacion_id>/', actualizar_variacion, name='actualizar_variacion'),
+    path('productos/variacion/ajustar-stock/<int:variacion_id>/', ajustar_stock, name='ajustar_stock'),
+    path('productos/variacion/historial/<int:variacion_id>/', obtener_historial_movimientos, name='obtener_historial_movimientos'),
+    path('productos/variacion/eliminar/<int:variacion_id>/', eliminar_variacion, name='eliminar_variacion'),
+    
+    # ========== NUEVAS URLs PARA MOVIMIENTOS ==========
      
      # === VENTAS AL PÚBLICO ===
      path('crear_ticket_venta/', views.crear_ticket_venta, name='crear_ticket_venta'),
@@ -237,9 +258,10 @@ urlpatterns = [
      path('verReporteDespachosProveedor/', views.verReporteDespachosProveedor, name='verReporteDespachosProveedor'),
      
      # ========== URLs PARA CREACIÓN MANUAL DE PRODUCTOS ==========
-     path('proveedores/', views.obtener_proveedores, name='obtener_proveedores'),
-     path('dtes_por_proveedor/<int:proveedor_id>/', views.obtener_dtes_por_proveedor, name='obtener_dtes_por_proveedor'),
-     path('crear_producto_manual/', views.crear_producto_manual, name='crear_producto_manual'),
+    path('proveedores/', views.obtener_proveedores, name='obtener_proveedores'),
+    path('dtes_por_proveedor/<int:proveedor_id>/', views.obtener_dtes_por_proveedor, name='obtener_dtes_por_proveedor'),
+    path('crear_producto_manual/', views.crear_producto_manual, name='crear_producto_manual'),
+    path('actualizar_producto_existente/', views.actualizar_producto_existente, name='actualizar_producto_existente'),
      
      # ========== URLs PARA GESTIÓN DE PROVEEDORES ==========
      path('crear_proveedor/', views.crear_proveedor, name='crear_proveedor'),

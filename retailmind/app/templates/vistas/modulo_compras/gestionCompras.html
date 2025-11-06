@@ -30,6 +30,23 @@
     cursor: not-allowed;
 }
 
+/* Modal de recepción extra grande */
+.modal-xxl {
+    max-width: 95%;
+}
+
+@media (min-width: 1400px) {
+    .modal-xxl {
+        max-width: 1600px;
+    }
+}
+
+@media (min-width: 1920px) {
+    .modal-xxl {
+        max-width: 1800px;
+    }
+}
+
 /* Mejorar la tabla de recepción */
 #tablaRecepcionProductos {
     font-size: 0.9rem;
@@ -40,6 +57,72 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+/* Estilos para vista agrupada */
+.producto-grupo {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.producto-grupo:hover {
+    background-color: #e9ecef;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.producto-grupo.expandido {
+    background-color: #e7f1ff;
+    border-left-color: #0a58ca;
+}
+
+.producto-grupo.table-warning {
+    background-color: #fff8e6;
+    border-left-color: #ffc107;
+}
+
+.producto-grupo.table-warning:hover {
+    background-color: #fff3cd;
+}
+
+.talla-detalle {
+    background-color: #ffffff;
+    border-left: 2px solid #dee2e6;
+}
+
+.talla-detalle.table-success {
+    background-color: #f0f9f4;
+}
+
+.expand-icon {
+    transition: transform 0.2s ease;
+    display: inline-block;
+}
+
+.expand-icon.expanded {
+    transform: rotate(90deg);
+}
+
+.recepcion-masiva-input {
+    background-color: #fff3cd;
+    border-color: #ffc107;
+    font-weight: bold;
+}
+
+.factura-masiva-input {
+    background-color: #e7f1ff;
+    border-color: #0d6efd;
+}
+
+.badge-stock-total {
+    font-size: 0.95rem;
+    padding: 0.35em 0.65em;
+}
+
+.border-success {
+    border-color: #198754 !important;
+    border-width: 2px !important;
 }
 
 /* Responsive para controles */
@@ -317,7 +400,7 @@
 
         <div class="modal fade" id="modalRecepcionProductos" tabindex="-1" aria-labelledby="modalRecepcionLabel"
             aria-hidden="true">
-            <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-dialog modal-xxl modal-dialog-centered" style="max-width: 95%; width: 95%;">
                 <div class="modal-content shadow-lg border-0">
                     <div class="modal-header bg-success text-white">
                         <h5 class="modal-title text-white" id="modalRecepcionLabel">
@@ -336,6 +419,31 @@
                                 <span class="visually-hidden">Cargando...</span>
                             </div>
                             <p class="mt-2 text-muted">Cargando productos...</p>
+                        </div>
+                        
+                        <!-- Controles superiores -->
+                        <div class="row mb-3 align-items-center">
+                            <div class="col-md-4">
+                                <div class="btn-group" role="group">
+                                    <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaAgrupada" autocomplete="off" checked>
+                                    <label class="btn btn-outline-primary" for="vistaAgrupada">
+                                        <i class="bi bi-grid-3x3-gap"></i> Vista Agrupada
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaDetallada" autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="vistaDetallada">
+                                        <i class="bi bi-list-ul"></i> Vista Detallada
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-8 text-end">
+                                <button type="button" class="btn btn-info" id="btnRecargarFacturas" title="Recargar facturas disponibles">
+                                    <i class="bi bi-arrow-clockwise"></i> Recargar Facturas
+                                </button>
+                                <button type="button" class="btn btn-warning" id="btnRecepcionarTodo">
+                                    <i class="bi bi-check-all"></i> Recepcionar Todo
+                                </button>
+                            </div>
                         </div>
                         
                         <!-- Controles de búsqueda y paginación -->
@@ -361,7 +469,7 @@
                             </div>
                         </div>
 
-                        <div class="table-responsive border rounded p-2" style="max-height: 400px; overflow-y: auto;">
+                        <div class="table-responsive border rounded p-2" style="max-height: 600px; overflow-y: auto;">
                             <table class="table table-hover align-middle mb-0" id="tablaRecepcionProductos">
                                 <thead class="table-light text-center">
                                     <tr>
@@ -668,6 +776,9 @@ const GestionCompras = (function() {
         $('.pagination-controls').hide();
         $('#tablaRecepcionProductos').hide();
         
+        // Determinar qué vista está activa
+        const vistaAgrupada = $('#vistaAgrupada').is(':checked');
+        
         $.ajax({
             url: GestionCompras.urls.recepcionarCompra,
             method: 'POST',
@@ -679,7 +790,8 @@ const GestionCompras = (function() {
                 compra_id: compraId,
                 page: page,
                 page_size: 50,
-                search: search
+                search: search,
+                vista_agrupada: vistaAgrupada
             }),
             success: function (data) {
                 console.log('Respuesta del servidor:', data);
@@ -705,19 +817,234 @@ const GestionCompras = (function() {
                 if (data.items.length === 0) {
                     tbody.append('<tr><td colspan="11" class="text-center text-muted">No hay productos para recepcionar</td></tr>');
                 } else {
-                    data.items.forEach(item => {
-                        // Generar opciones de factura para datalist
-                        const datalistId = `facturas-list-${item.compra_producto_talla_id || ''}`;
-                        const facturaOptions = (item.facturas || []).map(f => 
-                            `<option value="${f.numero}" data-id="${f.id}"></option>`
-                        ).join('');
-                        let selectedFacturaValue = '';
-                        if (item.factura_id) {
-                            // Busca el número de la factura asociada
-                            const asociada = (item.facturas || []).find(f => f.id === item.factura_id);
-                            selectedFacturaValue = asociada ? asociada.numero : `Factura asociada: ${item.factura_id}`;
-                        }
-                        const fila = `
+                    if (data.vista_agrupada) {
+                        // Renderizar VISTA AGRUPADA
+                        renderizarVistaAgrupada(data.items, tbody, search);
+                    } else {
+                        // Renderizar VISTA DETALLADA (original)
+                        renderizarVistaDetallada(data.items, tbody, search);
+                    }
+                }
+
+                // Recalcular totales
+                recalcularTotalesRecepcion();
+
+                // Mostrar contenido
+                $('#recepcionLoader').hide();
+                $('.pagination-controls').show();
+                $('#tablaRecepcionProductos').show();
+            },
+            error: function (xhr) {
+                console.error('Error en la petición:', xhr);
+                $('#recepcionLoader').hide();
+                $('.pagination-controls').show();
+                $('#tablaRecepcionProductos').show();
+                showError('Error al cargar los productos para recepción. Revisa la consola para más detalles.');
+            }
+        });
+    }
+
+    function renderizarVistaAgrupada(items, tbody, search) {
+        items.forEach((producto, index) => {
+            const grupoId = `grupo-${index}`;
+            const stockTotal = producto.tallas.reduce((sum, t) => sum + t.stock, 0);
+            const recepcionadoTotal = producto.recepcionado_total || 0;
+            const tallasInfo = producto.tallas.map(t => t.talla).join(', ');
+            
+            // Determinar clase de badge según el progreso
+            let badgeClass = 'bg-primary';
+            let badgeText = `${stockTotal}`;
+            if (recepcionadoTotal > 0) {
+                if (recepcionadoTotal >= stockTotal) {
+                    badgeClass = 'bg-success';
+                    badgeText = `${recepcionadoTotal}/${stockTotal} ✓`;
+                } else {
+                    badgeClass = 'bg-warning text-dark';
+                    badgeText = `${recepcionadoTotal}/${stockTotal}`;
+                }
+            }
+            
+            // Generar datalist de facturas para el producto
+            const datalistIdProducto = `facturas-producto-${grupoId}`;
+            const facturaOptions = (producto.tallas[0]?.facturas || []).map(f => 
+                `<option value="${f.numero}" data-id="${f.id}"></option>`
+            ).join('');
+            
+            // Fila principal del producto agrupado
+            const filaGrupo = `
+<tr class="producto-grupo ${recepcionadoTotal > 0 ? 'table-warning' : ''}" data-grupo="${grupoId}">
+    <td>
+        <i class="bi bi-chevron-right expand-icon me-2"></i>
+        <strong>${resaltarBusqueda(producto.nombre || '-', search)}</strong>
+        ${recepcionadoTotal > 0 ? '<br><small class="text-success"><i class="bi bi-check-circle-fill"></i> Con recepciones</small>' : ''}
+    </td>
+    <td>${resaltarBusqueda(producto.descripcion || '-', search)}</td>
+    <td>${resaltarBusqueda(producto.marca || '-', search)}</td>
+    <td>${resaltarBusqueda(producto.color || '-', search)}</td>
+    <td>${resaltarBusqueda(producto.genero || '-', search)}</td>
+    <td>$${(producto.costo || 0).toLocaleString()}</td>
+    <td>$${(producto.precio || 0).toLocaleString()}</td>
+    <td>
+        <span class="badge ${badgeClass} badge-stock-total">${badgeText}</span>
+        <br><small class="text-muted">${producto.tallas.length} talla(s)</small>
+    </td>
+    <td>
+        <input type="number" class="form-control form-control-sm recepcion-masiva-input"
+               data-grupo="${grupoId}" data-stock-total="${stockTotal}"
+               placeholder="Recepcionar ${stockTotal} unidades"
+               max="${stockTotal}">
+    </td>
+    <td>
+        <input type="text" class="form-control form-control-sm factura-masiva-input" 
+               list="${datalistIdProducto}" 
+               data-grupo="${grupoId}"
+               placeholder="Factura">
+        <datalist id="${datalistIdProducto}">
+            ${facturaOptions}
+        </datalist>
+    </td>
+    <td>
+        <button type="button" class="btn btn-sm btn-success aplicar-masivo" data-grupo="${grupoId}">
+            <i class="bi bi-check-all"></i>
+        </button>
+    </td>
+</tr>`;
+            tbody.append(filaGrupo);
+            
+            // Filas de tallas (ocultas inicialmente)
+            producto.tallas.forEach(talla => {
+                const datalistId = `facturas-list-${talla.compra_producto_talla_id}`;
+                const facturaOptions = (talla.facturas || []).map(f => 
+                    `<option value="${f.numero}" data-id="${f.id}"></option>`
+                ).join('');
+                
+                // Determinar valor de factura a mostrar
+                let selectedFacturaValue = '';
+                if (talla.factura_numero) {
+                    selectedFacturaValue = talla.factura_numero;
+                }
+                
+                // Determinar si tiene recepción previa
+                const tieneRecepcion = talla.recepcionado && talla.recepcionado > 0;
+                const tallaCompleta = tieneRecepcion && talla.recepcionado >= talla.stock;
+                
+                const filaTalla = `
+<tr class="talla-detalle ${tieneRecepcion ? 'table-success' : ''}" data-grupo="${grupoId}" style="display: none;">
+    <td class="ps-5">
+        ${tallaCompleta ? '<i class="bi bi-check-circle-fill text-success"></i>' : ''}
+        ${tieneRecepcion && !tallaCompleta ? '<i class="bi bi-clock-fill text-warning"></i>' : ''}
+        ↳ Talla ${resaltarBusqueda(talla.talla || '-', search)}
+        ${tieneRecepcion ? `<small class="text-muted ms-2">(${talla.recepcionado}/${talla.stock})</small>` : ''}
+    </td>
+    <td colspan="6"></td>
+    <td>${talla.stock || 0}</td>
+    <td>
+        <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
+               data-id="${talla.compra_producto_talla_id}"
+               data-grupo="${grupoId}"
+               value="${talla.recepcionado || ''}"
+               max="${talla.stock}">
+    </td>
+    <td>
+        <input type="text" class="form-control form-control-sm factura-datalist-input ${selectedFacturaValue ? 'border-success' : ''}" 
+               list="${datalistId}" 
+               data-id="${talla.compra_producto_talla_id}"
+               data-grupo="${grupoId}"
+               value="${selectedFacturaValue}">
+        <datalist id="${datalistId}">
+            ${facturaOptions}
+        </datalist>
+    </td>
+    <td></td>
+</tr>`;
+                tbody.append(filaTalla);
+            });
+        });
+        
+        // Manejar click en filas de grupo para expandir/colapsar
+        $('.producto-grupo').off('click').on('click', function() {
+            const grupoId = $(this).data('grupo');
+            const icon = $(this).find('.expand-icon');
+            const tallasRows = $(`.talla-detalle[data-grupo="${grupoId}"]`);
+            
+            icon.toggleClass('expanded');
+            $(this).toggleClass('expandido');
+            tallasRows.toggle();
+        });
+        
+        // Manejar aplicar masivo
+        $('.aplicar-masivo').off('click').on('click', function(e) {
+            e.stopPropagation();
+            const grupoId = $(this).data('grupo');
+            const inputCantidad = $(`.recepcion-masiva-input[data-grupo="${grupoId}"]`);
+            const inputFactura = $(`.factura-masiva-input[data-grupo="${grupoId}"]`);
+            const cantidadTotal = parseInt(inputCantidad.val()) || 0;
+            const facturaNumero = (inputFactura.val() || '').trim();
+            
+            // Validar que al menos se ingresó cantidad o factura
+            if (cantidadTotal === 0 && !facturaNumero) {
+                GestionCompras.showError('Ingresa una cantidad y/o factura para aplicar');
+                return;
+            }
+            
+            const tallasInputs = $(`.recepcionado-input[data-grupo="${grupoId}"]`);
+            const tallasFacturas = $(`.factura-datalist-input[data-grupo="${grupoId}"]`);
+            const stockTotal = parseInt(inputCantidad.data('stock-total')) || 0;
+            
+            // Distribuir cantidad si se ingresó
+            if (cantidadTotal > 0) {
+                tallasInputs.each(function() {
+                    const stockTalla = parseInt($(this).attr('max')) || 0;
+                    const proporcion = stockTalla / stockTotal;
+                    const cantidadTalla = Math.round(cantidadTotal * proporcion);
+                    $(this).val(cantidadTalla);
+                    // Marcar en verde si tiene cantidad
+                    if (cantidadTalla > 0) {
+                        $(this).addClass('is-valid').removeClass('is-invalid');
+                    }
+                });
+            }
+            
+            // Aplicar factura a todas las tallas si se ingresó
+            if (facturaNumero) {
+                tallasFacturas.each(function() {
+                    $(this).val(facturaNumero);
+                    // Validar la factura aplicada
+                    validarFacturaInput($(this));
+                });
+            }
+            
+            // Limpiar inputs del grupo
+            inputCantidad.val('');
+            inputFactura.val('');
+            
+            recalcularTotalesRecepcion();
+            
+            let mensaje = '';
+            if (cantidadTotal > 0 && facturaNumero) {
+                mensaje = `Cantidad y factura distribuidas entre las ${tallasInputs.length} talla(s)`;
+            } else if (cantidadTotal > 0) {
+                mensaje = `Cantidad distribuida entre las ${tallasInputs.length} talla(s)`;
+            } else if (facturaNumero) {
+                mensaje = `Factura aplicada a las ${tallasInputs.length} talla(s)`;
+            }
+            
+            GestionCompras.showSuccess(mensaje);
+        });
+    }
+
+    function renderizarVistaDetallada(items, tbody, search) {
+        items.forEach(item => {
+            const datalistId = `facturas-list-${item.compra_producto_talla_id || ''}`;
+            const facturaOptions = (item.facturas || []).map(f => 
+                `<option value="${f.numero}" data-id="${f.id}"></option>`
+            ).join('');
+            let selectedFacturaValue = '';
+            if (item.factura_id) {
+                const asociada = (item.facturas || []).find(f => f.id === item.factura_id);
+                selectedFacturaValue = asociada ? asociada.numero : `Factura asociada: ${item.factura_id}`;
+            }
+            const fila = `
 <tr>
     <td>${resaltarBusqueda(item.nombre || '-', search)}</td>
     <td>${resaltarBusqueda(item.descripcion || '-', search)}</td>
@@ -731,7 +1058,8 @@ const GestionCompras = (function() {
     <td>
         <input type="number" class="form-control form-control-sm recepcionado-input"
                data-id="${item.compra_producto_talla_id || ''}"
-               value="${item.recepcionado || ''}">
+               value="${item.recepcionado || ''}"
+               max="${item.stock}">
     </td>
     <td>
         <input type="text" class="form-control form-control-sm factura-datalist-input" 
@@ -748,28 +1076,7 @@ const GestionCompras = (function() {
         </div>
     </td>
 </tr>`;
-                        tbody.append(fila);
-                        if (item.recepcionado) totalRecepcionados += parseInt(item.recepcionado) || 0;
-                    });
-                }
-
-                $('#totalParesRecepcionados').text(totalRecepcionados);
-
-                // Eliminar toda la inicialización de select2
-                // $('.factura-select').each(function() { ... });
-
-                // Mostrar contenido
-                $('#recepcionLoader').hide();
-                $('.pagination-controls').show();
-                $('#tablaRecepcionProductos').show();
-            },
-            error: function (xhr) {
-                console.error('Error en la petición:', xhr);
-                $('#recepcionLoader').hide();
-                $('.pagination-controls').show();
-                $('#tablaRecepcionProductos').show();
-                showError('Error al cargar los productos para recepción. Revisa la consola para más detalles.');
-            }
+            tbody.append(fila);
         });
     }
 
@@ -807,6 +1114,79 @@ const GestionCompras = (function() {
         if (e.which === 13) {
             $('#btnSearchRecepcion').click();
         }
+    });
+
+    // Cambiar entre vista agrupada y detallada
+    $('input[name="vistaRecepcion"]').on('change', function() {
+        if (currentCompraId) {
+            cargarDatosRecepcion(currentCompraId, 1, currentSearch);
+        }
+    });
+
+    // Botón para recargar facturas disponibles
+    $('#btnRecargarFacturas').on('click', function() {
+        const compraId = $('#globalIDCompraRecepcion').val();
+        if (compraId) {
+            // Mostrar mensaje de carga
+            const $btn = $(this);
+            const originalHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat"></i> Recargando...');
+            
+            // Recargar los datos (mantiene la página y búsqueda actual)
+            cargarDatosRecepcion(compraId, currentPage, currentSearch);
+            
+            // Restaurar botón después de 1 segundo y mostrar confirmación
+            setTimeout(() => {
+                $btn.prop('disabled', false).html(originalHtml);
+                
+                // Mostrar toast de confirmación
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: true
+                });
+                
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Facturas actualizadas correctamente'
+                });
+            }, 1000);
+        } else {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin compra seleccionada',
+                text: 'Por favor, abre primero una recepción de compra.',
+                confirmButtonText: 'Entendido'
+            });
+        }
+    });
+
+    // Recepcionar todo
+    $('#btnRecepcionarTodo').on('click', function() {
+        Swal.fire({
+            title: '¿Recepcionar todo el stock?',
+            text: 'Esto marcará todas las tallas con su stock completo',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, recepcionar todo',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Marcar todos los inputs de recepción con su stock máximo
+                $('.recepcionado-input').each(function() {
+                    const max = $(this).attr('max');
+                    if (max) {
+                        $(this).val(max);
+                    }
+                });
+                recalcularTotalesRecepcion();
+                GestionCompras.showSuccess('Todas las cantidades han sido completadas');
+            }
+        });
     });
 
 // Variable global para todos los registros cargados
@@ -1256,38 +1636,81 @@ $('#btnCargarCSV').on('click', function () {
         recalcularTotalesRecepcion();
     });
 
+    // Función para validar factura de un input
+    function validarFacturaInput(facturaInput) {
+        const facturaNumero = (facturaInput.val() || '').trim();
+        let facturaId = null;
+        
+        if (facturaNumero) {
+            const datalistId = facturaInput.attr('list');
+            const $datalist = $('#' + datalistId);
+            
+            // Buscar opción exacta o parcial
+            $datalist.find('option').each(function () {
+                const optionValue = ($(this).val() || '').trim();
+                const optionDataId = $(this).attr('data-id');
+                
+                if (optionValue === facturaNumero || 
+                    optionValue.replace(/\s+/g, '').toLowerCase() === facturaNumero.replace(/\s+/g, '').toLowerCase()) {
+                    facturaId = optionDataId || null;
+                    return false; // Break
+                }
+            });
+            
+            if (facturaId) {
+                facturaInput.removeClass('is-invalid').addClass('is-valid');
+                return facturaId;
+            } else {
+                facturaInput.removeClass('is-valid').addClass('is-invalid');
+                return null;
+            }
+        } else {
+            facturaInput.removeClass('is-invalid is-valid');
+            return null;
+        }
+    }
+
+    // Validación en tiempo real al cambiar la factura
+    $(document).on('input change', '.factura-datalist-input', function() {
+        validarFacturaInput($(this));
+    });
+
+    // Validación en tiempo real al cambiar la cantidad
+    $(document).on('input change', '.recepcionado-input', function() {
+        const $row = $(this).closest('tr');
+        const cantidad = parseInt($(this).val()) || 0;
+        
+        // Marcar en verde si tiene cantidad
+        if (cantidad > 0) {
+            $(this).addClass('is-valid').removeClass('is-invalid');
+        } else {
+            $(this).removeClass('is-valid is-invalid');
+        }
+    });
+
     $('#btnGuardarRecepcion').on('click', function () {
         const datos = [];
         let errorFactura = false;
+        let errorMensajes = [];
 
         $('#tablaRecepcionProductos tbody tr').each(function () {
             const $row = $(this);
             const cantidad = parseInt($row.find('.recepcionado-input').val()) || 0;
             const compraTallaId = $row.find('.recepcionado-input').data('id');
             const facturaInput = $row.find('.factura-datalist-input');
-            const facturaNumero = (facturaInput.val() || '').trim();
-            let facturaId = null;
-            if (facturaNumero) {
-                const datalistId = facturaInput.attr('list');
-                const $datalist = $('#' + datalistId);
-                // Buscar opción ignorando espacios y mayúsculas
-                $datalist.find('option').each(function () {
-                    if (
-                        ($(this).val() || '').replace(/\s+/g, '').toLowerCase() === facturaNumero.replace(/\s+/g, '').toLowerCase()
-                    ) {
-                        facturaId = $(this).data('id') || null;
-                    }
-                });
-                if (!facturaId) {
-                    errorFactura = true;
-                    facturaInput.addClass('is-invalid');
-                } else {
-                    facturaInput.removeClass('is-invalid');
-                }
-            } else {
-                facturaInput.removeClass('is-invalid');
-            }
+            
+            // Solo validar si hay cantidad ingresada
             if (cantidad > 0) {
+                const facturaId = validarFacturaInput(facturaInput);
+                const facturaNumero = (facturaInput.val() || '').trim();
+                
+                // Si hay factura ingresada pero no es válida
+                if (facturaNumero && !facturaId) {
+                    errorFactura = true;
+                    const tallaText = $row.find('td').eq(0).text().trim();
+                    errorMensajes.push(`${tallaText}: factura "${facturaNumero}" no válida`);
+                }
+                
                 datos.push({
                     compra_producto_talla_id: compraTallaId,
                     recepcionado: cantidad,
@@ -1295,11 +1718,25 @@ $('#btnCargarCSV').on('click', function () {
                 });
             }
         });
+        
         if (errorFactura) {
             Swal.fire({
                 icon: 'error',
-                title: 'Factura inválida',
-                text: 'Debes seleccionar una factura válida de la lista para cada producto.'
+                title: 'Facturas inválidas',
+                html: '<p>Las siguientes facturas no son válidas:</p><ul style="text-align: left;">' + 
+                      errorMensajes.map(m => `<li>${m}</li>`).join('') + 
+                      '</ul><p class="mt-2">Por favor, selecciona una factura de la lista desplegable.</p>',
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+        
+        if (datos.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin datos para guardar',
+                text: 'Debes ingresar al menos una cantidad a recepcionar.',
+                confirmButtonText: 'Entendido'
             });
             return;
         }

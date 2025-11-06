@@ -408,7 +408,7 @@ class Producto(models.Model):
 class Producto_Talla(models.Model):
 
     producto =   models.ForeignKey(Producto, related_name='producto_talla', on_delete=models.CASCADE)
-    sku = models.IntegerField()
+    sku = models.BigIntegerField()  # Cambiado a BigIntegerField para soportar codigo_asociado de MySQL
     stock =   models.IntegerField( )
     talla =   models.CharField(max_length=50)
   

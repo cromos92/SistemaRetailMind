@@ -9,8 +9,8 @@
     display: grid;
     grid-template-columns: 1fr 500px;
     gap: 20px;
-    height: 700px;
-    max-height: calc(100vh - 150px);
+    min-height: 600px;
+    max-height: calc(100vh - 200px);
 }
 
 .search-panel {
@@ -19,7 +19,7 @@
     padding: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     overflow-y: auto;
-    height: 100%;
+    max-height: calc(100vh - 200px);
 }
 
 .edit-panel {
@@ -29,7 +29,7 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     display: flex;
     flex-direction: column;
-    height: 100%;
+    max-height: calc(100vh - 200px);
 }
 
 .search-box {
@@ -473,14 +473,15 @@
 }
 </style>
 
-<div class="page-content">
-    <div class="container-fluid">
-        <div style="margin-bottom: 20px;">
-            <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
-                <i class="fas fa-bolt"></i> Edición Rápida de Precios
-            </h1>
-            <p style="color: #7f8c8d; margin: 0;">Agrega productos y edita precios con Tab - Súper rápido ⚡</p>
-        </div>
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+            <div style="margin-bottom: 20px;">
+                <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
+                    <i class="fas fa-bolt"></i> Edición Rápida de Precios
+                </h1>
+                <p style="color: #7f8c8d; margin: 0;">Agrega productos y edita precios con Tab - Súper rápido ⚡</p>
+            </div>
 
         <div class="quick-edit-container">
             <!-- Panel Izquierdo: Búsqueda -->
@@ -547,7 +548,11 @@
             </div>
         </div>
     </div>
+    <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
 </div>
+<!-- main-content -->
 
 <!-- Loading Overlay -->
 <div class="loading-overlay" id="loadingOverlay">

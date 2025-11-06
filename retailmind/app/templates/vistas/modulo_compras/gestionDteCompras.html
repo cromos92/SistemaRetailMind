@@ -685,6 +685,20 @@ th.sorting_desc::after {
     function hideGlobalLoader() {
         $('#fullscreenLoader').fadeOut(100);
     }
+    
+    // Función para limpiar modales bloqueados
+    function limpiarModales() {
+        // Cerrar SweetAlert si está abierto
+        if (typeof Swal !== 'undefined') {
+            Swal.close();
+        }
+        
+        // Limpiar backdrop de Bootstrap que a veces queda residual
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        $('body').css('padding-right', '');
+        $('body').css('overflow', '');
+    }
 
     // Variables para paginación y búsqueda de DTE
     let currentPageDTE = 1;
@@ -1087,7 +1101,7 @@ th.sorting_desc::after {
         const fechaRecepcion = $('#fechaRecepcion').val();
         const estadoDTE = $('#estadoDTE').val();
         const estadoPago = $('#estadoPago').val();
-        const tipoDocumento = $('#tipoDocumento').val(); // 👈 nuevo campo
+        const tipoDocumento = $('#tipoDocumento').val();
         const diasCredito = $('#diasCredito').val();
         const bultos = $('#bultos').val();
         const unidades_productos = $('#unidadesProductos').val();
@@ -1122,10 +1136,17 @@ th.sorting_desc::after {
             descuento_con_iva: descuento_con_iva
         };
 
+        // Detectar si estamos editando o creando
+        const dteId = $('#modalNuevoDTE').data('dte-id');
+        const isEditing = dteId !== undefined && dteId !== null;
+        const url = isEditing ? `/app/actualizarDteCompras/${dteId}/` : '/app/crearDteCompras/';
+        const method = isEditing ? 'PUT' : 'POST';
+        const mensajeExito = isEditing ? 'DTE actualizado' : 'DTE registrado';
+
         // Enviar AJAX
         $.ajax({
-            url: '/app/crearDteCompras/',
-            method: 'POST',
+            url: url,
+            method: method,
             contentType: 'application/json',
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
@@ -1143,8 +1164,8 @@ th.sorting_desc::after {
                 if (resp.success) {
                     Swal.fire({
                         icon: 'success',
-                        title: 'DTE registrado',
-                        text: 'Se ha guardado correctamente.',
+                        title: mensajeExito,
+                        text: resp.message || 'Se ha guardado correctamente.',
                         timer: 2000,
                         showConfirmButton: false
                     });
@@ -1160,11 +1181,12 @@ th.sorting_desc::after {
                     });
                 }
             },
-            error: function () {
+            error: function (xhr) {
+                const resp = xhr.responseJSON;
                 Swal.fire({
                     icon: 'error',
                     title: 'Error de red o servidor',
-                    text: 'No se pudo completar la solicitud.'
+                    text: resp?.error || 'No se pudo completar la solicitud.'
                 });
             }
         });
@@ -1251,7 +1273,7 @@ th.sorting_desc::after {
         const pagoId = $('#pagoEditId').val();
         const dteId = $('#pagoDteId').val();
         const metodo_pago = $('#metodoPago').val();
-        const voucher = $('#voucher').val();
+        const voucher = $('#voucher').val().trim();
         const monto = parseInt($('#montoPago').val());
         const saldoPermitido = parseInt($('#inputSaldoPendiente').val()?.replace(/[^\d]/g, '') || 0);
 
@@ -1259,14 +1281,15 @@ th.sorting_desc::after {
             return Swal.fire('Faltan datos', 'Completa todos los campos obligatorios.', 'warning');
         }
 
-        if (monto > saldoPermitido) {
+        // Solo validar el saldo si NO estamos editando (ya que el backend lo valida correctamente)
+        if (!pagoId && monto > saldoPermitido) {
             return Swal.fire('Monto excedido', `El monto ingresado supera el saldo restante ($${saldoPermitido.toLocaleString()}).`, 'warning');
         }
 
         const data = {
             dte_id: dteId,
             metodo_pago,
-            voucher,
+            voucher: voucher || '',
             monto
         };
 
@@ -1279,23 +1302,68 @@ th.sorting_desc::after {
             contentType: 'application/json',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             data: JSON.stringify(data),
-            success: function () {
+            beforeSend: function () {
                 Swal.fire({
-                    icon: 'success',
-                    title: pagoId ? 'Pago actualizado' : 'Pago registrado',
-                    timer: 2000,
-                    showConfirmButton: false
-                }).then(() => {
-                    $('#modalPago').modal('hide');
-                    $('#formPago')[0].reset();
-                    $('#pagoEditId').val('');
-                    if (typeof cargarDTEs === 'function') cargarDTEs(currentPageDTE, currentSearchDTE);
-                    if (typeof verPagosDTE === 'function') verPagosDTE(dteId);
+                    title: 'Guardando...',
+                    text: 'Por favor espera',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
                 });
             },
+            success: function (response) {
+                // Cerrar el loading primero
+                Swal.close();
+                
+                // Verificar si la respuesta indica éxito
+                if (response.success === true || response.mensaje) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: pagoId ? 'Pago actualizado' : 'Pago registrado',
+                        text: response.mensaje || response.message || 'Operación exitosa',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        // Cerrar modal de pago
+                        const modalPago = bootstrap.Modal.getInstance(document.getElementById('modalPago'));
+                        if (modalPago) {
+                            modalPago.hide();
+                        } else {
+                            $('#modalPago').modal('hide');
+                        }
+                        
+                        $('#formPago')[0].reset();
+                        $('#pagoEditId').val('');
+                        
+                        // Cerrar modal de detalle de pagos si está abierto
+                        const detalleModal = bootstrap.Modal.getInstance(document.getElementById('modalDetallePagos'));
+                        if (detalleModal) {
+                            detalleModal.hide();
+                        }
+                        
+                        // Limpiar cualquier modal residual
+                        setTimeout(limpiarModales, 300);
+                        
+                        // Recargar tabla principal de DTEs (IMPORTANTE para reflejar cambios)
+                        cargarDTEs(currentPageDTE, currentSearchDTE);
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: response.error || 'Ocurrió un error inesperado.'
+                    });
+                }
+            },
             error: function (xhr) {
+                // Cerrar el loading primero
+                Swal.close();
+                
                 const res = xhr.responseJSON;
-                Swal.fire('Error', res?.error || 'Ocurrió un error al guardar.', 'error');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error al guardar',
+                    text: res?.error || 'Ocurrió un error al guardar el pago.'
+                });
             }
         });
     });
@@ -1317,8 +1385,19 @@ th.sorting_desc::after {
                         'X-CSRFToken': getCookie('csrftoken')
                     },
                     success: () => {
-                        Swal.fire('Eliminado', 'El pago fue eliminado.', 'success');
-                        $('#tablaPagosDTEBody').find(`tr[data-id="${pagoId}"]`).remove();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Eliminado',
+                            text: 'El pago fue eliminado correctamente.',
+                            timer: 2000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            // Eliminar la fila de la tabla de pagos
+                            $('#tablaPagosDTEBody').find(`tr[data-id="${pagoId}"]`).remove();
+                            
+                            // Recargar tabla principal de DTEs (IMPORTANTE para reflejar cambios en estado de pago)
+                            cargarDTEs(currentPageDTE, currentSearchDTE);
+                        });
                     },
                     error: () => {
                         Swal.fire('Error', 'No se pudo eliminar el pago.', 'error');
@@ -1811,6 +1890,19 @@ th.sorting_desc::after {
         $('#proveedorId').val('');
         $('#modalCrearProveedorLabel').html('<i class="bi bi-building-add me-2"></i>Crear Nuevo Proveedor');
         $('#formProveedor button[type="submit"]').html('<i class="bi bi-save me-1"></i>Guardar Proveedor');
+    });
+
+    // Limpiar al cerrar modal de pago
+    $('#modalPago').on('hidden.bs.modal', function() {
+        limpiarModales();
+        $('#formPago')[0].reset();
+        $('#pagoEditId').val('');
+        $('#pagoDteId').val('');
+    });
+
+    // Limpiar al cerrar modal de detalle de pagos
+    $('#modalDetallePagos').on('hidden.bs.modal', function() {
+        limpiarModales();
     });
 
 </script>

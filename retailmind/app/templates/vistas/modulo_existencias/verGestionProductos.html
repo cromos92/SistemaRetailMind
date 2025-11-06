@@ -281,6 +281,9 @@
                         <button class="btn btn-primary" id="btnCrearManualGeneral">
                             <i class="bi bi-plus-square me-1"></i> Crear Producto Manual
                         </button>
+                        <button class="btn btn-warning" id="btnEdicionProductos">
+                            <i class="fas fa-edit me-1"></i> Edición Productos
+                        </button>
                     </div>
                 </div>
             </div>
@@ -408,18 +411,6 @@
                     <a href="/app/dashboard_productos/" class="btn btn-success btn-sm">
                         <i class="bi bi-box-seam me-1"></i>Dashboard Productos
                     </a>
-                    <div class="dropdown">
-                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                            <i class="bi bi-funnel me-1"></i>Filtros
-                        </button>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#" id="filtroTodos">Todos</a></li>
-                            <li><a class="dropdown-item" href="#" id="filtroPendientes">Solo Pendientes</a></li>
-                            <li><a class="dropdown-item" href="#" id="filtroCreados">Solo Creados</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="#" id="filtroRecientes">Más Recientes</a></li>
-                        </ul>
-                    </div>
                 </div>
             </div>
             <div class="card-body">
@@ -788,7 +779,7 @@
     <!-- Modal Crear Producto Manual -->
     <div class="modal fade" id="modalCrearProductoManual" tabindex="-1" aria-labelledby="crearProductoManualLabel"
         aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 95%;">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title" id="crearProductoManualLabel">Crear Producto Manual</h5>
@@ -1134,6 +1125,195 @@
         </div>
     </div>
 
+    <!-- Modal Producto Existente -->
+    <div class="modal fade" id="modalProductoExistente" tabindex="-1" aria-labelledby="modalProductoExistenteLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="modalProductoExistenteLabel">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Producto Ya Existe
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Se encontró un producto existente con las mismas características. Puedes actualizar los precios y/o agregar nuevas tallas.
+                    </div>
+
+                    <!-- Información del Producto -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i>Producto Existente</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Artículo:</strong> <span id="prodExistenteArticulo"></span><br>
+                                    <strong>Descripción:</strong> <span id="prodExistenteDescripcion"></span><br>
+                                    <strong>Categoría:</strong> <span id="prodExistenteCategoria"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Marca:</strong> <span id="prodExistenteMarca"></span><br>
+                                    <strong>Color:</strong> <span id="prodExistenteColor"></span><br>
+                                    <strong>Género:</strong> <span id="prodExistenteGenero"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Comparación de Precios -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="bi bi-currency-dollar me-2"></i>Comparación de Precios</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Campo</th>
+                                            <th>Valor Actual</th>
+                                            <th>Nuevo Valor</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr id="rowCosto">
+                                            <td><strong>Costo</strong></td>
+                                            <td id="costoActual" class="text-muted"></td>
+                                            <td id="costoNuevo"></td>
+                                            <td>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="chkActualizarCosto" checked>
+                                                    <label class="form-check-label" for="chkActualizarCosto">Actualizar</label>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr id="rowSobreprecio">
+                                            <td><strong>Sobreprecio</strong></td>
+                                            <td id="sobreprecioActual" class="text-muted"></td>
+                                            <td id="sobreprecioNuevo"></td>
+                                            <td>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="chkActualizarSobreprecio" checked>
+                                                    <label class="form-check-label" for="chkActualizarSobreprecio">Actualizar</label>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr id="rowPrecioVenta">
+                                            <td><strong>Precio Venta</strong></td>
+                                            <td id="precioVentaActual" class="text-muted"></td>
+                                            <td id="precioVentaNuevo"></td>
+                                            <td>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="chkActualizarPrecioVenta" checked>
+                                                    <label class="form-check-label" for="chkActualizarPrecioVenta">Actualizar</label>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Comparación de Tallas -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="bi bi-list-ul me-2"></i>Comparación de Tallas</h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="chkAgregarTallas" checked>
+                                <label class="form-check-label" for="chkAgregarTallas">Agregar nuevas tallas</label>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="comparacionTallas" style="max-height: 300px; overflow-y: auto;">
+                                <!-- Se llenará dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnConfirmarActualizacion">
+                        <i class="bi bi-check-circle me-2"></i>Actualizar Producto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== MODAL: BÚSQUEDA Y EDICIÓN DE PRODUCTOS ========== -->
+    <div class="modal fade" id="modalBusquedaEdicionProductos" tabindex="-1" aria-labelledby="modalBusquedaEdicionLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="modalBusquedaEdicionLabel">
+                        <i class="fas fa-search me-2"></i>Buscar y Editar Productos
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    
+                    <!-- Buscador -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-primary text-white">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="inputBuscarProductoEditar" 
+                                       placeholder="Buscar por nombre, código, SKU, marca...">
+                                <button class="btn btn-primary" type="button" id="btnBuscarProductoEditar">
+                                    Buscar
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" id="btnLimpiarBusquedaProducto">
+                                    <i class="fas fa-times"></i> Limpiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtros Rápidos -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-primary" data-filtro="todos">
+                                    <i class="fas fa-list"></i> Todos
+                                </button>
+                                <button type="button" class="btn btn-outline-success" data-filtro="con_stock">
+                                    <i class="fas fa-check-circle"></i> Con Stock
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" data-filtro="sin_stock">
+                                    <i class="fas fa-exclamation-triangle"></i> Sin Stock
+                                </button>
+                                <button type="button" class="btn btn-outline-warning" data-filtro="bajo_stock">
+                                    <i class="fas fa-battery-quarter"></i> Stock Bajo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Resultados de Búsqueda -->
+                    <div id="resultadosBusquedaProductos">
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Use el buscador para encontrar productos
+                        </div>
+                    </div>
+                    
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="modalCrearCategoria" tabindex="-1" aria-labelledby="modalCategoriaLabel"
         aria-hidden="true">
         <div class="modal-dialog">
@@ -1270,7 +1450,6 @@
 </div>
 <!-- container-fluid -->
 </div>
-{% include '../../layout/footer.html' %}
 <script>
  
 // Función para obtener cookies
@@ -1905,7 +2084,13 @@ function showError(msg) {
         margenSobreprecioGlobal = parseFloat($('#inputMargenSobreprecio').val()) || 0;
         margenPrecioVentaGlobal = parseFloat($('#inputMargenPrecioVenta').val()) || 0;
         $('#modalAjusteMargenes').modal('hide');
-        aplicarMargenes();
+        
+        // Aplicar márgenes según qué modal esté abierto
+        if ($('#modalCrearProductoManual').hasClass('show')) {
+            aplicarMargenesManual();
+        } else {
+            aplicarMargenes();
+        }
     });
 
     // Al cambiar costo, recalcular
@@ -2643,32 +2828,6 @@ $(document).ready(function() {
     // Botón limpiar filtros
     $('#btnLimpiarFiltros').on('click', function() {
         limpiarFiltros();
-    });
-    
-    
-    // Eventos para filtros del dropdown
-    $('#filtroTodos').on('click', function(e) {
-        e.preventDefault();
-        $('#filtroEstado').val('').trigger('change');
-        aplicarFiltros();
-    });
-    
-    $('#filtroPendientes').on('click', function(e) {
-        e.preventDefault();
-        $('#filtroEstado').val('no_creado').trigger('change');
-        aplicarFiltros();
-    });
-    
-    $('#filtroCreados').on('click', function(e) {
-        e.preventDefault();
-        $('#filtroEstado').val('creado').trigger('change');
-        aplicarFiltros();
-    });
-    
-    $('#filtroRecientes').on('click', function(e) {
-        e.preventDefault();
-        const anioActual = new Date().getFullYear();
-        cargarProductosParaCrear(anioActual, { recientes: 'true' });
     });
 });
 
@@ -3540,8 +3699,17 @@ $(document).on('click', '#btnEliminarGuiaTallaManual', function() {
 });
 
 // Eventos para configurar márgenes en modal manual
+// Clic normal: aplicar márgenes
 $(document).on('click', '#btnConfigSobreprecioManual, #btnConfigPrecioVentaManual', function() {
     aplicarMargenesManual();
+});
+
+// Clic derecho o doble clic: abrir modal de indicadores
+$(document).on('contextmenu dblclick', '#btnConfigSobreprecioManual, #btnConfigPrecioVentaManual', function(e) {
+    e.preventDefault();
+    $('#inputMargenSobreprecio').val(margenSobreprecioGlobal);
+    $('#inputMargenPrecioVenta').val(margenPrecioVentaGlobal);
+    $('#modalAjusteMargenes').modal('show');
 });
 
 function aplicarMargenesManual() {
@@ -3572,14 +3740,24 @@ function generarSkuManual(inputTalla) {
     const talla = inputTalla.val().trim();
     if (!talla) return;
     
-    const articulo = $('#modalCrearProductoManual input[name="articulo"]').val().trim();
-    const marca = $('#modalCrearProductoManual select[name="atributo1"] option:selected').text().trim();
-    const color = $('#modalCrearProductoManual select[name="atributo2"] option:selected').text().trim();
+    const inputSku = inputTalla.closest('tr').find('input[name="sku[]"]');
     
-    if (articulo && marca && color) {
-        const sku = `${articulo.substring(0, 3).toUpperCase()}-${marca.substring(0, 3).toUpperCase()}-${color.substring(0, 3).toUpperCase()}-${talla}`;
-        inputTalla.closest('tr').find('input[name="sku[]"]').val(sku);
+    // Si ya tiene un SKU asignado, no lo sobrescribir
+    if (inputSku.val() && inputSku.val().trim() !== '') {
+        return;
     }
+    
+    // Obtener SKU secuencial desde la base de datos
+    $.get('/app/obtener_siguiente_sku/', function(res) {
+        if (res.success) {
+            inputSku.val(res.sku);
+            inputSku.removeClass('bg-light').addClass('bg-warning').attr('title', 'SKU sugerido por sistema');
+        } else {
+            console.error('Error al obtener SKU:', res.error);
+        }
+    }).fail(function() {
+        console.error('Error al conectar con el servidor para obtener SKU');
+    });
 }
 
 // Evento para actualizar guías de talla cuando cambia la talla
@@ -3690,30 +3868,69 @@ function actualizarFilaTallaManual(inputTalla, guiaId, tipoTalla) {
 $('#formCrearProductoManual').on('submit', function(e) {
     e.preventDefault();
     
-    // Validar campos obligatorios
+    // Contexto del modal
+    const modal = $('#modalCrearProductoManual');
+    
+    // Validar campos obligatorios (buscando dentro del modal)
     const camposObligatorios = [
-        { selector: 'input[name="articulo"]', nombre: 'Artículo' },
-        { selector: 'select[name="proveedor"]', nombre: 'Proveedor' },
-        { selector: 'select[name="dte_manual"]', nombre: 'DTE' },
-        { selector: 'select[name="atributo1"]', nombre: 'Marca' },
-        { selector: 'select[name="atributo2"]', nombre: 'Color' },
-        { selector: 'select[name="atributo3"]', nombre: 'Género' },
-        { selector: 'select[name="categoria"]', nombre: 'Categoría' },
-        { selector: 'select[name="tipo_talla"]', nombre: 'Tipo de Talla' },
-        { selector: 'input[name="costo"]', nombre: 'Costo' },
-        { selector: 'input[name="precioventa"]', nombre: 'Precio Venta' }
+        { selector: modal.find('input[name="articulo"]'), nombre: 'Artículo' },
+        { selector: modal.find('select[name="proveedor"]'), nombre: 'Proveedor' },
+        { selector: modal.find('select[name="dte_manual"]'), nombre: 'DTE' },
+        { selector: modal.find('select[name="atributo1"]'), nombre: 'Marca' },
+        { selector: modal.find('select[name="atributo2"]'), nombre: 'Color' },
+        { selector: modal.find('select[name="atributo3"]'), nombre: 'Género' },
+        { selector: modal.find('select[name="categoria"]'), nombre: 'Categoría' },
+        { selector: modal.find('select[name="tipo_talla"]'), nombre: 'Tipo de Talla' },
+        { selector: modal.find('input[name="costo"]'), nombre: 'Costo' },
+        { selector: modal.find('input[name="precioventa"]'), nombre: 'Precio Venta' }
     ];
 
     let valido = true;
     let mensajes = [];
 
     camposObligatorios.forEach(campo => {
-        if (!$(campo.selector).val()) {
+        // Verificar que el selector exista
+        if (campo.selector.length === 0) {
+            console.warn(`Campo no encontrado: ${campo.nombre}`);
+            valido = false;
+            mensajes.push(`Error: Campo ${campo.nombre} no encontrado.`);
+            return;
+        }
+        
+        // Para select2, obtener el valor correctamente
+        let valor = null;
+        
+        // Si es un select2, usar el método select2
+        if (campo.selector.data('select2')) {
+            try {
+                valor = campo.selector.select2('val');
+                // Si select2 devuelve un array, tomar el primer valor
+                if (Array.isArray(valor)) {
+                    valor = valor.length > 0 ? valor[0] : null;
+                }
+            } catch(e) {
+                // Fallback: obtener valor directamente del select
+                valor = campo.selector.val();
+            }
+        } else {
+            valor = campo.selector.val();
+        }
+        
+        // Validar que tenga valor (manejar strings vacíos, null, undefined, arrays vacíos)
+        const tieneValor = valor !== null && 
+                          valor !== undefined && 
+                          valor !== '' && 
+                          !(Array.isArray(valor) && valor.length === 0);
+        
+        if (!tieneValor) {
             valido = false;
             mensajes.push(`Debes completar ${campo.nombre}.`);
-            $(campo.selector).addClass('is-invalid');
+            campo.selector.addClass('is-invalid');
+            // También marcar el contenedor de select2 si existe
+            campo.selector.closest('.input-group, .mb-2, .mb-3').find('.select2-container').addClass('border-danger');
         } else {
-            $(campo.selector).removeClass('is-invalid');
+            campo.selector.removeClass('is-invalid');
+            campo.selector.closest('.input-group, .mb-2, .mb-3').find('.select2-container').removeClass('border-danger');
         }
     });
 
@@ -3733,7 +3950,14 @@ $('#formCrearProductoManual').on('submit', function(e) {
         return false;
     }
 
-    // Enviar formulario
+    // Enviar formulario - asegurar que select2 envíe sus valores
+    // Forzar actualización de valores de select2 antes de serializar
+    modal.find('select').each(function() {
+        if ($(this).data('select2')) {
+            $(this).trigger('change');
+        }
+    });
+    
     const formData = $(this).serialize();
     $.ajax({
         url: '/app/crear_producto_manual/',
@@ -3747,12 +3971,222 @@ $('#formCrearProductoManual').on('submit', function(e) {
                 // Refrescar la tabla de productos
                 const anioActual = new Date().getFullYear();
                 cargarProductosParaCrear(anioActual);
+            } else if (res.producto_existente) {
+                // Mostrar modal de producto existente
+                mostrarModalProductoExistente(res);
             } else {
                 showErrorAlert('Error', res.error || 'No se pudo crear el producto.');
             }
         },
         error: function(xhr) {
             showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado al crear el producto.');
+        }
+    });
+});
+
+// ========== FUNCIONES PARA MANEJO DE PRODUCTO EXISTENTE ==========
+
+// Variable global para almacenar datos del producto existente
+let datosProductoExistente = null;
+let datosFormularioOriginal = null;
+
+function mostrarModalProductoExistente(res) {
+    datosProductoExistente = res.producto_actual;
+    datosFormularioOriginal = res.producto_nuevo;
+    
+    // Llenar información del producto
+    $('#prodExistenteArticulo').text(datosProductoExistente.articulo);
+    $('#prodExistenteDescripcion').text(datosProductoExistente.descripcion || 'Sin descripción');
+    $('#prodExistenteCategoria').text(datosProductoExistente.categoria_nombre || 'Sin categoría');
+    $('#prodExistenteMarca').text(datosProductoExistente.marca || 'N/A');
+    $('#prodExistenteColor').text(datosProductoExistente.color || 'N/A');
+    $('#prodExistenteGenero').text(datosProductoExistente.genero || 'N/A');
+    
+    // Comparar y mostrar precios
+    const costoActual = parseFloat(datosProductoExistente.costo) || 0;
+    const costoNuevo = parseFloat(datosFormularioOriginal.costo) || 0;
+    const sobreprecioActual = parseFloat(datosProductoExistente.sobreprecio) || 0;
+    const sobreprecioNuevo = parseFloat(datosFormularioOriginal.sobreprecio) || 0;
+    const precioVentaActual = parseFloat(datosProductoExistente.precioventa) || 0;
+    const precioVentaNuevo = parseFloat(datosFormularioOriginal.precioventa) || 0;
+    
+    // Formatear precios
+    $('#costoActual').text(formatearPrecio(costoActual));
+    $('#costoNuevo').text(formatearPrecio(costoNuevo));
+    $('#sobreprecioActual').text(formatearPrecio(sobreprecioActual));
+    $('#sobreprecioNuevo').text(formatearPrecio(sobreprecioNuevo));
+    $('#precioVentaActual').text(formatearPrecio(precioVentaActual));
+    $('#precioVentaNuevo').text(formatearPrecio(precioVentaNuevo));
+    
+    // Resaltar diferencias
+    if (costoActual !== costoNuevo) {
+        $('#rowCosto').addClass('table-warning');
+        $('#costoNuevo').addClass('text-success fw-bold');
+    } else {
+        $('#rowCosto').removeClass('table-warning');
+        $('#chkActualizarCosto').prop('checked', false);
+    }
+    
+    if (sobreprecioActual !== sobreprecioNuevo) {
+        $('#rowSobreprecio').addClass('table-warning');
+        $('#sobreprecioNuevo').addClass('text-success fw-bold');
+    } else {
+        $('#rowSobreprecio').removeClass('table-warning');
+        $('#chkActualizarSobreprecio').prop('checked', false);
+    }
+    
+    if (precioVentaActual !== precioVentaNuevo) {
+        $('#rowPrecioVenta').addClass('table-warning');
+        $('#precioVentaNuevo').addClass('text-success fw-bold');
+    } else {
+        $('#rowPrecioVenta').removeClass('table-warning');
+        $('#chkActualizarPrecioVenta').prop('checked', false);
+    }
+    
+    // Comparar tallas
+    const tallasExistentes = datosProductoExistente.tallas.map(t => t.talla);
+    const tallasNuevas = datosFormularioOriginal.tallas;
+    const tallasParaAgregar = tallasNuevas.filter(t => !tallasExistentes.includes(t.talla));
+    const tallasDuplicadas = tallasNuevas.filter(t => tallasExistentes.includes(t.talla));
+    
+    let htmlTallas = '<div class="table-responsive"><table class="table table-sm table-bordered">';
+    htmlTallas += '<thead class="table-light"><tr><th>Talla</th><th>Stock</th><th>SKU</th><th>Estado</th></tr></thead><tbody>';
+    
+    // Mostrar tallas nuevas
+    tallasParaAgregar.forEach(talla => {
+        htmlTallas += `<tr class="table-success">
+            <td><strong>${talla.talla}</strong></td>
+            <td>${talla.stock}</td>
+            <td>${talla.sku || 'Auto'}</td>
+            <td><span class="badge bg-success">Nueva</span></td>
+        </tr>`;
+    });
+    
+    // Mostrar tallas duplicadas
+    tallasDuplicadas.forEach(talla => {
+        const tallaExistente = datosProductoExistente.tallas.find(t => t.talla === talla.talla);
+        htmlTallas += `<tr class="table-warning">
+            <td><strong>${talla.talla}</strong></td>
+            <td>${talla.stock} <small class="text-muted">(actual: ${tallaExistente ? tallaExistente.stock : 0})</small></td>
+            <td>${talla.sku || tallaExistente?.sku || 'Auto'}</td>
+            <td><span class="badge bg-warning">Ya existe</span></td>
+        </tr>`;
+    });
+    
+    // Mostrar tallas existentes que no están en el formulario
+    datosProductoExistente.tallas.forEach(talla => {
+        if (!tallasNuevas.find(t => t.talla === talla.talla)) {
+            htmlTallas += `<tr class="table-light">
+                <td>${talla.talla}</td>
+                <td>${talla.stock}</td>
+                <td>${talla.sku}</td>
+                <td><span class="badge bg-secondary">Existente</span></td>
+            </tr>`;
+        }
+    });
+    
+    htmlTallas += '</tbody></table></div>';
+    
+    if (tallasParaAgregar.length === 0 && tallasDuplicadas.length === 0) {
+        htmlTallas = '<p class="text-muted">No hay tallas nuevas para agregar.</p>';
+    }
+    
+    $('#comparacionTallas').html(htmlTallas);
+    
+    // Mostrar modal
+    $('#modalProductoExistente').modal('show');
+}
+
+function formatearPrecio(precio) {
+    return new Intl.NumberFormat('es-CL', {
+        style: 'currency',
+        currency: 'CLP',
+        minimumFractionDigits: 0
+    }).format(precio);
+}
+
+// Evento para confirmar actualización
+$('#btnConfirmarActualizacion').on('click', function() {
+    if (!datosProductoExistente || !datosFormularioOriginal) {
+        showErrorAlert('Error', 'No hay datos del producto para actualizar.');
+        return;
+    }
+    
+    const actualizarPrecios = $('#chkActualizarCosto').is(':checked') || 
+                              $('#chkActualizarSobreprecio').is(':checked') || 
+                              $('#chkActualizarPrecioVenta').is(':checked');
+    const agregarTallas = $('#chkAgregarTallas').is(':checked');
+    
+    if (!actualizarPrecios && !agregarTallas) {
+        showErrorAlert('Error', 'Debes seleccionar al menos una opción para actualizar.');
+        return;
+    }
+    
+    // Obtener datos del formulario original
+    const modal = $('#modalCrearProductoManual');
+    const dteId = modal.find('select[name="dte_manual"]').val();
+    
+    // Preparar datos para enviar
+    const datosActualizacion = {
+        producto_id: datosProductoExistente.id,
+        actualizar_precios: actualizarPrecios,
+        agregar_tallas: agregarTallas,
+        dte_id: dteId
+    };
+    
+    if (actualizarPrecios) {
+        datosActualizacion.costo = parseFloat(datosFormularioOriginal.costo);
+        datosActualizacion.sobreprecio = parseFloat(datosFormularioOriginal.sobreprecio);
+        datosActualizacion.precioventa = parseFloat(datosFormularioOriginal.precioventa);
+    }
+    
+    if (agregarTallas) {
+        datosActualizacion.tallas = datosFormularioOriginal.tallas;
+    }
+    
+    // Deshabilitar botón mientras se procesa
+    const btn = $(this);
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Actualizando...');
+    
+    // Enviar actualización
+    $.ajax({
+        url: '/app/actualizar_producto_existente/',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(datosActualizacion),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(res) {
+            if (res.success) {
+                let mensaje = 'Producto actualizado correctamente.\n\n';
+                if (res.cambios && res.cambios.length > 0) {
+                    mensaje += 'Cambios realizados:\n';
+                    res.cambios.forEach(cambio => {
+                        mensaje += `• ${cambio}\n`;
+                    });
+                }
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Actualización Exitosa',
+                    html: mensaje.replace(/\n/g, '<br>'),
+                    confirmButtonText: 'Aceptar'
+                });
+                
+                $('#modalProductoExistente').modal('hide');
+                $('#modalCrearProductoManual').modal('hide');
+                
+                // Refrescar la tabla de productos
+                const anioActual = new Date().getFullYear();
+                cargarProductosParaCrear(anioActual);
+            } else {
+                showErrorAlert('Error', res.error || 'No se pudo actualizar el producto.');
+                btn.prop('disabled', false).html('<i class="bi bi-check-circle me-2"></i>Actualizar Producto');
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON?.error || 'Error inesperado al actualizar el producto.';
+            showErrorAlert('Error', error);
+            btn.prop('disabled', false).html('<i class="bi bi-check-circle me-2"></i>Actualizar Producto');
         }
     });
 });
@@ -4738,6 +5172,697 @@ $('#formCrearProductoManual').on('submit', function(e) {
             }
         });
     }
+
+</script>
+
+<!-- ========== INCLUIR MODALES DE EDICIÓN DE PRODUCTOS ========== -->
+{% include 'vistas/modulo_existencias/modales_edicion_producto.html' %}
+
+<!-- ========== SCRIPT DE EDICIÓN DE PRODUCTOS ========== -->
+<script src="{% static 'js/edicion_productos.js' %}?v=202411062203"></script>
+
+<script>
+    // Verificar que edicion_productos.js se cargó correctamente
+    if (typeof abrirModalEdicionProducto === 'undefined') {
+        // console.error('ERROR: edicion_productos.js no se cargó correctamente');
+        console.log('Usando funciones de edición inline');
+        
+        // Definir función fallback
+        window.abrirModalEdicionProducto = function(productoId) {
+            console.log('🟢 abrirModalEdicionProducto INICIO con ID:', productoId);
+            
+            try {
+                // Mostrar loading
+                Swal.fire({
+                    title: 'Cargando producto...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                console.log('🟢 Loading mostrado');
+                
+                // Obtener datos del producto
+                console.log('🟢 Iniciando fetch a:', `/app/productos/obtener-para-editar/${productoId}/`);
+                fetch(`/app/productos/obtener-para-editar/${productoId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    Swal.close();
+                    
+                    // DEBUG: Ver datos recibidos
+                    console.log('Datos recibidos del backend:', data);
+                    
+                    if (data.success) {
+                        console.log('Producto:', data.producto);
+                        console.log('Variaciones:', data.variaciones);
+                        
+                        window.productoActualEdicion = data.producto;
+                        cargarDatosProductoEnModal(data.producto, data.variaciones);
+                        
+                        // Abrir modal con Bootstrap 5
+                        const modalElement = document.getElementById('modalEdicionProducto');
+                        console.log('🔵 Modal element encontrado:', modalElement);
+                        
+                        if (!modalElement) {
+                            console.error('❌ ERROR: Modal #modalEdicionProducto NO encontrado en el DOM');
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error de Configuración',
+                                text: 'El modal de edición no está disponible. Verifique que modales_edicion_producto.html esté incluido.'
+                            });
+                            return;
+                        }
+                        
+                        const modal = new bootstrap.Modal(modalElement);
+                        console.log('🔵 Instancia de modal creada:', modal);
+                        modal.show();
+                        console.log('🔵 Modal.show() ejecutado');
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: data.error || 'Error al cargar el producto'
+                        });
+                    }
+                })
+                .catch(error => {
+                    Swal.close();
+                    console.error('🔴 Error en fetch:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Error al cargar el producto'
+                    });
+                });
+            } catch (error) {
+                console.error('🔴 Error en abrirModalEdicionProducto:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al abrir modal de edición'
+                });
+            }
+        };
+        
+        // Definir otras funciones necesarias como fallback
+        window.cargarDatosProductoEnModal = function(producto, variaciones) {
+            console.log('cargarDatosProductoEnModal llamada con:', producto, variaciones);
+            
+            // Datos del producto base
+            $('#edit_producto_id').val(producto.id);
+            $('#edit_articulo').val(producto.articulo);
+            $('#edit_descripcion').val(producto.descripcion);
+            $('#edit_costo').val(producto.costo);
+            $('#edit_sobreprecio').val(producto.sobreprecio);
+            $('#edit_precioventa').val(producto.precioventa);
+            $('#edit_precioSugerido').val(producto.precioSugerido);
+            
+            // Seleccionar categoría
+            if (producto.categoria_id) {
+                $('#edit_categoria_id').val(producto.categoria_id).trigger('change');
+            }
+            
+            // Limpiar y cargar atributos dinámicamente
+            // MARCA (atributo1)
+            const select1 = $('#edit_atributo1_id');
+            select1.empty().append('<option value="">Seleccionar marca...</option>');
+            if (producto.atributo1_id && producto.atributo1_nombre) {
+                select1.append(`<option value="${producto.atributo1_id}" selected>${producto.atributo1_nombre}</option>`);
+                console.log('Marca cargada:', producto.atributo1_nombre);
+            } else {
+                console.log('Producto sin marca asignada');
+            }
+            
+            // COLOR (atributo2)
+            const select2 = $('#edit_atributo2_id');
+            select2.empty().append('<option value="">Seleccionar color...</option>');
+            if (producto.atributo2_id && producto.atributo2_nombre) {
+                select2.append(`<option value="${producto.atributo2_id}" selected>${producto.atributo2_nombre}</option>`);
+                console.log('Color cargado:', producto.atributo2_nombre);
+            } else {
+                console.log('Producto sin color asignado');
+            }
+            
+            // GÉNERO (atributo3)
+            const select3 = $('#edit_atributo3_id');
+            select3.empty().append('<option value="">Seleccionar género...</option>');
+            if (producto.atributo3_id && producto.atributo3_nombre) {
+                select3.append(`<option value="${producto.atributo3_id}" selected>${producto.atributo3_nombre}</option>`);
+                console.log('Género cargado:', producto.atributo3_nombre);
+            } else {
+                console.log('Producto sin género asignado');
+            }
+            
+            // OTRO ATRIBUTO (atributo4)
+            const select4 = $('#edit_atributo4_id');
+            select4.empty().append('<option value="">Seleccionar...</option>');
+            if (producto.atributo4_id && producto.atributo4_nombre) {
+                select4.append(`<option value="${producto.atributo4_id}" selected>${producto.atributo4_nombre}</option>`);
+                console.log('Otro atributo cargado:', producto.atributo4_nombre);
+            } else {
+                console.log('Producto sin otro atributo asignado');
+            }
+            
+            // Cargar variaciones en la tabla
+            console.log('Llamando a cargarVariacionesEnTabla con', variaciones);
+            cargarVariacionesEnTabla(variaciones);
+        };
+        
+        // Función para cargar variaciones en tabla
+        window.cargarVariacionesEnTabla = function(variaciones) {
+            console.log('cargarVariacionesEnTabla - Variaciones recibidas:', variaciones);
+            console.log('cargarVariacionesEnTabla - Cantidad:', variaciones ? variaciones.length : 0);
+            
+            const tbody = $('#tablaVariacionesEdicion tbody');
+            console.log('Tbody encontrado:', tbody.length > 0 ? 'Sí' : 'No');
+            
+            tbody.empty();
+            
+            if (!variaciones || variaciones.length === 0) {
+                console.log('No hay variaciones para mostrar');
+                tbody.append('<tr><td colspan="5" class="text-center text-muted">No hay variaciones</td></tr>');
+                return;
+            }
+            
+            console.log(`Procesando ${variaciones.length} variaciones...`);
+            variaciones.forEach((variacion, index) => {
+                console.log(`Variación ${index + 1}:`, variacion);
+                const stockClass = variacion.stock_total === 0 ? 'text-danger' : 
+                                  variacion.stock_total < 5 ? 'text-warning' : 'text-success';
+                
+                const row = `
+                    <tr data-variacion-id="${variacion.id}">
+                        <td>${variacion.talla}</td>
+                        <td><span class="sku-display">${variacion.sku}</span></td>
+                        <td class="${stockClass}">
+                            <strong>${variacion.stock_total}</strong> unid.
+                            ${variacion.lotes && variacion.lotes.length > 0 ? 
+                                `<br><small class="text-muted">${variacion.lotes.length} lote(s)</small>` : ''}
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-primary" 
+                                    onclick="abrirModalAjustarStock(${variacion.id}, '${variacion.talla}', ${variacion.stock_total})"
+                                    title="Ajustar stock">
+                                <i class="bi bi-box-seam"></i> Ajustar
+                            </button>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-info" 
+                                    onclick="verHistorialMovimientos(${variacion.id}, '${variacion.talla}')"
+                                    title="Ver historial">
+                                <i class="bi bi-clock-history"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" 
+                                    onclick="verLotesVariacion(${variacion.id}, '${variacion.talla}')"
+                                    title="Ver lotes">
+                                <i class="bi bi-layers"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+            
+            console.log(`✅ ${variaciones.length} variaciones cargadas en la tabla correctamente`);
+        };
+        
+        // Funciones adicionales del sistema
+        window.guardarProductoBase = function() {
+            const productoId = $('#edit_producto_id').val();
+            const articulo = $('#edit_articulo').val().trim();
+            
+            if (!articulo) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'El nombre del producto es requerido' });
+                return;
+            }
+            
+            const datos = {
+                articulo: articulo,
+                descripcion: $('#edit_descripcion').val().trim(),
+                categoria_id: $('#edit_categoria_id').val() || null,
+                atributo1_id: $('#edit_atributo1_id').val() || null,
+                atributo2_id: $('#edit_atributo2_id').val() || null,
+                atributo3_id: $('#edit_atributo3_id').val() || null,
+                atributo4_id: $('#edit_atributo4_id').val() || null,
+                costo: parseInt($('#edit_costo').val()) || 0,
+                sobreprecio: parseInt($('#edit_sobreprecio').val()) || 0,
+                precioventa: parseInt($('#edit_precioventa').val()) || 0,
+                precioSugerido: parseInt($('#edit_precioSugerido').val()) || 0
+            };
+            
+            Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+            
+            fetch(`/app/productos/actualizar/${productoId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(datos)
+            })
+            .then(response => response.json())
+            .then(data => {
+                Swal.close();
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: '¡Éxito!', text: data.message, timer: 2000, showConfirmButton: false });
+                    // Cerrar modal con Bootstrap 5
+                    const modalElement = document.getElementById('modalEdicionProducto');
+                    const modal = bootstrap.Modal.getInstance(modalElement);
+                    if (modal) modal.hide();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: data.error });
+                }
+            })
+            .catch(error => {
+                Swal.close();
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Error al actualizar el producto' });
+            });
+        };
+        
+        window.abrirModalAjustarStock = function(variacionId, talla, stockActual) {
+            Swal.fire({ icon: 'info', title: 'Funcionalidad de ajuste de stock', text: 'Por favor use el archivo edicion_productos.js completo' });
+        };
+        
+        window.verHistorialMovimientos = function(variacionId, talla) {
+            Swal.fire({ icon: 'info', title: 'Funcionalidad de historial', text: 'Por favor use el archivo edicion_productos.js completo' });
+        };
+        
+        window.verLotesVariacion = function(variacionId, talla) {
+            window.location.href = `/app/lotes-producto/${variacionId}/`;
+        };
+        
+        // Función getCookie si no existe
+        if (typeof getCookie === 'undefined') {
+            window.getCookie = function(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            };
+        }
+        
+        // console.log('Funciones de edición definidas como fallback');
+    } else {
+        console.log('edicion_productos.js cargado correctamente');
+    }
+
+    // Función para agregar botón de editar en la tabla de productos
+    function agregarBotonEditar() {
+        // Esta función se puede llamar después de cargar productos
+        // para agregar el botón de editar a cada fila
+        $('.tabla-productos tbody tr').each(function() {
+            const productoId = $(this).data('producto-id');
+            if (productoId && !$(this).find('.btn-editar-producto').length) {
+                const btnEditar = `
+                    <button type="button" class="btn btn-sm btn-warning btn-editar-producto" 
+                            onclick="abrirModalEdicionProducto(${productoId})" 
+                            title="Editar producto">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                `;
+                $(this).find('.acciones-producto').prepend(btnEditar);
+            }
+        });
+    }
+
+    // Cargar categorías para el modal de edición
+    function cargarCategoriasModal() {
+        $.ajax({
+            url: '/app/api/categorias/listar/',
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.categorias) {
+                    const select = $('#edit_categoria_id');
+                    select.empty().append('<option value="">Seleccionar categoría...</option>');
+                    response.categorias.forEach(cat => {
+                        select.append(`<option value="${cat.id}">${cat.nombre}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    // Cargar atributos para el modal de edición
+    function cargarAtributosModal() {
+        // Cargar marcas (atributo1)
+        $.ajax({
+            url: '/app/opciones_atributo/?atributo=marca',
+            method: 'GET',
+            success: function(response) {
+                const select = $('#edit_atributo1_id');
+                select.empty().append('<option value="">Seleccionar marca...</option>');
+                if (response.opciones) {
+                    response.opciones.forEach(opt => {
+                        select.append(`<option value="${opt.id}">${opt.valor}</option>`);
+                    });
+                }
+            }
+        });
+
+        // Cargar colores (atributo2)
+        $.ajax({
+            url: '/app/opciones_atributo/?atributo=color',
+            method: 'GET',
+            success: function(response) {
+                const select = $('#edit_atributo2_id');
+                select.empty().append('<option value="">Seleccionar color...</option>');
+                if (response.opciones) {
+                    response.opciones.forEach(opt => {
+                        select.append(`<option value="${opt.id}">${opt.valor}</option>`);
+                    });
+                }
+            }
+        });
+
+        // Cargar géneros (atributo3)
+        $.ajax({
+            url: '/app/opciones_atributo/?atributo=genero',
+            method: 'GET',
+            success: function(response) {
+                const select = $('#edit_atributo3_id');
+                select.empty().append('<option value="">Seleccionar género...</option>');
+                if (response.opciones) {
+                    response.opciones.forEach(opt => {
+                        select.append(`<option value="${opt.id}">${opt.valor}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    // Inicializar cuando el documento esté listo
+    $(document).ready(function() {
+        // Cargar datos para los selects del modal
+        cargarCategoriasModal();
+        cargarAtributosModal();
+        
+        // Event listener para tab de variaciones
+        $('#tab-variaciones').on('click', function() {
+            console.log('👆 Click en tab Variaciones / Tallas');
+            console.log('Contenido del tbody:', $('#tablaVariacionesEdicion tbody').html());
+        });
+    });
+
+    // ========== FUNCIONES PARA BÚSQUEDA Y EDICIÓN DE PRODUCTOS ==========
+    
+    // Abrir modal de búsqueda y edición
+    $('#btnEdicionProductos').on('click', function() {
+        $('#modalBusquedaEdicionProductos').modal('show');
+        $('#inputBuscarProductoEditar').focus();
+    });
+
+    // Buscar productos
+    $('#btnBuscarProductoEditar').on('click', function() {
+        buscarProductosParaEditar();
+    });
+
+    // Buscar al presionar Enter
+    $('#inputBuscarProductoEditar').on('keypress', function(e) {
+        if (e.which === 13) {
+            buscarProductosParaEditar();
+        }
+    });
+
+    // Limpiar búsqueda
+    $('#btnLimpiarBusquedaProducto').on('click', function() {
+        $('#inputBuscarProductoEditar').val('');
+        $('#resultadosBusquedaProductos').html(`
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle me-2"></i>
+                Use el buscador para encontrar productos
+            </div>
+        `);
+    });
+
+    // Filtros rápidos
+    $('[data-filtro]').on('click', function() {
+        const filtro = $(this).data('filtro');
+        $('[data-filtro]').removeClass('active');
+        $(this).addClass('active');
+        
+        // Aplicar filtro
+        buscarProductosParaEditar(filtro);
+    });
+
+    // Función para buscar productos
+    function buscarProductosParaEditar(filtro = '') {
+        const termino = $('#inputBuscarProductoEditar').val().trim();
+        
+        if (!termino && !filtro) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Búsqueda vacía',
+                text: 'Ingrese un término de búsqueda o use un filtro'
+            });
+            return;
+        }
+
+        // Mostrar loading
+        $('#resultadosBusquedaProductos').html(`
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Buscando...</span>
+                </div>
+                <p class="mt-3 text-muted">Buscando productos...</p>
+            </div>
+        `);
+
+        // Realizar búsqueda
+        $.ajax({
+            url: '/app/obtener_productos/',
+            type: 'GET',
+            data: {
+                q: termino,  // La API usa 'q' no 'search'
+                page_size: 50
+            },
+            success: function(response) {
+                // La API devuelve { results: [...], pagination: {...} }
+                if (response.results) {
+                    // Convertir resultados de Producto_Talla a Productos agrupados
+                    const productosAgrupados = agruparProductosTallas(response.results);
+                    mostrarResultadosProductos(productosAgrupados, filtro);
+                } else {
+                    $('#resultadosBusquedaProductos').html(`
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No se encontraron productos
+                        </div>
+                    `);
+                }
+            },
+            error: function() {
+                $('#resultadosBusquedaProductos').html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error al conectar con el servidor
+                    </div>
+                `);
+            }
+        });
+    }
+
+    // Agrupar Producto_Talla por Producto
+    function agruparProductosTallas(results) {
+        const productosMap = new Map();
+        
+        results.forEach(item => {
+            // Extraer información del texto
+            // Formato: "codigo - descripcion | Marca: X | Color: Y | Género: Z | Talla: T | SKU: S"
+            const partes = item.text.split('|');
+            const nombreParte = partes[0].trim(); // "codigo - descripcion"
+            const nombrePartes = nombreParte.split(' - ');
+            const codigo = nombrePartes[0].trim();
+            const nombre = nombrePartes.slice(1).join(' - ').trim();
+            
+            // Crear clave única por producto (nombre + marca + color)
+            const clave = `${nombre}_${item.marca}_${item.color}`;
+            
+            if (!productosMap.has(clave)) {
+                // Crear nuevo producto
+                productosMap.set(clave, {
+                    id: item.id, // Usaremos el ID de la primera talla
+                    codigo: codigo,
+                    nombre: nombre || 'Sin nombre',
+                    categoria: '', // No disponible en esta API
+                    marca: item.marca || '-',
+                    color: item.color || '-',
+                    genero: item.genero || '-',
+                    stock_total: 0,
+                    tallas_count: 0,
+                    tallas: [],
+                    activo: true
+                });
+            }
+            
+            // Agregar talla al producto
+            const producto = productosMap.get(clave);
+            producto.tallas.push({
+                talla: item.talla,
+                sku: item.sku,
+                id_talla: item.id
+            });
+            producto.tallas_count = producto.tallas.length;
+        });
+        
+        // Convertir Map a Array
+        return Array.from(productosMap.values());
+    }
+
+    // Mostrar resultados de búsqueda
+    function mostrarResultadosProductos(productos, filtro = '') {
+        if (!productos || productos.length === 0) {
+            $('#resultadosBusquedaProductos').html(`
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-search me-2"></i>
+                    No se encontraron productos
+                </div>
+            `);
+            return;
+        }
+
+        // Aplicar filtro si existe
+        let productosFiltrados = productos;
+        if (filtro === 'con_stock') {
+            productosFiltrados = productos.filter(p => p.stock_total > 0);
+        } else if (filtro === 'sin_stock') {
+            productosFiltrados = productos.filter(p => p.stock_total === 0);
+        } else if (filtro === 'bajo_stock') {
+            productosFiltrados = productos.filter(p => p.stock_total > 0 && p.stock_total < 5);
+        }
+
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Marca</th>
+                            <th>Color</th>
+                            <th>Género</th>
+                            <th>Stock Total</th>
+                            <th>Tallas</th>
+                            <th width="150">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        productosFiltrados.forEach(producto => {
+            const stockClass = producto.stock_total === 0 ? 'text-danger' : 
+                              producto.stock_total < 5 ? 'text-warning' : 'text-success';
+            const estadoBadge = producto.activo ? 
+                '<span class="badge bg-success">Activo</span>' : 
+                '<span class="badge bg-secondary">Inactivo</span>';
+
+            html += `
+                <tr>
+                    <td><code>${producto.codigo || 'N/A'}</code></td>
+                    <td><strong>${producto.nombre}</strong></td>
+                    <td>${producto.marca || '-'}</td>
+                    <td>${producto.color || '-'}</td>
+                    <td>${producto.genero || '-'}</td>
+                    <td class="${stockClass}">
+                        <strong>${producto.stock_total}</strong> unid.
+                    </td>
+                    <td>
+                        <span class="badge bg-info">${producto.tallas_count || 0} talla(s)</span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" 
+                                onclick="console.log('🟡 Botón Editar clickeado, ID:', ${producto.id}); editarProductoCompleto(${producto.id});" 
+                                title="Editar producto">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3 text-center text-muted">
+                <small>Mostrando ${productosFiltrados.length} de ${productos.length} productos</small>
+            </div>
+        `;
+
+        $('#resultadosBusquedaProductos').html(html);
+    }
+
+    // Función para editar producto completo
+    window.editarProductoCompleto = function(productoTallaId) {
+        console.log('🔵 editarProductoCompleto llamada con ID:', productoTallaId);
+        
+        // Cerrar modal de búsqueda
+        const modalBusqueda = document.getElementById('modalBusquedaEdicionProductos');
+        const bsModalBusqueda = bootstrap.Modal.getInstance(modalBusqueda);
+        if (bsModalBusqueda) {
+            bsModalBusqueda.hide();
+        }
+        
+        // Mostrar loading
+        Swal.fire({
+            title: 'Cargando producto...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        console.log('🔵 Obteniendo producto desde talla:', productoTallaId);
+        
+        // Obtener el ID del producto principal desde el Producto_Talla
+        $.ajax({
+            url: `/app/productos/obtener-producto-desde-talla/${productoTallaId}/`,
+            type: 'GET',
+            success: function(response) {
+                console.log('🔵 Respuesta obtener-producto-desde-talla:', response);
+                Swal.close();
+                if (response.success && response.producto_id) {
+                    console.log('🔵 Producto ID obtenido:', response.producto_id);
+                    console.log('🔵 Llamando a abrirModalEdicionProducto...');
+                    console.log('🔵 Tipo de función:', typeof abrirModalEdicionProducto);
+                    console.log('🔵 Función es:', abrirModalEdicionProducto);
+                    
+                    // Abrir modal de edición con el ID del producto principal
+                    try {
+                        console.log('🔵 ANTES DE LLAMAR a abrirModalEdicionProducto');
+                        abrirModalEdicionProducto(response.producto_id);
+                        console.log('🔵 DESPUÉS DE LLAMAR a abrirModalEdicionProducto');
+                    } catch (error) {
+                        console.error('🔴 ERROR AL LLAMAR abrirModalEdicionProducto:', error);
+                        console.error('🔴 Stack:', error.stack);
+                    }
+                } else {
+                    console.error('❌ Error en respuesta:', response);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'No se pudo obtener la información del producto'
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Error AJAX:', status, error);
+                Swal.close();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al conectar con el servidor'
+                });
+            }
+        });
+    };
 
 </script>
 

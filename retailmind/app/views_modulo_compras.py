@@ -483,6 +483,7 @@ def crearDteCompras(request):
     return JsonResponse({'success': False, 'error': 'Método no permitido'})
 
 
+@login_required
 def empresas_proveedoras(request):
     """Obtener lista de empresas proveedoras"""
     try:
@@ -859,12 +860,12 @@ def eliminar_dte(request, dte_id):
 
 # ========== DASHBOARDS DE COMPRAS ==========
 
+@login_required
 @require_GET
 def dashboard_compras_estrategico(request):
     """Dashboard estratégico de compras con métricas avanzadas basado en datos reales"""
     try:
         from datetime import datetime
-        from django.db.models import TruncMonth
         
         # Parámetros de filtro
         anio = request.GET.get('anio', datetime.now().year)

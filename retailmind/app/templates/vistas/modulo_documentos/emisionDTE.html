@@ -1009,6 +1009,19 @@
                     </select>
                 </div>
             </div>
+            
+            <!-- Opción para incluir productos sin stock -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="checkIncluirSinStock">
+                        <label class="form-check-label" for="checkIncluirSinStock">
+                            <i class="bi bi-box-seam me-1"></i>Incluir productos sin stock en la búsqueda
+                        </label>
+                        <small class="text-muted ms-2">(Por defecto solo se muestran productos con stock disponible)</small>
+                    </div>
+                </div>
+            </div>
 
             <!-- Título de sección -->
             <div class="row mb-3">
@@ -1798,6 +1811,9 @@ function initializeEventListeners() {
 
     // Filtros
     $('#filterMarca, #filterCategoria, #filterTipoTalla').on('change', searchProducts);
+    
+    // Checkbox para incluir productos sin stock
+    $('#checkIncluirSinStock').on('change', searchProducts);
 
     // Paginación
     $('#btnPrevProducts').on('click', function() {
@@ -2710,6 +2726,7 @@ function searchProducts() {
     const marca = $('#filterMarca').val();
     const categoria = $('#filterCategoria').val();
     const tipoTalla = $('#filterTipoTalla').val();
+    const incluirSinStock = $('#checkIncluirSinStock').is(':checked');
     
     console.log('🔍 Iniciando búsqueda de productos...');
     console.log('📋 Parámetros de búsqueda:', {
@@ -2717,6 +2734,7 @@ function searchProducts() {
         marca: marca,
         categoria: categoria,
         tipo_talla: tipoTalla,
+        incluir_sin_stock: incluirSinStock,
         page: currentPage
     });
     
@@ -2726,7 +2744,7 @@ function searchProducts() {
     // Mostrar loading en la tabla también
     $('#datos_tabla_productos').html(`
         <tr>
-            <td colspan="9" class="text-center py-4">
+            <td colspan="10" class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Buscando productos...</span>
                 </div>
@@ -2743,6 +2761,7 @@ function searchProducts() {
             marca: marca,
             categoria: categoria,
             tipo_talla: tipoTalla,
+            incluir_sin_stock: incluirSinStock,
             page: currentPage,
             page_size: 20
         },
@@ -2805,21 +2824,25 @@ function displayProducts(products) {
     }
     
     products.forEach(product => {
+        const tallasDisponibles = product.tallas_disponibles && Array.isArray(product.tallas_disponibles) 
+            ? product.tallas_disponibles.join(', ') 
+            : 'No disponible';
+        
         const productHtml = `
             <div class="product-item" data-product-id="${product.id}">
                 <div class="row align-items-center">
                     <div class="col-md-8">
                         <h6 class="mb-1">${product.articulo}</h6>
-                        <p class="mb-1 text-muted">${product.descripcion}</p>
+                        <p class="mb-1 text-muted">${product.descripcion || '-'}</p>
                         <div class="d-flex gap-2">
                             <span class="badge bg-primary">${product.marca || 'Sin marca'}</span>
                             <span class="badge bg-secondary">${product.categoria || 'Sin categoría'}</span>
-                            <span class="badge bg-info">${product.tipo_talla}</span>
+                            <span class="badge bg-info">${product.tipo_talla || 'Sin talla'}</span>
                         </div>
                     </div>
                     <div class="col-md-2 text-center">
                         <div class="fw-bold">Stock Total</div>
-                        <div class="fs-4 text-primary">${product.stock_total}</div>
+                        <div class="fs-4 text-primary">${product.stock_total || 0}</div>
                     </div>
                     <div class="col-md-2 text-end">
                         <button class="btn btn-outline-primary btn-sm" onclick="selectProduct(${product.id})">
@@ -2828,7 +2851,7 @@ function displayProducts(products) {
                     </div>
                 </div>
                 <div class="mt-2">
-                    <small class="text-muted">Tallas disponibles: ${product.tallas_disponibles.join(', ')}</small>
+                    <small class="text-muted">Tallas disponibles: ${tallasDisponibles}</small>
                 </div>
             </div>
         `;
@@ -2845,7 +2868,7 @@ function displayProductsInTable(products) {
     if (!products || products.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="9" class="text-center text-muted py-4">
+                <td colspan="10" class="text-center text-muted py-4">
                     <i class="bi bi-search me-2"></i>
                     No se encontraron productos con los filtros aplicados
                 </td>
@@ -2856,16 +2879,20 @@ function displayProductsInTable(products) {
     
     products.forEach(product => {
         // Usar la estructura correcta del backend
+        const estado = product.estado || 'Activo';
         const marca = product.marca || '-';
         const color = product.color || '-';
         const sexo = product.sexo || '-';
         const costo = product.costo || 0;
         const precioVenta = product.precio_venta || 0;
+        const stockTotal = product.stock_total || 0;
+        const descripcion = product.descripcion || '-';
         
         const rowHtml = `
             <tr data-product-id="${product.id}">
-                <td class="text-center fw-bold">${product.articulo}</td>
-                <td>${product.descripcion}</td>
+                <td class="text-center fw-bold">${estado}</td>
+                <td>${product.articulo}</td>
+                <td>${descripcion}</td>
                 <td class="text-center">
                     <span class="badge bg-info">${color}</span>
                 </td>
@@ -2878,7 +2905,7 @@ function displayProductsInTable(products) {
                 <td class="text-end">$${parseInt(costo).toLocaleString()}</td>
                 <td class="text-end text-success fw-bold">$${parseInt(precioVenta).toLocaleString()}</td>
                 <td class="text-center">
-                    <span class="badge bg-success fs-6">${product.stock_total}</span>
+                    <span class="badge bg-success fs-6">${stockTotal}</span>
                 </td>
                 <td class="text-center">
                     <button class="btn btn-primary btn-sm" onclick="selectProduct(${product.id})" title="Ver tallas disponibles">
@@ -2979,33 +3006,37 @@ function getPrecioSegunMetodo(product) {
 function loadTallasDisponibles(product) {
     const tbody = $('#tabla_modal_ventas_interna');
     tbody.empty();
-    
+
     console.log('🔍 DEBUG loadTallasDisponibles:');
     console.log('  product:', product);
+    console.log('  product.tallas_detalle:', product.tallas_detalle);
     console.log('  product.tallas_disponibles:', product.tallas_disponibles);
-    console.log('  Array.isArray(product.tallas_disponibles):', Array.isArray(product.tallas_disponibles));
-    
-    // Validación robusta de tallas_disponibles
+    console.log('  Array.isArray(product.tallas_detalle):', Array.isArray(product.tallas_detalle));
+
+    // Usar tallas_detalle que incluye todas las tallas (con y sin stock)
     let tallas = [];
-    
-    if (product.tallas_disponibles && Array.isArray(product.tallas_disponibles)) {
-        tallas = product.tallas_disponibles;
-    } else if (product.tallas_disponibles && typeof product.tallas_disponibles === 'object') {
-        // Si es un objeto, intentar convertir a array
-        tallas = Object.values(product.tallas_disponibles);
+
+    if (product.tallas_detalle && Array.isArray(product.tallas_detalle)) {
+        tallas = product.tallas_detalle;
     } else {
-        console.warn('⚠️ tallas_disponibles no es un array válido');
-        tallas = [];
+        console.warn('⚠️ tallas_detalle no es un array válido, intentando tallas_disponibles');
+        if (product.tallas_disponibles && Array.isArray(product.tallas_disponibles)) {
+            tallas = product.tallas_disponibles;
+        } else if (product.tallas_disponibles && typeof product.tallas_disponibles === 'object') {
+            tallas = Object.values(product.tallas_disponibles);
+        } else {
+            tallas = [];
+        }
     }
-    
+
     console.log('👕 Tallas procesadas:', tallas);
-    
+
     if (!tallas || tallas.length === 0) {
         tbody.append(`
             <tr>
                 <td colspan="8" class="text-center text-muted py-4">
                     <i class="bi bi-info-circle me-2"></i>
-                    No hay tallas disponibles con stock para este producto
+                    No hay tallas disponibles para este producto
                     <br><small>Producto ID: ${product.id} - Artículo: ${product.articulo}</small>
                 </td>
             </tr>
