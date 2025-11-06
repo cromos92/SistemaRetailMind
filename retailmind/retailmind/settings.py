@@ -28,8 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u6k00%6(jlc5r(j2l34j7d=1mn8&_xaam4^t_*c3=oa7%_e-_7')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
-DEBUG = True  # Forzado a True para desarrollo local - CAMBIAR A False en producción
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 # ALLOWED_HOSTS configuration
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
@@ -192,6 +191,15 @@ if 'RAILWAY_ENVIRONMENT' in os.environ:
 else:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# CSRF Trusted Origins - SIEMPRE configurar en producción
+if 'RAILWAY_ENVIRONMENT' in os.environ:
+    CSRF_TRUSTED_ORIGINS = [
+        f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')}",
+        "https://*.railway.app",
+        "https://*.up.railway.app",
+        "https://retail.webappsolutions.cl"
+    ]
+
 # Security settings for production
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
@@ -204,15 +212,6 @@ if not DEBUG:
     # CSRF settings
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
-    
-    # Railway specific CSRF settings
-    if 'RAILWAY_ENVIRONMENT' in os.environ:
-        CSRF_TRUSTED_ORIGINS = [
-            f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN', '')}",
-            "https://*.railway.app",
-            "https://*.up.railway.app",
-            "https://retail.webappsolutions.cl"
-        ]
 
 # Configuración de autenticación
 LOGIN_URL = 'login'
