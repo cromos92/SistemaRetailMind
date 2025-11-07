@@ -677,11 +677,11 @@
     </div>
 </div>
 
-<!-- SDK Transbank POS Integrado -->
-<script src="https://unpkg.com/transbank-pos-sdk-web@5/dist/pos.js"></script>
+<!-- SDK Transbank POS Integrado - Librería Oficial -->
+<script src="{% static 'js/transbank-pos-sdk.js' %}"></script>
 
-<!-- Scripts JavaScript -->
-<!-- <script src="{% static 'js/pos-transbank.js' %}"></script> -->
+<!-- Scripts de Integración POS -->
+<script src="{% static 'js/pos-transbank.js' %}"></script>
 <script>
     // Variables globales (verificar si ya existen)
     if (typeof configuracionesActuales === 'undefined') {
