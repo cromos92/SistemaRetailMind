@@ -269,7 +269,7 @@
                     
                     <!-- Selector de Terminal y Estado -->
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label for="select-pos-venta" class="form-label">
                                 <i class="fas fa-desktop mr-2"></i>Seleccionar Terminal:
                             </label>
@@ -277,7 +277,29 @@
                                 <option value="">Seleccionar terminal...</option>
                             </select>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <label for="select-puerto-manual" class="form-label">
+                                <i class="fas fa-usb mr-2"></i>Puerto Manual:
+                            </label>
+                            <div class="input-group">
+                                <select id="select-puerto-manual" class="form-control">
+                                    <option value="">Autodetectar</option>
+                                    <option value="COM1">COM1</option>
+                                    <option value="COM2">COM2</option>
+                                    <option value="COM3">COM3</option>
+                                    <option value="COM4">COM4</option>
+                                    <option value="COM5">COM5</option>
+                                    <option value="COM6">COM6</option>
+                                </select>
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-info" type="button" id="btn-listar-puertos" title="Actualizar lista de puertos">
+                                        <i class="fas fa-sync"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">Puerto actual: <span id="puerto-actual-display">-</span></small>
+                        </div>
+                        <div class="col-md-4">
                             <label class="form-label">Estado de Conexión:</label>
                             <div id="connection-status" class="terminal-status status-disconnected">
                                 <i class="fas fa-times-circle mr-2"></i>Desconectado
@@ -291,7 +313,10 @@
                             <i class="fas fa-link mr-2"></i>Conexión y Configuración
                         </h6>
                         <div class="btn-group-vertical d-inline-block me-3">
-                            <button id="btn-connect" class="btn btn-success btn-pos">
+                            <button id="btn-autoconnect" class="btn btn-success btn-pos" title="Busca y conecta automáticamente al POS">
+                                <i class="fas fa-magic mr-2"></i>Autodetectar POS
+                            </button>
+                            <button id="btn-connect" class="btn btn-outline-success btn-pos">
                                 <i class="fas fa-plug mr-2"></i>Conectar Terminal
                             </button>
                             <button id="btn-disconnect" class="btn btn-secondary btn-pos" disabled>
@@ -1135,21 +1160,268 @@
             return;
         }
         // Botones de conexión
-        $('#btn-connect').on('click', () => {
-            posManager.connect();
+        // Botón Listar Puertos Disponibles
+        $('#btn-listar-puertos').on('click', async () => {
+            try {
+                $('#btn-listar-puertos').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+                
+                // Crear instancia si no existe
+                if (!window.posSDK) {
+                    window.posSDK = new TransbankPOSIntegration();
+                }
+                
+                // Inicializar si no está conectado
+                if (!window.posSDK.isConnected) {
+                    const initResult = await window.posSDK.initialize();
+                    if (!initResult.success) {
+                        throw new Error(initResult.error || 'No se pudo conectar al agente POS');
+                    }
+                }
+                
+                // Obtener puertos disponibles
+                const ports = await window.posSDK.sdk.getPorts();
+                
+                // Actualizar selector
+                const selector = $('#select-puerto-manual');
+                selector.empty();
+                selector.append('<option value="">Seleccione puerto...</option>');
+                
+                if (ports && ports.length > 0) {
+                    ports.forEach(port => {
+                        selector.append(`<option value="${port}">${port}</option>`);
+                    });
+                    mostrarExito(`✅ Se encontraron ${ports.length} puerto(s): ${ports.join(', ')}`);
+                } else {
+                    mostrarError('❌ No se encontraron puertos disponibles. Verifique la conexión USB del POS.');
+                }
+                
+            } catch (error) {
+                console.error('Error listando puertos:', error);
+                mostrarError(`❌ Error: ${error.message}`);
+            } finally {
+                $('#btn-listar-puertos').prop('disabled', false).html('<i class="fas fa-sync"></i>');
+            }
         });
 
-        $('#btn-disconnect').on('click', () => {
-            posManager.disconnect();
+        // Botón Autodetectar POS (usa SDK oficial)
+        $('#btn-autoconnect').on('click', async () => {
+            try {
+                // Deshabilitar botón durante la búsqueda
+                $('#btn-autoconnect').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Buscando POS...');
+                
+                // Crear instancia si no existe
+                if (!window.posSDK) {
+                    window.posSDK = new TransbankPOSIntegration();
+                }
+                
+                // Inicializar conexión con agente
+                const initResult = await window.posSDK.initialize();
+                if (!initResult.success) {
+                    throw new Error(initResult.error || 'No se pudo conectar al agente POS');
+                }
+                
+                // Listar puertos disponibles primero
+                const ports = await window.posSDK.sdk.getPorts();
+                console.log('🔌 Puertos disponibles:', ports);
+                
+                if (!ports || ports.length === 0) {
+                    throw new Error('No se encontraron puertos COM disponibles. Verifique que el POS esté conectado por USB.');
+                }
+                
+                // Actualizar selector de puertos
+                const selector = $('#select-puerto-manual');
+                selector.empty();
+                selector.append('<option value="">Seleccione puerto...</option>');
+                ports.forEach(port => {
+                    selector.append(`<option value="${port}">${port}</option>`);
+                });
+                
+                // Intentar autodetectar
+                mostrarExito(`📍 Puertos encontrados: ${ports.join(', ')}. Probando cada uno...`);
+                
+                let puertoDetectado = null;
+                
+                // Probar cada puerto manualmente
+                for (const port of ports) {
+                    try {
+                        console.log(`🔍 Probando puerto ${port}...`);
+                        await window.posSDK.sdk.openPort(port, 115200);
+                        
+                        // Verificar con poll
+                        await window.posSDK.sdk.poll();
+                        
+                        // ✅ ¡Este puerto funciona!
+                        puertoDetectado = port;
+                        window.posSDK.currentPort = port;
+                        break;
+                        
+                    } catch (error) {
+                        console.log(`❌ Puerto ${port} no responde, continuando...`);
+                        try {
+                            await window.posSDK.sdk.closePort();
+                        } catch {}
+                    }
+                }
+                
+                if (puertoDetectado) {
+                    // Éxito
+                    mostrarExito(`✅ POS detectado en ${puertoDetectado}`);
+                    $('#connection-status')
+                        .html(`<i class="fas fa-check-circle mr-2"></i>Conectado - ${puertoDetectado}`)
+                        .removeClass('status-disconnected status-processing')
+                        .addClass('status-connected');
+                    $('#puerto-actual-display').text(puertoDetectado);
+                    $('#select-puerto-manual').val(puertoDetectado);
+                    
+                    // Habilitar botones de operaciones
+                    $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', false);
+                    $('#btn-connect, #btn-autoconnect').prop('disabled', true);
+                } else {
+                    throw new Error(`No se detectó ningún POS en los puertos disponibles (${ports.join(', ')}). \n\nVerifique:\n1. El POS está encendido\n2. El cable USB/Serial está conectado\n3. Los drivers están instalados`);
+                }
+                
+            } catch (error) {
+                console.error('Error en autodetección:', error);
+                mostrarError(`❌ ${error.message}`);
+            } finally {
+                // Restaurar botón
+                $('#btn-autoconnect').prop('disabled', false).html('<i class="fas fa-magic mr-2"></i>Autodetectar POS');
+            }
+        });
+
+        // Botón Conectar Terminal (con puerto manual o autodetección)
+        $('#btn-connect').on('click', async () => {
+            try {
+                $('#btn-connect').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Conectando...');
+                
+                // Crear instancia si no existe
+                if (!window.posSDK) {
+                    window.posSDK = new TransbankPOSIntegration();
+                }
+                
+                // Inicializar agente
+                if (!window.posSDK.isConnected) {
+                    const initResult = await window.posSDK.initialize();
+                    if (!initResult.success) {
+                        throw new Error(initResult.error || 'No se pudo conectar al agente POS');
+                    }
+                }
+                
+                // Verificar si hay puerto seleccionado manualmente
+                const puertoSeleccionado = $('#select-puerto-manual').val();
+                
+                if (puertoSeleccionado) {
+                    // Conexión manual a puerto específico
+                    console.log(`🔌 Conectando a puerto seleccionado: ${puertoSeleccionado}`);
+                    
+                    await window.posSDK.sdk.openPort(puertoSeleccionado, 115200);
+                    await window.posSDK.sdk.poll();
+                    
+                    window.posSDK.currentPort = puertoSeleccionado;
+                    
+                    mostrarExito(`✅ Conectado a ${puertoSeleccionado}`);
+                    $('#connection-status')
+                        .html(`<i class="fas fa-check-circle mr-2"></i>Conectado - ${puertoSeleccionado}`)
+                        .removeClass('status-disconnected status-processing')
+                        .addClass('status-connected');
+                    $('#puerto-actual-display').text(puertoSeleccionado);
+                    
+                    // Habilitar botones
+                    $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', false);
+                    $('#btn-connect, #btn-autoconnect').prop('disabled', true);
+                    
+                } else {
+                    // Si no hay puerto seleccionado, mostrar mensaje
+                    mostrarError('❌ Por favor seleccione un puerto o use "Autodetectar POS"');
+                }
+                
+            } catch (error) {
+                console.error('Error conectando:', error);
+                mostrarError(`❌ Error: ${error.message}`);
+            } finally {
+                $('#btn-connect').prop('disabled', false).html('<i class="fas fa-plug mr-2"></i>Conectar Terminal');
+            }
+        });
+
+        $('#btn-disconnect').on('click', async () => {
+            try {
+                if (window.posSDK) {
+                    await window.posSDK.disconnect();
+                    
+                    $('#connection-status')
+                        .html('<i class="fas fa-times-circle mr-2"></i>Desconectado')
+                        .removeClass('status-connected status-processing')
+                        .addClass('status-disconnected');
+                    $('#puerto-actual-display').text('-');
+                    
+                    // Deshabilitar botones de operaciones
+                    $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', true);
+                    $('#btn-connect, #btn-autoconnect').prop('disabled', false);
+                    
+                    mostrarExito('🔌 Desconectado del POS');
+                }
+            } catch (error) {
+                console.error('Error desconectando:', error);
+            }
         });
 
         // Operaciones básicas
-        $('#btn-load-keys').on('click', () => {
-            posManager.executeOperation('carga de llaves');
+        $('#btn-load-keys').on('click', async () => {
+            if (!window.posSDK || !window.posSDK.currentPort) {
+                mostrarError('❌ Debe conectar el POS primero');
+                return;
+            }
+            
+            if (!confirm('¿Desea cargar las llaves criptográficas en el POS?\n\nNota: Esta operación solo se realiza durante la configuración inicial o cuando Transbank lo indique.')) {
+                return;
+            }
+            
+            try {
+                $('#btn-load-keys').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Cargando llaves...');
+                
+                const result = await window.posSDK.loadKeys();
+                
+                if (result.success) {
+                    mostrarExito('✅ Llaves cargadas exitosamente');
+                } else {
+                    mostrarError('❌ Error cargando llaves');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarError(`❌ ${error.message}`);
+            } finally {
+                $('#btn-load-keys').prop('disabled', false).html('<i class="fas fa-key mr-2"></i>Cargar Llaves');
+            }
         });
 
-        $('#btn-poll').on('click', () => {
-            posManager.executeOperation('verificación de conexión');
+        $('#btn-poll').on('click', async () => {
+            if (!window.posSDK || !window.posSDK.currentPort) {
+                mostrarError('❌ Debe conectar el POS primero');
+                return;
+            }
+            
+            try {
+                $('#btn-poll').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Verificando...');
+                
+                const result = await window.posSDK.poll();
+                
+                if (result.success) {
+                    mostrarExito('✅ Terminal POS respondiendo correctamente');
+                    $('#connection-status')
+                        .html(`<i class="fas fa-check-circle mr-2"></i>Conectado - ${window.posSDK.currentPort} (Verificado)`)
+                        .removeClass('status-disconnected status-processing')
+                        .addClass('status-connected');
+                } else {
+                    mostrarError('❌ El terminal no responde');
+                }
+                
+            } catch (error) {
+                console.error('Error en poll:', error);
+                mostrarError(`❌ Terminal no responde: ${error.message}`);
+            } finally {
+                $('#btn-poll').prop('disabled', false).html('<i class="fas fa-heartbeat mr-2"></i>Verificar Conexión');
+            }
         });
 
         // Operaciones de venta
