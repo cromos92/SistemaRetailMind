@@ -261,10 +261,55 @@
                     <div class="alert alert-info alert-dismissible fade show" role="alert" id="help-alert">
                         <i class="fas fa-lightbulb mr-2"></i>
                         <strong>¡Bienvenido al Terminal POS!</strong> 
-                        Para comenzar: <strong>1)</strong> Selecciona un terminal, <strong>2)</strong> Haz clic en "Conectar Terminal" o usa el "Modo Demo" para probar sin hardware.
+                        Para comenzar: <strong>1)</strong> Escribe el puerto COM, <strong>2)</strong> Haz clic en "Conectar"
                         <button type="button" class="close" data-dismiss="alert" aria-label="Close">
                             <span aria-hidden="true">&times;</span>
                         </button>
+                    </div>
+                    
+                    <!-- CONEXIÓN RÁPIDA - Puerto Manual -->
+                    <div class="card border-primary mb-3" style="border-width: 2px;">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-usb mr-2"></i>Conexión Rápida - Escribir Puerto Manual
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-end">
+                                <div class="col-md-4">
+                                    <label for="puerto-manual-input" class="font-weight-bold">Puerto COM del POS:</label>
+                                    <div class="input-group input-group-lg">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text bg-primary text-white">
+                                                <i class="fas fa-keyboard"></i>
+                                            </span>
+                                        </div>
+                                        <input type="text" 
+                                               id="puerto-manual-input" 
+                                               class="form-control form-control-lg" 
+                                               placeholder="Ejemplo: COM15" 
+                                               style="font-size: 1.5rem; text-align: center; font-weight: bold;"
+                                               maxlength="10">
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-info-circle"></i> Escribe el puerto donde está conectado tu POS (COM1, COM3, COM15, etc.)
+                                    </small>
+                                </div>
+                                <div class="col-md-4">
+                                    <button id="btn-conectar-rapido" class="btn btn-success btn-lg btn-block" style="height: 60px;">
+                                        <i class="fas fa-plug mr-2"></i>Conectar al Puerto
+                                    </button>
+                                    <small class="form-text text-muted text-center">
+                                        Puerto actual: <strong id="puerto-conectado-display" class="text-success">Ninguno</strong>
+                                    </small>
+                                </div>
+                                <div class="col-md-4">
+                                    <div id="estado-conexion-rapida" class="alert alert-secondary mb-0" style="height: 60px; display: flex; align-items: center; justify-content: center;">
+                                        <span><i class="fas fa-times-circle mr-2"></i>Desconectado</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Selector de Terminal y Estado -->
@@ -337,26 +382,12 @@
                             <i class="fas fa-link mr-2"></i>Conexión y Configuración
                         </h6>
                         
-                        <!-- Modo de Desarrollo -->
-                        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="modo-desarrollo">
-                                <label class="form-check-label" for="modo-desarrollo">
-                                    <i class="fas fa-code mr-1"></i><strong>Modo Desarrollo</strong> 
-                                    <small>(Probar sin POS físico - solo simulación)</small>
-                                </label>
-                            </div>
-                            <button type="button" class="close" data-dismiss="alert">
-                                <span>&times;</span>
-                            </button>
-                        </div>
-                        
                         <div class="btn-group-vertical d-inline-block me-3">
                             <button id="btn-autoconnect" class="btn btn-success btn-pos" title="Busca y conecta automáticamente al POS">
                                 <i class="fas fa-magic mr-2"></i>Autodetectar POS
                             </button>
                             <button id="btn-connect" class="btn btn-outline-success btn-pos">
-                                <i class="fas fa-plug mr-2"></i>Conectar Terminal
+                                <i class="fas fa-plug mr-2"></i>Conectar a Puerto Seleccionado
                             </button>
                             <button id="btn-disconnect" class="btn btn-secondary btn-pos" disabled>
                                 <i class="fas fa-unlink mr-2"></i>Desconectar
@@ -367,10 +398,7 @@
                                 <i class="fas fa-key mr-2"></i>Cargar Llaves
                             </button>
                             <button id="btn-poll" class="btn btn-info btn-pos" disabled>
-                                <i class="fas fa-heartbeat mr-2"></i>Verificar Conexión
-                            </button>
-                            <button id="btn-simular-conexion" class="btn btn-outline-secondary btn-pos" title="Simular conexión exitosa (modo desarrollo)">
-                                <i class="fas fa-flask mr-2"></i>Simular Conexión
+                                <i class="fas fa-heartbeat mr-2"></i>Verificar Conexión (Poll)
                             </button>
                         </div>
                     </div>
@@ -1202,7 +1230,126 @@
             return;
         }
         // Botones de conexión
-        // Botón usar puerto personalizado
+        // =====================================================
+        // BOTÓN CONECTAR RÁPIDO (Campo Grande Azul)
+        // =====================================================
+        $('#btn-conectar-rapido').on('click', async () => {
+            try {
+                const puertoIngresado = $('#puerto-manual-input').val().trim().toUpperCase();
+                
+                if (!puertoIngresado) {
+                    alert('❌ Debe escribir un puerto en el campo.\n\nEjemplo: COM15, COM3, COM7');
+                    $('#puerto-manual-input').focus();
+                    return;
+                }
+                
+                // Validar formato
+                if (!puertoIngresado.match(/^COM\d+$/i)) {
+                    alert('❌ Formato inválido.\n\nDebe ser: COM15, COM3, etc.\n\nNo use espacios ni otros caracteres.');
+                    $('#puerto-manual-input').focus();
+                    return;
+                }
+                
+                // Deshabilitar botón y mostrar progreso
+                $('#btn-conectar-rapido')
+                    .prop('disabled', true)
+                    .html('<i class="fas fa-spinner fa-spin mr-2"></i>Conectando a ' + puertoIngresado + '...');
+                
+                $('#estado-conexion-rapida')
+                    .removeClass('alert-secondary alert-success alert-danger')
+                    .addClass('alert-warning')
+                    .html('<span><i class="fas fa-spinner fa-spin mr-2"></i>Conectando...</span>');
+                
+                console.log(`🔌 === CONECTANDO AL PUERTO ${puertoIngresado} ===`);
+                
+                // Crear instancia si no existe
+                if (!window.posSDK) {
+                    window.posSDK = new TransbankPOSIntegration();
+                }
+                
+                // Paso 1: Conectar al agente Transbank
+                console.log('1️⃣ Conectando al agente Transbank...');
+                if (!window.posSDK.isConnected) {
+                    const initResult = await window.posSDK.initialize();
+                    if (!initResult.success) {
+                        throw new Error('No se pudo conectar al agente Transbank. Verifique que esté ejecutándose en https://localhost:8090');
+                    }
+                }
+                console.log('✅ Agente conectado');
+                
+                // Paso 2: Abrir puerto
+                console.log(`2️⃣ Abriendo puerto ${puertoIngresado}...`);
+                await window.posSDK.sdk.openPort(puertoIngresado, 115200);
+                console.log('✅ Puerto abierto');
+                
+                // Paso 3: Verificar con poll
+                console.log('3️⃣ Verificando comunicación con POS (poll)...');
+                await window.posSDK.sdk.poll();
+                console.log('✅ POS responde correctamente');
+                
+                // Éxito total
+                window.posSDK.currentPort = puertoIngresado;
+                
+                alert(`✅ ¡CONECTADO EXITOSAMENTE!\n\nPuerto: ${puertoIngresado}\nEstado: POS Respondiendo`);
+                
+                $('#estado-conexion-rapida')
+                    .removeClass('alert-secondary alert-warning alert-danger')
+                    .addClass('alert-success')
+                    .html(`<span><i class="fas fa-check-circle mr-2"></i>Conectado a ${puertoIngresado}</span>`);
+                
+                $('#puerto-conectado-display').text(puertoIngresado);
+                $('#connection-status')
+                    .html(`<i class="fas fa-check-circle mr-2"></i>Conectado - ${puertoIngresado}`)
+                    .removeClass('status-disconnected status-processing')
+                    .addClass('status-connected');
+                
+                // Habilitar botones de operaciones
+                $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', false);
+                $('#btn-connect, #btn-autoconnect').prop('disabled', true);
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                
+                let mensajeError = `❌ ERROR AL CONECTAR\n\n`;
+                mensajeError += `Puerto: ${$('#puerto-manual-input').val()}\n`;
+                mensajeError += `Error: ${error.message}\n\n`;
+                
+                if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                    mensajeError += `💡 ESTO ES NORMAL SI:\n`;
+                    mensajeError += `• Estás en PC sin el POS físico (desarrollo)\n`;
+                    mensajeError += `• El POS está apagado\n`;
+                    mensajeError += `• El puerto no es el correcto\n\n`;
+                    mensajeError += `👉 En producción, el POS debe estar encendido.`;
+                } else if (error.message.includes('agente') || error.message.includes('8090')) {
+                    mensajeError += `💡 SOLUCIÓN:\n`;
+                    mensajeError += `1. Ejecute el agente Transbank\n`;
+                    mensajeError += `2. Verifique que corra en puerto 8090\n`;
+                    mensajeError += `3. Ejecute como administrador`;
+                }
+                
+                alert(mensajeError);
+                
+                $('#estado-conexion-rapida')
+                    .removeClass('alert-secondary alert-warning alert-success')
+                    .addClass('alert-danger')
+                    .html('<span><i class="fas fa-times-circle mr-2"></i>Error de Conexión</span>');
+                
+            } finally {
+                $('#btn-conectar-rapido')
+                    .prop('disabled', false)
+                    .html('<i class="fas fa-plug mr-2"></i>Conectar al Puerto');
+            }
+        });
+        
+        // Permitir Enter en el campo de puerto rápido
+        $('#puerto-manual-input').on('keypress', (e) => {
+            if (e.which === 13) { // Enter
+                e.preventDefault();
+                $('#btn-conectar-rapido').click();
+            }
+        });
+        
+        // Botón usar puerto personalizado (campo pequeño)
         $('#btn-usar-puerto-custom').on('click', () => {
             const puertoCustom = $('#input-puerto-custom').val().trim().toUpperCase();
             
@@ -1374,125 +1521,86 @@
             }
         });
 
-        // Botón Simular Conexión (Modo Desarrollo)
-        $('#btn-simular-conexion').on('click', () => {
-            const modoDesarrollo = $('#modo-desarrollo').is(':checked');
-            
-            if (!modoDesarrollo) {
-                mostrarError('❌ Active primero el "Modo Desarrollo" para usar la simulación');
-                return;
-            }
-            
-            // Simular conexión exitosa
-            const puertoSimulado = $('#select-puerto-manual').val() || 'COM3';
-            
-            // Crear instancia simulada si no existe
-            if (!window.posSDK) {
-                window.posSDK = {
-                    isConnected: true,
-                    currentPort: puertoSimulado,
-                    sdk: null,
-                    modoSimulacion: true
-                };
-            } else {
-                window.posSDK.isConnected = true;
-                window.posSDK.currentPort = puertoSimulado;
-                window.posSDK.modoSimulacion = true;
-            }
-            
-            mostrarExito(`✅ [SIMULACIÓN] Conexión simulada a ${puertoSimulado}`);
-            
-            $('#connection-status')
-                .html(`<i class="fas fa-check-circle mr-2"></i>[SIMULADO] ${puertoSimulado}`)
-                .removeClass('status-disconnected status-processing')
-                .addClass('status-connected');
-            $('#puerto-actual-display').text(puertoSimulado + ' (Simulado)');
-            
-            // Habilitar todos los botones
-            $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', false);
-            $('#btn-connect, #btn-autoconnect, #btn-simular-conexion').prop('disabled', true);
-        });
-
-        // Botón Conectar Terminal (con puerto manual o autodetección)
+        // Botón Conectar Terminal (usa SDK REAL de Transbank)
         $('#btn-connect').on('click', async () => {
             try {
                 $('#btn-connect').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>Conectando...');
                 
-                // Verificar modo desarrollo
-                const modoDesarrollo = $('#modo-desarrollo').is(':checked');
+                // Verificar si hay puerto seleccionado
+                const puertoSeleccionado = $('#select-puerto-manual').val();
                 
-                if (modoDesarrollo) {
-                    // En modo desarrollo, simular conexión
-                    const puerto = $('#select-puerto-manual').val() || 'COM3';
-                    
-                    window.posSDK = {
-                        isConnected: true,
-                        currentPort: puerto,
-                        modoSimulacion: true
-                    };
-                    
-                    mostrarExito(`✅ [MODO DESARROLLO] Conectado simulado a ${puerto}`);
-                    $('#connection-status')
-                        .html(`<i class="fas fa-check-circle mr-2"></i>[DEV] ${puerto}`)
-                        .removeClass('status-disconnected status-processing')
-                        .addClass('status-connected');
-                    $('#puerto-actual-display').text(puerto + ' (Dev)');
-                    
-                    // Habilitar botones
-                    $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', false);
-                    $('#btn-connect, #btn-autoconnect').prop('disabled', true);
-                    
+                if (!puertoSeleccionado) {
+                    mostrarError('❌ Debe seleccionar o escribir un puerto primero.\n\n1. Escriba un puerto (ej: COM3, COM7)\n2. Presione "✓ Usar"\n3. Luego haga clic en "Conectar"');
                     return;
                 }
                 
-                // Modo REAL - Conectar al POS físico
+                console.log(`🔌 Intentando conectar a puerto: ${puertoSeleccionado}`);
+                
                 // Crear instancia si no existe
                 if (!window.posSDK) {
                     window.posSDK = new TransbankPOSIntegration();
                 }
                 
-                // Inicializar agente
+                // Inicializar agente Transbank REAL
+                console.log('🔗 Conectando al agente Transbank...');
                 if (!window.posSDK.isConnected) {
                     const initResult = await window.posSDK.initialize();
                     if (!initResult.success) {
-                        throw new Error(initResult.error || 'No se pudo conectar al agente POS');
+                        throw new Error(initResult.error || 'No se pudo conectar al agente Transbank en https://localhost:8090');
                     }
                 }
                 
-                // Verificar si hay puerto seleccionado manualmente
-                const puertoSeleccionado = $('#select-puerto-manual').val();
+                console.log(`✅ Agente conectado. Abriendo puerto ${puertoSeleccionado}...`);
                 
-                if (puertoSeleccionado) {
-                    // Conexión manual a puerto específico
-                    console.log(`🔌 Conectando a puerto seleccionado: ${puertoSeleccionado}`);
-                    
-                    await window.posSDK.sdk.openPort(puertoSeleccionado, 115200);
-                    await window.posSDK.sdk.poll();
-                    
-                    window.posSDK.currentPort = puertoSeleccionado;
-                    window.posSDK.modoSimulacion = false;
-                    
-                    mostrarExito(`✅ Conectado a ${puertoSeleccionado}`);
-                    $('#connection-status')
-                        .html(`<i class="fas fa-check-circle mr-2"></i>Conectado - ${puertoSeleccionado}`)
-                        .removeClass('status-disconnected status-processing')
-                        .addClass('status-connected');
-                    $('#puerto-actual-display').text(puertoSeleccionado);
-                    
-                    // Habilitar botones
-                    $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', false);
-                    $('#btn-connect, #btn-autoconnect').prop('disabled', true);
-                    
-                } else {
-                    // Si no hay puerto seleccionado, mostrar mensaje
-                    mostrarError('❌ Por favor:\n1. Escriba un puerto en el campo de texto (ej: COM3)\n2. O seleccione uno del dropdown\n3. O active "Modo Desarrollo" para simular');
-                }
+                // Intentar abrir el puerto especificado
+                await window.posSDK.sdk.openPort(puertoSeleccionado, 115200);
+                
+                console.log(`🔌 Puerto ${puertoSeleccionado} abierto. Verificando con poll...`);
+                
+                // Verificar que el POS responda
+                await window.posSDK.sdk.poll();
+                
+                // Si llegamos aquí, todo funcionó
+                window.posSDK.currentPort = puertoSeleccionado;
+                
+                mostrarExito(`✅ Conectado exitosamente a ${puertoSeleccionado}`);
+                
+                $('#connection-status')
+                    .html(`<i class="fas fa-check-circle mr-2"></i>Conectado - ${puertoSeleccionado}`)
+                    .removeClass('status-disconnected status-processing')
+                    .addClass('status-connected');
+                $('#puerto-actual-display').text(puertoSeleccionado);
+                
+                // Habilitar botones de operaciones
+                $('#btn-disconnect, #btn-load-keys, #btn-poll, #btn-sale, #btn-quick-sale-10, #btn-refund, #btn-annulment, #btn-sales-report, #btn-last-sale, #btn-totals, #btn-detail, #btn-close-terminal').prop('disabled', false);
+                $('#btn-connect, #btn-autoconnect').prop('disabled', true);
                 
             } catch (error) {
-                console.error('Error conectando:', error);
-                mostrarError(`❌ Error: ${error.message}\n\nSugerencia: Active "Modo Desarrollo" si no tiene el POS físico conectado`);
+                console.error('❌ Error conectando:', error);
+                
+                // Mensaje de error detallado
+                let mensajeError = `❌ Error conectando al puerto ${$('#select-puerto-manual').val() || 'seleccionado'}:\n\n${error.message}`;
+                
+                // Agregar sugerencias según el error
+                if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                    mensajeError += '\n\n💡 El puerto no responde. Esto es NORMAL si:\n';
+                    mensajeError += '• Estás en PC de desarrollo sin POS físico\n';
+                    mensajeError += '• El POS está apagado\n';
+                    mensajeError += '• El puerto no es el correcto\n\n';
+                    mensajeError += '👉 En producción, el POS debe estar encendido y conectado.';
+                } else if (error.message.includes('agente')) {
+                    mensajeError += '\n\n💡 Verifique que el agente Transbank esté ejecutándose.';
+                }
+                
+                mostrarError(mensajeError);
+                
+                console.log('\n📝 NOTA: Si está desarrollando sin POS físico:');
+                console.log('   - Los errores de timeout son esperados');
+                console.log('   - El agente debe estar corriendo');
+                console.log('   - En producción, el POS debe estar conectado\n');
+                
             } finally {
-                $('#btn-connect').prop('disabled', false).html('<i class="fas fa-plug mr-2"></i>Conectar Terminal');
+                $('#btn-connect').prop('disabled', false).html('<i class="fas fa-plug mr-2"></i>Conectar a Puerto Seleccionado');
             }
         });
 

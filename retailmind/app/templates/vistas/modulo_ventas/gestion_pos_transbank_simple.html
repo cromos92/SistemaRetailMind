@@ -126,6 +126,55 @@
                         </button>
                     </div>
                     
+                    <!-- CAMPO PARA ESCRIBIR PUERTO MANUAL -->
+                    <div class="card border-success mb-4" style="border-width: 3px;">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-keyboard mr-2"></i>Escribir Puerto COM Manualmente
+                            </h5>
+                        </div>
+                        <div class="card-body bg-light">
+                            <div class="row align-items-end">
+                                <div class="col-md-5">
+                                    <label for="puerto-manual-input" class="font-weight-bold" style="font-size: 1.1rem;">
+                                        Escriba el Puerto COM:
+                                    </label>
+                                    <div class="input-group input-group-lg">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text bg-success text-white">
+                                                <i class="fas fa-usb" style="font-size: 1.5rem;"></i>
+                                            </span>
+                                        </div>
+                                        <input type="text" 
+                                               id="puerto-manual-input" 
+                                               class="form-control form-control-lg text-center font-weight-bold" 
+                                               placeholder="COM15" 
+                                               style="font-size: 2rem; letter-spacing: 2px;"
+                                               maxlength="10"
+                                               value="COM15">
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        <i class="fas fa-info-circle"></i> Ejemplo: COM1, COM3, COM15, COM22, etc.
+                                    </small>
+                                </div>
+                                <div class="col-md-4">
+                                    <button id="btn-conectar-puerto-manual" class="btn btn-success btn-lg btn-block" style="height: 70px; font-size: 1.2rem;">
+                                        <i class="fas fa-plug mr-2"></i>
+                                        CONECTAR AL PUERTO
+                                    </button>
+                                </div>
+                                <div class="col-md-3">
+                                    <div id="estado-puerto-manual" class="alert alert-secondary mb-0 text-center" style="height: 70px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                                        <span><i class="fas fa-circle mr-2"></i>Desconectado</span>
+                                    </div>
+                                    <small class="text-muted text-center d-block">
+                                        Puerto: <strong id="puerto-actual-manual">-</strong>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Selector de Terminal -->
                     <div class="row mb-3">
                         <div class="col-md-6">
@@ -343,8 +392,11 @@
     </div>
 </div>
 
-<!-- SDK Transbank POS Integrado v3 (versión que funciona) -->
-<script src="https://unpkg.com/transbank-pos-sdk-web@3/dist/pos.js"></script>
+<!-- SDK Transbank POS Integrado - Librería Oficial Local -->
+<script src="{% static 'js/transbank-pos-sdk.js' %}"></script>
+
+<!-- Scripts de Integración POS con Métodos Nuevos -->
+<script src="{% static 'js/pos-transbank.js' %}"></script>
 
 <script>
     // Suprimir errores de consola del agente Transbank cuando no está disponible
@@ -1702,6 +1754,147 @@
         // Generar ticket ID inicial
         document.getElementById('ticket-id').value = posManager.generateTicketId();
 
+        // ========================================================
+        // BOTÓN CONECTAR PUERTO MANUAL (USA SDK OFICIAL)
+        // ========================================================
+        document.getElementById('btn-conectar-puerto-manual').addEventListener('click', async () => {
+            try {
+                const puertoIngresado = document.getElementById('puerto-manual-input').value.trim().toUpperCase();
+                
+                // Validar que hay puerto
+                if (!puertoIngresado) {
+                    alert('❌ Debe escribir un puerto.\n\nEjemplo: COM15');
+                    document.getElementById('puerto-manual-input').focus();
+                    return;
+                }
+                
+                // Validar formato COMxx
+                if (!puertoIngresado.match(/^COM\d+$/i)) {
+                    alert('❌ Formato inválido.\n\nDebe ser: COM15, COM3, etc.');
+                    return;
+                }
+                
+                // Actualizar UI - Iniciando
+                const btnConectar = document.getElementById('btn-conectar-puerto-manual');
+                const estadoPuerto = document.getElementById('estado-puerto-manual');
+                
+                btnConectar.disabled = true;
+                btnConectar.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Conectando a ' + puertoIngresado + '...';
+                
+                estadoPuerto.className = 'alert alert-warning mb-0 text-center';
+                estadoPuerto.innerHTML = '<span><i class="fas fa-spinner fa-spin mr-2"></i>Conectando...</span>';
+                
+                posManager.log(`🔌 Intentando conectar al puerto ${puertoIngresado}`, 'info');
+                
+                // Verificar que SDK esté disponible
+                if (typeof Transbank === 'undefined') {
+                    throw new Error('SDK de Transbank no está cargado. Refresque la página (Ctrl+F5).');
+                }
+                
+                // Paso 1: Conectar al agente Transbank
+                posManager.log('1️⃣ Conectando al agente Transbank (localhost:8090)...', 'info');
+                posManager.updateOperationStatus('Conectando al agente Transbank...', 'info');
+                
+                await Transbank.POS.connect('https://localhost:8090');
+                
+                posManager.log('✅ Agente conectado', 'success');
+                
+                // Paso 2: Abrir puerto especificado
+                posManager.log(`2️⃣ Abriendo puerto ${puertoIngresado} @ 115200 baud...`, 'info');
+                posManager.updateOperationStatus(`Abriendo puerto ${puertoIngresado}...`, 'info');
+                
+                await Transbank.POS.openPort(puertoIngresado, 115200);
+                
+                posManager.log(`✅ Puerto ${puertoIngresado} abierto`, 'success');
+                
+                // Paso 3: Verificar comunicación con poll
+                posManager.log('3️⃣ Verificando comunicación con POS (poll)...', 'info');
+                posManager.updateOperationStatus('Verificando POS...', 'info');
+                
+                const pollResult = await Transbank.POS.poll();
+                
+                posManager.log('✅ POS responde correctamente', 'success');
+                posManager.log('Respuesta poll: ' + JSON.stringify(pollResult), 'info');
+                
+                // ÉXITO TOTAL
+                posManager.connected = true;
+                posManager.currentPort = puertoIngresado;
+                
+                // Actualizar UI - Éxito
+                btnConectar.innerHTML = '<i class="fas fa-plug mr-2"></i>CONECTAR AL PUERTO';
+                
+                estadoPuerto.className = 'alert alert-success mb-0 text-center';
+                estadoPuerto.innerHTML = `<span><i class="fas fa-check-circle mr-2"></i>Conectado a ${puertoIngresado}</span>`;
+                
+                document.getElementById('puerto-actual-manual').textContent = puertoIngresado;
+                document.getElementById('connection-status').innerHTML = `<i class="fas fa-check-circle mr-2"></i>Conectado - ${puertoIngresado}`;
+                document.getElementById('connection-status').className = 'terminal-status status-connected';
+                
+                posManager.updateOperationStatus(`✅ Conectado exitosamente a ${puertoIngresado}`, 'success');
+                
+                alert(`✅ ¡CONECTADO EXITOSAMENTE!\n\nPuerto: ${puertoIngresado}\nEstado: POS Operativo\n\nAhora puede realizar operaciones.`);
+                
+                // Habilitar todos los botones de operaciones
+                const botonesOperacion = [
+                    'btn-disconnect', 'btn-sale', 'btn-refund', 'btn-last-sale',
+                    'btn-totals', 'btn-close-day', 'btn-load-keys', 'btn-sales-detail',
+                    'btn-demo-sale-1000', 'btn-demo-sale-5000', 'btn-demo-sale-10000'
+                ];
+                
+                botonesOperacion.forEach(btnId => {
+                    const btn = document.getElementById(btnId);
+                    if (btn) btn.disabled = false;
+                });
+                
+                // Deshabilitar botones de conexión
+                document.getElementById('btn-connect').disabled = true;
+                document.getElementById('btn-auto-detect').disabled = true;
+                
+            } catch (error) {
+                console.error('❌ Error conectando:', error);
+                
+                // Actualizar UI - Error
+                const btnConectar = document.getElementById('btn-conectar-puerto-manual');
+                const estadoPuerto = document.getElementById('estado-puerto-manual');
+                
+                btnConectar.disabled = false;
+                btnConectar.innerHTML = '<i class="fas fa-plug mr-2"></i>CONECTAR AL PUERTO';
+                
+                estadoPuerto.className = 'alert alert-danger mb-0 text-center';
+                estadoPuerto.innerHTML = '<span><i class="fas fa-times-circle mr-2"></i>Error</span>';
+                
+                posManager.log(`❌ Error: ${error.message}`, 'error');
+                
+                let mensajeError = `❌ ERROR AL CONECTAR\n\n`;
+                mensajeError += `Puerto: ${document.getElementById('puerto-manual-input').value}\n`;
+                mensajeError += `Error: ${error.message}\n\n`;
+                
+                if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                    mensajeError += `💡 ESTO ES NORMAL SI:\n`;
+                    mensajeError += `• No tienes el POS conectado en este PC\n`;
+                    mensajeError += `• El POS está apagado\n`;
+                    mensajeError += `• El puerto no es correcto\n\n`;
+                    mensajeError += `👉 En producción con POS conectado, debe funcionar.`;
+                } else if (error.message.includes('agente') || error.message.includes('8090')) {
+                    mensajeError += `💡 SOLUCIÓN:\n`;
+                    mensajeError += `1. Ejecute el agente Transbank desktop\n`;
+                    mensajeError += `2. Debe estar en https://localhost:8090\n`;
+                    mensajeError += `3. Ejecute como administrador si es necesario`;
+                }
+                
+                alert(mensajeError);
+                posManager.updateOperationStatus('Error de conexión', 'error');
+            }
+        });
+        
+        // Permitir Enter en el campo de puerto manual
+        document.getElementById('puerto-manual-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('btn-conectar-puerto-manual').click();
+            }
+        });
+
         // Botones de conexión y detección
         document.getElementById('btn-connect').addEventListener('click', () => {
             posManager.connect();
@@ -1815,8 +2008,40 @@
         });
 
         // Operaciones básicas
+        // Botón Cargar Llaves (USA SDK OFICIAL)
         document.getElementById('btn-load-keys').addEventListener('click', async () => {
-            await posManager.cargarLlaves();
+            if (!confirm('¿Desea cargar las llaves criptográficas en el POS?\n\nNota: Esta operación solo se realiza durante la configuración inicial.')) {
+                return;
+            }
+            
+            const btn = document.getElementById('btn-load-keys');
+            const originalText = btn.innerHTML;
+            
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cargando llaves...';
+                
+                posManager.updateOperationStatus('Cargando llaves criptográficas...', 'info');
+                posManager.log('🔑 Iniciando carga de llaves...', 'info');
+                
+                // Usar SDK oficial directamente
+                const result = await Transbank.POS.loadKeys();
+                
+                posManager.log('✅ Llaves cargadas exitosamente', 'success');
+                posManager.log('Respuesta: ' + JSON.stringify(result), 'info');
+                
+                posManager.updateOperationStatus('✅ Llaves cargadas correctamente', 'success');
+                alert('✅ Llaves cargadas exitosamente en el POS');
+                
+            } catch (error) {
+                console.error('Error cargando llaves:', error);
+                posManager.log(`❌ Error cargando llaves: ${error.message}`, 'error');
+                posManager.updateOperationStatus('Error cargando llaves', 'error');
+                alert(`❌ Error al cargar llaves:\n\n${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
         });
 
         document.getElementById('btn-poll').addEventListener('click', async () => {
@@ -1948,47 +2173,112 @@
             }
         });
 
+        // Botón Totales del Día (USA SDK OFICIAL)
         document.getElementById('btn-totals').addEventListener('click', async () => {
             const btn = document.getElementById('btn-totals');
             const originalText = btn.innerHTML;
+            
             try {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Obteniendo...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Consultando totales...';
                 btn.disabled = true;
-                await posManager.obtenerTotales();
+                
+                posManager.updateOperationStatus('Obteniendo totales del día...', 'info');
+                posManager.log('📊 Consultando totales del día...', 'info');
+                
+                // Usar SDK oficial
+                const totales = await Transbank.POS.getTotals();
+                
+                posManager.log('✅ Totales obtenidos', 'success');
+                posManager.log('Totales: ' + JSON.stringify(totales, null, 2), 'info');
+                
+                // Mostrar resultados
+                let mensaje = '📊 TOTALES DEL DÍA\n\n';
+                mensaje += `Total Ventas: ${totales.salesCount || 0}\n`;
+                mensaje += `Monto Ventas: $${(totales.salesAmount || 0) / 100}\n`;
+                mensaje += `Total Anulaciones: ${totales.refundsCount || 0}\n`;
+                mensaje += `Monto Anulado: $${(totales.refundsAmount || 0) / 100}`;
+                
+                alert(mensaje);
+                posManager.updateOperationStatus('✅ Totales obtenidos', 'success');
+                
             } catch (error) {
-                posManager.log(`Error: ${error.message}`, 'error');
+                console.error('Error obteniendo totales:', error);
+                posManager.log(`❌ Error: ${error.message}`, 'error');
+                posManager.updateOperationStatus('Error obteniendo totales', 'error');
+                alert(`❌ Error obteniendo totales:\n\n${error.message}`);
             } finally {
                 btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         });
 
+        // Botón Cerrar Día (USA SDK OFICIAL)
         document.getElementById('btn-close-day').addEventListener('click', async () => {
             const btn = document.getElementById('btn-close-day');
             const originalText = btn.innerHTML;
             
             // Confirmación antes de cerrar
-            if (!confirm('¿Está seguro de ejecutar el cierre de día? Esta operación no se puede deshacer.')) {
+            if (!confirm('¿Está seguro de ejecutar el CIERRE DE DÍA?\n\n⚠️ Esta operación:\n• Imprime el cierre en el POS\n• Resetea los contadores\n• No se puede deshacer\n\n¿Continuar?')) {
                 return;
             }
             
             try {
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cerrando...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando cierre...';
                 btn.disabled = true;
-                await posManager.cerrarDia();
+                
+                posManager.updateOperationStatus('Ejecutando cierre de día...', 'info');
+                posManager.log('📊 Iniciando cierre de día...', 'info');
+                
+                // Usar SDK oficial
+                const result = await Transbank.POS.closeDay();
+                
+                posManager.log('✅ Cierre de día completado', 'success');
+                posManager.log('Resultado: ' + JSON.stringify(result, null, 2), 'info');
+                
+                alert(`✅ CIERRE DE DÍA COMPLETADO\n\nEl cierre fue impreso en el POS.\nLos contadores han sido reseteados.`);
+                posManager.updateOperationStatus('✅ Cierre de día completado', 'success');
+                
             } catch (error) {
-                posManager.log(`Error: ${error.message}`, 'error');
+                console.error('Error en cierre de día:', error);
+                posManager.log(`❌ Error en cierre: ${error.message}`, 'error');
+                posManager.updateOperationStatus('Error en cierre de día', 'error');
+                alert(`❌ Error en cierre de día:\n\n${error.message}`);
             } finally {
                 btn.innerHTML = originalText;
             }
         });
 
+        // Botón Última Venta (USA SDK OFICIAL)
         document.getElementById('btn-last-sale').addEventListener('click', async () => {
             const btn = document.getElementById('btn-last-sale');
             const originalText = btn.innerHTML;
+            
             try {
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Consultando...';
                 btn.disabled = true;
-                await posManager.obtenerUltimaVenta();
+                
+                posManager.updateOperationStatus('Obteniendo última venta...', 'info');
+                posManager.log('📄 Consultando última venta...', 'info');
+                
+                // Usar SDK oficial
+                const ultimaVenta = await Transbank.POS.getLastSale();
+                
+                posManager.log('✅ Última venta obtenida', 'success');
+                posManager.log('Datos: ' + JSON.stringify(ultimaVenta, null, 2), 'info');
+                
+                // Mostrar información
+                let mensaje = '📄 ÚLTIMA VENTA\n\n';
+                if (ultimaVenta) {
+                    mensaje += `Código Autorización: ${ultimaVenta.authorizationCode || 'N/A'}\n`;
+                    mensaje += `Monto: $${(ultimaVenta.amount || 0) / 100}\n`;
+                    mensaje += `Tipo Tarjeta: ${ultimaVenta.cardType || 'N/A'}\n`;
+                    mensaje += `Número Operación: ${ultimaVenta.operationNumber || 'N/A'}`;
+                } else {
+                    mensaje += 'No hay ventas registradas';
+                }
+                
+                alert(mensaje);
+                posManager.updateOperationStatus('✅ Última venta consultada', 'success');
             } catch (error) {
                 posManager.log(`Error: ${error.message}`, 'error');
             } finally {
