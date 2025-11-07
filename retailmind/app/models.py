@@ -414,6 +414,54 @@ class Producto_Talla(models.Model):
   
     def __str__(self):
         return f"Producto_Talla {self.sku} - {self.stock}"
+    
+    def stock_sucursal(self, sucursal_id):
+        """
+        Calcula el stock disponible en una sucursal específica
+        basándose en los movimientos de productos
+        """
+        from django.db.models import Sum, Q
+        
+        # Sumar ingresos a esta sucursal (movimientos donde sucursal_destino = sucursal_id)
+        ingresos = self.movimientos_productos_talla.filter(
+            Q(sucursal_destino_id=sucursal_id) &
+            (Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA')) &
+            Q(estado='COMPLETADO')
+        ).aggregate(total=Sum('cantidad'))['total'] or 0
+        
+        # Sumar egresos desde esta sucursal (movimientos donde sucursal_origen = sucursal_id)
+        egresos = self.movimientos_productos_talla.filter(
+            Q(sucursal_origen_id=sucursal_id) &
+            (Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA')) &
+            Q(estado='COMPLETADO')
+        ).aggregate(total=Sum('cantidad'))['total'] or 0
+        
+        # El stock en sucursal es ingresos + egresos (egresos son negativos)
+        stock_calculado = ingresos + egresos
+        
+        return max(0, stock_calculado)  # No permitir stock negativo
+    
+    def stock_total(self):
+        """
+        Calcula el stock total en todas las sucursales
+        """
+        from django.db.models import Sum
+        
+        # Sumar todos los ingresos
+        ingresos = self.movimientos_productos_talla.filter(
+            tipo_movimiento='INGRESO',
+            estado='COMPLETADO'
+        ).aggregate(total=Sum('cantidad'))['total'] or 0
+        
+        # Sumar todos los egresos (son negativos)
+        egresos = self.movimientos_productos_talla.filter(
+            tipo_movimiento='EGRESO',
+            estado='COMPLETADO'
+        ).aggregate(total=Sum('cantidad'))['total'] or 0
+        
+        stock_calculado = ingresos + egresos
+        
+        return max(0, stock_calculado)
 # ========== CONSTANTES PARA MOVIMIENTOS ==========
 TIPO_MOVIMIENTO_CHOICES = [
     ('INGRESO', 'Ingreso'),

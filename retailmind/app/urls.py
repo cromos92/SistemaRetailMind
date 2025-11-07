@@ -130,6 +130,8 @@ from .views_modulo_gestion_precios import (
     rechazar_cambio_precio,
     obtener_notificaciones_precio,
     marcar_notificacion_leida,
+    # Debug
+    debug_session_precios,
 )
 from . import views_modulo_documentos
 from .views_modulo_cotizaciones import (
@@ -540,6 +542,9 @@ urlpatterns = [
     path('gestion-precios/rechazar-cambio/', rechazar_cambio_precio, name='rechazar_cambio_precio'),
     path('gestion-precios/notificaciones/', obtener_notificaciones_precio, name='obtener_notificaciones_precio'),
     path('gestion-precios/marcar-notificacion/', marcar_notificacion_leida, name='marcar_notificacion_leida'),
+    
+    # Endpoint temporal de debug
+    path('gestion-precios/debug-session/', debug_session_precios, name='debug_session_precios'),
 
     # ========== MÓDULO DE GENERACIÓN DE ARCHIVOS TXT ACEPTA ==========
     path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),

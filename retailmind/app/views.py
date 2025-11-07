@@ -83,7 +83,7 @@ def recepciones_pendientes_api(request):
                 fecha_recepcion__isnull=True,
                 dte_movimientos__concepto='TRASPASO_SALIDA',
                 dte_movimientos__tipo_movimiento='EGRESO',
-                dte_movimientos__estado='PENDIENTE_RECEPCION',
+                dte_movimientos__estado='COMPLETADO',  # ✅ COMPLETADO porque el stock ya salió
                 dte_movimientos__sucursal_destino_id=sucursal_destino_id
             )
             .select_related('emisor', 'sucursal')
@@ -131,7 +131,7 @@ def recepciones_pendientes_api(request):
             movimientos_salida = [
                 mov for mov in dte.dte_movimientos.all()
                 if mov.concepto == 'TRASPASO_SALIDA'
-                and mov.estado == 'PENDIENTE_RECEPCION'  # ✅ CORREGIDO
+                and mov.estado == 'COMPLETADO'  # ✅ COMPLETADO porque el stock ya salió
                 and mov.sucursal_destino_id == sucursal_destino_id
             ]
             if not movimientos_salida:
@@ -208,7 +208,7 @@ def recepciones_pendientes_api(request):
         movimientos_pendientes = Movimientos_Producto.objects.filter(
             id__in=movimiento_ids,
             concepto='TRASPASO_SALIDA',
-            estado='PENDIENTE_RECEPCION',  # ✅ CORREGIDO
+            estado='COMPLETADO',  # ✅ COMPLETADO porque el stock ya salió
             sucursal_destino_id=sucursal_destino_id
         ).select_related('sucursal_origen__empresa')
 
@@ -399,12 +399,9 @@ def confirmar_recepcion_api(request):
                 else:
                     productos_ok += 1
                 
-                # Actualizar stock solo con lo que llegó bien
+                # Calcular cantidad a ingresar (solo lo que llegó bien)
                 cantidad_a_ingresar = cantidad_recepcionada - cantidad_danada
-                if cantidad_a_ingresar > 0 and estado != 'FALTANTE':
-                    producto_talla.stock += cantidad_a_ingresar
-                    producto_talla.save(update_fields=['stock'])
-                    print(f"✓ Stock aumentado: {producto_talla.sku} +{cantidad_a_ingresar}")
+                # No se modifica el campo stock directamente - el stock se calcula desde movimientos
                 
                 # Registrar recepción detallada
                 Productos_Recepcionados.objects.create(
@@ -421,14 +418,14 @@ def confirmar_recepcion_api(request):
                     recepcionado_por=usuario
                 )
                 
-                # Crear movimiento de INGRESO (solo lo que llegó bien)
+                # Crear movimiento de INGRESO en sucursal destino (solo lo que llegó bien)
                 if cantidad_a_ingresar > 0:
                     Movimientos_Producto.objects.create(
                         dte=dte,
                         ProductoTalla=producto_talla,
                         sucursal_origen=dte.sucursal,
                         sucursal_destino=sucursal_destino,
-                        cantidad=cantidad_a_ingresar,
+                        cantidad=cantidad_a_ingresar,  # Positivo porque es ingreso
                         costo=producto_talla.producto.costo if producto_talla.producto else 0,
                         sobreprecio=producto_talla.producto.sobreprecio if producto_talla.producto else 0,
                         precio=producto_talla.producto.precioventa if producto_talla.producto else 0,
@@ -438,13 +435,9 @@ def confirmar_recepcion_api(request):
                         responsable=usuario,
                         observaciones=f'Recepción DTE #{dte.numero_documento}' + (f' - {observaciones}' if observaciones else '')
                     )
+                    print(f"✓ Movimiento de ingreso creado: {producto_talla.sku} +{cantidad_a_ingresar} en sucursal {sucursal_destino.alias}")
             
-            # Marcar movimientos de salida como COMPLETADOS
-            Movimientos_Producto.objects.filter(
-                dte=dte,
-                concepto='TRASPASO_SALIDA',
-                estado='PENDIENTE_RECEPCION'
-            ).update(estado='COMPLETADO')
+            # Los movimientos de salida ya están en COMPLETADO desde la emisión
             
             # Determinar estado final del DTE
             if productos_problemas == 0:
@@ -8866,12 +8859,13 @@ def emitir_dte(request):
                 cantidad = int(item.get('cantidad', 0))
                 precio = int(float(item.get('precio', 0)))  # Convertir a int para compatibilidad con IntegerField
                 
-                # Validar stock disponible
+                # Validar stock disponible en la sucursal
                 talla = get_object_or_404(Producto_Talla, id=talla_id)
-                if talla.stock < cantidad:
+                stock_disponible = talla.stock_sucursal(sucursal_id)
+                if stock_disponible < cantidad:
                     return JsonResponse({
                         'success': False,
-                        'error': f'Stock insuficiente para {talla.producto.articulo} talla {talla.talla}'
+                        'error': f'Stock insuficiente para {talla.producto.articulo} talla {talla.talla}. Disponible en sucursal: {stock_disponible}'
                     }, status=400)
                 
                 subtotal_neto += cantidad * precio
@@ -8972,55 +8966,38 @@ def emitir_dte(request):
                 
                 # Gestión de stock y movimientos según tipo de despacho
                 if metodo_despacho == 'externo':
-                    # DESPACHO EXTERNO: Usar FIFO para consumir stock (venta real)
-                    if talla.stock < cantidad:
-                        raise ValueError(f"Stock insuficiente para {producto.articulo} talla {talla.talla}. Disponible: {talla.stock}, Solicitado: {cantidad}")
+                    # DESPACHO EXTERNO: Validar stock y crear movimiento de egreso
+                    stock_disponible = talla.stock_sucursal(sucursal_id)
+                    if stock_disponible < cantidad:
+                        raise ValueError(f"Stock insuficiente para {producto.articulo} talla {talla.talla}. Disponible en sucursal: {stock_disponible}, Solicitado: {cantidad}")
                     
-                    # Consumir stock usando FIFO (esto crea automáticamente el movimiento)
-                    try:
-                        costo_consumido, lotes_usados = consumir_stock_fifo(
-                            producto_talla=talla,
-                            cantidad_requerida=cantidad,
-                            responsable=request.user.username,
-                            ticket=None,
-                            observaciones=f"Venta DTE #{numero_documento} - Cliente: {receptor.nombre if receptor else 'N/A'}",
-                            referencia_externa=f"DTE_{numero_documento}"
-                        )
-                        print(f"✓ Stock consumido FIFO: {talla.sku} -{cantidad} (Costo: ${costo_consumido})")
-                    except Exception as fifo_error:
-                        print(f"⚠ Error FIFO: {fifo_error}. Usando método manual.")
-                        # Fallback: Reducir stock manualmente y crear movimiento
-                        talla.stock -= cantidad
-                        talla.save()
-                        
-                        Movimientos_Producto.objects.create(
-                            dte=dte,
-                            ProductoTalla=talla,
-                            sucursal_origen=sucursal,
-                            sucursal_destino=None,
-                            cantidad=-cantidad,
-                            costo=producto.costo,
-                            sobreprecio=producto.sobreprecio,
-                            precio=int(precio),
-                            concepto='VENTA_MAYORISTA',
-                            tipo_movimiento='EGRESO',
-                            estado='COMPLETADO',
-                            responsable=request.user.username,
-                            observaciones=f"Venta DTE #{numero_documento} - Cliente: {receptor.nombre if receptor else 'N/A'} (Sin FIFO)"
-                        )
+                    # Crear movimiento de egreso (el stock se calcula desde movimientos)
+                    Movimientos_Producto.objects.create(
+                        dte=dte,
+                        ProductoTalla=talla,
+                        sucursal_origen=sucursal,
+                        sucursal_destino=None,
+                        cantidad=-cantidad,  # Negativo porque es egreso
+                        costo=producto.costo,
+                        sobreprecio=producto.sobreprecio,
+                        precio=int(precio),
+                        concepto='VENTA_MAYORISTA',
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',
+                        responsable=request.user.username,
+                        observaciones=f"Venta DTE #{numero_documento} - Cliente: {receptor.nombre if receptor else 'N/A'}"
+                    )
+                    print(f"✓ Movimiento de egreso creado: {talla.sku} -{cantidad} en sucursal {sucursal.alias}")
+                    
                 else:
-                    # DESPACHO INTERNO: Reducir stock INMEDIATAMENTE y crear movimiento de traspaso
+                    # DESPACHO INTERNO: Crear movimiento de traspaso (salida en origen)
                     
-                    # Validar que hay stock suficiente
-                    if talla.stock < cantidad:
-                        raise ValueError(f"Stock insuficiente para {producto.articulo} talla {talla.talla}. Disponible: {talla.stock}, Solicitado: {cantidad}")
+                    # Validar que hay stock suficiente en la sucursal origen
+                    stock_disponible = talla.stock_sucursal(sucursal_id)
+                    if stock_disponible < cantidad:
+                        raise ValueError(f"Stock insuficiente para {producto.articulo} talla {talla.talla}. Disponible en sucursal: {stock_disponible}, Solicitado: {cantidad}")
                     
-                    # ✅ REDUCIR STOCK INMEDIATAMENTE en sucursal origen
-                    talla.stock -= cantidad
-                    talla.save()
-                    print(f"✓ Stock reducido en origen INMEDIATAMENTE: {talla.sku} -{cantidad} (Stock actual: {talla.stock})")
-                    
-                    # Crear movimiento de egreso en sucursal origen (COMPLETADO porque ya se redujo el stock)
+                    # Crear movimiento de egreso en sucursal origen (COMPLETADO porque ya salió)
                     Movimientos_Producto.objects.create(
                         dte=dte,
                         ProductoTalla=talla,
@@ -9031,11 +9008,12 @@ def emitir_dte(request):
                         sobreprecio=producto.sobreprecio,
                         precio=int(precio),
                         concepto='TRASPASO_SALIDA',
-                        tipo_movimiento='EGRESO',  # Cambiado a EGRESO porque ya salió físicamente
-                        estado='PENDIENTE_RECEPCION',  # Pendiente de que el destino lo reciba
+                        tipo_movimiento='EGRESO',
+                        estado='COMPLETADO',  # ✅ COMPLETADO inmediatamente - el stock ya salió
                         responsable=request.user.username,
-                        observaciones=f"Traspaso DTE #{numero_documento} - Origen: {sucursal.alias} → Destino: {sucursal_destino.alias} - Stock reducido al emitir"
+                        observaciones=f"Traspaso DTE #{numero_documento} - Origen: {sucursal.alias} → Destino: {sucursal_destino.alias}"
                     )
+                    print(f"✓ Movimiento de egreso creado: {talla.sku} -{cantidad} desde {sucursal.alias} hacia {sucursal_destino.alias}")
         
         return JsonResponse({
             'success': True,
@@ -9213,8 +9191,8 @@ def buscar_productos_sucursal(request):
     """
     Vista para mostrar productos por sucursal con filtros de búsqueda
     """
-    # Obtener sucursal actual del usuario
-    sucursal_actual_id = request.session.get('sucursalActual')
+    # Obtener sucursal actual del usuario (intentar ambas variables)
+    sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
     
     # Obtener todas las sucursales disponibles para el usuario
     sucursales_usuario = EmpresaUser.objects.filter(
@@ -9303,15 +9281,40 @@ def obtener_productos_sucursal(request):
             productos_query = productos_query.filter(atributo2_id=atributo2_id)
         if atributo3_id:  # Género
             productos_query = productos_query.filter(atributo3_id=atributo3_id)
-        
-        productos_query = productos_query.distinct()
 
-        # Filtrar solo productos con stock si se seleccionó el checkbox
-        if solo_con_stock:
-            # Anotar cada producto con su stock total
+        # Obtener parámetro de ordenamiento
+        ordenar = request.GET.get('ordenar', '')
+        
+        # Anotar stock ANTES del distinct para que funcione el ordenamiento
+        # Esto es necesario para que el ORDER BY funcione correctamente
+        necesita_stock_anotado = solo_con_stock or ordenar in ['stock_desc', 'stock_asc']
+        
+        if necesita_stock_anotado:
             productos_query = productos_query.annotate(
                 stock_total_anotado=Sum('producto_talla__stock')
-            ).filter(stock_total_anotado__gt=0)
+            )
+        
+        # Aplicar distinct después de anotar
+        productos_query = productos_query.distinct()
+        
+        # Filtrar solo productos con stock si se seleccionó el checkbox
+        if solo_con_stock:
+            productos_query = productos_query.filter(stock_total_anotado__gt=0)
+        
+        # Aplicar ordenamiento según el parámetro
+        if ordenar:
+            if ordenar == 'stock_desc':
+                productos_query = productos_query.order_by('-stock_total_anotado')
+            elif ordenar == 'stock_asc':
+                productos_query = productos_query.order_by('stock_total_anotado')
+            elif ordenar == 'articulo_asc':
+                productos_query = productos_query.order_by('articulo')
+            elif ordenar == 'articulo_desc':
+                productos_query = productos_query.order_by('-articulo')
+            elif ordenar == 'precio_asc':
+                productos_query = productos_query.order_by('precioventa')
+            elif ordenar == 'precio_desc':
+                productos_query = productos_query.order_by('-precioventa')
 
         # Contar total
         total_productos = productos_query.count()
@@ -9347,6 +9350,7 @@ def obtener_productos_sucursal(request):
                 'color': producto.atributo2.valor if producto.atributo2 else '',
                 'genero': producto.atributo3.valor if producto.atributo3 else '',
                 'stock_total': stock_total,
+                'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
                 'tallas_stock': tallas_stock,
                 'tipo_talla': producto.tipo_talla,
             })
@@ -9408,8 +9412,8 @@ def ticket_venta(request):
     Vista principal para crear tickets de venta
     Muestra vendedores asociados a la sucursal actual del usuario
     """
-    # Obtener sucursal actual del usuario
-    sucursal_actual_id = request.session.get('sucursalActual')
+    # Obtener sucursal actual del usuario (intentar ambas variables de sesión)
+    sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
     sucursal_actual = None
     empresa_actual_nombre = request.session.get('nombreEmpresaActual', 'Sin empresa')
     
@@ -9494,7 +9498,8 @@ def buscar_producto_por_sku(request):
     Buscar producto por SKU para el ticket de venta
     """
     sku = request.GET.get('sku', '').strip()
-    sucursal_id = request.session.get('sucursalActual')
+    # Obtener sucursal de la sesión (intentar ambas variables)
+    sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
     
     if not sku:
         return JsonResponse({
@@ -9505,7 +9510,7 @@ def buscar_producto_por_sku(request):
     if not sucursal_id:
         return JsonResponse({
             'success': False,
-            'message': 'No hay sucursal seleccionada'
+            'message': 'No hay sucursal seleccionada. Por favor selecciona una sucursal desde el menú principal.'
         })
     
     try:
@@ -9667,6 +9672,7 @@ def buscar_productos_bodega(request):
                 'categoria': producto.categoria.nombre if producto.categoria else '-',
                 'tipo_talla': producto.tipo_talla or '-',
                 'costo': float(producto.costo) if producto.costo else 0,
+                'sobreprecio': float(producto.sobreprecio) if producto.sobreprecio else 0,  # ← AGREGADO
                 'precio_venta': float(producto.precioventa) if producto.precioventa else 0,
                 'stock_total': stock_total,
                 'tallas_disponibles': tallas_disponibles,
@@ -9677,7 +9683,9 @@ def buscar_productos_bodega(request):
                     'id': talla.id,
                     'talla': talla.talla,
                     'sku': str(talla.sku),
-                    'stock': talla.stock
+                    'stock': talla.stock,
+                    'costo': float(producto.costo) if producto.costo else 0,  # ← AGREGADO
+                    'sobreprecio': float(producto.sobreprecio) if producto.sobreprecio else 0  # ← AGREGADO
                 } for talla in tallas_disponibles_obj]
             })
         

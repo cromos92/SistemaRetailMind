@@ -1794,21 +1794,43 @@
                 
                 await Transbank.POS.connect('https://localhost:8090');
                 
-                posManager.log('✅ Agente conectado', 'success');
+                // Esperar a que la conexión esté realmente establecida
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Verificar estado de conexión
+                posManager.log(`Estado SDK: isConnected = ${Transbank.POS.isConnected}`, 'info');
+                
+                if (!Transbank.POS.isConnected) {
+                    throw new Error('El agente Transbank no se conectó correctamente. Verifique que esté ejecutándose.');
+                }
+                
+                posManager.log('✅ Agente conectado y listo', 'success');
                 
                 // Paso 2: Abrir puerto especificado
                 posManager.log(`2️⃣ Abriendo puerto ${puertoIngresado} @ 115200 baud...`, 'info');
                 posManager.updateOperationStatus(`Abriendo puerto ${puertoIngresado}...`, 'info');
                 
-                await Transbank.POS.openPort(puertoIngresado, 115200);
-                
-                posManager.log(`✅ Puerto ${puertoIngresado} abierto`, 'success');
+                try {
+                    const openPortResult = await Transbank.POS.openPort(puertoIngresado, 115200);
+                    posManager.log(`✅ Puerto ${puertoIngresado} abierto`, 'success');
+                    posManager.log(`Respuesta openPort: ${JSON.stringify(openPortResult)}`, 'info');
+                } catch (portError) {
+                    posManager.log(`❌ Error abriendo puerto: ${portError}`, 'error');
+                    throw new Error(`No se pudo abrir puerto COM15. Verifique:\n1. El puerto existe en el sistema\n2. No está siendo usado por otra aplicación\n3. Tiene permisos suficientes\n\nError: ${portError.message || portError}`);
+                }
                 
                 // Paso 3: Verificar comunicación con poll
                 posManager.log('3️⃣ Verificando comunicación con POS (poll)...', 'info');
                 posManager.updateOperationStatus('Verificando POS...', 'info');
                 
-                const pollResult = await Transbank.POS.poll();
+                let pollResult;
+                try {
+                    pollResult = await Transbank.POS.poll();
+                    posManager.log(`Respuesta poll: ${JSON.stringify(pollResult)}`, 'info');
+                } catch (pollError) {
+                    posManager.log(`❌ Error en poll: ${pollError}`, 'error');
+                    throw new Error(`El puerto COM15 se abrió pero el POS no responde.\n\nEsto puede significar:\n• El POS está apagado\n• El puerto no es el correcto\n• El POS no está listo\n\nError: ${pollError.message || pollError}`);
+                }
                 
                 posManager.log('✅ POS responde correctamente', 'success');
                 posManager.log('Respuesta poll: ' + JSON.stringify(pollResult), 'info');
@@ -1848,7 +1870,10 @@
                 document.getElementById('btn-auto-detect').disabled = true;
                 
             } catch (error) {
-                console.error('❌ Error conectando:', error);
+                console.error('❌ Error conectando completo:', error);
+                console.error('❌ Error tipo:', typeof error);
+                console.error('❌ Error mensaje:', error.message);
+                console.error('❌ Error stack:', error.stack);
                 
                 // Actualizar UI - Error
                 const btnConectar = document.getElementById('btn-conectar-puerto-manual');
@@ -1860,11 +1885,12 @@
                 estadoPuerto.className = 'alert alert-danger mb-0 text-center';
                 estadoPuerto.innerHTML = '<span><i class="fas fa-times-circle mr-2"></i>Error</span>';
                 
-                posManager.log(`❌ Error: ${error.message}`, 'error');
+                posManager.log(`❌ Error completo: ${JSON.stringify(error)}`, 'error');
+                posManager.log(`❌ Error mensaje: ${error.message || 'Sin mensaje'}`, 'error');
                 
                 let mensajeError = `❌ ERROR AL CONECTAR\n\n`;
                 mensajeError += `Puerto: ${document.getElementById('puerto-manual-input').value}\n`;
-                mensajeError += `Error: ${error.message}\n\n`;
+                mensajeError += `Error: ${error.message || error.toString() || 'Error desconocido'}\n\n`;
                 
                 if (error.message.includes('timeout') || error.message.includes('Timeout')) {
                     mensajeError += `💡 ESTO ES NORMAL SI:\n`;

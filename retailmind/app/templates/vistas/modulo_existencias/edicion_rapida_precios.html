@@ -473,15 +473,15 @@
 }
 </style>
 
-<div class="main-content">
-    <div class="page-content">
-        <div class="container-fluid">
-            <div style="margin-bottom: 20px;">
-                <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
-                    <i class="fas fa-bolt"></i> Edición Rápida de Precios
-                </h1>
-                <p style="color: #7f8c8d; margin: 0;">Agrega productos y edita precios con Tab - Súper rápido ⚡</p>
-            </div>
+<!-- El main-content ya está incluido en layout/menu.html -->
+<div class="page-content">
+    <div class="container-fluid">
+        <div style="margin-bottom: 20px;">
+            <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
+                <i class="fas fa-bolt"></i> Edición Rápida de Precios
+            </h1>
+            <p style="color: #7f8c8d; margin: 0;">Agrega productos y edita precios con Tab - Súper rápido ⚡</p>
+        </div>
 
         <div class="quick-edit-container">
             <!-- Panel Izquierdo: Búsqueda -->
@@ -549,10 +549,8 @@
         </div>
     </div>
     <!-- container-fluid -->
-    </div>
-    <!-- page-content -->
 </div>
-<!-- main-content -->
+<!-- page-content -->
 
 <!-- Loading Overlay -->
 <div class="loading-overlay" id="loadingOverlay">
@@ -584,16 +582,50 @@ async function buscarProductosRapido() {
     }
     
     try {
-        const response = await fetch(`/app/gestion-precios/buscar/?search=${encodeURIComponent(termino)}&per_page=20`);
+        // 🔍 Obtener sucursal desde el contexto de Django
+        const sucursalId = '{{ sucursal_actual }}';
+        
+        // 🔍 Construir URL con parámetro sucursal explícito
+        let url = `/app/gestion-precios/buscar/?search=${encodeURIComponent(termino)}&per_page=20`;
+        if (sucursalId && sucursalId !== 'None') {
+            url += `&sucursal=${sucursalId}`;
+        }
+        
+        console.log('🔍 Buscando productos:', { termino, sucursalId, url });
+        
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.success) {
             productosDisponibles = data.productos;
             renderizarResultadosBusqueda(data.productos);
+            console.log(`✅ ${data.productos.length} productos encontrados`);
+        } else {
+            // Mostrar error si no hay sucursal o hay otro problema
+            console.error('❌ Error en búsqueda:', data.error);
+            if (data.error && data.error.includes('sucursal')) {
+                mostrarAlertaSucursal();
+            }
         }
     } catch (error) {
-        console.error('Error buscando:', error);
+        console.error('❌ Error buscando:', error);
     }
+}
+
+// Mostrar alerta si no hay sucursal activa
+function mostrarAlertaSucursal() {
+    Swal.fire({
+        icon: 'warning',
+        title: 'Sin Sucursal Activa',
+        text: 'No tienes una sucursal activa en tu sesión. Por favor, selecciona una sucursal.',
+        confirmButtonText: 'Ir a Selección de Sucursal',
+        showCancelButton: true,
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = '/app/seleccionar-empresa-sucursal/';
+        }
+    });
 }
 
 // Renderizar resultados de búsqueda
@@ -624,8 +656,12 @@ function renderizarResultadosBusqueda(productos) {
         // Info de sucursales similares
         let sucursalesInfo = '';
         if (producto.sucursales_similares > 0) {
-            sucursalesInfo = `<span class="info-badge info-badge-sucursales" title="Existe en otras sucursales">
-                <i class="fas fa-store"></i> ${producto.sucursales_similares} sucursal${producto.sucursales_similares > 1 ? 'es' : ''}
+            // Crear tooltip con la lista de sucursales
+            const sucursalesTexto = producto.sucursales_lista ? producto.sucursales_lista.join(', ') : '';
+            const tooltipTexto = sucursalesTexto ? `También en: ${sucursalesTexto}` : 'Existe en otras sucursales';
+            
+            sucursalesInfo = `<span class="info-badge info-badge-sucursales" title="${tooltipTexto}">
+                <i class="fas fa-store"></i> ${producto.sucursales_lista ? producto.sucursales_lista.join(', ') : producto.sucursales_similares + ' sucursal' + (producto.sucursales_similares > 1 ? 'es' : '')}
             </span>`;
         }
         

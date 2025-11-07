@@ -155,7 +155,13 @@
                                 <div class="col-md-3">
                                     <label class="form-control bg-dark text-white">
                                         <b>Sucursal</b>
-                                        <h6 id="ticketSucursal">{{ sucursal_actual.alias|default:"Sin sucursal" }}</h6>
+                                        <h6 id="ticketSucursal">
+                                            {% if sucursal_actual %}
+                                                {{ sucursal_actual.alias }}
+                                            {% else %}
+                                                Sin sucursal - Selecciona una
+                                            {% endif %}
+                                        </h6>
                                     </label>
                                 </div>
                                 <div class="col-md-2">
@@ -329,22 +335,52 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <!-- Información de Sucursal Actual -->
+                <div class="alert alert-info py-2 mb-3">
+                    <i class="ri-information-line me-1"></i>
+                    <strong>Sucursal:</strong> 
+                    <span id="modalSucursalActual">
+                        {% if sucursal_actual %}
+                            {{ sucursal_actual.alias }} (ID: {{ sucursal_actual.id }})
+                        {% else %}
+                            No seleccionada - Por favor selecciona una sucursal desde el menú principal
+                        {% endif %}
+                    </span>
+                    {% if sucursal_actual %}
+                    <span class="ms-3">
+                        <input type="checkbox" class="form-check-input me-1" id="chkBuscarTodasSucursales">
+                        <label class="form-check-label" for="chkBuscarTodasSucursales">
+                            <small>Buscar en todas mis sucursales</small>
+                        </label>
+                    </span>
+                    {% endif %}
+                </div>
+
                 <div class="row g-3 mb-3">
-                    <div class="col-md-3">
-                        <label class="form-label mb-1"><small>Artículo</small></label>
-                        <input type="text" class="form-control form-control-sm" id="filtroArticulo" placeholder="Ej: Polera">
+                    <div class="col-md-6">
+                        <label class="form-label mb-1"><small>Búsqueda General (Artículo, Descripción o SKU)</small></label>
+                        <input type="text" class="form-control form-control-sm" id="filtroBusqueda" placeholder="Ej: Polera, Nike, 123456...">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label mb-1"><small>Descripción</small></label>
-                        <input type="text" class="form-control form-control-sm" id="filtroDescripcion" placeholder="Ej: Hombre">
+                        <label class="form-label mb-1"><small>Ordenar por</small></label>
+                        <select class="form-select form-select-sm" id="selectOrdenar">
+                            <option value="">Sin orden específico</option>
+                            <option value="stock_desc">Stock: Mayor a Menor ⬇️</option>
+                            <option value="stock_asc">Stock: Menor a Mayor ⬆️</option>
+                            <option value="articulo_asc">Artículo: A-Z</option>
+                            <option value="articulo_desc">Artículo: Z-A</option>
+                            <option value="precio_asc">Precio: Menor a Mayor</option>
+                            <option value="precio_desc">Precio: Mayor a Menor</option>
+                        </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label mb-1"><small>Marca</small></label>
-                        <input type="text" class="form-control form-control-sm" id="filtroMarca" placeholder="Ej: Nike">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label mb-1"><small>SKU</small></label>
-                        <input type="text" class="form-control form-control-sm" id="filtroSku" placeholder="Ej: 123456">
+                        <label class="form-label mb-1"><small>&nbsp;</small></label>
+                        <div class="form-check mt-2">
+                            <input type="checkbox" class="form-check-input" id="chkSoloConStock" checked>
+                            <label class="form-check-label" for="chkSoloConStock">
+                                <strong>Solo con stock</strong>
+                            </label>
+                        </div>
                     </div>
                     <div class="col-12 text-end">
                         <button type="button" class="btn btn-sm btn-outline-secondary me-2" id="btnLimpiarFiltros">
@@ -904,9 +940,25 @@ $(document).ready(function() {
 
     // Abrir modal de búsqueda
     $('#btnBuscarArticulo').click(function() {
+        // Verificar que haya sucursal seleccionada
+        const sucursalActualId = {% if sucursal_actual %}{{ sucursal_actual.id }}{% else %}null{% endif %};
+        
+        if (!sucursalActualId) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sucursal requerida',
+                html: 'Debes seleccionar una sucursal desde el menú principal antes de buscar productos.<br><br>' +
+                      'Ve a: <strong>Menú > Seleccionar Sucursal</strong>',
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+        
+        console.log('Abriendo modal de búsqueda con sucursal ID:', sucursalActualId);
+        
         $('#modalBusquedaProductos').modal('show');
         setTimeout(() => {
-            $('#filtroArticulo').focus();
+            $('#filtroBusqueda').focus();
         }, 300);
 
         resetearBusquedaModal();
@@ -922,8 +974,8 @@ $(document).ready(function() {
         buscarProductosModal(1);
     });
 
-    // Buscar con Enter en los filtros
-    $('#filtroArticulo, #filtroDescripcion, #filtroMarca, #filtroSku').on('keypress', function(e) {
+    // Buscar con Enter en el filtro de búsqueda
+    $('#filtroBusqueda').on('keypress', function(e) {
         if (e.which === 13) {
             buscarProductosModal(1);
         }
@@ -936,32 +988,57 @@ $(document).ready(function() {
     }
 
     function limpiarFiltrosModal() {
-        $('#filtroArticulo, #filtroDescripcion, #filtroMarca, #filtroSku').val('');
-        $('#filtroArticulo').focus();
+        $('#filtroBusqueda').val('');
+        $('#chkSoloConStock').prop('checked', true);
+        $('#chkBuscarTodasSucursales').prop('checked', false);
+        $('#selectOrdenar').val('');
+        $('#filtroBusqueda').focus();
     }
 
     function buscarProductosModal(pagina = 1) {
-        const filtroArticulo = ($('#filtroArticulo').val() || '').trim();
-        const filtroDescripcion = ($('#filtroDescripcion').val() || '').trim();
-        const filtroMarca = ($('#filtroMarca').val() || '').trim();
-        const filtroSku = ($('#filtroSku').val() || '').trim();
+        const filtroBusqueda = ($('#filtroBusqueda').val() || '').trim();
+        const soloConStock = $('#chkSoloConStock').is(':checked');
+        const buscarTodas = $('#chkBuscarTodasSucursales').is(':checked');
+        const ordenar = $('#selectOrdenar').val();
+
+        // Obtener sucursal actual de la sesión
+        const sucursalActualId = {% if sucursal_actual %}{{ sucursal_actual.id }}{% else %}null{% endif %};
+
+        // Debug: Mostrar información en consola
+        console.log('===== BÚSQUEDA DE PRODUCTOS =====');
+        console.log('Sucursal Actual ID:', sucursalActualId);
+        console.log('Búsqueda:', filtroBusqueda);
+        console.log('Solo con stock:', soloConStock);
+        console.log('Buscar en todas:', buscarTodas);
+        console.log('Ordenar por:', ordenar || 'Sin orden');
 
         const filtros = {
-            articulo: filtroArticulo,
-            descripcion: filtroDescripcion,
-            marca: filtroMarca,
-            sku: filtroSku,
+            search: filtroBusqueda,
+            solo_con_stock: soloConStock ? 'on' : 'off',
             page: pagina
         };
 
-        // Validar que al menos un filtro tenga contenido
-        if (!filtroArticulo && !filtroDescripcion && !filtroMarca && !filtroSku) {
+        // Agregar ordenamiento si está seleccionado
+        if (ordenar) {
+            filtros.ordenar = ordenar;
+        }
+
+        // Si NO está marcado "buscar en todas", filtrar por sucursal actual
+        if (!buscarTodas && sucursalActualId) {
+            filtros.sucursal_id = sucursalActualId;
+            console.log('Filtrando por sucursal ID:', sucursalActualId);
+        } else if (!sucursalActualId) {
+            console.warn('⚠️ No hay sucursal seleccionada!');
+        }
+
+        // Validar que al menos tenga un criterio de búsqueda
+        if (!filtroBusqueda && !soloConStock) {
             Swal.fire({
                 icon: 'warning',
-                title: 'Filtros requeridos',
-                text: 'Ingrese al menos un criterio de búsqueda'
+                title: 'Criterio de búsqueda requerido',
+                text: 'Ingresa un término de búsqueda o activa el filtro de stock'
             }).then(() => {
-                $('#filtroArticulo').focus();
+                $('#filtroBusqueda').focus();
             });
             return;
         }
@@ -978,6 +1055,8 @@ $(document).ready(function() {
                 </td>
             </tr>
         `);
+
+        console.log('Enviando petición con filtros:', filtros);
 
         $.ajax({
             url: '{% url "obtener_productos_sucursal" %}',
@@ -1031,22 +1110,26 @@ $(document).ready(function() {
 
         // Crear filas por cada combinación Producto/Talla
         productos.forEach(producto => {
-            const marcaCompleta = producto.atributo1 || '';
-            const marca = marcaCompleta.includes(':') ? marcaCompleta.split(':').pop().trim() : (marcaCompleta || '-');
-            const precioFormateado = producto.precio_venta ? parseInt(producto.precio_venta).toLocaleString() : '0';
+            // La API ya devuelve 'marca' como string, no como objeto
+            const marca = producto.marca || '-';
+            
+            // Obtener precio de venta del producto
+            const precioVenta = producto.precio_venta || 0;
+            const precioFormateado = parseInt(precioVenta).toLocaleString();
             
             if (producto.tallas_stock && producto.tallas_stock.length > 0) {
                 producto.tallas_stock.forEach(tallaStock => {
+                    const stockDisponible = tallaStock.stock || 0;
                     const fila = `
                         <tr>
-                            <td><strong>${tallaStock.sku || ''}</strong></td>
-                            <td>${producto.articulo || ''}</td>
-                            <td>${producto.descripcion || ''}</td>
+                            <td><strong>${tallaStock.sku || '-'}</strong></td>
+                            <td>${producto.articulo || '-'}</td>
+                            <td>${producto.descripcion || '-'}</td>
                             <td>${marca}</td>
                             <td><span class="badge bg-info">${tallaStock.talla || '-'}</span></td>
                             <td>
-                                <span class="badge ${(tallaStock.stock || 0) > 0 ? 'bg-success' : 'bg-danger'}">
-                                    ${tallaStock.stock || 0}
+                                <span class="badge ${stockDisponible > 0 ? 'bg-success' : 'bg-danger'}">
+                                    ${stockDisponible}
                                 </span>
                             </td>
                             <td><strong>$${precioFormateado}</strong></td>
@@ -1057,9 +1140,9 @@ $(document).ready(function() {
                                         data-descripcion="${producto.descripcion || ''}"
                                         data-marca="${marca}"
                                         data-talla="${tallaStock.talla || ''}"
-                                        data-precio="${producto.precio_venta || 0}"
-                                        data-stock="${tallaStock.stock || 0}"
-                                        ${!tallaStock.stock ? 'disabled' : ''}>
+                                        data-precio="${precioVenta}"
+                                        data-stock="${stockDisponible}"
+                                        ${stockDisponible <= 0 ? 'disabled' : ''}>
                                     <i class="ri-add-line"></i>
                                     Seleccionar
                                 </button>
@@ -1069,16 +1152,13 @@ $(document).ready(function() {
                     tbody.append(fila);
                 });
             } else {
-                const fila = `
+                tbody.append(`
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">
-                            <i class="ri-inbox-line" style="font-size: 2rem;"></i>
-                            <br>
-                            El producto ${producto.articulo || ''} no tiene tallas asociadas en esta sucursal
+                        <td colspan="8" class="text-center text-muted py-2">
+                            <small>El producto ${producto.articulo || ''} no tiene tallas con stock en esta sucursal</small>
                         </td>
                     </tr>
-                `;
-                tbody.append(fila);
+                `);
             }
         });
 

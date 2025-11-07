@@ -1112,18 +1112,20 @@
                                     <table class="table table-hover table-sm" id="detalleTable">
                                         <thead class="table-light">
                                             <tr>
-                                                <th width="15%">SKU</th>
-                                                <th width="25%">Producto</th>
-                                                <th width="15%">Tallas</th>
-                                                <th width="10%">Cantidad</th>
-                                                <th width="12%">Precio Unit.</th>
-                                                <th width="12%">Subtotal</th>
-                                                <th width="11%">Acciones</th>
+                                                <th width="12%">SKU</th>
+                                                <th width="20%">Producto</th>
+                                                <th width="12%">Tallas</th>
+                                                <th width="8%">Cantidad</th>
+                                                <th width="10%">Costo</th>
+                                                <th width="10%">Sobreprecio</th>
+                                                <th width="10%">Precio Unit.</th>
+                                                <th width="10%">Subtotal</th>
+                                                <th width="8%">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody id="detalleBody">
                                             <tr id="emptyRow">
-                                                <td colspan="7" class="text-center text-muted py-4">
+                                                <td colspan="9" class="text-center text-muted py-4">
                                                     <i class="bi bi-inbox display-6"></i>
                                                     <br>No hay productos seleccionados
                                                     <br><small>Busca y selecciona productos arriba</small>
@@ -1418,6 +1420,10 @@
                                 <th class="text-center">SKU</th>
                                 <th class="text-center">Talla</th>
                                 <th class="text-center">Stock</th>
+                                <th class="text-center" title="Unidades ya agregadas al despacho">
+                                    <i class="bi bi-truck"></i> En Despacho
+                                </th>
+                                <th class="text-center">Disponible</th>
                                 <th class="text-center">Precio</th>
                                 <th class="text-center">Cantidad</th>
                                 <th class="text-center">Subtotal</th>
@@ -2558,12 +2564,30 @@ function loadReceptores() {
 function loadSucursalesDestino() {
     console.log('🔄 Cargando sucursales destino...');
     
-    // Determinar el filtro según el tipo de documento
-    let filtroEmpresa = 'todas'; // Por defecto
+    // ═══════════════════════════════════════════════════════════════
+    // VALIDACIÓN DE SUCURSALES SEGÚN REGLAS DE NEGOCIO:
+    // - GUÍA: Solo entre sucursales de la misma empresa
+    // - EXCEPCIÓN: EDEL GILD puede enviar a cualquier sucursal
+    // ═══════════════════════════════════════════════════════════════
+    
+    let filtroEmpresa = 'misma'; // Por defecto: solo misma empresa
+    
     if (selectedConcept === 'factura') {
-        filtroEmpresa = 'misma'; // Factura: solo misma empresa
+        // Factura: no aplica para despacho interno
+        filtroEmpresa = 'misma';
     } else if (selectedConcept === 'guia') {
-        filtroEmpresa = 'todas'; // Guía: cualquier empresa
+        // Guía: depende de la empresa
+        // Verificar si la empresa actual es EDEL GILD
+        const empresaActual = '{{ empresa_actual.razon_social|default:"" }}';
+        const esEdelGild = empresaActual.toUpperCase().includes('EDEL') && empresaActual.toUpperCase().includes('GILD');
+        
+        if (esEdelGild) {
+            console.log('🏢 Empresa EDEL GILD detectada: puede enviar a CUALQUIER sucursal');
+            filtroEmpresa = 'todas'; // EDEL GILD: cualquier sucursal
+        } else {
+            console.log('🏢 Empresa normal: solo sucursales de la misma empresa');
+            filtroEmpresa = 'misma'; // Otras empresas: solo misma empresa
+        }
     }
     
     console.log(`📋 Tipo documento: ${selectedConcept}, Filtro empresa: ${filtroEmpresa}`);
@@ -2623,19 +2647,33 @@ function loadSucursalesDestino() {
 
 function updateSucursalInfo() {
     const infoContainer = $('#infoDespachoInterno');
+    const empresaActual = '{{ empresa_actual.razon_social|default:"" }}';
+    const esEdelGild = empresaActual.toUpperCase().includes('EDEL') && empresaActual.toUpperCase().includes('GILD');
     
     if (selectedConcept === 'factura') {
         infoContainer.html(`
             <i class="bi bi-building-exclamation me-2"></i>
             <strong>Factura Electrónica - Despacho Interno:</strong> Se muestran sucursales de <strong>OTRAS empresas</strong> (diferentes a tu empresa actual).
             <br><small class="text-muted">Las facturas internas son entre empresas diferentes. El documento quedará pendiente hasta confirmación.</small>
-        `).removeClass('alert-info').addClass('alert-warning');
+        `).removeClass('alert-info alert-success').addClass('alert-warning');
+        
     } else if (selectedConcept === 'guia') {
-        infoContainer.html(`
-            <i class="bi bi-truck me-2"></i>
-            <strong>Guía de Despacho - Despacho Interno:</strong> Se muestran sucursales de <strong>tu misma empresa</strong> (traslados internos).
-            <br><small class="text-muted">Las guías internas son para mover mercadería entre sucursales de la misma empresa. El documento quedará pendiente hasta confirmación.</small>
-        `).removeClass('alert-warning').addClass('alert-info');
+        // ═══════════════════════════════════════════════════════════════
+        // MENSAJE SEGÚN EMPRESA
+        // ═══════════════════════════════════════════════════════════════
+        if (esEdelGild) {
+            infoContainer.html(`
+                <i class="bi bi-star me-2"></i>
+                <strong>Guía de Despacho - EDEL GILD:</strong> Puedes enviar a <strong>CUALQUIER sucursal</strong> del sistema (privilegio especial).
+                <br><small class="text-muted">EDEL GILD tiene permisos para hacer guías a cualquier sucursal, incluyendo otras empresas. El documento quedará pendiente hasta confirmación.</small>
+            `).removeClass('alert-info alert-warning').addClass('alert-success');
+        } else {
+            infoContainer.html(`
+                <i class="bi bi-truck me-2"></i>
+                <strong>Guía de Despacho - Despacho Interno:</strong> Solo puedes enviar a sucursales de <strong>tu misma empresa</strong> (traslados internos).
+                <br><small class="text-muted">Las guías solo pueden enviarse entre sucursales de la misma empresa. El documento quedará pendiente hasta confirmación.</small>
+            `).removeClass('alert-warning alert-success').addClass('alert-info');
+        }
     }
 }
 
@@ -2879,7 +2917,6 @@ function displayProductsInTable(products) {
     
     products.forEach(product => {
         // Usar la estructura correcta del backend
-        const estado = product.estado || 'Activo';
         const marca = product.marca || '-';
         const color = product.color || '-';
         const sexo = product.sexo || '-';
@@ -2888,9 +2925,45 @@ function displayProductsInTable(products) {
         const stockTotal = product.stock_total || 0;
         const descripcion = product.descripcion || '-';
         
+        // ═══════════════════════════════════════════════════════════════
+        // CALCULAR ESTADO BASADO EN STOCK EN DESPACHO
+        // ═══════════════════════════════════════════════════════════════
+        let stockEnDespacho = 0;
+        
+        // Contar cuántas unidades de este producto están en el detalle
+        $(`#detalleBody tr[data-producto-id="${product.id}"]`).each(function() {
+            const cantidadInput = $(this).find('.cantidad-detalle-input');
+            stockEnDespacho += parseInt(cantidadInput.val()) || 0;
+        });
+        
+        // Determinar estado y badge
+        let estadoTexto, estadoBadge, estadoClass;
+        
+        if (stockEnDespacho === 0) {
+            // Sin usar
+            estadoTexto = 'Disponible';
+            estadoBadge = 'bg-success';
+            estadoClass = '';
+        } else if (stockEnDespacho < stockTotal) {
+            // Parcialmente usado
+            estadoTexto = 'Agregado Parcial';
+            estadoBadge = 'bg-warning text-dark';
+            estadoClass = 'table-warning';
+        } else {
+            // Completamente usado (todo el stock)
+            estadoTexto = 'Agregado Completo';
+            estadoBadge = 'bg-danger';
+            estadoClass = 'table-danger';
+        }
+        
+        console.log(`📊 Producto ${product.id}: Stock total: ${stockTotal}, En despacho: ${stockEnDespacho}, Estado: ${estadoTexto}`);
+        
         const rowHtml = `
-            <tr data-product-id="${product.id}">
-                <td class="text-center fw-bold">${estado}</td>
+            <tr data-product-id="${product.id}" class="${estadoClass}">
+                <td class="text-center">
+                    <span class="badge ${estadoBadge}">${estadoTexto}</span>
+                    ${stockEnDespacho > 0 ? `<br><small class="text-muted">${stockEnDespacho}/${stockTotal}</small>` : ''}
+                </td>
                 <td>${product.articulo}</td>
                 <td>${descripcion}</td>
                 <td class="text-center">
@@ -2992,14 +3065,32 @@ function getPrecioSegunMetodo(product) {
     });
     
     if (selectedMethod === 'interno') {
-        // Despacho interno: usar sobreprecio
-        return parseInt(product.sobreprecio || product.precio_venta || 0);
+        // ═══════════════════════════════════════════════════════════════
+        // DESPACHO INTERNO: Para venta entre sucursales propias
+        // Usar SOLO el sobreprecio (NO costo, NO precio_venta)
+        // ═══════════════════════════════════════════════════════════════
+        const sobreprecio = parseInt(product.sobreprecio || 0);
+        
+        console.log(`💰 Despacho INTERNO: SOLO sobreprecio = ${sobreprecio}`);
+        console.log(`   (NO usar costo: ${product.costo}, NO usar precio_venta: ${product.precio_venta})`);
+        
+        // SIEMPRE retornar SOLO sobreprecio
+        return sobreprecio;
+        
     } else if (selectedMethod === 'externo') {
-        // Despacho externo: usar costo
-        return parseInt(product.costo || product.precio_venta || 0);
+        // ═══════════════════════════════════════════════════════════════
+        // DESPACHO EXTERNO: Para proveedores
+        // Usar solo el costo (sin sobreprecio)
+        // ═══════════════════════════════════════════════════════════════
+        const costo = parseInt(product.costo || 0);
+        
+        console.log(`💰 Despacho EXTERNO: solo costo = ${costo}`);
+        
+        return costo;
     }
     
     // Por defecto (no debería llegar aquí)
+    console.warn('⚠️ Método de despacho no reconocido, usando precio_venta');
     return parseInt(product.precio_venta || 0);
 }
 
@@ -3051,25 +3142,67 @@ function loadTallasDisponibles(product) {
     tallas.forEach((talla, index) => {
         console.log(`👕 Procesando talla ${index}:`, talla);
         
+        // ═══════════════════════════════════════════════════════════════
+        // NUEVO: Calcular cuánto ya está en el detalle de despacho
+        // ═══════════════════════════════════════════════════════════════
+        let cantidadEnDespacho = 0;
+        
+        // Buscar en el detalle de despacho si ya está agregada esta talla
+        const existingRow = $(`#detalleBody tr[data-producto-id="${product.id}"][data-talla-id="${talla.id}"]`).first();
+        if (existingRow.length > 0) {
+            cantidadEnDespacho = parseInt(existingRow.find('.cantidad-detalle-input').val()) || 0;
+        }
+        
+        // Calcular disponible para agregar
+        const stockTotal = talla.stock || 0;
+        const disponibleParaAgregar = Math.max(0, stockTotal - cantidadEnDespacho);
+        
+        // Clase para el badge de "En Despacho"
+        const badgeEnDespacho = cantidadEnDespacho > 0 ? 'bg-warning text-dark' : 'bg-secondary';
+        const badgeDisponible = disponibleParaAgregar === 0 ? 'bg-danger' : 
+                                disponibleParaAgregar < 5 ? 'bg-warning text-dark' : 'bg-success';
+        
+        console.log(`   Stock: ${stockTotal}, En despacho: ${cantidadEnDespacho}, Disponible: ${disponibleParaAgregar}`);
+        
+        // Obtener costo y sobreprecio de la talla o del producto
+        const costoTalla = talla.costo || product.costo || 0;
+        const sobrepreioTalla = talla.sobreprecio || product.sobreprecio || 0;
+        
         const rowHtml = `
-            <tr data-talla-id="${talla.id || index}">
+            <tr data-talla-id="${talla.id || index}" data-sku="${talla.sku || ''}" data-stock="${stockTotal}" 
+                data-en-despacho="${cantidadEnDespacho}" data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}">
                 <td class="text-center">${talla.id || index}</td>
                 <td class="text-center fw-bold">${talla.sku || '-'}</td>
                 <td class="text-center">
                     <span class="badge bg-primary">${talla.talla || '-'}</span>
                 </td>
                 <td class="text-center">
-                    <span class="badge bg-success">${talla.stock || 0}</span>
+                    <span class="badge bg-info">${stockTotal}</span>
+                </td>
+                <td class="text-center">
+                    <span class="badge ${badgeEnDespacho}" title="Unidades ya agregadas al despacho">
+                        ${cantidadEnDespacho > 0 ? cantidadEnDespacho : '-'}
+                    </span>
+                </td>
+                <td class="text-center">
+                    <span class="badge ${badgeDisponible}" title="Stock disponible para agregar">
+                        ${disponibleParaAgregar}
+                    </span>
                 </td>
                 <td class="text-end">$${precioAUsar.toLocaleString()}</td>
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm cantidad-input" 
-                           min="0" max="${talla.stock || 0}" value="0" 
-                           data-talla-id="${talla.id || index}" data-precio="${precioAUsar}">
+                           min="0" max="${disponibleParaAgregar}" value="0" 
+                           data-talla-id="${talla.id || index}" data-precio="${precioAUsar}" 
+                           data-sku="${talla.sku || ''}" data-disponible="${disponibleParaAgregar}"
+                           data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}">
+                    ${disponibleParaAgregar === 0 ? '<small class="text-danger d-block">Sin stock</small>' : ''}
                 </td>
                 <td class="text-end subtotal-cell">$0</td>
                 <td class="text-center">
-                    <button class="btn btn-success btn-sm" onclick="agregarTallaIndividual(${talla.id || index})">
+                    <button class="btn btn-success btn-sm" 
+                            onclick="agregarTallaIndividual(${talla.id || index})"
+                            ${disponibleParaAgregar === 0 ? 'disabled title="Sin stock disponible"' : ''}>
                         <i class="bi bi-plus"></i>
                     </button>
                 </td>
@@ -3255,21 +3388,107 @@ function addTallasToDetalle(tallas, productOverride = null) {
     
     // Crear una fila por cada talla seleccionada
     tallas.forEach(talla => {
+        // ═══════════════════════════════════════════════════════════════
+        // CORRECCIÓN: Validar stock acumulado
+        // ═══════════════════════════════════════════════════════════════
+        
+        // Buscar si ya existe una fila con este producto/talla en el detalle
+        const existingRow = tbody.find(`tr[data-producto-id="${currentProduct.id}"][data-talla-id="${talla.id}"]`).first();
+        
+        if (existingRow.length > 0) {
+            console.log('⚠️ Producto/talla ya existe en detalle, actualizando cantidad...');
+            
+            // Obtener cantidad actual en el detalle
+            const inputCantidad = existingRow.find('.cantidad-detalle-input');
+            const cantidadActual = parseInt(inputCantidad.val()) || 0;
+            const nuevaCantidad = cantidadActual + talla.cantidad;
+            const stockMax = parseInt(inputCantidad.data('stock-max')) || talla.stock;
+            
+            console.log(`📊 Stock actual en detalle: ${cantidadActual}, agregar: ${talla.cantidad}, total: ${nuevaCantidad}, stock disponible: ${stockMax}`);
+            
+            // Validar que no exceda el stock disponible
+            if (nuevaCantidad > stockMax) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Stock Insuficiente',
+                    html: `
+                        <p><strong>No se puede agregar esta cantidad</strong></p>
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <ul class="list-unstyled mb-0 mt-2">
+                                <li>📦 Stock disponible: <strong>${stockMax}</strong> unidades</li>
+                                <li>📋 Ya en detalle: <strong>${cantidadActual}</strong> unidades</li>
+                                <li>➕ Intentando agregar: <strong>${talla.cantidad}</strong> unidades</li>
+                                <li class="text-danger mt-2">❌ Total: <strong>${nuevaCantidad}</strong> unidades (excede stock)</li>
+                            </ul>
+                        </div>
+                        <p class="mt-2">Puede agregar máximo <strong>${stockMax - cantidadActual}</strong> unidades más.</p>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
+                console.error(`❌ Stock insuficiente: ${nuevaCantidad} > ${stockMax}`);
+                return; // No agregar
+            }
+            
+            // Actualizar cantidad existente
+            inputCantidad.val(nuevaCantidad);
+            
+            // Recalcular subtotal de esta fila
+            const precio = parseInt(inputCantidad.data('precio')) || talla.precio;
+            const nuevoSubtotal = nuevaCantidad * precio;
+            existingRow.find('.subtotal-detalle').text(`$${nuevoSubtotal.toLocaleString()}`);
+            
+            // Actualizar datos almacenados en la fila
+            const tallasData = existingRow.data('tallas') || [];
+            if (tallasData.length > 0) {
+                tallasData[0].cantidad = nuevaCantidad;
+                tallasData[0].subtotal = nuevoSubtotal;
+                existingRow.data('tallas', tallasData);
+            }
+            
+            console.log(`✅ Cantidad actualizada: ${cantidadActual} → ${nuevaCantidad}`);
+            
+            // Resaltar la fila actualizada
+            existingRow.addClass('table-warning');
+            setTimeout(() => {
+                existingRow.removeClass('table-warning');
+            }, 1500);
+            
+            // Los totales se recalcularán automáticamente con los listeners
+            
+            return; // No crear nueva fila
+        }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // Si no existe, crear nueva fila (código original)
+        // ═══════════════════════════════════════════════════════════════
+        
+        console.log('➕ Creando nueva fila para producto/talla');
+        
+        // Obtener costo y sobreprecio desde talla o producto
+        const costo = parseInt(talla.costo || currentProduct.costo || 0);
+        const sobreprecio = parseInt(talla.sobreprecio || currentProduct.sobreprecio || 0);
+        
+        console.log(`💰 Desglose para fila: Costo: ${costo}, Sobreprecio: ${sobreprecio}, Precio: ${talla.precio}`);
+        
         const rowHtml = `
             <tr data-producto-id="${currentProduct.id}" data-talla-id="${talla.id}">
                 <td class="text-center">${currentProduct.articulo}</td>
                 <td>${currentProduct.descripcion}</td>
                 <td class="text-center">
                     <span class="badge bg-primary">${talla.talla}</span>
-                    <br><small class="text-muted">${talla.sku}</small>
+                    <br><small class="text-muted">SKU: ${talla.sku}</small>
                 </td>
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm cantidad-detalle-input text-center" 
                            value="${talla.cantidad}" min="1" max="${talla.stock}" 
-                           data-precio="${talla.precio}" data-stock-max="${talla.stock}">
+                           data-precio="${talla.precio}" data-stock-max="${talla.stock}" data-sku="${talla.sku}" 
+                           data-costo="${costo}" data-sobreprecio="${sobreprecio}">
                 </td>
-                <td class="text-end precio-unitario">$${talla.precio.toLocaleString()}</td>
-                <td class="text-end subtotal-detalle">$${talla.subtotal.toLocaleString()}</td>
+                <td class="text-end text-muted"><small>$${costo.toLocaleString()}</small></td>
+                <td class="text-end text-muted"><small>$${sobreprecio.toLocaleString()}</small></td>
+                <td class="text-end precio-unitario fw-bold">$${talla.precio.toLocaleString()}</td>
+                <td class="text-end subtotal-detalle fw-bold">$${talla.subtotal.toLocaleString()}</td>
                 <td class="text-center">
                     <button class="btn btn-danger btn-sm" onclick="eliminarFilaDetalle(this)" title="Eliminar">
                         <i class="bi bi-trash"></i>
@@ -3288,6 +3507,8 @@ function addTallasToDetalle(tallas, productOverride = null) {
             subtotal: talla.subtotal
         }]);
         tbody.append($row);
+        
+        console.log(`✅ Nueva fila agregada - SKU: ${talla.sku}, Talla: ${talla.talla}, Cantidad: ${talla.cantidad}`);
     });
     
     // Agregar event listeners para las nuevas filas
@@ -3327,6 +3548,11 @@ function addTallasToDetalle(tallas, productOverride = null) {
     updateTotales();
     validateStep2();
     
+    // Actualizar estado en tabla de productos
+    if (typeof productData !== 'undefined' && productData.length > 0) {
+        displayProductsInTable(productData);
+    }
+    
     // Actualizar resumen en tiempo real (ya no necesitamos panel lateral)
     
     const actionText = window.editingProductRow ? 'actualizadas' : 'agregadas';
@@ -3361,7 +3587,7 @@ function eliminarFilaDetalle(button) {
             if ($('#detalleBody tr').length === 0) {
                 $('#detalleBody').append(`
                     <tr id="emptyRow">
-                        <td colspan="7" class="text-center text-muted py-4">
+                        <td colspan="9" class="text-center text-muted py-4">
                             <i class="bi bi-inbox me-2"></i>
                             No hay productos agregados al detalle
                         </td>
@@ -3370,6 +3596,11 @@ function eliminarFilaDetalle(button) {
             }
             
             updateTotales();
+            
+            // Actualizar estado en tabla de productos
+            if (typeof productData !== 'undefined' && productData.length > 0) {
+                displayProductsInTable(productData);
+            }
             validateStep2();
             
             // El detalle se actualiza automáticamente en tiempo real
@@ -3393,15 +3624,79 @@ function agregarTallaIndividual(tallaId) {
     const cantidad = parseInt(row.find('.cantidad-input').val()) || 0;
     
     if (cantidad <= 0) {
-        Swal.fire('Atención', 'Ingrese una cantidad válida', 'warning');
+        Swal.fire({
+            icon: 'warning',
+            title: 'Atención',
+            text: 'Ingrese una cantidad válida mayor a 0',
+            confirmButtonText: 'Entendido'
+        });
         return;
     }
     
-    // Obtener datos de la talla
-    const sku = row.find('td:nth-child(2)').text().trim();
+    // ═══════════════════════════════════════════════════════════════
+    // CORRECCIÓN: Obtener datos desde data-attributes (más confiable)
+    // ═══════════════════════════════════════════════════════════════
+    const sku = row.data('sku') || row.find('td:nth-child(2)').text().trim();
     const talla = row.find('td:nth-child(3) .badge').text().trim();
-    const stock = parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+    const stock = parseInt(row.data('stock')) || parseInt(row.find('td:nth-child(4) .badge').text()) || 0;
+    const cantidadEnDespacho = parseInt(row.data('en-despacho')) || 0;
+    const disponible = parseInt(row.find('.cantidad-input').data('disponible')) || 0;
     const precio = parseInt(row.find('.cantidad-input').data('precio')) || 0;
+    
+    console.log('📦 Datos de talla obtenidos:', {
+        tallaId: tallaId, 
+        sku: sku, 
+        talla: talla, 
+        cantidad: cantidad, 
+        stock: stock,
+        enDespacho: cantidadEnDespacho,
+        disponible: disponible,
+        precio: precio
+    });
+    
+    // Verificar que tenemos todos los datos necesarios
+    if (!sku || sku === '-' || !talla) {
+        console.error('❌ Datos incompletos de la talla:', {sku, talla});
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudieron obtener los datos completos de la talla. Por favor, intente nuevamente.',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // VALIDACIÓN ADICIONAL: Verificar stock disponible
+    // ═══════════════════════════════════════════════════════════════
+    if (cantidad > disponible) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Stock Insuficiente',
+            html: `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <p class="mb-0"><strong>No hay suficiente stock disponible</strong></p>
+                </div>
+                <ul class="list-unstyled text-start mt-3">
+                    <li>📦 <strong>Stock total:</strong> ${stock} unidades</li>
+                    <li>🚛 <strong>Ya en despacho:</strong> ${cantidadEnDespacho} unidades</li>
+                    <li>✅ <strong>Disponible:</strong> ${disponible} unidades</li>
+                    <li class="text-danger mt-2">❌ <strong>Intentando agregar:</strong> ${cantidad} unidades</li>
+                </ul>
+                <p class="mt-3 text-muted">Puede agregar máximo <strong>${disponible}</strong> unidades más.</p>
+            `,
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+    
+    // Obtener costo y sobreprecio desde el input o desde currentProduct
+    const inputCantidad = row.find('.cantidad-input');
+    const costoProducto = parseInt(inputCantidad.data('costo')) || parseInt(window.currentProduct.costo) || 0;
+    const sobrepreioProducto = parseInt(inputCantidad.data('sobreprecio')) || parseInt(window.currentProduct.sobreprecio) || 0;
+    
+    console.log('💰 Costo y Sobreprecio:', {costo: costoProducto, sobreprecio: sobrepreioProducto});
     
     const tallaData = [{
         id: tallaId,
@@ -3410,6 +3705,8 @@ function agregarTallaIndividual(tallaId) {
         cantidad: cantidad,
         stock: stock,
         precio: precio,
+        costo: costoProducto,  // ← AGREGADO
+        sobreprecio: sobrepreioProducto,  // ← AGREGADO
         subtotal: cantidad * precio
     }];
     
@@ -3446,19 +3743,7 @@ function updateModalSummary() {
     $('#totalMontoModal').text(`$${totalMonto.toLocaleString()}`);
 }
 
-function agregarTallaIndividual(tallaId) {
-    const row = $(`tr[data-talla-id="${tallaId}"]`);
-    const cantidad = parseInt(row.find('.cantidad-input').val()) || 0;
-    
-    if (cantidad <= 0) {
-        Swal.fire('Atención', 'Ingrese una cantidad válida', 'warning');
-        return;
-    }
-    
-    // Aquí agregarías la lógica para agregar al detalle
-    console.log(`Agregando talla ${tallaId} con cantidad ${cantidad}`);
-    Swal.fire('Éxito', `Agregada talla con cantidad ${cantidad}`, 'success');
-}
+// Función duplicada eliminada - ver la versión completa arriba (línea ~3467)
 
 function updatePagination(pagination) {
     currentPage = pagination.page;

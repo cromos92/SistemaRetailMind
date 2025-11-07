@@ -39,7 +39,82 @@ def revisar_cambios_precios_view(request):
 @login_required
 def edicion_rapida_precios_view(request):
     """Vista de edición rápida con navegación por Tab"""
-    return render(request, 'vistas/modulo_existencias/edicion_rapida_precios.html')
+    from django.contrib import messages
+    from django.shortcuts import redirect
+    from .models import EmpresaUser
+    
+    # 🔍 VERIFICAR SESIÓN DE SUCURSAL
+    sucursal_id = request.session.get('idSucursalActual')
+    
+    if not sucursal_id:
+        # Intentar obtener sucursal del usuario
+        try:
+            empresa_user = EmpresaUser.objects.filter(
+                user=request.user,
+                status=True
+            ).select_related('sucursal', 'empresa').first()
+            
+            if empresa_user and empresa_user.sucursal:
+                # Establecer en sesión
+                request.session['idSucursalActual'] = empresa_user.sucursal.id
+                request.session['idEmpresaActual'] = empresa_user.empresa.id
+                request.session['alias'] = empresa_user.sucursal.alias
+                request.session['nombreEmpresaActual'] = empresa_user.empresa.razon_social
+                sucursal_id = empresa_user.sucursal.id
+                print(f"✅ Sesión inicializada - Sucursal: {sucursal_id}")
+            else:
+                # Redirigir a selección de sucursal
+                messages.error(request, 'Por favor selecciona una sucursal para continuar')
+                return redirect('seleccionar_empresa_sucursal')
+        except Exception as e:
+            print(f"❌ Error al obtener sucursal: {str(e)}")
+            messages.error(request, f'Error al obtener sucursal: {str(e)}')
+            return redirect('verHome')
+    
+    context = {
+        'sucursal_actual': sucursal_id,
+        'alias_sucursal': request.session.get('alias', ''),
+    }
+    
+    return render(request, 'vistas/modulo_existencias/edicion_rapida_precios.html', context)
+
+
+@login_required
+def debug_session_precios(request):
+    """Endpoint temporal para verificar sesión (SOLO PARA DEBUG)"""
+    from .models import EmpresaUser
+    
+    # Información de sesión
+    session_data = {
+        'idSucursalActual': request.session.get('idSucursalActual'),
+        'idEmpresaActual': request.session.get('idEmpresaActual'),
+        'alias': request.session.get('alias'),
+        'nombreEmpresaActual': request.session.get('nombreEmpresaActual'),
+        'session_keys': list(request.session.keys()),
+        'user': request.user.username,
+    }
+    
+    # Información de EmpresaUser
+    try:
+        empresa_user = EmpresaUser.objects.filter(
+            user=request.user,
+            status=True
+        ).select_related('sucursal', 'empresa').first()
+        
+        if empresa_user:
+            session_data['empresa_user'] = {
+                'empresa_id': empresa_user.empresa.id if empresa_user.empresa else None,
+                'empresa_nombre': empresa_user.empresa.razon_social if empresa_user.empresa else None,
+                'sucursal_id': empresa_user.sucursal.id if empresa_user.sucursal else None,
+                'sucursal_alias': empresa_user.sucursal.alias if empresa_user.sucursal else None,
+                'status': empresa_user.status,
+            }
+        else:
+            session_data['empresa_user'] = None
+    except Exception as e:
+        session_data['empresa_user_error'] = str(e)
+    
+    return JsonResponse(session_data)
 
 
 # ========== ESTADÍSTICAS GENERALES ==========
@@ -135,6 +210,28 @@ def buscar_productos(request):
         antiguedad = request.GET.get('antiguedad')
         anio = request.GET.get('anio')
         
+        # 🔍 LOGGING PARA DEBUG
+        print(f"🔍 DEBUG BÚSQUEDA PRODUCTOS:")
+        print(f"  - search: '{search}'")
+        print(f"  - sucursal_id (GET param): {request.GET.get('sucursal')}")
+        print(f"  - sucursal_id (SESSION): {request.session.get('idSucursalActual')}")
+        print(f"  - sucursal_id (FINAL): {sucursal_id}")
+        print(f"  - usuario: {request.user.username}")
+        
+        # 🚨 VALIDAR QUE HAYA SUCURSAL (OBLIGATORIO)
+        if not sucursal_id:
+            print(f"❌ ERROR: No hay sucursal en sesión ni en parámetros GET")
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa en la sesión. Por favor, selecciona una sucursal.',
+                'productos': [],
+                'total': 0,
+                'debug': {
+                    'session_keys': list(request.session.keys()),
+                    'user': request.user.username,
+                }
+            }, status=400)
+        
         # Paginación
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 50))
@@ -163,18 +260,30 @@ def buscar_productos(request):
         if marca_id:
             queryset = queryset.filter(atributo1_id=marca_id)
         
-        # Filtro por sucursal
-        if sucursal_id:
-            queryset = queryset.filter(sucursal_id=sucursal_id)
+        # Filtro por sucursal (OBLIGATORIO - ya validado arriba)
+        queryset = queryset.filter(sucursal_id=sucursal_id)
+        print(f"✅ Filtrando por sucursal_id={sucursal_id}")
+        print(f"📊 Total productos en queryset después de filtros iniciales: {queryset.count()}")
         
         # Preparar datos para respuesta
         productos_data = []
+        productos_excluidos = {
+            'sin_tallas': 0,
+            'sin_stock_ni_lotes': 0,
+            'stock_minimo': 0,
+            'precio': 0,
+            'margen': 0,
+            'antiguedad': 0,
+            'anio': 0
+        }
         
         for producto in queryset:
             # Obtener todas las tallas del producto
             tallas = producto.producto_talla.all()
             
             if not tallas.exists():
+                print(f"  ⏭️  Excluido: {producto.articulo} (sin tallas)")
+                productos_excluidos['sin_tallas'] += 1
                 continue
             
             # Calcular totales de todas las tallas
@@ -202,20 +311,38 @@ def buscar_productos(request):
                     if fecha_ingreso_mas_antiguo is None or lote.fecha_ingreso < fecha_ingreso_mas_antiguo:
                         fecha_ingreso_mas_antiguo = lote.fecha_ingreso
             
-            if cantidad_total == 0:
+            # ✅ CAMBIO: No excluir productos sin lotes si tienen stock
+            # Si no hay lotes pero hay stock, usar el costo del producto
+            if cantidad_total == 0 and stock_total == 0:
+                # Solo excluir si NO tiene stock ni lotes
+                print(f"  ⏭️  Excluido: {producto.articulo} (sin stock ni lotes)")
+                productos_excluidos['sin_stock_ni_lotes'] += 1
                 continue
             
             # Filtro por stock mínimo
             if stock_min and stock_total < int(stock_min):
+                print(f"  ⏭️  Excluido: {producto.articulo} (stock {stock_total} < mínimo {stock_min})")
+                productos_excluidos['stock_minimo'] += 1
                 continue
             
-            costo_promedio = costo_total_ponderado / cantidad_total
+            # Calcular costo promedio
+            if cantidad_total > 0:
+                # Tiene lotes: usar costo ponderado de lotes
+                costo_promedio = costo_total_ponderado / cantidad_total
+            else:
+                # No tiene lotes pero tiene stock: usar costo del producto
+                costo_promedio = float(producto.costo) if producto.costo else 0
+            
             precio_venta = producto.precioventa
             
             # Aplicar filtros de precio
             if precio_min and precio_venta < float(precio_min):
+                print(f"  ⏭️  Excluido: {producto.articulo} (precio {precio_venta} < mínimo {precio_min})")
+                productos_excluidos['precio'] += 1
                 continue
             if precio_max and precio_venta > float(precio_max):
+                print(f"  ⏭️  Excluido: {producto.articulo} (precio {precio_venta} > máximo {precio_max})")
+                productos_excluidos['precio'] += 1
                 continue
             
             # Calcular margen
@@ -223,6 +350,8 @@ def buscar_productos(request):
             
             # Aplicar filtro de margen
             if margen_min and margen < float(margen_min):
+                print(f"  ⏭️  Excluido: {producto.articulo} (margen {margen:.2f}% < mínimo {margen_min}%)")
+                productos_excluidos['margen'] += 1
                 continue
             
             # Calcular antigüedad
@@ -233,15 +362,23 @@ def buscar_productos(request):
             # Aplicar filtro de antigüedad
             if antiguedad:
                 if antiguedad == 'nuevo' and dias_inventario >= 180:
+                    print(f"  ⏭️  Excluido: {producto.articulo} (antigüedad {dias_inventario} días, filtro: nuevo)")
+                    productos_excluidos['antiguedad'] += 1
                     continue
                 elif antiguedad == 'medio' and (dias_inventario < 180 or dias_inventario >= 365):
+                    print(f"  ⏭️  Excluido: {producto.articulo} (antigüedad {dias_inventario} días, filtro: medio)")
+                    productos_excluidos['antiguedad'] += 1
                     continue
                 elif antiguedad == 'antiguo' and dias_inventario < 365:
+                    print(f"  ⏭️  Excluido: {producto.articulo} (antigüedad {dias_inventario} días, filtro: antiguo)")
+                    productos_excluidos['antiguedad'] += 1
                     continue
             
             # Aplicar filtro de año
             if anio and fecha_ingreso_mas_antiguo:
                 if fecha_ingreso_mas_antiguo.year != int(anio):
+                    print(f"  ⏭️  Excluido: {producto.articulo} (año {fecha_ingreso_mas_antiguo.year} != filtro {anio})")
+                    productos_excluidos['anio'] += 1
                     continue
             
             # Buscar último cambio de precio
@@ -250,13 +387,19 @@ def buscar_productos(request):
             ).select_related('usuario').first()
             
             # Buscar productos similares en otras sucursales
-            productos_similares_count = Producto.objects.filter(
+            productos_similares = Producto.objects.filter(
                 articulo=producto.articulo,
                 atributo1=producto.atributo1,
                 atributo2=producto.atributo2
-            ).exclude(sucursal=producto.sucursal).count()
+            ).exclude(sucursal=producto.sucursal).select_related('sucursal')
+            
+            # Obtener lista de sucursales donde existe el producto
+            sucursales_lista = [p.sucursal.alias for p in productos_similares if p.sucursal]
+            sucursales_count = len(sucursales_lista)
             
             # Agregar a resultados
+            print(f"  ✅ Incluido: {producto.articulo} (stock: {stock_total}, lotes: {cantidad_total}, margen: {margen:.2f}%)")
+            
             productos_data.append({
                 'id': producto.id,  # ID del producto (no de la talla)
                 'sku': ', '.join([str(t.sku) for t in tallas[:3]]),  # Primeros 3 SKUs
@@ -276,12 +419,25 @@ def buscar_productos(request):
                     'fecha': ultimo_cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M') if ultimo_cambio else None,
                     'hace_cuanto': ultimo_cambio.hace_cuanto if ultimo_cambio else None
                 } if ultimo_cambio else None,
-                'sucursales_similares': productos_similares_count
+                'sucursales_similares': sucursales_count,
+                'sucursales_lista': sucursales_lista,  # ✅ NUEVO: Lista de sucursales
             })
         
         # Paginación manual
         paginator = Paginator(productos_data, per_page)
         page_obj = paginator.get_page(page)
+        
+        # Resumen de logging
+        total_excluidos = sum(productos_excluidos.values())
+        print(f"\n📊 RESUMEN DE BÚSQUEDA:")
+        print(f"  ✅ Productos incluidos: {len(productos_data)}")
+        print(f"  ❌ Productos excluidos: {total_excluidos}")
+        if total_excluidos > 0:
+            print(f"     Razones de exclusión:")
+            for razon, cantidad in productos_excluidos.items():
+                if cantidad > 0:
+                    print(f"       - {razon}: {cantidad}")
+        print(f"  📄 Retornando página {page_obj.number} de {paginator.num_pages}")
         
         return JsonResponse({
             'success': True,
