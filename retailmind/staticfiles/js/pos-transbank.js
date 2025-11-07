@@ -1,16 +1,17 @@
 /**
  * POS Transbank Integration - JavaScript SDK
  * Integración con SDK Web de Transbank para terminales POS
+ * Usa la librería oficial de Transbank (transbank-pos-sdk.js)
  */
 
 class TransbankPOSIntegration {
     constructor() {
         this.isConnected = false;
         this.currentPort = null;
-        this.agentUrl = 'ws://localhost:8090';
-        this.websocket = null;
+        this.agentUrl = 'https://localhost:8090';
         this.currentTransaction = null;
         this.callbacks = {};
+        this.sdk = null; // Instancia del SDK oficial
     }
 
     /**
@@ -20,16 +21,19 @@ class TransbankPOSIntegration {
         try {
             // Verificar si Transbank SDK está disponible
             if (typeof Transbank === 'undefined') {
-                throw new Error('SDK de Transbank no está cargado. Verifique la conexión a internet.');
+                throw new Error('SDK de Transbank no está cargado. Asegúrese de incluir transbank-pos-sdk.js');
             }
 
+            // Crear instancia del SDK oficial
+            this.sdk = Transbank.POS;
+
             // Conectar al agente POS
-            await Transbank.POS.connect();
+            await this.sdk.connect(this.agentUrl);
             console.log('✅ Conectado al agente POS Transbank');
             this.isConnected = true;
 
             // Obtener puertos disponibles
-            const ports = await Transbank.POS.getPorts();
+            const ports = await this.sdk.getPorts();
             console.log('🔌 Puertos disponibles:', ports);
 
             return {
@@ -44,8 +48,8 @@ class TransbankPOSIntegration {
             
             return {
                 success: false,
-                error: error.message,
-                suggestion: this.getSuggestionForError(error.message)
+                error: error.message || error,
+                suggestion: this.getSuggestionForError(error.message || error.toString())
             };
         }
     }
@@ -53,15 +57,15 @@ class TransbankPOSIntegration {
     /**
      * Abrir puerto específico
      */
-    async openPort(portName) {
-        if (!this.isConnected) {
+    async openPort(portName, baudRate = 115200) {
+        if (!this.isConnected || !this.sdk) {
             throw new Error('No hay conexión con el agente POS');
         }
 
         try {
-            await Transbank.POS.openPort(portName);
+            await this.sdk.openPort(portName, baudRate);
             this.currentPort = portName;
-            console.log(`🔌 Puerto abierto: ${portName}`);
+            console.log(`🔌 Puerto abierto: ${portName} @ ${baudRate} baud`);
             return true;
         } catch (error) {
             console.error(`❌ Error abriendo puerto ${portName}:`, error);
@@ -73,9 +77,9 @@ class TransbankPOSIntegration {
      * Cerrar puerto actual
      */
     async closePort() {
-        if (this.currentPort) {
+        if (this.currentPort && this.sdk) {
             try {
-                await Transbank.POS.closePort();
+                await this.sdk.closePort();
                 console.log(`🔌 Puerto cerrado: ${this.currentPort}`);
                 this.currentPort = null;
             } catch (error) {
@@ -85,10 +89,124 @@ class TransbankPOSIntegration {
     }
 
     /**
+     * Cargar llaves criptográficas en el POS
+     */
+    async loadKeys() {
+        if (!this.isConnected || !this.sdk) {
+            throw new Error('POS no conectado');
+        }
+
+        try {
+            console.log('🔑 Cargando llaves en el POS...');
+            const result = await this.sdk.loadKeys();
+            console.log('✅ Llaves cargadas exitosamente');
+            return {
+                success: true,
+                message: 'Llaves cargadas correctamente',
+                data: result
+            };
+        } catch (error) {
+            console.error('❌ Error cargando llaves:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Realizar cierre de día
+     */
+    async closeDay() {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
+            throw new Error('POS no conectado o puerto no abierto');
+        }
+
+        try {
+            console.log('📊 Iniciando cierre de día...');
+            const result = await this.sdk.closeDay();
+            console.log('✅ Cierre de día completado:', result);
+            return {
+                success: true,
+                message: 'Cierre de día completado',
+                data: result
+            };
+        } catch (error) {
+            console.error('❌ Error en cierre de día:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Poll - Verificar estado del terminal
+     */
+    async poll() {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
+            throw new Error('POS no conectado o puerto no abierto');
+        }
+
+        try {
+            const result = await this.sdk.poll();
+            console.log('📡 Poll exitoso:', result);
+            return {
+                success: true,
+                data: result
+            };
+        } catch (error) {
+            console.error('❌ Error en poll:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Obtener estado del puerto
+     */
+    async getPortStatus() {
+        if (!this.sdk) {
+            throw new Error('SDK no inicializado');
+        }
+
+        try {
+            const status = await this.sdk.getPortStatus();
+            return {
+                success: true,
+                connected: this.isConnected,
+                currentPort: this.currentPort,
+                agentStatus: status
+            };
+        } catch (error) {
+            return {
+                success: false,
+                connected: this.isConnected,
+                currentPort: this.currentPort,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Cambiar a modo normal
+     */
+    async setNormalMode() {
+        if (!this.isConnected || !this.sdk) {
+            throw new Error('POS no conectado');
+        }
+
+        try {
+            const result = await this.sdk.setNormalMode();
+            console.log('✅ Modo normal activado');
+            return {
+                success: true,
+                data: result
+            };
+        } catch (error) {
+            console.error('❌ Error cambiando a modo normal:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Realizar venta
      */
     async doSale(amount, ticketId, onStatusUpdate = null) {
-        if (!this.isConnected || !this.currentPort) {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
             throw new Error('POS no conectado o puerto no abierto');
         }
 
@@ -104,11 +222,10 @@ class TransbankPOSIntegration {
                 this.updateTransactionUI(intermediateResponse);
             };
 
-            // Ejecutar venta con callback de estado
-            const result = await Transbank.POS.doSale(
+            // Ejecutar venta con SDK oficial
+            const result = await this.sdk.doSale(
                 Math.round(amount * 100), // Convertir a centavos
-                ticketId,
-                true, // sendStatus = true para recibir estados intermedios
+                ticketId.toString(),
                 statusCallback
             );
 
@@ -122,16 +239,53 @@ class TransbankPOSIntegration {
     }
 
     /**
-     * Anular última venta
+     * Realizar venta multi-código de comercio
      */
-    async doRefund() {
-        if (!this.isConnected || !this.currentPort) {
+    async doMulticodeSale(amount, ticketId, commerceCode = "0", onStatusUpdate = null) {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
             throw new Error('POS no conectado o puerto no abierto');
         }
 
         try {
-            console.log('🔄 Iniciando anulación...');
-            const result = await Transbank.POS.doRefund();
+            console.log(`💳 Iniciando venta multicode: $${amount} - Ticket: ${ticketId} - Commerce: ${commerceCode}`);
+            
+            // Callback para estados intermedios
+            const statusCallback = (intermediateResponse) => {
+                console.log('📊 Estado intermedio (multicode):', intermediateResponse);
+                if (onStatusUpdate) {
+                    onStatusUpdate(intermediateResponse);
+                }
+                this.updateTransactionUI(intermediateResponse);
+            };
+
+            // Ejecutar venta multicode con SDK oficial
+            const result = await this.sdk.doMulticodeSale(
+                Math.round(amount * 100), // Convertir a centavos
+                ticketId.toString(),
+                commerceCode,
+                statusCallback
+            );
+
+            console.log('✅ Resultado de venta multicode:', result);
+            return this.processTransactionResult(result);
+
+        } catch (error) {
+            console.error('❌ Error en venta multicode:', error);
+            throw this.processTransactionError(error);
+        }
+    }
+
+    /**
+     * Anular transacción por ID de operación
+     */
+    async doRefund(operationId) {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
+            throw new Error('POS no conectado o puerto no abierto');
+        }
+
+        try {
+            console.log(`🔄 Iniciando anulación de operación: ${operationId}`);
+            const result = await this.sdk.refund(operationId);
             console.log('✅ Resultado de anulación:', result);
             return this.processTransactionResult(result);
         } catch (error) {
@@ -144,12 +298,14 @@ class TransbankPOSIntegration {
      * Obtener última venta
      */
     async getLastSale() {
-        if (!this.isConnected || !this.currentPort) {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
             throw new Error('POS no conectado o puerto no abierto');
         }
 
         try {
-            const result = await Transbank.POS.getLastSale();
+            console.log('📄 Obteniendo última venta...');
+            const result = await this.sdk.getLastSale();
+            console.log('✅ Última venta obtenida:', result);
             return this.processTransactionResult(result);
         } catch (error) {
             console.error('❌ Error obteniendo última venta:', error);
@@ -161,15 +317,36 @@ class TransbankPOSIntegration {
      * Obtener totales del día
      */
     async getTotals() {
-        if (!this.isConnected || !this.currentPort) {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
             throw new Error('POS no conectado o puerto no abierto');
         }
 
         try {
-            const result = await Transbank.POS.getTotals();
+            console.log('📊 Obteniendo totales del día...');
+            const result = await this.sdk.getTotals();
+            console.log('✅ Totales obtenidos:', result);
             return result;
         } catch (error) {
             console.error('❌ Error obteniendo totales:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Obtener detalles de ventas
+     */
+    async getDetails(printOnPos = false) {
+        if (!this.isConnected || !this.currentPort || !this.sdk) {
+            throw new Error('POS no conectado o puerto no abierto');
+        }
+
+        try {
+            console.log('📋 Obteniendo detalles de ventas...');
+            const result = await this.sdk.getDetails(printOnPos);
+            console.log('✅ Detalles obtenidos:', result);
+            return result;
+        } catch (error) {
+            console.error('❌ Error obteniendo detalles:', error);
             throw error;
         }
     }
@@ -361,13 +538,44 @@ class TransbankPOSIntegration {
         try {
             await this.closePort();
             
-            if (this.isConnected) {
-                await Transbank.POS.disconnect();
+            if (this.isConnected && this.sdk) {
+                await this.sdk.disconnect();
                 this.isConnected = false;
+                this.sdk = null;
                 console.log('🔌 Desconectado del agente POS');
             }
         } catch (error) {
             console.error('Error al desconectar:', error);
+        }
+    }
+
+    /**
+     * Autoconectar - Buscar y conectar automáticamente al POS
+     */
+    async autoconnect(baudRate = 115200) {
+        if (!this.sdk) {
+            throw new Error('SDK no inicializado');
+        }
+
+        try {
+            console.log(`🔍 Buscando POS automáticamente...`);
+            const result = await this.sdk.autoconnect(baudRate);
+            
+            if (result && result.port) {
+                this.currentPort = result.port;
+                console.log(`✅ POS detectado automáticamente en: ${result.port}`);
+                return {
+                    success: true,
+                    port: result.port,
+                    message: `POS conectado automáticamente en ${result.port}`,
+                    data: result
+                };
+            } else {
+                throw new Error('No se pudo detectar ningún POS');
+            }
+        } catch (error) {
+            console.error('❌ Error en autoconexión:', error);
+            throw error;
         }
     }
 }

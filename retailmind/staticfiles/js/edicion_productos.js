@@ -183,28 +183,30 @@ window.cargarVariacionesEnTabla = function(variaciones) {
                     <button type="button" class="btn btn-sm btn-primary" 
                             onclick="abrirModalAjustarStock(${variacion.id}, '${variacion.talla}', ${variacion.stock_total})"
                             title="Ajustar stock">
-                        <i class="fas fa-boxes"></i> Ajustar
+                        <i class="bi bi-box-seam"></i> Ajustar
                     </button>
                 </td>
                 <td>
                     <button type="button" class="btn btn-sm btn-info" 
                             onclick="verHistorialMovimientos(${variacion.id}, '${variacion.talla}')"
                             title="Ver historial">
-                        <i class="fas fa-history"></i>
+                        <i class="bi bi-clock-history"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-secondary" 
                             onclick="verLotesVariacion(${variacion.id}, '${variacion.talla}')"
                             title="Ver lotes">
-                        <i class="fas fa-layer-group"></i>
+                        <i class="bi bi-layers"></i>
                     </button>
                 </td>
             </tr>
         `;
         tbody.append(row);
+        console.log(`Fila ${index + 1} agregada:`, row.substring(0, 100) + '...');
     });
     
     console.log(`✅ ${variaciones.length} variaciones cargadas en la tabla correctamente`);
-}
+    console.log('HTML final del tbody:', tbody.html().substring(0, 200) + '...');
+};
 
 // ========== FUNCIONES DE GUARDADO ==========
 
