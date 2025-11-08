@@ -424,6 +424,26 @@ def ticket_venta(request):
             for eu in sucursales_usuario
         ]
     
+    # Validar que existe correlativo para tickets
+    tiene_correlativo = False
+    correlativo_info = None
+    if sucursal_actual:
+        try:
+            correlativo = Correlativo.objects.get(
+                sucursal=sucursal_actual,
+                tipo_dte='TICKET'
+            )
+            tiene_correlativo = correlativo.puede_emitir()
+            correlativo_info = {
+                'disponibles': correlativo.disponibles,
+                'inicio': correlativo.inicio,
+                'termino': correlativo.termino,
+                'estado': correlativo.estado
+            }
+        except Correlativo.DoesNotExist:
+            tiene_correlativo = False
+            correlativo_info = None
+    
     # Obtener todos los vendedores
     vendedores = Vendedor.objects.all().order_by('nombre')
     
@@ -433,6 +453,8 @@ def ticket_venta(request):
         'vendedores': vendedores,
         'sucursales_disponibles': sucursales_disponibles,
         'necesita_seleccionar_sucursal': not sucursal_actual,
+        'tiene_correlativo': tiene_correlativo,
+        'correlativo_info': correlativo_info,
     }
     
     return render(request, 'vistas/modulo_ventas/ticket_venta.html', context)
@@ -769,6 +791,23 @@ def crear_ticket_venta(request):
         
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         vendedor = get_object_or_404(Vendedor, id=vendedor_id)
+        
+        # Validar que existe correlativo antes de crear el ticket
+        try:
+            correlativo_obj = Correlativo.objects.get(
+                sucursal=sucursal,
+                tipo_dte='TICKET'
+            )
+            if not correlativo_obj.puede_emitir():
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'No hay correlativos disponibles para TICKET en {sucursal.alias}. Por favor, configure un nuevo rango de correlativos.'
+                })
+        except Correlativo.DoesNotExist:
+            return JsonResponse({
+                'success': False, 
+                'error': f'No existe correlativo configurado para TICKET en {sucursal.alias}. Por favor, configure un correlativo antes de crear tickets.'
+            })
         
         # Obtener siguiente correlativo
         correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')

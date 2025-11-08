@@ -120,17 +120,18 @@ class Correlativo(models.Model):
         verbose_name = 'Correlativo'
         verbose_name_plural = 'Correlativos'
 TIPO_DOCUMENTO_CHOICES = [
-    ('FACTURA ELECTRONICA', 'Factura Electronica'),
-    ('BOLETA ELECTRONICA', 'Boleta Electronica'),
+    ('FACTURA ELECTRONICA', 'Factura Electrónica'),
+    ('BOLETA ELECTRONICA', 'Boleta Electrónica'),
     ('GUIA', 'Guía de Despacho'),
     ('NOTA DE PEDIDO', 'Nota de Pedido'),
-    ('NOTA DE CREDITO', 'Nota de Credito'),
-    ('NOTA DE DEBITO', 'Nota de debito'),
+    ('NOTA DE CREDITO', 'Nota de Crédito'),
+    ('NOTA DE DEBITO', 'Nota de Débito'),
     ('FACTURA EXENTA', 'Factura Exenta'),
-    ('COTIZACION', 'Cotizacion'),
+    ('COTIZACION', 'Cotización'),
     ('COMPRA', 'Compra'),
     ('TICKET', 'Ticket'),
     ('TRASPASO', 'Traspaso'),
+    ('AJUSTE', 'Ajuste de Inventario'),
 ]
 
 ESTADO_PAGO_CHOICES = [

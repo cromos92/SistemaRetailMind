@@ -2215,7 +2215,7 @@ def crear_ticket_venta(request):
         total = subtotal - descuento_total
         
         # Crear ticket
-        correlativo = obtener_siguiente_correlativo(sucursal, 'Ticket')
+        correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
         
         ticket = Ticket.objects.create(
             vendedor=vendedor,
@@ -2408,7 +2408,7 @@ def crear_traspaso(request):
                 raise Exception(f'Stock insuficiente para {producto_talla.producto.articulo} - Talla {producto_talla.talla}')
         
         # Crear traspaso
-        numero_traspaso = obtener_siguiente_correlativo(sucursal_origen, 'Traspaso')
+        numero_traspaso = obtener_siguiente_correlativo(sucursal_origen, 'TRASPASO')
         
         traspaso = Traspaso.objects.create(
             sucursal_origen=sucursal_origen,
@@ -2562,7 +2562,7 @@ def crear_ajuste_inventario(request):
             return JsonResponse({'success': False, 'error': 'No hay productos en el ajuste'}, status=400)
         
         # Crear ajuste
-        numero_ajuste = obtener_siguiente_correlativo(sucursal, 'Ajuste')
+        numero_ajuste = obtener_siguiente_correlativo(sucursal, 'AJUSTE')
         
         ajuste = AjusteInventario.objects.create(
             sucursal=sucursal,
@@ -2960,7 +2960,7 @@ def crear_compra(request):
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
 
         # Usar la función obtener_siguiente_correlativo que maneja la creación automática
-        numero_actual = obtener_siguiente_correlativo(sucursal, 'Compra')
+        numero_actual = obtener_siguiente_correlativo(sucursal, 'COMPRA')
 
         # Crear la compra
         compra = Compras.objects.create(
@@ -10315,13 +10315,27 @@ def gestion_correlativos(request):
     Vista principal para la gestión de correlativos
     """
     try:
+        # Obtener la empresa y sucursal actual del usuario
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        sucursal_actual_id = request.session.get('idSucursalActual')
+        
         # Obtener filtros
         sucursal_filtro = request.GET.get('sucursal')
         tipo_documento_filtro = request.GET.get('tipo_documento')
         estado_filtro = request.GET.get('estado')
         
-        # Query base - corregir correlativos con datos inconsistentes
-        correlativos = Correlativo.objects.select_related('sucursal').all()
+        # Query base - Si es superuser, ver todo; si no, filtrar por sucursal actual
+        if request.user.is_superuser:
+            correlativos = Correlativo.objects.select_related('sucursal').all()
+        else:
+            # Filtrar solo por la sucursal actual en sesión
+            if sucursal_actual_id:
+                correlativos = Correlativo.objects.select_related('sucursal').filter(
+                    sucursal_id=sucursal_actual_id
+                )
+            else:
+                # Si no hay sucursal en sesión, no mostrar correlativos
+                correlativos = Correlativo.objects.none()
         
         # Corregir correlativos con datos faltantes
         for correlativo in correlativos:
@@ -10332,8 +10346,18 @@ def gestion_correlativos(request):
             if not correlativo.fecha_actualizacion:
                 correlativo.fecha_actualizacion = timezone.now().date()
                 updated = True
+            # Normalizar tipos antiguos
             if correlativo.tipo_dte == 'Compra':
                 correlativo.tipo_dte = 'COMPRA'
+                updated = True
+            if correlativo.tipo_dte == 'Ticket':
+                correlativo.tipo_dte = 'TICKET'
+                updated = True
+            if correlativo.tipo_dte == 'Traspaso':
+                correlativo.tipo_dte = 'TRASPASO'
+                updated = True
+            if correlativo.tipo_dte == 'Ajuste':
+                correlativo.tipo_dte = 'AJUSTE'
                 updated = True
             if updated:
                 correlativo.save()
@@ -10356,16 +10380,41 @@ def gestion_correlativos(request):
                 disponibles=F('termino') - F('inicio') + 1
             ).filter(disponibles__lte=100, disponibles__gt=0)
         
-        # Calcular estadísticas
-        total_correlativos = Correlativo.objects.count()
-        correlativos_activos = Correlativo.objects.filter(inicio__lt=F('termino')).count()
-        correlativos_agotados = Correlativo.objects.filter(inicio__gte=F('termino')).count()
-        correlativos_proximos_agotar = Correlativo.objects.annotate(
-            disponibles=F('termino') - F('inicio') + 1
-        ).filter(disponibles__lte=100, disponibles__gt=0).count()
+        # Calcular estadísticas - Si es superuser, ver todo; si no, filtrar por sucursal actual
+        if request.user.is_superuser:
+            total_correlativos = Correlativo.objects.count()
+            correlativos_activos = Correlativo.objects.filter(inicio__lt=F('termino')).count()
+            correlativos_agotados = Correlativo.objects.filter(inicio__gte=F('termino')).count()
+            correlativos_proximos_agotar = Correlativo.objects.annotate(
+                disponibles=F('termino') - F('inicio') + 1
+            ).filter(disponibles__lte=100, disponibles__gt=0).count()
+            sucursales = Sucursal.objects.all().order_by('alias')
+        else:
+            # Estadísticas solo de la sucursal actual
+            if sucursal_actual_id:
+                total_correlativos = Correlativo.objects.filter(sucursal_id=sucursal_actual_id).count()
+                correlativos_activos = Correlativo.objects.filter(
+                    sucursal_id=sucursal_actual_id,
+                    inicio__lt=F('termino')
+                ).count()
+                correlativos_agotados = Correlativo.objects.filter(
+                    sucursal_id=sucursal_actual_id,
+                    inicio__gte=F('termino')
+                ).count()
+                correlativos_proximos_agotar = Correlativo.objects.filter(
+                    sucursal_id=sucursal_actual_id
+                ).annotate(
+                    disponibles=F('termino') - F('inicio') + 1
+                ).filter(disponibles__lte=100, disponibles__gt=0).count()
+                # Solo mostrar la sucursal actual
+                sucursales = Sucursal.objects.filter(id=sucursal_actual_id).order_by('alias')
+            else:
+                total_correlativos = 0
+                correlativos_activos = 0
+                correlativos_agotados = 0
+                correlativos_proximos_agotar = 0
+                sucursales = Sucursal.objects.none()
         
-        # Obtener datos para formularios
-        sucursales = Sucursal.objects.all().order_by('alias')
         tipos_documento = TIPO_DOCUMENTO_CHOICES
         
         # Los correlativos ya tienen las propiedades calculadas en el modelo
@@ -10389,10 +10438,25 @@ def gestion_correlativos(request):
         return render(request, 'vistas/modulo_administracion/gestion_correlativos.html', context)
         
     except Exception as e:
+        sucursal_actual_id = request.session.get('idSucursalActual')
+        # Si es superuser, mostrar todas las sucursales; si no, solo la sucursal actual
+        if request.user.is_superuser:
+            sucursales = Sucursal.objects.all()
+        else:
+            if sucursal_actual_id:
+                sucursales = Sucursal.objects.filter(id=sucursal_actual_id)
+            else:
+                sucursales = Sucursal.objects.none()
+        
+        # Mostrar el error pero continuar con la página
+        import traceback
+        print(f"Error en gestion_correlativos: {str(e)}")
+        print(traceback.format_exc())
+        
         return render(request, 'vistas/modulo_administracion/gestion_correlativos.html', {
-            'error': f'Error al cargar correlativos: {str(e)}',
+            'error': f'Advertencia: {str(e)}. Mostrando datos disponibles.',
             'correlativos': [],
-            'sucursales': Sucursal.objects.all(),
+            'sucursales': sucursales,
             'tipos_documento': TIPO_DOCUMENTO_CHOICES,
             'total_correlativos': 0,
             'correlativos_activos': 0,
@@ -10436,7 +10500,7 @@ def guardar_correlativo(request):
         if existing_query.exists():
             return JsonResponse({
                 'success': False,
-                'message': f'Ya existe un correlativo para {tipo_documento} en {sucursal.nombre}'
+                'message': f'Ya existe un correlativo para {tipo_documento} en {sucursal.alias}'
             })
         
         # Crear o actualizar

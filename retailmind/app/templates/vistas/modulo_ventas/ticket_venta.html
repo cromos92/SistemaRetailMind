@@ -59,6 +59,44 @@
             </div>
             <!-- end page title -->
 
+            <!-- Alerta de Correlativo -->
+            {% if sucursal_actual and not tiene_correlativo %}
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="ri-error-warning-line me-2"></i>
+                        <strong>¡Atención!</strong> No existe un correlativo configurado para TICKET en esta sucursal.
+                        <br>
+                        <small>No podrá crear tickets de venta hasta que se configure un correlativo. Por favor, contacte al administrador.</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+            </div>
+            {% elif sucursal_actual and correlativo_info and correlativo_info.estado == 'critico' %}
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <i class="ri-alarm-warning-line me-2"></i>
+                        <strong>¡Advertencia!</strong> El correlativo de tickets está en estado crítico.
+                        <br>
+                        <small>Quedan {{ correlativo_info.disponibles }} correlativos disponibles (Rango: {{ correlativo_info.inicio }} - {{ correlativo_info.termino }})</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+            </div>
+            {% elif sucursal_actual and correlativo_info and correlativo_info.estado == 'agotado' %}
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="ri-error-warning-line me-2"></i>
+                        <strong>¡Error!</strong> El correlativo de tickets está agotado.
+                        <br>
+                        <small>No hay correlativos disponibles. Por favor, configure un nuevo rango de correlativos.</small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
 
             <!-- Vendedores -->
             <div  id="seccionVendedores">
@@ -434,6 +472,7 @@
 <script>
 $(document).ready(function() {
     let vendedorSeleccionado = null;
+    const tieneCorrelativo = {{ tiene_correlativo|yesno:"true,false" }};
     const MENSAJE_BUSQUEDA_DEFAULT = `
         <tr>
             <td colspan="8" class="text-center text-muted py-4">
@@ -443,6 +482,14 @@ $(document).ready(function() {
             </td>
         </tr>
     `;
+
+    // Validar correlativo al cargar la página
+    if (!tieneCorrelativo) {
+        $('#btnImprimirTicket').prop('disabled', true)
+            .removeClass('btn-success')
+            .addClass('btn-secondary')
+            .attr('title', 'No hay correlativo disponible');
+    }
 
     // Enfocar automáticamente el input de código al cargar la página
     $('#codigoVendedor').focus();
@@ -1293,6 +1340,17 @@ $(document).ready(function() {
 
     // Procesar e imprimir ticket
     function procesarTicket() {
+        // Validar que existe correlativo antes de procesar
+        if (!tieneCorrelativo) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Sin correlativo',
+                text: 'No existe un correlativo configurado para TICKET en esta sucursal. Por favor, contacte al administrador.',
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+
         const ticketData = {
             vendedor_id: vendedorSeleccionado.id,
             productos: productosTicket.map(p => ({
@@ -1334,11 +1392,22 @@ $(document).ready(function() {
                     }
                 });
             } else {
-                Swal.fire('Error', response.message || 'No se pudo crear el ticket', 'error');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error al crear ticket',
+                    text: response.error || response.message || 'No se pudo crear el ticket',
+                    confirmButtonText: 'Entendido'
+                });
             }
         })
-        .catch(() => {
-            Swal.fire('Error', 'Error al crear el ticket', 'error');
+        .catch((error) => {
+            console.error('Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de conexión',
+                text: 'Error al comunicarse con el servidor',
+                confirmButtonText: 'Entendido'
+            });
         });
     }
 

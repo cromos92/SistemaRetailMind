@@ -111,6 +111,30 @@
             </div>
             <!-- end page title -->
             
+            <!-- Mensajes de error/debug -->
+            {% if error %}
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="ri-error-warning-line me-2"></i>
+                        <strong>Error:</strong> {{ error }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Debug info (solo visible en consola del navegador) -->
+            <script>
+                console.log('DEBUG - Correlativos cargados:', {{ correlativos|length }});
+                console.log('DEBUG - Total en estadísticas:', {{ total_correlativos }});
+                {% if request.user.is_superuser %}
+                console.log('DEBUG - Usuario es SUPERUSER');
+                {% else %}
+                console.log('DEBUG - Usuario NO es superuser');
+                {% endif %}
+            </script>
+            
             <!-- Header Actions -->
             <div class="row mb-4">
                 <div class="col-12">
@@ -516,11 +540,23 @@
 
     <script>
         $(document).ready(function() {
+            console.log('=== DEBUG GESTION CORRELATIVOS ===');
+            console.log('Total correlativos en contexto: {{ correlativos|length }}');
+            console.log('Tabla existe:', $('#tablaCorrelativos').length > 0);
+            console.log('Filas en tbody:', $('#tablaCorrelativos tbody tr').length);
+            
             // Verificar que la tabla existe antes de inicializar DataTable
             if ($('#tablaCorrelativos').length) {
+                var totalFilas = $('#tablaCorrelativos tbody tr').length;
+                var tieneColspan = $('#tablaCorrelativos tbody tr').first().find('td[colspan]').length > 0;
+                
+                console.log('Total filas:', totalFilas);
+                console.log('Primera fila tiene colspan (mensaje vacío):', tieneColspan);
+                
                 // Verificar si hay datos reales (no solo el mensaje de "no hay datos")
-                var hasData = $('#tablaCorrelativos tbody tr').length > 0 && 
-                             !$('#tablaCorrelativos tbody tr').first().find('td[colspan]').length;
+                var hasData = totalFilas > 0 && !tieneColspan;
+                
+                console.log('Tiene datos válidos:', hasData);
                 
                 if (hasData) {
                     // Solo inicializar si hay datos reales
@@ -538,13 +574,16 @@
                             responsive: true,
                             autoWidth: false
                         });
-                        console.log('DataTable inicializado correctamente');
+                        console.log('✓ DataTable inicializado correctamente');
                     } catch (error) {
-                        console.error('Error al inicializar DataTable:', error);
+                        console.error('✗ Error al inicializar DataTable:', error);
                     }
                 } else {
-                    console.log('Tabla sin datos válidos, DataTable no inicializado');
+                    console.warn('⚠ Tabla sin datos válidos, DataTable no inicializado');
+                    console.log('Revisar que la vista envíe la variable "correlativos" con datos');
                 }
+            } else {
+                console.error('✗ Tabla #tablaCorrelativos no encontrada en el DOM');
             }
         });
 

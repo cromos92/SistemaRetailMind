@@ -248,7 +248,69 @@ def cargar_dte_ventas(request):
 @login_required
 def gestion_correlativos(request):
     """Vista principal para gestión de correlativos"""
-    return render(request, 'vistas/modulo_administracion/gestion_correlativos.html')
+    from .models import Correlativo, Sucursal, TIPO_DOCUMENTO_CHOICES
+    
+    # Obtener la empresa actual
+    empresa_actual_id = request.session.get('idEmpresaActual')
+    
+    # Obtener todas las sucursales de la empresa
+    sucursales = Sucursal.objects.filter(empresa_id=empresa_actual_id).order_by('alias')
+    
+    # Obtener todos los correlativos de todas las sucursales de la empresa
+    correlativos = Correlativo.objects.filter(
+        sucursal__empresa_id=empresa_actual_id
+    ).select_related('sucursal').order_by('sucursal__alias', 'tipo_dte')
+    
+    # Aplicar filtros si existen
+    filtro_sucursal = request.GET.get('sucursal')
+    filtro_tipo_documento = request.GET.get('tipo_documento')
+    filtro_estado = request.GET.get('estado')
+    
+    if filtro_sucursal:
+        correlativos = correlativos.filter(sucursal_id=filtro_sucursal)
+    
+    if filtro_tipo_documento:
+        correlativos = correlativos.filter(tipo_dte=filtro_tipo_documento)
+    
+    # Filtrar por estado calculado
+    if filtro_estado:
+        correlativos_filtrados = []
+        for correlativo in correlativos:
+            if filtro_estado == 'activo' and correlativo.estado == 'activo':
+                correlativos_filtrados.append(correlativo)
+            elif filtro_estado == 'agotado' and correlativo.estado == 'agotado':
+                correlativos_filtrados.append(correlativo)
+            elif filtro_estado == 'proximo_agotarse' and correlativo.estado == 'critico':
+                correlativos_filtrados.append(correlativo)
+        correlativos = correlativos_filtrados
+    
+    # Calcular estadísticas
+    total_correlativos = len(correlativos) if isinstance(correlativos, list) else correlativos.count()
+    
+    correlativos_activos = 0
+    correlativos_proximos_agotar = 0
+    correlativos_agotados = 0
+    
+    for correlativo in correlativos:
+        estado = correlativo.estado
+        if estado == 'activo':
+            correlativos_activos += 1
+        elif estado == 'critico':
+            correlativos_proximos_agotar += 1
+        elif estado == 'agotado':
+            correlativos_agotados += 1
+    
+    context = {
+        'correlativos': correlativos,
+        'sucursales': sucursales,
+        'tipos_documento': TIPO_DOCUMENTO_CHOICES,
+        'total_correlativos': total_correlativos,
+        'correlativos_activos': correlativos_activos,
+        'correlativos_proximos_agotar': correlativos_proximos_agotar,
+        'correlativos_agotados': correlativos_agotados,
+    }
+    
+    return render(request, 'vistas/modulo_administracion/gestion_correlativos.html', context)
 
 
 @login_required
