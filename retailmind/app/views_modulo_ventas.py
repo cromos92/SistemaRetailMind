@@ -395,8 +395,8 @@ def exportar_vendedores(request):
 @login_required
 def ticket_venta(request):
     """Vista principal para crear tickets de venta"""
-    # Obtener sucursal actual del usuario
-    sucursal_actual_id = request.session.get('sucursalActual')
+    # Obtener sucursal actual del usuario (intentar ambas variables de sesión)
+    sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
     sucursal_actual = None
     empresa_actual_nombre = request.session.get('nombreEmpresaActual', 'Sin empresa')
     
@@ -427,12 +427,24 @@ def ticket_venta(request):
     # Validar que existe correlativo para tickets
     tiene_correlativo = False
     correlativo_info = None
+    
+    # DEBUG: Imprimir información de sesión
+    print(f"🔍 DEBUG ticket_venta:")
+    print(f"  - idSucursalActual: {request.session.get('idSucursalActual')}")
+    print(f"  - sucursalActual: {request.session.get('sucursalActual')}")
+    print(f"  - sucursal_actual_id final: {sucursal_actual_id}")
+    print(f"  - sucursal_actual objeto: {sucursal_actual}")
+    
     if sucursal_actual:
+        print(f"  - Buscando correlativo TICKET para sucursal: {sucursal_actual.alias} (ID: {sucursal_actual.id})")
         try:
             correlativo = Correlativo.objects.get(
                 sucursal=sucursal_actual,
                 tipo_dte='TICKET'
             )
+            print(f"  - ✅ Correlativo encontrado: ID={correlativo.id}, inicio={correlativo.inicio}, termino={correlativo.termino}")
+            print(f"  - puede_emitir()={correlativo.puede_emitir()}")
+            
             tiene_correlativo = correlativo.puede_emitir()
             correlativo_info = {
                 'disponibles': correlativo.disponibles,
@@ -441,8 +453,11 @@ def ticket_venta(request):
                 'estado': correlativo.estado
             }
         except Correlativo.DoesNotExist:
+            print(f"  - ❌ Correlativo NO encontrado para TICKET")
             tiene_correlativo = False
             correlativo_info = None
+    else:
+        print(f"  - ⚠️ No hay sucursal_actual definida")
     
     # Obtener todos los vendedores
     vendedores = Vendedor.objects.all().order_by('nombre')

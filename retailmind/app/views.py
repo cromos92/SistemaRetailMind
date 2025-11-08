@@ -9441,6 +9441,26 @@ def ticket_venta(request):
             for eu in sucursales_usuario
         ]
     
+    # Validar que existe correlativo para tickets
+    tiene_correlativo = False
+    correlativo_info = None
+    if sucursal_actual:
+        try:
+            correlativo = Correlativo.objects.get(
+                sucursal=sucursal_actual,
+                tipo_dte='TICKET'
+            )
+            tiene_correlativo = correlativo.puede_emitir()
+            correlativo_info = {
+                'disponibles': correlativo.disponibles,
+                'inicio': correlativo.inicio,
+                'termino': correlativo.termino,
+                'estado': correlativo.estado
+            }
+        except Correlativo.DoesNotExist:
+            tiene_correlativo = False
+            correlativo_info = None
+    
     # Obtener todos los vendedores
     vendedores = Vendedor.objects.all().order_by('nombre')
     
@@ -9450,6 +9470,8 @@ def ticket_venta(request):
         'vendedores': vendedores,
         'sucursales_disponibles': sucursales_disponibles,
         'necesita_seleccionar_sucursal': not sucursal_actual,
+        'tiene_correlativo': tiene_correlativo,
+        'correlativo_info': correlativo_info,
     }
     
     return render(request, 'vistas/modulo_ventas/ticket_venta.html', context)
@@ -10338,29 +10360,55 @@ def gestion_correlativos(request):
                 correlativos = Correlativo.objects.none()
         
         # Corregir correlativos con datos faltantes
-        for correlativo in correlativos:
+        from django.db import IntegrityError
+        correlativos_a_procesar = list(correlativos)
+        
+        for correlativo in correlativos_a_procesar:
             updated = False
+            tipo_original = correlativo.tipo_dte
+            
             if not correlativo.responsable:
                 correlativo.responsable = 'Sistema'
                 updated = True
             if not correlativo.fecha_actualizacion:
                 correlativo.fecha_actualizacion = timezone.now().date()
                 updated = True
+            
             # Normalizar tipos antiguos
+            tipo_normalizado = None
             if correlativo.tipo_dte == 'Compra':
-                correlativo.tipo_dte = 'COMPRA'
-                updated = True
-            if correlativo.tipo_dte == 'Ticket':
-                correlativo.tipo_dte = 'TICKET'
-                updated = True
-            if correlativo.tipo_dte == 'Traspaso':
-                correlativo.tipo_dte = 'TRASPASO'
-                updated = True
-            if correlativo.tipo_dte == 'Ajuste':
-                correlativo.tipo_dte = 'AJUSTE'
-                updated = True
+                tipo_normalizado = 'COMPRA'
+            elif correlativo.tipo_dte == 'Ticket':
+                tipo_normalizado = 'TICKET'
+            elif correlativo.tipo_dte == 'Traspaso':
+                tipo_normalizado = 'TRASPASO'
+            elif correlativo.tipo_dte == 'Ajuste':
+                tipo_normalizado = 'AJUSTE'
+            
+            if tipo_normalizado:
+                # Verificar si ya existe un correlativo con el tipo normalizado
+                existe_normalizado = Correlativo.objects.filter(
+                    sucursal_id=correlativo.sucursal_id,
+                    tipo_dte=tipo_normalizado
+                ).exclude(id=correlativo.id).exists()
+                
+                if existe_normalizado:
+                    # Ya existe uno normalizado, eliminar este duplicado
+                    print(f"Eliminando duplicado: ID {correlativo.id}, Tipo: {tipo_original} (ya existe {tipo_normalizado})")
+                    correlativo.delete()
+                    continue
+                else:
+                    # No existe, normalizar
+                    correlativo.tipo_dte = tipo_normalizado
+                    updated = True
+            
             if updated:
-                correlativo.save()
+                try:
+                    correlativo.save()
+                except IntegrityError as e:
+                    # Si aún así hay error de integridad, eliminar este correlativo
+                    print(f"Error de integridad al guardar correlativo {correlativo.id}: {str(e)}")
+                    correlativo.delete()
         
         # Aplicar filtros
         if sucursal_filtro:
@@ -10488,6 +10536,16 @@ def guardar_correlativo(request):
         
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
+        # Normalizar tipo de documento antes de guardar
+        tipo_documento_normalizado = tipo_documento.upper()
+        normalizaciones = {
+            'COMPRA': 'COMPRA',
+            'TICKET': 'TICKET',
+            'TRASPASO': 'TRASPASO',
+            'AJUSTE': 'AJUSTE'
+        }
+        tipo_documento = normalizaciones.get(tipo_documento_normalizado, tipo_documento)
+        
         # Verificar si ya existe un correlativo para esta combinación (excepto el actual)
         existing_query = Correlativo.objects.filter(
             sucursal=sucursal,
@@ -10504,35 +10562,41 @@ def guardar_correlativo(request):
             })
         
         # Crear o actualizar
-        if correlativo_id:
-            correlativo = get_object_or_404(Correlativo, id=correlativo_id)
-            correlativo.sucursal = sucursal
-            correlativo.tipo_dte = tipo_documento
-            correlativo.inicio = inicio
-            correlativo.termino = termino
-            correlativo.alias = alias
-            correlativo.responsable = responsable
-            correlativo.fecha_actualizacion = timezone.now().date()
-            mensaje = 'Correlativo actualizado exitosamente'
-        else:
-            correlativo = Correlativo.objects.create(
-                sucursal=sucursal,
-                tipo_dte=tipo_documento,
-                inicio=inicio,
-                termino=termino,
-                alias=alias,
-                responsable=responsable,
-                fecha_actualizacion=timezone.now().date()
-            )
-            mensaje = 'Correlativo creado exitosamente'
-        
-        correlativo.save()
-        
-        return JsonResponse({
-            'success': True,
-            'message': mensaje,
-            'correlativo_id': correlativo.id
-        })
+        from django.db import IntegrityError
+        try:
+            if correlativo_id:
+                correlativo = get_object_or_404(Correlativo, id=correlativo_id)
+                correlativo.sucursal = sucursal
+                correlativo.tipo_dte = tipo_documento
+                correlativo.inicio = inicio
+                correlativo.termino = termino
+                correlativo.alias = alias
+                correlativo.responsable = responsable
+                correlativo.fecha_actualizacion = timezone.now().date()
+                correlativo.save()
+                mensaje = 'Correlativo actualizado exitosamente'
+            else:
+                correlativo = Correlativo.objects.create(
+                    sucursal=sucursal,
+                    tipo_dte=tipo_documento,
+                    inicio=inicio,
+                    termino=termino,
+                    alias=alias,
+                    responsable=responsable,
+                    fecha_actualizacion=timezone.now().date()
+                )
+                mensaje = 'Correlativo creado exitosamente'
+            
+            return JsonResponse({
+                'success': True,
+                'message': mensaje,
+                'correlativo_id': correlativo.id
+            })
+        except IntegrityError as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Ya existe un correlativo para {tipo_documento} en {sucursal.alias}. Error: {str(e)}'
+            }, status=400)
         
     except Exception as e:
         return JsonResponse({

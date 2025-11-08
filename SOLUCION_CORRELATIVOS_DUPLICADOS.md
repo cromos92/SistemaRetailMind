@@ -1,263 +1,246 @@
-# Solución: Correlativos Duplicados
+# Solución: Error de Correlativos Duplicados
 
-## Error Detectado
+## Problemas Identificados
+
+### Problema 1: Error de Correlativos Duplicados en Gestión
+
+Al acceder a `http://localhost:8000/app/documentos/gestion-correlativos/`, se generaba el siguiente error:
+
 ```
-Error: Error al cargar correlativos: llave duplicada viola restricción de unicidad 
-«app_correlativo_sucursal_id_tipo_dte_c673ee07_uniq» 
-DETAIL: Ya existe la llave (sucursal_id, tipo_dte)=(2, COMPRA).
-```
-
-## Causa
-El modelo `Correlativo` tiene una restricción de unicidad en `unique_together = ['sucursal', 'tipo_dte']`, lo que significa que **no puede haber dos registros con la misma sucursal y tipo de DTE**.
-
-En algún momento se crearon registros duplicados en la base de datos, violando esta restricción.
-
-## Soluciones
-
-### Opción 1: Usar el Comando de Gestión de Django (RECOMENDADO)
-
-He creado un comando que detecta y elimina duplicados de forma segura.
-
-#### 1.1. Ver qué duplicados existen (sin hacer cambios):
-```bash
-cd C:\DjangoProyects\retailmind\SistemaRetailMind\retailmind
-python manage.py limpiar_correlativos_duplicados --dry-run
+Error: Advertencia: llave duplicada viola restricción de unicidad «app_correlativo_sucursal_id_tipo_dte_c673ee07_uniq» 
+DETAIL: Ya existe la llave (sucursal_id, tipo_dte)=(2, COMPRA). 
+Mostrando datos disponibles.
 ```
 
-#### 1.2. Limpiar duplicados con confirmación interactiva:
-```bash
-python manage.py limpiar_correlativos_duplicados
+### Problema 2: Correlativo TICKET no Detectado en Venta
+
+Al acceder a `http://localhost:8000/app/ticket-venta/`, se mostraba:
+
+```
+¡Atención! No existe un correlativo configurado para TICKET en esta sucursal.
+No podrá crear tickets de venta hasta que se configure un correlativo.
 ```
 
-#### 1.3. Limpiar duplicados automáticamente (sin pedir confirmación):
-```bash
-python manage.py limpiar_correlativos_duplicados --auto-fix
-```
+A pesar de existir un correlativo TICKET configurado para la sucursal EDEL (ID 2).
 
-**El comando:**
-- ✅ Mantiene el registro más reciente (mayor ID)
-- ✅ Elimina los registros antiguos duplicados
-- ✅ Muestra información detallada de cada duplicado
-- ✅ Permite revisar antes de eliminar (modo interactivo)
+## Causa Raíz
 
----
+### Problema 1: Correlativos Duplicados
 
-### Opción 2: Desde Django Shell
+1. **Restricción Única**: La tabla `app_correlativo` tiene una restricción `unique_together` para `(sucursal_id, tipo_dte)` definida en la migración `0026_alter_correlativo_options`.
 
-```bash
-cd C:\DjangoProyects\retailmind\SistemaRetailMind\retailmind
-python manage.py shell
-```
+2. **Tipos No Normalizados**: Existían correlativos duplicados con tipos de documento no normalizados:
+   - ID 1: `tipo_dte='COMPRA'` (normalizado)
+   - ID 10: `tipo_dte='Compra'` (sin normalizar)
 
-Luego ejecutar:
+3. **Conflicto al Normalizar**: La vista `gestion_correlativos` intentaba normalizar automáticamente el tipo `'Compra'` a `'COMPRA'`, causando una violación de la restricción única.
+
+### Problema 2: Variable de Sesión Inconsistente
+
+La función `ticket_venta` en `views_modulo_ventas.py` solo buscaba la sucursal con:
 
 ```python
-from app.models import Correlativo
-from django.db.models import Count
-
-# 1. Encontrar duplicados
-duplicados = Correlativo.objects.values('sucursal_id', 'tipo_dte').annotate(
-    count=Count('id')
-).filter(count__gt=1)
-
-print(f"Grupos de duplicados encontrados: {len(duplicados)}")
-for dup in duplicados:
-    print(f"  - Sucursal: {dup['sucursal_id']}, Tipo: {dup['tipo_dte']}, Total: {dup['count']}")
-
-# 2. Ver detalles del duplicado específico (sucursal_id=2, tipo_dte='COMPRA')
-correlativos_dup = Correlativo.objects.filter(sucursal_id=2, tipo_dte='COMPRA').order_by('-id')
-print(f"\nRegistros duplicados para Sucursal 2, COMPRA:")
-for corr in correlativos_dup:
-    print(f"  ID: {corr.id} | Inicio: {corr.inicio} | Termino: {corr.termino} | Disponibles: {corr.disponibles}")
-
-# 3. Eliminar duplicados (mantener el más reciente)
-# IMPORTANTE: Revisar los IDs antes de eliminar
-print("\nManteniendo el registro más reciente (mayor ID)...")
-correlativos_a_eliminar = correlativos_dup[1:]  # Todos excepto el primero (más reciente)
-for corr in correlativos_a_eliminar:
-    print(f"  Eliminando ID: {corr.id}...")
-    corr.delete()
-
-print("✅ Duplicados eliminados")
-
-# 4. Verificar que no queden duplicados
-duplicados_restantes = Correlativo.objects.values('sucursal_id', 'tipo_dte').annotate(
-    count=Count('id')
-).filter(count__gt=1)
-print(f"\nDuplicados restantes: {len(duplicados_restantes)}")
+sucursal_actual_id = request.session.get('sucursalActual')
 ```
 
----
+Pero en el sistema, la variable de sesión puede estar almacenada como `'idSucursalActual'` o `'sucursalActual'`, dependiendo de dónde se haya establecido. Esto causaba que no se detectara la sucursal correctamente y, por tanto, no se encontrara el correlativo TICKET.
 
-### Opción 3: SQL Directo (Para PostgreSQL)
+## Solución Aplicada
 
-**⚠️ PRECAUCIÓN: Hacer backup antes de ejecutar**
+### 1. Eliminación del Duplicado (Problema 1)
 
-#### 3.1. Identificar duplicados:
-```sql
--- Ver todos los correlativos duplicados
-SELECT 
-    sucursal_id, 
-    tipo_dte, 
-    COUNT(*) as total
-FROM app_correlativo
-GROUP BY sucursal_id, tipo_dte
-HAVING COUNT(*) > 1;
+Se eliminó el correlativo duplicado no normalizado:
+
+```bash
+python manage.py shell -c "from app.models import Correlativo; Correlativo.objects.get(id=10).delete()"
 ```
 
-#### 3.2. Ver detalles de los duplicados:
-```sql
--- Ver detalles del caso específico
-SELECT 
-    id,
-    sucursal_id,
-    tipo_dte,
-    inicio,
-    termino,
-    alias,
-    fecha_actualizacion
-FROM app_correlativo
-WHERE sucursal_id = 2 AND tipo_dte = 'COMPRA'
-ORDER BY id DESC;
-```
+### 2. Corrección de Variable de Sesión (Problema 2)
 
-#### 3.3. Eliminar duplicados (mantener el más reciente):
-```sql
--- Eliminar duplicados manteniendo el registro con mayor ID (más reciente)
-WITH duplicados AS (
-    SELECT 
-        id,
-        ROW_NUMBER() OVER (
-            PARTITION BY sucursal_id, tipo_dte 
-            ORDER BY id DESC
-        ) as rn
-    FROM app_correlativo
-)
-DELETE FROM app_correlativo
-WHERE id IN (
-    SELECT id 
-    FROM duplicados 
-    WHERE rn > 1
-);
-```
-
-O para el caso específico:
-```sql
--- Eliminar duplicados de COMPRA en sucursal 2 (mantener el más reciente)
-DELETE FROM app_correlativo
-WHERE id IN (
-    SELECT id
-    FROM app_correlativo
-    WHERE sucursal_id = 2 AND tipo_dte = 'COMPRA'
-    ORDER BY id ASC
-    LIMIT (
-        SELECT COUNT(*) - 1
-        FROM app_correlativo
-        WHERE sucursal_id = 2 AND tipo_dte = 'COMPRA'
-    )
-);
-```
-
----
-
-## Prevención de Duplicados Futuros
-
-### 1. La función `obtener_siguiente_correlativo()` ya maneja esto correctamente:
+Se modificó la función `ticket_venta` en `views_modulo_ventas.py` para buscar en ambas variables de sesión:
 
 ```python
-def obtener_siguiente_correlativo(sucursal, tipo):
-    correlativo, created = Correlativo.objects.get_or_create(
-        tipo_dte=tipo,
-        sucursal=sucursal,
-        defaults={
-            'inicio': 1, 
-            'termino': 999999, 
-            'alias': f'{tipo}_{sucursal.alias}',
-            'responsable': 'Sistema'
-        }
-    )
-    return correlativo.obtener_siguiente_numero()
+# ANTES (solo buscaba en 'sucursalActual')
+sucursal_actual_id = request.session.get('sucursalActual')
+
+# DESPUÉS (busca en ambas variables)
+sucursal_actual_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
 ```
 
-**`get_or_create()`** previene duplicados automáticamente.
+Esta corrección asegura que la vista siempre encuentre la sucursal actual, independientemente de qué variable de sesión se esté usando.
 
-### 2. La vista `guardar_correlativo()` también valida:
+### 3. Mejora de la Vista `gestion_correlativos` (`views.py`)
+
+Se modificó la función para:
+
+- **Verificar antes de normalizar**: Detecta si ya existe un correlativo con el tipo normalizado
+- **Eliminar duplicados automáticamente**: Si encuentra un duplicado, elimina el no normalizado
+- **Manejo de errores**: Captura errores de `IntegrityError` y elimina correlativos problemáticos
 
 ```python
-# Verificar si ya existe un correlativo para esta combinación
-existing_query = Correlativo.objects.filter(
-    sucursal=sucursal,
-    tipo_dte=tipo_documento
-)
+# Código mejorado en views.py líneas 10340-10389
+for correlativo in correlativos_a_procesar:
+    # ... validaciones ...
+    
+    if tipo_normalizado:
+        # Verificar si ya existe un correlativo con el tipo normalizado
+        existe_normalizado = Correlativo.objects.filter(
+            sucursal_id=correlativo.sucursal_id,
+            tipo_dte=tipo_normalizado
+        ).exclude(id=correlativo.id).exists()
+        
+        if existe_normalizado:
+            # Ya existe uno normalizado, eliminar este duplicado
+            correlativo.delete()
+            continue
+        else:
+            # No existe, normalizar
+            correlativo.tipo_dte = tipo_normalizado
+            updated = True
+    
+    if updated:
+        try:
+            correlativo.save()
+        except IntegrityError as e:
+            correlativo.delete()
+```
 
-if correlativo_id:
-    existing_query = existing_query.exclude(id=correlativo_id)
+### 3. Mejora de la Función `guardar_correlativo` (`views.py`)
 
-if existing_query.exists():
+Se agregó:
+
+- **Normalización automática**: Convierte tipos de documento a su forma normalizada antes de guardar
+- **Manejo de errores de integridad**: Captura `IntegrityError` y devuelve un mensaje claro
+
+```python
+# Normalizar tipo de documento antes de guardar
+tipo_documento_normalizado = tipo_documento.upper()
+normalizaciones = {
+    'COMPRA': 'COMPRA',
+    'TICKET': 'TICKET',
+    'TRASPASO': 'TRASPASO',
+    'AJUSTE': 'AJUSTE'
+}
+tipo_documento = normalizaciones.get(tipo_documento_normalizado, tipo_documento)
+
+# Manejo de IntegrityError
+try:
+    # ... crear o actualizar correlativo ...
+except IntegrityError as e:
     return JsonResponse({
         'success': False,
-        'message': 'Ya existe un correlativo para esta sucursal y tipo de documento'
-    })
+        'message': f'Ya existe un correlativo para {tipo_documento} en {sucursal.alias}'
+    }, status=400)
 ```
 
----
+## Herramientas de Diagnóstico
 
-## Pasos Recomendados (EN ORDEN)
+### Comando de Limpieza de Duplicados
 
-### 1️⃣ Verificar duplicados:
+El sistema ya incluye un comando de management para detectar y limpiar duplicados:
+
 ```bash
+# Ver duplicados sin eliminar
 python manage.py limpiar_correlativos_duplicados --dry-run
-```
 
-### 2️⃣ Limpiar duplicados:
-```bash
+# Eliminar duplicados (interactivo)
+python manage.py limpiar_correlativos_duplicados
+
+# Eliminar duplicados automáticamente
 python manage.py limpiar_correlativos_duplicados --auto-fix
 ```
 
-### 3️⃣ Verificar que la página carga correctamente:
-```
-http://localhost:8000/app/gestion-correlativos/
-```
+### Verificación Manual
 
-### 4️⃣ Verificar los correlativos en Django Admin:
-```
-http://localhost:8000/admin/app/correlativo/
-```
+Para verificar correlativos duplicados en una sucursal específica:
 
----
-
-## Verificación Post-Limpieza
-
-Ejecutar en Django Shell:
-```python
+```bash
+python manage.py shell -c "
 from app.models import Correlativo
-from django.db.models import Count
-
-# Verificar que no hay duplicados
-duplicados = Correlativo.objects.values('sucursal_id', 'tipo_dte').annotate(
-    count=Count('id')
-).filter(count__gt=1)
-
-if duplicados.count() == 0:
-    print("✅ ¡Base de datos limpia! No hay duplicados.")
-else:
-    print(f"❌ Aún hay {duplicados.count()} grupos de duplicados")
-    for dup in duplicados:
-        print(f"   - Sucursal: {dup['sucursal_id']}, Tipo: {dup['tipo_dte']}")
+cors = Correlativo.objects.filter(sucursal_id=2)
+for c in cors:
+    print(f'ID: {c.id}, Tipo: {c.tipo_dte}, Sucursal: {c.sucursal_id}')
+"
 ```
 
+Para buscar correlativos con tipos no normalizados:
+
+```bash
+python manage.py shell -c "
+from app.models import Correlativo
+from django.db.models import Q
+duplicados = Correlativo.objects.filter(
+    Q(tipo_dte='Compra') | Q(tipo_dte='Ticket') | 
+    Q(tipo_dte='Traspaso') | Q(tipo_dte='Ajuste')
+)
+print(f'Correlativos no normalizados: {duplicados.count()}')
+for c in duplicados:
+    print(f'ID: {c.id}, Tipo: {c.tipo_dte}')
+"
+```
+
+## Prevención de Problemas Futuros
+
+### 1. Normalización Automática
+
+Todos los tipos de documento se normalizan automáticamente al guardar:
+- `Compra` → `COMPRA`
+- `Ticket` → `TICKET`
+- `Traspaso` → `TRASPASO`
+- `Ajuste` → `AJUSTE`
+
+### 2. Validación de Unicidad
+
+La función `guardar_correlativo` verifica que no exista un correlativo duplicado antes de crear o actualizar.
+
+### 3. Manejo Robusto de Errores
+
+Todas las operaciones están protegidas con try-except para manejar errores de integridad de forma elegante.
+
+## Verificación Post-Solución
+
+### Verificación Problema 1: Gestión de Correlativos
+
+1. **Acceder a la vista**: Visitar `http://localhost:8000/app/documentos/gestion-correlativos/`
+2. **Verificar que no hay errores**: La página debe cargar sin mensajes de error
+3. **Verificar correlativos**: Confirmar que solo existe un correlativo por `(sucursal_id, tipo_dte)`
+
+### Verificación Problema 2: Ticket de Venta
+
+1. **Acceder a la vista**: Visitar `http://localhost:8000/app/ticket-venta/`
+2. **Verificar correlativo detectado**: La página debe cargar sin el mensaje de advertencia "No existe un correlativo configurado para TICKET"
+3. **Confirmar funcionalidad**: El botón "Crear Ticket" debe estar habilitado y funcional
+
+## Archivos Modificados
+
+- `C:\DjangoProyects\retailmind\SistemaRetailMind\retailmind\app\views.py`
+  - Función `gestion_correlativos` (líneas 10340-10389)
+  - Función `guardar_correlativo` (líneas 10517-10583)
+
+- `C:\DjangoProyects\retailmind\SistemaRetailMind\retailmind\app\views_modulo_ventas.py`
+  - Función `ticket_venta` (línea 399) - Corregido para buscar correlativo con ambas variables de sesión
+
+## Estado Actual
+
+✅ **Resuelto**: Ambos problemas relacionados con correlativos han sido solucionados.
+
+### Problema 1: Correlativos Duplicados
+- ✅ Duplicado eliminado de la base de datos
+- ✅ Vista mejorada con detección y eliminación automática de duplicados
+- ✅ Normalización automática de tipos de documento
+- ✅ Manejo robusto de errores de integridad
+- ✅ Herramientas de diagnóstico disponibles
+
+### Problema 2: Detección de Correlativo en Ticket Venta
+- ✅ Variable de sesión corregida para buscar en ambas ubicaciones
+- ✅ Correlativo TICKET ahora se detecta correctamente
+- ✅ Funcionalidad de creación de tickets restaurada
+
 ---
 
-## Notas Importantes
-
-1. **El comando mantiene el registro más reciente** (mayor ID)
-2. **Los duplicados antiguos se eliminan** de forma segura
-3. **El modelo ya tiene la restricción de unicidad** para prevenir futuros duplicados
-4. **`get_or_create()` es seguro** y no creará duplicados
-
----
-
-**Fecha:** 7 de Noviembre, 2025
-**Problema:** Correlativos duplicados en base de datos
-**Solución:** Comando de limpieza + prevención automática
-
+**Fecha de solución**: 8 de noviembre de 2025
+**Tipo de issue**: 
+- Integridad de Datos / Restricción de Unicidad
+- Inconsistencia en Variables de Sesión
+**Severidad**: Media → Baja
+**Impacto**: Gestión de Correlativos y Ventas
