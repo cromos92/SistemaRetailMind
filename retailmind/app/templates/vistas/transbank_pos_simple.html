@@ -270,8 +270,19 @@
 {% include 'layout/footer.html' %}
 
     <script>
-        // Detectar URL base automáticamente (funciona en localhost y producción)
+        // Detectar URL base automáticamente
         const API_BASE_URL = window.location.origin + '/app/pos/transbank';
+        
+        // Detectar si estamos en localhost o producción
+        const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
+        // Detectar si Web Serial API está disponible
+        const WEB_SERIAL_AVAILABLE = 'serial' in navigator;
+        
+        // Variable global para el puerto serial (Web Serial API)
+        let serialPort = null;
+        let reader = null;
+        let writer = null;
 
         // CSRF Token
         function getCookie(name) {
@@ -356,14 +367,103 @@
             }
         }
 
-        // Auto-conectar
+        // ========== WEB SERIAL API FUNCTIONS ==========
+        
+        async function conectarWebSerial() {
+            if (!WEB_SERIAL_AVAILABLE) {
+                log('❌ Web Serial API no disponible', 'error');
+                log('Usa Chrome/Edge o activa en chrome://flags', 'warning');
+                return false;
+            }
+            
+            try {
+                log('📍 Solicitando puerto al usuario...', 'info');
+                
+                // Solicitar puerto al usuario
+                serialPort = await navigator.serial.requestPort();
+                
+                // Abrir puerto con baudrate 115200
+                await serialPort.open({ baudRate: 115200 });
+                
+                log('✅ Puerto abierto con Web Serial API', 'success');
+                log(`Baudrate: 115200`, 'info');
+                
+                // Configurar reader y writer
+                const textDecoder = new TextDecoderStream();
+                const readableStreamClosed = serialPort.readable.pipeTo(textDecoder.writable);
+                reader = textDecoder.readable.getReader();
+                
+                writer = serialPort.writable.getWriter();
+                
+                actualizarEstado(true, 'Web Serial API');
+                marcarPaso(1, true);
+                
+                return true;
+            } catch (err) {
+                log(`❌ Error: ${err.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function desconectarWebSerial() {
+            try {
+                if (reader) {
+                    await reader.cancel();
+                    reader = null;
+                }
+                if (writer) {
+                    await writer.releaseLock();
+                    writer = null;
+                }
+                if (serialPort) {
+                    await serialPort.close();
+                    serialPort = null;
+                }
+                
+                log('✅ Desconectado (Web Serial API)', 'success');
+                actualizarEstado(false);
+                return true;
+            } catch (err) {
+                log(`⚠️ Error desconectando: ${err.message}`, 'warning');
+                return false;
+            }
+        }
+        
+        // Auto-conectar (Inteligente)
         async function autoconectar() {
             log('🚀 Auto-conectando...', 'info');
+            
+            // Detectar qué método usar
+            if (IS_LOCALHOST) {
+                log('📍 Localhost detectado: Usando SDK Python', 'info');
+                await autoconectarSDK();
+            } else {
+                log('🌐 Producción detectada: Usando Web Serial API', 'info');
+                
+                if (!WEB_SERIAL_AVAILABLE) {
+                    log('❌ Web Serial API no disponible', 'error');
+                    log('⚠️ Opciones:', 'warning');
+                    log('  1. Usa Chrome o Edge', 'info');
+                    log('  2. Accede por HTTPS', 'info');
+                    log('  3. Instala agente desktop', 'info');
+                    return;
+                }
+                
+                const conectado = await conectarWebSerial();
+                
+                if (conectado) {
+                    log('💡 Web Serial API: Listo para usar', 'info');
+                    log('⚠️ Algunas funciones pueden no estar disponibles', 'warning');
+                }
+            }
+        }
+        
+        async function autoconectarSDK() {
             try {
                 const data = await api('/autoconectar/', 'POST');
 
                 if (data.success && data.conectado) {
-                    log('✅ CONECTADO!', 'success');
+                    log('✅ CONECTADO con SDK Python!', 'success');
                     log(`Puerto: ${data.puerto} @ ${data.baudrate}`, 'success');
                     if (data.guardado_en_db) {
                         log(`💾 Guardado en DB (ID: ${data.config_id})`, 'success');
@@ -371,9 +471,21 @@
                     actualizarEstado(true, data.puerto);
                 } else {
                     log(`❌ ${data.error}`, 'error');
+                    
+                    // Si falla SDK, ofrecer Web Serial API
+                    if (WEB_SERIAL_AVAILABLE && !IS_LOCALHOST) {
+                        log('💡 Intentando con Web Serial API...', 'info');
+                        await conectarWebSerial();
+                    }
                 }
             } catch (err) {
                 log(`❌ ${err.message}`, 'error');
+                
+                // Fallback a Web Serial API
+                if (WEB_SERIAL_AVAILABLE && !IS_LOCALHOST) {
+                    log('💡 Intentando con Web Serial API...', 'info');
+                    await conectarWebSerial();
+                }
             }
         }
 
@@ -406,10 +518,18 @@
         // Desconectar
         async function desconectar() {
             log('Desconectando...', 'info');
+            
+            // Si hay conexión Web Serial, desconectar
+            if (serialPort) {
+                await desconectarWebSerial();
+                return;
+            }
+            
+            // Si no, usar API del SDK
             try {
                 const data = await api('/desconectar/', 'POST');
                 if (data.success) {
-                    log('✅ Desconectado', 'success');
+                    log('✅ Desconectado (SDK)', 'success');
                     actualizarEstado(false);
                 }
             } catch (err) {
@@ -582,7 +702,22 @@
 
         // Inicialización
         log('✅ POS SDK cargado', 'success');
-        log('💡 Paso 1: Auto-Conectar', 'info');
+        
+        // Detectar modo de operación
+        if (IS_LOCALHOST) {
+            log('📍 Modo: SDK Python Directo (localhost)', 'success');
+        } else {
+            if (WEB_SERIAL_AVAILABLE) {
+                log('🌐 Modo: Web Serial API (producción)', 'success');
+                log('⚠️ Requiere Chrome/Edge y HTTPS', 'warning');
+            } else {
+                log('❌ Web Serial API no disponible', 'error');
+                log('💡 Soluciones:', 'warning');
+                log('  1. Usa navegador Chrome o Edge', 'info');
+                log('  2. Asegúrate de usar HTTPS', 'info');
+                log('  3. O instala agente desktop local', 'info');
+            }
+        }
+        
+        log('💡 Paso 1: Click en "Auto-Conectar"', 'info');
     </script>
-</body>
-</html>
