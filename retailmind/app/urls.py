@@ -162,8 +162,9 @@ from .views_edicion_productos import (
     obtener_producto_desde_talla,
 )
 from .views_transbank_sdk import (
-    # Vista principal
+    # Vistas
     gestion_transbank_pos_sdk,
+    gestion_transbank_pos_manual,
     # API Transbank POS SDK
     listar_puertos,
     autoconectar,
@@ -469,8 +470,9 @@ urlpatterns = [
     path('api/validar-password/', validar_password_usuario, name='validar_password_usuario'),
 
     # ========== MÓDULO POS TRANSBANK SDK (CONEXIÓN SERIAL DIRECTA) ==========
-    # Vista principal
+    # Vista principal con SDK oficial de Transbank
     path('pos/transbank/', gestion_transbank_pos_sdk, name='gestion_transbank_pos_sdk'),
+    path('pos/transbank-manual/', gestion_transbank_pos_manual, name='gestion_transbank_pos_manual'),
     
     # APIs sin base de datos - Conexión directa a puerto serial
     path('pos/transbank/puertos/', listar_puertos, name='transbank_sdk_listar_puertos'),

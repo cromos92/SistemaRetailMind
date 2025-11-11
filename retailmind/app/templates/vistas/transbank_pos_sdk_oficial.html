@@ -1,0 +1,715 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+<div class="container-fluid">
+
+<style>
+    .status-badge {
+        display: inline-block;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+    .badge-success { background: #10b981; color: white; }
+    .badge-danger { background: #ef4444; color: white; }
+    .badge-warning { background: #f59e0b; color: white; }
+    .badge-info { background: #3b82f6; color: white; }
+    
+    .log-container {
+        background: #1a202c;
+        color: #68d391;
+        padding: 20px;
+        border-radius: 8px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    .log-success { color: #68d391; }
+    .log-error { color: #fc8181; }
+    .log-warning { color: #f6ad55; }
+    .log-info { color: #63b3ed; }
+</style>
+
+<!-- Header -->
+<div class="row">
+    <div class="col-12">
+        <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <div class="card-body text-center py-4">
+                <h2 class="mb-2 text-white">🏪 Transbank POS - SDK Web Serial Oficial</h2>
+                <div class="mt-3">
+                    <span class="status-badge badge-danger" id="browser-support">Verificando navegador...</span>
+                    <span class="status-badge badge-danger" id="pos-state">● DESCONECTADO</span>
+                    <span class="status-badge badge-info" id="sale-state">Sin venta</span>
+                </div>
+                <p class="mb-0 mt-2" id="port-name">Puerto: Ninguno</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <!-- Columna Principal -->
+    <div class="col-lg-8">
+        <!-- Conexión -->
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0 text-white"><i class="ri-plug-line"></i> Conexión al POS</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Baudrate:</label>
+                        <select id="baudrate" class="form-select">
+                            <option value="115200" selected>115200</option>
+                            <option value="57600">57600</option>
+                            <option value="19200">19200</option>
+                            <option value="14400">14400</option>
+                            <option value="9600">9600</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid gap-2">
+                            <button onclick="conectar()" class="btn btn-success" id="btnConectar">
+                                <i class="ri-plug-line"></i> Conectar POS
+                            </button>
+                            <button onclick="desconectar()" class="btn btn-danger" id="btnDesconectar" disabled>
+                                <i class="ri-logout-box-line"></i> Desconectar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operaciones -->
+        <div id="operations-panel" style="display: none;">
+            <!-- Cargar Llaves -->
+            <div class="card mb-3">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0"><i class="ri-key-2-line"></i> Cargar Llaves</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <strong>⚠️ IMPORTANTE:</strong> El POS mostrará "¿Desea cargar llaves criptográficas?" - Presiona <strong>SÍ</strong>
+                    </div>
+                    <button onclick="cargarLlaves()" class="btn btn-warning btn-lg w-100">
+                        <i class="ri-key-2-line"></i> Cargar Llaves
+                    </button>
+                </div>
+            </div>
+
+            <!-- Venta -->
+            <div class="card mb-3">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0 text-white"><i class="ri-bank-card-line"></i> Procesar Venta</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Monto (CLP):</label>
+                            <input type="number" id="monto" class="form-control form-control-lg" value="1000" min="50">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Ticket:</label>
+                            <input type="text" id="ticket" class="form-control form-control-lg" readonly>
+                        </div>
+                    </div>
+                    <button onclick="procesarVenta()" class="btn btn-success btn-lg w-100">
+                        <i class="ri-bank-card-line"></i> Procesar Venta
+                    </button>
+                    <div id="resultado-venta" class="mt-3"></div>
+                </div>
+            </div>
+
+            <!-- Últim Venta -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="ri-file-list-line"></i> Consultas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button onclick="ultimaVenta()" class="btn btn-info">
+                            <i class="ri-file-text-line"></i> Última Venta
+                        </button>
+                        <button onclick="consultarTotales()" class="btn btn-info">
+                            <i class="ri-bar-chart-line"></i> Totales del Día
+                        </button>
+                        <button onclick="detalleVentas()" class="btn btn-info">
+                            <i class="ri-file-list-3-line"></i> Detalle de Ventas
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Anular -->
+            <div class="card mb-3">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0 text-white"><i class="ri-close-circle-line"></i> Anular Transacción</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <label class="form-label">Operation ID:</label>
+                            <input type="number" id="operation-id" class="form-control" placeholder="ID de operación">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <button onclick="anular()" class="btn btn-danger w-100">
+                                <i class="ri-close-line"></i> Anular
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cerrar Día -->
+            <div class="card mb-3">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0 text-white"><i class="ri-shut-down-line"></i> Cerrar Día</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <strong>⚠️</strong> Esto cerrará el batch del día en el POS
+                    </div>
+                    <button onclick="cerrarDia()" class="btn btn-dark btn-lg w-100">
+                        <i class="ri-lock-line"></i> Cerrar Día
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna Lateral: Log -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="ri-terminal-line"></i> Log de Comunicación
+                    <button onclick="limpiarLog()" class="btn btn-sm btn-secondary float-end">
+                        <i class="ri-delete-bin-line"></i> Limpiar
+                    </button>
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="log" class="log-container"></div>
+            </div>
+        </div>
+
+        <!-- Información SDK -->
+        <div class="card mt-3">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0 text-white"><i class="ri-information-line"></i> Info SDK</h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-1"><strong>SDK:</strong> Transbank Web Serial</p>
+                <p class="mb-1"><strong>Versión:</strong> 1.0.0</p>
+                <p class="mb-1"><strong>Modo:</strong> <span id="sdk-mode">Detectando...</span></p>
+                <p class="mb-0"><strong>Navegador:</strong> <span id="browser-name"></span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+<!-- container-fluid -->
+</div>
+<!-- page-content -->
+
+{% include 'layout/footer.html' %}
+
+<script src="{% static 'js/transbank-web-serial.js' %}"></script>
+<script>
+    // SDK se carga como window.Transbank
+    let pos = null;
+    let conectado = false;
+    
+    // CSRF Token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+    
+    // Generar ticket
+    function generarTicket() {
+        return Date.now().toString().slice(-6);
+    }
+    document.getElementById('ticket').value = generarTicket();
+    
+    // Log
+    function log(msg, tipo = 'info') {
+        const logDiv = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = `log-${tipo}`;
+        entry.textContent = `[${time}] ${msg}`;
+        logDiv.appendChild(entry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    function limpiarLog() {
+        document.getElementById('log').innerHTML = '';
+    }
+    
+    // Actualizar estado
+    function actualizarEstado(conectado, portName = '') {
+        const posState = document.getElementById('pos-state');
+        const portNameEl = document.getElementById('port-name');
+        const btnConectar = document.getElementById('btnConectar');
+        const btnDesconectar = document.getElementById('btnDesconectar');
+        const operations = document.getElementById('operations-panel');
+        
+        if (conectado) {
+            posState.textContent = '● CONECTADO';
+            posState.className = 'status-badge badge-success';
+            portNameEl.textContent = `Puerto: ${portName}`;
+            btnConectar.disabled = true;
+            btnDesconectar.disabled = false;
+            operations.style.display = 'block';
+        } else {
+            posState.textContent = '● DESCONECTADO';
+            posState.className = 'status-badge badge-danger';
+            portNameEl.textContent = 'Puerto: Ninguno';
+            btnConectar.disabled = false;
+            btnDesconectar.disabled = true;
+            operations.style.display = 'none';
+        }
+    }
+    
+    // Verificar compatibilidad del navegador
+    function verificarCompatibilidad() {
+        const browserSupport = document.getElementById('browser-support');
+        const browserName = document.getElementById('browser-name');
+        const sdkMode = document.getElementById('sdk-mode');
+        
+        if ('serial' in navigator) {
+            browserSupport.textContent = '✅ Compatible';
+            browserSupport.className = 'status-badge badge-success';
+            log('✅ Web Serial API disponible', 'success');
+            sdkMode.textContent = 'Web Serial API';
+        } else {
+            browserSupport.textContent = '❌ No Compatible';
+            browserSupport.className = 'status-badge badge-danger';
+            log('❌ Web Serial API no disponible', 'error');
+            log('Usa Chrome/Edge/Opera 89+', 'warning');
+            sdkMode.textContent = 'No disponible';
+        }
+        
+        // Detectar navegador
+        const ua = navigator.userAgent;
+        let browser = 'Desconocido';
+        if (ua.includes('Chrome')) browser = 'Chrome';
+        else if (ua.includes('Edge')) browser = 'Edge';
+        else if (ua.includes('Opera')) browser = 'Opera';
+        else if (ua.includes('Firefox')) browser = 'Firefox';
+        else if (ua.includes('Safari')) browser = 'Safari';
+        
+        browserName.textContent = browser;
+        log(`Navegador: ${browser}`, 'info');
+        log(`Protocolo: ${window.location.protocol}`, 'info');
+        log(`Host: ${window.location.host}`, 'info');
+    }
+    
+    // Conectar al POS
+    window.conectar = async function() {
+        try {
+            log('🔌 Conectando al POS...', 'info');
+            log('📍 Selecciona el puerto en el popup', 'info');
+            
+            const baudrate = parseInt(document.getElementById('baudrate').value);
+            
+            // Crear instancia del SDK oficial de Transbank
+            if (!window.Transbank) {
+                log('❌ SDK Transbank no cargado', 'error');
+                return;
+            }
+            
+            pos = window.Transbank.POS.Integrado;
+            
+            log('SDK Transbank inicializado', 'info');
+            
+            // Conectar
+            const resultado = await pos.connect(baudrate);
+            
+            if (resultado) {
+                log(`✅ CONECTADO exitosamente!`, 'success');
+                log(`Baudrate: ${baudrate}`, 'success');
+                
+                conectado = true;
+                actualizarEstado(true, 'SDK Oficial Transbank');
+            } else {
+                log(`❌ Conexión falló`, 'error');
+            }
+            
+        } catch (err) {
+            log(`❌ Error: ${err.message || err}`, 'error');
+            if (err && err.toString().includes('cancel')) {
+                log('💡 Usuario canceló selección de puerto', 'warning');
+            }
+        }
+    }
+    
+    // Desconectar
+    window.desconectar = async function() {
+        try {
+            log('Desconectando...', 'info');
+            
+            if (pos) {
+                await pos.disconnect();
+            }
+            
+            conectado = false;
+            actualizarEstado(false);
+            log('✅ Desconectado', 'success');
+            
+        } catch (err) {
+            log(`❌ Error: ${err.message || err}`, 'error');
+        }
+    }
+    
+    // Cargar Llaves
+    window.cargarLlaves = async function() {
+        if (!pos) {
+            log('❌ No conectado al POS', 'error');
+            return;
+        }
+        
+        try {
+            log('🔑 Cargando llaves...', 'info');
+            log('⚠️ PRESIONA SÍ EN EL POS cuando pregunte', 'warning');
+            log('⏳ Esperando (puede tardar 30-60s)...', 'info');
+            
+            const resultado = await pos.loadKeys();
+            
+            log('━━━━ RESPUESTA LOAD KEYS ━━━━', 'success');
+            log(JSON.stringify(resultado, null, 2), 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            if (resultado.successful) {
+                log('✅ LLAVES CARGADAS EXITOSAMENTE!', 'success');
+                log(`Commerce Code: ${resultado.commerceCode}`, 'success');
+                log(`Terminal ID: ${resultado.terminalId}`, 'success');
+                log(`Function Code: ${resultado.functionCode}`, 'info');
+            } else {
+                log(`⚠️ Código: ${resultado.responseCode}`, 'warning');
+                log(`Mensaje: ${resultado.responseMessage}`, 'warning');
+                
+                if (resultado.responseCode === 3) {
+                    log('💡 Código 3 = POS sin conexión GPRS', 'info');
+                    log('El SDK funciona correctamente', 'success');
+                }
+            }
+            
+        } catch (err) {
+            log(`❌ Error: ${err}`, 'error');
+        }
+    }
+    
+    // Procesar Venta
+    window.procesarVenta = async function() {
+        if (!pos) {
+            log('❌ No conectado al POS', 'error');
+            return;
+        }
+        
+        try {
+            const monto = parseInt(document.getElementById('monto').value);
+            const ticket = document.getElementById('ticket').value;
+            
+            if (!monto || monto < 50) {
+                log('❌ Monto mínimo $50', 'error');
+                return;
+            }
+            
+            log(`💳 Venta: $${monto} - Ticket: ${ticket}`, 'info');
+            log('⚠️ PASE LA TARJETA EN EL POS', 'warning');
+            log('⏳ Esperando (hasta 90s)...', 'info');
+            
+            const saleState = document.getElementById('sale-state');
+            saleState.textContent = '⏳ Procesando...';
+            saleState.className = 'status-badge badge-warning';
+            
+            // Usar SDK oficial
+            const resultado = await pos.sale(monto, ticket);
+            
+            log('━━━━ RESPUESTA VENTA ━━━━', 'success');
+            log(JSON.stringify(resultado, null, 2), 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            saleState.textContent = 'Completado';
+            saleState.className = 'status-badge badge-success';
+            
+            if (resultado.successful) {
+                log('✅ VENTA APROBADA!', 'success');
+                log(`Autorización: ${resultado.authorizationCode}`, 'success');
+                log(`Operation Number: ${resultado.operationNumber}`, 'success');
+                log(`Tipo Tarjeta: ${resultado.cardType}`, 'info');
+                log(`Últimos 4 dígitos: ${resultado.last4Digits}`, 'info');
+                log(`Cuotas: ${resultado.sharesNumber}`, 'info');
+                
+                document.getElementById('operation-id').value = resultado.operationNumber;
+                
+                document.getElementById('resultado-venta').innerHTML = `
+                    <div class="alert alert-success">
+                        <h6>✅ Venta Aprobada</h6>
+                        <p class="mb-1"><strong>Autorización:</strong> ${resultado.authorizationCode}</p>
+                        <p class="mb-1"><strong>Operation:</strong> ${resultado.operationNumber}</p>
+                        <p class="mb-1"><strong>Monto:</strong> $${resultado.amount.toLocaleString()}</p>
+                        <p class="mb-1"><strong>Tarjeta:</strong> ${resultado.cardType} ****${resultado.last4Digits}</p>
+                        <p class="mb-0"><strong>Cuotas:</strong> ${resultado.sharesNumber}</p>
+                    </div>
+                `;
+                
+                document.getElementById('ticket').value = generarTicket();
+                
+                // Guardar en DB
+                await guardarVentaDB(resultado, monto, ticket);
+                
+            } else {
+                log(`❌ RECHAZADA - Código: ${resultado.responseCode}`, 'error');
+                log(`Mensaje: ${resultado.responseMessage}`, 'error');
+                saleState.textContent = 'Rechazada';
+                saleState.className = 'status-badge badge-danger';
+            }
+            
+        } catch (err) {
+            log(`❌ Error: ${err}`, 'error');
+            const saleState = document.getElementById('sale-state');
+            saleState.textContent = 'Error';
+            saleState.className = 'status-badge badge-danger';
+        }
+    }
+    
+    // Última Venta
+    window.ultimaVenta = async function() {
+        if (!pos) {
+            log('❌ No conectado', 'error');
+            return;
+        }
+        
+        try {
+            log('📄 Consultando última venta...', 'info');
+            
+            const resultado = await pos.lastSale();
+            
+            log('━━━━ ÚLTIMA VENTA ━━━━', 'success');
+            log(JSON.stringify(resultado, null, 2), 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            if (resultado.successful) {
+                log('✅ Última venta obtenida', 'success');
+                log(`Autorización: ${resultado.authorizationCode}`, 'info');
+                log(`Monto: $${resultado.amount.toLocaleString()}`, 'info');
+                log(`Operation: ${resultado.operationNumber}`, 'info');
+            }
+            
+        } catch (err) {
+            log(`❌ Error: ${err}`, 'error');
+        }
+    }
+    
+    // Totales
+    window.consultarTotales = async function() {
+        if (!pos) {
+            log('❌ No conectado', 'error');
+            return;
+        }
+        
+        try {
+            log('📊 Consultando totales...', 'info');
+            
+            const resultado = await pos.getTotals();
+            
+            log('━━━━ TOTALES DEL DÍA ━━━━', 'success');
+            log(JSON.stringify(resultado, null, 2), 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            if (resultado.successful) {
+                log('✅ Totales obtenidos', 'success');
+                log(`Transacciones: ${resultado.txCount}`, 'info');
+                log(`Total: $${resultado.txTotal.toLocaleString()}`, 'info');
+            } else {
+                log(`⚠️ Código: ${resultado.responseCode}`, 'warning');
+            }
+            
+        } catch (err) {
+            log(`❌ Error: ${err}`, 'error');
+        }
+    }
+    
+    // Detalle de Ventas
+    window.detalleVentas = async function() {
+        if (!pos) {
+            log('❌ No conectado', 'error');
+            return;
+        }
+        
+        try {
+            log('📋 Consultando detalle...', 'info');
+            log('⏳ Esto puede tardar un momento...', 'info');
+            
+            const resultado = await pos.salesDetail(false); // false = imprimir en caja
+            
+            log('━━━━ DETALLE DE VENTAS ━━━━', 'success');
+            log(`${resultado.length} transacciones encontradas`, 'info');
+            
+            resultado.forEach((venta, index) => {
+                log(`Venta ${index + 1}:`, 'info');
+                log(`  Auth: ${venta.authorizationCode}, Monto: $${venta.amount}`, 'info');
+            });
+            
+        } catch (err) {
+            log(`❌ Error: ${err}`, 'error');
+        }
+    }
+    
+    // Anular
+    window.anular = async function() {
+        if (!pos) {
+            log('❌ No conectado', 'error');
+            return;
+        }
+        
+        try {
+            const opId = document.getElementById('operation-id').value;
+            
+            if (!opId) {
+                log('❌ Ingresa Operation ID', 'error');
+                return;
+            }
+            
+            log(`🔄 Anulando operación ${opId}...`, 'info');
+            
+            const resultado = await pos.refund(parseInt(opId));
+            
+            log('━━━━ RESPUESTA ANULACIÓN ━━━━', 'success');
+            log(JSON.stringify(resultado, null, 2), 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            if (resultado.successful) {
+                log('✅ ANULACIÓN APROBADA', 'success');
+                log(`Autorización: ${resultado.authorizationCode}`, 'success');
+                document.getElementById('operation-id').value = '';
+            } else {
+                log(`❌ RECHAZADA - Código: ${resultado.responseCode}`, 'error');
+                log(`Mensaje: ${resultado.responseMessage}`, 'error');
+            }
+            
+        } catch (err) {
+            log(`❌ Error: ${err}`, 'error');
+        }
+    }
+    
+    // Cerrar Día
+    window.cerrarDia = async function() {
+        if (!pos) {
+            log('❌ No conectado', 'error');
+            return;
+        }
+        
+        if (!confirm('¿Cerrar el día?\n\nEsto cerrará el batch del POS.')) return;
+        
+        try {
+            log('🔒 Cerrando día...', 'info');
+            log('⏳ Esperando (puede tardar 60s)...', 'info');
+            
+            const resultado = await pos.closeDay();
+            
+            log('━━━━ RESPUESTA CIERRE ━━━━', 'success');
+            log(JSON.stringify(resultado, null, 2), 'info');
+            log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
+            
+            if (resultado.successful) {
+                log('✅ DÍA CERRADO EXITOSAMENTE', 'success');
+                log(`Commerce: ${resultado.commerceCode}`, 'success');
+                log(`Terminal: ${resultado.terminalId}`, 'success');
+            } else {
+                log(`❌ Error - Código: ${resultado.responseCode}`, 'error');
+                log(`Mensaje: ${resultado.responseMessage}`, 'error');
+            }
+            
+        } catch (err) {
+            log(`❌ Error: ${err}`, 'error');
+        }
+    }
+    
+    // Guardar venta en Django
+    async function guardarVentaDB(resultado, monto, ticket) {
+        try {
+            log('💾 Guardando en BD...', 'info');
+            
+            const response = await fetch('/app/pos/transbank/venta/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    monto: monto,
+                    ticket: ticket,
+                    web_serial: true,
+                    respuesta_pos: {
+                        response_code: resultado.responseCode,
+                        authorization_code: resultado.authorizationCode,
+                        operation_number: resultado.operationNumber,
+                        card_type: resultado.cardType,
+                        commerce_code: resultado.commerceCode,
+                        terminal_id: resultado.terminalId,
+                        amount: resultado.amount,
+                        card_number: resultado.last4Digits
+                    }
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.guardado_en_db) {
+                log(`✅ Guardado en DB (ID: ${data.transaccion_id})`, 'success');
+            } else {
+                log(`⚠️ No se guardó en DB`, 'warning');
+            }
+        } catch (err) {
+            log(`⚠️ Error guardando en DB: ${err.message}`, 'warning');
+        }
+    }
+    
+    // Inicialización
+    verificarCompatibilidad();
+    
+    log('✅ Transbank POS SDK OFICIAL - RetailMind', 'success');
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    log('', 'info');
+    log('📦 SDK: GitHub TransbankDevelopers/transbank-pos-sdk-web-serial', 'success');
+    log('🔧 Versión: 1.0.0', 'info');
+    log('🌐 Modo: Web Serial API (oficial)', 'info');
+    log('', 'info');
+    log('✅ Funciones implementadas:', 'success');
+    log('  - connect() - Conectar al POS', 'info');
+    log('  - loadKeys() - Cargar llaves', 'info');
+    log('  - sale() - Procesar venta', 'info');
+    log('  - lastSale() - Última venta', 'info');
+    log('  - refund() - Anular transacción', 'info');
+    log('  - getTotals() - Totales del día', 'info');
+    log('  - salesDetail() - Detalle de ventas', 'info');
+    log('  - closeDay() - Cerrar día', 'info');
+    log('', 'info');
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    log('💡 PASO 1: Click en "Conectar POS"', 'info');
+    log('', 'info');
+</script>
+

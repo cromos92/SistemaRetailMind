@@ -24,12 +24,19 @@ pos_service = POSService()
 def gestion_transbank_pos_sdk(request):
     """
     Vista principal de gestión Transbank POS SDK
-    Interfaz simplificada con métodos esenciales del SDK
+    SDK Oficial Web Serial de Transbank
+    """
+    return render(request, 'vistas/transbank_pos_sdk_oficial.html')
+
+
+@login_required  
+def gestion_transbank_pos_manual(request):
+    """
+    Vista con implementación manual (desarrollo)
     """
     context = {}
     
     try:
-        # Obtener configuración guardada si existe
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         
         if sucursal_id:
