@@ -1859,13 +1859,14 @@ def generar_txt_dte_acepta(datos):
     return contenido_txt
 
 
-def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA'):
+def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_id=None):
     """
     Genera un archivo TXT de Acepta desde un Ticket de venta
     
     Args:
-        ticket_id (int): ID del ticket
+        ticket_id (int): ID o correlativo del ticket
         tipo_dte (str): BOLETA_ELECTRONICA o FACTURA_ELECTRONICA
+        sucursal_id (int): ID de la sucursal (opcional)
         
     Returns:
         tuple: (contenido_txt, nombre_archivo)
@@ -1874,8 +1875,15 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA'):
     from django.shortcuts import get_object_or_404
     from decimal import Decimal
     
-    # Obtener ticket
-    ticket = get_object_or_404(Ticket, id=ticket_id)
+    # Intentar obtener ticket por ID primero, si falla intentar por correlativo
+    try:
+        ticket = Ticket.objects.get(id=ticket_id)
+    except Ticket.DoesNotExist:
+        # Si no existe por ID, intentar por correlativo y sucursal
+        if sucursal_id:
+            ticket = get_object_or_404(Ticket, correlativo=ticket_id, sucursal_id=sucursal_id)
+        else:
+            raise ValidationError(f"No se encontró el ticket {ticket_id}")
     
     # Obtener empresa (emisor)
     empresa = ticket.sucursal.empresa
@@ -2100,8 +2108,11 @@ def generar_dte_desde_ticket_api(request):
                 'error': 'ID de ticket requerido'
             }, status=400)
         
-        # Generar DTE
-        contenido_txt, nombre_archivo = generar_dte_desde_ticket(ticket_id, tipo_dte)
+        # Obtener sucursal de la sesión
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        
+        # Generar DTE (ticket_id puede ser ID o correlativo)
+        contenido_txt, nombre_archivo = generar_dte_desde_ticket(ticket_id, tipo_dte, sucursal_id)
         
         # Retornar como archivo descargable
         response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')

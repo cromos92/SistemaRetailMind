@@ -31,3 +31,8 @@ websockets==11.0.3
 # Additional dependencies that might be needed
 reportlab==4.0.4
 celery==5.3.4
+
+# REST Framework & DTE
+djangorestframework==3.14.0
+num2words==0.5.14
+transbank-pos-sdk==1.0.1

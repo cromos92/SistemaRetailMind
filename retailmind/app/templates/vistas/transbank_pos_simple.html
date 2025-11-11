@@ -1,0 +1,587 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+<div class="container-fluid">
+
+<style>
+        .header-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        .status-connected { background: #10b981; }
+        .status-disconnected { background: #ef4444; }
+        
+        .step-card {
+            border-left: 5px solid;
+            height: 100%;
+        }
+        .step-1 { border-left-color: #10b981; }
+        .step-2 { border-left-color: #f59e0b; }
+        .step-3 { border-left-color: #3b82f6; }
+        .step-4 { border-left-color: #ef4444; }
+        
+        .log-container {
+            background: #1a202c;
+            color: #68d391;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-success { color: #68d391; }
+        .log-error { color: #fc8181; }
+        .log-warning { color: #f6ad55; }
+        .log-info { color: #63b3ed; }
+</style>
+
+<!-- Header Status -->
+<div class="header-card">
+            <h3 class="mb-2">Terminal VX 520</h3>
+            <h4 id="status-text" class="status-badge status-disconnected">● DESCONECTADO</h4>
+            <p id="puerto-info" class="mb-0 mt-2">Puerto: Ninguno</p>
+        </div>
+
+        <!-- Pasos Visuales -->
+        <div class="row g-3 mb-4">
+            <div class="col-lg-3 col-md-6">
+                <div class="card step-card step-1">
+                    <div class="card-body text-center">
+                        <h1 class="mb-2" id="paso1-icon">○</h1>
+                        <h5>Paso 1</h5>
+                        <p class="text-muted mb-0">🔌 Conectar</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card step-card step-2">
+                    <div class="card-body text-center">
+                        <h1 class="mb-2" id="paso2-icon">○</h1>
+                        <h5>Paso 2</h5>
+                        <p class="text-muted mb-0">🔑 Llaves</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card step-card step-3">
+                    <div class="card-body text-center">
+                        <h1 class="mb-2" id="paso3-icon">○</h1>
+                        <h5>Paso 3</h5>
+                        <p class="text-muted mb-0">💳 Ventas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="card step-card step-4">
+                    <div class="card-body text-center">
+                        <h1 class="mb-2" id="paso4-icon">○</h1>
+                        <h5>Paso 4</h5>
+                        <p class="text-muted mb-0">📊 Cierre</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Columna Principal -->
+            <div class="col-lg-8">
+                <!-- PASO 1: Conectar -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0 text-white">🔌 PASO 1: Conectar al POS</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <strong>ℹ️</strong> Auto-detecta COM9 @ 115200 y guarda en DB
+                        </div>
+                        <button onclick="autoconectar()" class="btn btn-success btn-lg w-100">
+                            <i class="ri-plug-line"></i> Auto-Conectar al POS
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PASO 2: Cargar Llaves -->
+                <div class="card mb-3">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0">🔑 PASO 2: Cargar Llaves</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning">
+                            <strong>⚠️ IMPORTANTE:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>El POS mostrará: "¿Desea cargar llaves criptográficas?"</li>
+                                <li><strong>Presiona SÍ</strong> en el POS físico</li>
+                                <li>Espera 30-60 segundos</li>
+                                <li>Código '03' = POS sin GPRS (es normal)</li>
+                            </ul>
+                        </div>
+                        <button onclick="cargarLlaves()" class="btn btn-warning btn-lg w-100">
+                            <i class="ri-key-2-line"></i> Cargar Llaves
+                        </button>
+                    </div>
+                </div>
+
+                <!-- PASO 3: Venta -->
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0 text-white">💳 PASO 3: Procesar Venta</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Monto (CLP)</label>
+                                <input type="number" id="monto" class="form-control form-control-lg" value="1000" min="50">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Ticket ID</label>
+                                <input type="text" id="ticket" class="form-control form-control-lg" readonly>
+                            </div>
+                        </div>
+                        <button onclick="procesarVenta()" class="btn btn-primary btn-lg w-100">
+                            <i class="ri-bank-card-line"></i> Procesar Venta
+                        </button>
+                        <div id="resultado-venta" class="mt-3"></div>
+                    </div>
+                </div>
+
+                <!-- Anular -->
+                <div class="card mb-3">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0 text-white">❌ Anular Transacción</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-9 mb-2">
+                                <label class="form-label">Operation Number</label>
+                                <input type="number" id="operation-number" class="form-control" placeholder="Se llena automático">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">&nbsp;</label>
+                                <button onclick="anular()" class="btn btn-danger w-100">Anular</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Lateral -->
+            <div class="col-lg-4">
+                <!-- PASO 4: Totales -->
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0 text-white">📊 PASO 4: Totales</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="totales-display" class="text-center mb-3">
+                            <p class="text-muted">Click para ver</p>
+                        </div>
+                        <button onclick="consultarTotales()" class="btn btn-info w-100">
+                            <i class="ri-bar-chart-line"></i> Ver Totales
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Resumen -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">📈 Resumen del Día</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="resumen-display">
+                            <p class="text-muted text-center">Ver totales primero</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cerrar Día -->
+                <div class="card mb-3">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0 text-white">🔒 Cerrar Día</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-danger mb-3">
+                            <strong>⚠️</strong> Cierra operaciones
+                        </div>
+                        <button onclick="cerrarDia()" class="btn btn-danger btn-lg w-100">
+                            Cerrar Día
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Utilidades -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">🛠️ Utilidades</h6>
+                    </div>
+                    <div class="card-body">
+                        <button onclick="verificarConexion()" class="btn btn-outline-primary w-100 mb-2">
+                            Verificar POLL
+                        </button>
+                        <button onclick="obtenerInfoPuerto()" class="btn btn-outline-info w-100 mb-2">
+                            Info Puerto
+                        </button>
+                        <button onclick="desconectar()" class="btn btn-outline-danger w-100">
+                            Desconectar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            📝 Log de Operaciones
+                            <button onclick="limpiarLog()" class="btn btn-sm btn-secondary float-end">
+                                Limpiar
+                            </button>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="log" class="log-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+</div>
+<!-- container-fluid -->
+</div>
+<!-- page-content -->
+
+{% include 'layout/footer.html' %}
+
+<script>
+        const API_BASE_URL = 'http://localhost:8000/app/pos/transbank';
+
+        // CSRF Token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        // Generar ticket
+        function generarTicket() {
+            return 'TKT' + Date.now().toString().slice(-6);
+        }
+        document.getElementById('ticket').value = generarTicket();
+
+        // Log
+        function log(msg, tipo = 'info') {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-${tipo}`;
+            entry.textContent = `[${time}] ${msg}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function limpiarLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function marcarPaso(paso, completado) {
+            const icon = document.getElementById(`paso${paso}-icon`);
+            icon.textContent = completado ? '✓' : '○';
+            icon.style.color = completado ? '#10b981' : '#6b7280';
+        }
+
+        function actualizarEstado(conectado, puerto = null) {
+            const statusText = document.getElementById('status-text');
+            const puertoInfo = document.getElementById('puerto-info');
+            
+            if (conectado) {
+                statusText.textContent = '● CONECTADO';
+                statusText.className = 'status-badge status-connected';
+                puertoInfo.textContent = `Conectado a: ${puerto}`;
+                marcarPaso(1, true);
+            } else {
+                statusText.textContent = '● DESCONECTADO';
+                statusText.className = 'status-badge status-disconnected';
+                puertoInfo.textContent = 'Puerto: Ninguno';
+                marcarPaso(1, false);
+                marcarPaso(2, false);
+                marcarPaso(3, false);
+            }
+        }
+
+        // API
+        async function api(endpoint, method = 'GET', body = null) {
+            try {
+                const opts = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken
+                    }
+                };
+                if (body) opts.body = JSON.stringify(body);
+                
+                const res = await fetch(`${API_BASE_URL}${endpoint}`, opts);
+                return await res.json();
+            } catch (err) {
+                log(`Error API: ${err.message}`, 'error');
+                throw err;
+            }
+        }
+
+        // Auto-conectar
+        async function autoconectar() {
+            log('🚀 Auto-conectando...', 'info');
+            try {
+                const data = await api('/autoconectar/', 'POST');
+
+                if (data.success && data.conectado) {
+                    log('✅ CONECTADO!', 'success');
+                    log(`Puerto: ${data.puerto} @ ${data.baudrate}`, 'success');
+                    if (data.guardado_en_db) {
+                        log(`💾 Guardado en DB (ID: ${data.config_id})`, 'success');
+                    }
+                    actualizarEstado(true, data.puerto);
+                } else {
+                    log(`❌ ${data.error}`, 'error');
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Verificar
+        async function verificarConexion() {
+            log('Verificando...', 'info');
+            try {
+                const data = await api('/verificar/');
+                log(data.conectado ? '✅ POS responde' : '❌ No responde', data.conectado ? 'success' : 'error');
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Info
+        async function obtenerInfoPuerto() {
+            log('ℹ️ Info...', 'info');
+            try {
+                const data = await api('/info-puerto/');
+                if (data.puerto_conectado) {
+                    log(`Puerto: ${data.puerto_conectado} @ ${data.baudrate}`, 'info');
+                } else {
+                    log('Sin puerto conectado', 'info');
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Desconectar
+        async function desconectar() {
+            log('Desconectando...', 'info');
+            try {
+                const data = await api('/desconectar/', 'POST');
+                if (data.success) {
+                    log('✅ Desconectado', 'success');
+                    actualizarEstado(false);
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Cargar llaves
+        async function cargarLlaves() {
+            log('🔑 Cargando llaves...', 'info');
+            log('⚠️ PRESIONA SÍ EN EL POS', 'warning');
+            log('⏳ Espera 30-60s...', 'info');
+            
+            try {
+                const data = await api('/cargar-llaves/', 'POST');
+
+                if (data.success) {
+                    const code = String(data.response_code);
+                    
+                    if (code === '0' || code === '00') {
+                        log('✅ LLAVES CARGADAS!', 'success');
+                        marcarPaso(2, true);
+                    } else {
+                        log(`⚠️ Código: ${code}`, 'warning');
+                        if (code === '03') {
+                            log('💡 POS sin GPRS (SDK OK)', 'info');
+                            marcarPaso(2, true);
+                        }
+                    }
+                    log(`Commerce: ${data.commerce_code}`, 'info');
+                    log(`Terminal: ${data.terminal_id}`, 'info');
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Venta
+        async function procesarVenta() {
+            const monto = parseInt(document.getElementById('monto').value);
+            const ticket = document.getElementById('ticket').value;
+
+            if (!monto || monto < 50) {
+                log('❌ Monto mínimo $50', 'error');
+                return;
+            }
+
+            log(`💳 Venta $${monto} - ${ticket}`, 'info');
+            log('⚠️ PASE LA TARJETA', 'warning');
+            
+            try {
+                const data = await api('/venta/', 'POST', {monto, ticket});
+                const code = String(data.response_code);
+
+                if (code === '0' || code === '00') {
+                    log('✅ VENTA APROBADA!', 'success');
+                    log(`Autorización: ${data.authorization_code}`, 'success');
+                    log(`Operation: ${data.operation_number}`, 'success');
+                    if (data.guardado_en_db) {
+                        log(`💾 Guardado en DB (ID: ${data.transaccion_id})`, 'success');
+                    }
+                    
+                    marcarPaso(3, true);
+                    
+                    if (data.operation_number) {
+                        document.getElementById('operation-number').value = data.operation_number;
+                    }
+                    
+                    document.getElementById('resultado-venta').innerHTML = `
+                        <div class="alert alert-success">
+                            <h6>✅ Aprobada</h6>
+                            <p class="mb-1"><strong>Autorización:</strong> ${data.authorization_code}</p>
+                            <p class="mb-0"><strong>Operation:</strong> ${data.operation_number}</p>
+                        </div>
+                    `;
+                    
+                    document.getElementById('ticket').value = generarTicket();
+                } else {
+                    log(`❌ RECHAZADA - ${code}`, 'error');
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Anular
+        async function anular() {
+            const opNum = document.getElementById('operation-number').value;
+            if (!opNum) {
+                log('❌ Ingrese Operation Number', 'error');
+                return;
+            }
+
+            log(`Anulando ${opNum}...`, 'info');
+            try {
+                const data = await api('/anular/', 'POST', {operation_id: parseInt(opNum)});
+                const code = String(data.response_code);
+                
+                if (code === '0' || code === '00') {
+                    log('✅ ANULACIÓN APROBADA', 'success');
+                    document.getElementById('operation-number').value = '';
+                } else {
+                    log(`❌ Código: ${code}`, 'error');
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Totales
+        async function consultarTotales() {
+            log('📊 Consultando...', 'info');
+            try {
+                const data = await api('/totales/');
+                const code = String(data.response_code);
+                
+                if (code === '0' || code === '00') {
+                    const count = data.tx_count || 0;
+                    const total = data.tx_total || 0;
+                    const prom = count > 0 ? (total / count) : 0;
+                    
+                    log('✅ Totales obtenidos', 'success');
+                    log(`Transacciones: ${count}`, 'info');
+                    log(`Total: $${total.toLocaleString()}`, 'info');
+                    
+                    document.getElementById('totales-display').innerHTML = `
+                        <h2 class="text-primary">${count}</h2>
+                        <p class="text-muted mb-1">Transacciones</p>
+                        <h3>$${total.toLocaleString()}</h3>
+                    `;
+                    
+                    document.getElementById('resumen-display').innerHTML = `
+                        <table class="table table-sm">
+                            <tr><td>Transacciones:</td><td class="text-end">${count}</td></tr>
+                            <tr><td>Total:</td><td class="text-end">$${total.toLocaleString()}</td></tr>
+                            <tr><td>Promedio:</td><td class="text-end">$${prom.toLocaleString(undefined, {maximumFractionDigits: 0})}</td></tr>
+                        </table>
+                    `;
+                    
+                    marcarPaso(4, true);
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Cerrar día
+        async function cerrarDia() {
+            if (!confirm('¿Cerrar el día?')) return;
+            
+            log('🔒 Cerrando...', 'info');
+            try {
+                const data = await api('/cerrar-dia/', 'POST');
+                const code = String(data.response_code);
+                
+                if (code === '0' || code === '00') {
+                    log('✅ DÍA CERRADO', 'success');
+                    marcarPaso(1, false);
+                    marcarPaso(2, false);
+                    marcarPaso(3, false);
+                    marcarPaso(4, false);
+                    actualizarEstado(false);
+                } else {
+                    log(`❌ Código: ${code}`, 'error');
+                }
+            } catch (err) {
+                log(`❌ ${err.message}`, 'error');
+            }
+        }
+
+        // Inicialización
+        log('✅ POS SDK cargado', 'success');
+        log('💡 Paso 1: Auto-Conectar', 'info');
+    </script>
+</body>
+</html>

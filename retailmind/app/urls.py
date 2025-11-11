@@ -162,11 +162,16 @@ from .views_edicion_productos import (
     obtener_producto_desde_talla,
 )
 from .views_transbank_sdk import (
+    # Vista principal
+    gestion_transbank_pos_sdk,
     # API Transbank POS SDK
     listar_puertos,
+    autoconectar,
     conectar,
+    conectar_con_reintentos,
     desconectar,
     verificar,
+    obtener_info_puerto,
     cargar_llaves,
     venta,
     venta_multicodigo,
@@ -437,9 +442,9 @@ urlpatterns = [
     path('api/creditos/validar-codigo/', validar_codigo_credito, name='validar_codigo_credito'),
     path('api/creditos/usar-en-venta/', usar_credito_en_venta, name='usar_credito_en_venta'),
 
-    # ========== MÓDULO POS TRANSBANK ==========
-    # Vista principal
-    path('pos/transbank/', gestion_pos_transbank, name='gestion_pos_transbank'),
+    # ========== MÓDULO POS TRANSBANK (SISTEMA VIEJO - WEBSOCKET) ==========
+    # Vista principal WebSocket (movida a /transbank-websocket/)
+    path('pos/transbank-websocket/', gestion_pos_transbank, name='gestion_pos_transbank'),
     
     # Página de test del SDK (solo para diagnóstico)
     path('test-transbank-sdk/', lambda request: render(request, 'test_transbank_sdk.html'), name='test_transbank_sdk'),
@@ -464,11 +469,17 @@ urlpatterns = [
     path('api/validar-password/', validar_password_usuario, name='validar_password_usuario'),
 
     # ========== MÓDULO POS TRANSBANK SDK (CONEXIÓN SERIAL DIRECTA) ==========
+    # Vista principal
+    path('pos/transbank/', gestion_transbank_pos_sdk, name='gestion_transbank_pos_sdk'),
+    
     # APIs sin base de datos - Conexión directa a puerto serial
     path('pos/transbank/puertos/', listar_puertos, name='transbank_sdk_listar_puertos'),
+    path('pos/transbank/autoconectar/', autoconectar, name='transbank_sdk_autoconectar'),
     path('pos/transbank/conectar/', conectar, name='transbank_sdk_conectar'),
+    path('pos/transbank/conectar-reintentos/', conectar_con_reintentos, name='transbank_sdk_conectar_reintentos'),
     path('pos/transbank/desconectar/', desconectar, name='transbank_sdk_desconectar'),
     path('pos/transbank/verificar/', verificar, name='transbank_sdk_verificar'),
+    path('pos/transbank/info-puerto/', obtener_info_puerto, name='transbank_sdk_info_puerto'),
     path('pos/transbank/cargar-llaves/', cargar_llaves, name='transbank_sdk_cargar_llaves'),
     path('pos/transbank/venta/', venta, name='transbank_sdk_venta'),
     path('pos/transbank/venta-multicodigo/', venta_multicodigo, name='transbank_sdk_venta_multicodigo'),
