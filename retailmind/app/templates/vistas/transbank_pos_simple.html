@@ -269,8 +269,9 @@
 
 {% include 'layout/footer.html' %}
 
-<script>
-        const API_BASE_URL = 'http://localhost:8000/app/pos/transbank';
+    <script>
+        // Detectar URL base automáticamente (funciona en localhost y producción)
+        const API_BASE_URL = window.location.origin + '/app/pos/transbank';
 
         // CSRF Token
         function getCookie(name) {
