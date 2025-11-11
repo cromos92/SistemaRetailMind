@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ejemplo Transbank POS SDK - Frontend</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #4a5568;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        h2 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .input-group {
+            margin: 15px 0;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #4a5568;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .log {
+            background: #2d3748;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+        }
+
+        .log-success { color: #68d391; }
+        .log-error { color: #fc8181; }
+        .log-info { color: #63b3ed; }
+        .log-warning { color: #f6ad55; }
+
+        .status {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-connected {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .status-disconnected {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .result-card {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .result-card h3 {
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f7fafc;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            color: #718096;
+            font-weight: 600;
+        }
+
+        .result-value {
+            color: #2d3748;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏪 RetailMind - Transbank POS SDK</h1>
+            <p>Ejemplo de Integración Frontend</p>
+        </div>
+
+        <div class="content">
+            <!-- Estado de Conexión -->
+            <div class="section">
+                <h2>
+                    Estado de Conexión
+                    <span id="status" class="status status-disconnected">DESCONECTADO</span>
+                </h2>
+                <p id="puerto-actual">Puerto: Ninguno</p>
+            </div>
+
+            <!-- 1. Configuración -->
+            <div class="section">
+                <h2>1️⃣ Configuración</h2>
+                
+                <div class="button-group">
+                    <button onclick="listarPuertos()">📍 Listar Puertos</button>
+                    <button onclick="verificarConexion()">✅ Verificar Conexión</button>
+                </div>
+
+                <div class="input-group">
+                    <label for="puerto-select">Puerto Serial:</label>
+                    <select id="puerto-select">
+                        <option value="">Seleccione un puerto...</option>
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button onclick="conectar()">🔌 Conectar</button>
+                    <button onclick="desconectar()">🔌 Desconectar</button>
+                    <button onclick="cargarLlaves()">🔑 Cargar Llaves</button>
+                </div>
+            </div>
+
+            <!-- 2. Ventas -->
+            <div class="section">
+                <h2>2️⃣ Procesar Venta</h2>
+                
+                <div class="input-group">
+                    <label for="monto-venta">Monto (CLP):</label>
+                    <input type="number" id="monto-venta" value="1000" min="100">
+                </div>
+
+                <div class="input-group">
+                    <label for="ticket-venta">Ticket ID:</label>
+                    <input type="text" id="ticket-venta" value="" placeholder="Ej: TKT001">
+                </div>
+
+                <div class="button-group">
+                    <button onclick="procesarVenta()">💳 Procesar Venta</button>
+                    <button onclick="ultimaVenta()">📄 Última Venta</button>
+                </div>
+
+                <div id="resultado-venta"></div>
+            </div>
+
+            <!-- 3. Anulación -->
+            <div class="section">
+                <h2>3️⃣ Anulación</h2>
+                
+                <div class="input-group">
+                    <label for="operation-id">Operation ID:</label>
+                    <input type="number" id="operation-id" placeholder="Ej: 83">
+                </div>
+
+                <button onclick="anularTransaccion()">❌ Anular Transacción</button>
+            </div>
+
+            <!-- 4. Consultas -->
+            <div class="section">
+                <h2>4️⃣ Consultas</h2>
+                
+                <div class="button-group">
+                    <button onclick="consultarTotales()">📊 Totales del Día</button>
+                    <button onclick="consultarDetalles()">📋 Detalles</button>
+                    <button onclick="cerrarDia()">🔒 Cerrar Día</button>
+                </div>
+            </div>
+
+            <!-- Log de Operaciones -->
+            <div class="section">
+                <h2>📝 Log de Operaciones</h2>
+                <button onclick="limpiarLog()" style="margin-bottom: 10px;">🗑️ Limpiar Log</button>
+                <div id="log" class="log"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuración
+        const API_BASE_URL = 'http://localhost:8000/app/pos/transbank';
+        let conectado = false;
+        let puertoActual = null;
+
+        // Generar ticket ID aleatorio
+        function generarTicketID() {
+            return 'TKT' + Date.now().toString().slice(-6);
+        }
+
+        // Inicialización
+        document.getElementById('ticket-venta').value = generarTicketID();
+
+        // Funciones de Log
+        function log(mensaje, tipo = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${tipo}`;
+            entry.textContent = `[${timestamp}] ${mensaje}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function limpiarLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function actualizarEstado(conectado, puerto = null) {
+            const statusEl = document.getElementById('status');
+            const puertoEl = document.getElementById('puerto-actual');
+            
+            if (conectado) {
+                statusEl.textContent = 'CONECTADO';
+                statusEl.className = 'status status-connected';
+                puertoEl.textContent = `Puerto: ${puerto || 'Desconocido'}`;
+            } else {
+                statusEl.textContent = 'DESCONECTADO';
+                statusEl.className = 'status status-disconnected';
+                puertoEl.textContent = 'Puerto: Ninguno';
+            }
+        }
+
+        // API Calls
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                const data = await response.json();
+                
+                return data;
+            } catch (error) {
+                log(`Error en API: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Funciones de API
+        async function listarPuertos() {
+            log('Listando puertos disponibles...', 'info');
+            try {
+                const data = await apiCall('/puertos/');
+                
+                if (data.success && data.puertos) {
+                    log(`✅ Puertos encontrados: ${data.puertos.join(', ')}`, 'success');
+                    
+                    // Actualizar select
+                    const select = document.getElementById('puerto-select');
+                    select.innerHTML = '<option value="">Seleccione un puerto...</option>';
+                    data.puertos.forEach(puerto => {
+                        const option = document.createElement('option');
+                        option.value = puerto;
+                        option.textContent = puerto;
+                        select.appendChild(option);
+                    });
+                } else {
+                    log('⚠️ No se encontraron puertos', 'warning');
+                }
+            } catch (error) {
+                log(`❌ Error listando puertos: ${error.message}`, 'error');
+            }
+        }
+
+        async function conectar() {
+            const puerto = document.getElementById('puerto-select').value;
+            
+            if (!puerto) {
+                log('❌ Debe seleccionar un puerto', 'error');
+                return;
+            }
+
+            log(`Conectando a ${puerto}...`, 'info');
+            
+            try {
+                const data = await apiCall('/conectar/', 'POST', {
+                    puerto: puerto,
+                    baud_rate: 115200
+                });
+
+                if (data.success && data.conectado) {
+                    log(`✅ Conectado exitosamente a ${puerto}`, 'success');
+                    conectado = true;
+                    puertoActual = puerto;
+                    actualizarEstado(true, puerto);
+                } else {
+                    log('❌ No se pudo conectar', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error conectando: ${error.message}`, 'error');
+            }
+        }
+
+        async function desconectar() {
+            log('Desconectando...', 'info');
+            
+            try {
+                const data = await apiCall('/desconectar/', 'POST');
+
+                if (data.success && data.desconectado) {
+                    log('✅ Desconectado exitosamente', 'success');
+                    conectado = false;
+                    puertoActual = null;
+                    actualizarEstado(false);
+                } else {
+                    log('⚠️ Error al desconectar', 'warning');
+                }
+            } catch (error) {
+                log(`❌ Error desconectando: ${error.message}`, 'error');
+            }
+        }
+
+        async function verificarConexion() {
+            log('Verificando conexión (POLL)...', 'info');
+            
+            try {
+                const data = await apiCall('/verificar/');
+
+                if (data.success && data.conectado) {
+                    log('✅ POS responde correctamente', 'success');
+                } else {
+                    log('❌ POS no responde', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error verificando: ${error.message}`, 'error');
+            }
+        }
+
+        async function cargarLlaves() {
+            log('Cargando llaves en el POS...', 'info');
+            
+            try {
+                const data = await apiCall('/cargar-llaves/', 'POST');
+
+                if (data.success && data.response_code === 0) {
+                    log('✅ Llaves cargadas exitosamente', 'success');
+                    log(`   Commerce Code: ${data.commerce_code}`, 'info');
+                    log(`   Terminal ID: ${data.terminal_id}`, 'info');
+                } else {
+                    log(`❌ Error cargando llaves: código ${data.response_code}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function procesarVenta() {
+            const monto = parseInt(document.getElementById('monto-venta').value);
+            const ticket = document.getElementById('ticket-venta').value;
+
+            if (!monto || monto < 100) {
+                log('❌ Monto inválido (mínimo $100)', 'error');
+                return;
+            }
+
+            if (!ticket) {
+                log('❌ Debe ingresar un Ticket ID', 'error');
+                return;
+            }
+
+            log(`💳 Procesando venta: $${monto.toLocaleString()} - Ticket: ${ticket}`, 'info');
+            log('⚠️ PASE LA TARJETA EN EL POS', 'warning');
+            
+            try {
+                const data = await apiCall('/venta/', 'POST', {
+                    monto: monto,
+                    ticket: ticket,
+                    con_mensajes: false
+                });
+
+                if (data.success && data.response_code === 0) {
+                    log('✅ VENTA APROBADA', 'success');
+                    log(`   Autorización: ${data.authorization_code}`, 'success');
+                    log(`   Operation ID: ${data.operation_number}`, 'success');
+                    log(`   Tipo Tarjeta: ${data.card_type}`, 'info');
+                    
+                    // Mostrar resultado
+                    mostrarResultadoVenta(data);
+                    
+                    // Actualizar campo operation_id para anulación
+                    document.getElementById('operation-id').value = data.operation_number;
+                    
+                    // Generar nuevo ticket
+                    document.getElementById('ticket-venta').value = generarTicketID();
+                } else {
+                    log(`❌ VENTA RECHAZADA: ${data.message || 'Error desconocido'}`, 'error');
+                    log(`   Código: ${data.response_code}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Error procesando venta: ${error.message}`, 'error');
+            }
+        }
+
+        function mostrarResultadoVenta(data) {
+            const resultDiv = document.getElementById('resultado-venta');
+            resultDiv.innerHTML = `
+                <div class="result-card">
+                    <h3>✅ Transacción Aprobada</h3>
+                    <div class="result-item">
+                        <span class="result-label">Código Autorización:</span>
+                        <span class="result-value">${data.authorization_code}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Operation Number:</span>
+                        <span class="result-value">${data.operation_number}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Monto:</span>
+                        <span class="result-value">$${data.amount?.toLocaleString()}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Tipo Tarjeta:</span>
+                        <span class="result-value">${data.card_type}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Tarjeta:</span>
+                        <span class="result-value">****${data.card_number?.slice(-4)}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function ultimaVenta() {
+            log('Consultando última venta...', 'info');
+            
+            try {
+                const data = await apiCall('/ultima-venta/');
+
+                if (data.success) {
+                    log('✅ Última venta obtenida', 'success');
+                    log(`   Ticket: ${data.ticket}`, 'info');
+                    log(`   Monto: $${data.amount?.toLocaleString()}`, 'info');
+                    log(`   Autorización: ${data.authorization_code}`, 'info');
+                } else {
+                    log('❌ Error obteniendo última venta', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function anularTransaccion() {
+            const operationId = document.getElementById('operation-id').value;
+
+            if (!operationId) {
+                log('❌ Debe ingresar un Operation ID', 'error');
+                return;
+            }
+
+            log(`Anulando transacción ${operationId}...`, 'info');
+            
+            try {
+                const data = await apiCall('/anular/', 'POST', {
+                    operation_id: parseInt(operationId)
+                });
+
+                if (data.success && data.response_code === 0) {
+                    log('✅ ANULACIÓN APROBADA', 'success');
+                    log(`   Código Autorización: ${data.authorization_code}`, 'success');
+                } else {
+                    log(`❌ ANULACIÓN RECHAZADA: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Error en anulación: ${error.message}`, 'error');
+            }
+        }
+
+        async function consultarTotales() {
+            log('Consultando totales del día...', 'info');
+            
+            try {
+                const data = await apiCall('/totales/');
+
+                if (data.success && data.response_code === 0) {
+                    log('✅ Totales obtenidos', 'success');
+                    log(`   Cantidad transacciones: ${data.tx_count || 0}`, 'info');
+                    log(`   Total: $${(data.tx_total || 0).toLocaleString()}`, 'info');
+                } else {
+                    log('⚠️ No se pudieron obtener totales', 'warning');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function consultarDetalles() {
+            log('Consultando detalles...', 'info');
+            
+            try {
+                const data = await apiCall('/detalles/?imprimir_en_pos=false');
+
+                if (data.success) {
+                    log('✅ Detalles obtenidos', 'success');
+                } else {
+                    log('⚠️ Error obteniendo detalles', 'warning');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function cerrarDia() {
+            if (!confirm('¿Está seguro de cerrar el día?')) {
+                return;
+            }
+
+            log('Cerrando día...', 'info');
+            
+            try {
+                const data = await apiCall('/cerrar-dia/', 'POST');
+
+                if (data.success && data.response_code === 0) {
+                    log('✅ DÍA CERRADO EXITOSAMENTE', 'success');
+                } else {
+                    log('❌ Error cerrando día', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Inicialización
+        log('Sistema RetailMind - Transbank POS SDK cargado', 'success');
+        log('Base URL: ' + API_BASE_URL, 'info');
+    </script>
+</body>
+</html>
+

@@ -1220,9 +1220,324 @@ def validar_datos_dte_acepta(datos):
     return True, "OK"
 
 
+def generar_txt_nota_credito_acepta(datos):
+    """
+    Genera el contenido de un archivo TXT para NOTAS DE CRÉDITO (tipo 61) en formato Acepta
+    En Chile las NC usan montos POSITIVOS (el tipo 61 indica que es NC)
+    """
+    # Validar datos
+    es_valido, mensaje = validar_datos_dte_acepta(datos)
+    if not es_valido:
+        raise ValidationError(f"Error en validación de datos: {mensaje}")
+    
+    separador = '|'
+    lineas = []
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    doc = datos['documento']
+    emisor = datos['emisor']
+    receptor = datos['receptor']
+    totales = datos['totales']
+    
+    # ===== LÍNEA 1: IdDoc NC =====
+    fecha_emision = formatear_fecha(doc.get('fecha_emision', ''))
+    fecha_vencimiento = formatear_fecha(doc.get('fecha_vencimiento', ''))
+    if not fecha_vencimiento:
+        fecha_vencimiento = fecha_emision
+    
+    linea1 = [
+        str(doc.get('tipo_documento', '')),  # 61
+        str(doc.get('folio', '')),
+        fecha_emision,
+        '',
+        str(doc.get('tipo_despacho', '2')),
+        str(doc.get('ind_traslado', '1')),
+        str(doc.get('forma_pago', '1')),
+        fecha_vencimiento,
+        '}'
+    ]
+    lineas.append(separador.join(linea1))
+    
+    # ===== LÍNEA 2: EMISOR (completo con usuario) =====
+    linea2 = [
+        formatear_rut(emisor.get('rut', '')),
+        limpiar_texto(emisor.get('razon_social', ''), 100),
+        limpiar_texto(emisor.get('giro', ''), 80),
+        str(emisor.get('acteco', '')),
+        '',  '', '',  # Campos vacíos
+        limpiar_texto(emisor.get('direccion', ''), 60),
+        limpiar_texto(emisor.get('comuna', ''), 20),
+        limpiar_texto(emisor.get('ciudad', ''), 20),
+        limpiar_texto(emisor.get('codigo_vendedor', ''), 60) or 'USUARIO',
+        '}'
+    ]
+    lineas.append(separador.join(linea2))
+    
+    # ===== LÍNEA 3: RECEPTOR (completo) =====
+    linea3 = [
+        formatear_rut(receptor.get('rut', '')),
+        limpiar_texto(receptor.get('codigo_interno', ''), 20),
+        limpiar_texto(receptor.get('razon_social', ''), 100),
+        limpiar_texto(receptor.get('giro', ''), 40),
+        limpiar_texto(receptor.get('contacto', ''), 80),
+        limpiar_texto(receptor.get('direccion', ''), 70),
+        limpiar_texto(receptor.get('comuna', ''), 20),
+        limpiar_texto(receptor.get('ciudad', ''), 20),
+        '',
+        '}'
+    ]
+    lineas.append(separador.join(linea3))
+    
+    # ===== LÍNEA 4: TRANSPORTE =====
+    lineas.append('||||' + "|}")
+    
+    # ===== LÍNEA 5: TOTALES (POSITIVOS) =====
+    # ✅ En Chile las NC usan montos POSITIVOS
+    tasa_iva_str = '19' if totales.get('monto_neto', 0) else ''
+    
+    linea5 = [
+        formatear_monto(abs(totales.get('monto_neto', 0))),  # POSITIVO
+        formatear_monto(totales.get('monto_exento', '')),
+        tasa_iva_str,
+        formatear_monto(abs(totales.get('iva', 0))),  # POSITIVO
+        formatear_monto(abs(totales.get('monto_total', 0))),  # POSITIVO
+        '', '', '', '', '', '', '', '', '', '', '', '',
+        '}'
+    ]
+    lineas.append(separador.join(linea5))
+    
+    # ===== SEPARADOR =====
+    lineas.append('~')
+    
+    # ===== PRODUCTOS (cantidades y montos POSITIVOS) =====
+    for index, item in enumerate(datos['detalle'], start=1):
+        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35) or 'Item'
+        nombre_con_codigo = f"{codigo_item} {limpiar_texto(item.get('nombre', ''), 80)}"
+        
+        # ✅ Cantidades y montos POSITIVOS
+        cantidad_val = abs(int(item.get('cantidad', 0)))
+        precio_val = abs(int(item.get('precio_unitario', 0)))
+        monto_val = abs(int(item.get('monto_item', 0)))
+        
+        linea_detalle = [
+            str(item.get('indicador_exencion', '')),
+            nombre_con_codigo,
+            limpiar_texto(item.get('descripcion', ''), 1000),
+            str(cantidad_val),  # POSITIVO
+            limpiar_texto(item.get('unidad', 'UN'), 4),
+            str(precio_val),  # POSITIVO
+            formatear_decimal(item.get('descuento_pct', ''), 3, 2) if item.get('descuento_pct') else '',
+            formatear_monto(item.get('monto_descuento', 0)) if item.get('monto_descuento') else '',
+            str(monto_val),  # POSITIVO
+            codigo_item,
+            '}'
+        ]
+        lineas.append(separador.join(linea_detalle))
+    
+    # ===== SEPARADORES =====
+    # ✅ NC necesita 2 separadores antes de referencias
+    lineas.append('~')
+    lineas.append('~')
+    
+    # ===== REFERENCIA OBLIGATORIA =====
+    # NC siempre debe tener referencia al documento que anula/corrige
+    referencias = datos.get('referencias', [])
+    if referencias and len(referencias) > 0:
+        for ref in referencias:
+            tipo_ref = str(ref.get('tipo_documento', ''))
+            folio_ref = str(ref.get('folio', ''))
+            fecha_ref = formatear_fecha(ref.get('fecha', ''))
+            cod_ref = str(ref.get('razon', '')) or '1'  # 1=anula, 3=corrige montos
+            
+            # Formato SIN espacios: 33||12345|2025-11-05|1|}
+            linea_ref = [
+                tipo_ref,
+                '',
+                folio_ref,
+                fecha_ref,
+                cod_ref,
+                '}'
+            ]
+            lineas.append(separador.join(linea_ref))
+    
+    lineas.append('~')
+    
+    # ===== LÍNEA OBSERVACIONES =====
+    vendedor_codigo = emisor.get('codigo_vendedor', '') or 'USUARIO'
+    monto_total = abs(int(totales.get('monto_total', 0)))
+    monto_neto = abs(int(totales.get('monto_neto', 0)))
+    
+    # Convertir monto a letras (POSITIVO, sin centavos)
+    try:
+        from num2words import num2words
+        monto_letras = num2words(monto_total, lang='es').upper()
+        monto_letras = f"{monto_letras} PESOS (Total Art {monto_neto})"
+        monto_letras = monto_letras.replace('  ', ' ').strip()
+    except:
+        monto_letras = f"{monto_total} PESOS (Total Art {monto_neto})"
+    
+    # Referencia en observaciones
+    folio_ref = referencias[0].get('folio', '') if referencias else ''
+    impresora_texto = f"factura {folio_ref}" if folio_ref else 'factura'
+    
+    info_adicional = [
+        f"{vendedor_codigo} ",
+        '', '',
+        f"{monto_letras}  ",
+        '', '', '', '', '', '', '',
+        impresora_texto,
+        '4',
+        '}'
+    ]
+    lineas.append(separador.join(info_adicional))
+    
+    # ===== CIERRE =====
+    lineas.append('~')
+    lineas.append('\\')
+    
+    return '\n'.join(lineas)
+
+
+def generar_txt_boleta_acepta(datos):
+    """
+    Genera el contenido de un archivo TXT para BOLETAS (tipo 39/41) en formato Acepta
+    Las boletas tienen estructura DIFERENTE a las facturas
+    """
+    # Validar datos
+    es_valido, mensaje = validar_datos_dte_acepta(datos)
+    if not es_valido:
+        raise ValidationError(f"Error en validación de datos: {mensaje}")
+    
+    separador = '|'
+    lineas = []
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    doc = datos['documento']
+    emisor = datos['emisor']
+    receptor = datos['receptor']
+    totales = datos['totales']
+    
+    # ===== LÍNEA 1: IdDoc BOLETA =====
+    # Formato: 39|folio|fecha|ind_servicio|||fecha||}
+    fecha_emision = formatear_fecha(doc.get('fecha_emision', ''))
+    ind_servicio = doc.get('ind_servicio', '3')  # 3 = Boleta de venta y servicios
+    
+    linea1 = [
+        str(doc.get('tipo_documento', '')),  # 39 o 41
+        str(doc.get('folio', '')),
+        fecha_emision,
+        str(ind_servicio),
+        '', '',  # Campos vacíos
+        fecha_emision,  # Fecha vencimiento = fecha emisión
+        '',  # Campo vacío
+        '}'
+    ]
+    lineas.append(separador.join(linea1))
+    
+    # ===== LÍNEA 2: EMISOR (CON acteco, direccion, comuna, ciudad) =====
+    # ✅ CORRECCIÓN 1: Incluir todos los campos
+    linea2 = [
+        formatear_rut(emisor.get('rut', '')),
+        limpiar_texto(emisor.get('razon_social', ''), 100),
+        limpiar_texto(emisor.get('giro', ''), 80),
+        str(emisor.get('acteco', '')),
+        limpiar_texto(emisor.get('direccion', ''), 60),
+        limpiar_texto(emisor.get('comuna', ''), 20),
+        limpiar_texto(emisor.get('ciudad', ''), 20),
+        '}'  # Termina aquí (SIN usuario)
+    ]
+    lineas.append(separador.join(linea2))
+    
+    # ===== LÍNEA 3: RECEPTOR (solo RUT) =====
+    # ✅ CORRECCIÓN 4: Usar consumidor final por defecto
+    rut_receptor = receptor.get('rut', '') if receptor.get('rut') else '66666666-6'
+    linea3 = [
+        formatear_rut(rut_receptor),
+        '', '', '', '', '', '',  # 6 campos vacíos
+        '}'
+    ]
+    lineas.append(separador.join(linea3))
+    
+    # ✅ CORRECCIÓN: Totales en línea 4 para boletas (no hay línea de transporte)
+    # Formato: |total|||||}
+    linea4_totales = [
+        '',  # Campo vacío
+        formatear_monto(totales.get('monto_total', 0)),
+        '', '', '',  # ✅ 3 campos vacíos = 4 pipes total
+        '}'
+    ]
+    lineas.append(separador.join(linea4_totales))
+    
+    # ===== SEPARADOR =====
+    lineas.append('~')
+    
+    # ===== PRODUCTOS (formato boleta) =====
+    # Formato: tipo|codigo||nombre||cantidad|unidad|precio|monto|}
+    for index, item in enumerate(datos['detalle'], start=1):
+        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35) or 'PROD001'
+        nombre = limpiar_texto(item.get('nombre', ''), 80)
+        cantidad_val = int(item.get('cantidad', 0))
+        precio_val = int(item.get('precio_unitario', 0))
+        monto_val = int(item.get('monto_item', 0))
+        
+        linea_prod = [
+            'INT1',  # Tipo interno
+            codigo_item,
+            '',  # Desc vacía
+            nombre,
+            '',  # Campo vacío
+            str(cantidad_val),
+            limpiar_texto(item.get('unidad', 'UN'), 4),
+            str(precio_val),
+            str(monto_val),
+            '}'
+        ]
+        lineas.append(separador.join(linea_prod))
+    
+    # ===== SEPARADOR =====
+    lineas.append('~')
+    
+    # ===== OBSERVACIONES CON FORMATO ESPECIAL =====
+    # ✅ CORRECCIÓN 3: 4 pipes antes de boleta, no 5
+    vendedor_codigo = emisor.get('codigo_vendedor', '') or 'USUARIO'
+    correlativo = doc.get('folio', '')
+    observacion = f"^ Vendedor: {vendedor_codigo} ^ Correlativo Interno: {correlativo} "
+    
+    linea_obs = [
+        vendedor_codigo,
+        '', '',
+        observacion,
+        '', '', '',  # ✅ 3 campos vacíos = 4 pipes
+        'boleta',
+        '4',
+        '}'
+    ]
+    lineas.append(separador.join(linea_obs))
+    
+    # ===== SEPARADOR =====
+    lineas.append('~')
+    
+    # ===== DESCUENTO GLOBAL (si existe) =====
+    descuento_global = totales.get('descuento_global', 0)
+    if descuento_global and descuento_global > 0:
+        linea_desc = f"1|D|Descuento Global|$|{formatear_monto(descuento_global)}" + "|}"
+        lineas.append(linea_desc)
+        lineas.append('~')
+    
+    # ===== CIERRE =====
+    lineas.append('\\')
+    
+    return '\n'.join(lineas)
+
+
 def generar_txt_dte_acepta(datos):
     """
     Genera el contenido de un archivo TXT para el sistema Acepta
+    Detecta automáticamente si es factura o boleta y usa el formato correcto
     
     Args:
         datos (dict): Diccionario con la estructura completa del DTE
@@ -1302,26 +1617,57 @@ def generar_txt_dte_acepta(datos):
     if not es_valido:
         raise ValidationError(f"Error en validación de datos: {mensaje}")
     
+    # ✅ Detectar tipo de documento y usar función específica
+    tipo_doc = datos.get('documento', {}).get('tipo_documento')
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if tipo_doc in [39, 41]:
+        logger.warning(f"🔍 Detectado tipo BOLETA ({tipo_doc}), usando formato específico de boletas")
+        return generar_txt_boleta_acepta(datos)
+    elif tipo_doc == 61:
+        logger.warning(f"🔍 Detectado tipo NOTA DE CRÉDITO ({tipo_doc}), usando formato específico de NC")
+        return generar_txt_nota_credito_acepta(datos)
+    
     separador = '|'
     lineas = []
     
     # ===== LÍNEA 1: IDENTIFICACIÓN DEL DOCUMENTO =====
     doc = datos['documento']
+    
+    # DEBUG: Verificar folio en generación de línea
+    import logging
+    logger = logging.getLogger(__name__)
+    folio_raw = doc.get('folio', '')
+    folio_str = str(folio_raw)
+    logger.warning(f"🔍 DEBUG generar_txt - Folio raw: {folio_raw} (tipo: {type(folio_raw)})")
+    logger.warning(f"🔍 DEBUG generar_txt - Folio convertido a str: {folio_str}")
+    
+    # ===== LÍNEA 1: IdDoc - Formato ACEPTA REAL =====
+    fecha_emision = formatear_fecha(doc.get('fecha_emision', ''))
+    fecha_vencimiento = formatear_fecha(doc.get('fecha_vencimiento', ''))
+    
+    # ✅ SIEMPRE poner fecha vencimiento (usar fecha emisión si no hay)
+    if not fecha_vencimiento:
+        fecha_vencimiento = fecha_emision
+    
     linea1 = [
-        str(doc.get('tipo_documento', '')),
-        str(doc.get('folio', '')),
-        formatear_fecha(doc.get('fecha_emision', '')),
-        str(doc.get('ind_no_rebaja', '')),
-        str(doc.get('tipo_despacho', '')),
-        str(doc.get('ind_traslado', '')),
-        str(doc.get('forma_pago', '')),
-        formatear_fecha(doc.get('fecha_vencimiento', '')),
-        str(doc.get('ind_servicio', '')),
-        '',  # Campo reservado
-        formatear_timestamp(doc.get('timestamp', '')),
-        ''   # Campo extra al final
+        str(doc.get('tipo_documento', '')),              # 1. Tipo documento
+        str(doc.get('folio', '')),                       # 2. Folio
+        fecha_emision,                                    # 3. Fecha emisión
+        '',                                              # 4. Indicador no rebaja
+        str(doc.get('tipo_despacho', '2')),              # 5. Tipo despacho (default 2)
+        str(doc.get('ind_traslado', '1')),               # 6. Indicador traslado (default 1)
+        str(doc.get('forma_pago', '1')),                 # 7. Forma pago (default 1)
+        fecha_vencimiento,                                # 8. Fecha vencimiento
+        '}'                                              # 9. ✅ CIERRE CON }
     ]
-    lineas.append(separador.join(linea1))
+    
+    # DEBUG: Ver la línea 1 completa
+    linea1_completa = separador.join(linea1)
+    logger.warning(f"🔍 DEBUG - Línea 1 generada: {linea1_completa}")
+    
+    lineas.append(linea1_completa)
     
     # ===== LÍNEA 2: DATOS DEL EMISOR =====
     emisor = datos['emisor']
@@ -1335,11 +1681,8 @@ def generar_txt_dte_acepta(datos):
         limpiar_texto(emisor.get('direccion', ''), 60),
         limpiar_texto(emisor.get('comuna', ''), 20),
         limpiar_texto(emisor.get('ciudad', ''), 20),
-        limpiar_texto(emisor.get('codigo_vendedor', ''), 60),
-        limpiar_texto(emisor.get('telefono', ''), 20),
-        '',  # Teléfono 2
-        '',  # Campo reservado
-        ''   # Campo extra al final
+        limpiar_texto(emisor.get('codigo_vendedor', ''), 60) or 'USUARIO',
+        '}'  # ✅ CIERRE CON }
     ]
     lineas.append(separador.join(linea2))
     
@@ -1355,7 +1698,7 @@ def generar_txt_dte_acepta(datos):
         limpiar_texto(receptor.get('comuna', ''), 20),
         limpiar_texto(receptor.get('ciudad', ''), 20),
         '',  # Ciudad postal
-        ''   # Campo extra al final
+        '}'  # ✅ CIERRE CON }
     ]
     lineas.append(separador.join(linea3))
     
@@ -1363,79 +1706,150 @@ def generar_txt_dte_acepta(datos):
     transporte = datos.get('transporte', {})
     linea4 = [
         limpiar_texto(transporte.get('patente', ''), 8),
-        formatear_rut(transporte.get('rut_transportista', '')),
+        limpiar_texto(transporte.get('rut_transportista', ''), 20),
         limpiar_texto(transporte.get('direccion_destino', ''), 70),
         limpiar_texto(transporte.get('comuna_destino', ''), 20),
         limpiar_texto(transporte.get('ciudad_destino', ''), 20),
-        ''   # Campo extra al final
+        '}'  # ✅ CIERRE CON }
     ]
     lineas.append(separador.join(linea4))
     
     # ===== LÍNEA 5: TOTALES =====
+    # ✅ PROBLEMA 2: EXACTAMENTE 16 pipes después del total
     totales = datos['totales']
+    tasa_iva_str = '19' if totales.get('monto_neto', 0) else ''
+    
     linea5 = [
-        formatear_monto(totales.get('monto_neto', 0)),
-        formatear_monto(totales.get('monto_exento', '')),
-        formatear_decimal(totales.get('tasa_iva', 19.00), 3, 2) if totales.get('monto_neto', 0) else '',
-        formatear_monto(totales.get('iva', 0)),
-        formatear_monto(totales.get('monto_total', 0)),
-        formatear_timestamp(totales.get('timestamp', '')),
-        '',  # IVA No Retenido
-        '',  # Monto No Facturable
-        '',  # Total Período
-        '',  # Saldo Anterior
-        '',  # Valor a Pagar
-        '',  # Campos adicionales (hasta completar ~30 campos)
-        '', '', '', '', '', '', '', '', '', '', 
-        '', '', '', '', '', '', '', '', '', '',
-        ''   # Campo extra final
+        formatear_monto(totales.get('monto_neto', 0)),      # 1. Monto neto
+        formatear_monto(totales.get('monto_exento', '')),   # 2. Monto exento
+        tasa_iva_str,                                        # 3. Tasa IVA (19)
+        formatear_monto(totales.get('iva', 0)),             # 4. IVA
+        formatear_monto(totales.get('monto_total', 0)),     # 5. Monto total
+        '', '', '', '', '', '', '', '', '', '', '', '',  # ✅ 12 campos más = 16 pipes total
+        '}'  # ✅ CIERRE CON }
     ]
     lineas.append(separador.join(linea5))
     
-    # ===== LÍNEAS 6+: DETALLE DE PRODUCTOS =====
-    for item in datos['detalle']:
-        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35)
-        
-        linea_detalle = [
-            str(item.get('indicador_exencion', '')),
-            limpiar_texto(item.get('nombre', ''), 80),
-            limpiar_texto(item.get('descripcion', ''), 1000),
-            formatear_decimal(item.get('cantidad', 0)),
-            limpiar_texto(item.get('unidad', 'UN'), 4),
-            formatear_decimal(item.get('precio_unitario', 0)),
-            formatear_decimal(item.get('descuento_pct', ''), 3, 2) if item.get('descuento_pct') else '',
-            formatear_monto(item.get('monto_descuento', 0)),
-            formatear_monto(item.get('monto_item', 0)),
-            '',  # Recargo porcentaje
-            '',  # Monto recargo
-            codigo_item,  # Código del producto/SKU
-            '',  # Tipo precio
-            ''   # Campo reservado final
-        ]
-        lineas.append(separador.join(linea_detalle))
-    
-    # ===== LÍNEA SEPARADOR =====
+    # ===== SEPARADOR ANTES DE PRODUCTOS =====
     lineas.append('~')
     
-    # ===== LÍNEA INFORMACIÓN ADICIONAL (OPCIONAL) =====
-    # Código vendedor, total en palabras, etc.
-    vendedor_codigo = datos.get('emisor', {}).get('codigo_vendedor', '')
+    # ===== LÍNEAS 6+: DETALLE DE PRODUCTOS =====
+    # ✅ CORREGIDO: Cada producto incluye código al inicio y al final, termina con }
+    logger.warning(f"🔍 DEBUG - Procesando {len(datos['detalle'])} productos")
+    for index, item in enumerate(datos['detalle'], start=1):
+        # Generar código del producto si no existe
+        codigo_item = limpiar_texto(item.get('codigo', ''), 35) or limpiar_texto(item.get('sku', ''), 35)
+        if not codigo_item:
+            codigo_item = f"Item"  # Código genérico si no existe
+        
+        # ✅ FORMATO REAL: Código AL INICIO del nombre
+        nombre_con_codigo = f"{codigo_item} {limpiar_texto(item.get('nombre', ''), 80)}"
+        
+        # ✅ Formatear cantidad y precio como enteros
+        cantidad_val = item.get('cantidad', 0)
+        precio_val = item.get('precio_unitario', 0)
+        
+        # ✅ PROBLEMA 3: EXACTAMENTE 9 campos por producto + cierre }
+        linea_detalle = [
+            str(item.get('indicador_exencion', '')),     # 1. Indicador exención
+            nombre_con_codigo,                            # 2. Código + Nombre
+            limpiar_texto(item.get('descripcion', ''), 1000),  # 3. Descripción
+            str(int(cantidad_val)) if cantidad_val else '',  # 4. Cantidad (entero)
+            limpiar_texto(item.get('unidad', 'UN'), 4),  # 5. Unidad
+            str(int(precio_val)) if precio_val else '',  # 6. Precio unitario (entero)
+            formatear_decimal(item.get('descuento_pct', ''), 3, 2) if item.get('descuento_pct') else '',  # 7. Desc %
+            formatear_monto(item.get('monto_descuento', 0)) if item.get('monto_descuento') else '',  # 8. Monto descuento
+            formatear_monto(item.get('monto_item', 0)),  # 9. Monto item
+            codigo_item,  # 10. Código producto al FINAL
+            '}'  # 11. ✅ CIERRE CON }
+        ]
+        linea_producto = separador.join(linea_detalle)
+        logger.warning(f"🔍 DEBUG - Producto {index}: {nombre_con_codigo[:30]}... → {linea_producto[:50]}...")
+        lineas.append(linea_producto)
+    
+    # ===== PRIMER SEPARADOR =====
+    lineas.append('~')
+    
+    # ===== DESCUENTO GLOBAL (Opcional) =====
+    descuento_global = totales.get('descuento_global', 0)
+    
+    if descuento_global and descuento_global > 0:
+        # CON descuento global
+        logger.warning(f"✅ Agregando línea de descuento global: {descuento_global}")
+        linea_descuento = f"D|Descuento|$|{formatear_monto(descuento_global)}|1|" + "|}"
+        lineas.append(linea_descuento)
+    
+    # ===== SEPARADOR =====
+    # ✅ CORRECCIÓN: NO agregar línea vacía |||||||}
+    lineas.append('~')
+    
+    # ===== REFERENCIAS A OTROS DOCUMENTOS (Opcional) =====
+    referencias = datos.get('referencias', [])
+    logger.warning(f"🔍 DEBUG - Procesando referencias: {len(referencias)} refs")
+    
+    if referencias and len(referencias) > 0:
+        logger.warning(f"🔍 DEBUG - Agregando {len(referencias)} referencias al TXT")
+        for idx, ref in enumerate(referencias):
+            logger.warning(f"🔍 DEBUG - Referencia {idx+1}: tipo={ref.get('tipo_documento')}, folio={ref.get('folio')}")
+            # ✅ Formato correcto: 801|| folio | fecha|| |}
+            fecha_ref = formatear_fecha(ref.get('fecha', ''))
+            folio_ref = str(ref.get('folio', ''))
+            tipo_ref = str(ref.get('tipo_documento', ''))
+            
+            linea_ref = [
+                tipo_ref,  # 1. Tipo documento
+                '',  # 2. Campo vacío
+                f" {folio_ref} ",  # 3. Folio CON espacios
+                f" {fecha_ref}",  # 4. Fecha CON espacio
+                '',  # 5. Campo vacío
+                '}'  # 6. Cierre
+            ]
+            linea_ref_completa = separador.join(linea_ref)
+            logger.warning(f"🔍 DEBUG - Línea referencia: '{linea_ref_completa}'")
+            lineas.append(linea_ref_completa)
+    else:
+        logger.warning(f"🔍 DEBUG - NO hay referencias para agregar")
+    
+    # ===== SEPARADOR FINAL ANTES DE INFO =====
+    lineas.append('~')
+    
+    # ===== LÍNEA INFORMACIÓN ADICIONAL =====
+    # ✅ PROBLEMA 4 y 5: Monto en letras completo y pipes correctos
+    vendedor_codigo = datos.get('emisor', {}).get('codigo_vendedor', '') or 'USUARIO'
+    monto_total = totales.get('monto_total', 0)
+    
+    # Convertir monto a letras (COMPLETO)
+    try:
+        from num2words import num2words
+        # Usar solo 'cardinal' para obtener el número en palabras sin "pesos"
+        monto_letras = num2words(int(monto_total), lang='es').upper()
+        monto_letras = f"{monto_letras} PESOS"
+        # Limpiar formatos no deseados
+        monto_letras = monto_letras.replace('  ', ' ')  # Dobles espacios
+        monto_letras = monto_letras.strip()
+        logger.warning(f"✅ Monto convertido a letras: {monto_letras}")
+    except Exception as e:
+        logger.warning(f"⚠️ Error al convertir monto a letras: {e}")
+        monto_letras = f"{int(monto_total)} PESOS"
+    
+    # ✅ CORRECCIÓN: Línea final con formato correcto
+    # Formato real: vendedor|||observacion  |||||||impresora|4|}
+    # Ejemplo: King Angulo|||CINCO MILLONES...PESOS (Total Art 51)  |||||||FACTURA MATTA 2438|4|}
     info_adicional = [
-        vendedor_codigo,
-        '',  # Reservado
-        '',  # Reservado
-        '',  # Total en palabras (opcional)
-        '',  # Observaciones adicionales
-        '',  # Reservado
-        '',  # Reservado
-        '',  # Reservado
-        '',  # Impresora
-        '',  # Número de copias
-        ''   # Campo final
+        vendedor_codigo,  # 1. Código vendedor
+        '',  # 2. Campo vacío
+        '',  # 3. Campo vacío
+        f"{monto_letras}  ",  # 4. Observación/Monto con 2 espacios al final
+        '', '', '', '', '', '', '',  # 5-11. 7 campos vacíos
+        'HP LaserJet Professional P1102w',  # 12. Impresora
+        '4',  # 13. Copias
+        '}'  # 14. Cierre
     ]
+    logger.warning(f"🔍 DEBUG - Línea final: vendedor={vendedor_codigo}, monto={monto_letras}")
     lineas.append(separador.join(info_adicional))
     
     # ===== LÍNEAS FINALES =====
+    # ✅ CORREGIDO: ~ y luego \
     lineas.append('~')
     lineas.append('\\')
     
@@ -1443,6 +1857,163 @@ def generar_txt_dte_acepta(datos):
     contenido_txt = '\n'.join(lineas)
     
     return contenido_txt
+
+
+def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA'):
+    """
+    Genera un archivo TXT de Acepta desde un Ticket de venta
+    
+    Args:
+        ticket_id (int): ID del ticket
+        tipo_dte (str): BOLETA_ELECTRONICA o FACTURA_ELECTRONICA
+        
+    Returns:
+        tuple: (contenido_txt, nombre_archivo)
+    """
+    from .models import Ticket, Empresa
+    from django.shortcuts import get_object_or_404
+    from decimal import Decimal
+    
+    # Obtener ticket
+    ticket = get_object_or_404(Ticket, id=ticket_id)
+    
+    # Obtener empresa (emisor)
+    empresa = ticket.sucursal.empresa
+    
+    # Obtener correlativo para el tipo de DTE
+    from .models import Correlativo
+    tipo_correlativo = tipo_dte.replace('_', ' ')  # BOLETA ELECTRONICA
+    
+    correlativo_obj = Correlativo.objects.filter(
+        sucursal=ticket.sucursal,
+        tipo_dte=tipo_correlativo
+    ).first()
+    
+    if not correlativo_obj:
+        raise ValidationError(f"No hay correlativo configurado para {tipo_correlativo} en {ticket.sucursal}")
+    
+    # Obtener siguiente folio
+    siguiente_folio = correlativo_obj.numero_actual + 1
+    
+    # Preparar datos del documento
+    documento = {
+        'tipo_documento': 39 if 'BOLETA' in tipo_dte else 33,
+        'folio': siguiente_folio,
+        'fecha_emision': ticket.fecha.strftime('%Y-%m-%d'),
+        'forma_pago': 1,  # Contado
+        'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
+    }
+    
+    # Preparar datos del emisor
+    emisor = {
+        'rut': empresa.rut,
+        'razon_social': empresa.razon_social,
+        'giro': empresa.giro,
+        'acteco': empresa.acteco or '',
+        'direccion': empresa.direccion,
+        'comuna': empresa.comuna,
+        'ciudad': empresa.ciudad,
+        'codigo_vendedor': ticket.responsable or 'USUARIO',
+        'telefono': empresa.contacto1 or ''
+    }
+    
+    # Preparar datos del receptor
+    if 'FACTURA' in tipo_dte and ticket.cliente_rut:
+        # Factura con cliente específico
+        receptor = {
+            'rut': ticket.cliente_rut,
+            'razon_social': ticket.cliente_nombre or 'CLIENTE',
+            'giro': ticket.cliente_giro or '',
+            'direccion': ticket.cliente_direccion or '',
+            'comuna': ticket.cliente_comuna or '',
+            'ciudad': ticket.cliente_ciudad or ''
+        }
+    else:
+        # Boleta o consumidor final
+        receptor = {
+            'rut': '66666666-6',
+            'razon_social': 'CONSUMIDOR FINAL',
+            'giro': '',
+            'direccion': '',
+            'comuna': '',
+            'ciudad': ''
+        }
+    
+    # Preparar productos
+    detalle = []
+    for item in ticket.ticket_productos.all():
+        producto_talla = item.ProductoTalla
+        producto = producto_talla.producto
+        
+        detalle.append({
+            'codigo': producto.codigo or f'PROD{producto.id}',
+            'sku': producto.sku or '',
+            'nombre': f"{producto.nombre} {producto_talla.marca.nombre if producto_talla.marca else ''} {producto_talla.talla}",
+            'descripcion': producto.descripcion or '',
+            'cantidad': item.stock,
+            'unidad': 'UN',
+            'precio_unitario': item.precio,
+            'descuento_pct': float(item.porcentaje_descuento) if item.porcentaje_descuento else 0,
+            'monto_descuento': item.descuento_unitario * item.stock if item.descuento_unitario else 0,
+            'monto_item': item.subtotal
+        })
+    
+    # Calcular totales
+    subtotal = sum(item['monto_item'] for item in detalle)
+    descuento_global = ticket.descuento or 0
+    neto = subtotal - descuento_global
+    iva = int(neto * Decimal('0.19'))
+    total = neto + iva
+    
+    totales = {
+        'monto_neto': neto,
+        'monto_exento': 0,
+        'tasa_iva': 19,
+        'iva': iva,
+        'monto_total': total,
+        'descuento_global': descuento_global
+    }
+    
+    # Preparar referencias (si hay)
+    referencias = []
+    if ticket.referencia_tipo and ticket.referencia_folio:
+        referencias.append({
+            'tipo_documento': ticket.referencia_tipo,
+            'folio': ticket.referencia_folio,
+            'fecha': ticket.referencia_fecha.strftime('%Y-%m-%d') if ticket.referencia_fecha else '',
+            'razon': ''
+        })
+    
+    # Estructura completa para generar TXT
+    datos = {
+        'documento': documento,
+        'emisor': emisor,
+        'receptor': receptor,
+        'totales': totales,
+        'detalle': detalle,
+        'referencias': referencias
+    }
+    
+    # Generar TXT
+    contenido_txt = generar_txt_dte_acepta(datos)
+    
+    # Actualizar ticket
+    ticket.tipo_dte = tipo_dte
+    ticket.folio_dte = siguiente_folio
+    ticket.dte_generado = True
+    ticket.dte_fecha_generacion = timezone.now()
+    ticket.save()
+    
+    # Actualizar correlativo
+    correlativo_obj.numero_actual = siguiente_folio
+    correlativo_obj.save()
+    
+    # Nombre del archivo
+    tipo_codigo = documento['tipo_documento']
+    fecha_str = ticket.fecha.strftime('%Y%m%d')
+    nombre_archivo = f"dte_{tipo_codigo}_{siguiente_folio}_{fecha_str}.txt"
+    
+    return contenido_txt, nombre_archivo
 
 
 @require_POST
@@ -1461,6 +2032,16 @@ def generar_txt_acepta_api(request):
     try:
         # Parsear datos del request
         datos = json.loads(request.body)
+        
+        # DEBUG: Verificar qué valor de folio estamos recibiendo
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"🔍 DEBUG - Folio recibido: {datos.get('documento', {}).get('folio')}")
+        logger.warning(f"🔍 DEBUG - Tipo de dato: {type(datos.get('documento', {}).get('folio'))}")
+        logger.warning(f"🔍 DEBUG - Datos documento completos: {datos.get('documento')}")
+        logger.warning(f"🔍 DEBUG - Descuento global: {datos.get('totales', {}).get('descuento_global', 0)}")
+        logger.warning(f"🔍 DEBUG - Referencias recibidas: {datos.get('referencias', [])}")
+        logger.warning(f"🔍 DEBUG - Cantidad de referencias: {len(datos.get('referencias', []))}")
         
         # Generar contenido TXT
         contenido_txt = generar_txt_dte_acepta(datos)
@@ -1493,6 +2074,51 @@ def generar_txt_acepta_api(request):
         return JsonResponse({
             'success': False,
             'error': f'Error al generar archivo TXT: {str(e)}'
+        }, status=500)
+
+
+@require_POST
+@login_required
+def generar_dte_desde_ticket_api(request):
+    """
+    API para generar DTE desde un Ticket de venta del POS
+    
+    Recibe:
+        JSON con { ticket_id: int, tipo_dte: str }
+        
+    Retorna:
+        Archivo TXT descargable
+    """
+    try:
+        data = json.loads(request.body)
+        ticket_id = data.get('ticket_id')
+        tipo_dte = data.get('tipo_dte', 'BOLETA_ELECTRONICA')
+        
+        if not ticket_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de ticket requerido'
+            }, status=400)
+        
+        # Generar DTE
+        contenido_txt, nombre_archivo = generar_dte_desde_ticket(ticket_id, tipo_dte)
+        
+        # Retornar como archivo descargable
+        response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+        
+        return response
+        
+    except ValidationError as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar DTE: {str(e)}'
         }, status=500)
 
 

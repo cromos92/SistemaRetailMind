@@ -49,7 +49,8 @@
             border-color: #667eea;
             background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
         }
-        .producto-row {
+        .producto-row,
+        .referencia-row {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
@@ -172,21 +173,26 @@
                 <!-- Datos del Documento -->
                 <h4 class="section-title"><i class="fas fa-info-circle"></i> Datos del Documento</h4>
                 <div class="row mb-4">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Folio <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" id="folio" placeholder="Ej: 12345" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Fecha Emisión <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" id="fecha_emision" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Forma de Pago</label>
-                        <select class="form-control" id="forma_pago">
+                        <select class="form-control" id="forma_pago" onchange="toggleFechaVencimiento()">
                             <option value="1">Contado</option>
                             <option value="2">Crédito</option>
                             <option value="3">Sin Costo</option>
                         </select>
+                    </div>
+                    <div class="col-md-3" id="campo-fecha-vencimiento" style="display: none;">
+                        <label class="form-label">Fecha Vencimiento</label>
+                        <input type="date" class="form-control" id="fecha_vencimiento" placeholder="Solo para crédito">
+                        <small class="text-muted">Solo para Crédito</small>
                     </div>
                 </div>
 
@@ -257,6 +263,20 @@
                     </div>
                 </div>
 
+                <!-- Referencias (Orden de Compra, Guías, etc.) -->
+                <h4 class="section-title"><i class="fas fa-link"></i> Referencias a Otros Documentos</h4>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Para NC/ND:</strong> Debe referenciar el documento que anula/corrige (Factura o Boleta)<br>
+                    <strong>Para Facturas:</strong> Puede referenciar Orden de Compra, Guías, HES, etc.
+                </div>
+                <div id="referencias-container" class="mb-4">
+                    <!-- Las referencias se agregarán dinámicamente aquí -->
+                </div>
+                <button type="button" class="btn btn-outline-secondary mb-4" onclick="agregarReferencia()">
+                    <i class="fas fa-plus"></i> Agregar Referencia
+                </button>
+
                 <!-- Productos -->
                 <h4 class="section-title"><i class="fas fa-shopping-cart"></i> Productos / Servicios</h4>
                 <div id="productos-container" class="mb-4">
@@ -265,6 +285,29 @@
                 <button type="button" class="btn btn-outline-primary mb-4" onclick="agregarProducto()">
                     <i class="fas fa-plus"></i> Agregar Producto
                 </button>
+
+                <!-- Descuentos y Recargos -->
+                <h4 class="section-title"><i class="fas fa-percent"></i> Descuentos / Recargos Globales</h4>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label">Descuento Global ($)</label>
+                        <input type="number" class="form-control" id="descuento_global" placeholder="0" value="0" min="0">
+                        <small class="text-muted">Descuento aplicado al total (monto en $)</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Descuento Global (%)</label>
+                        <input type="number" class="form-control" id="descuento_global_pct" placeholder="0" value="0" min="0" max="100" step="0.01">
+                        <small class="text-muted">Descuento aplicado al total (porcentaje)</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tipo de Descuento</label>
+                        <select class="form-control" id="tipo_descuento_global">
+                            <option value="1">Descuento Global Afecto</option>
+                            <option value="2">Descuento Global No Afecto</option>
+                            <option value="3">Descuento Global Exento</option>
+                        </select>
+                    </div>
+                </div>
 
                 <!-- Totales (calculados automáticamente) -->
                 <h4 class="section-title"><i class="fas fa-calculator"></i> Totales</h4>
@@ -331,6 +374,24 @@
     <script>
         let tipoDocumentoSeleccionado = 33; // Default: Factura Electrónica
         let contadorProductos = 0;
+        let contadorReferencias = 0;
+
+        // Función para mostrar/ocultar fecha vencimiento
+        function toggleFechaVencimiento() {
+            const formaPago = document.getElementById('forma_pago').value;
+            const campoFechaVenc = document.getElementById('campo-fecha-vencimiento');
+            
+            if (formaPago === '2') {  // Crédito
+                campoFechaVenc.style.display = 'block';
+                // Sugerir fecha 30 días después
+                const fecha = new Date();
+                fecha.setDate(fecha.getDate() + 30);
+                document.getElementById('fecha_vencimiento').valueAsDate = fecha;
+            } else {
+                campoFechaVenc.style.display = 'none';
+                document.getElementById('fecha_vencimiento').value = '';
+            }
+        }
 
         // Inicializar
         document.addEventListener('DOMContentLoaded', function() {
@@ -342,6 +403,9 @@
             
             // Agregar primer producto
             agregarProducto();
+            
+            // Verificar forma de pago inicial
+            toggleFechaVencimiento();
         });
 
         // Selección de tipo de documento
@@ -417,10 +481,94 @@
             }
         }
 
+        function agregarReferencia() {
+            contadorReferencias++;
+            const container = document.getElementById('referencias-container');
+            const referenciaHtml = `
+                <div class="referencia-row" id="referencia-${contadorReferencias}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0"><i class="fas fa-file-alt"></i> Referencia #${contadorReferencias}</h6>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarReferencia(${contadorReferencias})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Tipo Documento a Referenciar</label>
+                            <select class="form-control referencia-tipo">
+                                <option value="">-- Seleccionar --</option>
+                                <optgroup label="Para Anular (NC/ND)">
+                                    <option value="33">33 - Factura Electrónica</option>
+                                    <option value="34">34 - Factura Exenta</option>
+                                    <option value="39">39 - Boleta Electrónica</option>
+                                    <option value="41">41 - Boleta Exenta</option>
+                                    <option value="52">52 - Guía de Despacho</option>
+                                </optgroup>
+                                <optgroup label="Documentos Comerciales">
+                                    <option value="801">801 - Orden de Compra</option>
+                                    <option value="802">802 - Nota de Pedido</option>
+                                    <option value="803">803 - Contrato</option>
+                                    <option value="HES">HES - Hoja Entrada Servicio</option>
+                                    <option value="SET">SET - Set Pruebas</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Folio / Número</label>
+                            <input type="text" class="form-control referencia-folio" placeholder="Ej: 12345">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Fecha Documento</label>
+                            <input type="date" class="form-control referencia-fecha">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Razón Referencia</label>
+                            <select class="form-control referencia-razon">
+                                <option value="">-- Seleccionar --</option>
+                                <option value="1">1 - Anula Documento de Referencia</option>
+                                <option value="2">2 - Corrige Texto del Documento</option>
+                                <option value="3">3 - Corrige Montos</option>
+                            </select>
+                            <small class="text-muted">Obligatorio para NC/ND</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', referenciaHtml);
+        }
+
+        function eliminarReferencia(id) {
+            const referencia = document.getElementById(`referencia-${id}`);
+            if (referencia) {
+                referencia.remove();
+            }
+        }
+
+        function recopilarReferencias() {
+            const referencias = [];
+            document.querySelectorAll('#referencias-container .referencia-row').forEach(row => {
+                const tipo = row.querySelector('.referencia-tipo').value;
+                const folio = row.querySelector('.referencia-folio').value;
+                const fecha = row.querySelector('.referencia-fecha').value;
+                const razon = row.querySelector('.referencia-razon').value;
+                
+                if (tipo && folio) {  // Solo agregar si tiene tipo y folio
+                    referencias.push({
+                        tipo_documento: tipo,
+                        folio: folio,
+                        fecha: fecha || '',
+                        razon: razon || ''
+                    });
+                }
+            });
+            return referencias;
+        }
+
         function calcularTotales() {
             let subtotal = 0;
             
-            document.querySelectorAll('.producto-row').forEach(row => {
+            // Sumar productos
+            document.querySelectorAll('#productos-container .producto-row').forEach(row => {
                 const cantidad = parseFloat(row.querySelector('.producto-cantidad').value) || 0;
                 const precio = parseFloat(row.querySelector('.producto-precio').value) || 0;
                 const descuento = parseFloat(row.querySelector('.producto-descuento').value) || 0;
@@ -429,17 +577,28 @@
                 subtotal += montoItem;
             });
             
-            const iva = Math.round(subtotal * 0.19);
-            const total = subtotal + iva;
+            // Aplicar descuento global
+            const descGlobal = parseFloat(document.getElementById('descuento_global').value) || 0;
+            const descGlobalPct = parseFloat(document.getElementById('descuento_global_pct').value) || 0;
             
-            document.getElementById('total_neto').value = subtotal.toLocaleString('es-CL');
+            let descuentoTotal = descGlobal;
+            if (descGlobalPct > 0) {
+                descuentoTotal = subtotal * (descGlobalPct / 100);
+            }
+            
+            const netoFinal = Math.max(0, subtotal - descuentoTotal);
+            const iva = Math.round(netoFinal * 0.19);
+            const total = netoFinal + iva;
+            
+            document.getElementById('total_neto').value = Math.round(netoFinal).toLocaleString('es-CL');
             document.getElementById('total_iva').value = iva.toLocaleString('es-CL');
             document.getElementById('total_total').value = total.toLocaleString('es-CL');
         }
 
         function recopilarProductos() {
             const productos = [];
-            document.querySelectorAll('.producto-row').forEach(row => {
+            // ✅ CORREGIDO: Solo seleccionar productos, no referencias
+            document.querySelectorAll('#productos-container .producto-row').forEach(row => {
                 const cantidad = parseFloat(row.querySelector('.producto-cantidad').value) || 0;
                 const precio = parseFloat(row.querySelector('.producto-precio').value) || 0;
                 const descuento = parseFloat(row.querySelector('.producto-descuento').value) || 0;
@@ -479,16 +638,56 @@
                     alert('Debe agregar al menos un producto');
                     return;
                 }
+                
+                // Recopilar referencias
+                const referencias = recopilarReferencias();
+                
+                // Calcular subtotal de productos para descuento
+                let subtotalProductos = 0;
+                productos.forEach(p => {
+                    subtotalProductos += p.cantidad * p.precio_unitario * (1 - p.descuento_pct / 100);
+                });
+                
+                // Recopilar descuento global
+                const descGlobal = parseFloat(document.getElementById('descuento_global').value) || 0;
+                const descGlobalPct = parseFloat(document.getElementById('descuento_global_pct').value) || 0;
+                const tipoDescGlobal = document.getElementById('tipo_descuento_global').value;
+                
+                // Calcular monto real del descuento
+                const montoDescGlobal = descGlobalPct > 0 ? (subtotalProductos * (descGlobalPct / 100)) : descGlobal;
+                
+                // DEBUG: Verificar valor del folio antes de procesarlo
+                const folioValue = document.getElementById('folio').value;
+                console.log('🔍 DEBUG - Folio del input:', folioValue);
+                console.log('🔍 DEBUG - Folio después de parseInt:', parseInt(folioValue));
+                console.log('🔍 DEBUG - Referencias:', referencias);
+                console.log('🔍 DEBUG - Cantidad de referencias:', referencias.length);
+                console.log('🔍 DEBUG - Descuento global:', descGlobal, descGlobalPct);
+                
+                // DEBUG: Ver si las referencias se están recopilando
+                if (referencias.length > 0) {
+                    console.log('✅ Hay referencias para enviar');
+                    referencias.forEach((ref, i) => {
+                        console.log(`   Ref ${i+1}: Tipo=${ref.tipo_documento}, Folio=${ref.folio}, Fecha=${ref.fecha}`);
+                    });
+                } else {
+                    console.log('⚠️ NO hay referencias');
+                }
 
                 // Crear datos según tipo de documento
                 let datos;
                 
                 if (tipoDocumentoSeleccionado === 33 || tipoDocumentoSeleccionado === 34) {
                     // Factura
+                    const formaPagoVal = parseInt(document.getElementById('forma_pago').value);
+                    // ✅ SIEMPRE enviar fecha vencimiento (si está vacía, backend usará fecha emisión)
+                    const fechaVenc = document.getElementById('fecha_vencimiento').value || document.getElementById('fecha_emision').value;
+                    
                     datos = GeneradorTXTAcepta.crearFacturaElectronica({
                         folio: parseInt(document.getElementById('folio').value),
                         fechaEmision: document.getElementById('fecha_emision').value,
-                        formaPago: parseInt(document.getElementById('forma_pago').value),
+                        formaPago: formaPagoVal,
+                        fechaVencimiento: fechaVenc,  // ✅ Siempre enviar fecha vencimiento
                         emisor: {
                             rut: document.getElementById('emisor_rut').value,
                             razon_social: document.getElementById('emisor_razon_social').value,
@@ -507,28 +706,44 @@
                             comuna: document.getElementById('receptor_comuna').value,
                             ciudad: document.getElementById('receptor_ciudad').value
                         },
-                        productos: productos
+                        productos: productos,
+                        descuentoGlobal: montoDescGlobal,  // ✅ Descuento global
+                        referencias: referencias  // ✅ Referencias
                     });
+                    
+                    // DEBUG: Verificar descuento
+                    console.log('🔍 DEBUG - Subtotal productos:', subtotalProductos);
+                    console.log('🔍 DEBUG - Descuento aplicado:', montoDescGlobal);
                     
                     if (tipoDocumentoSeleccionado === 34) {
                         datos.documento.tipo_documento = 34; // Factura Exenta
                     }
                 } else if (tipoDocumentoSeleccionado === 39 || tipoDocumentoSeleccionado === 41) {
                     // Boleta
+                    const formaPagoVal = parseInt(document.getElementById('forma_pago').value);
+                    const fechaVenc = document.getElementById('fecha_vencimiento').value || document.getElementById('fecha_emision').value;
+                    
                     datos = GeneradorTXTAcepta.crearBoletaElectronica({
                         folio: parseInt(document.getElementById('folio').value),
                         fechaEmision: document.getElementById('fecha_emision').value,
-                        formaPago: parseInt(document.getElementById('forma_pago').value),
+                        formaPago: formaPagoVal,
+                        fechaVencimiento: fechaVenc,
                         emisor: {
                             rut: document.getElementById('emisor_rut').value,
                             razon_social: document.getElementById('emisor_razon_social').value,
-                            giro: document.getElementById('emisor_giro').value
+                            giro: document.getElementById('emisor_giro').value,
+                            acteco: document.getElementById('emisor_acteco').value,  // ✅ Agregar acteco
+                            direccion: document.getElementById('emisor_direccion').value,  // ✅ Agregar dirección
+                            comuna: document.getElementById('emisor_comuna').value,  // ✅ Agregar comuna
+                            ciudad: document.getElementById('emisor_ciudad').value  // ✅ Agregar ciudad
                         },
                         receptor: {
                             rut: document.getElementById('receptor_rut').value,
                             razon_social: document.getElementById('receptor_razon_social').value
                         },
-                        productos: productos
+                        productos: productos,
+                        descuentoGlobal: montoDescGlobal,  // ✅ Descuento global
+                        referencias: referencias  // ✅ Referencias
                     });
                     
                     if (tipoDocumentoSeleccionado === 41) {
@@ -536,22 +751,61 @@
                     }
                 } else if (tipoDocumentoSeleccionado === 61) {
                     // Nota de Crédito
+                    const formaPagoVal = parseInt(document.getElementById('forma_pago').value);
+                    const fechaVenc = document.getElementById('fecha_vencimiento').value || document.getElementById('fecha_emision').value;
+                    
                     datos = GeneradorTXTAcepta.crearNotaCredito({
                         folio: parseInt(document.getElementById('folio').value),
                         fechaEmision: document.getElementById('fecha_emision').value,
+                        formaPago: formaPagoVal,
+                        fechaVencimiento: fechaVenc,
                         emisor: {
                             rut: document.getElementById('emisor_rut').value,
                             razon_social: document.getElementById('emisor_razon_social').value,
-                            giro: document.getElementById('emisor_giro').value
+                            giro: document.getElementById('emisor_giro').value,
+                            acteco: document.getElementById('emisor_acteco').value,  // ✅ Agregar acteco
+                            direccion: document.getElementById('emisor_direccion').value,  // ✅ Agregar dirección
+                            comuna: document.getElementById('emisor_comuna').value,  // ✅ Agregar comuna
+                            ciudad: document.getElementById('emisor_ciudad').value,  // ✅ Agregar ciudad
+                            telefono: document.getElementById('emisor_telefono').value
                         },
                         receptor: {
                             rut: document.getElementById('receptor_rut').value,
-                            razon_social: document.getElementById('receptor_razon_social').value
+                            razon_social: document.getElementById('receptor_razon_social').value,
+                            giro: document.getElementById('receptor_giro').value,
+                            direccion: document.getElementById('receptor_direccion').value,
+                            comuna: document.getElementById('receptor_comuna').value,
+                            ciudad: document.getElementById('receptor_ciudad').value
                         },
-                        productos: productos
+                        productos: productos,
+                        descuentoGlobal: montoDescGlobal,  // ✅ Descuento global
+                        referencias: referencias  // ✅ Referencias
                     });
                 }
 
+                // DEBUG: Verificar datos antes de validar
+                console.log('🔍 DEBUG - Datos completos a enviar:', datos);
+                console.log('🔍 DEBUG - Folio en documento:', datos.documento.folio);
+                console.log('🔍 DEBUG - Tipo de dato del folio:', typeof datos.documento.folio);
+                console.log('🔍 DEBUG - ¿Tiene referencias?', datos.referencias);
+                console.log('🔍 DEBUG - Cantidad referencias en datos:', datos.referencias ? datos.referencias.length : 0);
+                console.log('🔍 DEBUG - Descuento en totales?', datos.totales.descuento_global);
+                
+                // VERIFICACIÓN CRÍTICA
+                console.log('🔍 VERIFICACIÓN FINAL:');
+                console.log('   - Referencias en datos:', datos.referencias);
+                console.log('   - Descuento en datos.totales:', datos.totales.descuento_global);
+                console.log('   - Descuento calculado (montoDescGlobal):', montoDescGlobal);
+                
+                if (!datos.referencias || datos.referencias.length === 0) {
+                    console.error('❌ Referencias vacías en datos');
+                }
+                if (datos.totales.descuento_global === 0 && montoDescGlobal > 0) {
+                    console.error('❌ PROBLEMA: El descuento NO se está pasando a totales');
+                    console.log('   Descuento calculado:', montoDescGlobal);
+                    console.log('   Pero datos.totales.descuento_global:', datos.totales.descuento_global);
+                }
+                
                 // Validar datos
                 const validacion = GeneradorTXTAcepta.validarDatos(datos);
                 if (!validacion.valido) {
@@ -560,6 +814,7 @@
                 }
 
                 // Generar TXT
+                console.log('🔍 DEBUG - Enviando datos al servidor...');
                 const resultado = await GeneradorTXTAcepta.generarTXT(datos);
                 
                 if (resultado.success) {
@@ -575,12 +830,16 @@
         }
 
         function cargarEjemplo() {
-            // Cargar datos de ejemplo
-            document.getElementById('folio').value = '12345';
+            // Cargar datos de ejemplo QUE FUNCIONAN CORRECTAMENTE ✅
+            document.getElementById('folio').value = '4578';  // ✅ FOLIO ACTUALIZADO
             document.getElementById('fecha_emision').valueAsDate = new Date();
-            document.getElementById('forma_pago').value = '1';
+            document.getElementById('forma_pago').value = '1';  // ✅ Contado (sin fecha vencimiento)
             
-            document.getElementById('emisor_rut').value = '76.123.456-7';
+            // Activar campo de fecha vencimiento
+            toggleFechaVencimiento();
+            
+            // Datos del EMISOR - RUT actualizado
+            document.getElementById('emisor_rut').value = '78.503.140-7';  // ✅ RUT EMISOR
             document.getElementById('emisor_razon_social').value = 'EMPRESA DEMO LTDA';
             document.getElementById('emisor_giro').value = 'COMERCIO AL POR MENOR';
             document.getElementById('emisor_acteco').value = '521000';
@@ -589,7 +848,8 @@
             document.getElementById('emisor_ciudad').value = 'SANTIAGO';
             document.getElementById('emisor_telefono').value = '+56912345678';
             
-            document.getElementById('receptor_rut').value = '77.654.321-K';
+            // Datos del RECEPTOR - RUT actualizado
+            document.getElementById('receptor_rut').value = '18.312.585-0';  // ✅ RUT ACTUALIZADO
             document.getElementById('receptor_razon_social').value = 'CLIENTE EJEMPLO S.A.';
             document.getElementById('receptor_giro').value = 'COMERCIO';
             document.getElementById('receptor_direccion').value = 'CALLE COMERCIO 456';
@@ -600,23 +860,60 @@
             document.getElementById('productos-container').innerHTML = '';
             contadorProductos = 0;
             
-            // Agregar productos de ejemplo
+            // PRODUCTOS - Exactamente como en el DTE que funciona
+            // Producto 1: 10 x $15,000 = $150,000
             agregarProducto();
             document.querySelector('.producto-nombre').value = 'PRODUCTO EJEMPLO A';
             document.querySelector('.producto-cantidad').value = '10';
             document.querySelector('.producto-precio').value = '15000';
+            document.querySelector('.producto-descuento').value = '0';  // Sin descuento
             
+            // Producto 2: 5 x $8,500 - 5% descuento = $40,375
             agregarProducto();
             const productos = document.querySelectorAll('.producto-row');
             const ultimoProducto = productos[productos.length - 1];
             ultimoProducto.querySelector('.producto-nombre').value = 'PRODUCTO EJEMPLO B';
             ultimoProducto.querySelector('.producto-cantidad').value = '5';
             ultimoProducto.querySelector('.producto-precio').value = '8500';
-            ultimoProducto.querySelector('.producto-descuento').value = '5';
+            ultimoProducto.querySelector('.producto-descuento').value = '5';  // 5% descuento
             
+            // Limpiar referencias existentes
+            document.getElementById('referencias-container').innerHTML = '';
+            contadorReferencias = 0;
+            
+            // Agregar referencia de ejemplo (Orden de Compra)
+            agregarReferencia();
+            const primeraRef = document.querySelector('.referencia-tipo');
+            if (primeraRef) {
+                primeraRef.value = '801';  // Orden de Compra
+                document.querySelector('.referencia-folio').value = 'OC-98765';
+                const fechaRef = new Date();
+                fechaRef.setDate(fechaRef.getDate() - 5);  // 5 días atrás
+                document.querySelector('.referencia-fecha').valueAsDate = fechaRef;
+            }
+            
+            // Descuento global de ejemplo
+            document.getElementById('descuento_global').value = '10000';
+            document.getElementById('descuento_global_pct').value = '0';
+            
+            // Calcular totales automáticamente
             calcularTotales();
             
-            alert('✅ Datos de ejemplo cargados correctamente');
+            // Obtener fecha vencimiento para el mensaje
+            const fechaVenc = document.getElementById('fecha_vencimiento').value;
+            
+            alert('✅ Datos de ejemplo cargados correctamente\n\n' +
+                  'Folio: 4578\n' +
+                  'Emisor: 78.503.140-7 (EMPRESA DEMO LTDA)\n' +
+                  'Receptor: 18.312.585-0 (CLIENTE EJEMPLO S.A.)\n' +
+                  'Forma de Pago: CONTADO\n' +
+                  'Productos: 2 ($190,375)\n' +
+                  'Descuento Global: -$10,000\n' +
+                  'Neto Final: $180,375\n' +
+                  'IVA (19%): $34,271\n' +
+                  'Total: $214,646\n' +
+                  'Referencia: OC-98765 ✅\n\n' +
+                  '¡Listo para generar el TXT!');
         }
 
         function limpiarFormulario() {

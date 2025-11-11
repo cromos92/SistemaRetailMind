@@ -1798,6 +1798,18 @@ def registrar_pagos_ticket(request, correlativo):
     ticket.observaciones = payload.get('observaciones') or ''
     ticket.observaciones_adicionales = payload.get('observaciones_adicionales') or ''
 
+    # ✅ Guardar datos de referencia (OC, Guías, etc.)
+    ticket.referencia_tipo = payload.get('referencia_tipo') or None
+    ticket.referencia_folio = payload.get('referencia_folio') or None
+    if payload.get('referencia_fecha'):
+        from datetime import datetime
+        try:
+            ticket.referencia_fecha = datetime.strptime(payload.get('referencia_fecha'), '%Y-%m-%d').date()
+        except:
+            ticket.referencia_fecha = None
+    else:
+        ticket.referencia_fecha = None
+
     nuevo_estado = payload.get('estado')
     if nuevo_estado and nuevo_estado in dict(ESTADO_TICKET_CHOICES):
         ticket.estado = nuevo_estado

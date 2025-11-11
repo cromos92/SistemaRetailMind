@@ -108,10 +108,12 @@ const GeneradorTXTAcepta = {
             folio,
             fechaEmision,
             formaPago = this.FORMAS_PAGO.CONTADO,
+            fechaVencimiento = '',  // ✅ Fecha de vencimiento (para crédito)
             emisor,
             receptor,
             productos,
-            descuentoGlobal = 0
+            descuentoGlobal = 0,
+            referencias = []  // ✅ Referencias a otros documentos
         } = params;
 
         // Calcular totales
@@ -146,6 +148,7 @@ const GeneradorTXTAcepta = {
                 folio: folio,
                 fecha_emision: this.formatearFecha(fechaEmision),
                 forma_pago: formaPago,
+                fecha_vencimiento: fechaVencimiento ? this.formatearFecha(fechaVencimiento) : '',  // ✅ Fecha vencimiento
                 timestamp: new Date().toISOString().slice(0, 19)
             },
             emisor: {
@@ -170,9 +173,11 @@ const GeneradorTXTAcepta = {
                 monto_neto: montoNeto,
                 tasa_iva: 19.00,
                 iva: iva,
-                monto_total: total
+                monto_total: total,
+                descuento_global: descuentoGlobal  // ✅ Descuento global
             },
-            detalle: detalle
+            detalle: detalle,
+            referencias: referencias  // ✅ Referencias a otros documentos
         };
     },
 
@@ -180,6 +185,7 @@ const GeneradorTXTAcepta = {
      * Crear estructura para una boleta electrónica
      */
     crearBoletaElectronica(params) {
+        // ✅ crearFacturaElectronica ya incluye referencias y descuentoGlobal
         const datos = this.crearFacturaElectronica(params);
         
         // Cambiar tipo de documento
@@ -257,24 +263,27 @@ const GeneradorTXTAcepta = {
      * Crear estructura para una nota de crédito
      */
     crearNotaCredito(params) {
+        // ✅ crearFacturaElectronica ya incluye referencias y descuentoGlobal
         const datos = this.crearFacturaElectronica(params);
         
         // Cambiar tipo de documento
         datos.documento.tipo_documento = this.TIPOS_DOCUMENTO.NOTA_CREDITO;
         
-        // Convertir montos a negativos
-        datos.totales.monto_neto = -Math.abs(datos.totales.monto_neto);
-        datos.totales.iva = -Math.abs(datos.totales.iva);
-        datos.totales.monto_total = -Math.abs(datos.totales.monto_total);
+        // ✅ En Chile las NC usan montos POSITIVOS (el tipo 61 indica que es NC)
+        // NO convertir a negativos - mantener valores positivos
+        datos.totales.monto_neto = Math.abs(datos.totales.monto_neto);
+        datos.totales.iva = Math.abs(datos.totales.iva);
+        datos.totales.monto_total = Math.abs(datos.totales.monto_total);
         
-        // Convertir montos de productos a negativos
+        // Mantener productos con valores positivos
         datos.detalle = datos.detalle.map(item => ({
             ...item,
-            cantidad: -Math.abs(item.cantidad),
-            precio_unitario: Math.abs(item.precio_unitario), // Precio se mantiene positivo
-            monto_item: -Math.abs(item.monto_item)
+            cantidad: Math.abs(item.cantidad),
+            precio_unitario: Math.abs(item.precio_unitario),
+            monto_item: Math.abs(item.monto_item)
         }));
         
+        // ✅ Referencias y descuento_global ya están incluidos
         return datos;
     },
 

@@ -161,6 +161,21 @@ from .views_edicion_productos import (
     eliminar_variacion,
     obtener_producto_desde_talla,
 )
+from .views_transbank_sdk import (
+    # API Transbank POS SDK
+    listar_puertos,
+    conectar,
+    desconectar,
+    verificar,
+    cargar_llaves,
+    venta,
+    venta_multicodigo,
+    ultima_venta,
+    anular,
+    totales,
+    detalles,
+    cerrar_dia,
+)
 from django.urls import path
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
@@ -448,6 +463,21 @@ urlpatterns = [
     # API de validación
     path('api/validar-password/', validar_password_usuario, name='validar_password_usuario'),
 
+    # ========== MÓDULO POS TRANSBANK SDK (CONEXIÓN SERIAL DIRECTA) ==========
+    # APIs sin base de datos - Conexión directa a puerto serial
+    path('pos/transbank/puertos/', listar_puertos, name='transbank_sdk_listar_puertos'),
+    path('pos/transbank/conectar/', conectar, name='transbank_sdk_conectar'),
+    path('pos/transbank/desconectar/', desconectar, name='transbank_sdk_desconectar'),
+    path('pos/transbank/verificar/', verificar, name='transbank_sdk_verificar'),
+    path('pos/transbank/cargar-llaves/', cargar_llaves, name='transbank_sdk_cargar_llaves'),
+    path('pos/transbank/venta/', venta, name='transbank_sdk_venta'),
+    path('pos/transbank/venta-multicodigo/', venta_multicodigo, name='transbank_sdk_venta_multicodigo'),
+    path('pos/transbank/ultima-venta/', ultima_venta, name='transbank_sdk_ultima_venta'),
+    path('pos/transbank/anular/', anular, name='transbank_sdk_anular'),
+    path('pos/transbank/totales/', totales, name='transbank_sdk_totales'),
+    path('pos/transbank/detalles/', detalles, name='transbank_sdk_detalles'),
+    path('pos/transbank/cerrar-dia/', cerrar_dia, name='transbank_sdk_cerrar_dia'),
+
     # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
     # Vista principal
     path('ventas/cambios-devoluciones/', gestion_cambios_devoluciones, name='gestion_cambios_devoluciones'),
@@ -550,5 +580,6 @@ urlpatterns = [
     path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),
     path('documentos/generar-txt-acepta/', views_modulo_documentos.generar_txt_acepta_api, name='generar_txt_acepta_api'),
     path('documentos/generar-txt-desde-dte/', views_modulo_documentos.generar_txt_desde_dte_existente, name='generar_txt_desde_dte_existente'),
+    path('documentos/generar-dte-ticket/', views_modulo_documentos.generar_dte_desde_ticket_api, name='generar_dte_desde_ticket_api'),  # ✅ Nuevo endpoint
 
 ]

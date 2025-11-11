@@ -15,7 +15,12 @@ class Empresa(models.Model):
     esProveedor = models.BooleanField(default=False)
     correoVendedor = models.CharField(max_length=100) 
     correoIntercambio = models.CharField(max_length=100) 
-    correoAdministrador = models.CharField(max_length=100) 
+    correoAdministrador = models.CharField(max_length=100)
+    
+    # ✅ Campos para facturación electrónica (Acepta)
+    acteco = models.CharField(max_length=20, blank=True, null=True, verbose_name='Código Acteco', help_text='Código de actividad económica del SII')
+    contacto1 = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contacto 1', help_text='Teléfono o email de contacto principal')
+    contacto2 = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contacto 2', help_text='Teléfono o email de contacto secundario')
 
     def __str__(self):
         return self.nombre
@@ -561,6 +566,28 @@ class Ticket(models.Model):
         ('VENTA_MAYORISTA', 'Venta Mayorista'),
         ('POS', 'Punto de Venta'),
     ])
+    
+    # ✅ CAMPOS PARA FACTURACIÓN ELECTRÓNICA (Acepta)
+    tipo_dte = models.CharField(max_length=20, blank=True, null=True, choices=[
+        ('TICKET', 'Ticket (sin DTE)'),
+        ('BOLETA', 'Boleta Manual'),
+        ('BOLETA_ELECTRONICA', 'Boleta Electrónica - 39'),
+        ('FACTURA_ELECTRONICA', 'Factura Electrónica - 33'),
+        ('FACTURA_EXENTA', 'Factura Exenta - 34'),
+    ], default='TICKET', verbose_name='Tipo de Documento')
+    
+    folio_dte = models.IntegerField(blank=True, null=True, verbose_name='Folio DTE', help_text='Folio del documento electrónico generado')
+    
+    # Referencia a documento comercial (Orden Compra, Guía, etc.) - NO para anular
+    referencia_tipo = models.CharField(max_length=10, blank=True, null=True, verbose_name='Tipo Referencia', help_text='801=OC, 52=Guía, 803=Contrato')
+    referencia_folio = models.CharField(max_length=50, blank=True, null=True, verbose_name='Folio Referencia', help_text='Número de la OC, Guía, etc.')
+    referencia_fecha = models.DateField(blank=True, null=True, verbose_name='Fecha Referencia')
+    
+    # Estado de facturación electrónica
+    dte_generado = models.BooleanField(default=False, verbose_name='DTE Generado')
+    dte_fecha_generacion = models.DateTimeField(blank=True, null=True, verbose_name='Fecha Generación DTE')
+    dte_xml_path = models.CharField(max_length=500, blank=True, null=True, verbose_name='Ruta XML')
+    dte_pdf_url = models.CharField(max_length=500, blank=True, null=True, verbose_name='URL PDF')
     
     class Meta:
         ordering = ['-fecha', '-hora']
