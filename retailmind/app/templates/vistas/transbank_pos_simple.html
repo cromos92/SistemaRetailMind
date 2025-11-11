@@ -679,8 +679,11 @@
         
         // Leer respuesta del POS
         async function leerRespuestaTransbank(timeout = 90000) {
+            log(`⏳ Leyendo respuesta (timeout: ${timeout}ms)...`, 'info');
+            
             return new Promise(async (resolve, reject) => {
                 const timeoutId = setTimeout(() => {
+                    log(`⏱️ TIMEOUT después de ${timeout/1000}s`, 'error');
                     reject(new Error('Timeout esperando respuesta del POS'));
                 }, timeout);
                 
@@ -688,47 +691,86 @@
                     const buffer = [];
                     let leyendo = true;
                     let mensajeCompleto = false;
+                    let intentos = 0;
+                    const maxIntentos = 100;
                     
-                    while (leyendo && !mensajeCompleto) {
-                        const { value, done } = await reader.read();
+                    log(`👂 Esperando datos del POS...`, 'info');
+                    
+                    while (leyendo && !mensajeCompleto && intentos < maxIntentos) {
+                        intentos++;
                         
-                        if (done) {
-                            leyendo = false;
+                        try {
+                            const { value, done } = await reader.read();
+                            
+                            if (done) {
+                                log(`⚠️ Stream cerrado`, 'warning');
+                                leyendo = false;
+                                break;
+                            }
+                            
+                            if (value && value.length > 0) {
+                                log(`📥 Recibidos ${value.length} bytes (intento ${intentos})`, 'info');
+                                
+                                // value es un Uint8Array con datos binarios
+                                for (let i = 0; i < value.length; i++) {
+                                    const byte = value[i];
+                                    buffer.push(byte);
+                                    
+                                    log(`  Byte ${buffer.length}: 0x${byte.toString(16).padStart(2, '0')} (${byte}) [${byte >= 32 && byte < 127 ? String.fromCharCode(byte) : '.'}]`, 'info');
+                                    
+                                    // Si encontramos ETX (0x03) y ya tenemos un mensaje mínimo
+                                    if (byte === 0x03 && buffer.length > 5) {
+                                        log(`✓ ETX encontrado en posición ${buffer.length}`, 'success');
+                                        
+                                        // Esperar un poco más por el LRC
+                                        await new Promise(r => setTimeout(r, 100));
+                                        
+                                        // Intentar leer LRC
+                                        try {
+                                            const { value: lrcValue, done: lrcDone } = await Promise.race([
+                                                reader.read(),
+                                                new Promise((_, rej) => setTimeout(() => rej('lrc_timeout'), 1000))
+                                            ]);
+                                            
+                                            if (!lrcDone && lrcValue && lrcValue.length > 0) {
+                                                buffer.push(lrcValue[0]);
+                                                log(`✓ LRC recibido: 0x${lrcValue[0].toString(16)}`, 'success');
+                                            }
+                                        } catch (lrcErr) {
+                                            log(`⚠️ No se recibió LRC (ignorando)`, 'warning');
+                                        }
+                                        
+                                        mensajeCompleto = true;
+                                        leyendo = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (readErr) {
+                            log(`⚠️ Error leyendo: ${readErr.message}`, 'warning');
                             break;
                         }
                         
-                        if (value && value.length > 0) {
-                            // value es un Uint8Array con datos binarios
-                            for (let byte of value) {
-                                buffer.push(byte);
-                                
-                                // Si encontramos ETX (0x03) y ya tenemos datos
-                                if (byte === 0x03 && buffer.length > 3) {
-                                    // Leer un byte más (LRC)
-                                    const { value: lrcValue } = await reader.read();
-                                    if (lrcValue && lrcValue.length > 0) {
-                                        buffer.push(lrcValue[0]); // Agregar LRC
-                                    }
-                                    mensajeCompleto = true;
-                                    leyendo = false;
-                                    break;
-                                }
-                            }
-                        }
+                        // Pequeña pausa entre lecturas
+                        await new Promise(r => setTimeout(r, 10));
                     }
                     
                     clearTimeout(timeoutId);
                     
                     if (buffer.length === 0) {
+                        log(`❌ No se recibieron datos del POS`, 'error');
                         reject(new Error('No se recibió respuesta del POS'));
                         return;
                     }
                     
-                    log(`📦 Bytes recibidos: ${buffer.length}`, 'info');
+                    log(`✅ ${buffer.length} bytes recibidos en total`, 'success');
+                    log(`📦 Buffer completo: ${buffer.map(b => '0x' + b.toString(16).padStart(2, '0')).join(' ')}`, 'info');
+                    
                     resolve(parsearRespuestaTransbank(buffer));
                     
                 } catch (err) {
                     clearTimeout(timeoutId);
+                    log(`❌ Error en lectura: ${err.message}`, 'error');
                     reject(err);
                 }
             });
