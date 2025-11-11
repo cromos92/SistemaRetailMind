@@ -106,12 +106,26 @@
                         <h5 class="mb-0 text-white">🔌 PASO 1: Conectar al POS</h5>
                     </div>
                     <div class="card-body">
-                        <div class="alert alert-info">
-                            <strong>ℹ️</strong> Auto-detecta COM9 @ 115200 y guarda en DB
+                        <div class="alert alert-info mb-3">
+                            <strong>ℹ️ Métodos de Conexión:</strong><br>
+                            <small>
+                                <strong>Auto:</strong> Detecta automáticamente<br>
+                                <strong>Web Serial:</strong> Chrome/Edge (localhost y producción)<br>
+                                <strong>SDK Python:</strong> Solo localhost
+                            </small>
                         </div>
-                        <button onclick="autoconectar()" class="btn btn-success btn-lg w-100">
-                            <i class="ri-plug-line"></i> Auto-Conectar al POS
-                        </button>
+                        
+                        <div class="btn-group w-100 mb-2" role="group">
+                            <button onclick="autoconectar()" class="btn btn-success">
+                                🚀 Auto-Conectar
+                            </button>
+                            <button onclick="forzarWebSerial()" class="btn btn-outline-primary">
+                                🌐 Web Serial
+                            </button>
+                            <button onclick="forzarSDK()" class="btn btn-outline-secondary">
+                                🐍 SDK Python
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -515,6 +529,34 @@
             } catch (err) {
                 log(`⚠️ WebSocket no disponible: ${err.message}`, 'warning');
                 return false;
+            }
+        }
+        
+        // Forzar Web Serial API
+        async function forzarWebSerial() {
+            log('🌐 Forzando Web Serial API...', 'info');
+            
+            if (!WEB_SERIAL_AVAILABLE) {
+                log('❌ Web Serial API no disponible', 'error');
+                log('Requiere Chrome/Edge 89+', 'warning');
+                return;
+            }
+            
+            const conectado = await conectarWebSerial();
+            if (conectado) {
+                modoConexion = 'webserial';
+                log('✅ Conectado con Web Serial API', 'success');
+                log('📝 Comandos Transbank implementados', 'info');
+            }
+        }
+        
+        // Forzar SDK Python
+        async function forzarSDK() {
+            log('🐍 Forzando SDK Python...', 'info');
+            
+            const conectado = await autoconectarSDK();
+            if (conectado) {
+                modoConexion = 'sdk';
             }
         }
         
@@ -1251,37 +1293,42 @@
         log('✅ Transbank POS SDK - RetailMind', 'success');
         log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
         
-        // Detectar modos disponibles
+        // Detectar entorno
+        const entorno = IS_LOCALHOST ? 'Localhost' : 'Producción';
+        log(`📍 Entorno: ${entorno}`, 'success');
+        
+        // Mostrar métodos disponibles
+        log('', 'info');
+        log('🔌 Métodos de Conexión Disponibles:', 'success');
+        
+        // SDK Python
         if (IS_LOCALHOST) {
-            log('📍 MODO: Localhost', 'success');
-            log('  ✅ SDK Python Directo disponible', 'success');
-            log('  ✅ Todas las funciones', 'success');
-            log('  ✅ Auto-conecta a COM9', 'success');
+            log('  ✅ SDK Python Directo', 'success');
+            log('     - Auto-conecta a COM9', 'info');
+            log('     - Guarda en DB', 'info');
+            log('     - Todas las funciones', 'info');
         } else {
-            log('🌐 MODO: Producción', 'success');
-            log('  Intentará conectar en orden:', 'info');
-            log('  1️⃣ WebSocket (agente local:8090)', 'info');
-            log('  2️⃣ Web Serial API (protocolo completo)', 'info');
+            log('  ❌ SDK Python (solo localhost)', 'warning');
         }
         
-        // Mostrar capacidades de Web Serial API
+        // Web Serial API
         if (WEB_SERIAL_AVAILABLE) {
-            log('', 'info');
-            log('✅ Web Serial API Disponible', 'success');
-            log('  Comandos implementados:', 'success');
-            log('  - Poll (0x0100) ✅', 'info');
-            log('  - Load Keys (0x0810) ✅', 'info');
-            log('  - Sale (0x0200) ✅', 'info');
-            log('  - Refund (0x1200) ✅', 'info');
-            log('  - Totals (0x0710) ✅', 'info');
-            log('  - Close Day (0x0510) ✅', 'info');
-        } else if (!IS_LOCALHOST) {
-            log('', 'info');
-            log('❌ Web Serial API NO disponible', 'error');
-            log('💡 Usa Chrome/Edge 89+ con HTTPS', 'warning');
+            log('  ✅ Web Serial API', 'success');
+            log('     - Funciona en localhost Y producción', 'info');
+            log('     - Usuario elige puerto manualmente', 'info');
+            log('     - Poll, Load Keys, Sale, Refund, Totals, Close', 'info');
+        } else {
+            log('  ❌ Web Serial API (requiere Chrome/Edge)', 'warning');
         }
         
+        // WebSocket
+        log('  ⚠️ WebSocket (requiere agente local:8090)', 'warning');
+        
+        log('', 'info');
         log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-        log('💡 PASO 1: Click en "Auto-Conectar"', 'info');
+        log('💡 PASO 1: Elige un método de conexión', 'info');
+        log('   - 🚀 Auto: Intenta todos automáticamente', 'info');
+        log('   - 🌐 Web Serial: Funcionará en producción', 'info');
+        log('   - 🐍 SDK Python: Solo en localhost', 'info');
         log('', 'info');
     </script>
