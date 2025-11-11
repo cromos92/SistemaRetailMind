@@ -408,6 +408,8 @@ def venta(request):
     monto = request.data.get('monto')
     ticket_str = request.data.get('ticket')
     ticket_id = request.data.get('ticket_id')
+    web_serial = request.data.get('web_serial', False)
+    respuesta_pos = request.data.get('respuesta_pos')
     
     if not monto or not ticket_str:
         return Response({
@@ -416,8 +418,13 @@ def venta(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        # Procesar venta con SDK
-        resultado = pos_service.venta(int(monto), str(ticket_str))
+        # Si viene de Web Serial API (producción), usar esa respuesta
+        if web_serial and respuesta_pos:
+            resultado = respuesta_pos
+            logger.info(f"Venta procesada con Web Serial API: {resultado}")
+        else:
+            # Procesar venta con SDK Python
+            resultado = pos_service.venta(int(monto), str(ticket_str))
         
         # Determinar si fue exitosa
         response_code = str(resultado.get('response_code', ''))

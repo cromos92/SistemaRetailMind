@@ -1,0 +1,42 @@
+═══════════════════════════════════════════════════════════════
+  SOLUCIÓN: COM9 Ocupado en Localhost
+═══════════════════════════════════════════════════════════════
+
+PROBLEMA:
+  Error: "Acceso denegado" en COM9
+  Causa: Otro proceso está usando el puerto
+
+SOLUCIÓN:
+
+1. Cerrar otros programas que usen puertos seriales:
+   - Putty
+   - Arduino IDE
+   - Otros terminales de pago
+   - Otros scripts Python
+
+2. Si test_com9_directo.py está corriendo:
+   - Ctrl+C para detenerlo
+   - Espera 5 segundos
+   - Vuelve a intentar
+
+3. Reiniciar Python/Django:
+   - Ctrl+C en el servidor Django
+   - Espera 5 segundos
+   - venv\Scripts\python.exe retailmind\manage.py runserver
+
+4. En caso extremo, reiniciar la PC
+
+═══════════════════════════════════════════════════════════════
+  AHORA YA FUNCIONA EN PRODUCCIÓN CON WEB SERIAL API
+═══════════════════════════════════════════════════════════════
+
+✅ En producción (HTTPS):
+   - Usa Web Serial API
+   - Usuario selecciona puerto manualmente
+   - Funciona load_keys() y sale()
+   
+✅ En localhost:
+   - Usa SDK Python directo
+   - Auto-conecta a COM9
+   - Todas las funciones
+

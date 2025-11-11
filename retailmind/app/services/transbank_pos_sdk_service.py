@@ -88,6 +88,13 @@ class POSService:
         Raises:
             Exception: Si no se puede conectar en ningún puerto
         """
+        # Cerrar cualquier conexión previa
+        try:
+            self.pos.close_port()
+            logger.info("Puerto previo cerrado")
+        except:
+            pass
+        
         puertos = self.listar_puertos(solo_disponibles=True)
         baudrates = [115200, 9600, 19200, 38400, 57600]
         
