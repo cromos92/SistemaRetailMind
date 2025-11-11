@@ -269,7 +269,8 @@
 
 {% include 'layout/footer.html' %}
 
-    <script>
+<script src="{% static 'js/transbank-pos-sdk.js' %}"></script>
+<script>
         // Detectar URL base automáticamente
         const API_BASE_URL = window.location.origin + '/app/pos/transbank';
         
@@ -279,10 +280,12 @@
         // Detectar si Web Serial API está disponible
         const WEB_SERIAL_AVAILABLE = 'serial' in navigator;
         
-        // Variable global para el puerto serial (Web Serial API)
-        let serialPort = null;
+        // Variables globales
+        let serialPort = null;  // Para Web Serial API
         let reader = null;
         let writer = null;
+        let transbankPOS = null;  // Para SDK WebSocket
+        let modoConexion = null;  // 'sdk', 'websocket', 'webserial'
 
         // CSRF Token
         function getCookie(name) {
@@ -439,32 +442,79 @@
             }
         }
         
-        // Auto-conectar (Inteligente)
+        // Auto-conectar (Inteligente - 3 métodos)
         async function autoconectar() {
             log('🚀 Auto-conectando...', 'info');
+            log('🔍 Probando métodos disponibles...', 'info');
             
-            // Detectar qué método usar
+            // MÉTODO 1: SDK Python (si es localhost)
             if (IS_LOCALHOST) {
-                log('📍 Localhost detectado: Usando SDK Python', 'info');
-                await autoconectarSDK();
-            } else {
-                log('🌐 Producción detectada: Usando Web Serial API', 'info');
-                
-                if (!WEB_SERIAL_AVAILABLE) {
-                    log('❌ Web Serial API no disponible', 'error');
-                    log('⚠️ Opciones:', 'warning');
-                    log('  1. Usa Chrome o Edge', 'info');
-                    log('  2. Accede por HTTPS', 'info');
-                    log('  3. Instala agente desktop', 'info');
+                log('📍 Intentando SDK Python Directo...', 'info');
+                const sdkOk = await autoconectarSDK();
+                if (sdkOk) {
+                    modoConexion = 'sdk';
                     return;
                 }
-                
-                const conectado = await conectarWebSerial();
-                
-                if (conectado) {
-                    log('💡 Web Serial API: Listo para usar', 'info');
-                    log('⚠️ Algunas funciones pueden no estar disponibles', 'warning');
+            }
+            
+            // MÉTODO 2: WebSocket (si hay agente local)
+            log('📡 Intentando SDK WebSocket (agente local)...', 'info');
+            const wsOk = await conectarWebSocket();
+            if (wsOk) {
+                modoConexion = 'websocket';
+                return;
+            }
+            
+            // MÉTODO 3: Web Serial API (último recurso)
+            if (WEB_SERIAL_AVAILABLE) {
+                log('🌐 Intentando Web Serial API...', 'info');
+                const serialOk = await conectarWebSerial();
+                if (serialOk) {
+                    modoConexion = 'webserial';
+                    log('⚠️ Modo limitado - Solo funciones básicas', 'warning');
+                    return;
                 }
+            }
+            
+            // Si ninguno funcionó
+            log('❌ No se pudo conectar con ningún método', 'error');
+            log('', 'info');
+            log('💡 OPCIONES:', 'warning');
+            log('  1. SDK Python: Usa localhost', 'info');
+            log('  2. WebSocket: Instala agente en puerto 8090', 'info');
+            log('  3. Web Serial API: Usa Chrome/Edge + HTTPS', 'info');
+        }
+        
+        // Conectar con WebSocket (agente local)
+        async function conectarWebSocket() {
+            try {
+                if (typeof Transbank === 'undefined') {
+                    log('⚠️ SDK Transbank no cargado', 'warning');
+                    return false;
+                }
+                
+                transbankPOS = new Transbank.TransbankPOSWebSocket();
+                
+                // Intentar conectar al agente local
+                await transbankPOS.connect('ws://localhost:8090');
+                
+                log('✅ Conectado vía WebSocket (agente local)', 'success');
+                
+                // Auto-conectar al POS
+                const puertos = await transbankPOS.getPorts();
+                log(`Puertos detectados: ${JSON.stringify(puertos)}`, 'info');
+                
+                // Intentar auto-conectar
+                const resultado = await transbankPOS.autoconnect(115200);
+                log('✅ Auto-conectado al POS!', 'success');
+                
+                actualizarEstado(true, 'WebSocket Agent');
+                marcarPaso(1, true);
+                
+                return true;
+            } catch (err) {
+                log(`⚠️ WebSocket no disponible: ${err.message}`, 'warning');
+                return false;
             }
         }
         
@@ -479,23 +529,14 @@
                         log(`💾 Guardado en DB (ID: ${data.config_id})`, 'success');
                     }
                     actualizarEstado(true, data.puerto);
+                    return true;
                 } else {
-                    log(`❌ ${data.error}`, 'error');
-                    
-                    // Si falla SDK, ofrecer Web Serial API
-                    if (WEB_SERIAL_AVAILABLE && !IS_LOCALHOST) {
-                        log('💡 Intentando con Web Serial API...', 'info');
-                        await conectarWebSerial();
-                    }
+                    log(`⚠️ SDK Python: ${data.error}`, 'warning');
+                    return false;
                 }
             } catch (err) {
-                log(`❌ ${err.message}`, 'error');
-                
-                // Fallback a Web Serial API
-                if (WEB_SERIAL_AVAILABLE && !IS_LOCALHOST) {
-                    log('💡 Intentando con Web Serial API...', 'info');
-                    await conectarWebSerial();
-                }
+                log(`⚠️ SDK Python no disponible: ${err.message}`, 'warning');
+                return false;
             }
         }
 
@@ -657,69 +698,78 @@
             // [STX][FUNCTION_CODE(2)][RESPONSE_CODE(2)][DATA...][ETX][LRC]
             
             log(`🔍 Parseando ${buffer.length} bytes...`, 'info');
+            log(`📦 Buffer hex: ${Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join(' ')}`, 'info');
             
-            if (buffer.length < 6) {
-                return { success: false, error: 'Respuesta muy corta' };
-            }
-            
-            // Verificar STX
-            if (buffer[0] !== 0x02) {
-                log(`⚠️ STX inválido: ${buffer[0]}`, 'warning');
-            }
-            
-            // Function Code (2 bytes)
-            const functionCode = (buffer[1] << 8) | buffer[2];
-            
-            // Response Code (2 bytes ASCII)
-            const responseCode = String.fromCharCode(buffer[3]) + String.fromCharCode(buffer[4]);
-            
-            // Datos (entre response_code y ETX)
-            const dataStart = 5;
-            const etxIndex = buffer.indexOf(0x03);
-            
-            if (etxIndex === -1) {
-                return {
-                    success: false,
-                    function_code: functionCode,
-                    response_code: responseCode,
-                    error: 'ETX no encontrado'
-                };
-            }
-            
-            const dataBytes = buffer.slice(dataStart, etxIndex);
-            
-            // Convertir bytes a string
-            const dataStr = String.fromCharCode(...dataBytes);
-            
-            // Parsear campos específicos según function_code
+            // Resultado por defecto
             const resultado = {
-                success: responseCode === '00',
-                function_code: functionCode,
-                response_code: responseCode,
-                raw_data: dataStr
+                success: false,
+                function_code: 0,
+                response_code: 'FF',
+                raw_data: '',
+                error: null
             };
             
-            // Parsear campos para Sale (0x0200)
-            if (functionCode === 0x0200 || functionCode === 512) {
-                // Formato aprox: COMMERCE_CODE|TERMINAL_ID|TICKET|AUTH_CODE|AMOUNT|OPERATION_NUMBER|...
-                const partes = dataStr.split('|');
-                resultado.commerce_code = partes[0] || '';
-                resultado.terminal_id = partes[1] || '';
-                resultado.ticket = partes[2] || '';
-                resultado.authorization_code = partes[3] || '';
-                resultado.amount = partes[4] || '';
-                resultado.operation_number = partes[5] || '';
-                resultado.card_type = partes[6] || '';
+            if (buffer.length < 6) {
+                resultado.error = 'Respuesta muy corta';
+                log(`❌ ${resultado.error}`, 'error');
+                return resultado;
             }
             
-            // Parsear campos para Load Keys (0x0810)
-            if (functionCode === 0x0810 || functionCode === 2064) {
-                const partes = dataStr.split('|');
-                resultado.commerce_code = partes[0] || '';
-                resultado.terminal_id = partes[1] || '';
+            try {
+                // Verificar STX
+                if (buffer[0] !== 0x02) {
+                    log(`⚠️ STX inválido: 0x${buffer[0].toString(16)} (esperado: 0x02)`, 'warning');
+                }
+                
+                // Function Code (2 bytes)
+                resultado.function_code = (buffer[1] << 8) | buffer[2];
+                log(`Function Code: 0x${resultado.function_code.toString(16)} (${resultado.function_code})`, 'info');
+                
+                // Response Code (2 bytes ASCII)
+                if (buffer.length > 4) {
+                    resultado.response_code = String.fromCharCode(buffer[3]) + String.fromCharCode(buffer[4]);
+                    log(`Response Code: "${resultado.response_code}" (bytes: 0x${buffer[3].toString(16)} 0x${buffer[4].toString(16)})`, 'info');
+                }
+                
+                // Success si response code es 00 o 0
+                resultado.success = resultado.response_code === '00' || resultado.response_code === '0 ';
+                
+                // Datos (entre response_code y ETX)
+                const dataStart = 5;
+                const etxIndex = buffer.indexOf(0x03);
+                
+                if (etxIndex > dataStart) {
+                    const dataBytes = buffer.slice(dataStart, etxIndex);
+                    resultado.raw_data = String.fromCharCode(...dataBytes);
+                    log(`Datos raw: "${resultado.raw_data}"`, 'info');
+                    
+                    // Parsear campos específicos según function_code
+                    // Sale: 0x0200 (512 decimal)
+                    if (resultado.function_code === 0x0200 || resultado.function_code === 512) {
+                        const partes = resultado.raw_data.split('|');
+                        resultado.commerce_code = partes[0] || '';
+                        resultado.terminal_id = partes[1] || '';
+                        resultado.ticket = partes[2] || '';
+                        resultado.authorization_code = partes[3] || '';
+                        resultado.amount = partes[4] || '';
+                        resultado.operation_number = partes[5] || '';
+                        resultado.card_type = partes[6] || '';
+                    }
+                    
+                    // Load Keys: 0x0810 (2064 decimal)
+                    if (resultado.function_code === 0x0810 || resultado.function_code === 2064) {
+                        const partes = resultado.raw_data.split('|');
+                        resultado.commerce_code = partes[0] || '';
+                        resultado.terminal_id = partes[1] || '';
+                    }
+                }
+                
+                log(`✅ Parse OK: FC=${resultado.function_code}, RC=${resultado.response_code}, Success=${resultado.success}`, 'success');
+                
+            } catch (err) {
+                log(`❌ Error parseando: ${err.message}`, 'error');
+                resultado.error = err.message;
             }
-            
-            log(`✅ Parseado: FC=${functionCode}, RC=${responseCode}`, 'info');
             
             return resultado;
         }
@@ -740,24 +790,29 @@
         
         async function webSerialSale(monto, ticket) {
             // Comando Sale: 0x0200
-            // Formato: [FUNCTION_CODE][AMOUNT][TICKET]
+            // Formato: [FUNCTION_CODE][AMOUNT(9)][TICKET(6)][SEPARATOR]
             
             const comando = [0x02, 0x00];
             
             // Convertir monto a 9 dígitos (pesos chilenos sin decimales)
             const montoStr = String(monto).padStart(9, '0');
+            log(`💰 Monto formateado: "${montoStr}"`, 'info');
             for (let char of montoStr) {
                 comando.push(char.charCodeAt(0));
             }
             
             // Agregar ticket (6 caracteres)
             const ticketStr = String(ticket).padEnd(6, ' ').substring(0, 6);
+            log(`🎫 Ticket formateado: "${ticketStr}"`, 'info');
             for (let char of ticketStr) {
                 comando.push(char.charCodeAt(0));
             }
             
-            // Enviar con 0x7C como separador
+            // Enviar con 0x7C como separador (pipe |)
             comando.push(0x7C);
+            
+            log(`📤 Comando Sale: [${comando.map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`, 'info');
+            log(`📏 Longitud comando: ${comando.length} bytes`, 'info');
             
             try {
                 const respuesta = await enviarComandoTransbank(comando, 90000);
@@ -773,6 +828,52 @@
             
             try {
                 const respuesta = await enviarComandoTransbank(comando, 5000);
+                return respuesta;
+            } catch (err) {
+                throw err;
+            }
+        }
+        
+        async function webSerialRefund(operationId) {
+            // Comando Refund: 0x1200
+            const comando = [0x12, 0x00];
+            
+            // Operation ID (6 dígitos)
+            const opIdStr = String(operationId).padStart(6, '0');
+            for (let char of opIdStr) {
+                comando.push(char.charCodeAt(0));
+            }
+            
+            comando.push(0x7C);
+            
+            log(`📤 Comando Refund: OperationID=${opIdStr}`, 'info');
+            
+            try {
+                const respuesta = await enviarComandoTransbank(comando, 30000);
+                return respuesta;
+            } catch (err) {
+                throw err;
+            }
+        }
+        
+        async function webSerialTotals() {
+            // Comando Totals: 0x0710
+            const comando = [0x07, 0x10];
+            
+            try {
+                const respuesta = await enviarComandoTransbank(comando, 30000);
+                return respuesta;
+            } catch (err) {
+                throw err;
+            }
+        }
+        
+        async function webSerialClose() {
+            // Comando Close Day: 0x0510
+            const comando = [0x05, 0x10];
+            
+            try {
+                const respuesta = await enviarComandoTransbank(comando, 60000);
                 return respuesta;
             } catch (err) {
                 throw err;
@@ -860,10 +961,21 @@
                     const respuesta = await webSerialSale(monto, ticket);
                     
                     log(`📥 Respuesta recibida del POS`, 'info');
+                    log(`DEBUG: ${JSON.stringify(respuesta)}`, 'info');
                     log(`Function Code: ${respuesta.function_code}`, 'info');
                     log(`Response Code: ${respuesta.response_code}`, 'info');
+                    log(`Raw Data: ${respuesta.raw_data}`, 'info');
                     
-                    if (respuesta.success || respuesta.response_code === '00') {
+                    // Verificar que response_code existe
+                    if (!respuesta.response_code) {
+                        log(`⚠️ Response code es undefined`, 'warning');
+                        log(`Buffer completo: ${respuesta.buffer}`, 'info');
+                        throw new Error('Response code inválido en respuesta del POS');
+                    }
+                    
+                    const code = String(respuesta.response_code);
+                    
+                    if (respuesta.success || code === '00' || code === '0') {
                         log('✅ VENTA APROBADA!', 'success');
                         
                         // Mostrar todos los campos si están disponibles
@@ -964,7 +1076,29 @@
                 return;
             }
 
-            log(`Anulando ${opNum}...`, 'info');
+            log(`🔄 Anulando transacción ${opNum}...`, 'info');
+            
+            // Si es Web Serial API (producción)
+            if (modoConexion === 'webserial' && serialPort) {
+                try {
+                    const respuesta = await webSerialRefund(parseInt(opNum));
+                    
+                    log(`📥 Respuesta Refund`, 'info');
+                    log(`Response Code: ${respuesta.response_code}`, 'info');
+                    
+                    if (respuesta.success || respuesta.response_code === '00') {
+                        log('✅ ANULACIÓN APROBADA', 'success');
+                        document.getElementById('operation-number').value = '';
+                    } else {
+                        log(`❌ RECHAZADA - Código: ${respuesta.response_code}`, 'error');
+                    }
+                } catch (err) {
+                    log(`❌ ${err.message}`, 'error');
+                }
+                return;
+            }
+            
+            // Si es SDK Python (localhost) o WebSocket
             try {
                 const data = await api('/anular/', 'POST', {operation_id: parseInt(opNum)});
                 const code = String(data.response_code);
@@ -982,7 +1116,52 @@
 
         // Totales
         async function consultarTotales() {
-            log('📊 Consultando...', 'info');
+            log('📊 Consultando totales...', 'info');
+            
+            // Si es Web Serial API
+            if (modoConexion === 'webserial' && serialPort) {
+                try {
+                    const respuesta = await webSerialTotals();
+                    
+                    log(`📥 Respuesta Totals`, 'info');
+                    log(`Response Code: ${respuesta.response_code}`, 'info');
+                    log(`Data: ${respuesta.raw_data}`, 'info');
+                    
+                    if (respuesta.success || respuesta.response_code === '00') {
+                        // Parsear datos de totales
+                        // Formato típico: TX_COUNT|TX_TOTAL|...
+                        const partes = respuesta.raw_data.split('|');
+                        const count = parseInt(partes[0]) || 0;
+                        const total = parseInt(partes[1]) || 0;
+                        const prom = count > 0 ? (total / count) : 0;
+                        
+                        log('✅ Totales obtenidos', 'success');
+                        log(`Transacciones: ${count}`, 'info');
+                        log(`Total: $${total.toLocaleString()}`, 'info');
+                        
+                        document.getElementById('totales-display').innerHTML = `
+                            <h2 class="text-primary">${count}</h2>
+                            <p class="text-muted mb-1">Transacciones</p>
+                            <h3>$${total.toLocaleString()}</h3>
+                        `;
+                        
+                        document.getElementById('resumen-display').innerHTML = `
+                            <table class="table table-sm">
+                                <tr><td>Transacciones:</td><td class="text-end">${count}</td></tr>
+                                <tr><td>Total:</td><td class="text-end">$${total.toLocaleString()}</td></tr>
+                                <tr><td>Promedio:</td><td class="text-end">$${prom.toLocaleString(undefined, {maximumFractionDigits: 0})}</td></tr>
+                            </table>
+                        `;
+                        
+                        marcarPaso(4, true);
+                    }
+                } catch (err) {
+                    log(`❌ ${err.message}`, 'error');
+                }
+                return;
+            }
+            
+            // Si es SDK Python o WebSocket
             try {
                 const data = await api('/totales/');
                 const code = String(data.response_code);
@@ -1019,9 +1198,36 @@
 
         // Cerrar día
         async function cerrarDia() {
-            if (!confirm('¿Cerrar el día?')) return;
+            if (!confirm('¿Cerrar el día?\n\nEsto cerrará las operaciones del día en el POS.')) return;
             
-            log('🔒 Cerrando...', 'info');
+            log('🔒 Cerrando día...', 'info');
+            
+            // Si es Web Serial API
+            if (modoConexion === 'webserial' && serialPort) {
+                try {
+                    log('⏳ Esperando cierre (puede tardar 60s)...', 'info');
+                    const respuesta = await webSerialClose();
+                    
+                    log(`📥 Respuesta Close`, 'info');
+                    log(`Response Code: ${respuesta.response_code}`, 'info');
+                    
+                    if (respuesta.success || respuesta.response_code === '00') {
+                        log('✅ DÍA CERRADO EXITOSAMENTE', 'success');
+                        marcarPaso(1, false);
+                        marcarPaso(2, false);
+                        marcarPaso(3, false);
+                        marcarPaso(4, false);
+                        actualizarEstado(false);
+                    } else {
+                        log(`❌ Error - Código: ${respuesta.response_code}`, 'error');
+                    }
+                } catch (err) {
+                    log(`❌ ${err.message}`, 'error');
+                }
+                return;
+            }
+            
+            // Si es SDK Python o WebSocket
             try {
                 const data = await api('/cerrar-dia/', 'POST');
                 const code = String(data.response_code);
@@ -1045,32 +1251,37 @@
         log('✅ Transbank POS SDK - RetailMind', 'success');
         log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
         
-        // Detectar modo de operación
+        // Detectar modos disponibles
         if (IS_LOCALHOST) {
-            log('📍 MODO: SDK Python Directo', 'success');
-            log('  ✅ Todas las funciones disponibles', 'success');
-            log('  ✅ Auto-conecta a COM9 @ 115200', 'success');
-            log('  ✅ Guarda en DB automáticamente', 'success');
+            log('📍 MODO: Localhost', 'success');
+            log('  ✅ SDK Python Directo disponible', 'success');
+            log('  ✅ Todas las funciones', 'success');
+            log('  ✅ Auto-conecta a COM9', 'success');
         } else {
-            if (WEB_SERIAL_AVAILABLE) {
-                log('🌐 MODO: Web Serial API (Chrome)', 'success');
-                log('  ✅ Funciona en producción (HTTPS)', 'success');
-                log('  ✅ Usuario elige puerto manualmente', 'success');
-                log('  ✅ Load Keys, Sale, Refund implementados', 'success');
-                log('  ⚠️ Requiere Chrome/Edge', 'warning');
-            } else {
-                log('❌ Web Serial API NO disponible', 'error');
-                log('', 'info');
-                log('💡 SOLUCIONES:', 'warning');
-                log('  1️⃣ Usa Chrome o Edge (versión 89+)', 'info');
-                log('  2️⃣ Asegúrate de usar HTTPS', 'info');
-                log('  3️⃣ Accede desde localhost para testing', 'info');
-                log('', 'info');
-                log('Navegador actual: ' + navigator.userAgent.split(' ').pop(), 'info');
-                log('Protocolo: ' + window.location.protocol, 'info');
-            }
+            log('🌐 MODO: Producción', 'success');
+            log('  Intentará conectar en orden:', 'info');
+            log('  1️⃣ WebSocket (agente local:8090)', 'info');
+            log('  2️⃣ Web Serial API (protocolo completo)', 'info');
+        }
+        
+        // Mostrar capacidades de Web Serial API
+        if (WEB_SERIAL_AVAILABLE) {
+            log('', 'info');
+            log('✅ Web Serial API Disponible', 'success');
+            log('  Comandos implementados:', 'success');
+            log('  - Poll (0x0100) ✅', 'info');
+            log('  - Load Keys (0x0810) ✅', 'info');
+            log('  - Sale (0x0200) ✅', 'info');
+            log('  - Refund (0x1200) ✅', 'info');
+            log('  - Totals (0x0710) ✅', 'info');
+            log('  - Close Day (0x0510) ✅', 'info');
+        } else if (!IS_LOCALHOST) {
+            log('', 'info');
+            log('❌ Web Serial API NO disponible', 'error');
+            log('💡 Usa Chrome/Edge 89+ con HTTPS', 'warning');
         }
         
         log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
         log('💡 PASO 1: Click en "Auto-Conectar"', 'info');
+        log('', 'info');
     </script>
