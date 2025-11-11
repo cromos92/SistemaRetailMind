@@ -1002,17 +1002,29 @@
                     
                     const respuesta = await webSerialSale(monto, ticket);
                     
-                    log(`📥 Respuesta recibida del POS`, 'info');
-                    log(`DEBUG: ${JSON.stringify(respuesta)}`, 'info');
-                    log(`Function Code: ${respuesta.function_code}`, 'info');
-                    log(`Response Code: ${respuesta.response_code}`, 'info');
-                    log(`Raw Data: ${respuesta.raw_data}`, 'info');
+                    log(`━━━━ RESPUESTA DEL POS ━━━━`, 'info');
+                    log(`📦 Buffer (${respuesta.buffer ? respuesta.buffer.length : 0} bytes):`, 'info');
+                    if (respuesta.buffer) {
+                        log(`   HEX: ${Array.from(respuesta.buffer).map(b => b.toString(16).padStart(2, '0')).join(' ')}`, 'info');
+                        log(`   DEC: ${Array.from(respuesta.buffer).join(' ')}`, 'info');
+                        log(`   CHR: ${Array.from(respuesta.buffer).map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '.').join('')}`, 'info');
+                    }
+                    log(`Function Code: ${respuesta.function_code} (0x${respuesta.function_code?.toString(16)})`, 'info');
+                    log(`Response Code: "${respuesta.response_code}"`, 'info');
+                    log(`Raw Data: "${respuesta.raw_data}"`, 'info');
+                    log(`Success: ${respuesta.success}`, 'info');
+                    log(`━━━━━━━━━━━━━━━━━━━━━━`, 'info');
                     
                     // Verificar que response_code existe
-                    if (!respuesta.response_code) {
-                        log(`⚠️ Response code es undefined`, 'warning');
-                        log(`Buffer completo: ${respuesta.buffer}`, 'info');
-                        throw new Error('Response code inválido en respuesta del POS');
+                    if (!respuesta.response_code || respuesta.response_code === 'undefined') {
+                        log(`❌ ERROR: Response code inválido`, 'error');
+                        log(`⚠️ Esto puede significar:`, 'warning');
+                        log(`  1. El POS no respondió correctamente`, 'info');
+                        log(`  2. El formato del comando es incorrecto`, 'info');
+                        log(`  3. El POS está en modo incorrecto`, 'info');
+                        log(``, 'info');
+                        log(`💡 Verifica que el POS esté en modo POS INTEGRADO`, 'warning');
+                        return;
                     }
                     
                     const code = String(respuesta.response_code);
