@@ -241,3 +241,5 @@ class Command(BaseCommand):
         self.stdout.write('  - Se construye desde facturas_asociadas en la vista')
         self.stdout.write('')
 
+
+

@@ -54,7 +54,7 @@ def detalle_dte(request, dte_id):
             productos.append({
                 'id': dte_producto.id,
                 'sku': dte_producto.productoTalla.sku,
-                'nombre_producto': dte_producto.productoTalla.producto.nombre,
+                'nombre_producto': dte_producto.productoTalla.producto.articulo,
                 'talla': dte_producto.productoTalla.talla.nombre if dte_producto.productoTalla.talla else 'Sin talla',
                 'cantidad': dte_producto.cantidad,
                 'precio_unitario': float(dte_producto.precio_unitario),
@@ -83,7 +83,7 @@ def detalle_dte(request, dte_id):
                 'concepto': movimiento.concepto,
                 'tipo_movimiento': movimiento.tipo_movimiento,
                 'cantidad': movimiento.cantidad,
-                'producto': movimiento.producto_talla.producto.nombre if movimiento.producto_talla else '',
+                'producto': movimiento.producto_talla.producto.articulo if movimiento.producto_talla else '',
                 'sku': movimiento.producto_talla.sku if movimiento.producto_talla else '',
                 'sucursal_origen': movimiento.sucursal_origen.nombre if movimiento.sucursal_origen else '',
                 'sucursal_destino': movimiento.sucursal_destino.nombre if movimiento.sucursal_destino else '',
@@ -763,10 +763,10 @@ def buscar_productos_bodega(request):
                 productos_data.append({
                     'id': pt.id,
                     'sku': pt.sku,
-                    'nombre': pt.producto.nombre,
+                    'nombre': pt.producto.articulo,
                     'categoria': pt.producto.categoria.nombre if pt.producto.categoria else '',
-                    'marca': pt.producto.marca.nombre if pt.producto.marca else '',
-                    'talla': pt.talla.nombre if pt.talla else 'Sin talla',
+                    'marca': pt.producto.atributo1.valor if pt.producto.atributo1 else '',
+                    'talla': pt.talla if pt.talla else 'Sin talla',
                     'precio_venta': float(pt.precio_venta),
                     'stock_disponible': stock_sucursal
                 })
@@ -790,136 +790,9 @@ def buscar_productos_bodega(request):
 
 @require_POST
 @login_required
-def emitir_dte(request):
-    """Emitir un nuevo DTE"""
-    try:
-        data = json.loads(request.body)
-        
-        # Validar datos requeridos
-        tipo_documento = data.get('tipo_documento')
-        cliente_id = data.get('cliente_id')
-        sucursal_id = data.get('sucursal_id')
-        productos = data.get('productos', [])
-        
-        if not all([tipo_documento, sucursal_id]):
-            return JsonResponse({
-                'success': False,
-                'error': 'Tipo de documento y sucursal son requeridos'
-            })
-        
-        if not productos:
-            return JsonResponse({
-                'success': False,
-                'error': 'Debe incluir al menos un producto'
-            })
-        
-        # Verificar permisos
-        empresa_actual_id = request.session.get('idEmpresaActual')
-        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        
-        if sucursal.empresa_id != empresa_actual_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'No tiene permisos para esta sucursal'
-            }, status=403)
-        
-        with transaction.atomic():
-            # Obtener siguiente correlativo
-            from .views import obtener_siguiente_correlativo
-            numero_dte = obtener_siguiente_correlativo(sucursal, tipo_documento)
-            
-            # Calcular totales
-            subtotal = 0
-            for item in productos:
-                cantidad = Decimal(item['cantidad'])
-                precio_unitario = Decimal(item['precio_unitario'])
-                descuento_unitario = Decimal(item.get('descuento_unitario', 0))
-                subtotal += cantidad * (precio_unitario - descuento_unitario)
-            
-            descuento_global = Decimal(data.get('descuento_global', 0))
-            subtotal_con_descuento = subtotal - descuento_global
-            iva = subtotal_con_descuento * Decimal('0.19')  # 19% IVA
-            total = subtotal_con_descuento + iva
-            
-            # Crear DTE
-            dte = Dte.objects.create(
-                numero_dte=numero_dte,
-                tipo_documento=tipo_documento,
-                tipo_transaccion='VENTA',
-                fecha_emision=timezone.now().date(),
-                fecha_vencimiento=data.get('fecha_vencimiento'),
-                emisor_id=empresa_actual_id,
-                receptor_id=cliente_id,
-                sucursal=sucursal,
-                subtotal=subtotal,
-                descuento_global=descuento_global,
-                iva=iva,
-                total=total,
-                estado_dte='EMITIDO',
-                observaciones=data.get('observaciones', '')
-            )
-            
-            # Crear productos del DTE
-            for item in productos:
-                producto_talla = get_object_or_404(Producto_Talla, id=item['producto_talla_id'])
-                cantidad = int(item['cantidad'])
-                
-                # Verificar stock
-                stock_disponible = producto_talla.stock_sucursal(sucursal_id)
-                if stock_disponible < cantidad:
-                    raise ValidationError(f'Stock insuficiente para {producto_talla.sku}')
-                
-                Dte_Productos.objects.create(
-                    dte=dte,
-                    productoTalla=producto_talla,
-                    cantidad=cantidad,
-                    precio_unitario=item['precio_unitario'],
-                    descuento_unitario=item.get('descuento_unitario', 0)
-                )
-                
-                # Registrar movimiento de salida
-                from .views import registrar_movimiento_producto
-                registrar_movimiento_producto(
-                    producto_talla=producto_talla,
-                    concepto='VENTA',
-                    cantidad=-cantidad,  # Negativo para salida
-                    responsable=request.user,
-                    dte=dte,
-                    observaciones=f'Venta DTE #{numero_dte}'
-                )
-                
-                # Consumir stock FIFO
-                from .views import consumir_stock_fifo
-                consumir_stock_fifo(
-                    producto_talla=producto_talla,
-                    cantidad_requerida=cantidad,
-                    responsable=request.user,
-                    observaciones=f'Venta DTE #{numero_dte}',
-                    referencia_externa=numero_dte
-                )
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'DTE emitido exitosamente',
-            'dte_id': dte.id,
-            'numero_dte': numero_dte
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'success': False,
-            'error': 'Datos JSON inválidos'
-        })
-    except ValidationError as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'Error al emitir DTE: {str(e)}'
-        })
+# NOTA: Esta función fue eliminada porque está duplicada en views.py
+# La función activa está en views.py línea 8754 y es usada en urls.py
+# Esta versión estaba HUÉRFANA (no se usaba en ninguna URL)
 
 
 # ========== FUNCIONES DE DEBUG ==========
@@ -1261,6 +1134,8 @@ def generar_txt_nota_credito_acepta(datos):
     lineas.append(separador.join(linea1))
     
     # ===== LÍNEA 2: EMISOR (completo con usuario) =====
+    # ✅ Usar alias de sucursal en lugar de codigo_vendedor
+    alias_sucursal = limpiar_texto(emisor.get('sucursal', ''), 60) or emisor.get('codigo_vendedor', '') or 'USUARIO'
     linea2 = [
         formatear_rut(emisor.get('rut', '')),
         limpiar_texto(emisor.get('razon_social', ''), 100),
@@ -1270,7 +1145,7 @@ def generar_txt_nota_credito_acepta(datos):
         limpiar_texto(emisor.get('direccion', ''), 60),
         limpiar_texto(emisor.get('comuna', ''), 20),
         limpiar_texto(emisor.get('ciudad', ''), 20),
-        limpiar_texto(emisor.get('codigo_vendedor', ''), 60) or 'USUARIO',
+        alias_sucursal,  # ✅ CAMBIO: Usar alias de sucursal
         '}'
     ]
     lineas.append(separador.join(linea2))
@@ -1365,7 +1240,8 @@ def generar_txt_nota_credito_acepta(datos):
     lineas.append('~')
     
     # ===== LÍNEA OBSERVACIONES =====
-    vendedor_codigo = emisor.get('codigo_vendedor', '') or 'USUARIO'
+    # ✅ Usar alias de sucursal en lugar de codigo_vendedor
+    vendedor_codigo = emisor.get('sucursal', '') or emisor.get('codigo_vendedor', '') or 'USUARIO'
     monto_total = abs(int(totales.get('monto_total', 0)))
     monto_neto = abs(int(totales.get('monto_neto', 0)))
     
@@ -1502,10 +1378,16 @@ def generar_txt_boleta_acepta(datos):
     lineas.append('~')
     
     # ===== OBSERVACIONES CON FORMATO ESPECIAL =====
-    # ✅ CORRECCIÓN 3: 4 pipes antes de boleta, no 5
-    vendedor_codigo = emisor.get('codigo_vendedor', '') or 'USUARIO'
+    # ✅ Incluir información del vendedor y métodos de pago
+    # ✅ Usar alias de sucursal en lugar de codigo_vendedor
+    vendedor_codigo = emisor.get('sucursal', '') or emisor.get('codigo_vendedor', '') or 'USUARIO'
+    vendedor_nombre = emisor.get('nombre_vendedor', '') or 'Sin vendedor'
     correlativo = doc.get('folio', '')
-    observacion = f"^ Vendedor: {vendedor_codigo} ^ Correlativo Interno: {correlativo} "
+    correlativo_ticket = emisor.get('correlativo_ticket', '')
+    metodos_pago = emisor.get('metodos_pago', '')
+    
+    # Construir observación con toda la información
+    observacion = f"^ Vendedor: {vendedor_nombre} (Cod: {vendedor_codigo}) ^ Ticket: {correlativo_ticket} ^ DTE: {correlativo} ^ Pago: {metodos_pago} "
     
     linea_obs = [
         vendedor_codigo,
@@ -1628,6 +1510,10 @@ def generar_txt_dte_acepta(datos):
     elif tipo_doc == 61:
         logger.warning(f"🔍 Detectado tipo NOTA DE CRÉDITO ({tipo_doc}), usando formato específico de NC")
         return generar_txt_nota_credito_acepta(datos)
+    elif tipo_doc == 52:
+        logger.warning(f"🔍 Detectado tipo GUÍA DE DESPACHO ({tipo_doc}), usando formato de factura")
+        # Guía de Despacho usa el mismo formato que Factura, solo cambia el tipo
+        # Se procesa con el código de factura normal
     
     separador = '|'
     lineas = []
@@ -1671,6 +1557,8 @@ def generar_txt_dte_acepta(datos):
     
     # ===== LÍNEA 2: DATOS DEL EMISOR =====
     emisor = datos['emisor']
+    # ✅ Usar alias de sucursal en lugar de codigo_vendedor
+    alias_sucursal = limpiar_texto(emisor.get('sucursal', ''), 60) or emisor.get('codigo_vendedor', '') or 'USUARIO'
     linea2 = [
         formatear_rut(emisor.get('rut', '')),
         limpiar_texto(emisor.get('razon_social', ''), 100),
@@ -1681,7 +1569,7 @@ def generar_txt_dte_acepta(datos):
         limpiar_texto(emisor.get('direccion', ''), 60),
         limpiar_texto(emisor.get('comuna', ''), 20),
         limpiar_texto(emisor.get('ciudad', ''), 20),
-        limpiar_texto(emisor.get('codigo_vendedor', ''), 60) or 'USUARIO',
+        alias_sucursal,  # ✅ CAMBIO: Usar alias de sucursal
         '}'  # ✅ CIERRE CON }
     ]
     lineas.append(separador.join(linea2))
@@ -1814,8 +1702,8 @@ def generar_txt_dte_acepta(datos):
     lineas.append('~')
     
     # ===== LÍNEA INFORMACIÓN ADICIONAL =====
-    # ✅ PROBLEMA 4 y 5: Monto en letras completo y pipes correctos
-    vendedor_codigo = datos.get('emisor', {}).get('codigo_vendedor', '') or 'USUARIO'
+    # ✅ Usar alias de sucursal en lugar de código vendedor
+    vendedor_codigo = datos.get('emisor', {}).get('sucursal', '') or datos.get('emisor', {}).get('codigo_vendedor', '') or 'USUARIO'
     monto_total = totales.get('monto_total', 0)
     
     # Convertir monto a letras (COMPLETO)
@@ -1832,6 +1720,16 @@ def generar_txt_dte_acepta(datos):
         logger.warning(f"⚠️ Error al convertir monto a letras: {e}")
         monto_letras = f"{int(monto_total)} PESOS"
     
+    total_productos = sum(int(item.get('cantidad') or 0) for item in datos.get('detalle', []))
+    observaciones_generales = datos.get('observaciones_adicionales') or datos.get('observaciones') or ''
+    observaciones_generales = limpiar_texto(observaciones_generales, 200)
+    observacion_texto = ''
+    if tipo_doc == 33 and observaciones_generales:
+        observacion_texto = f"  {observaciones_generales}"
+
+    info_texto = f"{monto_letras}  total Productos: {total_productos}{observacion_texto}"
+    info_texto = limpiar_texto(info_texto, 1000)
+    
     # ✅ CORRECCIÓN: Línea final con formato correcto
     # Formato real: vendedor|||observacion  |||||||impresora|4|}
     # Ejemplo: King Angulo|||CINCO MILLONES...PESOS (Total Art 51)  |||||||FACTURA MATTA 2438|4|}
@@ -1839,7 +1737,7 @@ def generar_txt_dte_acepta(datos):
         vendedor_codigo,  # 1. Código vendedor
         '',  # 2. Campo vacío
         '',  # 3. Campo vacío
-        f"{monto_letras}  ",  # 4. Observación/Monto con 2 espacios al final
+        info_texto,  # 4. Observación/Monto con info adicional
         '', '', '', '', '', '', '',  # 5-11. 7 campos vacíos
         'HP LaserJet Professional P1102w',  # 12. Impresora
         '4',  # 13. Copias
@@ -1885,6 +1783,10 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         else:
             raise ValidationError(f"No se encontró el ticket {ticket_id}")
     
+    # Validar que no sea BOLETA PAPEL (no genera TXT)
+    if tipo_dte == 'BOLETA_PAPEL' or tipo_dte == 'BOLETA PAPEL':
+        raise ValidationError('Las Boletas de Papel no generan archivo TXT')
+    
     # Obtener empresa (emisor)
     empresa = ticket.sucursal.empresa
     
@@ -1922,6 +1824,7 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         'comuna': empresa.comuna,
         'ciudad': empresa.ciudad,
         'codigo_vendedor': ticket.responsable or 'USUARIO',
+        'sucursal': ticket.sucursal.alias if ticket.sucursal else '',  # ✅ Alias de sucursal
         'telefono': empresa.contacto1 or ''
     }
     
@@ -1954,9 +1857,9 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         producto = producto_talla.producto
         
         detalle.append({
-            'codigo': producto.codigo or f'PROD{producto.id}',
-            'sku': producto.sku or '',
-            'nombre': f"{producto.nombre} {producto_talla.marca.nombre if producto_talla.marca else ''} {producto_talla.talla}",
+            'codigo': producto.articulo or f'PROD{producto.id}',  # CORREGIDO: articulo no codigo
+            'sku': str(producto_talla.sku) if producto_talla.sku else '',
+            'nombre': f"{producto.articulo} {producto.atributo1.valor if producto.atributo1 else ''} {producto_talla.talla}".strip(),
             'descripcion': producto.descripcion or '',
             'cantidad': item.stock,
             'unidad': 'UN',
@@ -2166,63 +2069,138 @@ def generar_txt_desde_dte_existente(request):
                 'error': 'No tiene permisos para este DTE'
             }, status=403)
         
+        # Validar que no sea BOLETA PAPEL (no genera TXT)
+        if dte.tipo_documento == 'BOLETA PAPEL':
+            return JsonResponse({
+                'success': False,
+                'error': 'Las Boletas de Papel no generan archivo TXT'
+            }, status=400)
+        
+        # Mapear tipo de documento a código numérico
+        tipo_mapping = {
+            'FACTURA_ELECTRONICA': 33,
+            'FACTURA_EXENTA': 34,
+            'BOLETA_ELECTRONICA': 39,
+            'BOLETA_EXENTA': 41,
+            'GUIA_DESPACHO': 52,
+            'NOTA_CREDITO': 61
+        }
+        tipo_numerico = tipo_mapping.get(dte.tipo_documento, 33)
+        
+        # Calcular IVA desde monto_con_iva y monto_neto
+        iva_calculado = int(dte.monto_con_iva - dte.monto_neto)
+        
         # Construir diccionario de datos desde el DTE
         datos = {
             'documento': {
-                'tipo_documento': dte.tipo_documento,
-                'folio': dte.numero_dte,
-                'fecha_emision': dte.fecha_emision,
-                'fecha_vencimiento': dte.fecha_vencimiento,
-                'forma_pago': 1 if dte.fecha_vencimiento == dte.fecha_emision else 2,  # 1=Contado, 2=Crédito
-                'timestamp': timezone.now()
+                'tipo_documento': tipo_numerico,
+                'folio': dte.numero_documento,  # ✅ Campo correcto
+                'fecha_emision': dte.fecha_emision.strftime('%Y-%m-%d'),
+                'fecha_vencimiento': dte.fecha_vencimiento.strftime('%Y-%m-%d') if dte.fecha_vencimiento else '',
+                'forma_pago': 1 if dte.fecha_vencimiento == dte.fecha_emision else 2,
+                'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
             },
             'emisor': {
                 'rut': dte.emisor.rut,
-                'razon_social': dte.emisor.nombre,
+                'razon_social': dte.emisor.razon_social,  # ✅ Campo correcto
                 'giro': dte.emisor.giro or '',
+                'acteco': dte.emisor.acteco or '',  # ✅ Nuevo campo
                 'direccion': dte.emisor.direccion or '',
                 'comuna': dte.emisor.comuna or '',
                 'ciudad': dte.emisor.ciudad or '',
-                'telefono': dte.emisor.telefono or ''
+                'codigo_vendedor': dte.responsable or 'USUARIO',
+                'sucursal': dte.sucursal.alias if dte.sucursal else '',  # ✅ Alias de sucursal
+                'telefono': dte.emisor.contacto1 or ''  # ✅ Nuevo campo
             },
             'receptor': {
-                'rut': dte.receptor.rut,
-                'razon_social': dte.receptor.nombre,
-                'giro': dte.receptor.giro or '',
-                'direccion': dte.receptor.direccion or '',
-                'comuna': dte.receptor.comuna or '',
-                'ciudad': dte.receptor.ciudad or ''
+                'rut': dte.receptor.rut if dte.receptor else '66666666-6',
+                'razon_social': dte.receptor.razon_social if dte.receptor else 'CONSUMIDOR FINAL',
+                'giro': dte.receptor.giro if dte.receptor else '',
+                'direccion': dte.receptor.direccion if dte.receptor else '',
+                'comuna': dte.receptor.comuna if dte.receptor else '',
+                'ciudad': dte.receptor.ciudad if dte.receptor else ''
             },
             'totales': {
-                'monto_neto': dte.subtotal - (dte.descuento_global or 0),
+                'monto_neto': int(dte.monto_neto),  # ✅ Campo correcto
                 'monto_exento': 0,
-                'tasa_iva': Decimal('19.00'),
-                'iva': dte.iva,
-                'monto_total': dte.total
+                'tasa_iva': 19,
+                'iva': iva_calculado,  # ✅ Calculado
+                'monto_total': int(dte.monto_con_iva),  # ✅ Campo correcto
+                'descuento_global': int(dte.descuento) if dte.descuento else 0
             },
-            'detalle': []
+            'detalle': [],
+            'referencias': []
         }
         
-        # Agregar productos
-        for dte_producto in dte.dte_productos.select_related('productoTalla__producto', 'productoTalla__talla'):
+        # ✅ Agrupar productos por artículo para consolidar tallas
+        from collections import defaultdict
+        productos_agrupados = defaultdict(lambda: {
+            'tallas': [],
+            'cantidad_total': 0,
+            'precio': 0,
+            'monto_total': 0,
+            'producto': None,
+            'articulo': '',
+            'marca': '',
+            'color': ''
+        })
+        
+        # Agrupar por artículo
+        for dte_producto in dte.dte_productos.select_related('productoTalla__producto'):
+            producto = dte_producto.productoTalla.producto
+            producto_talla = dte_producto.productoTalla
+            articulo_key = producto.articulo
+            
+            grupo = productos_agrupados[articulo_key]
+            
+            # Agregar talla al grupo
+            talla_nombre = str(producto_talla.talla) if hasattr(producto_talla, 'talla') and producto_talla.talla else 'U'
+            grupo['tallas'].append(f"{dte_producto.stock}:{talla_nombre}")
+            grupo['cantidad_total'] += dte_producto.stock
+            grupo['precio'] = dte_producto.precio  # Mismo precio
+            grupo['monto_total'] += dte_producto.stock * dte_producto.precio
+            grupo['producto'] = producto
+            grupo['articulo'] = producto.articulo
+            
+            # Obtener marca y color si existen
+            if not grupo['marca'] and producto.atributo1:
+                grupo['marca'] = producto.atributo1.valor
+            if not grupo['color'] and producto.atributo2:
+                grupo['color'] = producto.atributo2.valor
+        
+        # Convertir grupos a detalle
+        for articulo, grupo in productos_agrupados.items():
+            # Formato: MARCA COLOR <tallas>
+            tallas_str = ' '.join(grupo['tallas'])  # 2:5,5 3:6
+            marca_color = f"{grupo['marca']} {grupo['color']}".strip() if grupo['marca'] or grupo['color'] else ''
+            nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
+            
             datos['detalle'].append({
-                'nombre': dte_producto.productoTalla.producto.nombre,
-                'descripcion': f"{dte_producto.productoTalla.producto.nombre} - Talla {dte_producto.productoTalla.talla.nombre if dte_producto.productoTalla.talla else 'Única'}",
-                'cantidad': dte_producto.cantidad,
+                'nombre': nombre_final,
+                'descripcion': '',
+                'cantidad': grupo['cantidad_total'],
                 'unidad': 'UN',
-                'precio_unitario': dte_producto.precio_unitario,
+                'precio_unitario': grupo['precio'],
                 'descuento_pct': 0,
-                'monto_descuento': dte_producto.descuento_unitario * dte_producto.cantidad,
-                'monto_item': dte_producto.cantidad * (dte_producto.precio_unitario - dte_producto.descuento_unitario),
-                'sku': dte_producto.productoTalla.sku,  # Agregar SKU
-                'codigo': dte_producto.productoTalla.sku  # Código del producto
+                'monto_descuento': 0,
+                'monto_item': grupo['monto_total'],
+                'codigo': grupo['articulo']  # Artículo como código
             })
+        
+        # Agregar referencias si existen
+        if dte.referencias:
+            try:
+                import json as json_lib
+                refs = json_lib.loads(dte.referencias) if isinstance(dte.referencias, str) else []
+                datos['referencias'] = refs
+            except:
+                pass
         
         # Generar TXT
         contenido_txt = generar_txt_dte_acepta(datos)
         
         # Crear nombre del archivo
-        nombre_archivo = f"dte_{dte.tipo_documento}_{dte.numero_dte}_{dte.fecha_emision.strftime('%Y%m%d')}.txt"
+        nombre_archivo = f"dte_{tipo_numerico}_{dte.numero_documento}_{dte.fecha_emision.strftime('%Y%m%d')}.txt"
         
         # Retornar como archivo descargable
         response = HttpResponse(contenido_txt, content_type='text/plain; charset=utf-8')

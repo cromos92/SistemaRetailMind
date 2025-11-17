@@ -7,27 +7,6 @@
 <div class="page-content">
     <div class="container-fluid">
         
-        <!-- Header -->
-        <div class="row mb-4">
-            <div class="col">
-                <h1 class="h3 mb-0">
-                    <i class="ri-file-list-line text-primary"></i> Consulta de DTEs
-                </h1>
-                <p class="text-muted mb-0">Consulta de Documentos Tributarios Electrónicos (Facturas y Boletas)</p>
-                <small class="text-info">
-                    <i class="ri-information-line"></i> Visualiza boletas y facturas electrónicas emitidas
-                </small>
-            </div>
-            <div class="col-auto">
-                <span class="badge bg-primary fs-6 me-2">
-                    <i class="ri-user-line"></i> {{ user.username }}
-                </span>
-                <span class="badge bg-info fs-6">
-                    <i class="ri-building-line"></i> {{ sucursal_actual.alias|default:"Sin sucursal" }}
-                </span>
-            </div>
-        </div>
-
         <!-- Filtros y Controles -->
         <div class="card shadow-sm mb-4">
             <div class="card-body">
@@ -45,6 +24,7 @@
                         <select class="form-select" id="tipoDocumento">
                             <option value="">Todos los DTEs</option>
                             <option value="BOLETA_ELECTRONICA">Boletas Electrónicas</option>
+                            <option value="BOLETA_PAPEL">Boletas Papel</option>
                             <option value="FACTURA_ELECTRONICA">Facturas Electrónicas</option>
                             <option value="FACTURA_EXENTA">Facturas Exentas</option>
                         </select>
@@ -408,21 +388,24 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function inicializarFechas() {
         const hoy = new Date();
-        const hace30Dias = new Date();
-        hace30Dias.setDate(hoy.getDate() - 30);
-        
+        const formatearParaInput = (fecha) => {
+            const ajusteZona = fecha.getTimezoneOffset() * 60000;
+            return new Date(fecha.getTime() - ajusteZona).toISOString().split('T')[0];
+        };
+        const fechaFormateada = formatearParaInput(hoy);
+
         const fechaDesde = document.getElementById('fechaDesde');
         const fechaHasta = document.getElementById('fechaHasta');
         const fechaEmision = document.getElementById('fechaEmision');
         
         if (fechaDesde) {
-            fechaDesde.value = hace30Dias.toISOString().split('T')[0];
+            fechaDesde.value = fechaFormateada;
         }
         if (fechaHasta) {
-            fechaHasta.value = hoy.toISOString().split('T')[0];
+            fechaHasta.value = fechaFormateada;
         }
         if (fechaEmision) {
-            fechaEmision.value = hoy.toISOString().split('T')[0];
+            fechaEmision.value = fechaFormateada;
         }
     }
 
@@ -761,12 +744,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function formatearFecha(fecha) {
-        return new Date(fecha).toLocaleDateString('es-CL');
+        if (!fecha) return '';
+
+        if (fecha instanceof Date && !isNaN(fecha.getTime())) {
+            return fecha.toLocaleDateString('es-CL');
+        }
+
+        if (typeof fecha === 'string') {
+            const partes = fecha.split('-').map(Number);
+            if (partes.length === 3 && partes.every(num => !isNaN(num))) {
+                const [anio, mes, dia] = partes;
+                const fechaLocal = new Date(anio, mes - 1, dia);
+                return fechaLocal.toLocaleDateString('es-CL');
+            }
+        }
+
+        const fechaParsed = new Date(fecha);
+        if (!isNaN(fechaParsed.getTime())) {
+            return fechaParsed.toLocaleDateString('es-CL');
+        }
+
+        return '';
     }
 
     function obtenerClaseTipo(tipo) {
         const clases = {
             'TICKET': 'bg-primary',
+            'BOLETA ELECTRONICA': 'bg-info',
+            'BOLETA PAPEL': 'bg-secondary',
+            'FACTURA ELECTRONICA': 'bg-success',
+            'FACTURA EXENTA': 'bg-warning',
+            // Fallbacks para compatibilidad
             'BOLETA': 'bg-info',
             'FACTURA': 'bg-success'
         };

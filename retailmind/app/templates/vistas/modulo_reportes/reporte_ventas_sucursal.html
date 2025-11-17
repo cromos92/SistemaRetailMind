@@ -1,0 +1,1128 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="display-5 mb-2 fw-bold">
+                    <i class="ri-bar-chart-box-line text-primary"></i> Reporte de Ventas
+                </h1>
+                <p class="text-muted mb-0 fs-5">Análisis mensual de ventas por vendedor y sucursal</p>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">
+                            <i class="ri-filter-3-line text-primary"></i> Filtros de Búsqueda
+                        </h5>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="filtroMes" class="form-label">Mes</label>
+                                <input type="month" class="form-control" id="filtroMes">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filtroSucursal" class="form-label">Sucursal</label>
+                                <select class="form-select" id="filtroSucursal">
+                                    <option value="">Todas las sucursales</option>
+                                    <!-- Se llenará dinámicamente desde la API -->
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filtroVendedor" class="form-label">Vendedor</label>
+                                <select class="form-select" id="filtroVendedor">
+                                    <option value="">Todos los vendedores</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary w-100" id="btnFiltrar">
+                                    <i class="ri-search-line"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Indicadores KPI -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-primary bg-soft">
+                                    <span class="avatar-title rounded-circle bg-primary">
+                                        <i class="ri-money-dollar-circle-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Total Ventas</p>
+                                <h3 class="fs-3 fw-bold mb-0" id="totalVentas">
+                                    <span class="counter-value">$0</span>
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-success bg-soft">
+                                    <span class="avatar-title rounded-circle bg-success">
+                                        <i class="ri-file-list-3-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Total Documentos</p>
+                                <h3 class="fs-3 fw-bold mb-0" id="totalDocumentos">
+                                    <span class="counter-value">0</span>
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-info bg-soft">
+                                    <span class="avatar-title rounded-circle bg-info">
+                                        <i class="ri-calculator-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Ticket Promedio</p>
+                                <h3 class="fs-3 fw-bold mb-0" id="ticketPromedio">
+                                    <span class="counter-value">$0</span>
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="avatar-sm rounded-circle bg-warning bg-soft">
+                                    <span class="avatar-title rounded-circle bg-warning">
+                                        <i class="ri-trophy-line text-white"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Top Vendedor</p>
+                                <h3 class="fs-6 fw-bold mb-0" id="topVendedor">
+                                    <span>-</span>
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs de Reportes -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <ul class="nav nav-tabs nav-tabs-custom card-header-tabs border-bottom-0" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#tabVendedores" role="tab">
+                                    <i class="ri-user-line"></i> Ventas por Vendedores
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabSucursales" role="tab">
+                                    <i class="ri-store-2-line"></i> Ventas por Sucursal
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content">
+                            <!-- Tab Vendedores -->
+                            <div class="tab-pane fade show active" id="tabVendedores" role="tabpanel">
+                                <div class="row">
+                                    <!-- Gráfico de Barras - Top Vendedores -->
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h5 class="card-title mb-0">
+                                                    <i class="ri-bar-chart-fill text-primary"></i> Top 10 Vendedores
+                                                </h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartTopVendedores" style="min-height: 350px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gráfico Circular - Participación -->
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h5 class="card-title mb-0">
+                                                    <i class="ri-pie-chart-fill text-success"></i> Participación en Ventas
+                                                </h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartParticipacionVendedores" style="min-height: 350px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tabla Detallada de Vendedores -->
+                                    <div class="col-12">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                                <h5 class="card-title mb-0">
+                                                    <i class="ri-table-line text-info"></i> Detalle por Vendedor
+                                                </h5>
+                                                <div>
+                                                    <button class="btn btn-sm btn-success" id="btnExportarVendedores">
+                                                        <i class="ri-file-excel-line"></i> Exportar Excel
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" id="btnPDFVendedores">
+                                                        <i class="ri-file-pdf-line"></i> Exportar PDF
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-hover table-striped align-middle mb-0" id="tablaVendedores">
+                                                        <thead class="table-primary">
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Vendedor</th>
+                                                                <th class="text-end">Total Ventas</th>
+                                                                <th class="text-center">N° Documentos</th>
+                                                                <th class="text-end">Ticket Promedio</th>
+                                                                <th class="text-center">% Participación</th>
+                                                                <th class="text-center">Acciones</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <!-- Se llenará dinámicamente -->
+                                                        </tbody>
+                                                        <tfoot class="table-secondary fw-bold">
+                                                            <tr>
+                                                                <td colspan="2" class="text-end">TOTALES:</td>
+                                                                <td class="text-end" id="totalVentasVendedores">$0</td>
+                                                                <td class="text-center" id="totalDocsVendedores">0</td>
+                                                                <td class="text-end" id="promedioVendedores">$0</td>
+                                                                <td class="text-center">100%</td>
+                                                                <td></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Sucursales -->
+                            <div class="tab-pane fade" id="tabSucursales" role="tabpanel">
+                                <div class="row">
+                                    <!-- Gráfico de Barras - Ventas por Sucursal -->
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h5 class="card-title mb-0">
+                                                    <i class="ri-bar-chart-horizontal-fill text-primary"></i> Ventas por Sucursal
+                                                </h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartVentasSucursales" style="min-height: 350px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gráfico de Línea - Evolución Mensual -->
+                                    <div class="col-lg-6 mb-4">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light">
+                                                <h5 class="card-title mb-0">
+                                                    <i class="ri-line-chart-fill text-warning"></i> Comparativa Mensual
+                                                </h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="chartComparativaSucursales" style="min-height: 350px;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tabla Detallada de Sucursales -->
+                                    <div class="col-12">
+                                        <div class="card border shadow-sm">
+                                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                                <h5 class="card-title mb-0">
+                                                    <i class="ri-table-line text-info"></i> Detalle por Sucursal
+                                                </h5>
+                                                <div>
+                                                    <button class="btn btn-sm btn-primary" id="btnImprimirSucursales">
+                                                        <i class="ri-printer-line"></i> Imprimir
+                                                    </button>
+                                                    <button class="btn btn-sm btn-success" id="btnExportarSucursales">
+                                                        <i class="ri-file-excel-line"></i> Exportar Excel
+                                                    </button>
+                                                    <button class="btn btn-sm btn-danger" id="btnPDFSucursales">
+                                                        <i class="ri-file-pdf-line"></i> Exportar PDF
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="table-responsive" id="tablaSucursalesContainer">
+                                                    <table class="table table-hover table-striped align-middle mb-0" id="tablaSucursales">
+                                                        <thead class="table-primary">
+                                                            <tr>
+                                                                <th>#</th>
+                                                                <th>Sucursal</th>
+                                                                <th class="text-end">Neto</th>
+                                                                <th class="text-end">IVA</th>
+                                                                <th class="text-end">Total Ventas</th>
+                                                                <th class="text-center">N° Documentos</th>
+                                                                <th class="text-end">Ticket Promedio</th>
+                                                                <th class="text-center">% Participación</th>
+                                                                <th class="text-center">N° Vendedores</th>
+                                                                <th class="text-center no-print">Acciones</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <!-- Se llenará dinámicamente -->
+                                                        </tbody>
+                                                        <tfoot class="table-secondary fw-bold">
+                                                            <tr>
+                                                                <td colspan="2" class="text-end">TOTALES:</td>
+                                                                <td class="text-end" id="totalNetoSucursales">$0</td>
+                                                                <td class="text-end" id="totalIVASucursales">$0</td>
+                                                                <td class="text-end" id="totalVentasSucursales">$0</td>
+                                                                <td class="text-center" id="totalDocsSucursales">0</td>
+                                                                <td class="text-end" id="promedioSucursales">$0</td>
+                                                                <td class="text-center">100%</td>
+                                                                <td class="text-center">-</td>
+                                                                <td class="no-print"></td>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar fecha actual
+    const hoy = new Date();
+    const mesActual = hoy.toISOString().slice(0, 7);
+    document.getElementById('filtroMes').value = mesActual;
+
+    // Variables globales para los gráficos
+    let chartTopVendedores;
+    let chartParticipacionVendedores;
+    let chartVentasSucursales;
+    let chartComparativaSucursales;
+
+    // Cargar sucursales y vendedores
+    cargarSucursales();
+    cargarVendedores();
+    
+    // Cargar datos iniciales
+    cargarDatos();
+
+    // Event listeners
+    document.getElementById('btnFiltrar').addEventListener('click', cargarDatos);
+    document.getElementById('filtroSucursal').addEventListener('change', function() {
+        cargarVendedores(); // Recargar vendedores según sucursal
+    });
+    document.getElementById('btnExportarVendedores').addEventListener('click', exportarVendedoresExcel);
+    document.getElementById('btnPDFVendedores').addEventListener('click', exportarVendedoresPDF);
+    document.getElementById('btnImprimirSucursales').addEventListener('click', imprimirSucursales);
+    document.getElementById('btnExportarSucursales').addEventListener('click', exportarSucursalesExcel);
+    document.getElementById('btnPDFSucursales').addEventListener('click', exportarSucursalesPDF);
+
+    // Función para cargar sucursales
+    function cargarSucursales() {
+        fetch('/app/api/reportes/sucursales/')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Sucursales cargadas:', data);
+                if (data.success) {
+                    const selectSucursal = document.getElementById('filtroSucursal');
+                    // Limpiar opciones actuales (excepto "Todas")
+                    selectSucursal.innerHTML = '<option value="">Todas las sucursales</option>';
+                    
+                    if (data.sucursales && data.sucursales.length > 0) {
+                        data.sucursales.forEach(s => {
+                            const option = document.createElement('option');
+                            option.value = s.id;
+                            option.textContent = s.nombre;
+                            selectSucursal.appendChild(option);
+                        });
+                        console.log(`✓ ${data.sucursales.length} sucursales cargadas`);
+                    } else {
+                        console.warn('No hay sucursales disponibles');
+                    }
+                } else {
+                    console.error('Error en respuesta:', data.error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'No se pudieron cargar las sucursales: ' + (data.error || 'Error desconocido')
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando sucursales:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo conectar con el servidor para cargar las sucursales'
+                });
+            });
+    }
+
+    // Función para cargar vendedores
+    function cargarVendedores() {
+        const sucursalId = document.getElementById('filtroSucursal').value;
+        const url = sucursalId ? 
+            `/app/api/reportes/vendedores/?sucursal_id=${sucursalId}` : 
+            '/app/api/reportes/vendedores/';
+            
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Vendedores cargados:', data);
+                if (data.success) {
+                    const selectVendedor = document.getElementById('filtroVendedor');
+                    // Limpiar opciones actuales (excepto "Todos")
+                    selectVendedor.innerHTML = '<option value="">Todos los vendedores</option>';
+                    
+                    if (data.vendedores && data.vendedores.length > 0) {
+                        data.vendedores.forEach(v => {
+                            const option = document.createElement('option');
+                            option.value = v.id;
+                            option.textContent = v.nombre;
+                            selectVendedor.appendChild(option);
+                        });
+                        console.log(`✓ ${data.vendedores.length} vendedores cargados`);
+                    } else {
+                        console.warn('No hay vendedores disponibles');
+                    }
+                } else {
+                    console.error('Error en respuesta:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando vendedores:', error);
+            });
+    }
+
+    // Función principal para cargar datos
+    function cargarDatos() {
+        const mes = document.getElementById('filtroMes').value;
+        const sucursal = document.getElementById('filtroSucursal').value;
+        const vendedor = document.getElementById('filtroVendedor').value;
+
+        // Cargar datos de vendedores
+        cargarDatosVendedores(mes, sucursal, vendedor);
+        
+        // Cargar datos de sucursales
+        cargarDatosSucursales(mes, sucursal);
+        
+        // Cargar comparativa mensual
+        cargarComparativaMensual(sucursal);
+    }
+
+    // Cargar datos de vendedores desde API
+    function cargarDatosVendedores(mes, sucursal, vendedor) {
+        let url = '/app/api/reportes/ventas-por-vendedor/?';
+        if (mes) url += `mes=${mes}&`;
+        if (sucursal) url += `sucursal_id=${sucursal}&`;
+        if (vendedor) url += `vendedor_id=${vendedor}&`;
+        
+        console.log('Cargando ventas por vendedor:', url);
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Datos de vendedores recibidos:', data);
+                if (data.success) {
+                    // Actualizar KPIs
+                    document.getElementById('totalVentas').innerHTML = 
+                        `<span class="counter-value">$${formatearNumero(data.kpis.total_ventas)}</span>`;
+                    document.getElementById('totalDocumentos').innerHTML = 
+                        `<span class="counter-value">${data.kpis.total_documentos}</span>`;
+                    document.getElementById('ticketPromedio').innerHTML = 
+                        `<span class="counter-value">$${formatearNumero(data.kpis.ticket_promedio)}</span>`;
+                    document.getElementById('topVendedor').innerHTML = 
+                        `<span>${data.kpis.top_vendedor}</span>`;
+                    
+                    // Llenar tabla
+                    llenarTablaVendedores(data.vendedores, data.kpis.total_ventas, data.kpis.total_documentos);
+                    
+                    // Crear gráficos
+                    crearGraficosVendedores(data.vendedores);
+                    
+                    console.log('✓ Datos de vendedores cargados correctamente');
+                } else {
+                    console.error('Error en respuesta:', data.error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'No se pudieron cargar los datos: ' + (data.error || 'Error desconocido')
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando datos de vendedores:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo conectar con el servidor'
+                });
+            });
+    }
+
+    // Cargar datos de sucursales desde API
+    function cargarDatosSucursales(mes, sucursal) {
+        let url = '/app/api/reportes/ventas-por-sucursal/?';
+        if (mes) url += `mes=${mes}&`;
+        if (sucursal) url += `sucursal_id=${sucursal}&`;
+        
+        console.log('Cargando ventas por sucursal:', url);
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Datos de sucursales recibidos:', data);
+                if (data.success) {
+                    llenarTablaSucursales(data.sucursales);
+                    crearGraficosSucursales(data.sucursales);
+                    console.log('✓ Datos de sucursales cargados correctamente');
+                } else {
+                    console.error('Error en respuesta:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando datos de sucursales:', error);
+            });
+    }
+
+    // Cargar comparativa mensual
+    function cargarComparativaMensual(sucursal) {
+        let url = '/app/api/reportes/comparativa-mensual/?';
+        if (sucursal) url += `sucursal_id=${sucursal}`;
+        
+        console.log('Cargando comparativa mensual:', url);
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Datos de comparativa mensual recibidos:', data);
+                if (data.success) {
+                    crearGraficoComparativaMensual(data.series, data.categories);
+                    console.log('✓ Comparativa mensual cargada correctamente');
+                } else {
+                    console.error('Error en respuesta:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando comparativa mensual:', error);
+            });
+    }
+
+    // Llenar tabla de vendedores
+    function llenarTablaVendedores(datos, totalVentas, totalDocs) {
+        const tbody = document.querySelector('#tablaVendedores tbody');
+        tbody.innerHTML = '';
+
+        if (!datos || datos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos para mostrar</td></tr>';
+            document.getElementById('totalVentasVendedores').textContent = '$0';
+            document.getElementById('totalDocsVendedores').textContent = '0';
+            document.getElementById('promedioVendedores').textContent = '$0';
+            return;
+        }
+
+        datos.forEach((vendedor, index) => {
+            const ticketPromedio = vendedor.documentos > 0 ? vendedor.ventas / vendedor.documentos : 0;
+            const row = `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td><strong>${vendedor.nombre}</strong></td>
+                    <td class="text-end">$${formatearNumero(vendedor.ventas)}</td>
+                    <td class="text-center">${vendedor.documentos}</td>
+                    <td class="text-end">$${formatearNumero(ticketPromedio)}</td>
+                    <td class="text-center">
+                        <span class="badge bg-primary">${vendedor.participacion.toFixed(1)}%</span>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-info" onclick="verDetalleVendedor(${vendedor.id})">
+                            <i class="ri-eye-line"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+
+        const promedioTicket = totalDocs > 0 ? totalVentas / totalDocs : 0;
+        document.getElementById('totalVentasVendedores').textContent = '$' + formatearNumero(totalVentas);
+        document.getElementById('totalDocsVendedores').textContent = totalDocs;
+        document.getElementById('promedioVendedores').textContent = '$' + formatearNumero(promedioTicket);
+    }
+
+    // Llenar tabla de sucursales
+    function llenarTablaSucursales(datos) {
+        const tbody = document.querySelector('#tablaSucursales tbody');
+        tbody.innerHTML = '';
+
+        if (!datos || datos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">No hay datos para mostrar</td></tr>';
+            document.getElementById('totalNetoSucursales').textContent = '$0';
+            document.getElementById('totalIVASucursales').textContent = '$0';
+            document.getElementById('totalVentasSucursales').textContent = '$0';
+            document.getElementById('totalDocsSucursales').textContent = '0';
+            document.getElementById('promedioSucursales').textContent = '$0';
+            return;
+        }
+
+        const totalVentas = datos.reduce((sum, s) => sum + s.ventas, 0);
+        const totalNeto = datos.reduce((sum, s) => sum + s.neto, 0);
+        const totalIVA = datos.reduce((sum, s) => sum + s.iva, 0);
+        const totalDocs = datos.reduce((sum, s) => sum + s.documentos, 0);
+
+        datos.forEach((sucursal, index) => {
+            const ticketPromedio = sucursal.documentos > 0 ? sucursal.ventas / sucursal.documentos : 0;
+            const row = `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td><strong>${sucursal.nombre}</strong></td>
+                    <td class="text-end">$${formatearNumero(sucursal.neto)}</td>
+                    <td class="text-end">$${formatearNumero(sucursal.iva)}</td>
+                    <td class="text-end">$${formatearNumero(sucursal.ventas)}</td>
+                    <td class="text-center">${sucursal.documentos}</td>
+                    <td class="text-end">$${formatearNumero(ticketPromedio)}</td>
+                    <td class="text-center">
+                        <span class="badge bg-success">${sucursal.participacion.toFixed(1)}%</span>
+                    </td>
+                    <td class="text-center">${sucursal.vendedores}</td>
+                    <td class="text-center no-print">
+                        <button class="btn btn-sm btn-info" onclick="verDetalleSucursal(${sucursal.id})">
+                            <i class="ri-eye-line"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+
+        const promedioTicket = totalDocs > 0 ? totalVentas / totalDocs : 0;
+        document.getElementById('totalNetoSucursales').textContent = '$' + formatearNumero(totalNeto);
+        document.getElementById('totalIVASucursales').textContent = '$' + formatearNumero(totalIVA);
+        document.getElementById('totalVentasSucursales').textContent = '$' + formatearNumero(totalVentas);
+        document.getElementById('totalDocsSucursales').textContent = totalDocs;
+        document.getElementById('promedioSucursales').textContent = '$' + formatearNumero(promedioTicket);
+    }
+
+    // Crear gráficos de vendedores
+    function crearGraficosVendedores(datos) {
+        // Gráfico de barras - Top Vendedores
+        const optionsBarras = {
+            series: [{
+                name: 'Ventas',
+                data: datos.map(v => v.ventas)
+            }],
+            chart: {
+                type: 'bar',
+                height: 350,
+                toolbar: {
+                    show: true
+                }
+            },
+            plotOptions: {
+                bar: {
+                    borderRadius: 8,
+                    horizontal: false,
+                    dataLabels: {
+                        position: 'top',
+                    },
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function(val) {
+                    return '$' + (val / 1000000).toFixed(1) + 'M';
+                },
+                offsetY: -20,
+                style: {
+                    fontSize: '12px',
+                    colors: ["#304758"]
+                }
+            },
+            xaxis: {
+                categories: datos.map(v => v.nombre),
+                labels: {
+                    rotate: -45,
+                    style: {
+                        fontSize: '11px'
+                    }
+                }
+            },
+            yaxis: {
+                labels: {
+                    formatter: function(val) {
+                        return '$' + (val / 1000000).toFixed(1) + 'M';
+                    }
+                }
+            },
+            colors: ['#4154f1'],
+            tooltip: {
+                y: {
+                    formatter: function(val) {
+                        return '$' + formatearNumero(val);
+                    }
+                }
+            }
+        };
+
+        if (chartTopVendedores) {
+            chartTopVendedores.destroy();
+        }
+        chartTopVendedores = new ApexCharts(document.querySelector("#chartTopVendedores"), optionsBarras);
+        chartTopVendedores.render();
+
+        // Gráfico circular - Participación
+        const optionsDonut = {
+            series: datos.map(v => v.participacion),
+            chart: {
+                type: 'donut',
+                height: 350
+            },
+            labels: datos.map(v => v.nombre),
+            colors: ['#4154f1', '#2eca6a', '#ff771d', '#f1416c', '#7239ea', '#50cd89'],
+            legend: {
+                position: 'bottom'
+            },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '65%',
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Total',
+                                formatter: function(w) {
+                                    return '100%';
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function(val) {
+                    return val.toFixed(1) + '%';
+                }
+            }
+        };
+
+        if (chartParticipacionVendedores) {
+            chartParticipacionVendedores.destroy();
+        }
+        chartParticipacionVendedores = new ApexCharts(document.querySelector("#chartParticipacionVendedores"), optionsDonut);
+        chartParticipacionVendedores.render();
+    }
+
+    // Crear gráficos de sucursales
+    function crearGraficosSucursales(datos) {
+        // Gráfico de barras - Ventas por Sucursal
+        const optionsBarras = {
+            series: [{
+                name: 'Ventas',
+                data: datos.map(s => s.ventas)
+            }],
+            chart: {
+                type: 'bar',
+                height: 350,
+                toolbar: {
+                    show: true
+                }
+            },
+            plotOptions: {
+                bar: {
+                    borderRadius: 8,
+                    horizontal: true,
+                    dataLabels: {
+                        position: 'top',
+                    },
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function(val) {
+                    return '$' + (val / 1000000).toFixed(1) + 'M';
+                },
+                offsetX: 30,
+                style: {
+                    fontSize: '12px',
+                    colors: ["#fff"]
+                }
+            },
+            xaxis: {
+                categories: datos.map(s => s.nombre),
+                labels: {
+                    formatter: function(val) {
+                        return '$' + (val / 1000000).toFixed(1) + 'M';
+                    }
+                }
+            },
+            colors: ['#2eca6a'],
+            tooltip: {
+                y: {
+                    formatter: function(val) {
+                        return '$' + formatearNumero(val);
+                    }
+                }
+            }
+        };
+
+        if (chartVentasSucursales) {
+            chartVentasSucursales.destroy();
+        }
+        chartVentasSucursales = new ApexCharts(document.querySelector("#chartVentasSucursales"), optionsBarras);
+        chartVentasSucursales.render();
+    }
+
+    // Crear gráfico de comparativa mensual (función separada que se llama desde la API)
+    function crearGraficoComparativaMensual(series, categories) {
+        const optionsLinea = {
+            series: series,
+            chart: {
+                type: 'line',
+                height: 350,
+                toolbar: {
+                    show: true
+                }
+            },
+            stroke: {
+                curve: 'smooth',
+                width: 3
+            },
+            xaxis: {
+                categories: categories
+            },
+            yaxis: {
+                labels: {
+                    formatter: function(val) {
+                        return '$' + (val / 1000000).toFixed(1) + 'M';
+                    }
+                }
+            },
+            colors: ['#4154f1', '#2eca6a', '#ff771d', '#f1416c', '#7239ea'],
+            markers: {
+                size: 5,
+                hover: {
+                    size: 7
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: function(val) {
+                        return '$' + formatearNumero(val);
+                    }
+                }
+            }
+        };
+
+        if (chartComparativaSucursales) {
+            chartComparativaSucursales.destroy();
+        }
+        chartComparativaSucursales = new ApexCharts(document.querySelector("#chartComparativaSucursales"), optionsLinea);
+        chartComparativaSucursales.render();
+    }
+
+    // Función de impresión
+    function imprimirSucursales() {
+        const mesSeleccionado = document.getElementById('filtroMes').value;
+        const sucursalSeleccionada = document.getElementById('filtroSucursal').options[document.getElementById('filtroSucursal').selectedIndex].text;
+        
+        // Obtener la fecha formateada
+        const fechaReporte = new Date().toLocaleDateString('es-CL', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        // Crear ventana de impresión
+        const ventanaImpresion = window.open('', '_blank');
+        
+        // Contenido HTML para imprimir
+        const contenidoHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Reporte Ventas por Sucursal</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        margin: 20px;
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 30px;
+                    }
+                    .header h1 {
+                        margin: 0;
+                        color: #333;
+                    }
+                    .header p {
+                        margin: 5px 0;
+                        color: #666;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 20px;
+                    }
+                    th, td {
+                        border: 1px solid #ddd;
+                        padding: 8px;
+                        text-align: left;
+                    }
+                    th {
+                        background-color: #4154f1;
+                        color: white;
+                    }
+                    .text-end {
+                        text-align: right;
+                    }
+                    .text-center {
+                        text-align: center;
+                    }
+                    tfoot {
+                        background-color: #f8f9fa;
+                        font-weight: bold;
+                    }
+                    .no-print {
+                        display: none;
+                    }
+                    @media print {
+                        .no-print {
+                            display: none !important;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>📊 Reporte de Ventas por Sucursal</h1>
+                    <p><strong>Período:</strong> ${mesSeleccionado || 'Todos'}</p>
+                    <p><strong>Sucursal:</strong> ${sucursalSeleccionada}</p>
+                    <p><strong>Fecha de Generación:</strong> ${fechaReporte}</p>
+                </div>
+                
+                ${document.getElementById('tablaSucursalesContainer').innerHTML}
+                
+                <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px;">
+                    <p>RetailMind - Sistema de Gestión de Ventas</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        ventanaImpresion.document.write(contenidoHTML);
+        ventanaImpresion.document.close();
+        
+        // Esperar a que se cargue el contenido y luego imprimir
+        ventanaImpresion.onload = function() {
+            ventanaImpresion.print();
+        };
+    }
+
+    // Funciones de exportación
+    function exportarVendedoresExcel() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Exportando a Excel',
+            text: 'Funcionalidad en desarrollo...',
+            timer: 2000
+        });
+    }
+
+    function exportarVendedoresPDF() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Generando PDF',
+            text: 'Funcionalidad en desarrollo...',
+            timer: 2000
+        });
+    }
+
+    function exportarSucursalesExcel() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Exportando a Excel',
+            text: 'Funcionalidad en desarrollo...',
+            timer: 2000
+        });
+    }
+
+    function exportarSucursalesPDF() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Generando PDF',
+            text: 'Funcionalidad en desarrollo...',
+            timer: 2000
+        });
+    }
+
+    // Función auxiliar para formatear números
+    function formatearNumero(numero) {
+        return new Intl.NumberFormat('es-CL').format(Math.round(numero));
+    }
+});
+
+// Funciones globales para los botones de detalle
+function verDetalleVendedor(id) {
+    Swal.fire({
+        icon: 'info',
+        title: 'Ver Detalle Vendedor',
+        text: 'ID: ' + id + ' - Funcionalidad en desarrollo...',
+        timer: 2000
+    });
+}
+
+function verDetalleSucursal(id) {
+    Swal.fire({
+        icon: 'info',
+        title: 'Ver Detalle Sucursal',
+        text: 'ID: ' + id + ' - Funcionalidad en desarrollo...',
+        timer: 2000
+    });
+}
+</script>
+
+<style>
+.card {
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(65, 84, 241, 0.05);
+}
+
+.counter-value {
+    display: inline-block;
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.nav-tabs-custom .nav-link {
+    border: none;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.nav-tabs-custom .nav-link.active {
+    color: #4154f1;
+    border-bottom: 3px solid #4154f1;
+}
+
+.avatar-sm {
+    height: 3rem;
+    width: 3rem;
+}
+
+.bg-soft {
+    background-color: rgba(65, 84, 241, 0.1);
+}
+
+/* Estilos para impresión */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+    
+    .btn {
+        display: none !important;
+    }
+}
+</style>
+

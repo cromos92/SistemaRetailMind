@@ -2,6 +2,7 @@ from retailmind import settings
 from . import views
 from django.shortcuts import render
 from . import views_modulo_compras
+from . import views_modulo_reportes
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -32,12 +33,15 @@ from .views_modulo_ventas import (
     editar_cuadratura,
     exportar_cuadratura_excel,
     obtener_transacciones_dia,
+    agregar_deposito_arqueo,
+    eliminar_deposito_bancario,
     listar_arqueos,
     crear_arqueo,
     guardar_conteo_fisico,
     cerrar_arqueo,
     corregir_arqueos_express,
     obtener_arqueo_detalle,
+    obtener_sucursales,
     # Funciones POS Transbank
     gestion_pos_transbank,
     detectar_terminales_pos,
@@ -57,7 +61,11 @@ from .views_modulo_ventas import (
     crear_cambio_devolucion,
     obtener_detalle_cambio,
     aprobar_cambio_devolucion,
+    aprobar_cambio_generar_ticket,
+    validar_codigo_vendedor,
     cancelar_cambio_devolucion,
+    ejecutar_cambio_devolucion,
+    registrar_pago_diferencia,
     completar_cambio_devolucion,
     buscar_ticket_para_cambio,
     buscar_documento_cambio,
@@ -161,6 +169,28 @@ from .views_edicion_productos import (
     eliminar_variacion,
     obtener_producto_desde_talla,
 )
+from .views_modulo_requerimientos import (
+    # Vistas principales
+    modulo_requerimientos,
+    crear_requerimiento_vista,
+    detalle_requerimiento_vista,
+    gestionar_requerimientos_vista,
+    # APIs
+    crear_requerimiento,
+    listar_requerimientos,
+    detalle_requerimiento,
+    actualizar_estado_requerimiento,
+    enviar_a_proveedor,
+    registrar_respuesta_proveedor,
+    completar_requerimiento,
+    buscar_producto_sku,
+    buscar_ticket_por_folio,
+    buscar_cliente_por_rut,
+    validar_rut_chileno,
+    crear_cliente_rapido,
+    obtener_estadisticas_requerimientos,
+    exportar_requerimientos,
+)
 from .views_transbank_sdk import (
     # Vistas
     gestion_transbank_pos_sdk,
@@ -220,6 +250,21 @@ urlpatterns = [
      path('eliminarNC/<int:nc_id>/', views.eliminarNotaCredito, name='eliminarNotaCredito'),
      path('obtenerDTE/<int:dte_id>/', views.obtener_dte, name='obtener_dte'),
      path('eliminarDTE/<int:dte_id>/', views.eliminar_dte, name='eliminar_dte'),
+     
+     # Incidencias DTE
+     path('incidencias/<int:dte_id>/', views.listar_incidencias, name='listar_incidencias'),
+     path('incidencias/crear/', views.crear_incidencia, name='crear_incidencia'),
+     path('incidencias/actualizar/<int:incidencia_id>/', views.actualizar_incidencia, name='actualizar_incidencia'),
+     path('incidencias/eliminar/<int:incidencia_id>/', views.eliminar_incidencia, name='eliminar_incidencia'),
+     
+     # Documentos Base y Notas de Crédito
+     path('obtener_documentos_base/', views.obtener_documentos_base, name='obtener_documentos_base'),
+     path('obtener_ncs_disponibles/', views.obtener_ncs_disponibles, name='obtener_ncs_disponibles'),
+     path('obtener_facturas_para_nc/', views.obtener_facturas_para_nc, name='obtener_facturas_para_nc'),
+     path('obtener_info_asociacion_nc/<int:nc_id>/', views.obtener_info_asociacion_nc, name='obtener_info_asociacion_nc'),
+     path('desasociar_nc/<int:nc_id>/', views.desasociar_nc, name='desasociar_nc'),
+     path('asociar_nc_existente/', views.asociar_nc_existente, name='asociar_nc_existente'),
+     path('procesar_pago_masivo/', views.procesar_pago_masivo, name='procesar_pago_masivo'),
      path('guardar_recepcion/', views.guardar_recepcion, name='guardar_recepcion'),
      path('agregar_producto_manual/', views.agregar_producto_manual, name='agregar_producto_manual'),
      path('productos_recepcionados/', views.productos_recepcionados, name='productos_recepcionados'),
@@ -342,7 +387,10 @@ urlpatterns = [
     path('dte/decidir_solicitud/', views.decidir_solicitud_api, name='decidir_solicitud_api'),
     path('dte/buscar_productos_emisor/', views.buscar_productos_emisor, name='buscar_productos_emisor'),
     path('dte/regularizar_producto/', views.regularizar_producto_api, name='regularizar_producto_api'),
+    path('dte/regularizar_dte_masivo/', views.regularizar_dte_masivo, name='regularizar_dte_masivo'),
+    path('dte/anular_regularizacion_dte/', views.anular_regularizacion_dte, name='anular_regularizacion_dte'),
     path('dte/obtener_dtes_con_problemas/', views.obtener_dtes_con_problemas, name='obtener_dtes_con_problemas'),
+    path('dte/obtener_detalle_dte_recepcionado/', views.obtener_detalle_dte_recepcionado, name='obtener_detalle_dte_recepcionado'),
     path('debug_session/', views.debug_session, name='debug_session'),
     path('debug_user_empresas/', views.debug_user_empresas, name='debug_user_empresas'),  # Temporal para debug
     path('empresas_clientes/', views.empresas_clientes, name='empresas_clientes'),
@@ -398,10 +446,13 @@ urlpatterns = [
     path('api/cuadratura/verificar-existente/', verificar_cuadratura_existente, name='verificar_cuadratura_existente'),
     path('api/cuadratura/eliminar/<int:arqueo_id>/', eliminar_cuadratura, name='eliminar_cuadratura'),
     path('api/cuadratura/listar/', listar_cuadraturas, name='listar_cuadraturas'),
+    path('api/obtener-sucursales/', obtener_sucursales, name='obtener_sucursales'),
     path('api/cuadratura/detalle/<int:arqueo_id>/', obtener_detalle_arqueo, name='obtener_detalle_arqueo'),
     path('api/cuadratura/editar/<int:arqueo_id>/', editar_cuadratura, name='editar_cuadratura'),
     path('api/cuadratura/exportar/', exportar_cuadratura_excel, name='exportar_cuadratura_excel'),
     path('api/cuadratura/transacciones-dia/', obtener_transacciones_dia, name='obtener_transacciones_dia'),
+    path('api/cuadratura/agregar-deposito/', agregar_deposito_arqueo, name='agregar_deposito_arqueo'),
+    path('api/cuadratura/eliminar-deposito/', eliminar_deposito_bancario, name='eliminar_deposito_bancario'),
     
     # URLs para arqueo mejorado
     path('api/arqueos/', listar_arqueos, name='listar_arqueos'),
@@ -500,7 +551,11 @@ urlpatterns = [
     path('ventas/api/crear-cambio-devolucion/', crear_cambio_devolucion, name='crear_cambio_devolucion'),
     path('ventas/api/cambio-detalle/<int:cambio_id>/', obtener_detalle_cambio, name='obtener_detalle_cambio'),
     path('ventas/api/aprobar-cambio-devolucion/', aprobar_cambio_devolucion, name='aprobar_cambio_devolucion'),
+    path('ventas/api/aprobar-cambio-generar-ticket/', aprobar_cambio_generar_ticket, name='aprobar_cambio_generar_ticket'),
+    path('ventas/api/validar-codigo-vendedor/', validar_codigo_vendedor, name='validar_codigo_vendedor'),
     path('ventas/api/cancelar-cambio-devolucion/', cancelar_cambio_devolucion, name='cancelar_cambio_devolucion'),
+    path('ventas/api/ejecutar-cambio-devolucion/', ejecutar_cambio_devolucion, name='ejecutar_cambio_devolucion'),
+    path('ventas/api/registrar-pago-diferencia/', registrar_pago_diferencia, name='registrar_pago_diferencia'),
     path('ventas/api/completar-cambio-devolucion/', completar_cambio_devolucion, name='completar_cambio_devolucion'),
     
     # APIs de búsqueda
@@ -594,5 +649,55 @@ urlpatterns = [
     path('documentos/generar-txt-acepta/', views_modulo_documentos.generar_txt_acepta_api, name='generar_txt_acepta_api'),
     path('documentos/generar-txt-desde-dte/', views_modulo_documentos.generar_txt_desde_dte_existente, name='generar_txt_desde_dte_existente'),
     path('documentos/generar-dte-ticket/', views_modulo_documentos.generar_dte_desde_ticket_api, name='generar_dte_desde_ticket_api'),  # ✅ Nuevo endpoint
+
+    # ========== MÓDULO DE REPORTE DE EXISTENCIAS ==========
+    path('reportes/existencias/', views.ver_reporte_existencias, name='ver_reporte_existencias'),
+    path('api/obtener-existencias/', views.obtener_existencias_reporte, name='obtener_existencias_reporte'),
+    path('api/exportar-existencias-excel/', views.exportar_existencias_excel, name='exportar_existencias_excel'),
+
+    # ========== MÓDULO DE REPORTE DE VENTAS ==========
+    path('reportes/ventas-sucursal/', views_modulo_reportes.ver_reporte_ventas_sucursal, name='ver_reporte_ventas_sucursal'),
+    path('api/reportes/ventas-por-vendedor/', views_modulo_reportes.obtener_ventas_por_vendedor_reporte, name='obtener_ventas_por_vendedor_reporte'),
+    path('api/reportes/ventas-por-sucursal/', views_modulo_reportes.obtener_ventas_por_sucursal_reporte, name='obtener_ventas_por_sucursal_reporte'),
+    path('api/reportes/vendedores/', views_modulo_reportes.obtener_vendedores_reporte, name='obtener_vendedores_reporte'),
+    path('api/reportes/sucursales/', views_modulo_reportes.obtener_sucursales_reporte, name='obtener_sucursales_reporte'),
+    path('api/reportes/comparativa-mensual/', views_modulo_reportes.obtener_comparativa_mensual, name='obtener_comparativa_mensual'),
+    path('reportes/documentos-emitidos/', views_modulo_reportes.ver_documentos_emitidos, name='ver_documentos_emitidos'),
+    path('api/reportes/documentos-emitidos/', views_modulo_reportes.obtener_documentos_emitidos, name='obtener_documentos_emitidos'),
+    
+    # Reporte de existencias por marca
+    path('reportes/existencias-marca/', views_modulo_reportes.ver_reporte_existencias_marca, name='ver_reporte_existencias_marca'),
+    path('api/reporte-existencias-marca/', views_modulo_reportes.obtener_reporte_existencias_marca, name='obtener_reporte_existencias_marca'),
+    path('api/exportar-existencias-marca-excel/', views_modulo_reportes.exportar_existencias_marca_excel, name='exportar_existencias_marca_excel'),
+    
+    # Reporte de existencias por sucursal
+    path('reportes/existencias-sucursal/', views_modulo_reportes.ver_reporte_existencias_sucursal, name='ver_reporte_existencias_sucursal'),
+    path('api/reporte-existencias-sucursal/', views_modulo_reportes.obtener_reporte_existencias_sucursal, name='obtener_reporte_existencias_sucursal'),
+    path('api/exportar-existencias-sucursal-excel/', views_modulo_reportes.exportar_existencias_sucursal_excel, name='exportar_existencias_sucursal_excel'),
+
+    # ========== MÓDULO DE REQUERIMIENTOS DE GARANTÍAS ==========
+    # Vistas principales
+    path('requerimientos/', modulo_requerimientos, name='modulo_requerimientos'),
+    path('requerimientos/crear/', crear_requerimiento_vista, name='crear_requerimiento_vista'),
+    path('requerimientos/gestionar/', gestionar_requerimientos_vista, name='gestionar_requerimientos_vista'),
+    path('requerimientos/<int:requerimiento_id>/', detalle_requerimiento_vista, name='detalle_requerimiento_vista'),
+    
+    # APIs de requerimientos
+    path('api/requerimientos/crear/', crear_requerimiento, name='api_crear_requerimiento'),
+    path('api/requerimientos/listar/', listar_requerimientos, name='api_listar_requerimientos'),
+    path('api/requerimientos/<int:requerimiento_id>/', detalle_requerimiento, name='api_detalle_requerimiento'),
+    path('api/requerimientos/<int:requerimiento_id>/actualizar-estado/', actualizar_estado_requerimiento, name='api_actualizar_estado_requerimiento'),
+    path('api/requerimientos/<int:requerimiento_id>/enviar-proveedor/', enviar_a_proveedor, name='api_enviar_a_proveedor'),
+    path('api/requerimientos/<int:requerimiento_id>/respuesta-proveedor/', registrar_respuesta_proveedor, name='api_registrar_respuesta_proveedor'),
+    path('api/requerimientos/<int:requerimiento_id>/completar/', completar_requerimiento, name='api_completar_requerimiento'),
+    
+    # APIs de utilidades
+    path('api/requerimientos/buscar-producto/', buscar_producto_sku, name='api_buscar_producto_requerimiento'),
+    path('api/requerimientos/buscar-ticket/', buscar_ticket_por_folio, name='api_buscar_ticket_requerimiento'),
+    path('api/requerimientos/buscar-cliente/', buscar_cliente_por_rut, name='api_buscar_cliente_requerimiento'),
+    path('api/requerimientos/validar-rut/', validar_rut_chileno, name='api_validar_rut_requerimiento'),
+    path('api/requerimientos/crear-cliente/', crear_cliente_rapido, name='api_crear_cliente_requerimiento'),
+    path('api/requerimientos/estadisticas/', obtener_estadisticas_requerimientos, name='api_estadisticas_requerimientos'),
+    path('api/requerimientos/exportar/', exportar_requerimientos, name='api_exportar_requerimientos'),
 
 ]

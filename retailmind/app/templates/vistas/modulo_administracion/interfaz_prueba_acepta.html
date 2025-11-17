@@ -102,7 +102,7 @@
                 <!-- Tipo de Documento -->
                 <h4 class="section-title"><i class="fas fa-file-alt"></i> Tipo de Documento</h4>
                 <div class="row mb-4">
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="col-md-6 col-lg-3 mb-3">
                         <div class="tipo-doc-card" data-tipo="33">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
@@ -113,7 +113,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="col-md-6 col-lg-3 mb-3">
                         <div class="tipo-doc-card" data-tipo="39">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
@@ -124,7 +124,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="col-md-6 col-lg-3 mb-3">
                         <div class="tipo-doc-card" data-tipo="52">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
@@ -135,7 +135,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="col-md-6 col-lg-3 mb-3">
                         <div class="tipo-doc-card" data-tipo="61">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
@@ -677,7 +677,7 @@
                 // Crear datos según tipo de documento
                 let datos;
                 
-                if (tipoDocumentoSeleccionado === 33 || tipoDocumentoSeleccionado === 34) {
+                if (tipoDocumentoSeleccionado === 33 || tipoDocumentoSeleccionado === 34 || tipoDocumentoSeleccionado === 52) {
                     // Factura
                     const formaPagoVal = parseInt(document.getElementById('forma_pago').value);
                     // ✅ SIEMPRE enviar fecha vencimiento (si está vacía, backend usará fecha emisión)
@@ -717,6 +717,8 @@
                     
                     if (tipoDocumentoSeleccionado === 34) {
                         datos.documento.tipo_documento = 34; // Factura Exenta
+                    } else if (tipoDocumentoSeleccionado === 52) {
+                        datos.documento.tipo_documento = 52; // Guía de Despacho
                     }
                 } else if (tipoDocumentoSeleccionado === 39 || tipoDocumentoSeleccionado === 41) {
                     // Boleta

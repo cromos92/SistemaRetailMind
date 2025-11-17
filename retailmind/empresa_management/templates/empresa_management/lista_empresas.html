@@ -333,16 +333,42 @@
                         </div>
                         
                         <!-- Contacto -->
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="form-floating">
-                                <input type="email" class="form-control" id="emailEmpresa" name="email" placeholder="Email">
-                                <label for="emailEmpresa">Email</label>
+                                <input type="email" class="form-control" id="correoVendedor" name="correoVendedor" placeholder="Correo vendedor">
+                                <label for="correoVendedor">Correo vendedor</label>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <div class="form-floating">
-                                <input type="tel" class="form-control" id="telefonoEmpresa" name="telefono" placeholder="Teléfono">
-                                <label for="telefonoEmpresa">Teléfono</label>
+                                <input type="email" class="form-control" id="correoIntercambio" name="correoIntercambio" placeholder="Correo intercambio">
+                                <label for="correoIntercambio">Correo intercambio</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" id="correoAdministrador" name="correoAdministrador" placeholder="Correo administrador">
+                                <label for="correoAdministrador">Correo administrador</label>
+                            </div>
+                        </div>
+
+                        <!-- Contactos adicionales -->
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="contacto1Empresa" name="contacto1" placeholder="Contacto principal">
+                                <label for="contacto1Empresa">Contacto principal</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="contacto2Empresa" name="contacto2" placeholder="Contacto secundario">
+                                <label for="contacto2Empresa">Contacto secundario</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="actecoEmpresa" name="acteco" placeholder="Código Acteco">
+                                <label for="actecoEmpresa">Código Acteco</label>
                             </div>
                         </div>
                         
@@ -795,8 +821,12 @@ function editarEmpresa(empresaId) {
                 $('#nombreFantasia').val(empresa.nombre_fantasia);
                 $('#tipoEmpresa').val(empresa.tipo);
                 $('#giroComercial').val(empresa.giro_comercial);
-                $('#emailEmpresa').val(empresa.email);
-                $('#telefonoEmpresa').val(empresa.telefono);
+                $('#correoVendedor').val(empresa.correoVendedor || empresa.email || '');
+                $('#correoIntercambio').val(empresa.correoIntercambio || '');
+                $('#correoAdministrador').val(empresa.correoAdministrador || '');
+                $('#contacto1Empresa').val(empresa.contacto1 || empresa.telefono || '');
+                $('#contacto2Empresa').val(empresa.contacto2 || '');
+                $('#actecoEmpresa').val(empresa.acteco || '');
                 $('#direccionEmpresa').val(empresa.direccion);
                 $('#ciudadEmpresa').val(empresa.ciudad);
                 $('#regionEmpresa').val(empresa.region);
@@ -839,8 +869,12 @@ function verDetalleEmpresa(empresaId) {
                         <div class="col-md-6">
                             <h6 class="text-primary">Información de Contacto</h6>
                             <table class="table table-sm">
-                                <tr><td><strong>Email:</strong></td><td>${empresa.email || 'No especificado'}</td></tr>
-                                <tr><td><strong>Teléfono:</strong></td><td>${empresa.telefono || 'No especificado'}</td></tr>
+                                <tr><td><strong>Correo vendedor:</strong></td><td>${empresa.correoVendedor || empresa.email || 'No especificado'}</td></tr>
+                                <tr><td><strong>Correo intercambio:</strong></td><td>${empresa.correoIntercambio || 'No especificado'}</td></tr>
+                                <tr><td><strong>Correo administrador:</strong></td><td>${empresa.correoAdministrador || 'No especificado'}</td></tr>
+                                <tr><td><strong>Contacto principal:</strong></td><td>${empresa.contacto1 || empresa.telefono || 'No especificado'}</td></tr>
+                                <tr><td><strong>Contacto secundario:</strong></td><td>${empresa.contacto2 || 'No especificado'}</td></tr>
+                                <tr><td><strong>Código Acteco:</strong></td><td>${empresa.acteco || 'No especificado'}</td></tr>
                                 <tr><td><strong>Sitio Web:</strong></td><td>${empresa.sitio_web || 'No especificado'}</td></tr>
                                 <tr><td><strong>Representante Legal:</strong></td><td>${empresa.representante_legal || 'No especificado'}</td></tr>
                                 <tr><td><strong>Estado:</strong></td><td><span class="status-badge ${empresa.activo ? 'status-activo' : 'status-inactivo'}">${empresa.activo ? 'Activa' : 'Inactiva'}</span></td></tr>
@@ -919,6 +953,12 @@ function getCSRFToken() {
 function guardarEmpresa() {
     const formData = new FormData($('#formEmpresa')[0]);
     const data = Object.fromEntries(formData);
+
+    Object.keys(data).forEach(function(key) {
+        if (typeof data[key] === 'string') {
+            data[key] = data[key].trim();
+        }
+    });
     
     // Validaciones básicas
     const errores = [];
@@ -931,6 +971,9 @@ function guardarEmpresa() {
         return;
     }
     
+    $('#erroresFormulario').hide();
+    $('#listaErrores').empty();
+
     const url = modoEdicion ? '/empresa_management/editar_empresa/' : '/empresa_management/crear_empresa/';
     const method = modoEdicion ? 'PUT' : 'POST';
     
@@ -951,7 +994,8 @@ function guardarEmpresa() {
                 $('#modalEmpresa').modal('hide');
                 cargarEmpresas();
             } else {
-                mostrarErrores(response.errors || [response.error]);
+                const erroresRespuesta = response.errors || (response.error ? [response.error] : []);
+                mostrarErrores(erroresRespuesta);
             }
         },
         error: function() {
@@ -1057,7 +1101,12 @@ function mostrarErrores(errores) {
     const lista = $('#listaErrores');
     lista.empty();
     
-    errores.forEach(function(error) {
+    const mensajes = (errores || []).filter(Boolean);
+    if (mensajes.length === 0) {
+        mensajes.push('Ocurrió un error desconocido. Intente nuevamente.');
+    }
+
+    mensajes.forEach(function(error) {
         lista.append(`<li>${error}</li>`);
     });
     

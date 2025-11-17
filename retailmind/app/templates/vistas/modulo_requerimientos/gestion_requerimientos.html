@@ -1,0 +1,531 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Título de la página -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Gestión de Requerimientos</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item active">Requerimientos</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alertas de Seguimiento (solo para Admin/Supervisor) -->
+        <div class="row" id="alertas-seguimiento" style="display:none;">
+            <div class="col-12">
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <i class="ri-alarm-warning-line me-2"></i>
+                    <strong>¡Atención!</strong> Hay <span id="count-sin-respuesta">0</span> requerimiento(s) con más de 7 días sin respuesta del proveedor.
+                    <button type="button" class="btn btn-sm btn-warning ms-3" onclick="filtrarSinRespuesta()">
+                        <i class="ri-eye-line me-1"></i>Ver Todos
+                    </button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tarjetas de estadísticas -->
+        <div class="row">
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Total Requerimientos</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-4">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
+                                    <span class="counter-value" id="total-requerimientos">0</span>
+                                </h4>
+                            </div>
+                            <div class="avatar-sm flex-shrink-0">
+                                <span class="avatar-title bg-soft-info rounded fs-3">
+                                    <i class="bx bx-file text-info"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Pendientes / Revisión</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-4">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
+                                    <span class="counter-value" id="pendientes">0</span>
+                                </h4>
+                            </div>
+                            <div class="avatar-sm flex-shrink-0">
+                                <span class="avatar-title bg-soft-warning rounded fs-3">
+                                    <i class="bx bx-time text-warning"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate cursor-pointer" onclick="filtrarSinRespuesta()">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Sin Respuesta +7d</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-4">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
+                                    <span class="counter-value text-danger" id="sin-respuesta">0</span>
+                                </h4>
+                            </div>
+                            <div class="avatar-sm flex-shrink-0">
+                                <span class="avatar-title bg-soft-danger rounded fs-3">
+                                    <i class="bx bx-error-circle text-danger"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Completados</p>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-4">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-4">
+                                    <span class="counter-value" id="completados">0</span>
+                                </h4>
+                            </div>
+                            <div class="avatar-sm flex-shrink-0">
+                                <span class="avatar-title bg-soft-success rounded fs-3">
+                                    <i class="bx bx-check-circle text-success"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rol del usuario -->
+        <input type="hidden" id="rol-usuario" value="{{ rol_usuario }}">
+
+        <!-- Tabla de requerimientos -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex align-items-center flex-wrap gap-2">
+                            <div class="flex-grow-1">
+                                <a href="{% url 'crear_requerimiento_vista' %}" class="btn btn-success add-btn">
+                                    <i class="ri-add-fill me-1 align-bottom"></i> Nuevo Requerimiento
+                                </a>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <div class="hstack text-nowrap gap-2">
+                                    <button type="button" class="btn btn-soft-info" onclick="filtrarRequerimientos()">
+                                        <i class="ri-filter-3-line align-bottom me-1"></i> Filtrar
+                                    </button>
+                                    <button type="button" class="btn btn-soft-success" onclick="exportarRequerimientos()">
+                                        <i class="ri-file-excel-2-line align-bottom me-1"></i> Exportar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros -->
+                    <div class="card-body border-bottom border-bottom-dashed" id="filtros-section" style="display: none;">
+                        <form id="form-filtros">
+                            <div class="row g-3">
+                                <div class="col-xl-2 col-sm-6">
+                                    <div>
+                                        <label class="form-label mb-0">Estado</label>
+                                        <select class="form-select" id="filtro-estado" name="estado">
+                                            <option value="">Todos</option>
+                                            <option value="PENDIENTE">Pendiente</option>
+                                            <option value="EN_REVISION">En Revisión</option>
+                                            <option value="ESPERANDO_RESPUESTA">Esperando Proveedor</option>
+                                            <option value="APROBADO">Aprobado</option>
+                                            <option value="RECHAZADO">Rechazado</option>
+                                            <option value="EN_PROCESO">En Proceso</option>
+                                            <option value="COMPLETADO">Completado</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-xl-2 col-sm-6">
+                                    <div>
+                                        <label class="form-label mb-0">Tipo</label>
+                                        <select class="form-select" id="filtro-tipo" name="tipo">
+                                            <option value="">Todos</option>
+                                            <option value="GARANTIA">Garantía</option>
+                                            <option value="DEVOLUCION">Devolución</option>
+                                            <option value="CAMBIO">Cambio</option>
+                                            <option value="RECLAMO">Reclamo</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-xl-3 col-sm-6">
+                                    <div>
+                                        <label class="form-label mb-0">Búsqueda</label>
+                                        <input type="text" class="form-control" id="filtro-busqueda" placeholder="N° Req, SKU, Cliente...">
+                                    </div>
+                                </div>
+                                <div class="col-xl-2 col-sm-6">
+                                    <div>
+                                        <label class="form-label mb-0">Alertas</label>
+                                        <select class="form-select" id="filtro-sin-respuesta" name="sin_respuesta">
+                                            <option value="">Todas</option>
+                                            <option value="true">Sin Respuesta +7d</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-xl-3 col-sm-12">
+                                    <div class="hstack gap-2 mt-4">
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="ri-search-line me-1"></i> Buscar
+                                        </button>
+                                        <button type="button" class="btn btn-soft-danger w-100" onclick="limpiarFiltros()">
+                                            <i class="ri-close-line me-1"></i> Limpiar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table align-middle table-nowrap mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col">N° Requerimiento</th>
+                                        <th scope="col">Tipo</th>
+                                        <th scope="col">Estado</th>
+                                        <th scope="col">Producto</th>
+                                        <th scope="col">Cliente</th>
+                                        <th scope="col">Sucursal</th>
+                                        <th scope="col">Fotos</th>
+                                        <th scope="col">Días</th>
+                                        <th scope="col">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-requerimientos">
+                                    <tr>
+                                        <td colspan="9" class="text-center py-5">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Cargando...</span>
+                                            </div>
+                                            <p class="mt-2 text-muted">Cargando requerimientos...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Paginación -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="flex-shrink-0">
+                                <div class="text-muted">
+                                    Mostrando <span class="fw-semibold" id="showing-count">0</span> de <span class="fw-semibold" id="total-count">0</span> resultados
+                                </div>
+                            </div>
+                            <ul class="pagination pagination-separated pagination-sm mb-0" id="pagination">
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+let paginaActual = 1;
+let filtrosActuales = {};
+
+// Cargar datos al iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    cargarEstadisticas();
+    cargarRequerimientos();
+});
+
+// Cargar estadísticas
+function cargarEstadisticas() {
+    fetch('/app/api/requerimientos/estadisticas/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('total-requerimientos').textContent = data.estadisticas.total;
+                document.getElementById('pendientes').textContent = (
+                    (data.estadisticas.por_estado.PENDIENTE?.cantidad || 0) +
+                    (data.estadisticas.por_estado.EN_REVISION?.cantidad || 0)
+                );
+                document.getElementById('sin-respuesta').textContent = data.estadisticas.sin_respuesta_7dias || 0;
+                document.getElementById('completados').textContent = data.estadisticas.por_estado.COMPLETADO?.cantidad || 0;
+            }
+        })
+        .catch(error => console.error('Error al cargar estadísticas:', error));
+}
+
+// Filtrar por requerimientos sin respuesta
+function filtrarSinRespuesta() {
+    document.getElementById('filtro-sin-respuesta').value = 'true';
+    document.getElementById('filtro-estado').value = 'ESPERANDO_RESPUESTA';
+    filtrosActuales = {
+        estado: 'ESPERANDO_RESPUESTA',
+        sin_respuesta: 'true'
+    };
+    cargarRequerimientos(1);
+    document.getElementById('filtros-section').style.display = 'block';
+}
+
+// Cargar requerimientos
+function cargarRequerimientos(pagina = 1) {
+    const params = new URLSearchParams({
+        page: pagina,
+        ...filtrosActuales
+    });
+
+    fetch(`/app/api/requerimientos/listar/?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarRequerimientos(data.requerimientos);
+                actualizarPaginacion(data.pagination);
+                paginaActual = pagina;
+            }
+        })
+        .catch(error => {
+            console.error('Error al cargar requerimientos:', error);
+            Swal.fire('Error', 'No se pudieron cargar los requerimientos', 'error');
+        });
+}
+
+// Mostrar requerimientos en la tabla
+function mostrarRequerimientos(requerimientos) {
+    const tbody = document.getElementById('tabla-requerimientos');
+    
+    if (requerimientos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center text-muted">
+                    <div class="py-4">
+                        <i class="ri-inbox-line fs-1 d-block mb-2"></i>
+                        No se encontraron requerimientos
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = requerimientos.map(req => `
+        <tr ${req.requiere_recordatorio ? 'class="table-danger"' : ''}>
+            <td>
+                <a href="/app/requerimientos/${req.id}/" class="fw-medium link-primary">
+                    ${req.numero_requerimiento}
+                </a>
+                ${req.nivel_urgencia === 'CRITICA' ? '<br><span class="badge bg-danger"><i class="ri-alarm-warning-line me-1"></i>CRÍTICO</span>' : ''}
+            </td>
+            <td><span class="badge badge-soft-info">${req.tipo}</span></td>
+            <td>${obtenerBadgeEstado(req.estado_codigo, req.estado)}</td>
+            <td>
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <h6 class="fs-14 mb-1">${req.nombre_producto}</h6>
+                        <p class="text-muted mb-0 small">SKU: ${req.sku}</p>
+                    </div>
+                </div>
+            </td>
+            <td>${req.cliente_nombre}</td>
+            <td><span class="badge badge-soft-secondary">${req.sucursal}</span></td>
+            <td class="text-center">
+                ${req.cantidad_fotos > 0 ? 
+                    `<span class="badge bg-primary">
+                        <i class="ri-image-line me-1"></i>${req.cantidad_fotos}
+                    </span>` 
+                : '<span class="text-muted">-</span>'}
+            </td>
+            <td>
+                <span class="badge ${req.dias_transcurridos > 7 ? 'badge-soft-danger' : req.dias_transcurridos > 3 ? 'badge-soft-warning' : 'badge-soft-success'}">
+                    ${req.dias_transcurridos} días
+                </span>
+            </td>
+            <td>
+                <div class="hstack gap-2">
+                    <a href="/app/requerimientos/${req.id}/" class="btn btn-sm btn-soft-primary" title="Ver detalle">
+                        <i class="ri-eye-line"></i>
+                    </a>
+                    ${req.requiere_recordatorio ? 
+                        `<button class="btn btn-sm btn-soft-warning" onclick="enviarRecordatorioRapido(${req.id})" title="Enviar recordatorio">
+                            <i class="ri-mail-send-line"></i>
+                        </button>` 
+                    : ''}
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Obtener badge de estado
+function obtenerBadgeEstado(codigo, nombre) {
+    const badges = {
+        'PENDIENTE': 'warning',
+        'EN_REVISION': 'info',
+        'ESPERANDO_RESPUESTA': 'primary',
+        'APROBADO': 'success',
+        'RECHAZADO': 'danger',
+        'EN_PROCESO': 'info',
+        'COMPLETADO': 'success',
+        'CANCELADO': 'secondary'
+    };
+    const color = badges[codigo] || 'secondary';
+    return `<span class="badge badge-soft-${color}">${nombre}</span>`;
+}
+
+// Actualizar paginación
+function actualizarPaginacion(pagination) {
+    document.getElementById('showing-count').textContent = pagination.total_items > 0 ? 
+        ((pagination.current_page - 1) * 20 + 1) + '-' + Math.min(pagination.current_page * 20, pagination.total_items) : 
+        0;
+    document.getElementById('total-count').textContent = pagination.total_items;
+
+    const paginationEl = document.getElementById('pagination');
+    let html = '';
+
+    if (pagination.has_previous) {
+        html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${pagination.current_page - 1})">Anterior</a></li>`;
+    }
+
+    for (let i = 1; i <= pagination.total_pages; i++) {
+        if (i === pagination.current_page) {
+            html += `<li class="page-item active"><a class="page-link" href="javascript:void(0);">${i}</a></li>`;
+        } else if (Math.abs(i - pagination.current_page) <= 2 || i === 1 || i === pagination.total_pages) {
+            html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${i})">${i}</a></li>`;
+        }
+    }
+
+    if (pagination.has_next) {
+        html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${pagination.current_page + 1})">Siguiente</a></li>`;
+    }
+
+    paginationEl.innerHTML = html;
+}
+
+// Filtrar requerimientos
+function filtrarRequerimientos() {
+    const section = document.getElementById('filtros-section');
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+}
+
+// Form submit
+document.getElementById('form-filtros').addEventListener('submit', function(e) {
+    e.preventDefault();
+    filtrosActuales = {
+        estado: document.getElementById('filtro-estado').value,
+        tipo: document.getElementById('filtro-tipo').value,
+        busqueda: document.getElementById('filtro-busqueda').value,
+        sin_respuesta: document.getElementById('filtro-sin-respuesta').value,
+    };
+    cargarRequerimientos(1);
+});
+
+// Limpiar filtros
+function limpiarFiltros() {
+    document.getElementById('form-filtros').reset();
+    filtrosActuales = {};
+    cargarRequerimientos(1);
+}
+
+// Exportar requerimientos
+function exportarRequerimientos() {
+    const params = new URLSearchParams(filtrosActuales);
+    window.location.href = `/app/api/requerimientos/exportar/?${params}`;
+}
+
+// Enviar recordatorio rápido desde la tabla
+function enviarRecordatorioRapido(requerimientoId) {
+    Swal.fire({
+        title: 'Enviar Recordatorio',
+        text: '¿Enviar recordatorio al proveedor?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#f7b84b'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Enviado', 'Recordatorio enviado al proveedor', 'success');
+                    cargarRequerimientos(paginaActual);
+                } else {
+                    Swal.fire('Error', data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Error al enviar recordatorio', 'error');
+            });
+        }
+    });
+}
+
+// Filtrar requerimientos sin respuesta > 7 días (click en card)
+function filtrarSinRespuesta() {
+    filtrosActuales = {
+        estado: 'ESPERANDO_RESPUESTA',
+        sin_respuesta: 'true'
+    };
+    document.getElementById('filtro-estado').value = 'ESPERANDO_RESPUESTA';
+    document.getElementById('filtros-section').style.display = 'block';
+    cargarRequerimientos(1);
+}
+</script>
+
+    </div>
+    <!-- container-fluid -->
+</div>
+<!-- page-content -->
+
+{% include '../../layout/footer.html' %}
+

@@ -51,8 +51,14 @@ class Vendedor(models.Model):
     comision = models.DecimalField(max_digits=5, decimal_places=2, default=0) 
     fecha_nacimiento = models.DateField(null=True)
     correo = models.CharField(max_length=100,null=True)
+    sucursales = models.ManyToManyField(Sucursal, related_name='vendedores', blank=True, verbose_name='Sucursales asignadas')
+    
     def __str__(self):
         return self.nombre
+    
+    class Meta:
+        verbose_name = 'Vendedor'
+        verbose_name_plural = 'Vendedores'
 
 
 class Correlativo(models.Model):
@@ -127,6 +133,7 @@ class Correlativo(models.Model):
 TIPO_DOCUMENTO_CHOICES = [
     ('FACTURA ELECTRONICA', 'Factura Electrónica'),
     ('BOLETA ELECTRONICA', 'Boleta Electrónica'),
+    ('BOLETA PAPEL', 'Boleta Papel'),
     ('GUIA', 'Guía de Despacho'),
     ('NOTA DE PEDIDO', 'Nota de Pedido'),
     ('NOTA DE CREDITO', 'Nota de Crédito'),
@@ -265,6 +272,22 @@ class Dte(models.Model):
         null=True,
         help_text="Motivo de la Nota de Crédito"
     )
+    documento_padre = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documentos_hijos',
+        help_text="Documento previo (cotización/guía) al que regulariza esta factura"
+    )
+    
+    # Campo para motivo de rechazo
+    motivo_rechazo = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Motivo del rechazo del DTE (máximo 100 caracteres)"
+    )
 
     def __str__(self):
         return f"DTE {self.numero_documento} - {self.tipo_documento}"
@@ -286,6 +309,41 @@ class Dte_Detalle_Pago(models.Model):
     
     def __str__(self):
         return f"Dte_Detalle_Pago {self.metodo_pago} - {self.monto}"
+
+class Dte_Incidencia(models.Model):
+    """Incidencias asociadas a un DTE (problemas de mercadería, facturación, etc.)"""
+    
+    TIPO_INCIDENCIA_CHOICES = [
+        ('FACTURACION', 'Error de Facturación'),
+        ('MERCADERIA', 'Mercadería Faltante/Incompleta'),
+        ('CALIDAD', 'Productos Dañados/Defectuosos'),
+        ('DESCUENTOS', 'Descuentos Incorrectos'),
+        ('DESCRIPCION', 'Error en Descripción'),
+        ('OTRO', 'Otro')
+    ]
+    
+    ESTADO_CHOICES = [
+        ('PENDIENTE', 'Pendiente'),
+        ('EN_GESTION', 'En Gestión'),
+        ('RESUELTO', 'Resuelto')
+    ]
+    
+    dte = models.ForeignKey(Dte, related_name='incidencias', on_delete=models.CASCADE)
+    tipo = models.CharField(max_length=20, choices=TIPO_INCIDENCIA_CHOICES)
+    descripcion = models.TextField(help_text="Detalle del problema")
+    estado = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='PENDIENTE')
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+    fecha_resolucion = models.DateTimeField(null=True, blank=True)
+    notas_resolucion = models.TextField(blank=True, null=True, help_text="Cómo se resolvió la incidencia")
+    
+    class Meta:
+        ordering = ['-fecha_registro']
+        verbose_name = 'Incidencia DTE'
+        verbose_name_plural = 'Incidencias DTE'
+    
+    def __str__(self):
+        return f"Incidencia {self.get_tipo_display()} - DTE {self.dte.numero_documento} - {self.estado}"
+
 class Productos_Atributos(models.Model):
     nombre = models.CharField(max_length=100)
     descripcion = models.CharField(max_length=250)
@@ -424,28 +482,63 @@ class Producto_Talla(models.Model):
     def stock_sucursal(self, sucursal_id):
         """
         Calcula el stock disponible en una sucursal específica
-        basándose en los movimientos de productos
+        
+        SISTEMA HÍBRIDO (compatible con migración de datos legacy):
+        - Si existen movimientos: Calcula desde movimientos (sistema nuevo)
+        - Si NO hay movimientos: Usa campo 'stock' directo (datos migrados/legacy)
+        
+        Esto permite migrar datos históricos sin crear millones de movimientos
         """
         from django.db.models import Sum, Q
         
-        # Sumar ingresos a esta sucursal (movimientos donde sucursal_destino = sucursal_id)
-        ingresos = self.movimientos_productos_talla.filter(
-            Q(sucursal_destino_id=sucursal_id) &
-            (Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA')) &
-            Q(estado='COMPLETADO')
-        ).aggregate(total=Sum('cantidad'))['total'] or 0
+        # Verificar si hay movimientos para esta talla
+        tiene_movimientos = self.movimientos_productos_talla.exists()
         
-        # Sumar egresos desde esta sucursal (movimientos donde sucursal_origen = sucursal_id)
-        egresos = self.movimientos_productos_talla.filter(
-            Q(sucursal_origen_id=sucursal_id) &
-            (Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA')) &
-            Q(estado='COMPLETADO')
-        ).aggregate(total=Sum('cantidad'))['total'] or 0
-        
-        # El stock en sucursal es ingresos + egresos (egresos son negativos)
-        stock_calculado = ingresos + egresos
-        
-        return max(0, stock_calculado)  # No permitir stock negativo
+        if tiene_movimientos:
+            # SISTEMA NUEVO: Calcular desde movimientos
+            # Sumar ingresos a esta sucursal (movimientos donde sucursal_destino = sucursal_id)
+            ingresos = self.movimientos_productos_talla.filter(
+                Q(sucursal_destino_id=sucursal_id) &
+                (Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA')) &
+                Q(estado='COMPLETADO')
+            ).aggregate(total=Sum('cantidad'))['total'] or 0
+            
+            # Sumar egresos desde esta sucursal (movimientos donde sucursal_origen = sucursal_id)
+            egresos = self.movimientos_productos_talla.filter(
+                Q(sucursal_origen_id=sucursal_id) &
+                (Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA')) &
+                Q(estado='COMPLETADO')
+            ).aggregate(total=Sum('cantidad'))['total'] or 0
+            
+            # El stock en sucursal es ingresos + egresos (egresos son negativos)
+            stock_calculado = ingresos + egresos
+            
+            return max(0, stock_calculado)  # No permitir stock negativo
+        else:
+            # SISTEMA LEGACY: Intentar obtener stock desde StockSucursal si existe
+            try:
+                from .models import StockSucursal
+                stock_registro = StockSucursal.objects.filter(
+                    producto_talla=self,
+                    sucursal_id=sucursal_id
+                ).first()
+                
+                if stock_registro:
+                    return max(0, stock_registro.cantidad)
+            except (ImportError, AttributeError):
+                # Si no existe el modelo StockSucursal, continuar con la lógica legacy
+                pass
+            
+            # Fallback: Usar campo stock directo (datos migrados/legacy)
+            # Si el producto pertenece a esta sucursal, retornar su stock
+            if self.producto.sucursal_id == sucursal_id:
+                return max(0, self.stock)
+            else:
+                # ⚠️ ADVERTENCIA: En modo legacy sin movimientos ni tabla StockSucursal,
+                # no podemos determinar el stock por sucursal con precisión.
+                # Retornamos 0 para evitar inconsistencias.
+                # SOLUCIÓN: Migrar a sistema de movimientos o crear registros en StockSucursal
+                return 0  # No hay stock en esta sucursal
     
     def stock_total(self):
         """
@@ -1487,6 +1580,26 @@ class ArqueoCaja(models.Model):
     def requiere_supervision(self):
         """Determina si requiere supervisión (diferencia > $1000 o > 1%)"""
         return self.diferencia_absoluta > 1000 or self.porcentaje_diferencia > 1.0
+    
+    @property
+    def total_depositos(self):
+        """Calcula el total de depósitos bancarios realizados"""
+        return sum([d.monto for d in self.depositos.all()])
+    
+    @property
+    def efectivo_en_caja(self):
+        """Calcula el efectivo que realmente queda en caja (después de depósitos)"""
+        return self.total_efectivo_fisico - self.total_depositos
+    
+    @property
+    def diferencia_efectivo_real(self):
+        """Diferencia de efectivo considerando depósitos: (Efectivo en caja - Teórico)"""
+        return self.efectivo_en_caja - self.total_efectivo_teorico
+    
+    @property
+    def diferencia_total_real(self):
+        """Diferencia total considerando efectivo en caja + diferencia POS"""
+        return self.diferencia_efectivo_real + self.diferencia_transbank
 
 
 # ========== MODELO PARA DEPÓSITOS BANCARIOS ==========
@@ -2284,6 +2397,8 @@ ESTADO_CAMBIO_CHOICES = [
     ('SOLICITADO', 'Solicitado'),
     ('EN_PROCESO', 'En Proceso'),
     ('APROBADO', 'Aprobado'),
+    ('EJECUTADO', 'Ejecutado'),
+    ('EJECUTADO_COBRO_PENDIENTE', 'Ejecutado - Cobro Pendiente'),
     ('COMPLETADO', 'Completado'),
     ('RECHAZADO', 'Rechazado'),
     ('CANCELADO', 'Cancelado'),
@@ -2326,6 +2441,13 @@ class CambioDevolucion(models.Model):
         null=True, blank=True,
         help_text="Nuevo ticket generado por el cambio"
     )
+    ticket_diferencia = models.ForeignKey(
+        Ticket,
+        on_delete=models.SET_NULL,
+        related_name='cambios_diferencia',
+        null=True, blank=True,
+        help_text="Ticket de diferencia de precio (cuando cliente debe pagar más)"
+    )
     sucursal = models.ForeignKey(
         Sucursal, 
         on_delete=models.CASCADE, 
@@ -2344,7 +2466,7 @@ class CambioDevolucion(models.Model):
         help_text="Tipo de operación realizada"
     )
     estado = models.CharField(
-        max_length=20, 
+        max_length=30, 
         choices=ESTADO_CAMBIO_CHOICES, 
         default='SOLICITADO'
     )
@@ -2352,6 +2474,8 @@ class CambioDevolucion(models.Model):
     # === FECHAS Y TIEMPOS ===
     fecha_solicitud = models.DateTimeField(auto_now_add=True)
     fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    fecha_ejecucion = models.DateTimeField(null=True, blank=True, help_text="Fecha en que se ejecutó el cambio (movimientos de inventario)")
+    fecha_pago_diferencia = models.DateTimeField(null=True, blank=True, help_text="Fecha en que se cobró la diferencia")
     fecha_completado = models.DateTimeField(null=True, blank=True)
     fecha_limite_cambio = models.DateField(
         help_text="Fecha límite para realizar el cambio"
@@ -2479,13 +2603,18 @@ class CambioDevolucion(models.Model):
         return timezone.now().date() <= self.fecha_limite_cambio
     
     @property
-    def puede_completar(self):
-        """Verifica si el cambio puede ser completado"""
+    def puede_ejecutar(self):
+        """Verifica si el cambio puede ser ejecutado"""
         return (
             self.estado == 'APROBADO' and 
             self.dentro_del_plazo and
             self.detalles.filter(condicion_producto__in=['PERFECTO', 'BUENO']).exists()
         )
+    
+    @property
+    def puede_completar(self):
+        """Verifica si el cambio puede ser completado (legacy - mantener compatibilidad)"""
+        return self.puede_ejecutar
     
     @property
     def requiere_pago_adicional(self):
@@ -2496,6 +2625,15 @@ class CambioDevolucion(models.Model):
     def genera_devolucion(self):
         """Verifica si genera devolución de dinero"""
         return self.diferencia_monto < 0
+    
+    @property
+    def cobro_pendiente(self):
+        """Verifica si hay un cobro de diferencia pendiente"""
+        return (
+            self.estado == 'EJECUTADO_COBRO_PENDIENTE' and
+            self.ticket_diferencia is not None and
+            self.ticket_diferencia.estado == 'PENDIENTE'
+        )
     
     def aprobar_cambio(self, usuario_aprobador, observaciones=None):
         """Aprobar el cambio/devolución"""
@@ -3542,5 +3680,411 @@ class HistorialCambioPrecio(models.Model):
         """Retorna hace cuánto tiempo fue el cambio"""
         from django.utils.timesince import timesince
         return timesince(self.fecha_cambio)
+
+
+# ========== MÓDULO DE REQUERIMIENTOS DE GARANTÍAS ==========
+
+TIPO_REQUERIMIENTO_CHOICES = [
+    ('GARANTIA', 'Garantía'),
+    ('DEVOLUCION', 'Devolución'),
+    ('CAMBIO', 'Cambio de Producto'),
+    ('RECLAMO', 'Reclamo'),
+    ('CONSULTA', 'Consulta Técnica'),
+]
+
+ESTADO_REQUERIMIENTO_CHOICES = [
+    ('PENDIENTE', 'Pendiente'),
+    ('ESPERANDO_RESPUESTA', 'Esperando Respuesta Proveedor'),
+    ('APROBADO', 'Aprobado por Proveedor'),
+    ('RECHAZADO', 'Rechazado por Proveedor'),
+    ('CANCELADO', 'Cancelado'),
+]
+
+class Requerimiento(models.Model):
+    """
+    Modelo para gestionar requerimientos de garantías, devoluciones y reclamos
+    desde cualquier sucursal
+    """
+    # === INFORMACIÓN BÁSICA ===
+    numero_requerimiento = models.CharField(
+        max_length=50,
+        unique=True,
+        help_text="Número único de requerimiento (autogenerado)"
+    )
+    tipo = models.CharField(
+        max_length=20,
+        choices=TIPO_REQUERIMIENTO_CHOICES,
+        default='GARANTIA'
+    )
+    estado = models.CharField(
+        max_length=30,
+        choices=ESTADO_REQUERIMIENTO_CHOICES,
+        default='PENDIENTE'
+    )
+    
+    # === SUCURSAL Y USUARIO ===
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='requerimientos',
+        help_text="Sucursal que genera el requerimiento"
+    )
+    usuario_creador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='requerimientos_creados',
+        help_text="Usuario que creó el requerimiento"
+    )
+    usuario_gestor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requerimientos_gestionados',
+        help_text="Usuario que gestiona/administra el requerimiento"
+    )
+    
+    # === INFORMACIÓN DEL PRODUCTO ===
+    producto_talla = models.ForeignKey(
+        Producto_Talla,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requerimientos'
+    )
+    sku = models.CharField(
+        max_length=100,
+        help_text="SKU del producto"
+    )
+    nombre_producto = models.CharField(
+        max_length=255,
+        help_text="Nombre del producto"
+    )
+    
+    # === DOCUMENTO DE VENTA ===
+    numero_boleta = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Número de boleta o documento de venta"
+    )
+    tipo_documento = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Tipo de documento (Boleta, Factura, etc.)"
+    )
+    fecha_compra = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Fecha de compra del producto"
+    )
+    
+    # === INFORMACIÓN DEL CLIENTE ===
+    cliente_rut = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="RUT del cliente"
+    )
+    cliente_nombre = models.CharField(
+        max_length=255,
+        help_text="Nombre completo del cliente"
+    )
+    cliente_telefono = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Teléfono de contacto"
+    )
+    cliente_email = models.EmailField(
+        blank=True,
+        null=True,
+        help_text="Email del cliente"
+    )
+    
+    # === DESCRIPCIÓN DEL REQUERIMIENTO ===
+    motivo = models.TextField(
+        help_text="Descripción del motivo del requerimiento"
+    )
+    descripcion_problema = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Descripción detallada del problema"
+    )
+    
+    # === PROVEEDOR Y RESPUESTA ===
+    proveedor = models.ForeignKey(
+        Empresa,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requerimientos_como_proveedor',
+        help_text="Proveedor al que se envía el requerimiento"
+    )
+    correo_enviado_proveedor = models.BooleanField(
+        default=False,
+        help_text="Indica si se envió correo al proveedor"
+    )
+    fecha_envio_proveedor = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Fecha en que se envió al proveedor"
+    )
+    correo_proveedor_destino = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Email al que se envió el requerimiento"
+    )
+    intentos_envio = models.IntegerField(
+        default=0,
+        help_text="Número de veces que se ha enviado al proveedor"
+    )
+    ultimo_recordatorio = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Fecha del último recordatorio enviado"
+    )
+    respuesta_proveedor = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Respuesta del proveedor"
+    )
+    fecha_respuesta_proveedor = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Fecha de respuesta del proveedor"
+    )
+    decision_proveedor = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        choices=[
+            ('APROBADO', 'Aprobado'),
+            ('RECHAZADO', 'Rechazado'),
+            ('PARCIAL', 'Aprobado Parcial'),
+        ],
+        help_text="Decisión del proveedor"
+    )
+    asignado_a = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='requerimientos_asignados',
+        help_text="Usuario responsable de gestionar el requerimiento"
+    )
+    
+    # === RESOLUCIÓN ===
+    resolucion = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Descripción de la resolución final"
+    )
+    motivo_resolucion = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Motivo visible al usuario de por qué se aprobó o rechazó"
+    )
+    fecha_resolucion = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Fecha de resolución del requerimiento"
+    )
+    
+    # === FECHAS ===
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+    
+    # === PRIORIDAD ===
+    prioridad = models.CharField(
+        max_length=10,
+        choices=[
+            ('BAJA', 'Baja'),
+            ('MEDIA', 'Media'),
+            ('ALTA', 'Alta'),
+            ('URGENTE', 'Urgente'),
+        ],
+        default='MEDIA'
+    )
+    
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Requerimiento'
+        verbose_name_plural = 'Requerimientos'
+        indexes = [
+            models.Index(fields=['numero_requerimiento']),
+            models.Index(fields=['estado', '-fecha_creacion']),
+            models.Index(fields=['sucursal', '-fecha_creacion']),
+            models.Index(fields=['sku']),
+        ]
+    
+    def __str__(self):
+        return f"{self.numero_requerimiento} - {self.get_tipo_display()} - {self.get_estado_display()}"
+    
+    def save(self, *args, **kwargs):
+        """Genera número de requerimiento automáticamente"""
+        if not self.numero_requerimiento:
+            # Generar número correlativo: REQ-YYYYMMDD-XXXX
+            from django.utils import timezone
+            fecha_actual = timezone.now()
+            prefijo = f"REQ-{fecha_actual.strftime('%Y%m%d')}"
+            
+            # Obtener el último número del día
+            ultimo = Requerimiento.objects.filter(
+                numero_requerimiento__startswith=prefijo
+            ).order_by('-numero_requerimiento').first()
+            
+            if ultimo:
+                # Extraer el número y sumar 1
+                ultimo_num = int(ultimo.numero_requerimiento.split('-')[-1])
+                nuevo_num = ultimo_num + 1
+            else:
+                nuevo_num = 1
+            
+            self.numero_requerimiento = f"{prefijo}-{nuevo_num:04d}"
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def dias_transcurridos(self):
+        """Calcula días desde la creación"""
+        from django.utils import timezone
+        delta = timezone.now() - self.fecha_creacion
+        return delta.days
+    
+    @property
+    def cantidad_fotos(self):
+        """Retorna la cantidad de fotos adjuntas"""
+        return self.fotos.count()
+    
+    @property
+    def dias_sin_respuesta(self):
+        """Calcula días sin respuesta del proveedor"""
+        if not self.fecha_envio_proveedor:
+            return 0
+        if self.fecha_respuesta_proveedor:
+            delta = self.fecha_respuesta_proveedor - self.fecha_envio_proveedor
+        else:
+            delta = timezone.now() - self.fecha_envio_proveedor
+        return delta.days
+    
+    @property
+    def requiere_recordatorio(self):
+        """Indica si requiere enviar recordatorio al proveedor"""
+        return (
+            self.estado == 'ESPERANDO_RESPUESTA' and 
+            self.dias_sin_respuesta > 7 and 
+            not self.fecha_respuesta_proveedor
+        )
+    
+    @property
+    def nivel_urgencia(self):
+        """Retorna nivel de urgencia según días transcurridos"""
+        if self.estado in ['APROBADO', 'RECHAZADO', 'CANCELADO']:
+            return 'CERRADO'
+        
+        dias = self.dias_transcurridos
+        if self.estado == 'ESPERANDO_RESPUESTA':
+            dias = self.dias_sin_respuesta
+        
+        if dias <= 3:
+            return 'NORMAL'
+        elif dias <= 7:
+            return 'MEDIA'
+        elif dias <= 14:
+            return 'ALTA'
+        else:
+            return 'CRITICA'
+
+
+class FotoRequerimiento(models.Model):
+    """
+    Modelo para almacenar fotos adjuntas a un requerimiento
+    Permite hasta 5 fotos por requerimiento
+    """
+    requerimiento = models.ForeignKey(
+        Requerimiento,
+        on_delete=models.CASCADE,
+        related_name='fotos'
+    )
+    imagen = models.ImageField(
+        upload_to='requerimientos/fotos/%Y/%m/%d/',
+        help_text="Foto del producto o problema"
+    )
+    descripcion = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Descripción de la foto"
+    )
+    orden = models.IntegerField(
+        default=0,
+        help_text="Orden de la foto (1-5)"
+    )
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='fotos_requerimientos'
+    )
+    
+    class Meta:
+        ordering = ['orden', 'fecha_subida']
+        verbose_name = 'Foto de Requerimiento'
+        verbose_name_plural = 'Fotos de Requerimientos'
+    
+    def __str__(self):
+        return f"Foto {self.orden} - {self.requerimiento.numero_requerimiento}"
+
+
+class HistorialRequerimiento(models.Model):
+    """
+    Modelo para registrar el historial de cambios en un requerimiento
+    """
+    requerimiento = models.ForeignKey(
+        Requerimiento,
+        on_delete=models.CASCADE,
+        related_name='historial'
+    )
+    accion = models.CharField(
+        max_length=100,
+        help_text="Tipo de acción realizada"
+    )
+    estado_anterior = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="Estado anterior del requerimiento"
+    )
+    estado_nuevo = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="Nuevo estado del requerimiento"
+    )
+    comentario = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Comentario o descripción de la acción"
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='acciones_requerimientos'
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Historial de Requerimiento'
+        verbose_name_plural = 'Historial de Requerimientos'
+    
+    def __str__(self):
+        return f"{self.requerimiento.numero_requerimiento} - {self.accion} - {self.fecha.strftime('%d/%m/%Y %H:%M')}"
 
         

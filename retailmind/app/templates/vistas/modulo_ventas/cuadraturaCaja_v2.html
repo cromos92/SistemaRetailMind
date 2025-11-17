@@ -312,19 +312,26 @@
                         <p class="text-muted mb-0">Sistema intuitivo para cajeras y supervisores</p>
                     </div>
                     <div class="text-end">
-                        <label class="form-label mb-1 small text-muted">Fecha de cuadratura:</label>
+                        <label class="form-label mb-1 small text-muted">Selecciona la fecha:</label>
                         <div class="d-flex gap-2 align-items-end">
                             <div>
-                                <div class="input-group" style="width: 250px;">
-                                    <input type="date" class="form-control" id="fechaCuadraturaSelector" onchange="cambiarFechaCuadratura()">
+                                <input type="text" class="form-control" id="sucursalActual" style="width: 200px;" value="{{ sucursal_actual.alias }}" disabled>
+                                <small class="text-muted">Sucursal actual</small>
+                            </div>
+                            <div>
+                                <div class="input-group" style="width: 200px;">
+                                    <input type="date" class="form-control" id="fechaCuadraturaSelector">
                                     <button class="btn btn-outline-primary" onclick="irAHoy()" title="Ir a hoy">
                                         <i class="ri-calendar-todo-line"></i> Hoy
                                     </button>
                                 </div>
-                                <small class="text-muted" id="diasAtras"></small>
+                                <small class="text-muted" id="diasAtras">Fecha</small>
                             </div>
+                            <button class="btn btn-success btn-lg" onclick="buscarCuadratura()">
+                                <i class="ri-search-line"></i> Buscar
+                            </button>
                             <button class="btn btn-info" onclick="verCuadraturaDiariaDirecto()" title="Ver detalle de transacciones del día">
-                                <i class="ri-file-list-3-line"></i> Ver Detalle Diario
+                                <i class="ri-file-list-3-line"></i> Ver Detalle
                             </button>
                         </div>
                     </div>
@@ -344,11 +351,7 @@
                 </div>
                 <span style="opacity:0.5">→</span>
                 <div class="step-item" id="step3" onclick="irAPaso(3)">
-                    <i class="ri-bank-line"></i> 3. Depósitos
-                </div>
-                <span style="opacity:0.5">→</span>
-                <div class="step-item" id="step4" onclick="irAPaso(4)">
-                    <i class="ri-check-double-line"></i> 4. Revisión
+                    <i class="ri-check-double-line"></i> 3. Revisión
                 </div>
             </div>
         </div>
@@ -451,6 +454,10 @@
                                     <td class="text-end" id="totalBoletas">$0</td>
                                 </tr>
                                 <tr>
+                                    <td>📄 Boletas Papel</td>
+                                    <td class="text-end" id="totalBoletasPapel">$0</td>
+                                </tr>
+                                <tr>
                                     <td>📄 Facturas</td>
                                     <td class="text-end" id="totalFacturas">$0</td>
                                 </tr>
@@ -464,7 +471,7 @@
                 </div>
                 
                 <div class="col-12 text-center mt-4">
-                    <button class="btn btn-primary btn-mega" onclick="siguientePaso()">
+                    <button class="btn btn-primary btn-mega" id="btn-contar-efectivo" onclick="siguientePaso()">
                         Siguiente: Contar Efectivo <i class="ri-arrow-right-line ms-2"></i>
                     </button>
                 </div>
@@ -487,19 +494,23 @@
                         </div>
                         <div class="card-body text-center p-4">
                             <div class="mb-3">
-                                <small class="text-muted">Efectivo que debería haber:</small>
+                                <small class="text-muted">📊 Efectivo teórico (según sistema):</small>
                                 <div class="alert alert-info mb-0">
                                     <h4 class="mb-0" id="recordatorioTeorico">$0</h4>
+                                    <small class="text-muted">Este es el valor que el sistema calculó</small>
                                 </div>
                             </div>
                             
                             <hr class="my-3">
                             
-                            <h6 class="mb-3">Ingresa el efectivo real contado:</h6>
+                            <h6 class="mb-3">💵 Ingresa el efectivo real contado:</h6>
+                            <div class="alert alert-warning py-2 mb-2">
+                                <small><strong>⚠️ Importante:</strong> Cuenta el dinero físico en caja e ingresa ese monto aquí</small>
+                            </div>
                             <div class="input-group input-group-lg mb-3">
                                 <span class="input-group-text">$</span>
                                 <input type="number" class="form-control input-monto" id="efectivoReal" 
-                                       placeholder="0" onchange="calcularDiferencias()">
+                                       placeholder="Ej: 125000" onchange="calcularDiferencias()">
                             </div>
                             
                             <!-- Diferencia Instantánea -->
@@ -581,19 +592,23 @@
                         </div>
                         <div class="card-body text-center p-4">
                             <div class="mb-3">
-                                <small class="text-muted">Total según sistema:</small>
+                                <small class="text-muted">📊 Total Transbank teórico (según sistema):</small>
                                 <div class="alert alert-info mb-0">
                                     <h4 class="mb-0" id="recordatorioTarjetas">$0</h4>
+                                    <small class="text-muted">Este es el valor que el sistema calculó</small>
                                 </div>
                             </div>
                             
                             <hr class="my-3">
                             
-                            <h6 class="mb-3">Monto del cierre POS/Transbank:</h6>
+                            <h6 class="mb-3">💳 Monto del cierre POS/Transbank:</h6>
+                            <div class="alert alert-warning py-2 mb-2">
+                                <small><strong>⚠️ Importante:</strong> Ingresa el monto total que aparece en el cierre de la máquina POS</small>
+                            </div>
                             <div class="input-group input-group-lg mb-3">
                                 <span class="input-group-text">$</span>
                                 <input type="number" class="form-control input-monto" id="cierrePOS" 
-                                       placeholder="0" onchange="calcularDiferencias()">
+                                       placeholder="Ej: 350000" onchange="calcularDiferencias()">
                             </div>
                             
                             <div class="mb-3">
@@ -620,134 +635,17 @@
                         <i class="ri-arrow-left-line"></i> Anterior
                     </button>
                     <button class="btn btn-success btn-mega" onclick="siguientePaso()">
-                        Siguiente: Registrar Depósitos <i class="ri-arrow-right-line ms-2"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- PASO 3: Depósitos Bancarios -->
-        <div id="paso3" class="paso-content" style="display:none;">
-            <div class="row">
-                <div class="col-12 mb-3">
-                    <h4><i class="ri-bank-line text-info"></i> Paso 3: Depósitos Realizados al Banco</h4>
-                    <p class="text-muted">Registra los depósitos que se hicieron durante el día</p>
-                </div>
-                
-                <div class="col-md-8">
-                    <!-- Formulario de Depósito -->
-                    <div class="card card-simple">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="ri-add-circle-line"></i> Agregar Depósito</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <label class="form-label">Fecha del Depósito</label>
-                                    <input type="date" class="form-control" id="fechaDeposito">
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Monto Depositado</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control" id="montoDeposito" placeholder="0">
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Banco</label>
-                                    <select class="form-select" id="bancoDeposito">
-                                        <option value="ESTADO">BancoEstado</option>
-                                        <option value="CHILE">Banco de Chile</option>
-                                        <option value="SANTANDER">Santander</option>
-                                        <option value="BCI">BCI</option>
-                                        <option value="SCOTIABANK">Scotiabank</option>
-                                        <option value="ITAU">Itaú</option>
-                                        <option value="SECURITY">Banco Security</option>
-                                        <option value="FALABELLA">Banco Falabella</option>
-                                        <option value="RIPLEY">Banco Ripley</option>
-                                        <option value="OTRO">Otro</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">N° Comprobante</label>
-                                    <input type="text" class="form-control" id="comprobanteDeposito" placeholder="Opcional">
-                                </div>
-                            </div>
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <label class="form-label">Observaciones (Opcional)</label>
-                                    <input type="text" class="form-control" id="obsDeposito" placeholder="Ej: Depósito del día anterior">
-                                </div>
-                            </div>
-                            <div class="mt-3 text-end">
-                                <button class="btn btn-primary" onclick="agregarDeposito()">
-                                    <i class="ri-add-line"></i> Agregar Depósito
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Lista de Depósitos -->
-                    <div class="mt-3" id="listaDepositos">
-                        <h6 class="mb-3">Depósitos Registrados Hoy:</h6>
-                        <div id="depositosContainer">
-                            <div class="text-center text-muted py-4">
-                                <i class="ri-inbox-line" style="font-size: 2rem;"></i>
-                                <p class="mt-2">No hay depósitos registrados</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <!-- Resumen de Efectivo -->
-                    <div class="card card-simple">
-                        <div class="card-header bg-success text-white">
-                            <h6 class="mb-0"><i class="ri-calculator-line"></i> Resumen de Efectivo</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <small class="text-muted">Efectivo Contado:</small>
-                                <h5 class="text-success" id="resumenEfectivoContado">$0</h5>
-                            </div>
-                            <div class="mb-3">
-                                <small class="text-muted">Depósitos Realizados:</small>
-                                <h5 class="text-danger" id="resumenDepositoTotal">- $0</h5>
-                            </div>
-                            <hr>
-                            <div>
-                                <small class="text-muted">Efectivo que queda en caja:</small>
-                                <h4 class="text-primary" id="resumenEfectivoFinal">$0</h4>
-                            </div>
-                            <hr>
-                            <div>
-                                <small class="text-muted">Efectivo teórico del sistema:</small>
-                                <h5 id="resumenEfectivoTeorico">$0</h5>
-                            </div>
-                            
-                            <div class="alert alert-warning mt-3">
-                                <strong>Nota:</strong> Los depósitos se restan del efectivo contado para saber cuánto queda en caja.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-12 text-center mt-4">
-                    <button class="btn btn-outline-secondary btn-lg me-2" onclick="anteriorPaso()">
-                        <i class="ri-arrow-left-line"></i> Anterior
-                    </button>
-                    <button class="btn btn-info btn-mega" onclick="siguientePaso()">
                         Siguiente: Ver Resultado <i class="ri-arrow-right-line ms-2"></i>
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- PASO 4: Revisión y Resultado -->
-        <div id="paso4" class="paso-content" style="display:none;">
+        <!-- PASO 3: Revisión y Resultado -->
+        <div id="paso3" class="paso-content" style="display:none;">
             <div class="row">
                 <div class="col-12 mb-3">
-                    <h4><i class="ri-check-double-line text-primary"></i> Paso 4: Revisión y Resultado Final</h4>
+                    <h4><i class="ri-check-double-line text-primary"></i> Paso 3: Revisión y Resultado Final</h4>
                     <p class="text-muted">Resumen completo de la cuadratura</p>
                 </div>
                 
@@ -914,6 +812,248 @@
     </div>
 </div>
 
+<!-- Modal: Gestión de Depósitos -->
+<div class="modal fade" id="modalGestionDepositos" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="ri-bank-line"></i> Gestión de Depósitos Bancarios</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info del Arqueo -->
+                <div class="alert alert-info">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Fecha:</strong> <span id="gd_fecha_arqueo">-</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Cajero:</strong> <span id="gd_usuario">-</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Efectivo Físico:</strong> <span id="gd_efectivo_fisico">$0</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Estado:</strong> <span id="gd_estado" class="badge bg-secondary">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- Lista de depósitos existentes -->
+                    <div class="col-md-7">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="ri-list-check"></i> Depósitos Registrados</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Banco</th>
+                                                <th>Monto</th>
+                                                <th>Comprobante</th>
+                                                <th>Registrado por</th>
+                                                <th>Acción</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabla-depositos-existentes">
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted">
+                                                    <i class="ri-inbox-line"></i>
+                                                    <p class="mb-0">No hay depósitos registrados</p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Resumen de Depósitos -->
+                                <div class="card bg-light mt-3">
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            <div class="col-6">
+                                                <small class="text-muted">Total Depósitos</small>
+                                                <h4 id="gd_total_depositos" class="mb-0 text-success">$0</h4>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted">Efectivo en Caja</small>
+                                                <h4 id="gd_efectivo_caja" class="mb-0 text-primary">$0</h4>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Formulario para nuevo depósito -->
+                    <div class="col-md-5">
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0"><i class="ri-add-line"></i> Agregar Nuevo Depósito</h6>
+                            </div>
+                            <div class="card-body">
+                                <form id="formNuevoDeposito">
+                                    <input type="hidden" id="gd_arqueo_id">
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Fecha del Depósito <span class="text-danger">*</span></label>
+                                        <input type="date" class="form-control" id="gd_deposito_fecha" required>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Monto <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" class="form-control" id="gd_deposito_monto" placeholder="0" required min="1">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Banco <span class="text-danger">*</span></label>
+                                        <select class="form-select" id="gd_deposito_banco" required>
+                                            <option value="ESTADO">BancoEstado</option>
+                                            <option value="CHILE">Banco de Chile</option>
+                                            <option value="SANTANDER">Santander</option>
+                                            <option value="BCI">BCI</option>
+                                            <option value="SCOTIABANK">Scotiabank</option>
+                                            <option value="ITAU">Itaú</option>
+                                            <option value="SECURITY">Banco Security</option>
+                                            <option value="FALABELLA">Banco Falabella</option>
+                                            <option value="RIPLEY">Banco Ripley</option>
+                                            <option value="OTRO">Otro</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">N° Comprobante</label>
+                                        <input type="text" class="form-control" id="gd_deposito_comprobante" placeholder="Ej: 12345">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Observaciones</label>
+                                        <textarea class="form-control" id="gd_deposito_observaciones" rows="2"></textarea>
+                                    </div>
+                                    
+                                    <button type="button" class="btn btn-success w-100" onclick="agregarNuevoDeposito()">
+                                        <i class="ri-save-line"></i> Agregar Depósito
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Ingresar Depósitos (LEGACY - mantener por compatibilidad) -->
+<div class="modal fade" id="modalIngresarDeposito" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="ri-bank-line"></i> Ingresar Depósito Bancario</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong>💡 Info:</strong> Los depósitos se reflejarán en el efectivo final en caja.
+                </div>
+                
+                <form id="formIngresarDeposito">
+                    <input type="hidden" id="arqueo_id_deposito">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Fecha del Depósito <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="deposito_fecha" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Monto Depositado <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="deposito_monto" placeholder="0" required min="1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Banco <span class="text-danger">*</span></label>
+                            <select class="form-select" id="deposito_banco" required>
+                                <option value="ESTADO">BancoEstado</option>
+                                <option value="CHILE">Banco de Chile</option>
+                                <option value="SANTANDER">Santander</option>
+                                <option value="BCI">BCI</option>
+                                <option value="SCOTIABANK">Scotiabank</option>
+                                <option value="ITAU">Itaú</option>
+                                <option value="SECURITY">Banco Security</option>
+                                <option value="FALABELLA">Banco Falabella</option>
+                                <option value="RIPLEY">Banco Ripley</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">N° Comprobante (Opcional)</label>
+                            <input type="text" class="form-control" id="deposito_comprobante" placeholder="Ej: 12345">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Observaciones (Opcional)</label>
+                        <textarea class="form-control" id="deposito_observaciones" rows="2" placeholder="Ej: Depósito del día anterior"></textarea>
+                    </div>
+                    
+                    <!-- Resumen -->
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="mb-3">Resumen de Efectivo Actual:</h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Efectivo Teórico:</small>
+                                    <h5 id="dep_efectivo_teorico" class="text-white">$0</h5>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Efectivo Contado:</small>
+                                    <h5 id="dep_efectivo_real" class="text-white">$0</h5>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Depósitos Actuales:</small>
+                                    <h5 id="dep_depositos_actuales" >$0</h5>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Efectivo en Caja:</small>
+                                    <h5 id="dep_efectivo_caja" class="text-primary">$0</h5>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="guardarDeposito()">
+                    <i class="ri-save-line"></i> Guardar Depósito
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
 <script>
 // Variables globales
 let pasoActual = 1;
@@ -926,6 +1066,9 @@ let datosArqueo = {
     depositos: [],
     cuadratura: {}
 };
+
+const sucursalActualId = '{{ sucursal_actual.id }}';
+const sucursalActualNombre = '{{ sucursal_actual.alias|escapejs }}';
 
 // Inicialización
 $(document).ready(function() {
@@ -940,17 +1083,12 @@ $(document).ready(function() {
     configurarLimitesFecha();
     
     $('#fechaDeposito').val(hoyStr);
-    // NO inicializar filtroFecha - dejar vacío para que muestre todas
-    // $('#filtroFecha').val(hoyStr);
-    
-    // Cargar datos del sistema
-    cargarDatosDelSistema();
-    
-    // Cargar historial (sin filtro = muestra todas)
-    cargarHistorial();
     
     // Activar paso 1
     irAPaso(1);
+    
+    // Ejecutar búsqueda inicial automáticamente
+    buscarCuadratura();
 });
 
 function configurarLimitesFecha() {
@@ -963,11 +1101,214 @@ function configurarLimitesFecha() {
     $('#fechaCuadraturaSelector').attr('max', hoy.toISOString().split('T')[0]);
 }
 
+function mostrarMensajeInicial() {
+    // Mostrar mensaje en paso 1
+    $('#efectivoTeorico').html('<span class="text-muted">Selecciona fecha y presiona Buscar</span>');
+    $('#totalTarjetas').html('<span class="text-muted">Selecciona fecha y presiona Buscar</span>');
+    $('#totalInternet').html('<span class="text-muted">Selecciona fecha y presiona Buscar</span>');
+    $('#ventaTotal').html('<span class="text-muted">Selecciona fecha y presiona Buscar</span>');
+    
+    // Mensaje en historial
+    $('#historialTabla').html(`
+        <tr>
+            <td colspan="8" class="text-center">
+                <i class="ri-search-line" style="font-size: 3rem; color: #ccc;"></i>
+                <p class="mt-3 text-muted">Selecciona una fecha y haz clic en <strong>Buscar</strong> para ver las cuadraturas</p>
+            </td>
+        </tr>
+    `);
+}
+
+function buscarCuadratura() {
+    const fecha = $('#fechaCuadraturaSelector').val();
+    
+    if(!fecha) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Atención',
+            text: 'Por favor selecciona una fecha'
+        });
+        return;
+    }
+    
+    console.log('🔍 Buscando cuadratura:', { fecha, sucursal: sucursalActualNombre });
+    
+    // Cargar datos del sistema para la fecha seleccionada
+    cargarDatosDelSistemaConSucursal(fecha);
+    
+    // Cargar historial filtrado
+    cargarHistorialConSucursal(fecha);
+}
+
+function cargarDatosDelSistemaConSucursal(fecha) {
+    cargarDatosDelSistemaReal(fecha);
+}
+
+function cargarHistorialConSucursal(fecha) {
+    const url = new URL('/app/api/cuadratura/listar/', window.location.origin);
+    if(fecha) url.searchParams.append('fecha', fecha);
+    
+    // Mostrar loading
+    $('#historialTabla').html(`
+        <tr>
+            <td colspan="8" class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2 text-muted">Buscando cuadraturas...</p>
+            </td>
+        </tr>
+    `);
+    
+    $.ajax({
+        url: url.toString(),
+        method: 'GET',
+        success: function(response) {
+            if(response.success && response.arqueos.length > 0) {
+                cargarHistorialTabla(response.arqueos);
+            } else {
+                $('#historialTabla').html(`
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No hay cuadraturas para los filtros seleccionados</p>
+                        </td>
+                    </tr>
+                `);
+            }
+        },
+        error: function(xhr) {
+            console.error('Error al cargar historial:', xhr);
+            $('#historialTabla').html(`
+                <tr>
+                    <td colspan="8" class="text-center text-danger">
+                        <i class="ri-alert-line" style="font-size: 2rem;"></i>
+                        <p class="mt-2">Error al cargar historial</p>
+                    </td>
+                </tr>
+            `);
+        }
+    });
+}
+
+function cargarHistorialTabla(arqueos) {
+    let html = '';
+    arqueos.forEach((arqueo, index) => {
+        if(index === 0) {
+            console.log('🔍 Primer arqueo recibido:', arqueo);
+        }
+        
+        const diferencia = arqueo.diferencia_efectivo || 0;
+        const diferenciaTransbank = arqueo.diferencia_transbank || 0;
+        
+        let estadoClass = '';
+        let estadoIcon = '';
+        if(arqueo.estado_codigo === 'CERRADO') {
+            estadoClass = 'bg-success';
+            estadoIcon = '✅';
+        } else if(arqueo.estado_codigo === 'CON_DIFERENCIAS') {
+            estadoClass = 'bg-warning';
+            estadoIcon = '⚠️';
+        } else {
+            estadoClass = 'bg-info';
+            estadoIcon = '📝';
+        }
+        
+        // Usar diferencia real que considera depósitos
+        const diferenciaEfectivoReal = arqueo.diferencia_efectivo_real || 0;
+        const diferenciaTotal = arqueo.diferencia_total_real || (diferenciaEfectivoReal + diferenciaTransbank);
+        
+        let diferenciaHtml = '';
+        if(diferenciaTotal === 0) {
+            diferenciaHtml = '<span class="text-success fw-bold">$0 ✅</span>';
+        } else if(diferenciaTotal > 0) {
+            diferenciaHtml = '<span class="text-warning fw-bold">+' + formatearMoneda(diferenciaTotal) + ' ⚠️</span>';
+        } else {
+            // Si hay depósitos y la diferencia es negativa, puede ser depósito excedente (a favor)
+            if(arqueo.total_depositos > 0 && arqueo.efectivo_en_caja < 0) {
+                const depositoExcedente = Math.abs(arqueo.efectivo_en_caja);
+                diferenciaHtml = '<span class="text-info fw-bold">Dep. Excedente: +' + formatearMoneda(depositoExcedente) + ' 💰</span>';
+            } else {
+                diferenciaHtml = '<span class="text-danger fw-bold">' + formatearMoneda(diferenciaTotal) + ' ❌</span>';
+            }
+        }
+        
+        // Mostrar desglose si hay depósitos
+        if(arqueo.total_depositos > 0) {
+            diferenciaHtml += '<br><small class="text-muted">';
+            diferenciaHtml += 'Depósitos: ' + formatearMoneda(arqueo.total_depositos);
+            if(arqueo.efectivo_en_caja < 0) {
+                diferenciaHtml += ' (Excedente: +' + formatearMoneda(Math.abs(arqueo.efectivo_en_caja)) + ')';
+            }
+            diferenciaHtml += '</small>';
+        }
+        
+        let cierrePOSHtml = '';
+        if(arqueo.cierre_pos_fisico) {
+            const difPOS = diferenciaTransbank;
+            if(difPOS === 0) {
+                cierrePOSHtml = `<small class="text-muted">Teórico: ${formatearMoneda(arqueo.total_transbank_teorico)}</small><br>
+                               <strong class="text-success">${formatearMoneda(arqueo.cierre_pos_fisico)} ✅</strong>`;
+            } else {
+                cierrePOSHtml = `<small class="text-muted">Teórico: ${formatearMoneda(arqueo.total_transbank_teorico)}</small><br>
+                               <strong class="text-${difPOS > 0 ? 'warning' : 'danger'}">${formatearMoneda(arqueo.cierre_pos_fisico)} (${difPOS >= 0 ? '+' : ''}${formatearMoneda(difPOS)})</strong>`;
+            }
+            if(arqueo.numero_lote_pos) {
+                cierrePOSHtml += `<br><small class="text-muted">Lote: ${arqueo.numero_lote_pos}</small>`;
+            }
+        } else {
+            cierrePOSHtml = '<span class="text-muted">-</span>';
+        }
+        
+        html += `
+            <tr>
+                <td><strong>${arqueo.fecha_arqueo}</strong></td>
+                <td>${arqueo.usuario}</td>
+                <td>
+                    <small class="text-muted">Teórico: ${formatearMoneda(arqueo.efectivo_teorico)}</small><br>
+                    ${arqueo.total_depositos > 0 ? `
+                        <div>
+                            <strong>Físico: ${formatearMoneda(arqueo.efectivo_fisico)}</strong>
+                            <br><small class="text-info">- Depósitos: ${formatearMoneda(arqueo.total_depositos)}</small>
+                            <br><strong class="text-primary">= En Caja: ${formatearMoneda(arqueo.efectivo_en_caja)}</strong>
+                        </div>
+                    ` : `
+                        <strong>${formatearMoneda(arqueo.efectivo_fisico)}</strong>
+                    `}
+                    ${diferenciaEfectivoReal !== 0 ? `<br><small class="${diferenciaEfectivoReal > 0 ? 'text-warning' : 'text-danger'}">(${diferenciaEfectivoReal >= 0 ? '+' : ''}${formatearMoneda(diferenciaEfectivoReal)})</small>` : ''}
+                </td>
+                <td>${cierrePOSHtml}</td>
+                <td>
+                    <strong>${formatearMoneda(arqueo.total_depositos)}</strong>
+                    ${arqueo.cantidad_depositos > 0 ? '<br><small class="text-muted">' + arqueo.cantidad_depositos + ' depósito(s)</small>' : ''}
+                </td>
+                <td>${diferenciaHtml}</td>
+                <td>
+                    <span class="badge ${estadoClass}">${estadoIcon} ${arqueo.estado}</span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="verDetalleArqueo(${arqueo.id})" title="Ver detalle completo">
+                        <i class="ri-eye-line"></i>
+                    </button>
+                    <button class="btn btn-sm btn-success" onclick="abrirGestionDepositos(${arqueo.id})" title="Gestionar depósitos">
+                        <i class="ri-bank-line"></i> Depósitos
+                    </button>
+                    <button class="btn btn-sm btn-warning" onclick="editarArqueo(${arqueo.id})" title="Editar cuadratura">
+                        <i class="ri-edit-line"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    $('#historialTabla').html(html);
+    console.log('✅ Historial cargado: ' + arqueos.length + ' registros');
+}
+
 function cambiarFechaCuadratura() {
+    // Ya no carga automáticamente - el usuario debe hacer clic en "Buscar"
     const fechaSeleccionada = $('#fechaCuadraturaSelector').val();
     if(!fechaSeleccionada) return;
     
-    // Validar fecha
     const fecha = new Date(fechaSeleccionada + 'T00:00:00');
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -1030,25 +1371,21 @@ function cambiarFechaCuadratura() {
             cancelButtonText: 'No, volver a hoy',
             confirmButtonColor: '#0d6efd'
         }).then((result) => {
-            if (result.isConfirmed) {
-                // Cargar datos de esa fecha
-                cargarDatosDelSistemaReal(fechaSeleccionada);
-            } else {
+            if (!result.isConfirmed) {
                 // Volver a hoy
                 irAHoy();
             }
+            // Ya NO carga automáticamente - el usuario debe hacer clic en "Buscar"
         });
-    } else {
-        // Es hoy, cargar normalmente
-        cargarDatosDelSistema();
     }
+    // Ya NO carga automáticamente - el usuario debe hacer clic en "Buscar"
 }
 
 function irAHoy() {
     const hoy = new Date().toISOString().split('T')[0];
     $('#fechaCuadraturaSelector').val(hoy);
     $('#diasAtras').html('<span class="badge bg-success">📅 Cuadratura de hoy</span>');
-    cargarDatosDelSistema();
+    // Ya NO carga automáticamente - el usuario debe hacer clic en "Buscar"
 }
 
 // ========== NAVEGACIÓN ENTRE PASOS ==========
@@ -1075,9 +1412,6 @@ function irAPaso(paso) {
         $('#recordatorioTarjetas').text(formatearMoneda(datosArqueo.tarjetasTeorico));
     }
     if(paso === 3) {
-        actualizarResumenEfectivo();
-    }
-    if(paso === 4) {
         mostrarResultadoFinal();
     }
 }
@@ -1096,14 +1430,19 @@ function anteriorPaso() {
 
 function validarPaso(paso) {
     if(paso === 2) {
-        const efectivo = parseFloat($('#efectivoReal').val()) || 0;
-        if(efectivo <= 0) {
-            Swal.fire('Atención', 'Debes ingresar el monto de efectivo contado', 'warning');
+        const efectivo = parseFloat($('#efectivoReal').val());
+        
+        // Validar que se haya ingresado un valor (incluso si es 0)
+        if(efectivo === null || efectivo === undefined || $('#efectivoReal').val().trim() === '') {
+            Swal.fire('Atención', 'Debes ingresar el monto de efectivo contado (puede ser 0 si no hay efectivo)', 'warning');
             return false;
         }
+        
         datosArqueo.efectivoReal = efectivo;
         datosArqueo.cierrePOS = parseFloat($('#cierrePOS').val()) || 0;
         datosArqueo.numeroLote = $('#numeroLote').val();
+        
+        console.log('✅ Paso 2 validado:', datosArqueo);
     }
     return true;
 }
@@ -1143,13 +1482,20 @@ function verificarCuadraturaExistente(fecha, callback) {
         data: { fecha: fecha },
         success: function(response) {
             if(response.existe) {
+                // Deshabilitar botón de contar efectivo
+                $('#btn-contar-efectivo').prop('disabled', true);
+                $('#btn-contar-efectivo').html('<i class="ri-lock-line"></i> Ya existe cuadratura para esta fecha');
                 callback(true, response.datos);
             } else {
+                // Habilitar botón de contar efectivo
+                $('#btn-contar-efectivo').prop('disabled', false);
+                $('#btn-contar-efectivo').html('Siguiente: Contar Efectivo <i class="ri-arrow-right-line ms-2"></i>');
                 callback(false, null);
             }
         },
         error: function() {
             // Si hay error, asumir que no existe y continuar
+            $('#btn-contar-efectivo').prop('disabled', false);
             callback(false, null);
         }
     });
@@ -1311,11 +1657,16 @@ function cargarDatosDelSistemaReal(fecha) {
                 // Documentos
                 $('#totalTickets').text(formatearMoneda(c.total_tickets || 0));
                 $('#totalBoletas').text(formatearMoneda(c.total_boletas_electronicas || 0));
+                $('#totalBoletasPapel').text(formatearMoneda(c.total_boletas_papel || 0));
                 $('#totalFacturas').text(formatearMoneda(c.total_facturas || 0));
                 $('#totalNC').text(formatearMoneda(c.total_notas_credito || 0));
                 
                 datosArqueo.efectivoTeorico = c.total_efectivo || 0;
                 datosArqueo.tarjetasTeorico = (c.total_transbank || 0) + (c.total_tarjetas_comerciales || 0);
+                
+                console.log('✅ Datos del sistema cargados:', c);
+                console.log('💰 Efectivo teórico guardado en datosArqueo:', datosArqueo.efectivoTeorico);
+                console.log('💳 Tarjetas teórico guardado en datosArqueo:', datosArqueo.tarjetasTeorico);
                 
                 // Mostrar alerta si no hay ventas
                 if(c.venta_total === 0) {
@@ -1326,8 +1677,6 @@ function cargarDatosDelSistemaReal(fecha) {
                         confirmButtonText: 'Entendido'
                     });
                 }
-                
-                console.log('✅ Datos del sistema cargados:', c);
             } else {
                 mostrarError('Error al cargar datos: ' + response.error);
             }
@@ -1531,9 +1880,9 @@ function actualizarResumenEfectivo() {
 function mostrarResultadoFinal() {
     const efectivoTeorico = datosArqueo.efectivoTeorico;
     const efectivoReal = datosArqueo.efectivoReal;
-    const totalDepositos = datosArqueo.depositos.reduce((sum, d) => sum + d.monto, 0);
-    const efectivoEnCaja = efectivoReal - totalDepositos;
-    const diferenciaEfectivo = efectivoEnCaja - efectivoTeorico;
+    const totalDepositos = 0; // Sin depósitos en creación
+    const efectivoEnCaja = efectivoReal;
+    const diferenciaEfectivo = efectivoReal - efectivoTeorico;
     
     const tarjetasTeorico = datosArqueo.tarjetasTeorico;
     const cierrePOS = datosArqueo.cierrePOS || 0;
@@ -1568,7 +1917,7 @@ function mostrarResultadoFinal() {
     
     $('#finalEfectivoReal').text(formatearMoneda(efectivoReal));
     $('#finalCierrePOS').text(formatearMoneda(cierrePOS));
-    $('#finalDepositosTotal').text('- ' + formatearMoneda(totalDepositos));
+    $('#finalDepositosTotal').text('$0');
     $('#finalEfectivoEnCaja').text(formatearMoneda(efectivoEnCaja));
     
     // Mostrar diferencias con colores
@@ -1590,24 +1939,8 @@ function mostrarResultadoFinal() {
         $('#finalDiferenciaPOS').html(`<span class="text-danger fw-bold">❌ ${formatearMoneda(diferenciaPOS)}</span>`);
     }
     
-    // Mostrar depósitos
-    if(datosArqueo.depositos.length > 0) {
-        let htmlDepositos = '';
-        datosArqueo.depositos.forEach(d => {
-            htmlDepositos += `
-                <div class="deposito-item">
-                    <i class="ri-bank-line text-info"></i>
-                    <strong>${formatearMoneda(d.monto)}</strong> - 
-                    🏦 ${d.banco_nombre || d.banco} - 
-                    ${new Date(d.fecha).toLocaleDateString('es-CL')}
-                    ${d.comprobante ? ' (Comp: ' + d.comprobante + ')' : ''}
-                </div>
-            `;
-        });
-        $('#depositosFinalesLista').html(htmlDepositos);
-    } else {
-        $('#detalleDepositosFinales').hide();
-    }
+    // Ocultar sección de depósitos en creación
+    $('#detalleDepositosFinales').hide();
 }
 
 // ========== GUARDAR CUADRATURA ==========
@@ -1621,8 +1954,10 @@ function guardarCuadratura() {
     formData.append('fecha', fechaSeleccionada);
     formData.append('efectivo_teorico', datosArqueo.efectivoTeorico);
     formData.append('efectivo_real', datosArqueo.efectivoReal);
+    formData.append('cierre_pos', datosArqueo.cierrePOS || 0);
+    formData.append('numero_lote', datosArqueo.numeroLote || '');
     formData.append('observaciones', observaciones);
-    formData.append('depositos', JSON.stringify(datosArqueo.depositos));
+    formData.append('depositos', JSON.stringify([])); // Sin depósitos en creación
     formData.append('cuadratura_completa', JSON.stringify(datosArqueo.cuadratura));
     
     Swal.fire({
@@ -1630,10 +1965,14 @@ function guardarCuadratura() {
         html: `
             <div class="text-start">
                 <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-CL')}</p>
-                <p><strong>Efectivo teórico:</strong> ${formatearMoneda(datosArqueo.efectivoTeorico)}</p>
-                <p><strong>Efectivo contado:</strong> ${formatearMoneda(datosArqueo.efectivoReal)}</p>
-                <p><strong>Depósitos:</strong> ${datosArqueo.depositos.length} registrado(s)</p>
-                <p><strong>Diferencia:</strong> ${formatearMoneda(datosArqueo.efectivoReal - datosArqueo.efectivoTeorico)}</p>
+                <hr>
+                <p><strong>Efectivo teórico (sistema):</strong> ${formatearMoneda(datosArqueo.efectivoTeorico)}</p>
+                <p><strong>Efectivo contado (real):</strong> ${formatearMoneda(datosArqueo.efectivoReal)}</p>
+                <p><strong>Diferencia Efectivo:</strong> <span class="${(datosArqueo.efectivoReal - datosArqueo.efectivoTeorico) === 0 ? 'text-success' : 'text-danger'}">${formatearMoneda(datosArqueo.efectivoReal - datosArqueo.efectivoTeorico)}</span></p>
+                <hr>
+                <p><strong>Transbank teórico:</strong> ${formatearMoneda(datosArqueo.tarjetasTeorico)}</p>
+                <p><strong>Cierre POS (real):</strong> ${formatearMoneda(datosArqueo.cierrePOS || 0)}</p>
+                <p><strong>Diferencia POS:</strong> <span class="${((datosArqueo.cierrePOS || 0) - datosArqueo.tarjetasTeorico) === 0 ? 'text-success' : 'text-danger'}">${formatearMoneda((datosArqueo.cierrePOS || 0) - datosArqueo.tarjetasTeorico)}</span></p>
             </div>
         `,
         icon: 'question',
@@ -1643,6 +1982,16 @@ function guardarCuadratura() {
         confirmButtonColor: '#28a745'
     }).then((result) => {
         if (result.isConfirmed) {
+            // Debug: Mostrar datos que se enviarán
+            console.log('📤 Enviando cuadratura:', {
+                fecha: fechaSeleccionada,
+                efectivo_teorico: datosArqueo.efectivoTeorico,
+                efectivo_real: datosArqueo.efectivoReal,
+                cierre_pos: datosArqueo.cierrePOS || 0,
+                numero_lote: datosArqueo.numeroLote || '',
+                depositos: datosArqueo.depositos.length
+            });
+            
             // Mostrar loading
             Swal.fire({
                 title: 'Guardando...',
@@ -1739,7 +2088,12 @@ function cargarHistorial() {
             
             if(response.success && response.arqueos.length > 0) {
                 let html = '';
-                response.arqueos.forEach(arqueo => {
+                response.arqueos.forEach((arqueo, index) => {
+                    // Debug: mostrar datos del primer arqueo
+                    if(index === 0) {
+                        console.log('🔍 Primer arqueo recibido:', arqueo);
+                    }
+                    
                     const diferencia = arqueo.diferencia_efectivo || 0;
                     const diferenciaTransbank = arqueo.diferencia_transbank || 0;
                     
@@ -2306,6 +2660,8 @@ function mostrarModalEdicion(arqueo) {
 }
 
 function guardarEdicionCuadratura(arqueoId, datos) {
+    console.log('💾 Guardando edición de cuadratura:', arqueoId, datos);
+    
     Swal.fire({
         title: 'Guardando cambios...',
         text: 'Actualizando cuadratura',
@@ -2324,16 +2680,26 @@ function guardarEdicionCuadratura(arqueoId, datos) {
         },
         data: JSON.stringify(datos),
         success: function(response) {
+            console.log('✅ Respuesta de edición:', response);
             if(response.success) {
                 Swal.fire({
                     icon: 'success',
                     title: '✅ Cuadratura Actualizada',
-                    text: response.message,
-                    timer: 2000,
+                    html: `
+                        <div class="text-start">
+                            <p>${response.message}</p>
+                            <p><small class="text-muted">El historial se actualizará en unos momentos...</small></p>
+                        </div>
+                    `,
+                    timer: 1500,
                     showConfirmButton: false
+                }).then(() => {
+                    // Recargar historial con un pequeño delay para asegurar que la BD se actualizó
+                    setTimeout(() => {
+                        console.log('🔄 Recargando historial...');
+                        cargarHistorial();
+                    }, 300);
                 });
-                // Recargar historial
-                cargarHistorial();
             } else {
                 Swal.fire({
                     icon: 'error',
@@ -2343,10 +2709,11 @@ function guardarEdicionCuadratura(arqueoId, datos) {
             }
         },
         error: function(xhr) {
+            console.error('❌ Error al guardar edición:', xhr);
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: 'No se pudo actualizar la cuadratura'
+                text: 'No se pudo actualizar la cuadratura: ' + (xhr.responseText || xhr.statusText)
             });
         }
     });
@@ -2404,6 +2771,446 @@ function eliminarArqueo(arqueoId) {
 function limpiarFiltroFecha() {
     $('#filtroFecha').val('');
     cargarHistorial();
+}
+
+// ========== GESTIÓN DE DEPÓSITOS ==========
+
+function abrirGestionDepositos(arqueoId) {
+    console.log('🏦 Abriendo gestión de depósitos para arqueo:', arqueoId);
+    
+    // Cargar detalle del arqueo
+    $.ajax({
+        url: `/app/api/cuadratura/detalle/${arqueoId}/`,
+        method: 'GET',
+        success: function(response) {
+            if(response.success) {
+                const arqueo = response.arqueo;
+                
+                // Guardar ID del arqueo
+                $('#gd_arqueo_id').val(arqueoId);
+                
+                // Llenar info del arqueo
+                $('#gd_fecha_arqueo').text(arqueo.fecha_arqueo);
+                $('#gd_usuario').text(arqueo.usuario);
+                $('#gd_efectivo_fisico').text(formatearMoneda(arqueo.total_efectivo_fisico));
+                
+                // Badge de estado
+                const estadoBadge = arqueo.estado === 'CERRADO' ? 'bg-success' : 'bg-warning';
+                $('#gd_estado').removeClass('bg-success bg-warning bg-secondary').addClass(estadoBadge).text(arqueo.estado);
+                
+                // Establecer fecha de hoy como default para nuevo depósito
+                const hoy = new Date().toISOString().split('T')[0];
+                $('#gd_deposito_fecha').val(hoy);
+                
+                // Limpiar formulario de nuevo depósito
+                $('#gd_deposito_monto').val('');
+                $('#gd_deposito_comprobante').val('');
+                $('#gd_deposito_observaciones').val('');
+                $('#gd_deposito_banco').val('ESTADO');
+                
+                // Cargar lista de depósitos existentes
+                cargarListaDepositos(arqueo);
+                
+                // Abrir modal
+                const modal = new bootstrap.Modal(document.getElementById('modalGestionDepositos'));
+                modal.show();
+            } else {
+                Swal.fire('Error', 'No se pudo cargar la información del arqueo', 'error');
+            }
+        },
+        error: function(xhr) {
+            console.error('Error al obtener detalle:', xhr);
+            Swal.fire('Error', 'Error al cargar datos del arqueo', 'error');
+        }
+    });
+}
+
+function cargarListaDepositos(arqueo) {
+    const tbody = $('#tabla-depositos-existentes');
+    const depositos = arqueo.depositos || [];
+    
+    // Calcular totales
+    const totalDepositos = depositos.reduce((sum, d) => sum + d.monto, 0);
+    const efectivoCaja = arqueo.total_efectivo_fisico - totalDepositos;
+    
+    // Actualizar resumen
+    $('#gd_total_depositos').text(formatearMoneda(totalDepositos));
+    $('#gd_efectivo_caja').text(formatearMoneda(efectivoCaja));
+    
+    // Llenar tabla
+    if(depositos.length === 0) {
+        tbody.html(`
+            <tr>
+                <td colspan="6" class="text-center text-muted py-3">
+                    <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                    <p class="mb-0 mt-2">No hay depósitos registrados</p>
+                    <small>Use el formulario lateral para agregar</small>
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    let html = '';
+    depositos.forEach(deposito => {
+        html += `
+            <tr>
+                <td><strong>${deposito.fecha_deposito}</strong></td>
+                <td>${deposito.banco_display}</td>
+                <td class="fw-bold text-success">${formatearMoneda(deposito.monto)}</td>
+                <td><small class="text-muted">${deposito.numero_comprobante || '-'}</small></td>
+                <td><small>${deposito.registrado_por || '-'}</small></td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarDeposito(${deposito.id})" title="Eliminar depósito">
+                        <i class="ri-delete-bin-line"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    tbody.html(html);
+}
+
+function agregarNuevoDeposito() {
+    const arqueoId = $('#gd_arqueo_id').val();
+    const fecha = $('#gd_deposito_fecha').val();
+    const monto = parseFloat($('#gd_deposito_monto').val()) || 0;
+    const banco = $('#gd_deposito_banco').val();
+    const comprobante = $('#gd_deposito_comprobante').val();
+    const observaciones = $('#gd_deposito_observaciones').val();
+    
+    // Validaciones
+    if(!fecha) {
+        Swal.fire('Atención', 'Debes seleccionar la fecha del depósito', 'warning');
+        return;
+    }
+    
+    if(monto <= 0) {
+        Swal.fire('Atención', 'Debes ingresar un monto válido', 'warning');
+        return;
+    }
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Guardando depósito...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Enviar datos
+    const formData = new FormData();
+    formData.append('arqueo_id', arqueoId);
+    formData.append('fecha_deposito', fecha);
+    formData.append('monto', monto);
+    formData.append('banco', banco);
+    formData.append('numero_comprobante', comprobante);
+    formData.append('observaciones', observaciones);
+    
+    $.ajax({
+        url: '/app/api/cuadratura/agregar-deposito/',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            Swal.close();
+            
+            if(response.success) {
+                // Limpiar formulario
+                $('#gd_deposito_monto').val('');
+                $('#gd_deposito_comprobante').val('');
+                $('#gd_deposito_observaciones').val('');
+                
+                // Recargar lista de depósitos
+                abrirGestionDepositos(arqueoId);
+                
+                // Recargar historial en background
+                cargarHistorial();
+                
+                // Mostrar notificación de éxito
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: '✅ Depósito guardado',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            } else {
+                Swal.fire('Error', response.error || 'Error al guardar depósito', 'error');
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            console.error('Error al guardar depósito:', xhr);
+            Swal.fire('Error', 'Error al guardar el depósito', 'error');
+        }
+    });
+}
+
+function eliminarDeposito(depositoId) {
+    Swal.fire({
+        title: '¿Eliminar este depósito?',
+        html: `
+            <p>Esta acción eliminará el depósito y recalculará automáticamente las diferencias del arqueo.</p>
+            <p class="text-muted small">Esta acción no se puede deshacer.</p>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-delete-bin-line"></i> Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if(result.isConfirmed) {
+            // Mostrar loading
+            Swal.fire({
+                title: 'Eliminando depósito...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            $.ajax({
+                url: '/app/api/cuadratura/eliminar-deposito/',
+                method: 'POST',
+                data: JSON.stringify({ deposito_id: depositoId }),
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                success: function(response) {
+                    Swal.close();
+                    
+                    if(response.success) {
+                        const arqueoId = $('#gd_arqueo_id').val();
+                        
+                        // Recargar lista de depósitos
+                        abrirGestionDepositos(arqueoId);
+                        
+                        // Recargar historial en background
+                        cargarHistorial();
+                        
+                        // Mostrar notificación de éxito
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'success',
+                            title: '✅ Depósito eliminado',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                    } else {
+                        Swal.fire('Error', response.error || 'Error al eliminar depósito', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    Swal.close();
+                    console.error('Error al eliminar depósito:', xhr);
+                    Swal.fire('Error', 'Error al eliminar el depósito', 'error');
+                }
+            });
+        }
+    });
+}
+
+// ========== INGRESAR DEPÓSITO DESDE HISTORIAL (LEGACY) ==========
+
+function ingresarDepositoArqueo(arqueoId) {
+    console.log('📝 Abriendo modal de depósito para arqueo:', arqueoId);
+    
+    // Obtener detalle del arqueo primero
+    $.ajax({
+        url: `/app/api/cuadratura/detalle/${arqueoId}/`,
+        method: 'GET',
+        success: function(response) {
+            if(response.success) {
+                const arqueo = response.arqueo;
+                
+                // Guardar ID del arqueo
+                $('#arqueo_id_deposito').val(arqueoId);
+                
+                // Establecer fecha de hoy como default
+                const hoy = new Date().toISOString().split('T')[0];
+                $('#deposito_fecha').val(hoy);
+                
+                // Cargar datos del arqueo en el resumen
+                $('#dep_efectivo_teorico').text(formatearMoneda(arqueo.efectivo_teorico));
+                $('#dep_efectivo_real').text(formatearMoneda(arqueo.efectivo_fisico));
+                
+                // Calcular depósitos actuales (si existen)
+                const depositosActuales = arqueo.depositos || [];
+                const totalDepositos = depositosActuales.reduce((sum, d) => sum + d.monto, 0);
+                $('#dep_depositos_actuales').text(formatearMoneda(totalDepositos));
+                
+                // Calcular efectivo en caja
+                const efectivoCaja = arqueo.efectivo_fisico - totalDepositos;
+                $('#dep_efectivo_caja').text(formatearMoneda(efectivoCaja));
+                
+                // Limpiar formulario
+                $('#deposito_monto').val('');
+                $('#deposito_comprobante').val('');
+                $('#deposito_observaciones').val('');
+                $('#deposito_banco').val('ESTADO');
+                
+                // Abrir modal
+                const modal = new bootstrap.Modal(document.getElementById('modalIngresarDeposito'));
+                modal.show();
+            } else {
+                Swal.fire('Error', 'No se pudo cargar la información del arqueo', 'error');
+            }
+        },
+        error: function(xhr) {
+            console.error('Error al obtener detalle:', xhr);
+            Swal.fire('Error', 'Error al cargar datos del arqueo', 'error');
+        }
+    });
+}
+
+function guardarDeposito() {
+    const arqueoId = $('#arqueo_id_deposito').val();
+    const fecha = $('#deposito_fecha').val();
+    const monto = parseFloat($('#deposito_monto').val()) || 0;
+    const banco = $('#deposito_banco').val();
+    const comprobante = $('#deposito_comprobante').val();
+    const observaciones = $('#deposito_observaciones').val();
+    
+    // Validaciones
+    if(!fecha) {
+        Swal.fire('Atención', 'Debes seleccionar la fecha del depósito', 'warning');
+        return;
+    }
+    
+    if(monto <= 0) {
+        Swal.fire('Atención', 'Debes ingresar un monto válido', 'warning');
+        return;
+    }
+    
+    // Advertencia si el depósito excede el efectivo en caja (pero permitirlo)
+    const efectivoCaja = parseFloat($('#dep_efectivo_caja').text().replace(/[$.,]/g, '')) || 0;
+    if(monto > efectivoCaja) {
+        const excedente = monto - efectivoCaja;
+        
+        Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Depósito Mayor al Efectivo en Caja',
+            html: `
+                <p>El monto a depositar es <strong>mayor</strong> al efectivo disponible en caja.</p>
+                <hr>
+                <p><strong>Efectivo en Caja:</strong> ${formatearMoneda(efectivoCaja)}</p>
+                <p><strong>Monto a Depositar:</strong> <span class="text-warning">${formatearMoneda(monto)}</span></p>
+                <p><strong>Excedente:</strong> <span class="text-danger fw-bold">+${formatearMoneda(excedente)}</span></p>
+                <hr>
+                <p class="small">Esto puede ocurrir si se depositan fondos de días anteriores o efectivo adicional.</p>
+                <p class="small text-muted"><strong>¿Desea continuar con el depósito?</strong></p>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, depositar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                ejecutarGuardarDeposito(arqueoId, fecha, monto, banco, comprobante, observaciones);
+            }
+        });
+        return;
+    }
+    
+    // Si el depósito es normal, ejecutar directamente
+    ejecutarGuardarDeposito(arqueoId, fecha, monto, banco, comprobante, observaciones);
+}
+
+function ejecutarGuardarDeposito(arqueoId, fecha, monto, banco, comprobante, observaciones) {
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Guardando depósito...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Enviar datos
+    const formData = new FormData();
+    formData.append('arqueo_id', arqueoId);
+    formData.append('fecha_deposito', fecha);
+    formData.append('monto', monto);
+    formData.append('banco', banco);
+    formData.append('numero_comprobante', comprobante);
+    formData.append('observaciones', observaciones);
+    
+    $.ajax({
+        url: '/app/api/cuadratura/agregar-deposito/',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            Swal.close();
+            
+            if(response.success) {
+                // Cerrar modal PRIMERO
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalIngresarDeposito'));
+                if(modal) {
+                    modal.hide();
+                }
+                
+                // Recargar historial
+                const fecha = $('#fechaCuadraturaSelector').val();
+                cargarHistorialConSucursal(fecha);
+                
+                // Mostrar mensaje DESPUÉS con delay
+                setTimeout(() => {
+                    const arqueoAct = response.arqueo_actualizado || {};
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: '✅ Depósito Guardado',
+                        html: `
+                            <p>El depósito se registró correctamente</p>
+                            <hr>
+                            <div class="text-start">
+                                <p><strong>Depósito:</strong> ${formatearMoneda(response.deposito.monto)}</p>
+                                <p><strong>Banco:</strong> ${response.deposito.banco}</p>
+                                <p><strong>Total Depósitos:</strong> ${formatearMoneda(arqueoAct.total_depositos || 0)}</p>
+                                <p><strong>Efectivo en Caja:</strong> ${formatearMoneda(arqueoAct.efectivo_en_caja || 0)}</p>
+                                <hr>
+                                <p class="mb-0"><strong>Nueva Diferencia:</strong> 
+                                    <span class="${arqueoAct.diferencia_total === 0 ? 'text-success' : (arqueoAct.diferencia_total < 0 ? 'text-danger' : 'text-warning')}">
+                                        ${formatearMoneda(arqueoAct.diferencia_total || 0)}
+                                        ${arqueoAct.diferencia_total === 0 ? '✅' : (arqueoAct.diferencia_total < 0 ? '❌' : '⚠️')}
+                                    </span>
+                                </p>
+                                <p class="mb-0"><strong>Estado:</strong> 
+                                    <span class="badge ${arqueoAct.estado_codigo === 'CERRADO' ? 'bg-success' : 'bg-warning'}">${arqueoAct.estado}</span>
+                                </p>
+                            </div>
+                        `,
+                        timer: 3000,
+                        showConfirmButton: true,
+                        confirmButtonText: 'Entendido'
+                    });
+                }, 400);
+            } else {
+                Swal.fire('Error', response.error || 'Error al guardar depósito', 'error');
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            console.error('Error al guardar depósito:', xhr);
+            Swal.fire('Error', 'Error al guardar el depósito', 'error');
+        }
+    });
 }
 
 // ========== FUNCIONES AUXILIARES ==========
@@ -2974,6 +3781,3 @@ function formatearFecha(fecha) {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 </script>
-
-{% include '../../layout/footer.html' %}
-

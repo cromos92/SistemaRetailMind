@@ -30,8 +30,8 @@ def login_view(request):
                     
                     request.session['idEmpresaActual'] = empresa_user.empresa.id
                     request.session['idSucursalActual'] = empresa_user.sucursal.id if empresa_user.sucursal else None
-                    request.session['idDireccionSucursalActual'] = empresa_user.sucursal.direccion if empresa_user.sucursal else ''
-                    request.session['alias'] = empresa_user.sucursal.alias if empresa_user.sucursal else ''
+                    request.session['direccionSucursal'] = empresa_user.sucursal.direccion if empresa_user.sucursal else 'Sin dirección'
+                    request.session['alias'] = empresa_user.sucursal.alias if empresa_user.sucursal else 'Sin sucursal'
                     request.session['nombreEmpresaActual'] = empresa_user.empresa.nombre
                     request.session['rutEmpresaActual'] = empresa_user.empresa.rut
                     

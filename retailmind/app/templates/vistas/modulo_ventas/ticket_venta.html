@@ -260,7 +260,7 @@
                                 <div class="col-md-1">
                                     <div class="form-control p-1">
                                         <label class="text-center d-block"><b>Cantidad</b></label>
-                                        <input type="number" class="form-control text-center" id="cantidadProducto" value="1" min="1">
+                                        <input type="number" class="form-control text-center" id="cantidadProducto" value="1" min="1" step="1">
                                     </div>
                                 </div>
                                 <div class="col-md-1">
@@ -434,13 +434,14 @@
 
                 <div class="table-responsive border rounded">
                     <table class="table table-hover table-sm mb-0">
-                        <thead class="table-light text-center">
+                        <thead class="table-light text-center" id="theadBusquedaProductos">
                             <tr>
                                 <th>SKU</th>
                                 <th>Artículo</th>
                                 <th>Descripción</th>
                                 <th>Marca</th>
                                 <th>Talla</th>
+                                <th class="col-sucursal" style="display: none;">Sucursal</th>
                                 <th>Stock</th>
                                 <th>Precio</th>
                                 <th>Acción</th>
@@ -448,7 +449,7 @@
                         </thead>
                         <tbody id="tbodyBusquedaProductos">
                             <tr>
-                                <td colspan="8" class="text-center text-muted py-4">
+                                <td colspan="9" class="text-center text-muted py-4">
                                     <i class="ri-filter-line" style="font-size: 2rem;"></i>
                                     <br>
                                     Ingresa un criterio de búsqueda y presiona "Buscar productos".
@@ -475,7 +476,7 @@ $(document).ready(function() {
     const tieneCorrelativo = {{ tiene_correlativo|yesno:"true,false" }};
     const MENSAJE_BUSQUEDA_DEFAULT = `
         <tr>
-            <td colspan="8" class="text-center text-muted py-4">
+            <td colspan="9" class="text-center text-muted py-4">
                 <i class="ri-filter-line" style="font-size: 2rem;"></i>
                 <br>
                 Ingresa un criterio de búsqueda y presiona "Buscar productos".
@@ -490,6 +491,16 @@ $(document).ready(function() {
             .addClass('btn-secondary')
             .attr('title', 'No hay correlativo disponible');
     }
+
+    // Controlar visibilidad de columna Sucursal según checkbox
+    $('#chkBuscarTodasSucursales').on('change', function() {
+        const mostrarSucursal = $(this).is(':checked');
+        if (mostrarSucursal) {
+            $('.col-sucursal').show();
+        } else {
+            $('.col-sucursal').hide();
+        }
+    });
 
     // Enfocar automáticamente el input de código al cargar la página
     $('#codigoVendedor').focus();
@@ -775,22 +786,54 @@ $(document).ready(function() {
         const talla = $('#tallaProducto').val();
         const precio = parseFloat($('#precioProducto').val()) || 0;
         const precioOriginal = parseFloat($('#precioOriginal').val()) || 0;
-        const cantidad = parseInt($('#cantidadProducto').val()) || 1;
+        const cantidad = parseInt($('#cantidadProducto').val());
         const stock = parseInt($('#stockProducto').val()) || 0;
 
         // Validaciones
         if (!sku || !articulo) {
-            Swal.fire('Error', 'Busca un producto válido primero', 'error');
+            Swal.fire({
+                icon: 'error',
+                title: 'Producto requerido',
+                text: 'Debes buscar un producto válido primero',
+                confirmButtonText: 'Entendido'
+            });
+            $('#skuProducto').focus();
             return;
         }
 
-        if (cantidad <= 0) {
-            Swal.fire('Error', 'La cantidad debe ser mayor a 0', 'error');
+        // Validar cantidad: debe ser un número válido y positivo
+        if (isNaN(cantidad) || cantidad < 1) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Cantidad inválida',
+                text: 'La cantidad debe ser un número entero positivo mayor a 0',
+                confirmButtonText: 'Entendido'
+            });
+            $('#cantidadProducto').val(1).focus();
             return;
         }
 
+        // Validar que no sea decimal
+        if (cantidad !== Math.floor(cantidad)) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Cantidad inválida',
+                text: 'La cantidad debe ser un número entero (sin decimales)',
+                confirmButtonText: 'Entendido'
+            });
+            $('#cantidadProducto').val(Math.floor(cantidad)).focus();
+            return;
+        }
+
+        // Validar contra stock disponible
         if (cantidad > stock) {
-            Swal.fire('Error', `Stock insuficiente. Disponible: ${stock}`, 'error');
+            Swal.fire({
+                icon: 'error',
+                title: 'Stock insuficiente',
+                text: `La cantidad solicitada (${cantidad}) excede el stock disponible (${stock})`,
+                confirmButtonText: 'Entendido'
+            });
+            $('#cantidadProducto').val(stock > 0 ? stock : 1).focus();
             return;
         }
 
@@ -888,6 +931,46 @@ $(document).ready(function() {
         });
     }
 
+    // Validar cantidad en tiempo real
+    $('#cantidadProducto').on('input', function() {
+        let cantidad = parseInt($(this).val());
+        const stock = parseInt($('#stockProducto').val()) || 0;
+        
+        // Si es un valor inválido, establecer a 1
+        if (isNaN(cantidad) || cantidad < 1) {
+            $(this).val(1);
+            return;
+        }
+        
+        // Si excede el stock, ajustar al máximo disponible
+        if (stock > 0 && cantidad > stock) {
+            $(this).val(stock);
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cantidad ajustada',
+                text: `La cantidad no puede exceder el stock disponible (${stock})`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    });
+
+    // Validar cuando pierde el foco
+    $('#cantidadProducto').on('blur', function() {
+        let cantidad = parseInt($(this).val());
+        
+        if (isNaN(cantidad) || cantidad < 1) {
+            $(this).val(1);
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cantidad inválida',
+                text: 'La cantidad debe ser un número positivo mayor a 0',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    });
+
     // Agregar producto al ticket al presionar Enter en cantidad
     $('#cantidadProducto').on('keypress', function(e) {
         if (e.which === 13) {
@@ -927,15 +1010,33 @@ $(document).ready(function() {
         });
     }
 
-    // Cambiar cantidad de producto
+    // Cambiar cantidad de producto en la tabla
     $(document).on('change', '.cantidad-producto', function() {
         const id = $(this).data('id');
-        const nuevaCantidad = parseInt($(this).val()) || 1;
+        let nuevaCantidad = parseInt($(this).val());
         const producto = productosTicket.find(p => p.id === id);
         
         if (producto) {
+            // Validar que sea un número válido y positivo
+            if (isNaN(nuevaCantidad) || nuevaCantidad < 1) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Cantidad inválida',
+                    text: 'La cantidad debe ser un número positivo mayor a 0',
+                    confirmButtonText: 'Entendido'
+                });
+                $(this).val(producto.cantidad);
+                return;
+            }
+            
+            // Validar contra el stock
             if (nuevaCantidad > producto.stock) {
-                Swal.fire('Error', `Stock insuficiente. Máximo: ${producto.stock}`, 'error');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Stock insuficiente',
+                    text: `La cantidad máxima disponible es ${producto.stock}`,
+                    confirmButtonText: 'Entendido'
+                });
                 $(this).val(producto.cantidad);
                 return;
             }
@@ -944,6 +1045,25 @@ $(document).ready(function() {
             producto.subtotal = producto.precio * nuevaCantidad;
             actualizarTablaTicket();
             actualizarTotales();
+        }
+    });
+
+    // Validar input en tiempo real en la tabla
+    $(document).on('input', '.cantidad-producto', function() {
+        const id = $(this).data('id');
+        let cantidad = parseInt($(this).val());
+        const producto = productosTicket.find(p => p.id === id);
+        
+        if (producto) {
+            // Si es negativo o cero, prevenir
+            if (!isNaN(cantidad) && cantidad < 1) {
+                $(this).val(1);
+            }
+            
+            // Si excede el stock, ajustar al máximo
+            if (!isNaN(cantidad) && cantidad > producto.stock) {
+                $(this).val(producto.stock);
+            }
         }
     });
 
@@ -1039,6 +1159,8 @@ $(document).ready(function() {
         $('#chkSoloConStock').prop('checked', true);
         $('#chkBuscarTodasSucursales').prop('checked', false);
         $('#selectOrdenar').val('');
+        // Ocultar columna de sucursal al limpiar
+        $('.col-sucursal').hide();
         $('#filtroBusqueda').focus();
     }
 
@@ -1093,7 +1215,7 @@ $(document).ready(function() {
         // Mostrar loading en la tabla
         $('#tbodyBusquedaProductos').html(`
             <tr>
-                <td colspan="8" class="text-center py-4">
+                <td colspan="9" class="text-center py-4">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Cargando...</span>
                     </div>
@@ -1115,7 +1237,7 @@ $(document).ready(function() {
                 } else {
                     $('#tbodyBusquedaProductos').html(`
                         <tr>
-                            <td colspan="8" class="text-center text-danger py-4">
+                            <td colspan="9" class="text-center text-danger py-4">
                                 <i class="ri-error-warning-line" style="font-size: 2rem;"></i>
                                 <br>
                                 ${response.error || 'Error al buscar productos'}
@@ -1127,7 +1249,7 @@ $(document).ready(function() {
             error: function() {
                 $('#tbodyBusquedaProductos').html(`
                     <tr>
-                        <td colspan="8" class="text-center text-danger py-4">
+                        <td colspan="9" class="text-center text-danger py-4">
                             <i class="ri-wifi-off-line" style="font-size: 2rem;"></i>
                             <br>
                             Error de conexión
@@ -1142,10 +1264,13 @@ $(document).ready(function() {
         const tbody = $('#tbodyBusquedaProductos');
         tbody.empty();
 
+        // Determinar si se está buscando en todas las sucursales
+        const mostrarSucursal = $('#chkBuscarTodasSucursales').is(':checked');
+
         if (productos.length === 0) {
             tbody.html(`
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-4">
+                    <td colspan="9" class="text-center text-muted py-4">
                         <i class="ri-inbox-line" style="font-size: 2rem;"></i>
                         <br>
                         No se encontraron productos con los criterios especificados
@@ -1164,9 +1289,18 @@ $(document).ready(function() {
             const precioVenta = producto.precio_venta || 0;
             const precioFormateado = parseInt(precioVenta).toLocaleString();
             
+            // Información de sucursal (si está disponible)
+            const sucursalNombre = producto.sucursal || '-';
+            
             if (producto.tallas_stock && producto.tallas_stock.length > 0) {
                 producto.tallas_stock.forEach(tallaStock => {
                     const stockDisponible = tallaStock.stock || 0;
+                    
+                    // Columna de sucursal (condicional)
+                    const colSucursal = mostrarSucursal ? 
+                        `<td class="col-sucursal"><span class="badge bg-secondary">${sucursalNombre}</span></td>` : 
+                        '';
+                    
                     const fila = `
                         <tr>
                             <td><strong>${tallaStock.sku || '-'}</strong></td>
@@ -1174,6 +1308,7 @@ $(document).ready(function() {
                             <td>${producto.descripcion || '-'}</td>
                             <td>${marca}</td>
                             <td><span class="badge bg-info">${tallaStock.talla || '-'}</span></td>
+                            ${colSucursal}
                             <td>
                                 <span class="badge ${stockDisponible > 0 ? 'bg-success' : 'bg-danger'}">
                                     ${stockDisponible}
@@ -1201,7 +1336,7 @@ $(document).ready(function() {
             } else {
                 tbody.append(`
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-2">
+                        <td colspan="9" class="text-center text-muted py-2">
                             <small>El producto ${producto.articulo || ''} no tiene tallas con stock en esta sucursal</small>
                         </td>
                     </tr>
@@ -1428,15 +1563,38 @@ $(document).ready(function() {
 
     // Función para imprimir en impresora térmica
     /**
-     * IMPRESIÓN OPTIMIZADA PARA EPSON TM-20
-     * - Ancho: 58mm (optimizado para papel térmico estándar)
-     * - Fuentes: Reducidas para máximo aprovechamiento
-     * - Espaciado: Mínimo necesario para legibilidad
-     * - Código de barras: Compacto (35px altura)
+     * IMPRESIÓN OPTIMIZADA PARA IMPRESORA TÉRMICA 80MM
+     * - Ancho: 80mm (papel térmico estándar)
+     * - Fuentes: Agrandadas para mejor legibilidad
+     * - Espaciado: Optimizado para claridad
+     * - Código de barras: Visible y escaneable
+     * - Cierre automático después de imprimir
      */
     function imprimirTicketTermico(ticketData) {
         const ticketHtml = generarHtmlTicket(ticketData);
-        const ventanaImpresion = window.open('', '_blank', 'width=220,height=600');
+        
+        // Crear ventana popup optimizada para ticket térmico (72mm ≈ 272px en 96 DPI)
+        const ventanaImpresion = window.open('', '_blank', 'width=280,height=600,left=200,top=100');
+        
+        if (!ventanaImpresion) {
+            // Si el navegador bloqueó el popup, intentar imprimir en la misma ventana
+            Swal.fire({
+                icon: 'warning',
+                title: 'Popup bloqueado',
+                text: 'Por favor, permite las ventanas emergentes para imprimir. Imprimiendo en esta ventana...',
+                timer: 2000,
+                showConfirmButton: false
+            });
+            
+            // Imprimir en la misma ventana como alternativa
+            const contenidoOriginal = document.body.innerHTML;
+            document.body.innerHTML = ticketHtml;
+            window.print();
+            document.body.innerHTML = contenidoOriginal;
+            location.reload();
+            return;
+        }
+        
         ventanaImpresion.document.write(ticketHtml);
         ventanaImpresion.document.close();
 
@@ -1444,8 +1602,12 @@ $(document).ready(function() {
         setTimeout(function() {
             ventanaImpresion.focus();
             ventanaImpresion.print();
-            // No cerrar automáticamente para que el usuario pueda reimprimir si es necesario
-            // ventanaImpresion.close();
+            
+            // Cerrar automáticamente la ventana después de imprimir
+            // Esperar un poco más para asegurar que se envió a la impresora
+            setTimeout(function() {
+                ventanaImpresion.close();
+            }, 500);
         }, 1000); // Dar 1 segundo para que se genere el código de barras
     }
 
@@ -1468,10 +1630,11 @@ $(document).ready(function() {
 
         const productosHtml = productos.map((producto) => {
             const cant = producto.cantidad || 0;
-            const articulo = truncar(producto.articulo, 22);
-            const desc = truncar(producto.descripcion, 18);
-            const talla = truncar(producto.talla || '-', 4);
-            const precio = formatearMoneda(producto.precio || 0);
+            const sku = producto.sku || '';
+            const articulo = truncar(producto.articulo, 24);  // Optimizado para 72mm
+            const desc = truncar(producto.descripcion, 18);    // Reducido para incluir SKU
+            const talla = truncar(producto.talla || '-', 4);   // Reducido para incluir SKU
+            const precio = formatearMoneda(producto.precio_unitario || producto.precio || 0);
             const subtotal = formatearMoneda(producto.subtotal || 0);
             
             return `
@@ -1481,10 +1644,10 @@ $(document).ready(function() {
                         <span class="nombre">${articulo}</span>
                     </div>
                     <div class="item-line2">
-                        <span>${desc} T:${talla}</span>
+                        <span>SKU:${sku} ${desc} T:${talla}</span>
                     </div>
                     <div class="item-line3">
-                        <span>@$${precio}</span>
+                        <span>$${precio} c/u</span>
                         <span class="subtotal">$${subtotal}</span>
                     </div>
                 </div>
@@ -1500,7 +1663,7 @@ $(document).ready(function() {
                 <title>Ticket #${ticketData.correlativo || ''}</title>
                 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
                 <style>
-                    /* === OPTIMIZADO PARA EPSON TM-20 === */
+                    /* === OPTIMIZADO PARA IMPRESORA TÉRMICA 80MM === */
                     * { 
                         margin: 0; 
                         padding: 0; 
@@ -1508,69 +1671,101 @@ $(document).ready(function() {
                     }
                     
                     body {
-                        font-family: 'Courier New', Courier, monospace;
-                        font-size: 9px;
-                        width: 58mm;
-                        max-width: 58mm;
-                        padding: 2mm 3mm;
+                        font-family: 'Arial', 'Helvetica', sans-serif;
+                        font-size: 11px;
+                        width: 72mm;
+                        max-width: 72mm;
+                        padding: 2mm;
+                        margin: 0 auto;
                         background: #fff;
                         color: #000;
-                        line-height: 1.3;
+                        line-height: 1.4;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                        box-sizing: border-box;
+                        overflow-wrap: break-word;
+                        word-wrap: break-word;
                     }
                     
-                    /* Código de barras */
+                    /* Código de barras - Optimizado para pistola lectora */
                     .barcode-container {
                         text-align: center;
-                        margin: 3px 0 5px 0;
-                        padding-bottom: 5px;
-                        border-bottom: 1px dashed #000;
+                        margin: 8px 0 10px 0;
+                        padding: 10px 5px;
+                        background: #fff;
                     }
                     
                     .barcode-container svg {
                         max-width: 100%;
-                        height: 35px;
+                        width: 100%;
+                        height: 65px;
+                        display: block;
+                        margin: 5px auto;
+                    }
+                    
+                    .barcode-title {
+                        font-size: 9px;
+                        font-weight: bold;
+                        margin-bottom: 5px;
+                        color: #333;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
                     }
                     
                     /* Header */
                     .header {
                         text-align: center;
                         margin-bottom: 5px;
-                        padding-bottom: 5px;
-                        border-bottom: 1px dashed #000;
+                        padding: 0 2px 5px 2px;
+                        border-bottom: 2px dashed #000;
                     }
                     
                     .header strong {
-                        font-size: 11px;
+                        font-size: 14px;
                         font-weight: bold;
                         display: block;
-                        margin-bottom: 2px;
+                        margin-bottom: 3px;
+                        letter-spacing: 0px;
+                        word-wrap: break-word;
                     }
                     
                     .header div {
-                        font-size: 8px;
+                        font-size: 10px;
                         line-height: 1.3;
                         margin: 1px 0;
+                        word-wrap: break-word;
                     }
                     
                     /* Información general */
                     .info {
-                        font-size: 8px;
+                        font-size: 10px;
                         margin-bottom: 5px;
                         line-height: 1.4;
+                        padding: 0 2px;
                     }
                     
                     .info-row {
                         display: flex;
                         justify-content: space-between;
-                        margin: 1px 0;
+                        margin: 2px 0;
+                        gap: 5px;
                     }
                     
                     .info-row strong {
-                        min-width: 50px;
+                        min-width: 60px;
+                        font-weight: bold;
+                        flex-shrink: 0;
+                    }
+                    
+                    .info-row span {
+                        text-align: right;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
                     }
                     
                     .separador {
-                        border-top: 1px dashed #000;
+                        border-top: 2px dashed #000;
                         margin: 5px 0;
                         height: 0;
                     }
@@ -1578,23 +1773,26 @@ $(document).ready(function() {
                     /* Items/Productos */
                     .items {
                         margin: 5px 0;
+                        padding: 0 2px;
                     }
                     
                     .item {
                         margin-bottom: 5px;
-                        font-size: 8px;
+                        font-size: 10px;
+                        border-bottom: 1px solid #ddd;
+                        padding-bottom: 4px;
                     }
                     
                     .item-line1 {
                         display: flex;
-                        gap: 3px;
+                        gap: 4px;
                         font-weight: bold;
-                        margin-bottom: 1px;
-                        font-size: 9px;
+                        margin-bottom: 2px;
+                        font-size: 11px;
                     }
                     
                     .item-line1 .cant {
-                        min-width: 18px;
+                        min-width: 22px;
                         flex-shrink: 0;
                     }
                     
@@ -1606,68 +1804,117 @@ $(document).ready(function() {
                     }
                     
                     .item-line2 {
-                        margin-left: 20px;
-                        font-size: 8px;
-                        color: #222;
-                        margin-bottom: 1px;
+                        margin-left: 24px;
+                        font-size: 9px;
+                        color: #333;
+                        margin-bottom: 2px;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
                     }
                     
                     .item-line3 {
-                        margin-left: 20px;
+                        margin-left: 24px;
                         display: flex;
                         justify-content: space-between;
-                        font-size: 8px;
+                        font-size: 10px;
+                        margin-top: 2px;
+                        gap: 5px;
                     }
                     
                     .item-line3 .subtotal {
                         font-weight: bold;
+                        font-size: 11px;
+                        white-space: nowrap;
                     }
                     
                     /* Totales */
                     .totales {
-                        border-top: 1px solid #000;
-                        padding-top: 5px;
+                        border-top: 2px solid #000;
+                        padding: 5px 2px 0 2px;
                         margin-top: 5px;
-                        font-size: 9px;
+                        font-size: 11px;
                     }
                     
                     .totales-row {
                         display: flex;
                         justify-content: space-between;
-                        margin: 2px 0;
+                        margin: 3px 0;
+                        font-weight: 500;
+                        gap: 10px;
+                    }
+                    
+                    .totales-row span:last-child {
+                        white-space: nowrap;
                     }
                     
                     .totales .total-final {
-                        font-size: 11px;
+                        font-size: 14px;
                         font-weight: bold;
-                        border-top: 1px solid #000;
-                        padding-top: 4px;
-                        margin-top: 4px;
+                        border-top: 2px solid #000;
+                        padding-top: 5px;
+                        margin-top: 5px;
                     }
                     
                     /* Footer */
                     .footer {
                         text-align: center;
-                        margin-top: 6px;
-                        padding-top: 5px;
-                        border-top: 1px dashed #000;
-                        font-size: 7px;
+                        margin-top: 8px;
+                        padding: 5px 2px 0 2px;
+                        border-top: 2px dashed #000;
+                        font-size: 9px;
                         line-height: 1.5;
                     }
                     
                     .footer div {
                         margin: 2px 0;
+                        word-wrap: break-word;
+                    }
+                    
+                    .footer strong {
+                        font-size: 11px;
                     }
                     
                     /* Optimizaciones para impresión */
                     @media print {
                         body { 
-                            width: 58mm;
-                            padding: 0mm 2mm;
+                            width: 72mm;
+                            max-width: 72mm;
+                            padding: 2mm;
+                            margin: 0 auto;
                         }
                         @page { 
                             size: 80mm auto; 
-                            margin: 0;
+                            margin: 4mm;
+                        }
+                        
+                        /* Evitar saltos de página en elementos */
+                        .item, .info-row, .totales-row, .barcode-container {
+                            page-break-inside: avoid;
+                        }
+                        
+                        /* Asegurar que el texto sea nítido */
+                        * {
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                        }
+                        
+                        /* Asegurar que nada se salga */
+                        .item-line1, .item-line2, .item-line3, .info-row, .totales-row {
+                            max-width: 100%;
+                            overflow: hidden;
+                        }
+                        
+                        /* Optimizar código de barras para impresión */
+                        .barcode-container {
+                            background: #ffffff !important;
+                            padding: 10px 5px !important;
+                            margin: 8px 0 10px 0 !important;
+                        }
+                        
+                        .barcode-container svg {
+                            height: 65px !important;
+                            margin: 5px auto !important;
                         }
                     }
                 </style>
@@ -1675,8 +1922,11 @@ $(document).ready(function() {
             <body>
                 <!-- Código de barras del ticket -->
                 <div class="barcode-container">
+                    <div class="barcode-title">Ticket de Venta</div>
                     <svg id="barcode"></svg>
                 </div>
+                
+                <div class="separador"></div>
                 
                 <!-- Encabezado empresa/sucursal -->
                 <div class="header">
@@ -1700,8 +1950,8 @@ $(document).ready(function() {
                         <strong>Hora:</strong>
                         <span>${ticketData.hora || new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'})}</span>
                     </div>
-                    ${vendedor.nombre ? '<div class="info-row"><strong>Vendedor:</strong><span>' + truncar(vendedor.nombre, 20) + '</span></div>' : ''}
-                    ${cliente.nombre ? '<div class="info-row"><strong>Cliente:</strong><span>' + truncar(cliente.nombre, 20) + '</span></div>' : ''}
+                    ${vendedor.nombre ? '<div class="info-row"><strong>Vendedor:</strong><span>' + truncar(vendedor.nombre, 14) + ' (' + (vendedor.codigo || '') + ')' + '</span></div>' : ''}
+                    ${cliente.nombre ? '<div class="info-row"><strong>Cliente:</strong><span>' + truncar(cliente.nombre, 22) + '</span></div>' : ''}
                     ${cliente.rut && !cliente.nombre ? '<div class="info-row"><strong>RUT:</strong><span>' + cliente.rut + '</span></div>' : ''}
                 </div>
 
@@ -1732,7 +1982,7 @@ $(document).ready(function() {
                     ${sucursal.politica_cambios ? '<div>' + sucursal.politica_cambios + '</div>' : '<div>Cambios hasta 15 días</div>'}
                     <div>* Sin devolución de dinero</div>
                     ${sucursal.telefono ? '<div>Tel: ' + sucursal.telefono + '</div>' : ''}
-                    <div style="margin-top:3px;font-size:6px;">RetailMind POS</div>
+                    <div style="margin-top:5px;font-size:9px;color:#666;">RetailMind POS</div>
                 </div>
                 
                 <script>
@@ -1740,24 +1990,33 @@ $(document).ready(function() {
                     function generarCodigoBarras() {
                         if (typeof JsBarcode !== "undefined") {
                             try {
+                                // Configuración optimizada para pistola lectora
                                 JsBarcode("#barcode", ticketId, {
-                                    format: "CODE128",
-                                    width: 1.5,
-                                    height: 35,
-                                    displayValue: true,
-                                    fontSize: 12,
-                                    margin: 5,
-                                    marginTop: 2,
-                                    marginBottom: 2
+                                    format: "CODE128",      // Estándar más compatible con pistolas
+                                    width: 3,               // Barras anchas para mejor captura
+                                    height: 65,             // Altura óptima para lectura
+                                    displayValue: true,     // Mostrar número
+                                    fontSize: 18,           // Texto grande y claro
+                                    fontOptions: "bold",    // Negrita para legibilidad
+                                    textMargin: 6,          // Espacio entre barras y texto
+                                    margin: 10,             // Márgenes laterales generosos (zona silenciosa)
+                                    marginTop: 3,           // Margen superior
+                                    marginBottom: 3,        // Margen inferior
+                                    background: "#ffffff",  // Fondo blanco puro
+                                    lineColor: "#000000",   // Negro puro para máximo contraste
+                                    valid: function(valid) {
+                                        if (valid) {
+                                            console.log("✓ Código de barras válido y listo para escanear");
+                                        }
+                                    }
                                 });
-                                console.log("Código de barras generado");
                             } catch (e) {
                                 console.error("Error generando código de barras:", e);
-                                document.getElementById("barcode").innerHTML = "<p style=\\"font-size:12px;font-weight:bold;\\">" + ticketId + "<\\/p>";
+                                document.getElementById("barcode").innerHTML = "<p style=\\"font-size:18px;font-weight:bold;padding:15px;\\">" + ticketId + "<\\/p>";
                             }
                         } else {
                             console.warn("JsBarcode no está disponible");
-                            document.getElementById("barcode").innerHTML = "<p style=\\"font-size:16px; font-weight:bold;\\">Ticket #" + ticketId + "<\\/p>";
+                            document.getElementById("barcode").innerHTML = "<p style=\\"font-size:18px;font-weight:bold;padding:15px;\\">TICKET #" + ticketId + "<\\/p>";
                         }
                     }
                     if (document.readyState === "loading") {

@@ -28,7 +28,8 @@ class Command(BaseCommand):
         # Tipos de documento más comunes
         tipos_principales = [
             'FACTURA ELECTRONICA',
-            'BOLETA ELECTRONICA', 
+            'BOLETA ELECTRONICA',
+            'BOLETA PAPEL',
             'GUIA',
             'NOTA DE CREDITO',
             'NOTA DE DEBITO',
@@ -59,7 +60,7 @@ class Command(BaseCommand):
                 if tipo_documento == 'TICKET':
                     inicio = 1
                     termino = 999999
-                elif tipo_documento in ['FACTURA ELECTRONICA', 'BOLETA ELECTRONICA']:
+                elif tipo_documento in ['FACTURA ELECTRONICA', 'BOLETA ELECTRONICA', 'BOLETA PAPEL']:
                     inicio = 1
                     termino = 100000
                 elif tipo_documento == 'GUIA':

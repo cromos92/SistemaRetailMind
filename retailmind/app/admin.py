@@ -4,7 +4,10 @@ from .models import (
     Productos_Recepcionados,
     CambioPrecioPendiente,
     NotificacionCambioPrecio,
-    HistorialCambioPrecio
+    HistorialCambioPrecio,
+    Requerimiento,
+    FotoRequerimiento,
+    HistorialRequerimiento
 )
 
 # Register your models here.
@@ -126,6 +129,108 @@ class HistorialCambioPrecioAdmin(admin.ModelAdmin):
     def producto_nombre(self, obj):
         return obj.producto.articulo
     producto_nombre.short_description = 'Producto'
+    
+    def has_add_permission(self, request):
+        # No permitir crear manualmente (se crea automáticamente)
+        return False
+
+
+# ========== ADMINISTRACIÓN DE REQUERIMIENTOS ==========
+
+class FotoRequerimientoInline(admin.TabularInline):
+    model = FotoRequerimiento
+    extra = 1
+    max_num = 5
+    fields = ['imagen', 'descripcion', 'orden']
+    readonly_fields = ['fecha_subida', 'usuario']
+
+
+class HistorialRequerimientoInline(admin.TabularInline):
+    model = HistorialRequerimiento
+    extra = 0
+    fields = ['accion', 'estado_anterior', 'estado_nuevo', 'comentario', 'usuario', 'fecha']
+    readonly_fields = ['fecha', 'usuario']
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Requerimiento)
+class RequerimientoAdmin(admin.ModelAdmin):
+    list_display = [
+        'numero_requerimiento', 'tipo', 'estado', 'sucursal', 'cliente_nombre',
+        'sku', 'prioridad', 'dias_transcurridos_display', 'fecha_creacion'
+    ]
+    list_filter = ['estado', 'tipo', 'prioridad', 'sucursal', 'fecha_creacion']
+    search_fields = [
+        'numero_requerimiento', 'sku', 'cliente_nombre', 'cliente_rut',
+        'numero_boleta', 'motivo'
+    ]
+    readonly_fields = [
+        'numero_requerimiento', 'fecha_creacion', 'fecha_actualizacion',
+        'dias_transcurridos', 'cantidad_fotos'
+    ]
+    inlines = [FotoRequerimientoInline, HistorialRequerimientoInline]
+    date_hierarchy = 'fecha_creacion'
+    
+    fieldsets = (
+        ('Información del Requerimiento', {
+            'fields': ('numero_requerimiento', 'tipo', 'estado', 'prioridad')
+        }),
+        ('Sucursal y Usuarios', {
+            'fields': ('sucursal', 'usuario_creador', 'usuario_gestor')
+        }),
+        ('Información del Producto', {
+            'fields': ('producto_talla', 'sku', 'nombre_producto')
+        }),
+        ('Documento de Venta', {
+            'fields': ('tipo_documento', 'numero_boleta', 'fecha_compra')
+        }),
+        ('Información del Cliente', {
+            'fields': ('cliente_nombre', 'cliente_rut', 'cliente_telefono', 'cliente_email')
+        }),
+        ('Descripción', {
+            'fields': ('motivo', 'descripcion_problema')
+        }),
+        ('Proveedor', {
+            'fields': (
+                'proveedor', 'correo_enviado_proveedor', 'fecha_envio_proveedor',
+                'respuesta_proveedor', 'fecha_respuesta_proveedor'
+            )
+        }),
+        ('Resolución', {
+            'fields': ('resolucion', 'fecha_resolucion')
+        }),
+        ('Estadísticas', {
+            'fields': ('dias_transcurridos', 'cantidad_fotos', 'fecha_creacion', 'fecha_actualizacion'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def dias_transcurridos_display(self, obj):
+        dias = obj.dias_transcurridos
+        if dias > 7:
+            return f'{dias} días ⚠️'
+        elif dias > 3:
+            return f'{dias} días ⏰'
+        return f'{dias} días'
+    dias_transcurridos_display.short_description = 'Días'
+
+
+@admin.register(FotoRequerimiento)
+class FotoRequerimientoAdmin(admin.ModelAdmin):
+    list_display = ['id', 'requerimiento', 'orden', 'descripcion', 'fecha_subida', 'usuario']
+    list_filter = ['fecha_subida']
+    search_fields = ['requerimiento__numero_requerimiento', 'descripcion']
+    readonly_fields = ['fecha_subida']
+
+
+@admin.register(HistorialRequerimiento)
+class HistorialRequerimientoAdmin(admin.ModelAdmin):
+    list_display = ['requerimiento', 'accion', 'estado_anterior', 'estado_nuevo', 'usuario', 'fecha']
+    list_filter = ['accion', 'fecha']
+    search_fields = ['requerimiento__numero_requerimiento', 'accion', 'comentario']
+    readonly_fields = ['fecha']
     
     def has_add_permission(self, request):
         # No permitir crear manualmente (se crea automáticamente)

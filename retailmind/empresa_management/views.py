@@ -3,7 +3,8 @@ from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Q, Count, Sum
+from django.db.models import Q, Count, Sum, Value
+from django.db.models.functions import Replace
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -26,6 +27,15 @@ except ImportError:
     Proveedor = None
     LogEmpresa = None
     LogCliente = None
+
+# Utilidad interna para sanitizar valores de campos CharField
+def _clean_char_field(value):
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        return value.strip()
+    return str(value)
+
 
 # ========== VISTAS PARA EMPRESAS ==========
 
@@ -106,8 +116,14 @@ def lista_empresas(request):
                 'tipo': tipo,
                 'get_tipo_display': tipo_display,
                 'giro_comercial': empresa.giro or '',
-                'email': '',  # No existe en app.models
-                'telefono': '',  # No existe en app.models
+                'email': empresa.correoVendedor or '',
+                'telefono': empresa.contacto1 or '',
+                'contacto1': empresa.contacto1 or '',
+                'contacto2': empresa.contacto2 or '',
+                'acteco': empresa.acteco or '',
+                'correoVendedor': empresa.correoVendedor or '',
+                'correoIntercambio': empresa.correoIntercambio or '',
+                'correoAdministrador': empresa.correoAdministrador or '',
                 'direccion': empresa.direccion or '',
                 'ciudad': empresa.ciudad or '',
                 'region': '',  # No existe en app.models
@@ -149,23 +165,40 @@ def buscar_empresa_ajax(request):
     """API para buscar empresa por RUT o nombre para auto-completar en facturas"""
     try:
         termino = request.GET.get('q', '').strip()
+        termino_normalizado = termino.replace('.', '').replace('-', '').replace(' ', '')
         
-        if len(termino) < 3:
+        if len(termino_normalizado) < 3 and len(termino) < 3:
             return JsonResponse({
                 'success': False,
                 'error': 'Ingrese al menos 3 caracteres'
             })
         
-        # Buscar empresa por RUT o nombre
-        empresas = Empresa.objects.filter(
-            Q(rut__icontains=termino.replace('.', '').replace('-', '')) |
+        # Buscar empresa por RUT (normalizado) o nombre
+        empresas_query = Empresa.objects.annotate(
+            rut_normalizado=Replace(
+                Replace(
+                    Replace('rut', Value('.'), Value('')),
+                    Value('-'), Value('')
+                ),
+                Value(' '), Value('')
+            )
+        ).filter(
+            Q(rut_normalizado__icontains=termino_normalizado) |
+            Q(rut__icontains=termino) |
             Q(nombre__icontains=termino) |
             Q(razon_social__icontains=termino) |
             Q(nombre_fantasia__icontains=termino)
-        )[:10]
+        ).order_by('-id')
         
-        if empresas.exists():
-            empresa = empresas.first()  # Tomar la primera coincidencia
+        # Contar total antes de hacer slice
+        total_encontradas = empresas_query.count()
+        
+        # Limitar resultados
+        empresas = list(empresas_query[:10])
+        
+        if empresas:
+            empresa = empresas[0]  # Tomar la primera coincidencia
+            print(f"🔍 Empresa encontrada: {empresa.id} - {empresa.rut} - {empresa.giro}")
             
             return JsonResponse({
                 'success': True,
@@ -179,11 +212,11 @@ def buscar_empresa_ajax(request):
                     'direccion': empresa.direccion,
                     'comuna': empresa.comuna,
                     'ciudad': empresa.ciudad,
-                    'region': empresa.region or '',
-                    'telefono': empresa.telefono or '',
+                    'telefono': empresa.contacto1 or '',  # Usar contacto1 en lugar de telefono
                     'email': empresa.correoVendedor or empresa.correoAdministrador or '',
+                    'acteco': empresa.acteco or '',
                 },
-                'total_encontradas': empresas.count()
+                'total_encontradas': total_encontradas
             })
         else:
             return JsonResponse({
@@ -442,7 +475,9 @@ def crear_empresa(request):
         
         # Determinar si es proveedor basado en el tipo
         tipo = data.get('tipo', 'cliente')
-        es_proveedor = tipo == 'proveedor'
+        es_proveedor = tipo in ['proveedor', 'ambos']
+
+        correo_vendedor = data.get('correoVendedor') or data.get('email')
         
         # Crear empresa usando solo los campos que existen en app.models.Empresa
         empresa = Empresa(
@@ -455,9 +490,12 @@ def crear_empresa(request):
             comuna=data.get('ciudad', ''),  # Usar ciudad como comuna
             ciudad=data.get('ciudad', ''),
             esProveedor=es_proveedor,
-            correoVendedor=data.get('email', ''),  # Usar email como correoVendedor
-            correoIntercambio=data.get('correoIntercambio', ''),
-            correoAdministrador=data.get('correoAdministrador', ''),
+            correoVendedor=_clean_char_field(correo_vendedor),
+            correoIntercambio=_clean_char_field(data.get('correoIntercambio')),
+            correoAdministrador=_clean_char_field(data.get('correoAdministrador')),
+            acteco=_clean_char_field(data.get('acteco')),
+            contacto1=_clean_char_field(data.get('contacto1') or data.get('telefono')),
+            contacto2=_clean_char_field(data.get('contacto2')),
         )
         
         empresa.save()
@@ -517,7 +555,9 @@ def editar_empresa(request):
         
         # Determinar si es proveedor basado en el tipo
         tipo = data.get('tipo', 'cliente')
-        es_proveedor = tipo == 'proveedor'
+        es_proveedor = tipo in ['proveedor', 'ambos']
+
+        correo_vendedor = data.get('correoVendedor') or data.get('email')
         
         # Actualizar campos usando solo los campos que existen en app.models.Empresa
         empresa.nombre = data.get('razon_social', '')  # Usar razon_social como nombre
@@ -529,9 +569,12 @@ def editar_empresa(request):
         empresa.comuna = data.get('ciudad', '')  # Usar ciudad como comuna
         empresa.ciudad = data.get('ciudad', '')
         empresa.esProveedor = es_proveedor
-        empresa.correoVendedor = data.get('email', '')  # Usar email como correoVendedor
-        empresa.correoIntercambio = data.get('correoIntercambio', '')
-        empresa.correoAdministrador = data.get('correoAdministrador', '')
+        empresa.correoVendedor = _clean_char_field(correo_vendedor)
+        empresa.correoIntercambio = _clean_char_field(data.get('correoIntercambio'))
+        empresa.correoAdministrador = _clean_char_field(data.get('correoAdministrador'))
+        empresa.acteco = _clean_char_field(data.get('acteco'))
+        empresa.contacto1 = _clean_char_field(data.get('contacto1') or data.get('telefono'))
+        empresa.contacto2 = _clean_char_field(data.get('contacto2'))
         
         empresa.save()
         
@@ -929,7 +972,7 @@ def obtener_empresa(request, empresa_id):
                 'get_tipo_display': tipo_display,
                 'giro_comercial': empresa.giro or '',
                 'email': empresa.correoVendedor or '',  # Usar correoVendedor como email
-                'telefono': '',  # No existe en app.models
+                'telefono': empresa.contacto1 or '',
                 'direccion': empresa.direccion or '',
                 'ciudad': empresa.ciudad or '',
                 'region': '',  # No existe en app.models
@@ -944,6 +987,9 @@ def obtener_empresa(request, empresa_id):
                 'correoVendedor': empresa.correoVendedor or '',
                 'correoIntercambio': empresa.correoIntercambio or '',
                 'correoAdministrador': empresa.correoAdministrador or '',
+                'contacto1': empresa.contacto1 or '',
+                'contacto2': empresa.contacto2 or '',
+                'acteco': empresa.acteco or '',
             }
         })
     except Exception as e:

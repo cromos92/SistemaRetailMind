@@ -1,0 +1,650 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+<style>
+    .reporte-marca-container {
+        max-width: 100%;
+        margin: 0 auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .controls {
+        padding: 25px 30px;
+        background: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .control-group label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.9em;
+    }
+
+    .control-group select {
+        padding: 10px 15px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: all 0.3s ease;
+        min-width: 200px;
+    }
+
+    .control-group select:focus,
+    .control-group input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .control-group input[type="text"] {
+        background: white;
+        font-family: inherit;
+    }
+
+    .control-group input[type="text"]::placeholder {
+        color: #adb5bd;
+        font-style: italic;
+    }
+
+    .btn {
+        padding: 12px 25px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        align-self: flex-end;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #218838;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px;
+        font-size: 1.2em;
+        color: #667eea;
+    }
+
+    .marca-section {
+        margin: 20px 0;
+        border: 2px solid #dee2e6;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .marca-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px 20px;
+        font-size: 1.3em;
+        font-weight: 700;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .tabla-lotes {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+    }
+
+    .tabla-lotes thead {
+        background: #f8f9fa;
+    }
+
+    .tabla-lotes th {
+        padding: 12px 8px;
+        text-align: center;
+        font-weight: 700;
+        border: 1px solid #dee2e6;
+        color: #495057;
+        font-size: 0.85em;
+    }
+
+    .tabla-lotes td {
+        padding: 10px 8px;
+        text-align: center;
+        border: 1px solid #dee2e6;
+    }
+
+    .tabla-lotes tbody tr:hover {
+        background: #f1f3f5;
+    }
+
+    .tabla-lotes tbody tr:nth-child(even) {
+        background: #f8f9fa;
+    }
+
+    .td-articulo {
+        text-align: left !important;
+        font-weight: 600;
+        color: #212529;
+    }
+
+    .td-color {
+        text-align: left !important;
+    }
+
+    .td-numero {
+        text-align: right !important;
+        font-family: 'Courier New', monospace;
+    }
+
+    .lote-header {
+        background: #e7f1ff;
+        font-weight: 700;
+        color: #004085;
+    }
+
+    .stock-bajo {
+        color: #dc3545;
+        font-weight: 700;
+    }
+
+    .stock-ok {
+        color: #28a745;
+        font-weight: 600;
+    }
+
+    .total-row {
+        background: #e9ecef !important;
+        font-weight: 700;
+        font-size: 1.05em;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 4em;
+        color: #dee2e6;
+        margin-bottom: 20px;
+    }
+
+    @media print {
+        .controls, .btn {
+            display: none;
+        }
+        
+        .marca-section {
+            page-break-inside: avoid;
+        }
+    }
+</style>
+
+<div class="reporte-marca-container">
+    <div class="header">
+        <h1>📊 Reporte de Existencias por Marca</h1>
+        <p>Detalle de lotes y stock disponible agrupado por marca</p>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="search-marca">Buscar Marca:</label>
+            <input type="text" id="search-marca" placeholder="🔍 Escribe para buscar (ej: nike, adidas, puma...)" 
+                   oninput="filtrarMarcas()" style="min-width: 300px;">
+        </div>
+
+        <div class="control-group">
+            <label for="filtro-marca">Filtrar por Marca:</label>
+            <select id="filtro-marca" size="1">
+                <option value="">Todas las marcas</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="filtro-departamento">Departamento:</label>
+            <select id="filtro-departamento">
+                <option value="">Todos</option>
+            </select>
+        </div>
+
+        <button class="btn btn-primary" onclick="cargarReporte()">
+            🔄 Actualizar Reporte
+        </button>
+
+        <button class="btn btn-success" onclick="exportarExcel()">
+            📥 Exportar a Excel
+        </button>
+    </div>
+
+    <div id="contenido-reporte" class="p-4">
+        <div class="loading">
+            ⏳ Cargando datos del reporte...
+        </div>
+    </div>
+</div>
+
+<script>
+let datosCompletos = [];
+let todasLasMarcas = []; // Guardar todas las marcas para el filtrado
+let sucursalesDisponibles = []; // Guardar sucursales del sistema
+
+// Cargar filtros al iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    cargarMarcas();
+    cargarDepartamentos();
+    // NO cargar reporte automáticamente - solo cuando usuario haga clic
+    document.getElementById('contenido-reporte').innerHTML = `
+        <div class="empty-state">
+            <i>🔍</i>
+            <p><strong>Selecciona filtros y haz clic en "Actualizar Reporte"</strong></p>
+            <p style="color: #6c757d; font-size: 0.9em;">Puedes filtrar por marca, departamento o ver todas las marcas</p>
+        </div>
+    `;
+});
+
+// Cargar marcas para el filtro
+async function cargarMarcas() {
+    try {
+        const response = await fetch('/app/obtener_marcas/');
+        const data = await response.json();
+        
+        todasLasMarcas = data; // Guardar todas las marcas
+        
+        // NO llenar el select al inicio - el usuario debe buscar
+        const select = document.getElementById('filtro-marca');
+        
+        // Agregar opción informativa
+        const optionInfo = document.createElement('option');
+        optionInfo.value = '';
+        optionInfo.textContent = `💡 Usa el buscador arriba (${data.length} marcas disponibles)`;
+        optionInfo.disabled = true;
+        select.appendChild(optionInfo);
+        
+    } catch (error) {
+        console.error('Error al cargar marcas:', error);
+    }
+}
+
+// Filtrar marcas en el select según búsqueda
+function filtrarMarcas() {
+    const searchInput = document.getElementById('search-marca');
+    const select = document.getElementById('filtro-marca');
+    const searchText = searchInput.value.toLowerCase().trim();
+    
+    // Limpiar select
+    select.innerHTML = '<option value="">Todas las marcas</option>';
+    
+    // Si no hay búsqueda, mostrar mensaje informativo
+    if (!searchText) {
+        const optionInfo = document.createElement('option');
+        optionInfo.value = '';
+        optionInfo.textContent = `💡 Usa el buscador arriba (${todasLasMarcas.length} marcas disponibles)`;
+        optionInfo.disabled = true;
+        select.appendChild(optionInfo);
+        return;
+    }
+    
+    // Filtrar y agregar opciones (mínimo 2 caracteres para buscar)
+    if (searchText.length < 2) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '⌨️ Escribe al menos 2 caracteres...';
+        option.disabled = true;
+        select.appendChild(option);
+        return;
+    }
+    
+    const marcasFiltradas = todasLasMarcas.filter(marca => 
+        marca.valor.toLowerCase().includes(searchText)
+    );
+    
+    // Agregar opciones filtradas
+    marcasFiltradas.forEach(marca => {
+        const option = document.createElement('option');
+        option.value = marca.id;
+        option.textContent = marca.valor;
+        option.dataset.nombre = marca.valor.toLowerCase();
+        select.appendChild(option);
+    });
+    
+    // Mostrar mensaje si no hay resultados
+    if (marcasFiltradas.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = `❌ No se encontraron marcas con "${searchInput.value}"`;
+        option.disabled = true;
+        select.appendChild(option);
+    } else {
+        // Mostrar contador de resultados
+        const optionCount = document.createElement('option');
+        optionCount.value = '';
+        optionCount.textContent = `─────── ${marcasFiltradas.length} resultado(s) ───────`;
+        optionCount.disabled = true;
+        select.insertBefore(optionCount, select.children[1]);
+    }
+}
+
+// Cargar departamentos (categorías)
+async function cargarDepartamentos() {
+    try {
+        const response = await fetch('/app/obtener_categorias/');
+        const data = await response.json();
+        
+        const select = document.getElementById('filtro-departamento');
+        // La respuesta es un array directo
+        data.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.nombre;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error al cargar departamentos:', error);
+    }
+}
+
+// Cargar reporte principal
+async function cargarReporte() {
+    const contenido = document.getElementById('contenido-reporte');
+    contenido.innerHTML = '<div class="loading">⏳ Cargando datos del reporte...</div>';
+    
+    try {
+        const marcaId = document.getElementById('filtro-marca').value;
+        const deptId = document.getElementById('filtro-departamento').value;
+        
+        let url = '/app/api/reporte-existencias-marca/';
+        const params = new URLSearchParams();
+        if (marcaId) params.append('marca_id', marcaId);
+        if (deptId) params.append('departamento_id', deptId);
+        if (params.toString()) url += '?' + params.toString();
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            datosCompletos = data.datos;
+            sucursalesDisponibles = data.sucursales || [];
+            renderizarReporte(data.datos, data.debug);
+            
+            // Mostrar info de debug en consola
+            if (data.debug) {
+                console.log('📊 Debug Info:', data.debug);
+                console.log('🏪 Sucursales disponibles:', sucursalesDisponibles);
+            }
+        } else {
+            contenido.innerHTML = `<div class="empty-state"><i>⚠️</i><p>${data.error || 'Error al cargar datos'}</p></div>`;
+        }
+    } catch (error) {
+        console.error('Error al cargar reporte:', error);
+        contenido.innerHTML = '<div class="empty-state"><i>⚠️</i><p>Error al cargar el reporte</p></div>';
+    }
+}
+
+// Renderizar reporte
+function renderizarReporte(datos, debugInfo = null) {
+    const contenido = document.getElementById('contenido-reporte');
+    
+    if (!datos || datos.length === 0) {
+        let mensaje = '<div class="empty-state"><i>📦</i>';
+        
+        if (debugInfo) {
+            mensaje += `
+                <p><strong>No se encontraron productos con lotes activos</strong></p>
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left;">
+                    <h4 style="margin-top: 0; color: #667eea;">ℹ️ Información de Debug:</h4>
+                    <ul style="line-height: 1.8;">
+                        <li>📦 <strong>Total productos encontrados:</strong> ${debugInfo.total_productos}</li>
+                        <li>✅ <strong>Productos con lotes activos:</strong> ${debugInfo.productos_con_lotes}</li>
+                        <li>❌ <strong>Productos sin lotes/stock:</strong> ${debugInfo.productos_sin_lotes}</li>
+                    </ul>
+                    <p style="margin-bottom: 0; color: #6c757d; font-size: 0.9em;">
+                        💡 <strong>Posibles causas:</strong><br>
+                        • Los productos no tienen lotes creados<br>
+                        • Los lotes tienen stock 0 (cantidad_disponible = 0)<br>
+                        • Los lotes están marcados como inactivos
+                    </p>
+                </div>
+            `;
+        } else {
+            mensaje += '<p>No se encontraron productos con stock para mostrar</p>';
+        }
+        
+        mensaje += '</div>';
+        contenido.innerHTML = mensaje;
+        return;
+    }
+    
+    // Agrupar por marca
+    const porMarca = {};
+    datos.forEach(item => {
+        const marca = item.marca || 'Sin Marca';
+        if (!porMarca[marca]) {
+            porMarca[marca] = [];
+        }
+        porMarca[marca].push(item);
+    });
+    
+    // Renderizar cada marca
+    let html = '';
+    Object.keys(porMarca).sort().forEach(marca => {
+        const productos = porMarca[marca];
+        html += renderizarMarca(marca, productos, sucursalesDisponibles);
+    });
+    
+    contenido.innerHTML = html;
+}
+
+// Renderizar sección de marca
+function renderizarMarca(marca, productos, sucursalesDisponibles) {
+    // Filtrar solo sucursales que tienen stock en esta marca
+    const sucursalesConStock = sucursalesDisponibles.filter(suc => {
+        return productos.some(p => p.sucursales[suc.alias] && p.sucursales[suc.alias].stock > 0);
+    });
+    
+    // Calcular total de stock de la marca
+    let totalStock = 0;
+    productos.forEach(p => totalStock += p.total_stock);
+    
+    let html = `
+        <div class="marca-section">
+            <div class="marca-header">
+                <span>${marca}</span>
+                <span>Total Stock: ${totalStock.toLocaleString()} unidades</span>
+            </div>
+            <table class="tabla-lotes">
+                <thead>
+                    <tr>
+                        <th rowspan="2">Artículo</th>
+                        <th rowspan="2">Color</th>
+                        <th rowspan="2">Depart</th>
+                        <th rowspan="2">Costo</th>
+                        <th rowspan="2">PrecioV.</th>
+    `;
+    
+    // Encabezados solo de sucursales con stock
+    sucursalesConStock.forEach(suc => {
+        html += `<th colspan="2" class="lote-header">${suc.alias}</th>`;
+    });
+    
+    html += `
+                        <th colspan="2" class="lote-header">TT (TOTAL)</th>
+                    </tr>
+                    <tr>
+    `;
+    
+    // Sub-encabezados (Inicial / Stk) para cada sucursal con stock
+    sucursalesConStock.forEach(() => {
+        html += `
+            <th>Inicial</th>
+            <th>Stk</th>
+        `;
+    });
+    
+    html += `
+                        <th>Inicial</th>
+                        <th>Stk</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    // Inicializar totales por columna
+    const totalesPorSucursal = {};
+    sucursalesConStock.forEach(suc => {
+        totalesPorSucursal[suc.alias] = { inicial: 0, stock: 0 };
+    });
+    let granTotalInicial = 0;
+    let granTotalStock = 0;
+    
+    // Filas de productos
+    productos.forEach(producto => {
+        html += `
+            <tr>
+                <td class="td-articulo">${producto.articulo}</td>
+                <td class="td-color">${producto.color}</td>
+                <td>${producto.departamento}</td>
+                <td class="td-numero">$${formatearNumero(producto.costo)}</td>
+                <td class="td-numero">$${formatearNumero(producto.precio_venta)}</td>
+        `;
+        
+        // Datos de cada sucursal con stock
+        sucursalesConStock.forEach(suc => {
+            const stockSuc = producto.sucursales[suc.alias];
+            
+            if (stockSuc) {
+                const claseStock = stockSuc.stock < 5 ? 'stock-bajo' : 'stock-ok';
+                html += `
+                    <td class="td-numero">${stockSuc.inicial}</td>
+                    <td class="td-numero ${claseStock}">${stockSuc.stock}</td>
+                `;
+                // Sumar a totales
+                totalesPorSucursal[suc.alias].inicial += stockSuc.inicial;
+                totalesPorSucursal[suc.alias].stock += stockSuc.stock;
+            } else {
+                html += `
+                    <td class="td-numero">-</td>
+                    <td class="td-numero">-</td>
+                `;
+            }
+        });
+        
+        // Totales del producto
+        const claseStockTotal = producto.total_stock < 10 ? 'stock-bajo' : 'stock-ok';
+        html += `
+                <td class="td-numero" style="background: #fff3cd; font-weight: 700;">${producto.total_inicial}</td>
+                <td class="td-numero ${claseStockTotal}" style="background: #fff3cd; font-weight: 700;">${producto.total_stock}</td>
+            </tr>
+        `;
+        
+        granTotalInicial += producto.total_inicial;
+        granTotalStock += producto.total_stock;
+    });
+    
+    // Fila de TOTALES por columna
+    html += `
+            <tr class="total-row">
+                <td colspan="5" style="text-align: right; padding-right: 15px;"><strong>TOTALES:</strong></td>
+    `;
+    
+    sucursalesConStock.forEach(suc => {
+        const total = totalesPorSucursal[suc.alias];
+        html += `
+                <td class="td-numero"><strong>${total.inicial}</strong></td>
+                <td class="td-numero"><strong>${total.stock}</strong></td>
+        `;
+    });
+    
+    html += `
+                <td class="td-numero" style="background: #ffc107; font-weight: 700;">${granTotalInicial}</td>
+                <td class="td-numero" style="background: #ffc107; font-weight: 700;">${granTotalStock}</td>
+            </tr>
+    `;
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    return html;
+}
+
+// Formatear números
+function formatearNumero(num) {
+    if (!num) return '0';
+    return parseFloat(num).toLocaleString('es-CL', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    });
+}
+
+// Exportar a Excel
+async function exportarExcel() {
+    try {
+        const marcaId = document.getElementById('filtro-marca').value;
+        const deptId = document.getElementById('filtro-departamento').value;
+        
+        let url = '/app/api/exportar-existencias-marca-excel/';
+        const params = new URLSearchParams();
+        if (marcaId) params.append('marca_id', marcaId);
+        if (deptId) params.append('departamento_id', deptId);
+        if (params.toString()) url += '?' + params.toString();
+        
+        window.location.href = url;
+    } catch (error) {
+        console.error('Error al exportar:', error);
+        alert('Error al exportar a Excel');
+    }
+}
+</script>
+
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+

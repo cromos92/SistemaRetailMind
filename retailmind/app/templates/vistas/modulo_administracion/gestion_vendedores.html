@@ -238,7 +238,7 @@
                                     <th>Código</th>
                                     <th>RUT</th>
                                     <th>Comisión</th>
-                                    <th>Fecha Nacimiento</th>
+                                    <th>Sucursales</th>
                                     <th>Correo</th>
                                     <th>Estado</th>
                                     <th>Acciones</th>
@@ -326,6 +326,28 @@
                                 <input type="email" class="form-control" id="correoVendedor" name="correo" placeholder="Correo Electrónico">
                                 <label for="correoVendedor">Correo Electrónico</label>
                             </div>
+                        </div>
+                        
+                        <!-- Sucursales -->
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-building me-1"></i>Sucursales Asignadas
+                            </label>
+                            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                {% for sucursal in sucursales %}
+                                <div class="form-check">
+                                    <input class="form-check-input sucursal-checkbox" type="checkbox" 
+                                           name="sucursales[]" value="{{ sucursal.id }}" 
+                                           id="sucursal{{ sucursal.id }}">
+                                    <label class="form-check-label" for="sucursal{{ sucursal.id }}">
+                                        {{ sucursal.alias }}
+                                    </label>
+                                </div>
+                                {% empty %}
+                                <p class="text-muted mb-0">No hay sucursales disponibles</p>
+                                {% endfor %}
+                            </div>
+                            <small class="text-muted">Seleccione las sucursales donde trabajará este vendedor</small>
                         </div>
                     </div>
                     
@@ -488,7 +510,9 @@ function actualizarTabla(vendedores) {
                 <td>
                     <span class="comision-badge">${vendedor.comision}%</span>
                 </td>
-                <td>${vendedor.fecha_nacimiento || 'No especificada'}</td>
+                <td>
+                    <small class="text-muted">${vendedor.sucursales_nombres || 'Sin asignar'}</small>
+                </td>
                 <td>${vendedor.correo || 'Sin correo'}</td>
                 <td>
                     <span class="status-badge ${vendedor.activo ? 'status-activo' : 'status-inactivo'}">
@@ -529,6 +553,7 @@ function abrirModalCrear() {
     $('#vendedorId').val('');
     $('#sinRut').prop('checked', false);
     $('#rutVendedor').prop('disabled', false);
+    $('.sucursal-checkbox').prop('checked', false);
     $('#erroresFormulario').hide();
     limpiarErroresVisuales();
     $('#modalVendedor').modal('show');
@@ -558,6 +583,14 @@ function editarVendedor(vendedorId) {
     const sinRut = !vendedor.rut || vendedor.rut.trim() === '';
     $('#sinRut').prop('checked', sinRut);
     $('#rutVendedor').prop('disabled', sinRut);
+    
+    // Marcar sucursales asignadas
+    $('.sucursal-checkbox').prop('checked', false);
+    if (vendedor.sucursales && vendedor.sucursales.length > 0) {
+        vendedor.sucursales.forEach(function(sucursal) {
+            $(`#sucursal${sucursal.id}`).prop('checked', true);
+        });
+    }
     
     $('#erroresFormulario').hide();
     limpiarErroresVisuales();
@@ -589,10 +622,22 @@ function guardarVendedor() {
     const formData = new FormData($('#formVendedor')[0]);
     const data = Object.fromEntries(formData);
     
+    // Si está en modo edición, incluir el ID del vendedor
+    if (modoEdicion && $('#vendedorId').val()) {
+        data.id = $('#vendedorId').val();
+    }
+    
     // Si está marcado "sin RUT", limpiar el campo RUT
     if ($('#sinRut').is(':checked')) {
         data.rut = '';
     }
+    
+    // Obtener sucursales seleccionadas
+    const sucursalesSeleccionadas = [];
+    $('.sucursal-checkbox:checked').each(function() {
+        sucursalesSeleccionadas.push(parseInt($(this).val()));
+    });
+    data.sucursales = sucursalesSeleccionadas;
     
     // Validaciones básicas
     const errores = [];
@@ -643,7 +688,24 @@ function guardarVendedor() {
                     response.message
                 );
                 $('#modalVendedor').modal('hide');
-                cargarVendedores();
+                
+                // Si el servidor devuelve el vendedor actualizado, actualizar la lista local
+                if (response.vendedor) {
+                    if (modoEdicion) {
+                        // Actualizar vendedor existente en la lista
+                        const index = vendedores.findIndex(v => v.id === response.vendedor.id);
+                        if (index !== -1) {
+                            vendedores[index] = response.vendedor;
+                        }
+                    } else {
+                        // Agregar nuevo vendedor a la lista
+                        vendedores.push(response.vendedor);
+                    }
+                    actualizarTabla(vendedores);
+                } else {
+                    // Si no devuelve el vendedor, recargar todo
+                    cargarVendedores();
+                }
             } else {
                 // Manejar errores del servidor
                 if (response.errors && Array.isArray(response.errors)) {

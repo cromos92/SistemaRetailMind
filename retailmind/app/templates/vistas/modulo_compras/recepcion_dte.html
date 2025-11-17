@@ -36,8 +36,17 @@
         background-color: #28a745;
     }
 
+    .badge-recepcionado {
+        background-color: #28a745;
+    }
+
     .badge-anulado {
         background-color: #dc3545;
+    }
+    
+    .dte-recepcionado {
+        background-color: #f0f9ff;
+        opacity: 0.9;
     }
 
     .table th {
@@ -259,8 +268,8 @@
                 <div class="card recepcion-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div>
-                            <h5 class="mb-0">Documentos pendientes de recepción</h5>
-                            <small class="text-muted">Solo se muestran documentos internos con estado pendiente para tu sucursal</small>
+                            <h5 class="mb-0">Documentos de Traspaso</h5>
+                            <small class="text-muted">Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal</small>
                         </div>
                         <div>
                             <button id="btnRefresh" class="btn btn-outline-success btn-sm">
@@ -313,12 +322,13 @@
                                         <th>Fecha Emisión</th>
                                         <th>Items</th>
                                         <th>Cantidad Total</th>
+                                        <th>Estado</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="recepcionesBody">
                                     <tr>
-                                        <td colspan="6">
+                                        <td colspan="7">
                                             <div class="empty-state">
                                                 <i class="bi bi-clipboard-data"></i>
                                                 <h5 class="mt-2">Sin documentos pendientes</h5>
@@ -431,7 +441,7 @@
                     <div class="col-md-6">
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-search"></i></span>
-                            <input type="text" id="buscarProductoModal" class="form-control" placeholder="Buscar por SKU, descripción...">
+                            <input type="text" id="buscarProductoModal" class="form-control" placeholder="Buscar por SKU, descripción, artículo, color, marca...">
                             <button class="btn btn-outline-secondary" type="button" id="btnLimpiarBusqueda">
                                 <i class="bi bi-x"></i>
                             </button>
@@ -448,6 +458,9 @@
                         <button type="button" class="btn btn-sm btn-outline-warning" id="btnDesmarcarTodos">
                             <i class="bi bi-x-lg me-1"></i>Desmarcar todos
                         </button>
+                        <button type="button" class="btn btn-sm btn-outline-info" id="btnObservacionMasiva">
+                            <i class="bi bi-chat-left-text me-1"></i>Observación masiva
+                        </button>
                     </div>
                     <small class="text-muted">
                         <span id="contadorProductos">0 de 0</span> productos verificados
@@ -455,13 +468,16 @@
                 </div>
 
                 <!-- Lista de Productos con Scroll -->
-                <div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px;" id="listaProductosRecepcion">
+                <div style="max-height: 400px; overflow-y: auto; overflow-x: auto; border: 1px solid #dee2e6; border-radius: 8px;" id="listaProductosRecepcion">
                     <table class="table table-hover mb-0">
                         <thead class="sticky-top bg-white" style="top: 0; z-index: 10;">
                             <tr>
                                 <th style="width: 50px;">OK</th>
                                 <th style="width: 120px;">SKU</th>
                                 <th>Producto</th>
+                                <th style="width: 120px;">Artículo</th>
+                                <th style="width: 100px;">Color</th>
+                                <th style="width: 100px;">Marca</th>
                                 <th style="width: 80px;">Talla</th>
                                 <th style="width: 100px;" class="text-center">Esperado</th>
                                 <th style="width: 100px;" class="text-center">Recibido</th>
@@ -471,7 +487,7 @@
                         </thead>
                         <tbody id="productosVerificacionBody">
                             <tr>
-                                <td colspan="8" class="text-center text-muted py-4">Cargando productos...</td>
+                                <td colspan="11" class="text-center text-muted py-4">Cargando productos...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -544,9 +560,16 @@
                         <i class="bi bi-box-seam fs-3 me-3"></i>
                         <div>
                             <strong id="problemaProductoNombre" class="d-block">-</strong>
-                            <small class="text-muted">
+                            <small class="text-muted d-block">
                                 SKU: <span id="problemaProductoSKU">-</span> | 
-                                Talla: <span id="problemaProductoTalla">-</span> | 
+                                Talla: <span id="problemaProductoTalla">-</span>
+                            </small>
+                            <small class="text-muted d-block">
+                                Artículo: <span id="problemaProductoArticulo">-</span> | 
+                                Color: <span id="problemaProductoColor">-</span> | 
+                                Marca: <span id="problemaProductoMarca">-</span>
+                            </small>
+                            <small class="text-muted">
                                 Esperado: <strong><span id="problemaCantidadEsperada">0</span> unidades</strong>
                             </small>
                         </div>
@@ -684,6 +707,103 @@
     </div>
 </div>
 
+<!-- Modal Ver DTE Recepcionado -->
+<div class="modal fade" id="modalVerDTERecepcionado" tabindex="-1" aria-labelledby="modalVerDTELabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-success">
+                <div>
+                    <h5 class="modal-title mb-1" id="modalVerDTELabel">
+                        <i class="bi bi-check-circle me-2"></i>DTE Recepcionado - #<span id="verDteNumero">-</span>
+                    </h5>
+                    <small class="text-white-50">Detalles de la recepción completada</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Info del Documento -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="card bg-light">
+                            <div class="card-body py-2">
+                                <div class="row">
+                                    <div class="col-md-3"><small class="text-muted">Tipo:</small> <strong id="verDteTipo">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Emisor:</small> <strong id="verDteEmisor">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Origen:</small> <strong id="verDteOrigen">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Fecha Emisión:</small> <strong id="verDteFechaEmision">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Fecha Recepción:</small> <strong id="verDteFechaRecepcion">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Estado:</small> <strong id="verDteEstado">-</strong></div>
+                                    <div class="col-md-6"><small class="text-muted">Receptor:</small> <strong id="verDteReceptor">-</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Productos -->
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead class="table-success">
+                            <tr>
+                                <th>SKU</th>
+                                <th>Producto</th>
+                                <th>Artículo</th>
+                                <th>Color</th>
+                                <th>Marca</th>
+                                <th>Talla</th>
+                                <th class="text-center">Esperado</th>
+                                <th class="text-center">Recibido</th>
+                                <th class="text-center">Dañados</th>
+                                <th class="text-center">Faltantes</th>
+                                <th>Estado</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="verDteProductosBody">
+                            <tr>
+                                <td colspan="12" class="text-center text-muted py-4">Cargando productos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Resumen -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="card border-success">
+                            <div class="card-body py-2">
+                                <div class="row text-center">
+                                    <div class="col-3">
+                                        <div class="fw-bold text-success" id="verResumenOK">0</div>
+                                        <small class="text-muted">OK ✅</small>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="fw-bold text-warning" id="verResumenParcial">0</div>
+                                        <small class="text-muted">Parcial ⚠️</small>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="fw-bold text-danger" id="verResumenDanado">0</div>
+                                        <small class="text-muted">Dañados 🔴</small>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="fw-bold text-secondary" id="verResumenFaltante">0</div>
+                                        <small class="text-muted">Faltantes ❌</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% include '../../layout/footer.html' %}
 
 <script>
@@ -715,6 +835,7 @@ $(document).ready(function() {
     // Nuevos eventos para verificación
     $('#btnMarcarTodosOK').on('click', marcarTodosOK);
     $('#btnDesmarcarTodos').on('click', desmarcarTodos);
+    $('#btnObservacionMasiva').on('click', abrirObservacionMasiva);
     $('#buscarProductoModal').on('input', filtrarProductosModal);
     $('#btnLimpiarBusqueda').on('click', limpiarBusqueda);
     $('#btnGuardarProblema').on('click', guardarProblema);
@@ -845,11 +966,11 @@ function renderTablaRecepciones() {
     if (!recepcionesData.length) {
         tbody.append(`
             <tr>
-                <td colspan="6">
+                <td colspan="7">
                     <div class="empty-state">
                         <i class="bi bi-clipboard-data"></i>
-                        <h5 class="mt-2">Sin documentos pendientes</h5>
-                        <p class="text-muted">Cuando haya traspasos internos dirigidos a tu bodega aparecerán aquí para confirmación.</p>
+                        <h5 class="mt-2">Sin documentos</h5>
+                        <p class="text-muted">Cuando haya traspasos internos dirigidos a tu bodega aparecerán aquí.</p>
                     </div>
                 </td>
             </tr>
@@ -868,8 +989,44 @@ function renderTablaRecepciones() {
             ? resumenItems.map(item => `<span class="badge bg-secondary me-1">${item.talla} (${item.cantidad})</span>`).join(' ')
             : '<span class="text-muted">Sin detalle</span>';
 
+        // Determinar si está recepcionado
+        const estaRecepcionado = doc.fecha_recepcion !== null;
+        const rowClass = estaRecepcionado ? 'dte-recepcionado' : '';
+        
+        // Badge de estado
+        let estadoBadge = '';
+        if (estaRecepcionado) {
+            if (doc.estado_dte === 'RECEPCIONADO_COMPLETO') {
+                estadoBadge = '<span class="badge badge-recepcionado">✅ Recepcionado</span>';
+            } else if (doc.estado_dte === 'RECEPCIONADO_PARCIAL') {
+                estadoBadge = '<span class="badge bg-warning">⚠️ Parcial</span>';
+            } else if (doc.estado_dte === 'EN_REGULARIZACION') {
+                estadoBadge = '<span class="badge bg-info">🔄 En Regularización</span>';
+            } else {
+                estadoBadge = '<span class="badge badge-recepcionado">✅ Recepcionado</span>';
+            }
+        } else {
+            estadoBadge = '<span class="badge badge-pendiente">⏳ Pendiente</span>';
+        }
+        
+        // Botones según estado
+        let botonesHtml = '';
+        if (estaRecepcionado) {
+            botonesHtml = `
+                <button class="btn btn-success btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalles de recepción">
+                    <i class="bi bi-eye me-1"></i>Ver
+                </button>
+            `;
+        } else {
+            botonesHtml = `
+                <button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="Recepcionar documento">
+                    <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar
+                </button>
+            `;
+        }
+
         tbody.append(`
-            <tr data-id="${doc.id}">
+            <tr data-id="${doc.id}" class="${rowClass}">
                 <td>
                     <div class="fw-bold">${badgeTipo} Nº ${doc.numero_documento}</div>
                     <small class="text-muted">${doc.referencias || 'Sin observaciones'}</small>
@@ -881,10 +1038,9 @@ function renderTablaRecepciones() {
                 <td>${fechaEmision}</td>
                 <td class="detalle-tallas">${resumenHtml}</td>
                 <td class="text-center"><span class="badge bg-dark">${doc.total_unidades}</span></td>
+                <td class="text-center">${estadoBadge}</td>
                 <td class="text-center">
-                    <button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})">
-                        <i class="bi bi-eye me-1"></i>Ver Detalle
-                    </button>
+                    ${botonesHtml}
                 </td>
             </tr>
         `);
@@ -971,7 +1127,7 @@ function llenarDetalleDocumento(doc) {
     $('#observacionesGenerales').val('');
     
     if (!doc.detalle || !doc.detalle.length) {
-        $('#productosVerificacionBody').html('<tr><td colspan="8" class="text-center text-muted">Sin productos</td></tr>');
+        $('#productosVerificacionBody').html('<tr><td colspan="11" class="text-center text-muted">Sin productos</td></tr>');
         return;
     }
     
@@ -980,6 +1136,9 @@ function llenarDetalleDocumento(doc) {
         dte_producto_id: item.dte_producto_id,
         sku: item.sku,
         descripcion: item.descripcion,
+        articulo: item.articulo || '',
+        marca: item.marca || '',
+        color: item.color || '',
         talla: item.talla,
         cantidad_esperada: item.cantidad,
         cantidad_recepcionada: item.cantidad,  // Por defecto, todo OK
@@ -1002,10 +1161,13 @@ function renderizarProductosVerificacion() {
     const busqueda = $('#buscarProductoModal').val().toLowerCase();
     
     productosVerificacion.forEach((prod, index) => {
-        // Filtrar por búsqueda
+        // Filtrar por búsqueda (incluye SKU, descripción, artículo, color, marca y talla)
         const coincide = !busqueda || 
             prod.sku.toLowerCase().includes(busqueda) ||
             prod.descripcion.toLowerCase().includes(busqueda) ||
+            (prod.articulo && prod.articulo.toLowerCase().includes(busqueda)) ||
+            (prod.color && prod.color.toLowerCase().includes(busqueda)) ||
+            (prod.marca && prod.marca.toLowerCase().includes(busqueda)) ||
             prod.talla.toLowerCase().includes(busqueda);
         
         if (!coincide) return;
@@ -1015,8 +1177,13 @@ function renderizarProductosVerificacion() {
                               prod.cantidad_faltante > 0 ||
                               prod.cantidad_recepcionada !== prod.cantidad_esperada;
         
+        const sinObservaciones = tieneProblemas && (!prod.observaciones || prod.observaciones.trim() === '');
         const rowClass = tieneProblemas ? 'table-warning' : (prod.marcado_ok ? 'table-success' : '');
         const estadoBadge = getEstadoBadge(prod.estado);
+        
+        // Indicador de observaciones faltantes
+        const alertaObservaciones = sinObservaciones ? 
+            '<i class="bi bi-exclamation-triangle-fill text-danger" title="Falta agregar observaciones"></i>' : '';
         
         tbody.append(`
             <tr class="${rowClass}" data-index="${index}">
@@ -1026,6 +1193,9 @@ function renderizarProductosVerificacion() {
                 </td>
                 <td><small class="font-monospace">${prod.sku}</small></td>
                 <td><small>${prod.descripcion}</small></td>
+                <td><small>${prod.articulo || '-'}</small></td>
+                <td><small>${prod.color || '-'}</small></td>
+                <td><small>${prod.marca || '-'}</small></td>
                 <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
                 <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
                 <td class="text-center">
@@ -1035,6 +1205,7 @@ function renderizarProductosVerificacion() {
                 </td>
                 <td>${estadoBadge}</td>
                 <td class="text-center">
+                    ${alertaObservaciones}
                     <button type="button" class="btn btn-sm btn-outline-warning btn-detallar" 
                             data-index="${index}" title="Detallar problema">
                         <i class="bi bi-exclamation-circle"></i>
@@ -1045,7 +1216,7 @@ function renderizarProductosVerificacion() {
     });
     
     if (tbody.children().length === 0) {
-        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron productos</td></tr>');
+        tbody.html('<tr><td colspan="11" class="text-center text-muted">No se encontraron productos</td></tr>');
     }
     
     // Bind events
@@ -1081,8 +1252,13 @@ function toggleProductoOK(index) {
     productosVerificacion[index].marcado_ok = !productosVerificacion[index].marcado_ok;
     
     if (!productosVerificacion[index].marcado_ok) {
-        // Si se desmarca, abrir modal para detallar problema
-        abrirModalProblema(index);
+        // Si se desmarca, marcarlo como faltante (sin abrir modal)
+        // El usuario puede hacer clic en "Detallar" si quiere especificar más
+        productosVerificacion[index].cantidad_recepcionada = 0;
+        productosVerificacion[index].cantidad_danada = 0;
+        productosVerificacion[index].cantidad_faltante = productosVerificacion[index].cantidad_esperada;
+        productosVerificacion[index].estado = 'FALTANTE';
+        productosVerificacion[index].observaciones = '';
     } else {
         // Si se marca OK, resetear a valores correctos
         productosVerificacion[index].cantidad_recepcionada = productosVerificacion[index].cantidad_esperada;
@@ -1090,9 +1266,10 @@ function toggleProductoOK(index) {
         productosVerificacion[index].cantidad_faltante = 0;
         productosVerificacion[index].estado = 'RECEPCIONADO_OK';
         productosVerificacion[index].observaciones = '';
-        renderizarProductosVerificacion();
-        actualizarResumenVerificacion();
     }
+    
+    renderizarProductosVerificacion();
+    actualizarResumenVerificacion();
 }
 
 function actualizarCantidadRecepcionada(index, cantidad) {
@@ -1153,6 +1330,90 @@ function desmarcarTodos() {
     actualizarResumenVerificacion();
 }
 
+function abrirObservacionMasiva() {
+    // Obtener productos con problemas
+    const productosConProblemas = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK');
+    
+    if (productosConProblemas.length === 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin productos con problemas',
+            text: 'Todos los productos están marcados como OK. No hay productos a los que aplicar observaciones.',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+    
+    Swal.fire({
+        title: '📝 Observación Masiva',
+        html: `
+            <div class="text-start">
+                <p>Se aplicará la misma observación a <strong>${productosConProblemas.length}</strong> producto(s) con problemas:</p>
+                <div class="alert alert-info mb-3" style="max-height: 150px; overflow-y: auto;">
+                    <small>
+                        ${productosConProblemas.map(p => 
+                            `• ${p.descripcion} (${p.sku}) - Talla ${p.talla}`
+                        ).join('<br>')}
+                    </small>
+                </div>
+                <label class="form-label fw-bold">Observación para todos:</label>
+                <textarea id="observacionMasivaTexto" class="form-control" rows="3" 
+                          placeholder="Ej: Pedido incompleto, Caja dañada en tránsito, etc."></textarea>
+                <small class="text-muted mt-1 d-block">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Esta observación se agregará a todos los productos con problemas
+                </small>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-save me-1"></i>Aplicar a todos',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0dcaf0',
+        width: '600px',
+        preConfirm: () => {
+            const observacion = document.getElementById('observacionMasivaTexto').value.trim();
+            if (!observacion) {
+                Swal.showValidationMessage('Debes ingresar una observación');
+                return false;
+            }
+            return observacion;
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            const observacion = result.value;
+            
+            // Aplicar observación a todos los productos con problemas
+            let contador = 0;
+            productosVerificacion.forEach(prod => {
+                if (prod.estado !== 'RECEPCIONADO_OK') {
+                    prod.observaciones = observacion;
+                    contador++;
+                }
+            });
+            
+            // Actualizar vista
+            renderizarProductosVerificacion();
+            actualizarResumenVerificacion();
+            
+            // Mensaje de confirmación
+            Swal.fire({
+                icon: 'success',
+                title: '✅ Observación Aplicada',
+                html: `
+                    <p>Se aplicó la observación a <strong>${contador}</strong> producto(s):</p>
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-chat-left-text me-2"></i>
+                        "${observacion}"
+                    </div>
+                `,
+                timer: 2500,
+                showConfirmButton: false
+            });
+        }
+    });
+}
+
 function filtrarProductosModal() {
     renderizarProductosVerificacion();
 }
@@ -1169,11 +1430,20 @@ function actualizarResumenVerificacion() {
     productosVerificacion.forEach(prod => {
         if (prod.marcado_ok) verificados++;
         
+        // Sumar UNIDADES en lugar de contar productos
         switch(prod.estado) {
-            case 'RECEPCIONADO_OK': ok++; break;
-            case 'RECEPCIONADO_PARCIAL': parcial++; break;
-            case 'RECEPCIONADO_DANADO': danado++; break;
-            case 'FALTANTE': faltante++; break;
+            case 'RECEPCIONADO_OK': 
+                ok += prod.cantidad_recepcionada;
+                break;
+            case 'RECEPCIONADO_PARCIAL': 
+                parcial += (prod.cantidad_recepcionada - prod.cantidad_danada); // Solo las buenas
+                break;
+            case 'RECEPCIONADO_DANADO': 
+                danado += prod.cantidad_danada;
+                break;
+            case 'FALTANTE': 
+                faltante += prod.cantidad_faltante;
+                break;
         }
     });
     
@@ -1204,6 +1474,9 @@ function abrirModalProblema(index) {
     $('#problemaProductoNombre').text(prod.descripcion);
     $('#problemaProductoSKU').text(prod.sku);
     $('#problemaProductoTalla').text(prod.talla);
+    $('#problemaProductoArticulo').text(prod.articulo || '-');
+    $('#problemaProductoColor').text(prod.color || '-');
+    $('#problemaProductoMarca').text(prod.marca || '-');
     $('#problemaCantidadEsperada').text(prod.cantidad_esperada);
     $('#problemaCantidadRecepcionada').val(prod.cantidad_recepcionada);
     $('#problemaCantidadDanada').val(prod.cantidad_danada);
@@ -1313,6 +1586,37 @@ function confirmarRecepcion() {
     const conProblemas = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK');
     const hayProblemas = conProblemas.length > 0;
     
+    // 🔍 VALIDACIÓN: Verificar que productos con problemas tengan observaciones
+    if (hayProblemas) {
+        const sinObservaciones = conProblemas.filter(p => !p.observaciones || p.observaciones.trim() === '');
+        
+        if (sinObservaciones.length > 0) {
+            const productosSinObs = sinObservaciones.map(p => 
+                `• ${p.descripcion} (${p.sku}) - Talla ${p.talla}`
+            ).join('<br>');
+            
+            Swal.fire({
+                icon: 'warning',
+                title: '⚠️ Faltan Observaciones',
+                html: `
+                    <div class="text-start">
+                        <p>Los siguientes productos tienen problemas pero <strong>no tienen observaciones</strong>:</p>
+                        <div class="alert alert-warning mt-2 mb-3" style="max-height: 200px; overflow-y: auto;">
+                            ${productosSinObs}
+                        </div>
+                        <p class="text-muted small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Por favor, usa el botón <strong>"⚠️"</strong> para detallar qué pasó con cada producto problemático.
+                        </p>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido',
+                width: '600px'
+            });
+            return; // No permitir continuar
+        }
+    }
+    
     // Si hay productos con problemas, solo permitir recepcionar TODO según cantidades ingresadas
     if (hayProblemas) {
         // Desglosar los problemas
@@ -1325,6 +1629,11 @@ function confirmarRecepcion() {
         if (danados > 0) detalleProblemas += `<li>${danados} con productos dañados</li>`;
         if (faltantes > 0) detalleProblemas += `<li>${faltantes} faltante(s) completo(s)</li>`;
         
+        // Calcular totales de stock que se actualizará
+        const totalOK = productosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
+        const totalProblemas = conProblemas.reduce((sum, p) => sum + (p.cantidad_recepcionada - p.cantidad_danada), 0);
+        const totalNoIngresa = conProblemas.reduce((sum, p) => sum + p.cantidad_faltante + p.cantidad_danada, 0);
+        
         Swal.fire({
             title: '⚠️ Recepción con Problemas Detectados',
             html: `
@@ -1335,17 +1644,17 @@ function confirmarRecepcion() {
                     </ul>
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle me-2"></i>
-                        <strong>¿Qué se va a recepcionar?</strong>
+                        <strong>📦 ¿Qué stock se actualizará?</strong>
                         <ul class="mt-2 mb-0">
-                            <li><strong>${productosOK.length}</strong> productos OK → Stock se actualizará normalmente</li>
-                            <li><strong>${conProblemas.length}</strong> productos con problemas → Se actualizará con las cantidades que ingresaste</li>
+                            <li>✅ <strong>${totalOK}</strong> unidades de productos OK</li>
+                            ${totalProblemas > 0 ? `<li>⚠️ <strong>${totalProblemas}</strong> unidades parciales (recibidas - dañadas)</li>` : ''}
+                            <li>❌ <strong>${totalNoIngresa}</strong> unidades NO se agregarán al stock (faltantes + dañadas)</li>
                         </ul>
                     </div>
                     <div class="alert alert-warning mb-0">
                         <i class="bi bi-exclamation-triangle me-2"></i>
-                        <strong>Importante:</strong> El stock se actualizará con las cantidades reales que recepcionaste, 
-                        no con las cantidades esperadas. Los productos con problemas quedarán registrados 
-                        para seguimiento y posible regularización.
+                        <strong>Importante:</strong> Solo se actualizará el stock con las unidades que realmente llegaron en buen estado. 
+                        Los productos con problemas quedarán registrados para seguimiento y regularización.
                     </div>
                 </div>
             `,
@@ -1745,6 +2054,110 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+function verDTERecepcionado(dteId) {
+    // Mostrar loading
+    $('#verDteProductosBody').html('<tr><td colspan="12" class="text-center py-4"><div class="spinner-border text-success"></div><p class="mt-2 text-muted">Cargando detalles...</p></td></tr>');
+    
+    // Abrir modal
+    const modalVerDTE = new bootstrap.Modal(document.getElementById('modalVerDTERecepcionado'));
+    modalVerDTE.show();
+    
+    // Cargar datos del DTE recepcionado
+    $.getJSON(`/app/dte/obtener_detalle_dte_recepcionado/?dte_id=${dteId}`)
+        .done(response => {
+            if (!response.success) {
+                Swal.fire('Error', response.error || 'No se pudieron cargar los detalles', 'error');
+                modalVerDTE.hide();
+                return;
+            }
+            
+            const dte = response.dte;
+            const productos = response.productos || [];
+            
+            // Llenar información del DTE
+            $('#verDteNumero').text(dte.numero_documento);
+            $('#verDteTipo').html(dte.tipo_documento === 'FACTURA ELECTRONICA'
+                ? '<span class="badge bg-primary">Factura</span>'
+                : '<span class="badge bg-info text-dark">Guía</span>');
+            $('#verDteEmisor').text(dte.emisor);
+            $('#verDteReceptor').text(dte.receptor);
+            $('#verDteOrigen').text(dte.sucursal_origen);
+            $('#verDteFechaEmision').text(dte.fecha_emision ? new Date(dte.fecha_emision).toLocaleDateString('es-CL') : '-');
+            $('#verDteFechaRecepcion').text(dte.fecha_recepcion ? new Date(dte.fecha_recepcion).toLocaleDateString('es-CL') : '-');
+            
+            // Estado del DTE
+            let estadoHtml = '';
+            if (dte.estado_dte === 'RECEPCIONADO_COMPLETO') {
+                estadoHtml = '<span class="badge badge-recepcionado">✅ Recepcionado Completo</span>';
+            } else if (dte.estado_dte === 'RECEPCIONADO_PARCIAL') {
+                estadoHtml = '<span class="badge bg-warning">⚠️ Recepcionado Parcial</span>';
+            } else if (dte.estado_dte === 'EN_REGULARIZACION') {
+                estadoHtml = '<span class="badge bg-info">🔄 En Regularización</span>';
+            } else {
+                estadoHtml = `<span class="badge bg-secondary">${dte.estado_dte}</span>`;
+            }
+            $('#verDteEstado').html(estadoHtml);
+            
+            // Llenar tabla de productos
+            const tbody = $('#verDteProductosBody');
+            tbody.empty();
+            
+            if (productos.length === 0) {
+                tbody.html('<tr><td colspan="12" class="text-center text-muted py-3">Sin productos registrados</td></tr>');
+                return;
+            }
+            
+            let contOK = 0, contParcial = 0, contDanado = 0, contFaltante = 0;
+            
+            productos.forEach(prod => {
+                // Determinar clase de fila según estado
+                let rowClass = '';
+                if (prod.estado === 'RECEPCIONADO_OK') {
+                    rowClass = 'table-success';
+                    contOK += prod.cantidad_recepcionada;
+                } else if (prod.estado === 'RECEPCIONADO_PARCIAL') {
+                    rowClass = 'table-warning';
+                    contParcial += (prod.cantidad_recepcionada - prod.cantidad_danada);
+                } else if (prod.estado === 'RECEPCIONADO_DANADO') {
+                    rowClass = 'table-danger';
+                    contDanado += prod.cantidad_danada;
+                } else if (prod.estado === 'FALTANTE') {
+                    rowClass = 'table-secondary';
+                    contFaltante += prod.cantidad_faltante;
+                }
+                
+                const estadoBadge = getEstadoBadge(prod.estado);
+                
+                tbody.append(`
+                    <tr class="${rowClass}">
+                        <td><small class="font-monospace">${prod.sku}</small></td>
+                        <td><small>${prod.descripcion}</small></td>
+                        <td><small>${prod.articulo || '-'}</small></td>
+                        <td><small>${prod.color || '-'}</small></td>
+                        <td><small>${prod.marca || '-'}</small></td>
+                        <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
+                        <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
+                        <td class="text-center"><strong class="text-success">${prod.cantidad_recepcionada}</strong></td>
+                        <td class="text-center"><strong class="text-danger">${prod.cantidad_danada}</strong></td>
+                        <td class="text-center"><strong class="text-secondary">${prod.cantidad_faltante}</strong></td>
+                        <td>${estadoBadge}</td>
+                        <td><small class="text-muted">${prod.observaciones || '-'}</small></td>
+                    </tr>
+                `);
+            });
+            
+            // Actualizar resumen
+            $('#verResumenOK').text(contOK);
+            $('#verResumenParcial').text(contParcial);
+            $('#verResumenDanado').text(contDanado);
+            $('#verResumenFaltante').text(contFaltante);
+        })
+        .fail(() => {
+            Swal.fire('Error', 'No se pudieron cargar los detalles del DTE', 'error');
+            modalVerDTE.hide();
+        });
 }
 </script>
 

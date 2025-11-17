@@ -285,7 +285,7 @@ def obtener_dte(request, dte_id):
         for dte_producto in dte.dte_productos.all():
             productos.append({
                 'id': dte_producto.id,
-                'producto_nombre': dte_producto.productoTalla.producto.nombre,
+                'producto_nombre': dte_producto.productoTalla.producto.articulo,
                 'sku': dte_producto.productoTalla.sku,
                 'talla': dte_producto.productoTalla.talla.nombre if dte_producto.productoTalla.talla else '',
                 'cantidad': dte_producto.cantidad,

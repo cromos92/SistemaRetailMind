@@ -1,0 +1,449 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="display-5 mb-2 fw-bold">
+                    <i class="ri-file-list-3-line text-primary"></i> Documentos Emitidos
+                </h1>
+                <p class="text-muted mb-0 fs-5">Consulta y análisis de documentos de venta emitidos</p>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">
+                            <i class="ri-filter-3-line text-primary"></i> Filtros de Búsqueda
+                        </h5>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label for="filtroFechaDesde" class="form-label">Fecha Desde</label>
+                                <input type="date" class="form-control" id="filtroFechaDesde">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="filtroFechaHasta" class="form-label">Fecha Hasta</label>
+                                <input type="date" class="form-control" id="filtroFechaHasta">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="filtroTipoDoc" class="form-label">Tipo Documento</label>
+                                <select class="form-select" id="filtroTipoDoc">
+                                    <option value="">Todos</option>
+                                    <option value="BOLETA_ELECTRONICA">Boleta Electrónica</option>
+                                    <option value="BOLETA_PAPEL">Boleta Papel</option>
+                                    <option value="FACTURA_ELECTRONICA">Factura Electrónica</option>
+                                    <option value="FACTURA_EXENTA">Factura Exenta</option>
+                                    <option value="BOLETA">Boleta Manual</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="filtroMetodoPago" class="form-label">Método Pago</label>
+                                <select class="form-select" id="filtroMetodoPago">
+                                    <option value="">Todos</option>
+                                    <option value="EFECTIVO">Efectivo</option>
+                                    <option value="TBK_DEBITO_POS">TBK Débito</option>
+                                    <option value="TBK_CREDITO_POS">TBK Crédito</option>
+                                    <option value="TARJETA_COMERCIAL">Tarjeta Comercial</option>
+                                    <option value="VENTA_INTERNET">Venta Internet</option>
+                                    <option value="CONVENIO">Convenio</option>
+                                    <option value="TRANSFERENCIA">Transferencia</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary w-100" id="btnBuscar">
+                                    <i class="ri-search-line"></i> Buscar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Documentos -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-table-line text-info"></i> Listado de Documentos
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-primary" id="btnImprimir">
+                                <i class="ri-printer-line"></i> Imprimir
+                            </button>
+                            <button class="btn btn-sm btn-success" id="btnExportarExcel">
+                                <i class="ri-file-excel-line"></i> Excel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive" id="tablaDocumentosContainer">
+                            <table class="table table-hover table-striped align-middle mb-0" id="tablaDocumentos">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Tipo Documento</th>
+                                        <th>Método Pago</th>
+                                        <th>N° Documento</th>
+                                        <th>Cliente/RUT</th>
+                                        <th class="text-end">Total</th>
+                                        <th class="text-end">Descuento</th>
+                                        <th class="text-end">Pagado</th>
+                                        <th>Vendedor</th>
+                                        <th>Fecha</th>
+                                        <th class="no-print">Voucher</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Se llenará dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resúmenes por Método de Pago -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-light">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-money-dollar-circle-line text-success"></i> Resumen por Método de Pago
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive" id="resumenMetodosPagoContainer">
+                            <table class="table table-bordered align-middle mb-0">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th colspan="4" class="text-center">MÉTODOS DE PAGO</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resumenMetodosPago">
+                                    <tr>
+                                        <td width="25%"><strong>Total Efectivo:</strong></td>
+                                        <td width="25%" class="text-end" id="totalEfectivo">$0</td>
+                                        <td width="25%"><strong>Total TBK Crédito:</strong></td>
+                                        <td width="25%" class="text-end" id="totalTBKCredito">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total TBK Débito:</strong></td>
+                                        <td class="text-end" id="totalTBKDebito">$0</td>
+                                        <td><strong>Total Tarjeta Comercial:</strong></td>
+                                        <td class="text-end" id="totalTarjetaComercial">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Convenio:</strong></td>
+                                        <td class="text-end" id="totalConvenio">$0</td>
+                                        <td><strong>Total Descuentos:</strong></td>
+                                        <td class="text-end" id="totalDescuentos">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Venta Internet:</strong></td>
+                                        <td class="text-end" id="totalVentaInternet">$0</td>
+                                        <td><strong>Total Transferencia:</strong></td>
+                                        <td class="text-end" id="totalTransferencia">$0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total Crédito Trabajador:</strong></td>
+                                        <td class="text-end" id="totalCreditoTrabajador">$0</td>
+                                        <td><strong>Total Otros:</strong></td>
+                                        <td class="text-end" id="totalOtros">$0</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot class="table-warning fw-bold">
+                                    <tr>
+                                        <td colspan="3" class="text-end fs-5">TOTAL GLOBAL:</td>
+                                        <td class="text-end fs-5" id="totalGlobal">$0</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Establecer fechas por defecto (hoy)
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('filtroFechaDesde').value = hoy;
+    document.getElementById('filtroFechaHasta').value = hoy;
+
+    // Cargar datos iniciales
+    cargarDocumentos();
+
+    // Event listeners
+    document.getElementById('btnBuscar').addEventListener('click', cargarDocumentos);
+    document.getElementById('btnImprimir').addEventListener('click', imprimirDocumentos);
+    document.getElementById('btnExportarExcel').addEventListener('click', exportarExcel);
+
+    // Función para cargar documentos
+    function cargarDocumentos() {
+        const fechaDesde = document.getElementById('filtroFechaDesde').value;
+        const fechaHasta = document.getElementById('filtroFechaHasta').value;
+        const tipoDoc = document.getElementById('filtroTipoDoc').value;
+        const metodoPago = document.getElementById('filtroMetodoPago').value;
+
+        let url = '/app/api/reportes/documentos-emitidos/?';
+        if (fechaDesde) url += `fecha_desde=${fechaDesde}&`;
+        if (fechaHasta) url += `fecha_hasta=${fechaHasta}&`;
+        if (tipoDoc) url += `tipo_documento=${tipoDoc}&`;
+        if (metodoPago) url += `metodo_pago=${metodoPago}&`;
+
+        console.log('Cargando documentos:', url);
+
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Documentos recibidos:', data);
+                if (data.success) {
+                    llenarTablaDocumentos(data.documentos);
+                    actualizarResumenes(data.resumen);
+                } else {
+                    console.error('Error en respuesta:', data.error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'No se pudieron cargar los documentos: ' + (data.error || 'Error desconocido')
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando documentos:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo conectar con el servidor'
+                });
+            });
+    }
+
+    // Llenar tabla de documentos
+    function llenarTablaDocumentos(documentos) {
+        const tbody = document.querySelector('#tablaDocumentos tbody');
+        tbody.innerHTML = '';
+
+        if (!documentos || documentos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">No hay documentos para mostrar</td></tr>';
+            return;
+        }
+
+        documentos.forEach(doc => {
+            const row = `
+                <tr>
+                    <td>${doc.id}</td>
+                    <td>${doc.tipo_documento_display}</td>
+                    <td>${doc.metodo_pago_display}</td>
+                    <td>${doc.correlativo}</td>
+                    <td>${doc.cliente_info}</td>
+                    <td class="text-end">$${formatearNumero(doc.total)}</td>
+                    <td class="text-end">$${formatearNumero(doc.descuento)}</td>
+                    <td class="text-end">$${formatearNumero(doc.total)}</td>
+                    <td>${doc.vendedor}</td>
+                    <td>${doc.fecha}</td>
+                    <td class="no-print">${doc.voucher || '-'}</td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+
+    // Actualizar resúmenes
+    function actualizarResumenes(resumen) {
+        if (!resumen) return;
+
+        document.getElementById('totalEfectivo').textContent = '$' + formatearNumero(resumen.efectivo || 0);
+        document.getElementById('totalTBKCredito').textContent = '$' + formatearNumero(resumen.tbk_credito || 0);
+        document.getElementById('totalTBKDebito').textContent = '$' + formatearNumero(resumen.tbk_debito || 0);
+        document.getElementById('totalTarjetaComercial').textContent = '$' + formatearNumero(resumen.tarjeta_comercial || 0);
+        document.getElementById('totalConvenio').textContent = '$' + formatearNumero(resumen.convenio || 0);
+        document.getElementById('totalDescuentos').textContent = '$' + formatearNumero(resumen.descuentos || 0);
+        document.getElementById('totalVentaInternet').textContent = '$' + formatearNumero(resumen.venta_internet || 0);
+        document.getElementById('totalTransferencia').textContent = '$' + formatearNumero(resumen.transferencia || 0);
+        document.getElementById('totalCreditoTrabajador').textContent = '$' + formatearNumero(resumen.credito_trabajador || 0);
+        document.getElementById('totalOtros').textContent = '$' + formatearNumero(resumen.otros || 0);
+        document.getElementById('totalGlobal').textContent = '$' + formatearNumero(resumen.total_global || 0);
+    }
+
+    // Función de impresión
+    function imprimirDocumentos() {
+        const fechaDesde = document.getElementById('filtroFechaDesde').value || 'N/A';
+        const fechaHasta = document.getElementById('filtroFechaHasta').value || 'N/A';
+        
+        const fechaReporte = new Date().toLocaleDateString('es-CL', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        const ventanaImpresion = window.open('', '_blank');
+        
+        const contenidoHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Documentos Emitidos</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        margin: 20px;
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 30px;
+                        border-bottom: 2px solid #333;
+                        padding-bottom: 10px;
+                    }
+                    .header h1 {
+                        margin: 0;
+                        color: #333;
+                    }
+                    .header p {
+                        margin: 5px 0;
+                        color: #666;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin-top: 20px;
+                        font-size: 9px;
+                    }
+                    th, td {
+                        border: 1px solid #ddd;
+                        padding: 6px;
+                        text-align: left;
+                    }
+                    th {
+                        background-color: #4154f1;
+                        color: white;
+                    }
+                    .text-end {
+                        text-align: right;
+                    }
+                    .text-center {
+                        text-align: center;
+                    }
+                    .fw-bold, strong {
+                        font-weight: bold;
+                    }
+                    .table-success th {
+                        background-color: #28a745 !important;
+                        color: white;
+                    }
+                    .table-warning {
+                        background-color: #fff3cd;
+                    }
+                    .no-print {
+                        display: none;
+                    }
+                    .resumen-table {
+                        margin-top: 30px;
+                        page-break-before: auto;
+                    }
+                    @media print {
+                        .no-print {
+                            display: none !important;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>📋 Documentos Emitidos</h1>
+                    <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
+                    <p><strong>Fecha de Generación:</strong> ${fechaReporte}</p>
+                </div>
+                
+                <h3 style="margin-top: 20px;">Listado de Documentos</h3>
+                ${document.getElementById('tablaDocumentosContainer').innerHTML}
+                
+                <h3 style="margin-top: 40px;">Resumen por Método de Pago</h3>
+                ${document.getElementById('resumenMetodosPagoContainer').innerHTML}
+                
+                <div style="margin-top: 30px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 10px;">
+                    <p>RetailMind - Sistema de Gestión de Ventas</p>
+                </div>
+            </body>
+            </html>
+        `;
+        
+        ventanaImpresion.document.write(contenidoHTML);
+        ventanaImpresion.document.close();
+        
+        ventanaImpresion.onload = function() {
+            ventanaImpresion.print();
+        };
+    }
+
+    // Exportar a Excel
+    function exportarExcel() {
+        Swal.fire({
+            icon: 'info',
+            title: 'Exportando a Excel',
+            text: 'Funcionalidad en desarrollo...',
+            timer: 2000
+        });
+    }
+
+    // Función auxiliar para formatear números
+    function formatearNumero(numero) {
+        return new Intl.NumberFormat('es-CL').format(Math.round(numero));
+    }
+});
+</script>
+
+<style>
+.card {
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(65, 84, 241, 0.05);
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    
+    .card {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+    
+    .btn {
+        display: none !important;
+    }
+}
+</style>
+

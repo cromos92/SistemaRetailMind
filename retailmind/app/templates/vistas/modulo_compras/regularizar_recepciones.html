@@ -115,13 +115,14 @@
                     <div class="col-md-3">
                         <label class="form-label">Estado</label>
                         <select class="form-select" id="filtroEstado">
-                            <option value="">Todos</option>
+                            <option value="">Pendientes (sin regularizar)</option>
+                            <option value="TODOS">Todos (pendientes + regularizados)</option>
                             <option value="FALTANTE">Faltantes</option>
                             <option value="RECEPCIONADO_PARCIAL">Parciales</option>
                             <option value="RECEPCIONADO_DANADO">Dañados</option>
                             <option value="EN_REGULARIZACION">En Regularización</option>
                             <option value="EN_SOLICITUD_REGULARIZACION">En Solicitud</option>
-                            <option value="REGULARIZADO">Regularizados</option>
+                            <option value="REGULARIZADO">✅ Regularizados</option>
                         </select>
                     </div>
                     <div class="col-md-3">
@@ -167,21 +168,20 @@
                         <thead class="table-light">
                             <tr>
                                 <th>DTE</th>
-                                <th>Producto</th>
-                                <th>SKU</th>
-                                <th>Talla</th>
-                                <th>Esperado</th>
-                                <th>Recibido</th>
-                                <th>Faltante</th>
-                                <th>Dañado</th>
-                                <th>Estado</th>
-                                <th>Solución</th>
+                                <th>Fecha Emisión</th>
+                                <th>Origen</th>
+                                <th>Productos con Problemas</th>
+                                <th>Total Esperado</th>
+                                <th>Total Recibido</th>
+                                <th>Total Faltante</th>
+                                <th>Total Dañado</th>
+                                <th>Requiere</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyProductosProblemas">
                             <tr>
-                                <td colspan="11" class="text-center py-4">
+                                <td colspan="10" class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Cargando...</span>
                                     </div>
@@ -191,6 +191,106 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Regularizar DTE Completo -->
+<div class="modal fade" id="modalRegularizarDTE" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-tools me-2"></i> Regularizar DTE #<span id="dteTitulo">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Regularización de DTE:</strong> Se generará una Nota de Crédito por todos los productos con problemas.
+                </div>
+                
+                <!-- Resumen de Productos -->
+                <div class="card bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">📦 Productos a Regularizar</h6>
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th>SKU</th>
+                                        <th>Talla</th>
+                                        <th>Esperado</th>
+                                        <th>Recibido</th>
+                                        <th>Faltante</th>
+                                        <th>Dañado</th>
+                                        <th>A Acreditar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyProductosDTE">
+                                    <tr>
+                                        <td colspan="8" class="text-center">Cargando...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Resumen de NC -->
+                <div class="card border-success">
+                    <div class="card-body">
+                        <h6 class="card-title text-success">
+                            <i class="bi bi-file-earmark-text me-2"></i>Nota de Crédito a Generar
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr>
+                                        <td class="text-muted">Total productos:</td>
+                                        <td><strong id="ncTotalProductos">0</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Total unidades:</td>
+                                        <td><strong id="ncTotalUnidades">0</strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr>
+                                        <td class="text-muted">Monto Neto:</td>
+                                        <td><strong>$<span id="ncMontoNeto">0</span></strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">IVA (19%):</td>
+                                        <td><strong>$<span id="ncIVA">0</span></strong></td>
+                                    </tr>
+                                    <tr class="border-top">
+                                        <td class="text-muted"><strong>Total NC:</strong></td>
+                                        <td><strong class="text-success fs-5">$<span id="ncTotal">0</span></strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Motivo -->
+                <div class="mt-3">
+                    <label class="form-label fw-bold">Motivo de la NC <span class="text-danger">*</span></label>
+                    <textarea id="motivoNCMasiva" class="form-control" rows="2" 
+                              placeholder="Ej: Productos no llegaron completos al destino"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnProcesarDTE">
+                    <i class="bi bi-check-circle"></i> Generar NC y Regularizar
+                </button>
             </div>
         </div>
     </div>
@@ -803,7 +903,7 @@ function actualizarTabla() {
     if (productosProblemas.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="11" class="text-center py-4">
+                <td colspan="10" class="text-center py-4">
                     <i class="ri-inbox-line display-4 text-muted"></i>
                     <p class="text-muted mt-2">No hay productos con problemas pendientes</p>
                 </td>
@@ -812,60 +912,473 @@ function actualizarTabla() {
         return;
     }
     
-    tbody.innerHTML = productosProblemas.map(prod => `
+    // Agrupar productos por DTE
+    const dteGroups = {};
+    productosProblemas.forEach(prod => {
+        const dteNum = prod.dte_numero;
+        if (!dteGroups[dteNum]) {
+            dteGroups[dteNum] = {
+                dte_numero: dteNum,
+                dte_fecha: prod.dte_fecha,
+                sucursal_origen: prod.sucursal_origen,
+                emisor: prod.emisor,
+                productos: [],
+                total_esperado: 0,
+                total_recibido: 0,
+                total_faltante: 0,
+                total_danado: 0,
+                requiere_nc: prod.requiere_nc,
+                soy_emisor: prod.soy_emisor,
+                soy_receptor: prod.soy_receptor,
+                estado_general: prod.estado
+            };
+        }
+        dteGroups[dteNum].productos.push(prod);
+        dteGroups[dteNum].total_esperado += prod.cantidad_esperada || 0;
+        dteGroups[dteNum].total_recibido += prod.cantidad_recibida || 0;
+        dteGroups[dteNum].total_faltante += prod.cantidad_faltante || 0;
+        dteGroups[dteNum].total_danado += prod.cantidad_danada || 0;
+    });
+    
+    // Ordenar DTEs por fecha descendente (más reciente primero)
+    const dtesOrdenados = Object.values(dteGroups).sort((a, b) => {
+        const fechaA = new Date(a.dte_fecha);
+        const fechaB = new Date(b.dte_fecha);
+        return fechaB - fechaA; // Descendente: más reciente primero
+    });
+    
+    tbody.innerHTML = dtesOrdenados.map(dte => {
+        return `
         <tr>
-            <td><small class="badge bg-secondary">${prod.dte_numero}</small></td>
-            <td><strong>${prod.producto_nombre}</strong></td>
-            <td><code>${prod.sku}</code></td>
-            <td><span class="badge bg-info">${prod.talla}</span></td>
-            <td><strong>${prod.cantidad_esperada}</strong></td>
-            <td><strong class="text-success">${prod.cantidad_recibida}</strong></td>
-            <td><strong class="text-danger">${prod.cantidad_faltante}</strong></td>
-            <td><strong class="text-warning">${prod.cantidad_danada}</strong></td>
-            <td><span class="badge ${obtenerClaseEstado(prod.estado)}">${prod.estado_display}</span></td>
             <td>
-                ${prod.solucion_aplicada ? 
-                    `<span class="badge bg-success" title="Solución aplicada"><i class="bi bi-check-circle"></i> ${prod.solucion_aplicada}</span>` :
-                    (prod.estado === 'EN_SOLICITUD_REGULARIZACION' ?
-                        '<span class="badge bg-primary" title="Solicitud enviada al emisor"><i class="bi bi-envelope-paper"></i> Solicitud</span>' :
-                        (prod.requiere_nc ? 
-                            '<span class="badge bg-danger" title="Requiere Nota de Crédito (empresas diferentes)"><i class="bi bi-file-earmark-text"></i> NC</span>' : 
-                            '<span class="badge bg-success" title="Ajuste interno (misma empresa)"><i class="bi bi-pencil"></i> Ajuste</span>')
-                    )
-                }
+                <strong class="badge bg-secondary">#${dte.dte_numero}</strong>
+            </td>
+            <td><small>${formatearFecha(dte.dte_fecha)}</small></td>
+            <td>
+                <strong>${dte.sucursal_origen}</strong>
+                <br><small class="text-muted">${dte.emisor}</small>
+            </td>
+            <td>
+                <span class="badge bg-danger">${dte.productos.length}</span> producto(s)
+                <br><small class="text-muted">${dte.productos.map(p => `${p.producto_nombre} (${p.talla})`).join(', ')}</small>
+            </td>
+            <td><strong>${dte.total_esperado}</strong></td>
+            <td><strong class="text-success">${dte.total_recibido}</strong></td>
+            <td><strong class="text-danger">${dte.total_faltante}</strong></td>
+            <td><strong class="text-warning">${dte.total_danado}</strong></td>
+            <td>
+                ${dte.requiere_nc ? 
+                    '<span class="badge bg-danger"><i class="bi bi-file-earmark-text"></i> NC</span>' : 
+                    '<span class="badge bg-success"><i class="bi bi-pencil"></i> Ajuste</span>'}
             </td>
             <td class="text-nowrap">
-                ${prod.estado === 'REGULARIZADO' && prod.solucion_aplicada ?
-                    `<a href="/app/dte/documento-regularizacion/${prod.id}/" target="_blank" class="btn btn-sm btn-info" title="Ver documento de regularización">
-                        <i class="bi bi-printer"></i> Doc
-                    </a>` :
-                    (prod.estado === 'EN_SOLICITUD_REGULARIZACION' ?
-                        '<button class="btn btn-sm btn-info" onclick="verEstadoSolicitud('+prod.id+')" title="Ver solicitud"><i class="bi bi-eye"></i> Ver</button>' :
-                        `
-                        ${prod.requiere_nc ? `
-                            <button class="btn btn-sm ${prod.soy_receptor ? 'btn-warning' : 'btn-outline-secondary'}" 
-                                    onclick="abrirModalRegularizar(${prod.id})" 
-                                    title="${prod.soy_receptor ? 'Solicitar solución al emisor' : 'No puedes solicitar (eres el emisor)'}"
-                                    ${!prod.soy_receptor ? 'disabled' : ''}>
-                                <i class="bi bi-envelope-paper"></i> ${prod.soy_receptor ? 'Solicitar' : 'N/A'}
-                            </button>
-                            <button class="btn btn-sm ${prod.soy_emisor ? 'btn-success' : 'btn-outline-secondary'} ms-1" 
-                                    onclick="abrirModalRegularizar(${prod.id})" 
-                                    title="${prod.soy_emisor ? 'Resolver problema (eres el emisor)' : 'No puedes resolver (no eres el emisor)'}"
-                                    ${!prod.soy_emisor ? 'disabled' : ''}>
-                                <i class="bi bi-check-circle"></i> ${prod.soy_emisor ? 'Resolver' : 'N/A'}
-                            </button>
-                        ` : `
-                            <button class="btn btn-sm btn-success" onclick="abrirModalRegularizar(${prod.id})" title="Regularizar (ajuste interno)">
-                                <i class="ri-settings-3-line"></i> Regularizar
-                            </button>
-                        `}
-                        `
+                ${dte.soy_receptor && !dte.soy_emisor ?
+                    // SOY RECEPTOR: Ver detalle + opción de cancelar
+                    `<button class="btn btn-sm btn-info" onclick="verDetalleDTE('${dte.dte_numero}')" title="Ver detalle de productos">
+                        <i class="bi bi-eye"></i> Ver Detalle
+                    </button>
+                    <button class="btn btn-sm btn-danger ms-1" onclick="anularRegularizacionDTE('${dte.dte_numero}')" title="Anular solicitud (si fue por error)">
+                        <i class="bi bi-x-circle"></i> Anular
+                    </button>
+                    <br><span class="badge bg-warning mt-1"><i class="bi bi-clock-history"></i> En espera del emisor</span>` :
+                    (dte.soy_emisor && !dte.soy_receptor ?
+                        // SOY EMISOR: Puedo regularizar todo el DTE
+                        `<button class="btn btn-sm btn-success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')" title="Regularizar todos los productos">
+                            <i class="bi bi-tools"></i> Regularizar DTE
+                        </button>` :
+                        // Traspaso interno
+                        `<button class="btn btn-sm btn-success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')" title="Regularizar">
+                            <i class="ri-settings-3-line"></i> Regularizar
+                        </button>`
                     )
                 }
             </td>
         </tr>
+    `;
+    }).join('');
+}
+
+function abrirModalRegularizarDTE(dteNumero) {
+    const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
+    
+    if (!productosDTE.length) {
+        Swal.fire('Error', 'No se encontraron productos para este DTE', 'error');
+        return;
+    }
+    
+    $('#dteTitulo').text(dteNumero);
+    
+    // Renderizar tabla de productos
+    const tbody = $('#tbodyProductosDTE');
+    let totalUnidades = 0;
+    let montoNeto = 0;
+    
+    tbody.html(productosDTE.map((prod) => {
+        const cantidadAcreditar = prod.cantidad_faltante + prod.cantidad_danada;
+        totalUnidades += cantidadAcreditar;
+        montoNeto += cantidadAcreditar * (prod.precio_unitario || 0);
+        
+        return `
+        <tr data-producto-id="${prod.id}">
+            <td><strong>${prod.producto_nombre}</strong></td>
+            <td><code>${prod.sku}</code></td>
+            <td><span class="badge bg-info">${prod.talla}</span></td>
+            <td>${prod.cantidad_esperada}</td>
+            <td class="text-success">${prod.cantidad_recibida}</td>
+            <td class="text-danger">${prod.cantidad_faltante}</td>
+            <td class="text-warning">${prod.cantidad_danada}</td>
+            <td><strong class="text-primary">${cantidadAcreditar}</strong></td>
+        </tr>
+        `;
+    }).join(''));
+    
+    // Calcular montos de NC
+    const iva = montoNeto * 0.19;
+    const totalConIVA = montoNeto + iva;
+    
+    // Actualizar resumen de NC
+    $('#ncTotalProductos').text(productosDTE.length);
+    $('#ncTotalUnidades').text(totalUnidades);
+    $('#ncMontoNeto').text(Math.round(montoNeto).toLocaleString('es-CL'));
+    $('#ncIVA').text(Math.round(iva).toLocaleString('es-CL'));
+    $('#ncTotal').text(Math.round(totalConIVA).toLocaleString('es-CL'));
+    $('#motivoNCMasiva').val('');
+    
+    new bootstrap.Modal(document.getElementById('modalRegularizarDTE')).show();
+    
+    // Event listener para procesar
+    $('#btnProcesarDTE').off('click').on('click', () => procesarRegularizacionDTE(dteNumero, productosDTE));
+}
+
+function anularRegularizacionDTE(dteNumero) {
+    const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
+    if (!productosDTE.length) return;
+    
+    Swal.fire({
+        title: '❌ ¿Anular Regularización?',
+        html: `
+            <div class="text-start">
+                <p><strong>¿Estás seguro que deseas anular esta regularización?</strong></p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    Esta acción anulará la solicitud del DTE #${dteNumero} con <strong>${productosDTE.length}</strong> producto(s)
+                </div>
+                <ul class="text-muted mb-3">
+                    ${productosDTE.map(p => `<li>${p.producto_nombre} (${p.talla}) - ${p.cantidad_faltante + p.cantidad_danada} unid.</li>`).join('')}
+                </ul>
+                <div class="alert alert-info mb-3">
+                    <strong>💡 Usa esta opción si:</strong>
+                    <ul class="mb-0">
+                        <li>Marcaste productos por error</li>
+                        <li>Los productos llegaron después</li>
+                        <li>Necesitas corregir las cantidades</li>
+                    </ul>
+                </div>
+                <label class="form-label fw-bold">Motivo de anulación <span class="text-danger">*</span></label>
+                <textarea id="motivoAnulacion" class="form-control" rows="2" 
+                          placeholder="Ej: Se marcó por error, productos llegaron posteriormente"></textarea>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Sí, anular',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545',
+        width: '650px',
+        preConfirm: () => {
+            const motivo = document.getElementById('motivoAnulacion').value.trim();
+            if (!motivo) {
+                Swal.showValidationMessage('Debes ingresar el motivo de la anulación');
+                return false;
+            }
+            return motivo;
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        
+        const motivo = result.value;
+        const productosIds = productosDTE.map(p => p.id);
+        
+        // Procesar anulación
+        Swal.fire({
+            title: 'Procesando...',
+            text: 'Anulando regularización',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+        
+        fetch('{% url "anular_regularizacion_dte" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                dte_numero: dteNumero,
+                productos_ids: productosIds,
+                motivo: motivo
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ Regularización Anulada',
+                    html: `
+                        <p>${data.message}</p>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Los productos fueron marcados como <strong>RECEPCIONADO_OK</strong> y se actualizó el stock.
+                        </div>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
+                cargarProductosProblemas();
+            } else {
+                Swal.fire('Error', data.error || 'Error al anular', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error de conexión', 'error');
+        });
+    });
+}
+
+function verDetalleDTE(dteNumero) {
+    const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
+    if (!productosDTE.length) return;
+    
+    const tablaHTML = productosDTE.map(prod => `
+        <tr>
+            <td><strong>${prod.producto_nombre}</strong></td>
+            <td><code>${prod.sku}</code></td>
+            <td><span class="badge bg-info">${prod.talla}</span></td>
+            <td>${prod.cantidad_esperada}</td>
+            <td class="text-success">${prod.cantidad_recibida}</td>
+            <td class="text-danger">${prod.cantidad_faltante}</td>
+            <td class="text-warning">${prod.cantidad_danada}</td>
+            <td><small>${prod.observaciones || '-'}</small></td>
+        </tr>
     `).join('');
+    
+    Swal.fire({
+        title: `<i class="bi bi-file-text text-info"></i> DTE #${dteNumero}`,
+        html: `
+            <div class="text-start">
+                <div class="alert alert-warning mb-3">
+                    <i class="bi bi-clock-history me-2"></i>
+                    <strong>En espera:</strong> El emisor debe regularizar estos productos.
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>SKU</th>
+                                <th>Talla</th>
+                                <th>Esperado</th>
+                                <th>Recibido</th>
+                                <th>Faltante</th>
+                                <th>Dañado</th>
+                                <th>Obs.</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tablaHTML}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `,
+        icon: 'info',
+        confirmButtonText: 'Cerrar',
+        width: '900px'
+    });
+}
+
+function procesarRegularizacionDTE(dteNumero, productosDTE) {
+    // Validar motivo
+    const motivo = $('#motivoNCMasiva').val().trim();
+    if (!motivo) {
+        Swal.fire('Motivo requerido', 'Debes ingresar el motivo de la Nota de Crédito', 'warning');
+        return;
+    }
+    
+    // Calcular totales
+    const totalUnidades = parseInt($('#ncTotalUnidades').text()) || 0;
+    const totalNC = $('#ncTotal').text();
+    
+    // Preparar lista de productos
+    const productosIds = productosDTE.map(p => p.id);
+    
+    // Confirmar
+    Swal.fire({
+        title: '¿Generar Nota de Crédito?',
+        html: `
+            <div class="text-start">
+                <p>Se generará <strong>1 Nota de Crédito</strong> por el DTE #${dteNumero}</p>
+                <div class="alert alert-success mb-2">
+                    <strong>📦 ${productosDTE.length}</strong> producto(s) incluidos<br>
+                    <strong>📊 ${totalUnidades}</strong> unidades totales<br>
+                    <strong>💰 $${totalNC}</strong> monto total NC
+                </div>
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-arrow-return-left me-2"></i>
+                    El stock se <strong>devolverá a la bodega origen</strong> automáticamente
+                </div>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, generar NC',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#28a745'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        
+        // Llamar al backend
+        $('#btnProcesarDTE').prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
+        
+        fetch('{% url "regularizar_dte_masivo" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                dte_numero: dteNumero,
+                productos_ids: productosIds,
+                motivo: motivo
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const botonDescarga = data.archivo_txt_url ? 
+                    `<div class="text-center mt-3">
+                        <a href="${data.archivo_txt_url}" download class="btn btn-primary btn-lg">
+                            <i class="bi bi-download me-2"></i>Descargar TXT para Acepta
+                        </a>
+                    </div>` : '';
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ NC Generada',
+                    html: `
+                        <div class="text-start">
+                            <p>${data.message}</p>
+                            <div class="alert alert-success">
+                                <strong>📄 NC #${data.numero_nc}</strong><br>
+                                💰 Monto: $${data.monto_total.toLocaleString('es-CL')}<br>
+                                📦 Unidades: ${data.total_unidades}<br>
+                                ↩️ Stock devuelto a bodega origen ✅
+                            </div>
+                            ${data.archivo_txt_url ? 
+                                `<div class="alert alert-info">
+                                    <i class="bi bi-file-earmark-text me-2"></i>
+                                    <strong>Archivo TXT generado</strong><br>
+                                    Listo para cargar en Acepta/SII
+                                </div>
+                                ${botonDescarga}` : 
+                                `<div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    <strong>⚠️ No se generó el archivo TXT</strong><br>
+                                    La NC se creó correctamente, pero hubo un problema al generar el archivo para Acepta/SII.<br>
+                                    ${data.error_txt ? `<small class="text-muted d-block mt-2"><strong>Error:</strong> ${data.error_txt}</small>` : ''}
+                                    <small class="text-muted">Puedes generarlo manualmente desde el módulo de documentos.</small>
+                                </div>`}
+                        </div>
+                    `,
+                    confirmButtonText: 'Entendido',
+                    width: '650px'
+                });
+                bootstrap.Modal.getInstance(document.getElementById('modalRegularizarDTE')).hide();
+                cargarProductosProblemas();
+            } else {
+                Swal.fire('Error', data.error || 'Error al procesar', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error de conexión', 'error');
+        })
+        .finally(() => {
+            $('#btnProcesarDTE').prop('disabled', false).html('<i class="bi bi-check-circle"></i> Generar NC y Regularizar');
+        });
+    });
+}
+
+function verDetalleRegularizacion(productoId) {
+    const producto = productosProblemas.find(p => p.id === productoId);
+    if (!producto) return;
+    
+    Swal.fire({
+        title: '<i class="bi bi-info-circle text-info"></i> Detalle de Regularización',
+        html: `
+            <div class="text-start">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Estado:</strong> Este producto ya está registrado como problema en recepción.<br>
+                    El emisor (<strong>${producto.sucursal_origen}</strong>) debe dar una solución.
+                </div>
+                
+                <table class="table table-sm">
+                    <tr>
+                        <th>DTE:</th>
+                        <td>#${producto.dte_numero}</td>
+                    </tr>
+                    <tr>
+                        <th>Producto:</th>
+                        <td>${producto.producto_nombre}</td>
+                    </tr>
+                    <tr>
+                        <th>SKU:</th>
+                        <td>${producto.sku}</td>
+                    </tr>
+                    <tr>
+                        <th>Talla:</th>
+                        <td>${producto.talla}</td>
+                    </tr>
+                    <tr class="table-light">
+                        <th>Esperado:</th>
+                        <td><strong>${producto.cantidad_esperada}</strong> unidades</td>
+                    </tr>
+                    <tr class="table-success">
+                        <th>Recibido:</th>
+                        <td><strong>${producto.cantidad_recibida}</strong> unidades</td>
+                    </tr>
+                    <tr class="table-danger">
+                        <th>Faltante:</th>
+                        <td><strong>${producto.cantidad_faltante}</strong> unidades</td>
+                    </tr>
+                    <tr class="table-warning">
+                        <th>Dañadas:</th>
+                        <td><strong>${producto.cantidad_danada}</strong> unidades</td>
+                    </tr>
+                    ${producto.observaciones ? `
+                        <tr>
+                            <th>Observaciones:</th>
+                            <td><small>${producto.observaciones}</small></td>
+                        </tr>
+                    ` : ''}
+                    <tr>
+                        <th>Fecha Recepción:</th>
+                        <td>${formatearFecha(producto.fecha_recepcion)}</td>
+                    </tr>
+                </table>
+                
+                <div class="alert alert-warning mb-0">
+                    <i class="bi bi-clock-history me-2"></i>
+                    <strong>En espera:</strong> El emisor debe revisar y dar solución a este problema.
+                </div>
+            </div>
+        `,
+        icon: 'info',
+        confirmButtonText: 'Cerrar',
+        width: '600px'
+    });
 }
 
 function verEstadoSolicitud(productoId) {

@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Requerimientos - RetailMind</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Remix Icon -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    
+    <!-- SweetAlert2 -->
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    
+    <!-- Lightbox -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/css/lightbox.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #405189;
+            --success-color: #0ab39c;
+            --warning-color: #f7b84b;
+            --danger-color: #f06548;
+            --info-color: #299cdb;
+            --secondary-color: #74788d;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f3f9;
+        }
+
+        .navbar-custom {
+            background: linear-gradient(135deg, var(--primary-color) 0%, #2c3e78 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 0.75rem 1.5rem rgba(18,38,63,.03);
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-animate {
+            transition: all 0.3s ease;
+        }
+
+        .card-animate:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 1rem 2rem rgba(18,38,63,.1);
+        }
+
+        .badge-soft-primary { background-color: rgba(64, 81, 137, 0.1); color: var(--primary-color); }
+        .badge-soft-success { background-color: rgba(10, 179, 156, 0.1); color: var(--success-color); }
+        .badge-soft-warning { background-color: rgba(247, 184, 75, 0.1); color: var(--warning-color); }
+        .badge-soft-danger { background-color: rgba(240, 101, 72, 0.1); color: var(--danger-color); }
+        .badge-soft-info { background-color: rgba(41, 156, 219, 0.1); color: var(--info-color); }
+        .badge-soft-secondary { background-color: rgba(116, 120, 141, 0.1); color: var(--secondary-color); }
+
+        .page-section {
+            display: none;
+        }
+
+        .page-section.active {
+            display: block;
+        }
+
+        .stats-card {
+            border-left: 3px solid var(--primary-color);
+        }
+
+        .stats-card.success { border-left-color: var(--success-color); }
+        .stats-card.warning { border-left-color: var(--warning-color); }
+        .stats-card.info { border-left-color: var(--info-color); }
+
+        .table-hover tbody tr:hover {
+            background-color: rgba(64, 81, 137, 0.05);
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(64, 81, 137, 0.25);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: #2c3e78;
+            border-color: #2c3e78;
+        }
+
+        .timeline-item {
+            border-left: 2px solid #e9ecef;
+            padding-left: 1rem;
+            margin-left: 1rem;
+            padding-bottom: 1rem;
+        }
+
+        .timeline-item:last-child {
+            border-left: 2px solid transparent;
+        }
+
+        .avatar-sm {
+            width: 2.5rem;
+            height: 2.5rem;
+        }
+
+        .avatar-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .counter-value {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .photo-preview {
+            position: relative;
+            display: inline-block;
+        }
+
+        .photo-preview img {
+            max-width: 100%;
+            border-radius: 0.5rem;
+        }
+
+        .photo-remove {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#" onclick="navegarA('lista')">
+                <i class="ri-shield-check-line me-2"></i>
+                <strong>RetailMind - Requerimientos</strong>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="navegarA('lista')">
+                            <i class="ri-list-check me-1"></i> Lista
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="navegarA('crear')">
+                            <i class="ri-add-circle-line me-1"></i> Nuevo
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="navegarA('estadisticas')">
+                            <i class="ri-bar-chart-box-line me-1"></i> Estadísticas
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contenido Principal -->
+    <div class="container-fluid py-4">
+
+        <!-- Sección: Lista de Requerimientos -->
+        <div id="seccion-lista" class="page-section active">
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h2 class="mb-0">Gestión de Requerimientos</h2>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="#" onclick="navegarA('lista')">Inicio</a></li>
+                            <li class="breadcrumb-item active">Requerimientos</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Tarjetas de Estadísticas -->
+            <div class="row">
+                <div class="col-xl-3 col-md-6">
+                    <div class="card card-animate stats-card info">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <p class="text-uppercase fw-medium text-muted mb-1">Total Requerimientos</p>
+                                    <h3 class="counter-value mb-0" id="total-requerimientos">0</h3>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-soft-info rounded-circle">
+                                        <i class="ri-file-list-3-line fs-3 text-info"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6">
+                    <div class="card card-animate stats-card warning">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <p class="text-uppercase fw-medium text-muted mb-1">Pendientes</p>
+                                    <h3 class="counter-value mb-0" id="pendientes">0</h3>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-soft-warning rounded-circle">
+                                        <i class="ri-time-line fs-3 text-warning"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6">
+                    <div class="card card-animate stats-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <p class="text-uppercase fw-medium text-muted mb-1">En Proceso</p>
+                                    <h3 class="counter-value mb-0" id="en-proceso">0</h3>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-soft-primary rounded-circle">
+                                        <i class="ri-loader-line fs-3 text-primary"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6">
+                    <div class="card card-animate stats-card success">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <p class="text-uppercase fw-medium text-muted mb-1">Completados</p>
+                                    <h3 class="counter-value mb-0" id="completados">0</h3>
+                                </div>
+                                <div class="avatar-sm flex-shrink-0">
+                                    <span class="avatar-title bg-soft-success rounded-circle">
+                                        <i class="ri-check-double-line fs-3 text-success"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Requerimientos -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <h5 class="card-title mb-0">Lista de Requerimientos</h5>
+                                <div class="btn-group">
+                                    <button class="btn btn-primary" onclick="navegarA('crear')">
+                                        <i class="ri-add-line me-1"></i> Nuevo
+                                    </button>
+                                    <button class="btn btn-info" onclick="toggleFiltros()">
+                                        <i class="ri-filter-3-line me-1"></i> Filtros
+                                    </button>
+                                    <button class="btn btn-success" onclick="exportarRequerimientos()">
+                                        <i class="ri-file-excel-2-line me-1"></i> Exportar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Filtros -->
+                        <div class="card-body border-bottom" id="filtros-section" style="display: none;">
+                            <form id="form-filtros" onsubmit="return aplicarFiltros(event)">
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Estado</label>
+                                        <select class="form-select" id="filtro-estado">
+                                            <option value="">Todos</option>
+                                            <option value="PENDIENTE">Pendiente</option>
+                                            <option value="EN_REVISION">En Revisión</option>
+                                            <option value="ESPERANDO_PROVEEDOR">Esperando Proveedor</option>
+                                            <option value="APROBADO">Aprobado</option>
+                                            <option value="RECHAZADO">Rechazado</option>
+                                            <option value="EN_PROCESO">En Proceso</option>
+                                            <option value="COMPLETADO">Completado</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Tipo</label>
+                                        <select class="form-select" id="filtro-tipo">
+                                            <option value="">Todos</option>
+                                            <option value="GARANTIA">Garantía</option>
+                                            <option value="DEVOLUCION">Devolución</option>
+                                            <option value="CAMBIO">Cambio</option>
+                                            <option value="RECLAMO">Reclamo</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Búsqueda</label>
+                                        <input type="text" class="form-control" id="filtro-busqueda" 
+                                               placeholder="SKU, Cliente, N° Req...">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label d-block">&nbsp;</label>
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="ri-search-line"></i> Buscar
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>N° Requerimiento</th>
+                                            <th>Tipo</th>
+                                            <th>Estado</th>
+                                            <th>Producto</th>
+                                            <th>Cliente</th>
+                                            <th>Fecha</th>
+                                            <th>Días</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabla-requerimientos">
+                                        <tr>
+                                            <td colspan="8" class="text-center py-5">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Cargando...</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Paginación -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="text-muted">
+                                    Mostrando <span class="fw-semibold" id="showing-count">0</span> de 
+                                    <span class="fw-semibold" id="total-count">0</span> resultados
+                                </div>
+                                <ul class="pagination mb-0" id="pagination"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección: Crear Requerimiento -->
+        <div id="seccion-crear" class="page-section">
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h2 class="mb-0">Crear Nuevo Requerimiento</h2>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="#" onclick="navegarA('lista')">Inicio</a></li>
+                            <li class="breadcrumb-item active">Crear Requerimiento</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+
+            <form id="form-requerimiento" onsubmit="return guardarRequerimiento(event)">
+                <div class="row">
+                    <!-- Columna Principal -->
+                    <div class="col-lg-8">
+                        
+                        <!-- Información del Producto -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="ri-product-hunt-line me-2"></i>Información del Producto
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">SKU <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="sku" required>
+                                            <button class="btn btn-outline-secondary" type="button" onclick="buscarProductoPorSKU()">
+                                                <i class="ri-search-line"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Nombre del Producto <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" id="nombre_producto" required>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Documento de Venta -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="ri-file-text-line me-2"></i>Documento de Venta
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Tipo de Documento</label>
+                                        <select class="form-select" id="tipo_documento">
+                                            <option value="">Seleccione...</option>
+                                            <option value="BOLETA ELECTRONICA">Boleta Electrónica</option>
+                                            <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
+                                            <option value="BOLETA PAPEL">Boleta Papel</option>
+                                            <option value="TICKET">Ticket</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Número de Documento</label>
+                                        <input type="text" class="form-control" id="numero_boleta">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Fecha de Compra</label>
+                                        <input type="date" class="form-control" id="fecha_compra">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Información del Cliente -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="ri-user-line me-2"></i>Información del Cliente
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">RUT del Cliente</label>
+                                        <input type="text" class="form-control" id="cliente_rut" placeholder="12345678-9">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Nombre Completo <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" id="cliente_nombre" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Teléfono</label>
+                                        <input type="tel" class="form-control" id="cliente_telefono">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="cliente_email">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Descripción -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="ri-file-list-3-line me-2"></i>Descripción del Problema
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                                    <textarea class="form-control" id="motivo" rows="3" required></textarea>
+                                </div>
+                                <div>
+                                    <label class="form-label">Descripción Detallada</label>
+                                    <textarea class="form-control" id="descripcion_problema" rows="4"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Fotos -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="ri-image-line me-2"></i>Fotos Adjuntas
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="fotos-container" class="row g-3"></div>
+                                <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="agregarFoto()" id="btn-agregar-foto">
+                                    <i class="ri-add-line me-1"></i> Agregar Foto
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Panel Lateral -->
+                    <div class="col-lg-4">
+                        
+                        <!-- Información General -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">Información General</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Tipo de Requerimiento <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="tipo" required>
+                                        <option value="">Seleccione...</option>
+                                        <option value="GARANTIA">Garantía</option>
+                                        <option value="DEVOLUCION">Devolución</option>
+                                        <option value="CAMBIO">Cambio de Producto</option>
+                                        <option value="RECLAMO">Reclamo</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Prioridad</label>
+                                    <select class="form-select" id="prioridad">
+                                        <option value="BAJA">Baja</option>
+                                        <option value="MEDIA" selected>Media</option>
+                                        <option value="ALTA">Alta</option>
+                                        <option value="URGENTE">Urgente</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Sucursal <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="sucursal" required placeholder="Nombre de sucursal">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Información -->
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="text-primary mb-3">
+                                    <i class="ri-information-line me-2"></i>Información
+                                </h6>
+                                <ul class="small text-muted">
+                                    <li class="mb-2">Complete los campos marcados con <span class="text-danger">*</span></li>
+                                    <li class="mb-2">Puede adjuntar hasta 5 fotos</li>
+                                    <li class="mb-2">El documento de venta es opcional</li>
+                                    <li>Una vez creado, puede gestionar el requerimiento</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Botones -->
+                        <div class="card">
+                            <div class="card-body">
+                                <button type="submit" class="btn btn-success w-100 mb-2" id="btn-guardar">
+                                    <i class="ri-save-line me-1"></i> Crear Requerimiento
+                                </button>
+                                <button type="button" class="btn btn-secondary w-100" onclick="navegarA('lista')">
+                                    <i class="ri-arrow-left-line me-1"></i> Volver
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sección: Detalle Requerimiento -->
+        <div id="seccion-detalle" class="page-section">
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h2 class="mb-0">Detalle del Requerimiento</h2>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="#" onclick="navegarA('lista')">Inicio</a></li>
+                            <li class="breadcrumb-item active">Detalle</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Información Principal -->
+                <div class="col-lg-8">
+                    
+                    <!-- Encabezado -->
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h5 id="detalle-numero" class="mb-2">-</h5>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <span class="badge" id="detalle-tipo-badge"></span>
+                                        <span class="badge" id="detalle-estado-badge"></span>
+                                        <span class="badge" id="detalle-prioridad-badge"></span>
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <p class="text-muted mb-1">Días transcurridos</p>
+                                    <h4 id="detalle-dias" class="text-warning mb-0">0</h4>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-1">Sucursal</p>
+                                    <p class="fw-semibold" id="detalle-sucursal">-</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-1">Fecha de creación</p>
+                                    <p class="fw-semibold" id="detalle-fecha">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Producto -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-product-hunt-line me-2"></i>Producto</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <p class="text-muted mb-1">SKU</p>
+                                    <p class="fw-semibold" id="detalle-sku">-</p>
+                                </div>
+                                <div class="col-md-8">
+                                    <p class="text-muted mb-1">Nombre</p>
+                                    <p class="fw-semibold" id="detalle-nombre-producto">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cliente -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-user-line me-2"></i>Cliente</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-1">Nombre</p>
+                                    <p class="fw-semibold" id="detalle-cliente-nombre">-</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-1">RUT</p>
+                                    <p class="fw-semibold" id="detalle-cliente-rut">-</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-1">Teléfono</p>
+                                    <p class="fw-semibold" id="detalle-cliente-telefono">-</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p class="text-muted mb-1">Email</p>
+                                    <p class="fw-semibold" id="detalle-cliente-email">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Descripción -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-file-text-line me-2"></i>Descripción</h5>
+                        </div>
+                        <div class="card-body">
+                            <h6 class="text-muted mb-2">Motivo</h6>
+                            <p id="detalle-motivo" class="mb-3">-</p>
+                            <h6 class="text-muted mb-2">Descripción Detallada</h6>
+                            <p id="detalle-descripcion">-</p>
+                        </div>
+                    </div>
+
+                    <!-- Fotos -->
+                    <div class="card" id="detalle-card-fotos" style="display: none;">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-image-line me-2"></i>Fotos Adjuntas</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3" id="detalle-fotos-container"></div>
+                        </div>
+                    </div>
+
+                    <!-- Historial -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="ri-history-line me-2"></i>Historial</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="detalle-historial-container"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Panel Lateral -->
+                <div class="col-lg-4">
+                    
+                    <!-- Acciones -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Acciones</h5>
+                        </div>
+                        <div class="card-body">
+                            <button class="btn btn-primary w-100 mb-2" onclick="cambiarEstadoRequerimiento()">
+                                <i class="ri-refresh-line me-1"></i> Cambiar Estado
+                            </button>
+                            <button class="btn btn-success w-100 mb-2" onclick="completarRequerimiento()">
+                                <i class="ri-check-double-line me-1"></i> Completar
+                            </button>
+                            <button class="btn btn-secondary w-100" onclick="navegarA('lista')">
+                                <i class="ri-arrow-left-line me-1"></i> Volver
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Documento -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Documento de Venta</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted mb-1">Tipo</p>
+                            <p class="fw-semibold mb-3" id="detalle-tipo-doc">-</p>
+                            <p class="text-muted mb-1">Número</p>
+                            <p class="fw-semibold mb-3" id="detalle-numero-doc">-</p>
+                            <p class="text-muted mb-1">Fecha</p>
+                            <p class="fw-semibold" id="detalle-fecha-doc">-</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección: Estadísticas -->
+        <div id="seccion-estadisticas" class="page-section">
+            <div class="row mb-3">
+                <div class="col-12">
+                    <h2 class="mb-0">Estadísticas y Reportes</h2>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="#" onclick="navegarA('lista')">Inicio</a></li>
+                            <li class="breadcrumb-item active">Estadísticas</li>
+                        </ol>
+                    </nav>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Requerimientos por Estado</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="chart-estados"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Requerimientos por Tipo</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="chart-tipos"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Resumen General</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabla-estadisticas">
+                                        <tr><td colspan="2" class="text-center">Cargando...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal Cambiar Estado -->
+    <div class="modal fade" id="modalCambiarEstado" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Cambiar Estado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nuevo Estado</label>
+                        <select class="form-select" id="modal-nuevo-estado">
+                            <option value="PENDIENTE">Pendiente</option>
+                            <option value="EN_REVISION">En Revisión</option>
+                            <option value="ESPERANDO_PROVEEDOR">Esperando Proveedor</option>
+                            <option value="APROBADO">Aprobado</option>
+                            <option value="RECHAZADO">Rechazado</option>
+                            <option value="EN_PROCESO">En Proceso</option>
+                            <option value="COMPLETADO">Completado</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Comentario</label>
+                        <textarea class="form-control" id="modal-comentario" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="guardarCambioEstado()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.3/js/lightbox.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <script>
+        // ==================== VARIABLES GLOBALES ====================
+        let requerimientosData = [];
+        let requerimientoActual = null;
+        let paginaActual = 1;
+        let filtrosActuales = {};
+        let contadorFotos = 0;
+        const maxFotos = 5;
+
+        // ==================== FUNCIONES DE NAVEGACIÓN ====================
+        function navegarA(seccion) {
+            // Ocultar todas las secciones
+            document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+            
+            // Mostrar sección solicitada
+            const seccionEl = document.getElementById(`seccion-${seccion}`);
+            if (seccionEl) {
+                seccionEl.classList.add('active');
+                
+                // Ejecutar acciones específicas por sección
+                if (seccion === 'lista') {
+                    cargarRequerimientos();
+                    cargarEstadisticas();
+                } else if (seccion === 'crear') {
+                    resetearFormulario();
+                } else if (seccion === 'estadisticas') {
+                    cargarEstadisticasDetalladas();
+                }
+            }
+            
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ==================== FUNCIONES DE CARGA DE DATOS ====================
+        function cargarEstadisticas() {
+            // Calcular estadísticas desde los datos locales
+            const total = requerimientosData.length;
+            const pendientes = requerimientosData.filter(r => r.estado === 'PENDIENTE').length;
+            const enProceso = requerimientosData.filter(r => 
+                ['EN_REVISION', 'ESPERANDO_PROVEEDOR', 'EN_PROCESO'].includes(r.estado)
+            ).length;
+            const completados = requerimientosData.filter(r => r.estado === 'COMPLETADO').length;
+            
+            document.getElementById('total-requerimientos').textContent = total;
+            document.getElementById('pendientes').textContent = pendientes;
+            document.getElementById('en-proceso').textContent = enProceso;
+            document.getElementById('completados').textContent = completados;
+        }
+
+        function cargarRequerimientos(pagina = 1) {
+            // Filtrar requerimientos
+            let requerimientosFiltrados = [...requerimientosData];
+            
+            if (filtrosActuales.estado) {
+                requerimientosFiltrados = requerimientosFiltrados.filter(r => r.estado === filtrosActuales.estado);
+            }
+            
+            if (filtrosActuales.tipo) {
+                requerimientosFiltrados = requerimientosFiltrados.filter(r => r.tipo === filtrosActuales.tipo);
+            }
+            
+            if (filtrosActuales.busqueda) {
+                const busqueda = filtrosActuales.busqueda.toLowerCase();
+                requerimientosFiltrados = requerimientosFiltrados.filter(r =>
+                    r.numero.toLowerCase().includes(busqueda) ||
+                    r.sku.toLowerCase().includes(busqueda) ||
+                    r.clienteNombre.toLowerCase().includes(busqueda)
+                );
+            }
+            
+            // Paginación
+            const itemsPorPagina = 20;
+            const inicio = (pagina - 1) * itemsPorPagina;
+            const fin = inicio + itemsPorPagina;
+            const requerimientosPagina = requerimientosFiltrados.slice(inicio, fin);
+            
+            mostrarRequerimientos(requerimientosPagina);
+            actualizarPaginacion(requerimientosFiltrados.length, pagina, itemsPorPagina);
+        }
+
+        function mostrarRequerimientos(requerimientos) {
+            const tbody = document.getElementById('tabla-requerimientos');
+            
+            if (requerimientos.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <i class="ri-inbox-line fs-1 text-muted d-block mb-2"></i>
+                            <p class="text-muted">No se encontraron requerimientos</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = requerimientos.map(req => `
+                <tr>
+                    <td>
+                        <a href="#" onclick="verDetalle('${req.id}')" class="fw-medium text-primary">
+                            ${req.numero}
+                        </a>
+                    </td>
+                    <td><span class="badge badge-soft-info">${req.tipoTexto}</span></td>
+                    <td>${obtenerBadgeEstado(req.estado)}</td>
+                    <td>
+                        <h6 class="fs-14 mb-0">${req.nombreProducto}</h6>
+                        <small class="text-muted">SKU: ${req.sku}</small>
+                    </td>
+                    <td>${req.clienteNombre}</td>
+                    <td>${req.fecha}</td>
+                    <td>
+                        <span class="badge ${req.dias > 7 ? 'badge-soft-danger' : req.dias > 3 ? 'badge-soft-warning' : 'badge-soft-success'}">
+                            ${req.dias} días
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-soft-primary" onclick="verDetalle('${req.id}')">
+                            <i class="ri-eye-line"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function actualizarPaginacion(total, paginaActual, itemsPorPagina) {
+            const totalPaginas = Math.ceil(total / itemsPorPagina);
+            const inicio = (paginaActual - 1) * itemsPorPagina + 1;
+            const fin = Math.min(paginaActual * itemsPorPagina, total);
+            
+            document.getElementById('showing-count').textContent = total > 0 ? `${inicio}-${fin}` : '0';
+            document.getElementById('total-count').textContent = total;
+            
+            const pagination = document.getElementById('pagination');
+            let html = '';
+            
+            if (paginaActual > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="cargarRequerimientos(${paginaActual - 1})">Anterior</a></li>`;
+            }
+            
+            for (let i = 1; i <= totalPaginas; i++) {
+                if (i === paginaActual) {
+                    html += `<li class="page-item active"><a class="page-link" href="#">${i}</a></li>`;
+                } else if (Math.abs(i - paginaActual) <= 2 || i === 1 || i === totalPaginas) {
+                    html += `<li class="page-item"><a class="page-link" href="#" onclick="cargarRequerimientos(${i})">${i}</a></li>`;
+                }
+            }
+            
+            if (paginaActual < totalPaginas) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="cargarRequerimientos(${paginaActual + 1})">Siguiente</a></li>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+
+        // ==================== FUNCIONES DE FORMULARIO ====================
+        function resetearFormulario() {
+            document.getElementById('form-requerimiento').reset();
+            document.getElementById('fotos-container').innerHTML = '';
+            contadorFotos = 0;
+            document.getElementById('btn-agregar-foto').style.display = 'block';
+        }
+
+        function guardarRequerimiento(event) {
+            event.preventDefault();
+            
+            const nuevoReq = {
+                id: 'REQ-' + Date.now(),
+                numero: 'REQ-' + String(requerimientosData.length + 1).padStart(5, '0'),
+                tipo: document.getElementById('tipo').value,
+                tipoTexto: document.getElementById('tipo').selectedOptions[0].text,
+                estado: 'PENDIENTE',
+                sku: document.getElementById('sku').value,
+                nombreProducto: document.getElementById('nombre_producto').value,
+                clienteNombre: document.getElementById('cliente_nombre').value,
+                clienteRut: document.getElementById('cliente_rut').value,
+                clienteTelefono: document.getElementById('cliente_telefono').value,
+                clienteEmail: document.getElementById('cliente_email').value,
+                motivo: document.getElementById('motivo').value,
+                descripcion: document.getElementById('descripcion_problema').value,
+                prioridad: document.getElementById('prioridad').value,
+                sucursal: document.getElementById('sucursal').value,
+                tipoDocumento: document.getElementById('tipo_documento').value,
+                numeroDocumento: document.getElementById('numero_boleta').value,
+                fechaCompra: document.getElementById('fecha_compra').value,
+                fecha: new Date().toLocaleDateString('es-CL'),
+                dias: 0,
+                historial: [
+                    {
+                        accion: 'CREADO',
+                        fecha: new Date().toLocaleString('es-CL'),
+                        comentario: 'Requerimiento creado',
+                        usuario: 'Usuario Sistema'
+                    }
+                ],
+                fotos: []
+            };
+            
+            // Agregar a la lista
+            requerimientosData.push(nuevoReq);
+            
+            // Guardar en localStorage
+            guardarEnLocalStorage();
+            
+            Swal.fire({
+                icon: 'success',
+                title: '¡Requerimiento creado!',
+                text: `Número: ${nuevoReq.numero}`,
+                confirmButtonText: 'Ver detalle',
+                showCancelButton: true,
+                cancelButtonText: 'Ir a lista'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    verDetalle(nuevoReq.id);
+                } else {
+                    navegarA('lista');
+                }
+            });
+            
+            return false;
+        }
+
+        function agregarFoto() {
+            if (contadorFotos >= maxFotos) {
+                Swal.fire('Límite alcanzado', `Solo puede agregar hasta ${maxFotos} fotos`, 'warning');
+                return;
+            }
+            
+            contadorFotos++;
+            const container = document.getElementById('fotos-container');
+            
+            const div = document.createElement('div');
+            div.className = 'col-md-6';
+            div.id = `foto-container-${contadorFotos}`;
+            div.innerHTML = `
+                <div class="card border">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0 small fw-semibold">Foto ${contadorFotos}</label>
+                            <button type="button" class="btn btn-sm btn-danger" onclick="eliminarFoto(${contadorFotos})">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </div>
+                        <input type="file" class="form-control form-control-sm mb-2" accept="image/*" 
+                               onchange="previsualizarFoto(this, ${contadorFotos})">
+                        <input type="text" class="form-control form-control-sm" placeholder="Descripción (opcional)">
+                        <div id="preview-${contadorFotos}" class="mt-2" style="display:none;">
+                            <img class="img-fluid rounded" style="max-height: 120px;" id="img-preview-${contadorFotos}">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(div);
+            
+            if (contadorFotos >= maxFotos) {
+                document.getElementById('btn-agregar-foto').style.display = 'none';
+            }
+        }
+
+        function eliminarFoto(numero) {
+            const container = document.getElementById(`foto-container-${numero}`);
+            if (container) {
+                container.remove();
+                contadorFotos--;
+                document.getElementById('btn-agregar-foto').style.display = 'block';
+            }
+        }
+
+        function previsualizarFoto(input, numero) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById(`preview-${numero}`).style.display = 'block';
+                    document.getElementById(`img-preview-${numero}`).src = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function buscarProductoPorSKU() {
+            const sku = document.getElementById('sku').value.trim();
+            if (!sku) {
+                Swal.fire('Atención', 'Ingrese un SKU para buscar', 'warning');
+                return;
+            }
+            
+            // Simulación de búsqueda
+            Swal.fire({
+                icon: 'info',
+                title: 'Producto no encontrado',
+                text: 'El SKU no existe en el sistema. Puede continuar ingresando el nombre manualmente.',
+                confirmButtonText: 'Entendido'
+            });
+        }
+
+        // ==================== FUNCIONES DE DETALLE ====================
+        function verDetalle(id) {
+            requerimientoActual = requerimientosData.find(r => r.id === id);
+            
+            if (!requerimientoActual) {
+                Swal.fire('Error', 'Requerimiento no encontrado', 'error');
+                return;
+            }
+            
+            // Llenar información
+            document.getElementById('detalle-numero').textContent = requerimientoActual.numero;
+            document.getElementById('detalle-tipo-badge').textContent = requerimientoActual.tipoTexto;
+            document.getElementById('detalle-tipo-badge').className = 'badge badge-soft-info';
+            document.getElementById('detalle-estado-badge').innerHTML = obtenerBadgeEstado(requerimientoActual.estado);
+            document.getElementById('detalle-prioridad-badge').textContent = requerimientoActual.prioridad;
+            document.getElementById('detalle-prioridad-badge').className = `badge badge-soft-${obtenerColorPrioridad(requerimientoActual.prioridad)}`;
+            document.getElementById('detalle-dias').textContent = requerimientoActual.dias + ' días';
+            document.getElementById('detalle-sucursal').textContent = requerimientoActual.sucursal;
+            document.getElementById('detalle-fecha').textContent = requerimientoActual.fecha;
+            
+            document.getElementById('detalle-sku').textContent = requerimientoActual.sku;
+            document.getElementById('detalle-nombre-producto').textContent = requerimientoActual.nombreProducto;
+            
+            document.getElementById('detalle-cliente-nombre').textContent = requerimientoActual.clienteNombre;
+            document.getElementById('detalle-cliente-rut').textContent = requerimientoActual.clienteRut || '-';
+            document.getElementById('detalle-cliente-telefono').textContent = requerimientoActual.clienteTelefono || '-';
+            document.getElementById('detalle-cliente-email').textContent = requerimientoActual.clienteEmail || '-';
+            
+            document.getElementById('detalle-motivo').textContent = requerimientoActual.motivo;
+            document.getElementById('detalle-descripcion').textContent = requerimientoActual.descripcion || '-';
+            
+            document.getElementById('detalle-tipo-doc').textContent = requerimientoActual.tipoDocumento || '-';
+            document.getElementById('detalle-numero-doc').textContent = requerimientoActual.numeroDocumento || '-';
+            document.getElementById('detalle-fecha-doc').textContent = requerimientoActual.fechaCompra || '-';
+            
+            // Historial
+            const histContainer = document.getElementById('detalle-historial-container');
+            histContainer.innerHTML = requerimientoActual.historial.map(h => `
+                <div class="timeline-item">
+                    <div class="d-flex">
+                        <div class="flex-shrink-0">
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-success rounded-circle">
+                                    <i class="ri-checkbox-circle-line text-success"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="mb-1">${h.accion}</h6>
+                            <p class="text-muted mb-1">${h.comentario}</p>
+                            <small class="text-muted">${h.fecha} - ${h.usuario}</small>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            navegarA('detalle');
+        }
+
+        function cambiarEstadoRequerimiento() {
+            const modal = new bootstrap.Modal(document.getElementById('modalCambiarEstado'));
+            modal.show();
+        }
+
+        function guardarCambioEstado() {
+            const nuevoEstado = document.getElementById('modal-nuevo-estado').value;
+            const comentario = document.getElementById('modal-comentario').value;
+            
+            if (requerimientoActual) {
+                requerimientoActual.estado = nuevoEstado;
+                requerimientoActual.historial.push({
+                    accion: 'CAMBIO DE ESTADO',
+                    fecha: new Date().toLocaleString('es-CL'),
+                    comentario: `Estado cambiado a ${nuevoEstado}. ${comentario}`,
+                    usuario: 'Usuario Sistema'
+                });
+                
+                guardarEnLocalStorage();
+                
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalCambiarEstado'));
+                modal.hide();
+                
+                Swal.fire('Éxito', 'Estado actualizado correctamente', 'success');
+                verDetalle(requerimientoActual.id);
+            }
+        }
+
+        function completarRequerimiento() {
+            Swal.fire({
+                title: 'Completar Requerimiento',
+                input: 'textarea',
+                inputLabel: 'Resolución final',
+                inputPlaceholder: 'Describa la resolución del requerimiento...',
+                showCancelButton: true,
+                confirmButtonText: 'Completar',
+                cancelButtonText: 'Cancelar',
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'Debe ingresar una resolución';
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed && requerimientoActual) {
+                    requerimientoActual.estado = 'COMPLETADO';
+                    requerimientoActual.historial.push({
+                        accion: 'COMPLETADO',
+                        fecha: new Date().toLocaleString('es-CL'),
+                        comentario: result.value,
+                        usuario: 'Usuario Sistema'
+                    });
+                    
+                    guardarEnLocalStorage();
+                    
+                    Swal.fire('Éxito', 'Requerimiento completado', 'success');
+                    verDetalle(requerimientoActual.id);
+                }
+            });
+        }
+
+        // ==================== FUNCIONES DE FILTROS ====================
+        function toggleFiltros() {
+            const section = document.getElementById('filtros-section');
+            section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function aplicarFiltros(event) {
+            event.preventDefault();
+            
+            filtrosActuales = {
+                estado: document.getElementById('filtro-estado').value,
+                tipo: document.getElementById('filtro-tipo').value,
+                busqueda: document.getElementById('filtro-busqueda').value
+            };
+            
+            cargarRequerimientos(1);
+            return false;
+        }
+
+        // ==================== FUNCIONES AUXILIARES ====================
+        function obtenerBadgeEstado(estado) {
+            const badges = {
+                'PENDIENTE': '<span class="badge badge-soft-warning">Pendiente</span>',
+                'EN_REVISION': '<span class="badge badge-soft-info">En Revisión</span>',
+                'ESPERANDO_PROVEEDOR': '<span class="badge badge-soft-primary">Esperando Proveedor</span>',
+                'APROBADO': '<span class="badge badge-soft-success">Aprobado</span>',
+                'RECHAZADO': '<span class="badge badge-soft-danger">Rechazado</span>',
+                'EN_PROCESO': '<span class="badge badge-soft-info">En Proceso</span>',
+                'COMPLETADO': '<span class="badge badge-soft-success">Completado</span>'
+            };
+            return badges[estado] || '<span class="badge badge-soft-secondary">Desconocido</span>';
+        }
+
+        function obtenerColorPrioridad(prioridad) {
+            const colores = {
+                'BAJA': 'success',
+                'MEDIA': 'info',
+                'ALTA': 'warning',
+                'URGENTE': 'danger'
+            };
+            return colores[prioridad] || 'secondary';
+        }
+
+        function exportarRequerimientos() {
+            Swal.fire({
+                icon: 'info',
+                title: 'Exportar',
+                text: 'La funcionalidad de exportación está disponible. Los datos se exportarían a Excel.',
+                confirmButtonText: 'Entendido'
+            });
+        }
+
+        function cargarEstadisticasDetalladas() {
+            // Aquí podrías implementar gráficos con Chart.js
+            const tabla = document.getElementById('tabla-estadisticas');
+            tabla.innerHTML = `
+                <tr><td>Total de Requerimientos</td><td class="fw-bold">${requerimientosData.length}</td></tr>
+                <tr><td>Pendientes</td><td class="fw-bold">${requerimientosData.filter(r => r.estado === 'PENDIENTE').length}</td></tr>
+                <tr><td>En Proceso</td><td class="fw-bold">${requerimientosData.filter(r => r.estado === 'EN_PROCESO').length}</td></tr>
+                <tr><td>Completados</td><td class="fw-bold">${requerimientosData.filter(r => r.estado === 'COMPLETADO').length}</td></tr>
+                <tr><td>Garantías</td><td class="fw-bold">${requerimientosData.filter(r => r.tipo === 'GARANTIA').length}</td></tr>
+                <tr><td>Devoluciones</td><td class="fw-bold">${requerimientosData.filter(r => r.tipo === 'DEVOLUCION').length}</td></tr>
+                <tr><td>Cambios</td><td class="fw-bold">${requerimientosData.filter(r => r.tipo === 'CAMBIO').length}</td></tr>
+                <tr><td>Reclamos</td><td class="fw-bold">${requerimientosData.filter(r => r.tipo === 'RECLAMO').length}</td></tr>
+            `;
+        }
+
+        // ==================== FUNCIONES DE ALMACENAMIENTO ====================
+        function guardarEnLocalStorage() {
+            localStorage.setItem('requerimientosData', JSON.stringify(requerimientosData));
+        }
+
+        function cargarDesdeLocalStorage() {
+            const data = localStorage.getItem('requerimientosData');
+            if (data) {
+                requerimientosData = JSON.parse(data);
+            } else {
+                // Datos de ejemplo
+                requerimientosData = [
+                    {
+                        id: 'REQ-001',
+                        numero: 'REQ-00001',
+                        tipo: 'GARANTIA',
+                        tipoTexto: 'Garantía',
+                        estado: 'PENDIENTE',
+                        sku: 'PROD-12345',
+                        nombreProducto: 'Zapatillas Nike Air Max',
+                        clienteNombre: 'Juan Pérez',
+                        clienteRut: '12345678-9',
+                        clienteTelefono: '+56912345678',
+                        clienteEmail: 'juan@example.com',
+                        motivo: 'Desprendimiento de suela',
+                        descripcion: 'El cliente reporta que la suela se está desprendiendo después de 2 meses de uso',
+                        prioridad: 'ALTA',
+                        sucursal: 'Santiago Centro',
+                        tipoDocumento: 'BOLETA ELECTRONICA',
+                        numeroDocumento: '12345',
+                        fechaCompra: '2024-09-15',
+                        fecha: '15/11/2024',
+                        dias: 2,
+                        historial: [
+                            {
+                                accion: 'CREADO',
+                                fecha: '15/11/2024 10:30',
+                                comentario: 'Requerimiento creado',
+                                usuario: 'María González'
+                            }
+                        ],
+                        fotos: []
+                    },
+                    {
+                        id: 'REQ-002',
+                        numero: 'REQ-00002',
+                        tipo: 'DEVOLUCION',
+                        tipoTexto: 'Devolución',
+                        estado: 'COMPLETADO',
+                        sku: 'PROD-67890',
+                        nombreProducto: 'Polera Adidas Original',
+                        clienteNombre: 'Ana Silva',
+                        clienteRut: '98765432-1',
+                        clienteTelefono: '+56987654321',
+                        clienteEmail: 'ana@example.com',
+                        motivo: 'Talla incorrecta',
+                        descripcion: 'Cliente solicita cambio de talla M a L',
+                        prioridad: 'MEDIA',
+                        sucursal: 'Mall Plaza',
+                        tipoDocumento: 'BOLETA ELECTRONICA',
+                        numeroDocumento: '12346',
+                        fechaCompra: '2024-11-10',
+                        fecha: '12/11/2024',
+                        dias: 5,
+                        historial: [
+                            {
+                                accion: 'CREADO',
+                                fecha: '12/11/2024 14:20',
+                                comentario: 'Requerimiento creado',
+                                usuario: 'Carlos Muñoz'
+                            },
+                            {
+                                accion: 'COMPLETADO',
+                                fecha: '13/11/2024 09:15',
+                                comentario: 'Cambio realizado exitosamente',
+                                usuario: 'Carlos Muñoz'
+                            }
+                        ],
+                        fotos: []
+                    }
+                ];
+                guardarEnLocalStorage();
+            }
+        }
+
+        // ==================== INICIALIZACIÓN ====================
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarDesdeLocalStorage();
+            navegarA('lista');
+        });
+    </script>
+
+</body>
+</html>
+

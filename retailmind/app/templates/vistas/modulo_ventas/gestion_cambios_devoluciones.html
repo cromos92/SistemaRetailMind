@@ -51,6 +51,8 @@
     
     .status-solicitado { background-color: #ffc107; color: #000; }
     .status-aprobado { background-color: #17a2b8; color: #fff; }
+    .status-ejecutado { background-color: #0d6efd; color: #fff; }
+    .status-ejecutado_cobro_pendiente { background-color: #fd7e14; color: #fff; }
     .status-completado { background-color: #28a745; color: #fff; }
     .status-rechazado { background-color: #dc3545; color: #fff; }
     .status-cancelado { background-color: #6c757d; color: #fff; }
@@ -188,6 +190,160 @@
     .badge {
         font-weight: 500;
         padding: 0.35em 0.65em;
+    }
+
+    /* Indicador de pasos */
+    .wizard-stepper {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .wizard-step {
+        position: relative;
+        flex: 1;
+        text-align: center;
+        padding: 0 0.5rem;
+        color: #adb5bd;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: color 0.3s ease;
+    }
+
+    .wizard-step:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        top: 1.1rem;
+        right: -50%;
+        width: 100%;
+        height: 2px;
+        background: #dee2e6;
+        z-index: 1;
+    }
+
+    .wizard-step .wizard-circle {
+        width: 34px;
+        height: 34px;
+        margin: 0 auto 0.5rem;
+        border-radius: 50%;
+        border: 2px solid #dee2e6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        color: #6c757d;
+        font-weight: 700;
+        position: relative;
+        z-index: 2;
+        transition: all 0.3s ease;
+    }
+
+    .wizard-step.active {
+        color: #0d6efd;
+    }
+
+    .wizard-step.active .wizard-circle {
+        border-color: #0d6efd;
+        color: #0d6efd;
+        box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.1);
+    }
+
+    .wizard-step.completed {
+        color: #198754;
+    }
+
+    .wizard-step.completed .wizard-circle {
+        background: #198754;
+        color: #fff;
+        border-color: #198754;
+        box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.15);
+    }
+
+    .wizard-step.completed:not(:last-child)::after {
+        background: linear-gradient(90deg, rgba(25,135,84,1) 0%, rgba(25,135,84,0.35) 100%);
+    }
+
+    /* Panel resumen lateral */
+    .resumen-card {
+        border: 1px solid rgba(13, 110, 253, 0.08);
+        border-radius: 16px;
+        backdrop-filter: blur(4px);
+    }
+
+    .resumen-card.position-sticky {
+        top: 88px;
+    }
+
+    .resumen-card .card-body {
+        padding: 1.5rem;
+    }
+
+    .resumen-metric h4, .resumen-metric h3 {
+        font-weight: 700;
+    }
+
+    .resumen-metric + hr {
+        margin: 1.25rem 0;
+    }
+
+    .resumen-chips .badge {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.75rem;
+        border-radius: 999px;
+    }
+
+    .badge-pending {
+        background: rgba(255,193,7,0.15);
+        color: #d39e00;
+        border: 1px solid rgba(255,193,7,0.35);
+    }
+
+    .badge-neutral {
+        background: rgba(108,117,125,0.15);
+        color: #495057;
+        border: 1px solid rgba(108,117,125,0.3);
+    }
+
+    .table-glow {
+        animation: tableGlow 1.6s ease;
+    }
+
+    @keyframes tableGlow {
+        0% { box-shadow: inset 0 0 0 rgba(13,110,253,0); background-color: rgba(13,110,253,0.08); }
+        40% { background-color: rgba(13,110,253,0.12); }
+        100% { box-shadow: inset 0 0 0 rgba(13,110,253,0); background-color: transparent; }
+    }
+
+    .btn-action-group .btn {
+        min-width: 110px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+    }
+
+    tr.cambio-cobro-pendiente td {
+        background-color: rgba(255, 193, 7, 0.08);
+    }
+
+    tr.cambio-aprobado td {
+        background-color: rgba(13, 110, 253, 0.04);
+    }
+
+    .difference-positive {
+        color: #dc3545;
+        font-weight: 600;
+    }
+
+    .difference-negative {
+        color: #198754;
+        font-weight: 600;
+    }
+
+    .difference-zero {
+        color: #6c757d;
+        font-weight: 600;
     }
 </style>
 
@@ -389,6 +545,20 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="wizard-stepper" id="wizard-stepper">
+                    <div class="wizard-step active" data-step="1">
+                        <div class="wizard-circle">1</div>
+                        <div class="wizard-label">Buscar documento</div>
+                    </div>
+                    <div class="wizard-step" data-step="2">
+                        <div class="wizard-circle">2</div>
+                        <div class="wizard-label">Seleccionar productos</div>
+                    </div>
+                    <div class="wizard-step" data-step="3">
+                        <div class="wizard-circle">3</div>
+                        <div class="wizard-label">Revisar y enviar</div>
+                    </div>
+                </div>
                 <!-- Paso 1: Buscar DTE Original -->
                 <div id="paso-buscar-ticket">
                     <div class="alert alert-primary border-primary">
@@ -468,39 +638,30 @@
 
                 <!-- Paso 2: Seleccionar Productos -->
                 <div id="paso-seleccionar-productos" style="display: none;">
-                    <div class="alert alert-primary border-primary">
-                        <h6 class="alert-heading mb-2"><i class="ri-information-line"></i> Paso 2: Seleccionar Productos</h6>
-                        <ol class="mb-0 ps-3 small">
-                            <li>Selecciona el tipo de operación (Cambio o Devolución)</li>
-                            <li>Marca los productos que el cliente está devolviendo</li>
-                            <li>Si es cambio, busca y agrega los productos nuevos</li>
-                        </ol>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">
-                                <i class="ri-swap-line"></i> Tipo de Operación *
-                            </label>
-                            <select class="form-control form-control-lg" id="select-tipo-operacion" onchange="cambiarTipoOperacion()" required>
-                                <option value="">-- Seleccionar tipo --</option>
-                                {% for value, display in tipo_operacion_choices %}
-                                <option value="{{ value }}">{{ display }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">
-                                <i class="ri-question-line"></i> Motivo Principal *
-                            </label>
-                            <select class="form-control form-control-lg" id="select-motivo-principal" required>
-                                <option value="">-- Seleccionar motivo --</option>
-                                {% for value, display in motivo_choices %}
-                                <option value="{{ value }}">{{ display }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
+                    <div class="row g-4">
+                        <div class="col-xl-8 col-lg-8">
+                            <div class="alert alert-primary border-primary">
+                                <h6 class="alert-heading mb-2"><i class="ri-information-line"></i> Paso 2: Seleccionar Productos</h6>
+                                <ol class="mb-0 ps-3 small">
+                                    <li>Marca los productos que el cliente está devolviendo</li>
+                                    <li>Escanea o agrega los productos nuevos que entregarás</li>
+                                    <li>Ingresa observaciones relevantes</li>
+                                </ol>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">
+                                        <i class="ri-question-line"></i> Motivo Principal *
+                                    </label>
+                                    <select class="form-control form-control-lg" id="select-motivo-principal" required>
+                                        <option value="">-- Seleccionar motivo --</option>
+                                        {% for value, display in motivo_choices %}
+                                        <option value="{{ value }}">{{ display }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
 
                     <!-- Sistema de Escaneo de Productos -->
                     <div class="card border-primary mb-4">
@@ -534,9 +695,12 @@
                                     </div>
                                     <small class="text-muted">Presione Enter después de escanear o escribir el SKU</small>
                                 </div>
-                                <div class="col-md-4 d-flex align-items-end">
-                                    <button class="btn btn-outline-secondary w-100" onclick="limpiarEscaneos()">
-                                        <i class="ri-delete-bin-line"></i> Limpiar Escaneos
+                                <div class="col-md-4 d-flex align-items-end gap-2">
+                                    <button class="btn btn-outline-info flex-fill" onclick="verDetalleDocumento()">
+                                        <i class="ri-eye-line"></i> Ver Detalle
+                                    </button>
+                                    <button class="btn btn-outline-secondary flex-fill" onclick="limpiarEscaneos()">
+                                        <i class="ri-delete-bin-line"></i> Limpiar
                                     </button>
                                 </div>
                             </div>
@@ -585,14 +749,19 @@
                             <strong>Importante:</strong> El precio mostrado es el precio de compra original. 
                             Si el precio actual del producto cambió, se calculará una diferencia.
                         </div>
+                        <div class="alert alert-info mt-2 mb-3">
+                            <i class="ri-lock-line"></i> 
+                            <strong>Validación por Escaneo:</strong> Los checkboxes están bloqueados. 
+                            Debe escanear cada producto para habilitarlos y validar que correspondan al documento.
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover">
                                 <thead class="table-light">
                                     <tr>
                                         <th width="60">
-                                            <input type="checkbox" class="form-check-input" id="check-all-productos" title="Seleccionar todos">
+                                            <input type="checkbox" class="form-check-input" id="check-all-productos" title="Escanee los productos para habilitar" disabled>
                                         </th>
-                                        <th>SKU</th>
+                                        <th class="columna-sku-validacion" style="display: none;">SKU</th>
                                         <th>Artículo</th>
                                         <th>Talla</th>
                                         <th>Cant. Original</th>
@@ -610,7 +779,7 @@
                     </div>
 
                     <!-- Productos Nuevos (solo para cambios) -->
-                    <div id="seccion-productos-nuevos" class="productos-section" style="display: none;">
+                    <div id="seccion-productos-nuevos" class="productos-section">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h6 class="mb-0"><i class="ri-add-circle-line"></i> Productos Nuevos</h6>
                             <span class="badge bg-success" id="badge-productos-nuevos">0 agregados</span>
@@ -649,15 +818,54 @@
                         </div>
                     </div>
 
-                    <!-- Observaciones -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label class="form-label">Observaciones del Cliente</label>
-                            <textarea class="form-control" id="textarea-obs-cliente" rows="3"></textarea>
+                            <!-- Observaciones -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="form-label">Observaciones del Cliente</label>
+                                    <textarea class="form-control" id="textarea-obs-cliente" rows="3"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Observaciones del Vendedor</label>
+                                    <textarea class="form-control" id="textarea-obs-vendedor" rows="3"></textarea>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Observaciones del Vendedor</label>
-                            <textarea class="form-control" id="textarea-obs-vendedor" rows="3"></textarea>
+                        <div class="col-xl-4 col-lg-4">
+                            <div id="panel-resumen-cambio" class="card shadow-sm resumen-card position-sticky top-0">
+                                <div class="card-header bg-white border-0 pb-0">
+                                    <h6 class="mb-1"><i class="ri-dashboard-line"></i> Resumen en tiempo real</h6>
+                                    <small class="text-muted">Actualizado con cada selección</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex flex-wrap gap-2 mb-3 resumen-chips">
+                                        <span class="badge bg-light text-muted" id="chip-tipo-operacion">Se detectará automáticamente</span>
+                                        <span class="badge bg-secondary" id="chip-diferencia">Sin diferencia</span>
+                                    </div>
+                                    <div class="resumen-metric mb-3">
+                                        <small class="text-muted d-block mb-1">Productos a devolver</small>
+                                        <h4 class="mb-0" id="panel-productos-devolver">0</h4>
+                                        <span class="text-muted" id="panel-monto-original">$0</span>
+                                    </div>
+                                    <div class="resumen-metric mb-3">
+                                        <small class="text-muted d-block mb-1">Productos nuevos</small>
+                                        <h4 class="mb-0" id="panel-productos-nuevos">0</h4>
+                                        <span class="text-muted" id="panel-monto-nuevo">$0</span>
+                                    </div>
+                                    <div class="resumen-metric mb-3">
+                                        <small class="text-muted d-block mb-1">Diferencia</small>
+                                        <h3 class="mb-1" id="panel-diferencia">$0</h3>
+                                        <span class="badge bg-secondary" id="panel-estado-cobro">Sin diferencia</span>
+                                    </div>
+                                    <hr>
+                                    <div class="resumen-extra">
+                                        <small class="text-muted d-block mb-2">Consejos</small>
+                                        <ul class="list-unstyled small mb-0" id="panel-notas">
+                                            <li><i class="ri-checkbox-circle-line text-success me-1"></i> Escanea productos del ticket para asignarlos rápidamente.</li>
+                                            <li><i class="ri-checkbox-circle-line text-success me-1"></i> Agrega productos nuevos para cambios de talla o color.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -722,125 +930,318 @@
 
 <!-- Modal: Detalle de Cambio -->
 <div class="modal fade" id="modalDetalleCambio" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title">📋 Detalle de Cambio/Devolución</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title"><i class="ri-exchange-line"></i> Detalle Completo - Cambio/Devolución #<span id="detalle-numero-op">---</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <!-- Información General -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-body">
-                                <h6 class="card-title">Información General</h6>
-                                <table class="table table-sm">
-                                    <tr><td><strong>Nº Operación:</strong></td><td id="detalle-numero-operacion">-</td></tr>
-                                    <tr><td><strong>Tipo:</strong></td><td id="detalle-tipo-operacion">-</td></tr>
-                                    <tr><td><strong>Estado:</strong></td><td id="detalle-estado">-</td></tr>
-                                    <tr><td><strong>Fecha Solicitud:</strong></td><td id="detalle-fecha-solicitud">-</td></tr>
-                                    <tr><td><strong>Motivo:</strong></td><td id="detalle-motivo">-</td></tr>
-                                </table>
+            <div class="modal-body" style="background-color: #f8f9fa;">
+                <div class="container-fluid">
+                    
+                    <!-- Estado y Timeline -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card shadow-sm border-0">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h5 class="mb-0"><i class="ri-flow-chart"></i> Estado de la Operación</h5>
+                                        <span class="badge fs-6" id="detalle-badge-estado">PENDIENTE</span>
+                                    </div>
+                                    <div class="progress" style="height: 30px;">
+                                        <div class="progress-bar" id="detalle-progreso" role="progressbar" style="width: 33%">
+                                            <span id="detalle-progreso-texto">Pendiente</span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between mt-2 small text-muted">
+                                        <span>📝 Solicitado</span>
+                                        <span>✅ Aprobado</span>
+                                        <span>🎉 Completado</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-body">
-                                <h6 class="card-title">Montos</h6>
-                                <table class="table table-sm">
-                                    <tr><td><strong>Monto Original:</strong></td><td id="detalle-monto-original">$0</td></tr>
-                                    <tr><td><strong>Monto Nuevo:</strong></td><td id="detalle-monto-nuevo">$0</td></tr>
-                                    <tr><td><strong>Diferencia:</strong></td><td id="detalle-diferencia">$0</td></tr>
-                                    <tr><td><strong>Estado Plazo:</strong></td><td id="detalle-plazo">-</td></tr>
-                                </table>
+
+                    <!-- Información General -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card shadow-sm border-0 h-100">
+                                <div class="card-header bg-info text-white">
+                                    <i class="ri-information-line"></i> Información General
+                                </div>
+                                <div class="card-body">
+                                    <dl class="row mb-0">
+                                        <dt class="col-5">Operación:</dt>
+                                        <dd class="col-7" id="detalle-numero-operacion">-</dd>
+                                        
+                                        <dt class="col-5">Tipo:</dt>
+                                        <dd class="col-7" id="detalle-tipo-operacion">-</dd>
+                                        
+                                        <dt class="col-5">Fecha:</dt>
+                                        <dd class="col-7" id="detalle-fecha-solicitud">-</dd>
+                                        
+                                        <dt class="col-5">Cliente:</dt>
+                                        <dd class="col-7" id="detalle-cliente">-</dd>
+                                        
+                                        <dt class="col-5">Motivo:</dt>
+                                        <dd class="col-7"><span class="badge bg-warning text-dark" id="detalle-motivo">-</span></dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card shadow-sm border-0 h-100">
+                                <div class="card-header bg-primary text-white">
+                                    <i class="ri-file-list-line"></i> Documento Original
+                                </div>
+                                <div class="card-body">
+                                    <dl class="row mb-0">
+                                        <dt class="col-5">Documento:</dt>
+                                        <dd class="col-7" id="detalle-doc-original">-</dd>
+                                        
+                                        <dt class="col-5">Fecha:</dt>
+                                        <dd class="col-7" id="detalle-doc-fecha">-</dd>
+                                        
+                                        <dt class="col-5">Vendedor:</dt>
+                                        <dd class="col-7" id="detalle-vendedor">-</dd>
+                                        
+                                        <dt class="col-5">Total Doc:</dt>
+                                        <dd class="col-7 fw-bold" id="detalle-total-doc">$0</dd>
+                                        
+                                        <dt class="col-5">Plazo:</dt>
+                                        <dd class="col-7" id="detalle-plazo">-</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card shadow-sm border-0 h-100 border-success border-2">
+                                <div class="card-header bg-success text-white">
+                                    <i class="ri-money-dollar-circle-line"></i> Resumen Financiero
+                                </div>
+                                <div class="card-body">
+                                    <dl class="row mb-2">
+                                        <dt class="col-6">Productos Devueltos:</dt>
+                                        <dd class="col-6 text-end text-danger fw-bold" id="detalle-monto-original">-$0</dd>
+                                        
+                                        <dt class="col-6">Productos Nuevos:</dt>
+                                        <dd class="col-6 text-end text-success fw-bold" id="detalle-monto-nuevo">+$0</dd>
+                                    </dl>
+                                    <hr>
+                                    <dl class="row mb-0">
+                                        <dt class="col-6 fs-5">DIFERENCIA:</dt>
+                                        <dd class="col-6 text-end fs-4 fw-bold" id="detalle-diferencia">$0</dd>
+                                    </dl>
+                                    <div class="alert alert-light mt-2 mb-0 py-2" id="detalle-accion-diferencia">
+                                        <small id="detalle-texto-diferencia">-</small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Productos -->
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h6 class="card-title">Productos Involucrados</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th colspan="4" class="text-center bg-light">Producto Original</th>
-                                        <th colspan="4" class="text-center bg-light">Producto Nuevo</th>
-                                        <th rowspan="2" class="text-center">Diferencia</th>
-                                        <th rowspan="2" class="text-center">Condición</th>
-                                    </tr>
-                                    <tr>
-                                        <th>SKU</th>
-                                        <th>Artículo</th>
-                                        <th>Cant.</th>
-                                        <th>Precio</th>
-                                        <th>SKU</th>
-                                        <th>Artículo</th>
-                                        <th>Cant.</th>
-                                        <th>Precio</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="detalle-productos">
-                                    <!-- Productos cargados dinámicamente -->
-                                </tbody>
-                            </table>
+                    <!-- PRODUCTOS SALIENTES (Devueltos) -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card shadow-sm border-danger border-2">
+                                <div class="card-header bg-danger text-white">
+                                    <i class="ri-arrow-left-circle-line"></i> PRODUCTOS SALIENTES (Devueltos por el Cliente)
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>SKU</th>
+                                                    <th>Artículo</th>
+                                                    <th>Talla</th>
+                                                    <th class="text-center">Cantidad</th>
+                                                    <th class="text-end">Precio Unit.</th>
+                                                    <th class="text-end">Subtotal</th>
+                                                    <th>Condición</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="detalle-productos-salientes">
+                                                <!-- Dinámico -->
+                                            </tbody>
+                                            <tfoot class="table-light">
+                                                <tr>
+                                                    <th colspan="5" class="text-end">TOTAL DEVUELTO:</th>
+                                                    <th class="text-end text-danger fs-5" id="detalle-total-salientes">$0</th>
+                                                    <th></th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Historial -->
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-title">Historial de Acciones</h6>
-                        <div class="timeline" id="detalle-historial">
-                            <!-- Historial cargado dinámicamente -->
+                    <!-- PRODUCTOS ENTRANTES (Nuevos) -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card shadow-sm border-success border-2">
+                                <div class="card-header bg-success text-white">
+                                    <i class="ri-arrow-right-circle-line"></i> PRODUCTOS ENTRANTES (Entregados al Cliente)
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>SKU</th>
+                                                    <th>Artículo</th>
+                                                    <th>Marca</th>
+                                                    <th>Talla</th>
+                                                    <th class="text-center">Cantidad</th>
+                                                    <th class="text-end">Precio Unit.</th>
+                                                    <th class="text-end">Subtotal</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="detalle-productos-entrantes">
+                                                <!-- Dinámico -->
+                                            </tbody>
+                                            <tfoot class="table-light">
+                                                <tr>
+                                                    <th colspan="6" class="text-end">TOTAL NUEVO:</th>
+                                                    <th class="text-end text-success fs-5" id="detalle-total-entrantes">$0</th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Historial de Acciones -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card shadow-sm border-0">
+                                <div class="card-header bg-light">
+                                    <i class="ri-time-line"></i> Historial de Transacciones
+                                </div>
+                                <div class="card-body">
+                                    <div id="detalle-historial">
+                                        <!-- Timeline dinámico -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer bg-light">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="ri-close-line"></i> Cerrar
                 </button>
                 <div id="acciones-cambio">
-                    <!-- Botones de acción según el estado -->
+                    <!-- Botones según estado -->
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal: Aprobar -->
-<div class="modal fade" id="modalAprobarCambio" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+<!-- Modal: Aprobar y Generar Ticket -->
+<div class="modal fade" id="modalAprobarCambio" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title">
-                    <i class="ri-check-line"></i> Aprobar Cambio/Devolución
+                    <i class="ri-check-line"></i> Aprobar Cambio/Devolución y Generar Ticket
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info">
-                    <i class="ri-information-line"></i> Al aprobar, el cambio podrá ser procesado y completado
+                <div class="alert alert-success border-success">
+                    <i class="ri-information-line"></i> 
+                    <strong>Al aprobar se generará automáticamente un ticket de venta</strong> 
+                    con los productos del cambio/devolución.
                 </div>
+                
+                <!-- Resumen del Cambio -->
+                <div class="card bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="mb-3"><i class="ri-file-list-3-line"></i> Resumen de la Operación</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-2"><strong>Operación:</strong> <span id="aprobar-num-operacion">-</span></p>
+                                <p class="mb-2"><strong>Tipo:</strong> <span id="aprobar-tipo">-</span></p>
+                                <p class="mb-2"><strong>Cliente:</strong> <span id="aprobar-cliente">-</span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-2"><strong>Productos Devueltos:</strong> <span class="text-danger" id="aprobar-total-devuelto">$0</span></p>
+                                <p class="mb-2"><strong>Productos Nuevos:</strong> <span class="text-success" id="aprobar-total-nuevo">$0</span></p>
+                                <p class="mb-2"><strong class="fs-5">Diferencia:</strong> <span class="fs-5 fw-bold" id="aprobar-diferencia">$0</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Código de Vendedor -->
+                <div class="card border-warning mb-3">
+                    <div class="card-header bg-warning text-dark">
+                        <i class="ri-shield-user-line"></i> Validación de Vendedor
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning mb-3">
+                            <i class="ri-error-warning-line"></i> 
+                            <strong>Requerido:</strong> Ingrese el código del vendedor que procesará la venta.
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">
+                                    <i class="ri-key-line"></i> Código de Vendedor <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text">
+                                        <i class="ri-user-line"></i>
+                                    </span>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="input-codigo-vendedor-aprobacion" 
+                                           placeholder="Código del vendedor"
+                                           autocomplete="off"
+                                           required>
+                                    <button class="btn btn-primary" onclick="validarCodigoVendedorAprobacion()">
+                                        <i class="ri-checkbox-line"></i> Validar
+                                    </button>
+                                </div>
+                                <small class="text-muted">El vendedor debe ingresar su código personal</small>
+                            </div>
+                            <div class="col-md-6">
+                                <div id="info-vendedor-validado" style="display: none;" class="alert alert-success mb-0 mt-4">
+                                    <i class="ri-checkbox-circle-line"></i> 
+                                    <strong>Vendedor validado:</strong> <span id="nombre-vendedor-validado">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Observaciones -->
                 <div class="mb-3">
                     <label class="form-label fw-bold">
-                        <i class="ri-message-3-line"></i> Observaciones <span class="text-muted">(Opcional)</span>
+                        <i class="ri-message-3-line"></i> Observaciones de Aprobación <span class="text-muted">(Opcional)</span>
                     </label>
-                    <textarea class="form-control" id="textarea-observaciones-aprobacion" rows="4" placeholder="Observaciones sobre la aprobación..."></textarea>
+                    <textarea class="form-control" id="textarea-observaciones-aprobacion" rows="3" placeholder="Observaciones sobre la aprobación..."></textarea>
                 </div>
+                
+                <input type="hidden" id="vendedor-id-validado">
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="ri-close-line"></i> Cancelar
                 </button>
-                <button type="button" class="btn btn-success btn-lg" onclick="confirmarAprobacion()">
-                    <i class="ri-check-line"></i> Aprobar Cambio
+                <button type="button" class="btn btn-success btn-lg" id="btn-confirmar-aprobacion" onclick="confirmarAprobacionYGenerarTicket()" disabled>
+                    <i class="ri-check-line"></i> Aprobar y Generar Ticket
                 </button>
             </div>
         </div>
@@ -996,6 +1397,69 @@
     </div>
 </div>
 
+<!-- Modal: Ver Detalle del Documento -->
+<div class="modal fade" id="modalDetalleDocumento" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="ri-file-list-3-line"></i> Detalle del Documento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Información del documento -->
+                <div class="card border-info mb-3">
+                    <div class="card-header bg-light">
+                        <strong>Información del Documento</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-2"><strong>Documento:</strong> <span id="detalle-doc-numero">-</span></p>
+                                <p class="mb-2"><strong>Fecha:</strong> <span id="detalle-doc-fecha">-</span></p>
+                                <p class="mb-2"><strong>Cliente:</strong> <span id="detalle-doc-cliente">-</span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-2"><strong>Total:</strong> <span id="detalle-doc-total">$0</span></p>
+                                <p class="mb-2"><strong>Vendedor:</strong> <span id="detalle-doc-vendedor">-</span></p>
+                                <p class="mb-2"><strong>Días transcurridos:</strong> <span id="detalle-doc-dias">0</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de productos -->
+                <div class="card border-primary">
+                    <div class="card-header bg-light">
+                        <strong>Productos del Documento</strong>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Talla</th>
+                                        <th>Cantidad</th>
+                                        <th>Precio Unit.</th>
+                                        <th>Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-detalle-productos">
+                                    <!-- Productos dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal: Loading -->
 <div class="modal fade" id="modalLoading" tabindex="-1" data-backdrop="static" data-keyboard="false">
     <div class="modal-dialog modal-dialog-centered">
@@ -1027,11 +1491,83 @@ let productosOriginales = [];
 let productosNuevos = [];
 let pasoActual = 1;
 let cambioActual = null;
+let tipoOperacionDetectada = null;
+
+const TIPO_OPERACION_LABELS = {
+    'CAMBIO_SIMPLE': 'Cambio sin diferencia',
+    'CAMBIO_CON_DIFERENCIA': 'Cambio con diferencia',
+    'DEVOLUCION_TOTAL': 'Devolución',
+    'DEVOLUCION_PARCIAL': 'Devolución parcial'
+};
+
+function mostrarToast(tipo, mensaje) {
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: tipo,
+        title: mensaje,
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+    });
+}
+
+function actualizarStepper() {
+    $('.wizard-step').removeClass('active completed');
+    $('.wizard-step').each(function() {
+        const step = parseInt($(this).data('step'), 10);
+        if (step < pasoActual) {
+            $(this).addClass('completed');
+        } else if (step === pasoActual) {
+            $(this).addClass('active');
+        }
+    });
+}
+
+function resetResumenLateral() {
+    tipoOperacionDetectada = null;
+    $('#panel-productos-devolver').text('0');
+    $('#panel-monto-original').text('$0');
+    $('#panel-productos-nuevos').text('0');
+    $('#panel-monto-nuevo').text('$0');
+    $('#panel-diferencia').text('$0').removeClass('difference-positive difference-negative difference-zero').addClass('difference-zero');
+    $('#panel-estado-cobro').removeClass('badge-pending bg-success bg-danger text-white').addClass('bg-secondary').text('Sin diferencia');
+    $('#chip-diferencia').removeClass('bg-success badge-pending bg-danger text-white').addClass('bg-secondary').text('Sin diferencia');
+    $('#badge-productos-seleccionados').text('0 seleccionados');
+    $('#badge-productos-nuevos').text('0 agregados');
+    $('#panel-notas').html('<li><i class="ri-checkbox-circle-line text-success me-1"></i> Marca los productos del ticket que el cliente devuelve.</li><li><i class="ri-checkbox-circle-line text-success me-1"></i> Agrega productos nuevos si entregarás un reemplazo.</li>');
+    actualizarChipTipoOperacion();
+}
+
+function actualizarChipTipoOperacion() {
+    const $chip = $('#chip-tipo-operacion');
+    if (tipoOperacionDetectada) {
+        const texto = TIPO_OPERACION_LABELS[tipoOperacionDetectada] || tipoOperacionDetectada.replace(/_/g, ' ');
+        $chip.text(texto);
+        $chip.removeClass('bg-light text-muted').addClass('bg-primary text-white');
+    } else {
+        $chip.text('Se detectará automáticamente');
+        $chip.removeClass('bg-primary text-white').addClass('bg-light text-muted');
+    }
+}
+
+function determinarTipoOperacion(productosSeleccionadosCount, productosNuevosCount, diferencia) {
+    if (productosSeleccionadosCount === 0 && productosNuevosCount === 0) {
+        return null;
+    }
+    if (productosNuevosCount > 0) {
+        return diferencia > 0 ? 'CAMBIO_CON_DIFERENCIA' : 'CAMBIO_SIMPLE';
+    }
+    return diferencia < 0 ? 'DEVOLUCION_TOTAL' : 'DEVOLUCION_PARCIAL';
+}
 
 // Inicialización
 $(document).ready(function() {
     cargarCambiosDevoluciones();
     configurarEventos();
+    actualizarStepper();
+    resetResumenLateral();
+    actualizarChipTipoOperacion();
     
     // Establecer fecha actual por defecto
     const hoy = new Date().toISOString().split('T')[0];
@@ -1099,7 +1635,7 @@ function escanearProducto() {
     
     // Buscar el producto en el ticket actual
     const productoEncontrado = ticketActual.productos.find(p => 
-        p.sku && p.sku.toUpperCase() === sku
+        p.sku && String(p.sku).toUpperCase() === sku
     );
     
     if (!productoEncontrado) {
@@ -1139,12 +1675,14 @@ function escanearProducto() {
     }
     
     // Producto SÍ está en el ticket - Agregarlo/incrementar
+    let mensajeToast = '';
     if (productosEscaneados[sku]) {
         // Ya fue escaneado - incrementar cantidad
         const disponible = productoEncontrado.cantidad_disponible || productoEncontrado.stock;
         if (productosEscaneados[sku].cantidad < disponible) {
             productosEscaneados[sku].cantidad++;
             console.log(`✓ SKU ${sku} incrementado a ${productosEscaneados[sku].cantidad}`);
+            mensajeToast = `SKU ${sku} ×${productosEscaneados[sku].cantidad}`;
         } else {
             mostrarError(`Cantidad máxima alcanzada para este producto (${disponible})`);
             inputSku.val('').focus();
@@ -1157,6 +1695,7 @@ function escanearProducto() {
             productoData: productoEncontrado
         };
         console.log(`✓ SKU ${sku} agregado por primera vez`);
+        mensajeToast = `SKU ${sku} preparado para cambio`;
     }
     
     // Sonido de éxito (beep corto)
@@ -1171,6 +1710,50 @@ function escanearProducto() {
         gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
         oscillator.start(audioCtx.currentTime);
         oscillator.stop(audioCtx.currentTime + 0.1);
+    }
+    
+    const indexProducto = ticketActual.productos.indexOf(productoEncontrado);
+    if (indexProducto !== -1) {
+        // Marcar automáticamente el checkbox del producto
+        const checkbox = $(`#check-producto-${indexProducto}`);
+        const inputCantidad = $(`#cantidad-producto-${indexProducto}`);
+        const selectCondicion = $(`#condicion-${indexProducto}`);
+        
+        if (checkbox.length) {
+            // HABILITAR el checkbox (desbloquearlo)
+            checkbox.prop('disabled', false);
+            checkbox.attr('title', 'Producto validado mediante escaneo');
+            
+            // Marcar checkbox si no está marcado
+            if (!checkbox.prop('checked')) {
+                checkbox.prop('checked', true);
+                
+                // Habilitar inputs
+                inputCantidad.prop('disabled', false);
+                selectCondicion.prop('disabled', false);
+                
+                actualizarBadgeProductosSeleccionados();
+                console.log(`✅ Checkbox habilitado y activado automáticamente para ${sku}`);
+            }
+            
+            // Actualizar cantidad (siempre, incluso si ya estaba marcado)
+            if (inputCantidad.length) {
+                inputCantidad.val(productosEscaneados[sku].cantidad);
+            }
+        }
+        
+        // Mostrar la columna SKU después del primer escaneo exitoso
+        $('.columna-sku-validacion').show();
+        
+        const fila = checkbox.closest('tr');
+        if (fila.length) {
+            fila.addClass('table-glow');
+            setTimeout(() => fila.removeClass('table-glow'), 1600);
+        }
+    }
+
+    if (mensajeToast) {
+        mostrarToast('success', mensajeToast);
     }
     
     // Actualizar UI
@@ -1204,7 +1787,7 @@ function actualizarListaProductosEscaneados() {
                     <span class="badge bg-success fs-6">${data.cantidad}</span>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-danger" onclick="eliminarProductoEscaneado('${sku}')">
+                    <button class="btn btn-sm btn-danger" onclick='eliminarProductoEscaneado("${sku}")'>
                         <i class="ri-delete-bin-line"></i>
                     </button>
                 </td>
@@ -1216,6 +1799,53 @@ function actualizarListaProductosEscaneados() {
 function eliminarProductoEscaneado(sku) {
     delete productosEscaneados[sku];
     actualizarListaProductosEscaneados();
+}
+
+function verDetalleDocumento() {
+    if (!ticketActual || !ticketActual.productos) {
+        mostrarError('Primero debe buscar un documento de venta');
+        return;
+    }
+    
+    // Llenar información del documento
+    $('#detalle-doc-numero').text(ticketActual.correlativo || '-');
+    $('#detalle-doc-fecha').text(ticketActual.fecha || '-');
+    $('#detalle-doc-cliente').text(ticketActual.cliente || 'Cliente General');
+    $('#detalle-doc-total').text('$' + formatearNumero(ticketActual.total || 0));
+    $('#detalle-doc-vendedor').text(ticketActual.vendedor || '-');
+    $('#detalle-doc-dias').text(ticketActual.dias_transcurridos || '0');
+    
+    // Llenar tabla de productos
+    const tbody = $('#tbody-detalle-productos');
+    tbody.empty();
+    
+    if (ticketActual.productos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="6" class="text-center text-muted">
+                    No hay productos en este documento
+                </td>
+            </tr>
+        `);
+    } else {
+        ticketActual.productos.forEach(producto => {
+            const subtotal = (producto.precio_unitario || 0) * (producto.cantidad_original || 0);
+            tbody.append(`
+                <tr>
+                    <td><code>${producto.sku || '-'}</code></td>
+                    <td>${producto.articulo || '-'}</td>
+                    <td>${producto.talla || '-'}</td>
+                    <td class="text-center">${producto.cantidad_original || 0}</td>
+                    <td class="text-end">$${formatearNumero(producto.precio_unitario || 0)}</td>
+                    <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
+                </tr>
+            `);
+        });
+    }
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalleDocumento'));
+    modal.show();
 }
 
 function limpiarEscaneos() {
@@ -1250,7 +1880,7 @@ function aplicarProductosEscaneados() {
     // Primero desmarcar todos los productos
     ticketActual.productos.forEach((producto, index) => {
         $(`#check-producto-${index}`).prop('checked', false);
-        $(`#cantidad-${index}`).val(0).prop('disabled', true);
+        $(`#cantidad-producto-${index}`).val(0).prop('disabled', true);
     });
     
     // Marcar y configurar solo los productos escaneados
@@ -1263,7 +1893,7 @@ function aplicarProductosEscaneados() {
         
         if (index !== -1) {
             const checkbox = $(`#check-producto-${index}`);
-            const inputCantidad = $(`#cantidad-${index}`);
+            const inputCantidad = $(`#cantidad-producto-${index}`);
             
             // Marcar checkbox
             checkbox.prop('checked', true);
@@ -1273,8 +1903,8 @@ function aplicarProductosEscaneados() {
             
             // Highlight temporal para feedback visual
             const row = checkbox.closest('tr');
-            row.addClass('table-success');
-            setTimeout(() => row.removeClass('table-success'), 1000);
+            row.addClass('table-glow');
+            setTimeout(() => row.removeClass('table-glow'), 1600);
             
             productosAplicados++;
         }
@@ -1284,13 +1914,9 @@ function aplicarProductosEscaneados() {
     actualizarContadorProductosSeleccionados();
     actualizarVistaPreviaTotales();
     
-    Swal.fire({
-        icon: 'success',
-        title: '✓ Productos Aplicados',
-        text: `${productosAplicados} producto(s) seleccionado(s) desde escaneo`,
-        timer: 2000,
-        showConfirmButton: false
-    });
+    if (productosAplicados > 0) {
+        mostrarToast('success', `${productosAplicados} producto(s) aplicado(s) desde el escaneo`);
+    }
 }
 
 // Función debounce para optimizar búsquedas
@@ -1354,17 +1980,34 @@ function actualizarTablaCambios(cambios) {
         const estadoBadge = `<span class="status-badge status-${cambio.estado.toLowerCase()}">${cambio.estado_display}</span>`;
         const tipoBadge = `<span class="tipo-badge tipo-${cambio.tipo_operacion.toLowerCase().replace('_', '-')}">${cambio.tipo_operacion_display}</span>`;
         
-        let diferenciaMonto = '';
-        if (cambio.diferencia_monto > 0) {
-            diferenciaMonto = `<span class="diferencia-positiva">+$${formatearNumero(cambio.diferencia_monto)}</span>`;
-        } else if (cambio.diferencia_monto < 0) {
-            diferenciaMonto = `<span class="diferencia-negativa">-$${formatearNumero(Math.abs(cambio.diferencia_monto))}</span>`;
-        } else {
-            diferenciaMonto = `<span class="diferencia-cero">$0</span>`;
+        const cobroPendiente = cambio.cobro_pendiente || false;
+        const rowClasses = [];
+        if (cobroPendiente) {
+            rowClasses.push('cambio-cobro-pendiente');
+        } else if (cambio.estado === 'APROBADO') {
+            rowClasses.push('cambio-aprobado');
         }
-        
+
+        let diferenciaMonto = '<span class="difference-zero">$0</span>';
+        if (cambio.diferencia_monto > 0) {
+            diferenciaMonto = `<span class="difference-positive">+$${formatearNumero(cambio.diferencia_monto)}</span>`;
+        } else if (cambio.diferencia_monto < 0) {
+            diferenciaMonto = `<span class="difference-negative">-$${formatearNumero(Math.abs(cambio.diferencia_monto))}</span>`;
+        }
+
+        const extras = [];
+        if (cambio.ticket_diferencia) {
+            extras.push(`<span class="badge badge-pending">Ticket diferencia #${cambio.ticket_diferencia}</span>`);
+        }
+        if (cobroPendiente) {
+            extras.push('<span class="badge badge-pending">Cobro pendiente</span>');
+        }
+        if (extras.length) {
+            diferenciaMonto += `<div class="mt-1 d-flex flex-column gap-1">${extras.join('')}</div>`;
+        }
+
         tbody.append(`
-            <tr>
+            <tr class="${rowClasses.join(' ')}">
                 <td><strong>${cambio.numero_operacion}</strong></td>
                 <td>${cambio.fecha_solicitud}</td>
                 <td>${tipoBadge}</td>
@@ -1377,10 +2020,12 @@ function actualizarTablaCambios(cambios) {
                 <td>${diferenciaMonto}</td>
                 <td>${cambio.solicitado_por}</td>
                 <td class="text-nowrap">
-                    <button class="btn btn-sm btn-info me-1" onclick="verDetalleCambio(${cambio.id})" title="Ver Detalle">
-                        <i class="ri-eye-line"></i>
-                    </button>
-                    ${generarBotonesAccion(cambio)}
+                    <div class="btn-action-group d-flex flex-wrap gap-1">
+                        <button class="btn btn-sm btn-outline-info" onclick='verDetalleCambio(${cambio.id})' title='Ver detalle'>
+                            <i class="ri-eye-line"></i> Detalle
+                        </button>
+                        ${generarBotonesAccion(cambio)}
+                    </div>
                 </td>
             </tr>
         `);
@@ -1388,44 +2033,114 @@ function actualizarTablaCambios(cambios) {
 }
 
 function generarBotonesAccion(cambio) {
-    let botones = '';
-    
+    let botones = [];
+
     if (cambio.estado === 'SOLICITADO') {
-        botones += `
-            <button class="btn btn-sm btn-success me-1" onclick="aprobarCambio(${cambio.id})" title="Aprobar cambio">
+        botones.push(`
+            <button class="btn btn-sm btn-success" onclick='aprobarCambio(${cambio.id})' title='Aprobar cambio'>
                 <i class="ri-check-line"></i> Aprobar
             </button>
-            <button class="btn btn-sm btn-danger" onclick="cancelarCambio(${cambio.id})" title="Eliminar cambio">
-                <i class="ri-delete-bin-line"></i> Eliminar
+        `);
+        botones.push(`
+            <button class="btn btn-sm btn-outline-danger" onclick='cancelarCambio(${cambio.id})' title='Eliminar cambio'>
+                <i class="ri-delete-bin-line"></i>
             </button>
-        `;
+        `);
     }
     
     if (cambio.estado === 'APROBADO') {
-        botones += `
-            <button class="btn btn-sm btn-primary" onclick="completarCambio(${cambio.id})" title="Completar cambio">
+        botones.push(`
+            <button class="btn btn-sm btn-primary" onclick='ejecutarCambio(${cambio.id})' title='Ejecutar cambio: generar tickets y movimientos'>
+                <i class="ri-play-circle-line"></i> Ejecutar
+            </button>
+        `);
+        botones.push(`
+            <button class="btn btn-sm btn-outline-danger" onclick='cancelarCambio(${cambio.id})' title='Cancelar cambio aprobado'>
+                <i class="ri-close-line"></i>
+            </button>
+        `);
+    }
+    
+    if (cambio.estado === 'EJECUTADO_COBRO_PENDIENTE') {
+        botones.push(`
+            <button class="btn btn-sm btn-warning" onclick='cobrarDiferencia(${cambio.id}, ${cambio.diferencia_monto})' title='Cobrar diferencia pendiente'>
+                <i class="ri-money-dollar-circle-line"></i> Cobrar $${formatearNumero(cambio.diferencia_monto)}
+            </button>
+        `);
+    }
+    
+    if (cambio.estado === 'EJECUTADO') {
+        botones.push(`
+            <button class="btn btn-sm btn-success" onclick='marcarCompletado(${cambio.id})' title='Marcar como completado'>
                 <i class="ri-check-double-line"></i> Completar
             </button>
-        `;
+        `);
     }
     
     if (cambio.estado === 'COMPLETADO') {
-        botones += `
-            <span class="badge bg-success">
+        // Mostrar estado del cambio
+        botones.push(`
+            <span class="badge bg-success align-self-center px-3">
                 <i class="ri-check-line"></i> Completado
             </span>
-        `;
+        `);
+        
+        // Mostrar estado del ticket de pago si existe
+        if (cambio.ticket_nuevo && cambio.ticket_nuevo.estado) {
+            if (cambio.ticket_nuevo.estado === 'PENDIENTE') {
+                const tipoPago = cambio.ticket_nuevo.metodo_pago || '';
+                let iconoPago = 'ri-money-dollar-circle-line';
+                let textoPago = 'Pago Pendiente';
+                
+                if (tipoPago === 'PENDIENTE_COBRO') {
+                    iconoPago = 'ri-money-dollar-circle-line';
+                    textoPago = 'Por Cobrar';
+                } else if (tipoPago === 'PENDIENTE_DEVOLUCION') {
+                    iconoPago = 'ri-refund-line';
+                    textoPago = 'Por Devolver';
+                }
+                
+                botones.push(`
+                    <span class="badge bg-warning text-dark align-self-center px-2" title='Ticket ${cambio.ticket_nuevo.correlativo || ''} - Estado: ${cambio.ticket_nuevo.estado_display || ''}'>
+                        <i class="${iconoPago}"></i> ${textoPago}
+                    </span>
+                `);
+            } else if (cambio.ticket_nuevo.estado === 'PAGADO') {
+                botones.push(`
+                    <span class="badge bg-info align-self-center px-2" title='Ticket ${cambio.ticket_nuevo.correlativo || ''} pagado'>
+                        <i class="ri-checkbox-circle-line"></i> Pagado
+                    </span>
+                `);
+            }
+        }
+    }
+    
+    // Botón de imprimir ticket solo si existe y está PENDIENTE de pago
+    if (cambio.ticket_nuevo && cambio.ticket_nuevo.id && cambio.ticket_nuevo.estado === 'PENDIENTE') {
+        botones.push(`
+            <button class="btn btn-sm btn-outline-secondary" onclick='imprimirTicketDesdeCambio(${cambio.id})' title='Imprimir ticket pendiente'>
+                <i class="ri-printer-line"></i> Ticket
+            </button>
+        `);
     }
     
     if (cambio.estado === 'CANCELADO') {
-        botones += `
-            <span class="badge bg-secondary">
+        botones.push(`
+            <span class="badge bg-secondary align-self-center px-3">
                 <i class="ri-forbid-line"></i> Cancelado
             </span>
-        `;
+        `);
     }
     
-    return botones;
+    if (cambio.estado === 'RECHAZADO') {
+        botones.push(`
+            <span class="badge bg-danger align-self-center px-3">
+                <i class="ri-close-circle-line"></i> Rechazado
+            </span>
+        `);
+    }
+    
+    return botones.join('');
 }
 
 function actualizarPaginacion(pagination) {
@@ -1436,7 +2151,7 @@ function actualizarPaginacion(pagination) {
     if (pagination.has_previous) {
         paginacionEl.append(`
             <li class="page-item">
-                <a class="page-link" href="#" onclick="cargarCambiosDevoluciones(${pagination.current_page - 1})">Anterior</a>
+                <a class="page-link" href="#" onclick='cargarCambiosDevoluciones(${pagination.current_page - 1})'>Anterior</a>
             </li>
         `);
     }
@@ -1449,7 +2164,7 @@ function actualizarPaginacion(pagination) {
         const activeClass = i === pagination.current_page ? 'active' : '';
         paginacionEl.append(`
             <li class="page-item ${activeClass}">
-                <a class="page-link" href="#" onclick="cargarCambiosDevoluciones(${i})">${i}</a>
+                <a class="page-link" href="#" onclick='cargarCambiosDevoluciones(${i})'>${i}</a>
             </li>
         `);
     }
@@ -1458,7 +2173,7 @@ function actualizarPaginacion(pagination) {
     if (pagination.has_next) {
         paginacionEl.append(`
             <li class="page-item">
-                <a class="page-link" href="#" onclick="cargarCambiosDevoluciones(${pagination.current_page + 1})">Siguiente</a>
+                <a class="page-link" href="#" onclick='cargarCambiosDevoluciones(${pagination.current_page + 1})'>Siguiente</a>
             </li>
         `);
     }
@@ -1496,6 +2211,9 @@ function resetearFormularioNuevoCambio() {
     productosNuevos = [];
     productosEscaneados = {};  // Limpiar productos escaneados
     
+    resetResumenLateral();
+    actualizarStepper();
+    
     // Resetear formulario
     $('#input-ticket-correlativo').val('');
     $('#input-fecha-compra').val('');
@@ -1505,10 +2223,8 @@ function resetearFormularioNuevoCambio() {
     $('#btn-siguiente').hide();
     $('#btn-crear-cambio').hide();
     $('#btn-anterior').hide();
-    $('#vista-previa-totales').remove();
     
     // Limpiar selects
-    $('#select-tipo-operacion').val('');
     $('#select-motivo-principal').val('');
     $('#textarea-obs-cliente').val('');
     $('#textarea-obs-vendedor').val('');
@@ -1524,7 +2240,6 @@ function resetearFormularioNuevoCambio() {
     $('#count-escaneados').text('0');
     
     // Ocultar sección de productos nuevos
-    $('#seccion-productos-nuevos').hide();
 }
 
 function buscarDocumentoParaCambio() {
@@ -1561,11 +2276,39 @@ function buscarDocumentoParaCambio() {
                 if (response.documento.puede_cambiar) {
                     $('#btn-siguiente').show();
                     
+                    // Mostrar mensaje si fue redirigido a otro ticket
+                    if (response.documento.fue_redirigido) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '🔄 Ticket Actualizado Automáticamente',
+                            html: `
+                                <div class="alert alert-info">
+                                    <i class="ri-information-line"></i> 
+                                    El ticket <strong>#${response.documento.correlativo_original}</strong> ya tiene cambios completados.
+                                </div>
+                                <hr>
+                                <div class="alert alert-success">
+                                    <i class="ri-arrow-right-line"></i> 
+                                    <strong>Se cargó automáticamente:</strong><br>
+                                    <h5 class="mt-2 mb-0">Ticket #${response.documento.correlativo}</h5>
+                                    <small>(Último cambio de la cadena)</small>
+                                </div>
+                                <hr>
+                                <p class="small text-muted">
+                                    <strong>💡 Info:</strong> Este ticket contiene los productos que se entregaron en el último cambio.<br>
+                                    Puede realizar un nuevo cambio sobre estos productos.
+                                </p>
+                            `,
+                            confirmButtonText: 'Entendido, Continuar',
+                            timer: 6000
+                        });
+                    }
+                    
                     // Si hay cambios anteriores, mostrar mensaje informativo
                     const cambiosAnteriores = response.documento.cambios_anteriores || [];
                     const cambiosPendientes = cambiosAnteriores.filter(c => c.estado === 'Solicitado' || c.estado === 'Aprobado');
                     
-                    if (cambiosPendientes.length > 0) {
+                    if (cambiosPendientes.length > 0 && !response.documento.fue_redirigido) {
                         Swal.fire({
                             icon: 'info',
                             title: 'Cambios Parciales Detectados',
@@ -1808,6 +2551,8 @@ function siguientePaso() {
         cargarProductosOriginales();
         $('#btn-siguiente').html('Continuar al Resumen <i class="ri-arrow-right-line"></i>');
         $('#btn-anterior').show();
+        actualizarStepper();
+        actualizarVistaPreviaTotales();
         
         console.log('✅ Paso 2 mostrado');
     } else if (pasoActual === 2) {
@@ -1828,6 +2573,7 @@ function siguientePaso() {
         $('#btn-siguiente').hide();
         $('#btn-crear-cambio').show();
         $('#btn-anterior').show();
+        actualizarStepper();
         
         console.log('✅ Paso 3 (resumen) mostrado');
     }
@@ -1842,9 +2588,10 @@ function pasoAnterior() {
         // Volver al paso 1
         pasoActual = 1;
         $('#paso-seleccionar-productos').hide();
-        $('#vista-previa-totales').remove();
         $('#btn-siguiente').html('Siguiente <i class="ri-arrow-right-line"></i>');
         $('#btn-anterior').hide();
+        resetResumenLateral();
+        actualizarStepper();
         
         console.log('✅ Regresado al paso 1');
     } else if (pasoActual === 3) {
@@ -1859,6 +2606,7 @@ function pasoAnterior() {
         
         // Actualizar vista previa de totales
         actualizarVistaPreviaTotales();
+        actualizarStepper();
         
         console.log('✅ Regresado al paso 2');
     }
@@ -1895,32 +2643,50 @@ function cargarProductosOriginales() {
     
     ticketActual.productos.forEach((producto, index) => {
         console.log(`  Producto ${index}:`, producto);
+        
+        // Determinar badge de cambios anteriores
+        let badgeCambiosAnteriores = '';
+        if (producto.cantidad_ya_cambiada > 0) {
+            badgeCambiosAnteriores = `<span class="badge bg-warning text-dark ms-1" title='${producto.cantidad_ya_cambiada} unidad(es) ya cambiada(s)'>
+                ⚠️ ${producto.cantidad_ya_cambiada} cambiado
+            </span>`;
+        }
+        
         tbody.append(`
             <tr>
                 <td>
-                    <input type="checkbox" class="form-check-input check-producto" 
-                           id="check-producto-${index}" 
-                           data-index="${index}"
-                           onchange="toggleProductoOriginal(${index})">
+                    <input type='checkbox' class="form-check-input check-producto" 
+                           id='check-producto-${index}' 
+                           data-index='${index}'
+                           data-sku='${producto.sku || ''}'
+                           disabled
+                           title='Escanee el producto para habilitar'
+                           onchange='toggleProductoOriginal(${index})'>
                 </td>
-                <td>${producto.sku || '-'}</td>
-                <td>${producto.articulo || '-'}</td>
+                <td class="columna-sku-validacion" style="display: none;">${producto.sku || '-'}</td>
+                <td>
+                    <div>${producto.articulo || '-'}</div>
+                    ${badgeCambiosAnteriores}
+                </td>
                 <td>${producto.talla || '-'}</td>
                 <td>${producto.cantidad_original || 0}</td>
-                <td>${producto.cantidad_disponible || 0}</td>
+                <td>
+                    <strong class="${producto.cantidad_ya_cambiada > 0 ? 'text-warning' : ''}">${producto.cantidad_disponible || 0}</strong>
+                    ${producto.cantidad_ya_cambiada > 0 ? `<br><small class="text-muted">Ya cambiado: ${producto.cantidad_ya_cambiada}</small>` : ''}
+                </td>
                 <td>$${formatearNumero(producto.precio_unitario || 0)}</td>
                 <td>
-                    <input type="number" class="form-control form-control-sm" 
-                           id="cantidad-${index}" 
-                           min="1" 
-                           max="${producto.cantidad_disponible || 1}" 
-                           value="1" 
+                    <input type='number' class="form-control form-control-sm" 
+                           id='cantidad-producto-${index}' 
+                           min='1' 
+                           max='${producto.cantidad_disponible || 1}' 
+                           value='1' 
                            disabled
-                           onchange="validarCantidadProducto(${index})"
-                           oninput="validarCantidadProducto(${index})">
+                           onchange='validarCantidadProducto(${index})'
+                           oninput='validarCantidadProducto(${index})'>
                 </td>
                 <td>
-                    <select class="form-control form-control-sm" id="condicion-${index}" disabled>
+                    <select class="form-control form-control-sm" id='condicion-${index}' disabled>
                         {% for value, display in condicion_producto_choices %}
                         <option value="{{ value }}">{{ display }}</option>
                         {% endfor %}
@@ -1935,16 +2701,13 @@ function cargarProductosOriginales() {
 
 function toggleProductoOriginal(index) {
     const checked = $(`#check-producto-${index}`).is(':checked');
-    $(`#cantidad-${index}`).prop('disabled', !checked);
+    $(`#cantidad-producto-${index}`).prop('disabled', !checked);
     $(`#condicion-${index}`).prop('disabled', !checked);
     
     // Si se desmarca, resetear cantidad a 1
     if (!checked) {
-        $(`#cantidad-${index}`).val(1);
+        $(`#cantidad-producto-${index}`).val(1);
     }
-    
-    // Actualizar badge de productos seleccionados
-    actualizarBadgeProductosSeleccionados();
     
     // Actualizar vista previa de totales
     actualizarVistaPreviaTotales();
@@ -1969,7 +2732,7 @@ function validarCantidadProducto(index) {
     }
     
     const producto = ticketActual.productos[index];
-    const inputCantidad = $(`#cantidad-${index}`);
+    const inputCantidad = $(`#cantidad-producto-${index}`);
     const cantidad = parseInt(inputCantidad.val()) || 0;
     const maxCantidad = producto.cantidad_disponible || 1;
     
@@ -1996,143 +2759,72 @@ function actualizarVistaPreviaTotales() {
     if (!ticketActual || !ticketActual.productos) {
         return;
     }
-    
+
     let montoOriginal = 0;
     let montoNuevo = 0;
     let productosSeleccionadosCount = 0;
     let cantidadProductosNuevos = 0;
-    
-    console.log('💰 DEBUG - Calculando totales:');
-    
-    // Calcular monto original de productos seleccionados
+
     ticketActual.productos.forEach((producto, index) => {
         if ($(`#check-producto-${index}`).is(':checked')) {
-            const cantidad = parseInt($(`#cantidad-${index}`).val()) || 0;
-            const subtotal = cantidad * (producto.precio_unitario || 0);
-            montoOriginal += subtotal;
+            const cantidad = parseInt($(`#cantidad-producto-${index}`).val(), 10) || 0;
+            montoOriginal += cantidad * (producto.precio_unitario || 0);
             productosSeleccionadosCount++;
-            console.log(`  Producto Original: ${producto.articulo} - Cant: ${cantidad} x $${producto.precio_unitario} = $${subtotal}`);
         }
     });
-    
-    // Calcular monto nuevo de productos de cambio
-    productosNuevos.forEach(producto => {
-        const subtotal = (producto.cantidad || 0) * (producto.precio_venta || 0);
-        montoNuevo += subtotal;
-        cantidadProductosNuevos += (producto.cantidad || 0);
-        console.log(`  Producto Nuevo: ${producto.articulo} - Cant: ${producto.cantidad} x $${producto.precio_venta} = $${subtotal}`);
-    });
-    
-    console.log(`  TOTAL Original: $${montoOriginal}`);
-    console.log(`  TOTAL Nuevo: $${montoNuevo}`);
-    console.log(`  DIFERENCIA: $${montoNuevo - montoOriginal}`);
-    
-    const diferencia = montoNuevo - montoOriginal;
-    
-    // Determinar estilo según la diferencia
-    let diferenciaClase = 'bg-secondary';
-    let diferenciaIcono = 'ri-arrow-left-right-line';
-    let diferenciaTexto = 'Sin diferencia';
-    let diferenciaColor = 'text-secondary';
-    
-    if (diferencia > 0) {
-        diferenciaClase = 'bg-danger';
-        diferenciaIcono = 'ri-arrow-up-line';
-        diferenciaTexto = 'Cliente debe pagar';
-        diferenciaColor = 'text-danger';
-    } else if (diferencia < 0) {
-        diferenciaClase = 'bg-success';
-        diferenciaIcono = 'ri-arrow-down-line';
-        diferenciaTexto = 'A favor del cliente';
-        diferenciaColor = 'text-success';
-    }
-    
-    // Mostrar info en un card sticky visible
-    const infoHtml = `
-        <div class="card border-primary mt-3 shadow-sm" id="vista-previa-totales" style="position: sticky; top: 10px; z-index: 100;">
-            <div class="card-header bg-primary text-white">
-                <h6 class="mb-0"><i class="ri-calculator-line"></i> Vista Previa de Totales</h6>
-            </div>
-            <div class="card-body">
-                <div class="row g-3">
-                    <!-- Productos a Devolver -->
-                    <div class="col-md-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="avatar-sm rounded-circle bg-warning bg-soft">
-                                    <span class="avatar-title rounded-circle bg-warning">
-                                        <i class="ri-arrow-left-circle-line text-white"></i>
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="text-muted mb-1 small">Productos a Devolver</p>
-                                <h5 class="mb-0">${productosSeleccionadosCount}</h5>
-                                <p class="text-primary mb-0 fw-bold">$${formatearNumero(montoOriginal)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Productos Nuevos -->
-                    <div class="col-md-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="avatar-sm rounded-circle bg-info bg-soft">
-                                    <span class="avatar-title rounded-circle bg-info">
-                                        <i class="ri-arrow-right-circle-line text-white"></i>
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="text-muted mb-1 small">Productos Nuevos</p>
-                                <h5 class="mb-0">${cantidadProductosNuevos}</h5>
-                                <p class="text-info mb-0 fw-bold">$${formatearNumero(montoNuevo)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Diferencia -->
-                    <div class="col-md-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="avatar-sm rounded-circle ${diferenciaClase} bg-soft">
-                                    <span class="avatar-title rounded-circle ${diferenciaClase}">
-                                        <i class="${diferenciaIcono} text-white"></i>
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="text-muted mb-1 small">Diferencia</p>
-                                <h5 class="mb-0 ${diferenciaColor}">$${formatearNumero(Math.abs(diferencia))}</h5>
-                                <p class="mb-0 small"><span class="badge ${diferenciaClase}">${diferenciaTexto}</span></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Actualizar badge de productos seleccionados
-    actualizarBadgeProductosSeleccionados();
-    
-    // Remover vista previa anterior
-    $('#vista-previa-totales').remove();
-    
-    // Agregar nueva vista previa si hay productos seleccionados o productos nuevos
-    if (productosSeleccionadosCount > 0 || productosNuevos.length > 0) {
-        $('#paso-seleccionar-productos').append(infoHtml);
-    }
-}
 
-function cambiarTipoOperacion() {
-    const tipo = $('#select-tipo-operacion').val();
-    
-    if (tipo === 'CAMBIO_SIMPLE' || tipo === 'CAMBIO_CON_DIFERENCIA') {
-        $('#seccion-productos-nuevos').show();
+    productosNuevos.forEach(producto => {
+        const cantidad = producto.cantidad || 0;
+        montoNuevo += cantidad * (producto.precio_venta || 0);
+        cantidadProductosNuevos += cantidad;
+    });
+
+    const diferencia = montoNuevo - montoOriginal;
+
+    actualizarBadgeProductosSeleccionados();
+
+    $('#panel-productos-devolver').text(productosSeleccionadosCount);
+    $('#panel-monto-original').text('$' + formatearNumero(montoOriginal));
+    $('#panel-productos-nuevos').text(cantidadProductosNuevos);
+    $('#panel-monto-nuevo').text('$' + formatearNumero(montoNuevo));
+
+    const $panelDiferencia = $('#panel-diferencia');
+    const $chipDiferencia = $('#chip-diferencia');
+    const $estadoCobro = $('#panel-estado-cobro');
+
+    $panelDiferencia.removeClass('difference-positive difference-negative difference-zero');
+    $chipDiferencia.removeClass('bg-secondary badge-pending bg-success bg-danger text-white');
+    $estadoCobro.removeClass('bg-secondary badge-pending bg-success bg-danger text-white badge-neutral');
+
+    if (diferencia > 0) {
+        $panelDiferencia.addClass('difference-positive').text('$' + formatearNumero(diferencia));
+        $chipDiferencia.addClass('badge-pending').text('Cliente debe pagar');
+        $estadoCobro.addClass('badge-pending').text('Cobro pendiente');
+    } else if (diferencia < 0) {
+        $panelDiferencia.addClass('difference-negative').text('-$' + formatearNumero(Math.abs(diferencia)));
+        $chipDiferencia.addClass('bg-success text-white').text('A favor del cliente');
+        $estadoCobro.addClass('bg-success text-white').text('Devolver al cliente');
     } else {
-        $('#seccion-productos-nuevos').hide();
+        $panelDiferencia.addClass('difference-zero').text('$0');
+        $chipDiferencia.addClass('bg-secondary').text('Sin diferencia');
+        $estadoCobro.addClass('bg-secondary').text('Sin diferencia');
     }
+
+    tipoOperacionDetectada = determinarTipoOperacion(productosSeleccionadosCount, cantidadProductosNuevos, diferencia);
+    actualizarChipTipoOperacion();
+
+    const notas = [
+        '<li><i class="ri-checkbox-circle-line text-success me-1"></i> Marca los productos del ticket que el cliente devuelve.</li>',
+        '<li><i class="ri-checkbox-circle-line text-success me-1"></i> Agrega productos nuevos si entregarás un reemplazo.</li>'
+    ];
+
+    if (diferencia > 0) {
+        notas.push('<li><i class="ri-alert-line text-danger me-1"></i> Registra el pago de la diferencia antes de completar.</li>');
+    } else if (diferencia < 0) {
+        notas.push('<li><i class="ri-cash-line text-success me-1"></i> Recuerda devolver el saldo al cliente.</li>');
+    }
+
+    $('#panel-notas').html(notas.join(''));
 }
 
 function buscarProductosParaCambio() {
@@ -2202,7 +2894,7 @@ function mostrarResultadosBusquedaProductos(productos) {
                                 <td><strong>$${formatearNumero(p.precio_venta)}</strong></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" 
-                                            onclick="agregarProductoNuevo(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                                            onclick='agregarProductoNuevo(${JSON.stringify(p).replace(/"/g, "&quot;")})'>
                                         <i class="ri-add-line"></i> Agregar
                                     </button>
                                 </td>
@@ -2246,13 +2938,7 @@ function agregarProductoNuevo(producto) {
     // Actualizar vista previa de totales
     actualizarVistaPreviaTotales();
     
-    Swal.fire({
-        icon: 'success',
-        title: 'Producto agregado',
-        text: `${producto.articulo} agregado a la lista`,
-        timer: 1500,
-        showConfirmButton: false
-    });
+    mostrarToast('success', `${producto.articulo} agregado a la lista`);
 }
 
 function actualizarTablaProductosNuevos() {
@@ -2276,7 +2962,14 @@ function actualizarTablaProductosNuevos() {
     }
     
     productosNuevos.forEach((producto, index) => {
+        // Guardar precio original si no existe
+        if (!producto.precio_original) {
+            producto.precio_original = producto.precio_venta;
+        }
+        
         const subtotal = producto.cantidad * producto.precio_venta;
+        const precioOriginal = producto.precio_original;
+        
         tbody.append(`
             <tr>
                 <td><code>${producto.sku}</code></td>
@@ -2287,22 +2980,76 @@ function actualizarTablaProductosNuevos() {
                 <td>${producto.marca || '-'}</td>
                 <td><span class="badge bg-info">${producto.talla}</span></td>
                 <td><span class="badge bg-success">${producto.stock_disponible}</span></td>
-                <td class="fw-bold">$${formatearNumero(producto.precio_venta)}</td>
                 <td>
-                    <input type="number" class="form-control form-control-sm" 
-                           min="1" max="${producto.stock_disponible}" 
-                           value="${producto.cantidad}"
-                           onchange="cambiarCantidadProductoNuevo(${index}, this.value)"
+                    <div class="input-group input-group-sm" style="width: 140px;">
+                        <span class="input-group-text">$</span>
+                        <input type='number' 
+                               class="form-control form-control-sm" 
+                               id='precio-nuevo-${index}'
+                               min='${precioOriginal}' 
+                               step='100'
+                               value='${producto.precio_venta}'
+                               onchange='cambiarPrecioProductoNuevo(${index}, this.value)'
+                               title='Precio mínimo: $${formatearNumero(precioOriginal)}'>
+                    </div>
+                    ${producto.precio_venta > precioOriginal ? `<small class="text-success">+$${formatearNumero(producto.precio_venta - precioOriginal)}</small>` : ''}
+                </td>
+                <td>
+                    <input type='number' class="form-control form-control-sm" 
+                           min='1' max='${producto.stock_disponible}' 
+                           value='${producto.cantidad}'
+                           onchange='cambiarCantidadProductoNuevo(${index}, this.value)'
                            style="width: 70px;">
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-danger" onclick="eliminarProductoNuevo(${index})" title="Eliminar producto">
+                    <button class="btn btn-sm btn-danger" onclick='eliminarProductoNuevo(${index})' title='Eliminar producto'>
                         <i class="ri-delete-bin-line"></i>
                     </button>
                 </td>
             </tr>
         `);
     });
+}
+
+function cambiarPrecioProductoNuevo(index, nuevoPrecio) {
+    nuevoPrecio = parseInt(nuevoPrecio) || 0;
+    
+    if (productosNuevos[index]) {
+        const precioOriginal = productosNuevos[index].precio_original || productosNuevos[index].precio_venta;
+        
+        // Validar que el precio no sea menor al original
+        if (nuevoPrecio < precioOriginal) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Precio No Permitido',
+                html: `
+                    <p>El precio de salida <strong>NO puede ser menor</strong> al precio original.</p>
+                    <hr>
+                    <p><strong>Precio Original:</strong> $${formatearNumero(precioOriginal)}</p>
+                    <p><strong>Precio Ingresado:</strong> <span class="text-danger">$${formatearNumero(nuevoPrecio)}</span></p>
+                    <hr>
+                    <p class="small text-muted">Solo se permite aumentar o mantener el precio.</p>
+                `,
+                confirmButtonText: 'Entendido'
+            });
+            
+            // Restaurar precio anterior
+            actualizarTablaProductosNuevos();
+            return;
+        }
+        
+        // Actualizar precio
+        productosNuevos[index].precio_venta = nuevoPrecio;
+        
+        // Mostrar mensaje si aumentó el precio
+        if (nuevoPrecio > precioOriginal) {
+            const aumento = nuevoPrecio - precioOriginal;
+            mostrarToast('success', `Precio actualizado: +$${formatearNumero(aumento)}`);
+        }
+        
+        actualizarTablaProductosNuevos();
+        actualizarVistaPreviaTotales();
+    }
 }
 
 function cambiarCantidadProductoNuevo(index, nuevaCantidad) {
@@ -2342,16 +3089,10 @@ function eliminarProductoNuevo(index) {
 function validarSeleccionProductos() {
     console.log('🔍 DEBUG validarSeleccionProductos - Iniciando validación');
     
-    const tipoOperacion = $('#select-tipo-operacion').val();
     const motivoPrincipal = $('#select-motivo-principal').val();
     
-    console.log('  tipoOperacion:', tipoOperacion);
+    console.log('  tipoOperacionDetectada:', tipoOperacionDetectada);
     console.log('  motivoPrincipal:', motivoPrincipal);
-    
-    if (!tipoOperacion) {
-        mostrarError('Seleccione el tipo de operación');
-        return false;
-    }
     
     if (!motivoPrincipal) {
         mostrarError('Seleccione el motivo principal');
@@ -2405,8 +3146,13 @@ function validarSeleccionProductos() {
         return false;
     }
     
+    if (!tipoOperacionDetectada) {
+        mostrarError('No fue posible determinar el tipo de operación. Verifique la selección de productos.');
+        return false;
+    }
+    
     // Si es cambio, validar que haya productos nuevos
-    if (tipoOperacion === 'CAMBIO_SIMPLE' || tipoOperacion === 'CAMBIO_CON_DIFERENCIA') {
+    if (tipoOperacionDetectada === 'CAMBIO_SIMPLE' || tipoOperacionDetectada === 'CAMBIO_CON_DIFERENCIA') {
         console.log('  Es tipo CAMBIO, validando productos nuevos...');
         console.log('  productosNuevos.length:', productosNuevos.length);
         
@@ -2422,7 +3168,7 @@ function validarSeleccionProductos() {
         // Calcular monto de productos a devolver
         ticketActual.productos.forEach((producto, index) => {
             if ($(`#check-producto-${index}`).is(':checked')) {
-                const cantidad = parseInt($(`#cantidad-${index}`).val()) || 0;
+                const cantidad = parseInt($(`#cantidad-producto-${index}`).val()) || 0;
                 montoOriginal += cantidad * (producto.precio_unitario || 0);
             }
         });
@@ -2473,7 +3219,7 @@ function generarResumen() {
     // Calcular monto original de productos seleccionados
     ticketActual.productos.forEach((producto, index) => {
         if ($(`#check-producto-${index}`).is(':checked')) {
-            const cantidad = parseInt($(`#cantidad-${index}`).val()) || 0;
+            const cantidad = parseInt($(`#cantidad-producto-${index}`).val()) || 0;
             montoOriginal += cantidad * producto.precio_unitario;
         }
     });
@@ -2525,11 +3271,16 @@ function crearCambioDevolucion() {
     console.log('  Documento Tipo:', documentoTipo);
     console.log('  DTE número original:', ticketActual.numero_documento);
     
+    if (!tipoOperacionDetectada) {
+        mostrarError('No fue posible determinar el tipo de operación. Revise la selección de productos.');
+        return;
+    }
+    
     // Recopilar datos del formulario
     const datos = {
         documento_numero: documentoNumero,
         documento_tipo: documentoTipo,
-        tipo_operacion: $('#select-tipo-operacion').val(),
+        tipo_operacion: tipoOperacionDetectada,
         motivo_principal: $('#select-motivo-principal').val(),
         observaciones_cliente: $('#textarea-obs-cliente').val(),
         observaciones_vendedor: $('#textarea-obs-vendedor').val(),
@@ -2543,7 +3294,7 @@ function crearCambioDevolucion() {
         if ($(`#check-producto-${index}`).is(':checked')) {
             const productoData = {
                 ticket_producto_id: producto.id,
-                cantidad: parseInt($(`#cantidad-${index}`).val()),
+                cantidad: parseInt($(`#cantidad-producto-${index}`).val()),
                 condicion_producto: $(`#condicion-${index}`).val(),
                 apto_para_venta: $(`#condicion-${index}`).val() !== 'NO_APTO'
             };
@@ -2640,39 +3391,97 @@ function verDetalleCambio(cambioId) {
 function mostrarDetalleCambio(data) {
     const cambio = data.cambio;
     
-    // Llenar información general
+    // ===== HEADER Y ESTADO =====
+    $('#detalle-numero-op').text(cambio.numero_operacion);
+    
+    // Actualizar barra de progreso según estado
+    let progreso = 33;
+    let progresoTexto = 'Solicitado';
+    let badgeClass = 'bg-warning';
+    let badgeTexto = cambio.estado_display;
+    
+    if (cambio.estado === 'APROBADO') {
+        progreso = 66;
+        progresoTexto = 'Aprobado';
+        badgeClass = 'bg-info';
+    } else if (cambio.estado === 'COMPLETADO') {
+        progreso = 100;
+        progresoTexto = 'Completado';
+        badgeClass = 'bg-success';
+    } else if (cambio.estado === 'CANCELADO') {
+        progreso = 0;
+        progresoTexto = 'Cancelado';
+        badgeClass = 'bg-danger';
+    }
+    
+    $('#detalle-progreso').css('width', progreso + '%').removeClass('bg-warning bg-info bg-success bg-danger').addClass(
+        cambio.estado === 'SOLICITADO' ? 'bg-warning' :
+        cambio.estado === 'APROBADO' ? 'bg-info' :
+        cambio.estado === 'COMPLETADO' ? 'bg-success' : 'bg-danger'
+    );
+    $('#detalle-progreso-texto').text(progresoTexto);
+    $('#detalle-badge-estado').text(badgeTexto).removeClass('bg-warning bg-info bg-success bg-danger bg-secondary').addClass(badgeClass);
+    
+    // ===== INFORMACIÓN GENERAL =====
     $('#detalle-numero-operacion').text(cambio.numero_operacion);
-    $('#detalle-tipo-operacion').text(cambio.tipo_operacion_display);
-    $('#detalle-estado').html(`<span class="status-badge status-${cambio.estado.toLowerCase()}">${cambio.estado_display}</span>`);
+    $('#detalle-tipo-operacion').html(`<span class="badge bg-primary">${cambio.tipo_operacion_display}</span>`);
     $('#detalle-fecha-solicitud').text(cambio.fecha_solicitud);
+    $('#detalle-cliente').text(cambio.cliente || 'Cliente General');
     $('#detalle-motivo').text(cambio.motivo_principal_display);
     
-    // Llenar montos
-    $('#detalle-monto-original').text('$' + formatearNumero(cambio.monto_original));
-    $('#detalle-monto-nuevo').text('$' + formatearNumero(cambio.monto_nuevo));
-    $('#detalle-diferencia').text('$' + formatearNumero(Math.abs(cambio.diferencia_monto)));
+    // ===== DOCUMENTO ORIGINAL =====
+    $('#detalle-doc-original').text(cambio.documento_original || '-');
+    $('#detalle-doc-fecha').text(cambio.fecha_documento_original || '-');
+    $('#detalle-vendedor').text(cambio.vendedor_original || '-');
+    $('#detalle-total-doc').text('$' + formatearNumero(cambio.total_documento_original || 0));
     $('#detalle-plazo').html(
         cambio.dentro_del_plazo 
-            ? '<span class="text-success">Dentro del plazo</span>' 
-            : '<span class="text-danger">Fuera de plazo</span>'
+            ? '<span class="badge bg-success">Dentro del plazo ✓</span>' 
+            : '<span class="badge bg-danger">Fuera de plazo ✗</span>'
     );
     
-    // Llenar productos
-    const tbodyProductos = $('#detalle-productos');
-    tbodyProductos.empty();
+    // ===== RESUMEN FINANCIERO =====
+    const montoDevuelto = cambio.monto_original || 0;
+    const montoNuevo = cambio.monto_nuevo || 0;
+    const diferencia = montoNuevo - montoDevuelto;
     
+    $('#detalle-monto-original').text('-$' + formatearNumero(montoDevuelto));
+    $('#detalle-monto-nuevo').text('+$' + formatearNumero(montoNuevo));
+    
+    if (diferencia > 0) {
+        // Cliente debe pagar
+        $('#detalle-diferencia').text('+$' + formatearNumero(diferencia)).removeClass('text-success text-danger').addClass('text-danger');
+        $('#detalle-accion-diferencia').removeClass('alert-success alert-danger').addClass('alert-danger');
+        $('#detalle-texto-diferencia').html(`<i class="ri-arrow-up-line"></i> Cliente debe pagar: <strong>$${formatearNumero(diferencia)}</strong>`);
+    } else if (diferencia < 0) {
+        // Se devuelve dinero al cliente
+        $('#detalle-diferencia').text('-$' + formatearNumero(Math.abs(diferencia))).removeClass('text-success text-danger').addClass('text-success');
+        $('#detalle-accion-diferencia').removeClass('alert-success alert-danger').addClass('alert-success');
+        $('#detalle-texto-diferencia').html(`<i class="ri-arrow-down-line"></i> Devolver al cliente: <strong>$${formatearNumero(Math.abs(diferencia))}</strong>`);
+    } else {
+        // Sin diferencia
+        $('#detalle-diferencia').text('$0').removeClass('text-success text-danger').addClass('text-success');
+        $('#detalle-accion-diferencia').removeClass('alert-success alert-danger').addClass('alert-success');
+        $('#detalle-texto-diferencia').html(`<i class="ri-check-line"></i> Sin diferencia - Cambio directo`);
+    }
+    
+    // ===== PRODUCTOS SALIENTES (Devueltos) =====
+    const tbodySalientes = $('#detalle-productos-salientes');
+    tbodySalientes.empty();
+    
+    let totalSalientes = 0;
     data.productos.forEach(producto => {
-        tbodyProductos.append(`
+        const subtotal = producto.cantidad_cambio * producto.precio_original_unitario;
+        totalSalientes += subtotal;
+        
+        tbodySalientes.append(`
             <tr>
-                <td>${producto.producto_original.sku}</td>
-                <td>${producto.producto_original.articulo}</td>
-                <td>${producto.cantidad_cambio}</td>
-                <td>$${formatearNumero(producto.precio_original_unitario)}</td>
-                <td>${producto.producto_nuevo ? producto.producto_nuevo.sku : '-'}</td>
-                <td>${producto.producto_nuevo ? producto.producto_nuevo.articulo : '-'}</td>
-                <td>${producto.cantidad_nueva || '-'}</td>
-                <td>${producto.producto_nuevo ? '$' + formatearNumero(producto.producto_nuevo.precio_unitario) : '-'}</td>
-                <td>$${formatearNumero(producto.diferencia_total)}</td>
+                <td><code>${producto.producto_original.sku}</code></td>
+                <td><strong>${producto.producto_original.articulo}</strong></td>
+                <td><span class="badge bg-secondary">${producto.producto_original.talla || '-'}</span></td>
+                <td class="text-center"><span class="badge bg-danger">${producto.cantidad_cambio}</span></td>
+                <td class="text-end">$${formatearNumero(producto.precio_original_unitario)}</td>
+                <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
                 <td>
                     <span class="badge bg-${producto.apto_para_venta ? 'success' : 'warning'}">
                         ${producto.condicion_producto_display}
@@ -2682,62 +3491,128 @@ function mostrarDetalleCambio(data) {
         `);
     });
     
-    // Llenar historial
+    $('#detalle-total-salientes').text('$' + formatearNumero(totalSalientes));
+    
+    // ===== PRODUCTOS ENTRANTES (Nuevos) =====
+    const tbodyEntrantes = $('#detalle-productos-entrantes');
+    tbodyEntrantes.empty();
+    
+    let totalEntrantes = 0;
+    data.productos.forEach(producto => {
+        if (producto.producto_nuevo) {
+            const subtotal = producto.cantidad_nueva * producto.producto_nuevo.precio_unitario;
+            totalEntrantes += subtotal;
+            
+            tbodyEntrantes.append(`
+                <tr>
+                    <td><code>${producto.producto_nuevo.sku}</code></td>
+                    <td><strong>${producto.producto_nuevo.articulo}</strong></td>
+                    <td>${producto.producto_nuevo.marca || '-'}</td>
+                    <td><span class="badge bg-info">${producto.producto_nuevo.talla || '-'}</span></td>
+                    <td class="text-center"><span class="badge bg-success">${producto.cantidad_nueva}</span></td>
+                    <td class="text-end">$${formatearNumero(producto.producto_nuevo.precio_unitario)}</td>
+                    <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
+                </tr>
+            `);
+        }
+    });
+    
+    if (totalEntrantes === 0) {
+        tbodyEntrantes.append(`
+            <tr>
+                <td colspan="7" class="text-center text-muted py-3">
+                    <i class="ri-information-line"></i> No hay productos nuevos - Solo devolución
+                </td>
+            </tr>
+        `);
+    }
+    
+    $('#detalle-total-entrantes').text('$' + formatearNumero(totalEntrantes));
+    
+    // ===== HISTORIAL =====
     const historialEl = $('#detalle-historial');
     historialEl.empty();
     
-    data.historial.forEach(item => {
-        historialEl.append(`
-            <div class="timeline-item">
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-title">${item.accion_display}</h6>
-                        <p class="card-text">${item.descripcion}</p>
+    if (data.historial && data.historial.length > 0) {
+        data.historial.forEach((item, index) => {
+            let iconoAccion = 'ri-record-circle-line';
+            let colorBadge = 'bg-secondary';
+            
+            if (item.accion === 'SOLICITADO') {
+                iconoAccion = 'ri-file-add-line';
+                colorBadge = 'bg-warning';
+            } else if (item.accion === 'APROBADO') {
+                iconoAccion = 'ri-check-line';
+                colorBadge = 'bg-success';
+            } else if (item.accion === 'COMPLETADO') {
+                iconoAccion = 'ri-check-double-line';
+                colorBadge = 'bg-primary';
+            } else if (item.accion === 'CANCELADO') {
+                iconoAccion = 'ri-close-circle-line';
+                colorBadge = 'bg-danger';
+            }
+            
+            historialEl.append(`
+                <div class="d-flex mb-3 ${index < data.historial.length - 1 ? 'pb-3 border-bottom' : ''}">
+                    <div class="me-3">
+                        <span class="badge ${colorBadge} rounded-pill" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                            <i class="${iconoAccion} fs-5"></i>
+                        </span>
+                    </div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${item.accion_display || item.accion}</h6>
+                        <p class="mb-1 text-muted small">${item.descripcion || item.observaciones || '-'}</p>
                         <small class="text-muted">
-                            ${item.usuario} - ${item.timestamp}
+                            <i class="ri-user-line"></i> ${item.usuario} - 
+                            <i class="ri-time-line"></i> ${item.timestamp}
                         </small>
                     </div>
                 </div>
+            `);
+        });
+    } else {
+        historialEl.html(`
+            <div class="text-center text-muted py-4">
+                <i class="ri-time-line" style="font-size: 2rem; opacity: 0.3;"></i>
+                <p class="mb-0 mt-2">Sin historial registrado</p>
             </div>
         `);
-    });
+    }
     
-    // Generar botones de acción
+    // ===== BOTONES DE ACCIÓN =====
     const accionesEl = $('#acciones-cambio');
     accionesEl.empty();
     
     if (cambio.estado === 'SOLICITADO') {
+        const tipoOp = cambio.tipo_operacion || '';
         accionesEl.append(`
-            <button class="btn btn-success me-2" onclick="aprobarCambio(${cambio.id})">
-                <i class="ri-check-line"></i> Aprobar
+            <button class="btn btn-success btn-lg me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
+                <i class="ri-check-line"></i> Aprobar y Ejecutar Cambio
             </button>
-            <button class="btn btn-danger" onclick="cancelarCambio(${cambio.id})">
+            <button class="btn btn-danger" onclick='cancelarCambio(${cambio.id})'>
                 <i class="ri-delete-bin-line"></i> Eliminar
-            </button>
-        `);
-    }
-    
-    if (cambio.estado === 'APROBADO') {
-        accionesEl.append(`
-            <button class="btn btn-primary" onclick="completarCambio(${cambio.id})">
-                <i class="ri-check-double-line"></i> Completar Cambio
             </button>
         `);
     }
     
     if (cambio.estado === 'COMPLETADO') {
         accionesEl.append(`
-            <span class="badge bg-success p-2">
-                <i class="ri-check-line"></i> Cambio completado exitosamente
-            </span>
+            <div class="alert alert-success mb-0 p-3">
+                <i class="ri-check-double-line fs-4"></i> 
+                <strong>Cambio Completado Exitosamente</strong>
+                <hr>
+                <p class="mb-1"><i class="ri-ticket-line"></i> Ticket generado: #${cambio.ticket_nuevo?.correlativo || '-'}</p>
+                <p class="mb-0"><i class="ri-truck-line"></i> Inventario actualizado</p>
+            </div>
         `);
     }
     
     if (cambio.estado === 'CANCELADO') {
         accionesEl.append(`
-            <span class="badge bg-secondary p-2">
-                <i class="ri-forbid-line"></i> Cambio cancelado
-            </span>
+            <div class="alert alert-secondary mb-0 p-3">
+                <i class="ri-forbid-line fs-4"></i> 
+                <strong>Operación Cancelada</strong>
+            </div>
         `);
     }
     
@@ -2745,10 +3620,102 @@ function mostrarDetalleCambio(data) {
     $('#modalDetalleCambio').modal('show');
 }
 
-function aprobarCambio(cambioId) {
-    cambioActual = { id: cambioId };
+function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
+    cambioActual = { id: cambioId, tipo_operacion: tipo, monto_original: montoDevuelto, monto_nuevo: montoNuevo };
+    
+    // Llenar resumen en modal de aprobación
+    $('#aprobar-num-operacion').text(cambioId);
+    $('#aprobar-tipo').text(tipo === 'CAMBIO' ? 'Cambio' : 'Devolución');
+    $('#aprobar-total-devuelto').text('$' + formatearNumero(montoDevuelto));
+    $('#aprobar-total-nuevo').text('$' + formatearNumero(montoNuevo));
+    
+    const diferencia = montoNuevo - montoDevuelto;
+    if (diferencia > 0) {
+        $('#aprobar-diferencia').text('+$' + formatearNumero(diferencia)).addClass('text-danger');
+    } else if (diferencia < 0) {
+        $('#aprobar-diferencia').text('-$' + formatearNumero(Math.abs(diferencia))).addClass('text-success');
+    } else {
+        $('#aprobar-diferencia').text('$0').addClass('text-success');
+    }
+    
+    // Limpiar formulario
     $('#textarea-observaciones-aprobacion').val('');
-    $('#modalAprobarCambio').modal('show');
+    $('#input-codigo-vendedor-aprobacion').val('');
+    $('#vendedor-id-validado').val('');
+    $('#info-vendedor-validado').hide();
+    $('#btn-confirmar-aprobacion').prop('disabled', true);
+    
+    // Cerrar modal de detalle y abrir modal de aprobación
+    $('#modalDetalleCambio').modal('hide');
+    
+    setTimeout(() => {
+        $('#modalAprobarCambio').modal('show');
+        $('#input-codigo-vendedor-aprobacion').focus();
+    }, 300);
+}
+
+function aprobarCambio(cambioId) {
+    // Función legacy - redirige a la nueva
+    aprobarCambioConDatos(cambioId, 'CAMBIO', 0, 0);
+}
+
+function validarCodigoVendedorAprobacion() {
+    const codigo = $('#input-codigo-vendedor-aprobacion').val().trim();
+    
+    if (!codigo) {
+        mostrarError('Ingrese el código del vendedor');
+        return;
+    }
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Validando vendedor...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: '/app/ventas/api/validar-codigo-vendedor/',
+        method: 'POST',
+        data: JSON.stringify({ codigo: codigo }),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            Swal.close();
+            
+            if (response.success && response.vendedor) {
+                // Vendedor validado
+                $('#vendedor-id-validado').val(response.vendedor.id);
+                $('#nombre-vendedor-validado').text(response.vendedor.nombre_completo);
+                $('#info-vendedor-validado').show();
+                $('#btn-confirmar-aprobacion').prop('disabled', false);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Vendedor Validado',
+                    text: `${response.vendedor.nombre_completo}`,
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            } else {
+                mostrarError(response.error || 'Código de vendedor inválido');
+                $('#vendedor-id-validado').val('');
+                $('#info-vendedor-validado').hide();
+                $('#btn-confirmar-aprobacion').prop('disabled', true);
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            mostrarError('Error al validar vendedor');
+            $('#vendedor-id-validado').val('');
+            $('#info-vendedor-validado').hide();
+            $('#btn-confirmar-aprobacion').prop('disabled', true);
+        }
+    });
 }
 
 function cancelarCambio(cambioId) {
@@ -2813,44 +3780,98 @@ function cancelarCambio(cambioId) {
     });
 }
 
-function confirmarAprobacion() {
+function confirmarAprobacionYGenerarTicket() {
     const observaciones = $('#textarea-observaciones-aprobacion').val();
+    const vendedorId = $('#vendedor-id-validado').val();
+    
+    if (!vendedorId) {
+        mostrarError('Debe validar un vendedor antes de aprobar');
+        return;
+    }
     
     Swal.fire({
-        title: '¿Confirmar aprobación?',
-        text: '¿Está seguro que desea aprobar este cambio/devolución?',
+        title: '¿Aprobar y Ejecutar Cambio?',
+        html: `
+            <p>Se ejecutarán las siguientes acciones automáticamente:</p>
+            <hr>
+            <div class="alert alert-success text-start">
+                <strong>1. ✅ Generar Ticket de Venta</strong>
+                <ul class="mb-0 mt-2 small">
+                    <li>Productos devueltos (-)</li>
+                    <li>Productos entregados (+)</li>
+                    <li>Diferencia a cobrar/devolver</li>
+                </ul>
+            </div>
+            <div class="alert alert-info text-start">
+                <strong>2. 📦 Actualizar Inventario</strong>
+                <ul class="mb-0 mt-2 small">
+                    <li>Entrada: Productos devueltos (+stock)</li>
+                    <li>Salida: Productos entregados (-stock)</li>
+                </ul>
+            </div>
+            <div class="alert alert-warning text-start">
+                <strong>3. ✓ Completar Operación</strong>
+                <p class="mb-0 small">El cambio quedará como COMPLETADO</p>
+            </div>
+        `,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#28a745',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="ri-check-line"></i> Sí, aprobar',
-        cancelButtonText: 'No'
+        confirmButtonText: '<i class="ri-check-line"></i> Sí, ejecutar todo',
+        cancelButtonText: 'Cancelar'
     }).then((result) => {
         if (result.isConfirmed) {
-            mostrarLoading('Aprobando cambio...');
+            mostrarLoading('Aprobando y generando ticket...');
             
             const datos = {
                 cambio_id: cambioActual.id,
-                accion: 'aprobar',
-                observaciones: observaciones
+                vendedor_id: vendedorId,
+                observaciones: observaciones,
+                generar_ticket: true
             };
             
             $.ajax({
-                url: '/app/ventas/api/aprobar-cambio-devolucion/',
+                url: '/app/ventas/api/aprobar-cambio-generar-ticket/',
                 method: 'POST',
                 data: JSON.stringify(datos),
                 contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
                 success: function(response) {
                     ocultarLoading();
                     
                     if (response.success) {
                         Swal.fire({
                             icon: 'success',
-                            title: '¡Cambio Aprobado!',
-                            text: response.message || 'El cambio ha sido aprobado y puede ser completado',
-                            timer: 2000,
-                            showConfirmButton: false
+                            title: '✅ Cambio Ejecutado Completamente',
+                            html: `
+                                <div class="alert alert-success">
+                                    <h5 class="mb-3">Operación Completada</h5>
+                                    <hr>
+                                    <p class="mb-2"><i class="ri-check-line"></i> <strong>Estado:</strong> COMPLETADO</p>
+                                    <p class="mb-2"><i class="ri-ticket-line"></i> <strong>Ticket generado:</strong> #${response.ticket_correlativo}</p>
+                                    <p class="mb-2"><i class="ri-truck-line"></i> <strong>Inventario:</strong> Actualizado</p>
+                                    <hr>
+                                    ${response.diferencia_cobrar > 0 ? 
+                                        `<p class="text-danger fw-bold fs-5">💰 A cobrar al cliente: $${formatearNumero(response.diferencia_cobrar)}</p>` : 
+                                        response.diferencia_cobrar < 0 ?
+                                        `<p class="text-success fw-bold fs-5">💵 A devolver al cliente: $${formatearNumero(Math.abs(response.diferencia_cobrar))}</p>` :
+                                        `<p class="text-success fw-bold fs-5">✅ Sin diferencia - Cambio directo</p>`
+                                    }
+                                </div>
+                            `,
+                            confirmButtonText: '<i class="ri-printer-line"></i> Imprimir Ticket',
+                            showCancelButton: true,
+                            cancelButtonText: 'Cerrar'
+                        }).then((result) => {
+                            if (result.isConfirmed && response.ticket_data) {
+                                // Imprimir ticket directamente
+                                imprimirTicketCambio(response.ticket_data);
+                            }
                         });
+                        
                         $('#modalAprobarCambio').modal('hide');
                         $('#modalDetalleCambio').modal('hide');
                         cargarCambiosDevoluciones();
@@ -2877,50 +3898,228 @@ function confirmarAprobacion() {
     });
 }
 
+function confirmarAprobacion() {
+    // Función legacy - redirige a la nueva
+    confirmarAprobacionYGenerarTicket();
+}
+
+function ejecutarCambio(cambioId) {
+    Swal.fire({
+        title: '¿Ejecutar este cambio?',
+        html: `
+            <p>Se realizarán las siguientes acciones:</p>
+            <hr>
+            <ul class="text-start">
+                <li>✅ Devolución de productos al inventario</li>
+                <li>✅ Entrega de productos nuevos (con FIFO)</li>
+                <li>✅ Generación de ticket nuevo</li>
+                <li>💰 Generación de ticket de diferencia (si aplica)</li>
+            </ul>
+            <hr>
+            <p class="small text-muted">Esta acción no se puede deshacer.</p>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0d6efd',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-play-circle-line"></i> Sí, ejecutar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            mostrarLoading('Ejecutando cambio...');
+            
+            $.ajax({
+                url: '/app/ventas/api/ejecutar-cambio-devolucion/',
+                method: 'POST',
+                data: JSON.stringify({ cambio_id: cambioId }),
+                contentType: 'application/json',
+                success: function(response) {
+                    ocultarLoading();
+                    
+                    if (response.success) {
+                        let mensajeHtml = `
+                            <p><strong>Operación:</strong> ${response.numero_operacion}</p>
+                            <hr>
+                        `;
+                        
+                        if (response.ticket_nuevo) {
+                            mensajeHtml += `<p>✅ <strong>Ticket Nuevo:</strong> #${response.ticket_nuevo}</p>`;
+                        }
+                        
+                        if (response.ticket_diferencia) {
+                            mensajeHtml += `
+                                <p class="text-warning">
+                                    💰 <strong>Ticket de Diferencia:</strong> #${response.ticket_diferencia}
+                                    <br><small>Monto: $${formatearNumero(response.diferencia_monto)}</small>
+                                    <br><span class="badge bg-warning text-dark mt-1">PENDIENTE DE COBRO</span>
+                                </p>
+                            `;
+                        }
+                        
+                        mensajeHtml += `<hr><p><strong>Estado:</strong> ${response.estado_final}</p>`;
+                        
+                        Swal.fire({
+                            icon: 'success',
+                            title: '✅ Cambio Ejecutado',
+                            html: mensajeHtml,
+                            confirmButtonText: 'Entendido'
+                        });
+                        
+                        cargarCambiosDevoluciones();
+                    } else {
+                        mostrarError(response.error);
+                    }
+                },
+                error: function(xhr) {
+                    ocultarLoading();
+                    const error = xhr.responseJSON?.error || 'Error al ejecutar cambio';
+                    mostrarError(error);
+                }
+            });
+        }
+    });
+}
+
+function cobrarDiferencia(cambioId, montoDiferencia) {
+    Swal.fire({
+        title: '💰 Cobrar Diferencia de Precio',
+        html: `
+            <div class="text-start">
+                <div class="alert alert-warning">
+                    <strong>Monto a cobrar:</strong> $${formatearNumero(montoDiferencia)}
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Método de Pago *</label>
+                    <select class="form-select" id="swal-metodo-pago">
+                        <option value="EFECTIVO">Efectivo</option>
+                        <option value="DEBITO">Tarjeta Débito</option>
+                        <option value="CREDITO">Tarjeta Crédito</option>
+                        <option value="TRANSFERENCIA">Transferencia</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Referencia/Voucher</label>
+                    <input type="text" class="form-control" id="swal-referencia" placeholder="Ej: Voucher 1234">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Nº Autorización</label>
+                    <input type="text" class="form-control" id="swal-autorizacion" placeholder="Ej: AUTH-5678">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Observaciones</label>
+                    <textarea class="form-control" id="swal-observaciones" rows="2"></textarea>
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-money-dollar-circle-line"></i> Registrar Pago',
+        cancelButtonText: 'Cancelar',
+        width: '600px',
+        preConfirm: () => {
+            const metodoPago = $('#swal-metodo-pago').val();
+            if (!metodoPago) {
+                Swal.showValidationMessage('Debe seleccionar un método de pago');
+                return false;
+            }
+            return {
+                metodo_pago: metodoPago,
+                referencia_pago: $('#swal-referencia').val(),
+                numero_autorizacion: $('#swal-autorizacion').val(),
+                observaciones: $('#swal-observaciones').val()
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const datosPago = result.value;
+            
+            mostrarLoading('Registrando pago...');
+            
+            $.ajax({
+                url: '/app/ventas/api/registrar-pago-diferencia/',
+                method: 'POST',
+                data: JSON.stringify({
+                    cambio_id: cambioId,
+                    monto: montoDiferencia,
+                    ...datosPago
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    ocultarLoading();
+                    
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '✅ Pago Registrado',
+                            html: `
+                                <p>El pago de <strong>$${formatearNumero(montoDiferencia)}</strong> se registró correctamente</p>
+                                <p>El cambio está ahora <strong>${response.estado_final}</strong></p>
+                            `,
+                            timer: 3000,
+                            showConfirmButton: true
+                        });
+                        
+                        cargarCambiosDevoluciones();
+                    } else {
+                        mostrarError(response.error);
+                    }
+                },
+                error: function(xhr) {
+                    ocultarLoading();
+                    const error = xhr.responseJSON?.error || 'Error al registrar pago';
+                    mostrarError(error);
+                }
+            });
+        }
+    });
+}
+
+function marcarCompletado(cambioId) {
+    Swal.fire({
+        title: '¿Marcar como completado?',
+        text: 'El cambio se marcará como finalizado',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, completar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Simplemente cambiar el estado a COMPLETADO
+            $.ajax({
+                url: '/app/ventas/api/completar-cambio-devolucion/',
+                method: 'POST',
+                data: JSON.stringify({ cambio_id: cambioId }),
+                contentType: 'application/json',
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '✅ Cambio Completado',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                        cargarCambiosDevoluciones();
+                    } else {
+                        mostrarError(response.error);
+                    }
+                },
+                error: function(xhr) {
+                    const error = xhr.responseJSON?.error || 'Error al completar';
+                    mostrarError(error);
+                }
+            });
+        }
+    });
+}
+
 function completarCambio(cambioId) {
-    // Obtener datos del cambio para determinar si requiere pago
-    const cambio = cambiosData.find(c => c.id === cambioId);
-    
-    if (!cambio) {
-        mostrarError('No se encontró el cambio');
-        return;
-    }
-    
-    cambioActual = cambio;
-    
-    // Llenar resumen del modal
-    $('#resumen-monto-original-modal').text('$' + formatearNumero(cambio.monto_original));
-    $('#resumen-monto-nuevo-modal').text('$' + formatearNumero(cambio.monto_nuevo));
-    $('#resumen-diferencia-modal').text('$' + formatearNumero(Math.abs(cambio.diferencia_monto)));
-    
-    // Ocultar todas las secciones primero
-    $('#seccion-pago-diferencia').hide();
-    $('#seccion-devolucion-dinero').hide();
-    $('#seccion-sin-diferencia').hide();
-    
-    // SOLO PERMITIR: Cliente paga o sin diferencia (NO devolución)
-    if (cambio.diferencia_monto > 0) {
-        // Cliente debe pagar diferencia
-        $('#seccion-pago-diferencia').show();
-        $('#input-monto-diferencia').val(cambio.diferencia_monto);
-        $('#texto-monto-diferencia').text('$' + formatearNumero(cambio.diferencia_monto));
-        $('#resumen-diferencia-modal').removeClass('text-success text-secondary').addClass('text-danger');
-    } else if (cambio.diferencia_monto === 0) {
-        // Sin diferencia - Cambio exacto
-        $('#seccion-sin-diferencia').show();
-        $('#resumen-diferencia-modal').removeClass('text-danger text-success').addClass('text-secondary');
-    } else {
-        // Esto NO debería pasar porque ya lo validamos antes
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Este cambio requiere devolución de dinero, lo cual no está permitido por el momento.',
-            confirmButtonText: 'Entendido'
-        });
-        return;
-    }
-    
-    $('#modalCompletarCambio').modal('show');
+    // Función legacy - redirige a ejecutarCambio
+    ejecutarCambio(cambioId);
 }
 
 function completarCambioDevolucion() {
@@ -3012,288 +4211,73 @@ function completarCambioDevolucion() {
     });
 }
 
+// Función para imprimir ticket desde la tabla de cambios
+function imprimirTicketDesdeCambio(cambioId) {
+    mostrarLoading('Cargando datos del ticket...');
+    
+    $.ajax({
+        url: `/app/ventas/api/cambio-detalle/${cambioId}/`,
+        type: 'GET',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            ocultarLoading();
+            
+            if (response.success && response.cambio && response.cambio.ticket_nuevo) {
+                // Verificar que existe ticket_data
+                if (response.ticket_data) {
+                    imprimirTicketCambio(response.ticket_data);
+                } else {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Ticket sin datos',
+                        text: 'No se pudieron cargar los datos del ticket para imprimir',
+                        confirmButtonText: 'Entendido'
+                    });
+                }
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Sin ticket generado',
+                    text: 'Este cambio no tiene un ticket generado todavía',
+                    confirmButtonText: 'Entendido'
+                });
+            }
+        },
+        error: function(xhr) {
+            ocultarLoading();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: xhr.responseJSON?.error || 'Error al cargar los datos del ticket',
+                confirmButtonText: 'Entendido'
+            });
+        }
+    });
+}
+
 // Función para imprimir ticket de cambio
 function imprimirTicketCambio(ticketData) {
     const ticketHtml = generarHtmlTicket(ticketData);
-    const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
+    const ventanaImpresion = window.open('', '_blank', 'width=302,height=600');
     ventanaImpresion.document.write(ticketHtml);
     ventanaImpresion.document.close();
 
-    ventanaImpresion.onload = function() {
+    // Esperar a que se cargue el contenido antes de imprimir
+    setTimeout(function() {
+        ventanaImpresion.focus();
         ventanaImpresion.print();
-        // No cerrar automáticamente para que el usuario pueda reimprimir si es necesario
-    };
-}
-
-// Generar HTML para ticket térmico 80mm (igual que en ticket_venta.html)
-function generarHtmlTicket(ticketData) {
-    const productos = ticketData.productos || [];
-    const sucursal = ticketData.sucursal || {};
-    const vendedor = ticketData.vendedor || {};
-    const cliente = ticketData.cliente || {};
-    const totales = ticketData.totales || {};
-
-    const formatearMoneda = (valor) => {
-        const numero = parseInt(valor, 10) || 0;
-        return numero.toLocaleString('es-CL');
-    };
-
-    const productosHtml = productos.map((producto) => {
-        const cant = String(producto.cantidad || 0).padEnd(4);
-        const articulo = String(producto.articulo || '').substring(0, 20);
-        const desc = String(producto.descripcion || '').substring(0, 20);
-        const talla = String(producto.talla || '-').substring(0, 3);
-        const precio = formatearMoneda(producto.precio || 0);
-        const subtotal = formatearMoneda(producto.subtotal || 0);
         
-        return `
-            <div class="item">
-                <div class="item-header">
-                    <span class="item-cant">${cant}x</span>
-                    <span class="item-nombre">${articulo}</span>
-                </div>
-                <div class="item-desc">${desc} - Talla: ${talla}</div>
-                <div class="item-precio">
-                    <span>@$${precio}</span>
-                    <span class="item-total">$${subtotal}</span>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    return `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>Ticket de Cambio</title>
-            <style>
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                
-                body {
-                    font-family: 'Courier New', 'Consolas', monospace;
-                    font-size: 11px;
-                    width: 80mm;
-                    max-width: 80mm;
-                    padding: 5mm;
-                    background: #fff;
-                    color: #000;
-                }
-                
-                .header {
-                    text-align: center;
-                    margin-bottom: 8px;
-                    padding-bottom: 8px;
-                    border-bottom: 1px dashed #000;
-                }
-                
-                .header strong {
-                    font-size: 13px;
-                    display: block;
-                    margin-bottom: 3px;
-                }
-                
-                .header div {
-                    font-size: 10px;
-                    line-height: 1.4;
-                }
-                
-                .cambio-notice {
-                    background: #f0f0f0;
-                    padding: 8px;
-                    text-align: center;
-                    margin-bottom: 8px;
-                    border: 1px solid #000;
-                    font-weight: bold;
-                }
-                
-                .info {
-                    font-size: 10px;
-                    margin-bottom: 8px;
-                    line-height: 1.5;
-                }
-                
-                .info div {
-                    display: flex;
-                    justify-content: space-between;
-                    margin: 2px 0;
-                }
-                
-                .info strong {
-                    min-width: 70px;
-                }
-                
-                .separador {
-                    border-top: 1px dashed #000;
-                    margin: 8px 0;
-                }
-                
-                .items {
-                    margin: 8px 0;
-                }
-                
-                .item {
-                    margin-bottom: 8px;
-                    padding-bottom: 5px;
-                    font-size: 10px;
-                }
-                
-                .item-header {
-                    display: flex;
-                    gap: 5px;
-                    font-weight: bold;
-                    margin-bottom: 2px;
-                }
-                
-                .item-cant {
-                    min-width: 30px;
-                }
-                
-                .item-nombre {
-                    flex: 1;
-                }
-                
-                .item-desc {
-                    font-size: 9px;
-                    color: #333;
-                    margin-left: 35px;
-                    margin-bottom: 2px;
-                }
-                
-                .item-precio {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-left: 35px;
-                    font-size: 10px;
-                }
-                
-                .item-total {
-                    font-weight: bold;
-                }
-                
-                .totales {
-                    border-top: 1px solid #000;
-                    padding-top: 8px;
-                    margin-top: 8px;
-                    font-size: 11px;
-                }
-                
-                .totales div {
-                    display: flex;
-                    justify-content: space-between;
-                    margin: 4px 0;
-                }
-                
-                .totales .total-final {
-                    font-size: 13px;
-                    font-weight: bold;
-                    border-top: 1px solid #000;
-                    padding-top: 5px;
-                    margin-top: 5px;
-                }
-                
-                .footer {
-                    text-align: center;
-                    margin-top: 10px;
-                    padding-top: 8px;
-                    border-top: 1px dashed #000;
-                    font-size: 9px;
-                    line-height: 1.6;
-                }
-                
-                .footer div {
-                    margin: 3px 0;
-                }
-                
-                @media print {
-                    body { width: 80mm; }
-                    @page { 
-                        size: 80mm auto; 
-                        margin: 0;
-                    }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <strong>${sucursal.empresa || 'SUCURSAL'}</strong>
-                <div>${sucursal.alias || ''}</div>
-                <div>${sucursal.direccion || ''}</div>
-                <div>${sucursal.rut_empresa ? `RUT: ${sucursal.rut_empresa}` : ''}</div>
-            </div>
-
-            <div class="cambio-notice">
-                *** TICKET DE CAMBIO ***
-            </div>
-
-            <div class="info">
-                <div>
-                    <strong>Documento:</strong>
-                    <span>${ticketData.tipo_documento || 'TICKET'}</span>
-                </div>
-                <div>
-                    <strong>Ticket N°:</strong>
-                    <span>${ticketData.ticket_id || ''}</span>
-                </div>
-                <div>
-                    <strong>Fecha:</strong>
-                    <span>${ticketData.fecha || ''}</span>
-                </div>
-                <div>
-                    <strong>Hora:</strong>
-                    <span>${ticketData.hora || ''}</span>
-                </div>
-                <div>
-                    <strong>Vendedor:</strong>
-                    <span>${vendedor.nombre || ''}</span>
-                </div>
-                ${cliente.nombre || cliente.rut ? `
-                    <div>
-                        <strong>Cliente:</strong>
-                        <span>${cliente.nombre || cliente.rut || ''}</span>
-                    </div>
-                ` : ''}
-            </div>
-
-            <div class="separador"></div>
-
-            <div class="items">
-                ${productosHtml || '<div style="text-align:center;">Sin productos</div>'}
-            </div>
-
-            <div class="totales">
-                <div>
-                    <span>Items:</span>
-                    <span>${totales.items || 0}</span>
-                </div>
-                ${totales.descuento ? `
-                    <div>
-                        <span>Subtotal:</span>
-                        <span>$${formatearMoneda(totales.subtotal)}</span>
-                    </div>
-                    <div>
-                        <span>Descuento:</span>
-                        <span>-$${formatearMoneda(totales.descuento)}</span>
-                    </div>
-                ` : ''}
-                <div class="total-final">
-                    <span>TOTAL:</span>
-                    <span>$${formatearMoneda(totales.total)}</span>
-                </div>
-            </div>
-
-            <div class="footer">
-                <div><strong>TICKET DE CAMBIO</strong></div>
-                <div>Ticket original: ${ticketData.ticket_original || ''}</div>
-                <div>¡GRACIAS POR SU COMPRA!</div>
-                <div>Cambios hasta 15 días</div>
-                <div>* No se realizan devoluciones de dinero</div>
-                <div style="margin-top: 5px;">Sistema RetailMind</div>
-            </div>
-        </body>
-        </html>
-    `;
+        // Cerrar automáticamente después de imprimir (con un pequeño delay)
+        setTimeout(function() {
+            ventanaImpresion.close();
+        }, 500);
+    }, 300);
 }
+
+// Generar HTML para ticket térmico EPSON TM-T80 (80mm)
+
 
 // ========== UTILIDADES ==========
 
@@ -3358,4 +4342,175 @@ function mostrarInfo(mensaje) {
     // Implementar notificación de información
     alert('ℹ️ ' + mensaje);
 }
+    function generarHtmlTicket(ticketData) {
+        var productos = ticketData.productos || [];
+        var sucursal = ticketData.sucursal || {};
+        var vendedor = ticketData.vendedor || {};
+        var cliente = ticketData.cliente || {};
+        var totales = ticketData.totales || {};
+
+        function formatearMoneda(valor) {
+            var numero = parseInt(valor, 10) || 0;
+            return numero.toLocaleString('es-CL');
+        }
+
+        function truncar(texto, max) {
+            return String(texto || '').substring(0, max);
+        }
+
+        // Generar HTML de productos
+        var productosHtml = '';
+        for (var i = 0; i < productos.length; i++) {
+            var producto = productos[i];
+            var cant = producto.cantidad || 0;
+            var sku = truncar(producto.sku || '', 15);
+            var articulo = truncar(producto.articulo, 26);
+            var desc = truncar(producto.descripcion, 24);
+            var talla = truncar(producto.talla || '-', 6);
+            var precio = formatearMoneda(producto.precio || 0);
+            var subtotal = formatearMoneda(producto.subtotal || 0);
+
+            productosHtml += '<div class="item">';
+            productosHtml += '<div class="item-line1">';
+            productosHtml += '<span class="cant">' + cant + 'x</span>';
+            productosHtml += '<span class="nombre">' + articulo + '</span>';
+            productosHtml += '</div>';
+            productosHtml += '<div class="item-sku">';
+            productosHtml += '<span>SKU: ' + sku + ' | T: ' + talla + '</span>';
+            productosHtml += '</div>';
+            productosHtml += '<div class="item-line2">';
+            productosHtml += '<span>' + desc + '</span>';
+            productosHtml += '</div>';
+            productosHtml += '<div class="item-line3">';
+            productosHtml += '<span class="precio-unit">@$' + precio + '</span>';
+            productosHtml += '<span class="subtotal">$' + subtotal + '</span>';
+            productosHtml += '</div>';
+            productosHtml += '</div>';
+        }
+
+        if (!productosHtml) {
+            productosHtml = '<div style="text-align:center;font-size:8px;">Sin productos</div>';
+        }
+
+        // Cliente HTML
+        var clienteHtml = '';
+        if (cliente.nombre || cliente.rut) {
+            clienteHtml = '<div><strong>Cliente:</strong><span>' + truncar(cliente.nombre || cliente.rut || '-', 15) + '</span></div>';
+        }
+
+        // Descuento HTML
+        var descuentoHtml = '';
+        if (totales.descuento > 0) {
+            descuentoHtml = '<div><span>Subtotal:</span><span>$' + formatearMoneda(totales.subtotal) + '</span></div>';
+            descuentoHtml += '<div><span>Descuento:</span><span>-$' + formatearMoneda(totales.descuento) + '</span></div>';
+        }
+
+        // Ticket original
+        var ticketOrig = '-';
+        if (ticketData.observaciones && ticketData.observaciones.indexOf('#') !== -1) {
+            var match = ticketData.observaciones.match(/\d+/);
+            if (match) {
+                ticketOrig = '#' + match[0];
+            }
+        }
+
+        var html = '<!DOCTYPE html>';
+        html += '<html>';
+        html += '<head>';
+        html += '<meta charset="UTF-8">';
+        html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+        html += '<title>Ticket #' + (ticketData.ticket_id || '') + '</title>';
+        html += '<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></scr' + 'ipt>';
+        html += '<style>';
+        html += '* { margin: 0; padding: 0; box-sizing: border-box; }';
+        html += 'body { font-family: "Courier New", Courier, monospace; font-size: 12px; width: 80mm; max-width: 80mm; padding: 3mm 4mm; background: #fff; color: #000; line-height: 1.4; }';
+        html += '.header { text-align: center; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px dashed #000; }';
+        html += '.header strong { font-size: 16px; font-weight: bold; display: block; margin-bottom: 3px; }';
+        html += '.header div { font-size: 11px; line-height: 1.3; }';
+        html += '.barcode-container { text-align: center; margin: 8px 0; padding: 5px 0; background: #fff; }';
+        html += '.barcode-container svg { max-width: 100%; height: 50px; display: block; margin: 0 auto; }';
+        html += '.barcode-text { font-size: 11px; font-weight: bold; margin-top: 3px; letter-spacing: 0.5px; }';
+        html += '.cambio-notice { background: #000; color: #fff; padding: 6px; text-align: center; margin: 8px 0; font-weight: bold; font-size: 13px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }';
+        html += '.info { font-size: 11px; margin-bottom: 8px; line-height: 1.5; }';
+        html += '.info div { display: flex; justify-content: space-between; margin: 2px 0; }';
+        html += '.info strong { min-width: 75px; font-weight: bold; }';
+        html += '.separador { border-top: 1px dashed #000; margin: 8px 0; }';
+        html += '.items { margin: 8px 0; }';
+        html += '.item { margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px dotted #ccc; font-size: 11px; }';
+        html += '.item-line1 { display: flex; gap: 5px; font-weight: bold; margin-bottom: 2px; font-size: 13px; }';
+        html += '.item-line1 .cant { min-width: 25px; }';
+        html += '.item-line1 .nombre { flex: 1; }';
+        html += '.item-sku { font-size: 10px; margin-left: 30px; margin-bottom: 1px; color: #555; font-weight: bold; }';
+        html += '.item-line2 { font-size: 10px; margin-left: 30px; margin-bottom: 3px; color: #333; }';
+        html += '.item-line3 { display: flex; justify-content: space-between; margin-left: 30px; font-size: 13px; font-weight: bold; }';
+        html += '.item-line3 .precio-unit { font-size: 12px; }';
+        html += '.item-line3 .subtotal { font-weight: bold; font-size: 14px; }';
+        html += '.totales { border-top: 2px solid #000; padding-top: 6px; margin-top: 8px; font-size: 13px; font-weight: bold; }';
+        html += '.totales div { display: flex; justify-content: space-between; margin: 3px 0; }';
+        html += '.totales .total-final { font-size: 18px; font-weight: bold; border-top: 2px double #000; padding-top: 5px; margin-top: 5px; }';
+        html += '.footer { text-align: center; margin-top: 10px; padding-top: 8px; border-top: 2px dashed #000; font-size: 10px; line-height: 1.6; }';
+        html += '.footer div { margin: 2px 0; }';
+        html += '.footer strong { font-size: 11px; }';
+        html += '@media print { body { width: 80mm; margin: 0; padding: 3mm 4mm; } @page { size: 80mm auto; margin: 0; } }';
+        html += '</style>';
+        html += '</head>';
+        html += '<body>';
+        html += '<div class="header">';
+        html += '<strong>' + (sucursal.empresa || 'SUCURSAL') + '</strong>';
+        html += '<div>' + (sucursal.alias || '') + '</div>';
+        html += '<div>' + (sucursal.direccion || '') + '</div>';
+        html += '<div>' + (sucursal.rut_empresa ? 'RUT: ' + sucursal.rut_empresa : '') + '</div>';
+        html += '</div>';
+        html += '<div class="cambio-notice">*** TICKET DE CAMBIO ***</div>';
+        html += '<div class="barcode-container">';
+        html += '<svg id="barcode"></svg>';
+        html += '<div class="barcode-text">TICKET #' + (ticketData.ticket_id || '') + '</div>';
+        html += '</div>';
+        html += '<div class="info">';
+        html += '<div><strong>Ticket:</strong><span>#' + (ticketData.ticket_id || '') + '</span></div>';
+        html += '<div><strong>Fecha:</strong><span>' + (ticketData.fecha || '') + ' ' + (ticketData.hora || '') + '</span></div>';
+        html += '<div><strong>Vendedor:</strong><span>' + truncar(vendedor.nombre || '', 12) + ' (' + (vendedor.codigo || '-') + ')' + '</span></div>';
+        html += clienteHtml;
+        html += '</div>';
+        html += '<div class="separador"></div>';
+        html += '<div class="items">' + productosHtml + '</div>';
+        html += '<div class="totales">';
+        html += '<div><span>Items:</span><span>' + (totales.items || 0) + '</span></div>';
+        html += descuentoHtml;
+        html += '<div class="total-final"><span>TOTAL:</span><span>$' + formatearMoneda(totales.total) + '</span></div>';
+        html += '</div>';
+        html += '<div class="footer">';
+        html += '<div><strong>TICKET DE CAMBIO/DEVOLUCION</strong></div>';
+        html += '<div>Ticket Orig: ' + ticketOrig + '</div>';
+        html += '<div>================================</div>';
+        html += '<div>GRACIAS POR SU COMPRA</div>';
+        html += '<div>Cambios: 15 dias | Con ticket</div>';
+        html += '<div>================================</div>';
+        html += '<div>Sistema RetailMind</div>';
+        html += '</div>';
+        html += '<scr' + 'ipt>';
+        html += '(function() {';
+        html += 'try {';
+        html += 'var ticketNum = String(' + (ticketData.ticket_id || 0) + ');';
+        html += 'if (ticketNum && ticketNum !== "0" && typeof JsBarcode !== "undefined") {';
+        html += 'JsBarcode("#barcode", ticketNum, {';
+        html += 'format: "CODE39",';
+        html += 'width: 2,';
+        html += 'height: 50,';
+        html += 'displayValue: false,';
+        html += 'margin: 5,';
+        html += 'background: "#ffffff",';
+        html += 'lineColor: "#000000"';
+        html += '});';
+        html += '}';
+        html += '} catch(e) {';
+        html += 'console.error("Error generando codigo de barras:", e);';
+        html += '}';
+        html += '})();';
+        html += '</scr' + 'ipt>';
+        html += '</body>';
+        html += '</html>';
+
+        return html;
+    }
 </script>

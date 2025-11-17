@@ -1,0 +1,515 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+<style>
+    .reporte-sucursal-container {
+        max-width: 100%;
+        margin: 0 auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .controls {
+        padding: 25px 30px;
+        background: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .control-group label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.9em;
+    }
+
+    .control-group select,
+    .control-group input {
+        padding: 10px 15px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: all 0.3s ease;
+        min-width: 200px;
+    }
+
+    .control-group select:focus,
+    .control-group input:focus {
+        outline: none;
+        border-color: #28a745;
+        box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1);
+    }
+
+    .btn {
+        padding: 12px 25px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        align-self: flex-end;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+    }
+
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #218838;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px;
+        font-size: 1.2em;
+        color: #28a745;
+    }
+
+    .tabla-existencias {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85em;
+        margin: 20px 0;
+    }
+
+    .tabla-existencias thead {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .tabla-existencias th {
+        padding: 12px 8px;
+        text-align: left;
+        font-weight: 700;
+        border: 1px solid rgba(255,255,255,0.3);
+        font-size: 0.9em;
+    }
+
+    .tabla-existencias td {
+        padding: 10px 8px;
+        border: 1px solid #dee2e6;
+    }
+
+    .tabla-existencias tbody tr:hover {
+        background: #e8f5e9;
+    }
+
+    .tabla-existencias tbody tr:nth-child(even) {
+        background: #f8f9fa;
+    }
+
+    .td-articulo {
+        font-weight: 600;
+        color: #212529;
+    }
+
+    .td-numero {
+        text-align: right;
+        font-family: 'Courier New', monospace;
+    }
+
+    .td-centro {
+        text-align: center;
+    }
+
+    .stock-bajo {
+        color: #dc3545;
+        font-weight: 700;
+    }
+
+    .stock-ok {
+        color: #28a745;
+        font-weight: 600;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 4em;
+        color: #dee2e6;
+        margin-bottom: 20px;
+    }
+
+    .resumen-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        padding: 20px 30px;
+        background: #f8f9fa;
+    }
+
+    .card-resumen {
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+
+    .card-resumen h3 {
+        font-size: 0.9em;
+        color: #6c757d;
+        margin-bottom: 10px;
+    }
+
+    .card-resumen .valor {
+        font-size: 1.8em;
+        font-weight: 700;
+        color: #28a745;
+    }
+
+    @media print {
+        .controls, .btn {
+            display: none;
+        }
+    }
+</style>
+
+<div class="reporte-sucursal-container">
+    <div class="header">
+        <h1>🏪 Reporte de Existencias por Sucursal</h1>
+        <p>Detalle completo de productos y stock por sucursal</p>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="filtro-sucursal">Sucursal: *</label>
+            <select id="filtro-sucursal" required>
+                <option value="">Selecciona una sucursal</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="search-marca">Buscar Marca:</label>
+            <input type="text" id="search-marca" placeholder="🔍 Buscar marca..." 
+                   oninput="filtrarMarcas()">
+        </div>
+
+        <div class="control-group">
+            <label for="filtro-marca">Marca:</label>
+            <select id="filtro-marca">
+                <option value="">Todas las marcas</option>
+            </select>
+        </div>
+
+        <button class="btn btn-primary" onclick="cargarReporte()">
+            🔄 Generar Reporte
+        </button>
+
+        <button class="btn btn-success" onclick="exportarExcel()">
+            📥 Exportar a Excel
+        </button>
+    </div>
+
+    <div id="resumen-container"></div>
+
+    <div id="contenido-reporte" class="p-4">
+        <div class="empty-state">
+            <i>🔍</i>
+            <p><strong>Selecciona una sucursal y haz clic en "Generar Reporte"</strong></p>
+            <p style="color: #6c757d; font-size: 0.9em;">Opcionalmente puedes filtrar por marca</p>
+        </div>
+    </div>
+</div>
+
+<script>
+let todasLasMarcas = [];
+
+// Cargar filtros al iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    cargarSucursales();
+    cargarMarcas();
+});
+
+// Cargar sucursales
+async function cargarSucursales() {
+    try {
+        const response = await fetch('/app/api/reportes/sucursales/');
+        const data = await response.json();
+        
+        const select = document.getElementById('filtro-sucursal');
+        
+        if (data.success && data.sucursales) {
+            data.sucursales.forEach(sucursal => {
+                const option = document.createElement('option');
+                option.value = sucursal.id;
+                option.textContent = sucursal.nombre || sucursal.alias || `Sucursal ${sucursal.id}`;
+                select.appendChild(option);
+            });
+            
+            console.log('✅ Sucursales cargadas:', data.sucursales.length);
+        } else {
+            console.error('Error al cargar sucursales:', data.error);
+        }
+    } catch (error) {
+        console.error('Error al cargar sucursales:', error);
+    }
+}
+
+// Cargar marcas
+async function cargarMarcas() {
+    try {
+        const response = await fetch('/app/obtener_marcas/');
+        const data = await response.json();
+        
+        todasLasMarcas = data;
+        
+        const select = document.getElementById('filtro-marca');
+        const optionInfo = document.createElement('option');
+        optionInfo.value = '';
+        optionInfo.textContent = `💡 Usa el buscador arriba (${data.length} marcas)`;
+        optionInfo.disabled = true;
+        select.appendChild(optionInfo);
+    } catch (error) {
+        console.error('Error al cargar marcas:', error);
+    }
+}
+
+// Filtrar marcas
+function filtrarMarcas() {
+    const searchInput = document.getElementById('search-marca');
+    const select = document.getElementById('filtro-marca');
+    const searchText = searchInput.value.toLowerCase().trim();
+    
+    select.innerHTML = '<option value="">Todas las marcas</option>';
+    
+    if (!searchText) {
+        const optionInfo = document.createElement('option');
+        optionInfo.value = '';
+        optionInfo.textContent = `💡 Usa el buscador arriba (${todasLasMarcas.length} marcas)`;
+        optionInfo.disabled = true;
+        select.appendChild(optionInfo);
+        return;
+    }
+    
+    if (searchText.length < 2) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = '⌨️ Escribe al menos 2 caracteres...';
+        option.disabled = true;
+        select.appendChild(option);
+        return;
+    }
+    
+    const marcasFiltradas = todasLasMarcas.filter(marca => 
+        marca.valor.toLowerCase().includes(searchText)
+    );
+    
+    marcasFiltradas.forEach(marca => {
+        const option = document.createElement('option');
+        option.value = marca.id;
+        option.textContent = marca.valor;
+        select.appendChild(option);
+    });
+    
+    if (marcasFiltradas.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = `❌ No se encontraron marcas con "${searchInput.value}"`;
+        option.disabled = true;
+        select.appendChild(option);
+    }
+}
+
+// Cargar reporte
+async function cargarReporte() {
+    const sucursalId = document.getElementById('filtro-sucursal').value;
+    const marcaId = document.getElementById('filtro-marca').value;
+    
+    if (!sucursalId) {
+        alert('Por favor selecciona una sucursal');
+        return;
+    }
+    
+    const contenido = document.getElementById('contenido-reporte');
+    contenido.innerHTML = '<div class="loading">⏳ Generando reporte...</div>';
+    
+    try {
+        let url = `/app/api/reporte-existencias-sucursal/?sucursal_id=${sucursalId}`;
+        if (marcaId) url += `&marca_id=${marcaId}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderizarResumen(data.resumen);
+            renderizarReporte(data.datos);
+        } else {
+            contenido.innerHTML = `<div class="empty-state"><i>⚠️</i><p>${data.error || 'Error al cargar datos'}</p></div>`;
+        }
+    } catch (error) {
+        console.error('Error al cargar reporte:', error);
+        contenido.innerHTML = '<div class="empty-state"><i>⚠️</i><p>Error al cargar el reporte</p></div>';
+    }
+}
+
+// Renderizar resumen
+function renderizarResumen(resumen) {
+    const container = document.getElementById('resumen-container');
+    
+    const html = `
+        <div class="resumen-cards">
+            <div class="card-resumen">
+                <h3>Total Productos</h3>
+                <div class="valor">${resumen.total_productos}</div>
+            </div>
+            <div class="card-resumen">
+                <h3>Stock Total</h3>
+                <div class="valor">${resumen.stock_total.toLocaleString()}</div>
+            </div>
+            <div class="card-resumen">
+                <h3>Valor Inventario</h3>
+                <div class="valor">$${formatearNumero(resumen.valor_inventario)}</div>
+            </div>
+            <div class="card-resumen">
+                <h3>Productos Sin Stock</h3>
+                <div class="valor" style="color: #dc3545;">${resumen.sin_stock}</div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Renderizar reporte
+function renderizarReporte(datos) {
+    const contenido = document.getElementById('contenido-reporte');
+    
+    if (!datos || datos.length === 0) {
+        contenido.innerHTML = `
+            <div class="empty-state">
+                <i>📦</i>
+                <p>No se encontraron productos con stock en esta sucursal</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <table class="tabla-existencias">
+            <thead>
+                <tr>
+                    <th>Artículo</th>
+                    <th>Descripción</th>
+                    <th>Categoría</th>
+                    <th>Marca</th>
+                    <th>Color</th>
+                    <th>Género</th>
+                    <th class="td-centro">Talla</th>
+                    <th class="td-numero">Stock Inicial</th>
+                    <th class="td-numero">Stock</th>
+                    <th class="td-numero">Costo</th>
+                    <th class="td-numero">Sobreprecio</th>
+                    <th class="td-numero">Precio Venta</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    datos.forEach(item => {
+        const claseStock = item.stock < 5 ? 'stock-bajo' : 'stock-ok';
+        
+        html += `
+            <tr>
+                <td class="td-articulo">${item.articulo}</td>
+                <td>${item.descripcion}</td>
+                <td>${item.categoria}</td>
+                <td>${item.marca}</td>
+                <td>${item.color}</td>
+                <td>${item.genero}</td>
+                <td class="td-centro">${item.talla}</td>
+                <td class="td-numero">${item.stock_inicial}</td>
+                <td class="td-numero ${claseStock}">${item.stock}</td>
+                <td class="td-numero">$${formatearNumero(item.costo)}</td>
+                <td class="td-numero">$${formatearNumero(item.sobreprecio)}</td>
+                <td class="td-numero">$${formatearNumero(item.precio_venta)}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+            </tbody>
+        </table>
+    `;
+    
+    contenido.innerHTML = html;
+}
+
+// Formatear números
+function formatearNumero(num) {
+    if (!num) return '0';
+    return parseFloat(num).toLocaleString('es-CL', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    });
+}
+
+// Exportar a Excel
+function exportarExcel() {
+    const sucursalId = document.getElementById('filtro-sucursal').value;
+    const marcaId = document.getElementById('filtro-marca').value;
+    
+    if (!sucursalId) {
+        alert('Por favor selecciona una sucursal');
+        return;
+    }
+    
+    let url = `/app/api/exportar-existencias-sucursal-excel/?sucursal_id=${sucursalId}`;
+    if (marcaId) url += `&marca_id=${marcaId}`;
+    
+    window.location.href = url;
+}
+</script>
+
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+

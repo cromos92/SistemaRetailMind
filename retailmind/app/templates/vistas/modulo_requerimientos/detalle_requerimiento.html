@@ -1,0 +1,987 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Título -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Detalle del Requerimiento</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'modulo_requerimientos' %}">Requerimientos</a></li>
+                            <li class="breadcrumb-item active">Detalle</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Información principal -->
+            <div class="col-lg-8">
+                
+                <!-- Encabezado del requerimiento -->
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div>
+                                <h5 class="mb-1" id="numero-requerimiento">Cargando...</h5>
+                                <div class="hstack gap-2">
+                                    <span class="badge" id="badge-tipo"></span>
+                                    <span class="badge" id="badge-estado"></span>
+                                    <span class="badge" id="badge-prioridad"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-muted">Días transcurridos:</span>
+                                <span class="badge badge-soft-warning fs-6" id="dias-transcurridos">0</span>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Sucursal</p>
+                                <p class="fw-semibold" id="sucursal">-</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Creado por</p>
+                                <p class="fw-semibold" id="usuario-creador">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información del Producto -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="ri-product-hunt-line me-2"></i>Producto</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">SKU</p>
+                                <p class="fw-semibold" id="sku">-</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Nombre</p>
+                                <p class="fw-semibold" id="nombre-producto">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información del Cliente -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="ri-user-line me-2"></i>Cliente</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Nombre</p>
+                                <p class="fw-semibold" id="cliente-nombre">-</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">RUT</p>
+                                <p class="fw-semibold" id="cliente-rut">-</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Teléfono</p>
+                                <p class="fw-semibold" id="cliente-telefono">-</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="text-muted mb-1">Email</p>
+                                <p class="fw-semibold" id="cliente-email">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Descripción -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="ri-file-text-line me-2"></i>Descripción</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Motivo</h6>
+                        <p id="motivo">-</p>
+                        
+                        <h6 class="text-muted mb-2 mt-3">Descripción Detallada</h6>
+                        <p id="descripcion-problema">-</p>
+                    </div>
+                </div>
+
+                <!-- Resolución/Motivo (visible cuando está aprobado/rechazado) -->
+                <div class="card" id="card-resolucion" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-checkbox-circle-line me-2"></i>Resolución
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert" id="alert-resolucion">
+                            <h6 class="alert-heading" id="titulo-resolucion"></h6>
+                            <p class="mb-0" id="motivo-resolucion-texto"></p>
+                        </div>
+                        <small class="text-muted">Fecha: <span id="fecha-resolucion-texto"></span></small>
+                    </div>
+                </div>
+
+                <!-- Fotos -->
+                <div class="card" id="card-fotos" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="ri-image-line me-2"></i>Fotos Adjuntas</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3" id="fotos-container">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historial -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="ri-history-line me-2"></i>Historial</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="profile-timeline" id="historial-container">
+                            <div class="text-center text-muted py-4">
+                                <i class="ri-time-line fs-1"></i>
+                                <p class="mt-2">Cargando historial...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+
+            <!-- Panel lateral -->
+            <div class="col-lg-4">
+                
+                <!-- Acciones Dinámicas -->
+                <div class="card">
+                    <div class="card-header bg-soft-primary">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-settings-3-line me-2"></i>Acciones Disponibles
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="acciones-container" class="d-grid gap-2">
+                            <div class="text-center text-muted py-3">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                                <p class="small mt-2">Cargando...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seguimiento de Proveedor -->
+                <div class="card" id="card-seguimiento-proveedor" style="display:none;">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-mail-line me-2"></i>Seguimiento Proveedor
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="info-seguimiento-proveedor"></div>
+                    </div>
+                </div>
+
+                <!-- Documento -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Documento de Venta</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-1">Tipo</p>
+                        <p class="fw-semibold mb-3" id="tipo-documento">-</p>
+                        <p class="text-muted mb-1">Número</p>
+                        <p class="fw-semibold mb-3" id="numero-boleta">-</p>
+                        <p class="text-muted mb-1">Fecha</p>
+                        <p class="fw-semibold" id="fecha-compra">-</p>
+                    </div>
+                </div>
+
+                <!-- Información Proveedor -->
+                <div class="card" id="card-proveedor" style="display:none;">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Proveedor</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="fw-semibold mb-1" id="proveedor-nombre">-</p>
+                        <small class="text-muted" id="proveedor-email">-</small>
+                    </div>
+                </div>
+
+                <!-- Seguimiento de Proveedor -->
+                <div class="card" id="card-seguimiento-proveedor" style="display:none;">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-mail-send-line me-2"></i>Seguimiento Proveedor
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="info-seguimiento-proveedor">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal Cambiar Estado -->
+<div class="modal fade" id="modalCambiarEstado" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Cambiar Estado del Requerimiento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Nuevo Estado</label>
+                    <select class="form-select" id="nuevo-estado">
+                        <option value="PENDIENTE">Pendiente</option>
+                        <option value="ESPERANDO_RESPUESTA">Esperando Respuesta Proveedor</option>
+                        <option value="APROBADO">Aprobado</option>
+                        <option value="RECHAZADO">Rechazado</option>
+                        <option value="CANCELADO">Cancelado</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Comentario</label>
+                    <textarea class="form-control" id="comentario-estado" rows="3" placeholder="Agregue un comentario sobre este cambio..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarEstado()">Guardar Cambio</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Registrar Respuesta Proveedor -->
+<div class="modal fade" id="modalRegistrarRespuesta" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-soft-success">
+                <h5 class="modal-title">
+                    <i class="ri-mail-check-line me-2"></i>Registrar Respuesta del Proveedor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="ri-information-line me-2"></i>
+                    Registre la respuesta que recibió del proveedor por correo, teléfono u otro medio.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Decisión del Proveedor <span class="text-danger">*</span></label>
+                    <select class="form-select" id="decision-proveedor">
+                        <option value="">Seleccione...</option>
+                        <option value="APROBADO">✅ Aprobado - Procede Garantía/Cambio</option>
+                        <option value="RECHAZADO">❌ Rechazado - No Procede</option>
+                        <option value="PARCIAL">⚠️ Aprobado Parcialmente</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Respuesta del Proveedor (Interna) <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="respuesta-proveedor-text" rows="3" 
+                              placeholder="Respuesta completa del proveedor (solo para registro interno)..."></textarea>
+                    <small class="text-muted">Esta información es solo para registro interno</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Motivo para el Cliente <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="motivo-usuario" rows="3" 
+                              placeholder="Explique al cliente/vendedor por qué se aprobó o rechazó..."></textarea>
+                    <small class="text-muted"><strong>Este mensaje lo verá el vendedor y cliente</strong></small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Fecha de Respuesta</label>
+                    <input type="datetime-local" class="form-control" id="fecha-respuesta-proveedor">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="guardarRespuestaProveedor()">
+                    <i class="ri-save-line me-1"></i>Guardar Respuesta
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const requerimientoId = {{ requerimiento.id }};
+let datosRequerimiento = null;
+
+// Cargar datos al iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    cargarRequerimiento();
+});
+
+// Cargar requerimiento
+function cargarRequerimiento() {
+    fetch(`/app/api/requerimientos/${requerimientoId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                datosRequerimiento = data.requerimiento;
+                mostrarRequerimiento(data.requerimiento);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'No se pudo cargar el requerimiento', 'error');
+        });
+}
+
+// Mostrar requerimiento
+function mostrarRequerimiento(req) {
+    // Encabezado
+    document.getElementById('numero-requerimiento').textContent = req.numero_requerimiento;
+    document.getElementById('badge-tipo').textContent = req.tipo;
+    document.getElementById('badge-tipo').className = 'badge badge-soft-info';
+    document.getElementById('badge-estado').textContent = req.estado;
+    document.getElementById('badge-estado').className = `badge badge-soft-${obtenerColorEstado(req.estado_codigo)}`;
+    document.getElementById('badge-prioridad').textContent = req.prioridad;
+    document.getElementById('badge-prioridad').className = `badge badge-soft-${obtenerColorPrioridad(req.prioridad_codigo)}`;
+    
+    // Badge de urgencia según días
+    const badgeUrgencia = document.getElementById('dias-transcurridos');
+    badgeUrgencia.textContent = `${req.dias_transcurridos} días`;
+    badgeUrgencia.className = `badge badge-soft-${obtenerColorUrgencia(req.nivel_urgencia)} fs-6`;
+    
+    document.getElementById('sucursal').textContent = req.sucursal.nombre;
+    document.getElementById('usuario-creador').textContent = req.usuario_creador || '-';
+
+    // Producto
+    document.getElementById('sku').textContent = req.sku;
+    document.getElementById('nombre-producto').textContent = req.nombre_producto;
+
+    // Cliente
+    document.getElementById('cliente-nombre').textContent = req.cliente_nombre;
+    document.getElementById('cliente-rut').textContent = req.cliente_rut || '-';
+    document.getElementById('cliente-telefono').textContent = req.cliente_telefono || '-';
+    document.getElementById('cliente-email').textContent = req.cliente_email || '-';
+
+    // Descripción
+    document.getElementById('motivo').textContent = req.motivo;
+    document.getElementById('descripcion-problema').textContent = req.descripcion_problema || '-';
+
+    // Documento
+    document.getElementById('tipo-documento').textContent = req.tipo_documento || '-';
+    document.getElementById('numero-boleta').textContent = req.numero_boleta || '-';
+    document.getElementById('fecha-compra').textContent = req.fecha_compra || '-';
+
+    // Proveedor
+    if (req.proveedor.id) {
+        document.getElementById('card-proveedor').style.display = 'block';
+        document.getElementById('proveedor-nombre').textContent = req.proveedor.nombre;
+        document.getElementById('proveedor-email').textContent = req.correo_proveedor_destino || 'Email no registrado';
+    } else {
+        document.getElementById('card-proveedor').style.display = 'none';
+    }
+    
+    // Mostrar acciones dinámicas según rol y estado
+    mostrarAccionesDisponibles(req);
+    
+    // Mostrar seguimiento de proveedor si aplica
+    if (req.proveedor.id) {
+        mostrarSeguimientoProveedor(req);
+    }
+
+    // Motivo de Resolución (visible al usuario)
+    if (req.motivo_resolucion && (req.estado_codigo === 'APROBADO' || req.estado_codigo === 'RECHAZADO')) {
+        document.getElementById('card-resolucion').style.display = 'block';
+        const alertClass = req.estado_codigo === 'APROBADO' ? 'alert-success' : 'alert-warning';
+        document.getElementById('alert-resolucion').className = `alert ${alertClass}`;
+        document.getElementById('titulo-resolucion').innerHTML = 
+            req.estado_codigo === 'APROBADO' ? 
+            '<i class="ri-checkbox-circle-line me-2"></i>Requerimiento Aprobado' : 
+            '<i class="ri-close-circle-line me-2"></i>Requerimiento Rechazado';
+        document.getElementById('motivo-resolucion-texto').textContent = req.motivo_resolucion;
+        document.getElementById('fecha-resolucion-texto').textContent = req.fecha_resolucion;
+    }
+    
+    // Fotos
+    console.log('Fotos recibidas:', req.fotos);
+    if (req.fotos && req.fotos.length > 0) {
+        document.getElementById('card-fotos').style.display = 'block';
+        const container = document.getElementById('fotos-container');
+        container.innerHTML = req.fotos.map(foto => {
+            console.log(`Intentando cargar foto: ${foto.url}`);
+            return `
+            <div class="col-md-6 mb-3">
+                <a href="${foto.url}" data-lightbox="requerimiento-${req.id}" data-title="${foto.descripcion || 'Foto del requerimiento'}">
+                    <img src="${foto.url}" class="img-fluid rounded shadow-sm" alt="${foto.descripcion || 'Foto'}" 
+                         style="max-height: 300px; object-fit: cover; width: 100%;"
+                         onload="console.log('✅ Foto cargada:', '${foto.url}')"
+                         onerror="console.error('❌ Error al cargar foto:', '${foto.url}'); this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'200\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'200\\' height=\\'200\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' fill=\\'%23999\\'%3EImagen no disponible%3C/text%3E%3C/svg%3E'">
+                </a>
+                ${foto.descripcion ? `<p class="text-muted mt-2 small mb-0"><i class="ri-image-line me-1"></i>${foto.descripcion}</p>` : ''}
+                <small class="text-muted">Subida: ${foto.fecha}</small>
+                <p class="small text-info mb-0">URL: ${foto.url}</p>
+            </div>
+        `;
+        }).join('');
+    } else {
+        console.log('❌ No hay fotos para mostrar. Total fotos:', req.fotos ? req.fotos.length : 0);
+        document.getElementById('card-fotos').style.display = 'none';
+    }
+
+    // Historial
+    const histContainer = document.getElementById('historial-container');
+    if (req.historial.length > 0) {
+        histContainer.innerHTML = req.historial.map(hist => `
+            <div class="accordion-item border-0">
+                <div class="accordion-header">
+                    <a class="accordion-button p-2 shadow-none" data-bs-toggle="collapse" href="#hist-${hist.id}">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0 avatar-xs">
+                                <div class="avatar-title bg-light text-success rounded-circle">
+                                    <i class="ri-checkbox-circle-line"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <h6 class="fs-14 mb-0">${hist.accion}</h6>
+                                <small class="text-muted">${hist.fecha} - ${hist.usuario}</small>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                <div id="hist-${hist.id}" class="accordion-collapse collapse show">
+                    <div class="accordion-body ms-2 ps-5 pt-0">
+                        ${hist.comentario ? `<p class="text-muted mb-0">${hist.comentario}</p>` : ''}
+                        ${hist.estado_anterior ? `<p class="text-muted mb-0"><small>Estado: ${hist.estado_anterior} → ${hist.estado_nuevo}</small></p>` : ''}
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+
+// Mostrar acciones disponibles según rol y estado
+function mostrarAccionesDisponibles(req) {
+    const container = document.getElementById('acciones-container');
+    let html = '';
+    const permisos = req.permisos;
+    const rol = req.rol_usuario;
+    
+    // Badge de rol del usuario
+    const rolBadges = {
+        'administrador': '<span class="badge bg-danger mb-3"><i class="ri-shield-star-line me-1"></i>Administrador</span>',
+        'jefe_local': '<span class="badge bg-primary mb-3"><i class="ri-user-star-line me-1"></i>Supervisor</span>',
+        'cajero': '<span class="badge bg-info mb-3"><i class="ri-user-line me-1"></i>Cajero</span>',
+        'vendedor': '<span class="badge bg-secondary mb-3"><i class="ri-user-line me-1"></i>Vendedor</span>',
+    };
+    
+    html += (rolBadges[rol] || '') + '<br>';
+    
+    // PENDIENTE o EN_REVISION - Acciones de revisión
+    if (req.estado_codigo === 'PENDIENTE' || req.estado_codigo === 'EN_REVISION') {
+        if (permisos.puede_revisar && req.estado_codigo === 'PENDIENTE') {
+            html += `
+                <button class="btn btn-info w-100 mb-2" onclick="marcarEnRevision()">
+                    <i class="ri-eye-line me-1"></i> Revisar Ahora
+                </button>`;
+        }
+        
+        if (permisos.puede_aprobar) {
+            html += `
+                <button class="btn btn-success w-100 mb-2" onclick="aprobarRequerimiento()">
+                    <i class="ri-check-line me-1"></i> Aprobar
+                </button>`;
+        }
+        
+        if (permisos.puede_rechazar) {
+            html += `
+                <button class="btn btn-danger w-100 mb-2" onclick="rechazarRequerimiento()">
+                    <i class="ri-close-line me-1"></i> Rechazar
+                </button>`;
+        }
+        
+        if (permisos.puede_enviar_proveedor && req.proveedor.id) {
+            html += `
+                <button class="btn btn-primary w-100 mb-2" onclick="enviarAProveedor()">
+                    <i class="ri-mail-send-line me-1"></i> Enviar a Proveedor
+                </button>`;
+        }
+    }
+    
+    // ESPERANDO_RESPUESTA - Acciones de seguimiento
+    if (req.estado_codigo === 'ESPERANDO_RESPUESTA') {
+        if (permisos.puede_registrar_respuesta) {
+            html += `
+                <button class="btn btn-success w-100 mb-2" onclick="abrirModalRespuestaProveedor()">
+                    <i class="ri-file-edit-line me-1"></i> Registrar Respuesta
+                </button>
+                <button class="btn btn-warning w-100 mb-2" onclick="reenviarCorreoProveedor()">
+                    <i class="ri-mail-send-line me-1"></i> Re-enviar Correo
+                </button>`;
+        }
+    }
+    
+    // APROBADO o EN_PROCESO - Acciones de ejecución
+    if (req.estado_codigo === 'APROBADO' || req.estado_codigo === 'EN_PROCESO') {
+        if (req.estado_codigo === 'APROBADO') {
+            html += `
+                <button class="btn btn-primary w-100 mb-2" onclick="marcarEnProceso()">
+                    <i class="ri-play-line me-1"></i> Iniciar Proceso
+                </button>`;
+        }
+        
+        if (permisos.puede_completar) {
+            html += `
+                <button class="btn btn-success w-100 mb-2" onclick="completarRequerimiento()">
+                    <i class="ri-check-double-line me-1"></i> Completar
+                </button>`;
+        }
+    }
+    
+    // Botón cambiar estado (para admin y supervisor)
+    if (rol === 'administrador' || rol === 'jefe_local') {
+        html += `<hr>
+            <button class="btn btn-soft-primary w-100 mb-2" onclick="cambiarEstado()">
+                <i class="ri-refresh-line me-1"></i> Cambiar Estado
+            </button>`;
+    }
+    
+    // Botón volver (siempre visible)
+    html += `<hr>
+        <a href="/app/requerimientos/" class="btn btn-secondary w-100">
+            <i class="ri-arrow-left-line me-1"></i> Volver a Lista
+        </a>`;
+    
+    container.innerHTML = html;
+}
+
+// Mostrar información de seguimiento del proveedor
+function mostrarSeguimientoProveedor(req) {
+    if (!req.correo_enviado_proveedor) {
+        document.getElementById('card-seguimiento-proveedor').style.display = 'none';
+        return;
+    }
+    
+    document.getElementById('card-seguimiento-proveedor').style.display = 'block';
+    const container = document.getElementById('info-seguimiento-proveedor');
+    
+    let html = `
+        <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted">Estado:</span>
+                <span class="badge ${req.fecha_respuesta_proveedor ? 'bg-success' : 'bg-warning'}">
+                    ${req.fecha_respuesta_proveedor ? 'Respondido' : 'Esperando Respuesta'}
+                </span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted">Enviado a:</span>
+                <span class="fw-semibold">${req.correo_proveedor_destino || 'N/A'}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted">Fecha envío:</span>
+                <span>${req.fecha_envio_proveedor}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted">Intentos:</span>
+                <span class="badge bg-info">${req.intentos_envio || 0}</span>
+            </div>
+        </div>`;
+    
+    // Si está esperando respuesta
+    if (!req.fecha_respuesta_proveedor) {
+        const diasSinRespuesta = req.dias_sin_respuesta || 0;
+        let colorAlerta = 'success';
+        if (diasSinRespuesta > 14) colorAlerta = 'danger';
+        else if (diasSinRespuesta > 7) colorAlerta = 'warning';
+        
+        html += `
+            <div class="alert alert-${colorAlerta} mb-3">
+                <i class="ri-time-line me-1"></i>
+                <strong>${diasSinRespuesta} días sin respuesta</strong>
+                ${req.requiere_recordatorio ? '<br><small>Se recomienda enviar recordatorio</small>' : ''}
+            </div>`;
+    } else {
+        // Ya respondió
+        html += `
+            <div class="alert alert-success mb-3">
+                <i class="ri-checkbox-circle-line me-1"></i>
+                <strong>Proveedor respondió</strong>
+                <br><small>${req.fecha_respuesta_proveedor}</small>
+            </div>
+            <div class="mb-3">
+                <label class="text-muted small">Decisión:</label>
+                <p class="fw-semibold">${req.decision_proveedor || 'No registrada'}</p>
+            </div>
+            <div class="mb-3">
+                <label class="text-muted small">Respuesta:</label>
+                <p class="small">${req.respuesta_proveedor || '-'}</p>
+            </div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// Obtener color estado
+function obtenerColorEstado(estado) {
+    const colores = {
+        'PENDIENTE': 'warning',
+        'ESPERANDO_RESPUESTA': 'primary',
+        'APROBADO': 'success',
+        'RECHAZADO': 'danger',
+        'CANCELADO': 'secondary'
+    };
+    return colores[estado] || 'secondary';
+}
+
+// Obtener color prioridad
+function obtenerColorPrioridad(prioridad) {
+    const colores = {
+        'BAJA': 'success',
+        'MEDIA': 'info',
+        'ALTA': 'warning',
+        'URGENTE': 'danger'
+    };
+    return colores[prioridad] || 'secondary';
+}
+
+// Obtener color urgencia
+function obtenerColorUrgencia(nivel) {
+    const colores = {
+        'NORMAL': 'success',
+        'MEDIA': 'info',
+        'ALTA': 'warning',
+        'CRITICA': 'danger',
+        'CERRADO': 'secondary'
+    };
+    return colores[nivel] || 'secondary';
+}
+
+// Cambiar estado
+function cambiarEstado() {
+    new bootstrap.Modal(document.getElementById('modalCambiarEstado')).show();
+}
+
+// Guardar estado
+function guardarEstado() {
+    const nuevoEstado = document.getElementById('nuevo-estado').value;
+    const comentario = document.getElementById('comentario-estado').value;
+
+    fetch(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            estado: nuevoEstado,
+            comentario: comentario
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire('Éxito', 'Estado actualizado', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalCambiarEstado')).hide();
+            cargarRequerimiento();
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al actualizar estado', 'error');
+    });
+}
+
+// ========== ACCIONES DE REVISIÓN ==========
+
+// Marcar en revisión
+function marcarEnRevision() {
+    cambiarEstadoRapido('EN_REVISION', 'Requerimiento marcado para revisión');
+}
+
+// Aprobar requerimiento
+function aprobarRequerimiento() {
+    Swal.fire({
+        title: 'Aprobar Requerimiento',
+        text: '¿Está seguro de aprobar este requerimiento?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aprobar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0ab39c'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            cambiarEstadoRapido('APROBADO', 'Requerimiento aprobado');
+        }
+    });
+}
+
+// Rechazar requerimiento
+function rechazarRequerimiento() {
+    Swal.fire({
+        title: 'Rechazar Requerimiento',
+        input: 'textarea',
+        inputLabel: 'Motivo del rechazo',
+        inputPlaceholder: 'Explique por qué no procede este requerimiento...',
+        showCancelButton: true,
+        confirmButtonText: 'Rechazar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#f06548',
+        inputValidator: (value) => {
+            if (!value) {
+                return 'Debe indicar el motivo del rechazo';
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            cambiarEstadoRapido('RECHAZADO', result.value);
+        }
+    });
+}
+
+// Marcar en proceso
+function marcarEnProceso() {
+    cambiarEstadoRapido('EN_PROCESO', 'Iniciando proceso de resolución');
+}
+
+// Función auxiliar para cambio rápido de estado
+function cambiarEstadoRapido(nuevoEstado, comentario) {
+    fetch(`/app/api/requerimientos/${requerimientoId}/actualizar-estado/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            estado: nuevoEstado,
+            comentario: comentario
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire('Éxito', data.message || 'Estado actualizado', 'success');
+            cargarRequerimiento();
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al actualizar estado', 'error');
+    });
+}
+
+// ========== ACCIONES CON PROVEEDOR ==========
+
+// Enviar a proveedor
+function enviarAProveedor() {
+    Swal.fire({
+        title: 'Enviar a Proveedor',
+        html: `
+            <p>¿Enviar este requerimiento a <strong>${datosRequerimiento.proveedor.nombre}</strong>?</p>
+            <p class="text-muted small">Se enviará un correo con todos los detalles y ${datosRequerimiento.fotos.length} foto(s) adjunta(s)</p>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-mail-send-line me-1"></i> Sí, enviar correo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#405189',
+        showLoaderOnConfirm: true,
+        preConfirm: () => {
+            return fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    throw new Error(data.error);
+                }
+                return data;
+            })
+            .catch(error => {
+                Swal.showValidationMessage(`Error: ${error.message || error}`);
+            });
+        },
+        allowOutsideClick: () => !Swal.isLoading()
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Enviado Exitosamente',
+                html: `
+                    <p>${result.value.message}</p>
+                    <p class="text-muted small">Correo: ${result.value.correo_destino}</p>
+                    <p class="text-muted small">Fecha: ${result.value.fecha_envio}</p>
+                `,
+            });
+            cargarRequerimiento();
+        }
+    });
+}
+
+// Re-enviar correo a proveedor
+function reenviarCorreoProveedor() {
+    Swal.fire({
+        title: 'Re-enviar Recordatorio',
+        text: `¿Enviar recordatorio a ${datosRequerimiento.proveedor.nombre}?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar recordatorio',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Enviado', 'Recordatorio enviado al proveedor', 'success');
+                    cargarRequerimiento();
+                } else {
+                    Swal.fire('Error', data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Error al enviar', 'error');
+            });
+        }
+    });
+}
+
+// Abrir modal para registrar respuesta del proveedor
+function abrirModalRespuestaProveedor() {
+    // Establecer fecha actual
+    const now = new Date();
+    const datetime = now.toISOString().slice(0, 16);
+    document.getElementById('fecha-respuesta-proveedor').value = datetime;
+    
+    // Limpiar campos
+    document.getElementById('decision-proveedor').value = '';
+    document.getElementById('respuesta-proveedor-text').value = '';
+    
+    new bootstrap.Modal(document.getElementById('modalRegistrarRespuesta')).show();
+}
+
+// Guardar respuesta del proveedor
+function guardarRespuestaProveedor() {
+    const decision = document.getElementById('decision-proveedor').value;
+    const respuesta = document.getElementById('respuesta-proveedor-text').value;
+    const motivo = document.getElementById('motivo-usuario').value;
+    
+    if (!decision || !respuesta || !motivo) {
+        Swal.fire('Atención', 'Complete todos los campos requeridos', 'warning');
+        return;
+    }
+    
+    fetch(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            decision: decision,
+            respuesta: respuesta,
+            motivo: motivo  // Nuevo: motivo visible al usuario
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalRegistrarRespuesta')).hide();
+            Swal.fire({
+                icon: decision === 'APROBADO' ? 'success' : 'info',
+                title: `Requerimiento ${decision === 'APROBADO' ? 'Aprobado' : 'Rechazado'}`,
+                text: `El vendedor y cliente verán: "${motivo}"`,
+                confirmButtonText: 'Entendido'
+            });
+            cargarRequerimiento();
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al registrar respuesta', 'error');
+    });
+}
+
+// Completar requerimiento
+function completarRequerimiento() {
+    Swal.fire({
+        title: 'Completar Requerimiento',
+        input: 'textarea',
+        inputLabel: 'Resolución final',
+        inputPlaceholder: 'Describa la resolución del requerimiento...',
+        showCancelButton: true,
+        confirmButtonText: 'Completar',
+        cancelButtonText: 'Cancelar',
+        inputValidator: (value) => {
+            if (!value) {
+                return 'Debe ingresar una resolución';
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/app/api/requerimientos/${requerimientoId}/completar/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    resolucion: result.value
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Éxito', data.message, 'success');
+                    cargarRequerimiento();
+                } else {
+                    Swal.fire('Error', data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Error al completar', 'error');
+            });
+        }
+    });
+}
+</script>
+
+    </div>
+    <!-- container-fluid -->
+</div>
+<!-- page-content -->
+
+{% include '../../layout/footer.html' %}
+

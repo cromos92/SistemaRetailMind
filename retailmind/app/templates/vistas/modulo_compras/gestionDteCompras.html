@@ -129,6 +129,20 @@ th.sorting_desc::after {
     }
 }
 
+/* Estilos para botones de acciones deshabilitados */
+.btn:disabled,
+.btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: all !important;
+}
+
+.btn:disabled:hover,
+.btn.disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
 </style>
 
 <!-- Eliminado overlay custom y CSS -->
@@ -200,13 +214,23 @@ th.sorting_desc::after {
 
                 <!-- Controles de búsqueda y paginación -->
                 <div class="row mb-3 pagination-controls">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="input-group">
-                            <input type="text" class="form-control" id="searchDTE" placeholder="Buscar por proveedor, RUT, número documento, tipo, estado...">
+                            <input type="text" class="form-control" id="searchDTE" placeholder="Buscar por proveedor, RUT, número documento...">
                             <button class="btn btn-outline-secondary" type="button" id="btnSearchDTE">
                                 <i class="bi bi-search"></i>
                             </button>
                         </div>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="filtroTipoDocumento">
+                            <option value="">Todos los tipos</option>
+                            <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
+                            <option value="GUIA">Guía Despacho</option>
+                            <option value="COTIZACION">Cotización</option>
+                            <option value="NOTA DE CREDITO">Nota de Crédito</option>
+                            <option value="NOTA DE DEBITO">Nota de Débito</option>
+                        </select>
                     </div>
                     <div class="col-md-6 text-end">
                         <div class="btn-group" role="group">
@@ -222,11 +246,18 @@ th.sorting_desc::after {
                 </div>
 
                 <div class="table-responsive mb-4">
-                    <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-success" id="btnNuevoDTE" data-bs-toggle="modal"
-                            data-bs-target="#modalNuevoDTE">
-                            <i class="bi bi-plus-circle me-1"></i>Ingresar DTE Compra
-                        </button>
+                    <div class="d-flex justify-content-between mb-2">
+                        <div>
+                            <button class="btn btn-primary" id="btnPagoMasivo" style="display: none;" onclick="abrirModalPagoMasivo()">
+                                <i class="bi bi-cash-stack me-1"></i>Pago Masivo (<span id="contadorSeleccionadas">0</span>)
+                            </button>
+                        </div>
+                        <div>
+                            <button class="btn btn-success" id="btnNuevoDTE" data-bs-toggle="modal"
+                                data-bs-target="#modalNuevoDTE">
+                                <i class="bi bi-plus-circle me-1"></i>Ingresar DTE Compra
+                            </button>
+                        </div>
                     </div>
             <table class="table table-sm table-hover text-center align-middle w-100" id="tablaDTE"
                 style="table-layout: fixed; font-size: 0.875rem;">
@@ -234,6 +265,9 @@ th.sorting_desc::after {
                         <thead class="table-light">
                             <tr>
                                 <th style="display: none;">ID</th>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="selectAllFacturas" class="form-check-input" title="Seleccionar todas las facturas elegibles">
+                                </th>
                                 <th>Nombre</th>
                                 <th>RUT</th>
                                 <th>N° Documento</th>
@@ -286,9 +320,91 @@ th.sorting_desc::after {
                         <div class="col-md-4">
                             <label for="tipoDocumento" class="form-label">Tipo de Documento</label>
                             <select id="tipoDocumento" class="form-select" required>
-                                <option value="Factura Electrónica">Factura Electrónica</option>
-                                <option value="Guía Despacho">Guía Despacho</option>
+                                <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
+                                <option value="GUIA">Guía Despacho</option>
+                                <option value="COTIZACION">Cotización</option>
+                                <option value="NOTA DE CREDITO">Nota de Crédito</option>
+                                <option value="NOTA DE DEBITO">Nota de Débito</option>
                             </select>
+                        </div>
+                        <div class="col-12" id="divDocumentoBase" style="display: none;">
+                            <label for="documentoBase" class="form-label">Documento Base (Cotización / Guía)</label>
+                            <select id="documentoBase" class="form-select">
+                                <option value="">Sin documento base</option>
+                            </select>
+                            <div class="form-text">Selecciona la cotización o guía que regulariza esta factura.</div>
+                        </div>
+                        
+                        <div class="col-12" id="divNotaCredito" style="display: none;">
+                            <label for="notaCreditoBase" class="form-label">Nota de Crédito a Corregir</label>
+                            <select id="notaCreditoBase" class="form-select" required>
+                                <option value="">Selecciona una Nota de Crédito</option>
+                            </select>
+                            <div class="form-text">Selecciona la Nota de Crédito que deseas corregir con esta Nota de Débito.</div>
+                        </div>
+                        
+                        <!-- Información de asociación para NCs -->
+                        <div class="col-12" id="divAsociacionNC" style="display: none;">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Asociación de Nota de Crédito</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div id="infoAsociacionNC">
+                                        <!-- Se llenará dinámicamente -->
+                                    </div>
+                                    <div class="mt-2" id="accionesAsociacionNC">
+                                        <!-- Se llenará dinámicamente -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Información completa del DTE (solo lectura) -->
+                        <div class="col-12" id="divInfoCompleta">
+                            <div class="row">
+                                <!-- Historial de Pagos -->
+                                <div class="col-md-6" id="divHistorialPagos" style="display: none;">
+                                    <div class="card border-success">
+                                        <div class="card-header bg-success text-white">
+                                            <h6 class="mb-0"><i class="bi bi-cash-stack me-2"></i>Historial de Pagos</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="listaPagos">
+                                                <!-- Se llenará dinámicamente -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Incidencias -->
+                                <div class="col-md-6" id="divResumenIncidencias" style="display: none;">
+                                    <div class="card border-warning">
+                                        <div class="card-header bg-warning text-dark">
+                                            <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Incidencias</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="resumenIncidencias">
+                                                <!-- Se llenará dinámicamente -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Relaciones de Documentos -->
+                                <div class="col-12" id="divRelacionesDoc" style="display: none;">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Relaciones de Documentos</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="infoRelaciones">
+                                                <!-- Se llenará dinámicamente -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Número y Monto -->
@@ -329,12 +445,18 @@ th.sorting_desc::after {
                                 <option value="Rechazado">Rechazado</option>
                             </select>
                         </div>
-                        <div class="col-md-6">
-                            <label for="estadoPago" class="form-label">Estado Pago</label>
-                            <select id="estadoPago" class="form-select" required>
-                                <option value="Pagado">Pagado</option>
-                                <option value="Pendiente">Pendiente</option>
-                            </select>
+                        <input type="hidden" id="estadoPago" value="Pendiente">
+
+                        <!-- Campo de motivo de rechazo (solo se muestra si estado es Rechazado) -->
+                        <div class="col-md-12" id="divMotivoRechazo" style="display: none;">
+                            <label for="motivoRechazo" class="form-label">
+                                Motivo de Rechazo <span class="text-danger">*</span>
+                                <small class="text-muted">(máximo 100 caracteres)</small>
+                            </label>
+                            <input type="text" class="form-control" id="motivoRechazo" maxlength="100" placeholder="Especifica el motivo del rechazo">
+                            <div class="form-text">
+                                <span id="contadorCaracteres">0</span>/100 caracteres
+                            </div>
                         </div>
 
                         <!-- Días crédito, Bultos y Unidades -->
@@ -477,34 +599,271 @@ th.sorting_desc::after {
 
                     <!-- Inputs para agregar una NC -->
                     <div class="row mb-3">
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label for="ncNumero" class="form-label">N° Nota de Crédito</label>
                             <input type="text" class="form-control" id="ncNumero" required>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-3">
                             <label for="ncMonto" class="form-label">Monto</label>
                             <input type="number" class="form-control" id="ncMonto" required>
                         </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-plus-circle me-1"></i>Agregar
+                        <div class="col-md-5">
+                            <label for="ncMotivo" class="form-label">Motivo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="ncMotivo" maxlength="100" placeholder="Motivo de la nota de crédito" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12 text-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-plus-circle me-1"></i>Agregar Nota de Crédito
                             </button>
                         </div>
                     </div>
 
                     <!-- Tabla de NCs asignadas -->
-                    <table class="table table-bordered table-sm text-center">
+                    <table class="table table-bordered table-sm">
                         <thead class="table-light">
                             <tr>
-                                <th>N° NC</th>
-                                <th>Monto</th>
-                                <th>Acciones</th>
+                                <th class="text-center">N° NC</th>
+                                <th class="text-center">Monto</th>
+                                <th>Motivo</th>
+                                <th class="text-center">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tablaNCBody">
                             <!-- Notas de crédito se insertan aquí -->
                         </tbody>
                     </table>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pago Masivo -->
+<div class="modal fade" id="modalPagoMasivo" tabindex="-1" aria-labelledby="modalPagoMasivoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalPagoMasivoLabel">
+                    <i class="bi bi-cash-stack me-2"></i>Pago Masivo de Facturas
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form id="formPagoMasivo">
+                <div class="modal-body">
+                    <!-- Resumen de selección -->
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-info-circle me-2"></i>Resumen de Facturas Seleccionadas</h6>
+                        <div id="resumenFacturasSeleccionadas">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                    </div>
+                    
+                    <!-- Datos del pago -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="metodoPagoMasivo" class="form-label">Método de Pago</label>
+                            <select class="form-select" id="metodoPagoMasivo" required>
+                                <option value="">Seleccionar...</option>
+                                <option value="Transferencia">Transferencia</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Efectivo">Efectivo</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="voucherMasivo" class="form-label">Número de Documento / Voucher</label>
+                            <input type="text" class="form-control" id="voucherMasivo" placeholder="Ej: TRF-2025-001">
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <label for="observacionesMasivo" class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observacionesMasivo" rows="3" maxlength="200" 
+                                      placeholder="Información adicional sobre este pago masivo..."></textarea>
+                            <div class="form-text">
+                                <span id="contadorObservacionesMasivo">0</span>/200 caracteres
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabla de facturas seleccionadas -->
+                    <div class="mt-3">
+                        <h6>Facturas a Pagar:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Factura</th>
+                                        <th>Proveedor</th>
+                                        <th>Saldo Pendiente</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaFacturasSeleccionadas">
+                                    <!-- Se llenará dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <strong>Total a Pagar: $<span id="totalPagoMasivo">0</span></strong>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <strong>Facturas: <span id="cantidadFacturasMasivo">0</span></strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-cash-stack me-1"></i>Procesar Pago Masivo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Asociar NC Existente -->
+<div class="modal fade" id="modalAsociarNC" tabindex="-1" aria-labelledby="modalAsociarNCLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalAsociarNCLabel">
+                    <i class="bi bi-link-45deg me-2"></i>Asociar Nota de Crédito Existente
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="asociarNCDteId">
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Selecciona una Nota de Crédito existente para asociarla a esta factura.
+                </div>
+                
+                <!-- Filtros -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="filtroProveedorNC" class="form-label">Filtrar por Proveedor</label>
+                        <select id="filtroProveedorNC" class="form-select">
+                            <option value="">Todos los proveedores</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="buscarNC" class="form-label">Buscar por número</label>
+                        <input type="text" id="buscarNC" class="form-control" placeholder="Número de NC...">
+                    </div>
+                </div>
+                
+                <!-- Tabla de NCs disponibles -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Seleccionar</th>
+                                <th>Número</th>
+                                <th>Proveedor</th>
+                                <th>Fecha</th>
+                                <th>Monto</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaNCsDisponiblesBody">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Cargando notas de crédito...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info" id="btnAsociarNC" disabled>
+                    <i class="bi bi-link-45deg me-2"></i>Asociar NC Seleccionada
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Incidencias DTE -->
+<div class="modal fade" id="modalIncidencias" tabindex="-1" aria-labelledby="modalIncidenciasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="modalIncidenciasLabel">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Gestión de Incidencias
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formIncidencia">
+                <div class="modal-body">
+                    <input type="hidden" id="incidenciaDteId">
+                    
+                    <!-- Formulario para agregar incidencia -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Nueva Incidencia</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="incidenciaTipo" class="form-label">Tipo de Incidencia <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="incidenciaTipo" required>
+                                        <option value="">Seleccionar...</option>
+                                        <option value="FACTURACION">Error de Facturación</option>
+                                        <option value="MERCADERIA">Mercadería Faltante/Incompleta</option>
+                                        <option value="CALIDAD">Productos Dañados/Defectuosos</option>
+                                        <option value="DESCUENTOS">Descuentos Incorrectos</option>
+                                        <option value="DESCRIPCION">Error en Descripción</option>
+                                        <option value="OTRO">Otro</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-8">
+                                    <label for="incidenciaDescripcion" class="form-label">Descripción <span class="text-danger">*</span></label>
+                                    <textarea class="form-control" id="incidenciaDescripcion" rows="2" placeholder="Describe el problema (mínimo 10 caracteres)" required></textarea>
+                                </div>
+                                <div class="col-md-12 text-end">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-plus-circle me-1"></i>Agregar Incidencia
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabla de incidencias -->
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Incidencias Registradas</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 15%;">Tipo</th>
+                                            <th style="width: 35%;">Descripción</th>
+                                            <th style="width: 12%;">Estado</th>
+                                            <th style="width: 15%;">Fecha</th>
+                                            <th style="width: 23%;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tablaIncidenciasBody">
+                                        <!-- Incidencias se cargan aquí -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </form>
         </div>
@@ -763,14 +1122,129 @@ th.sorting_desc::after {
             $('#btnSearchDTE').click();
         }
     });
+    
+    // Event listener para filtro de tipo de documento
+    $('#filtroTipoDocumento').on('change', function() {
+        const search = $('#searchDTE').val().trim();
+        currentSearchDTE = search;
+        currentPageDTE = 1;
+        cargarDTEs(1, search);
+    });
 
     // Botón Ingresar DTE (redirección o abrir modal)
     $('#modalNuevoDTE').on('show.bs.modal', function () {
         const hoy = new Date().toISOString().split('T')[0];
         $('#fechaEmision').val(hoy);
         $('#fechaRecepcion').val(hoy);
+        $('#estadoPago').val('Pendiente');
         cargarEmpresasReceptoras();
+        
+        // Inicializar visibilidad del campo de motivo de rechazo
+        toggleMotivoRechazo();
     });
+
+    // Mostrar/ocultar campo de motivo de rechazo según el estado DTE
+    $('#estadoDTE').on('change', function() {
+        toggleMotivoRechazo();
+    });
+
+    function toggleMotivoRechazo() {
+        const estadoDTE = $('#estadoDTE').val();
+        if (estadoDTE === 'Rechazado') {
+            $('#divMotivoRechazo').slideDown(300);
+            $('#motivoRechazo').attr('required', true);
+        } else {
+            $('#divMotivoRechazo').slideUp(300);
+            $('#motivoRechazo').attr('required', false);
+            $('#motivoRechazo').val('');
+            $('#contadorCaracteres').text('0');
+        }
+    }
+
+    // Contador de caracteres para motivo de rechazo
+    $('#motivoRechazo').on('input', function() {
+        const length = $(this).val().length;
+        $('#contadorCaracteres').text(length);
+        
+        // Cambiar color según el límite
+        if (length >= 90) {
+            $('#contadorCaracteres').css('color', 'red').css('font-weight', 'bold');
+        } else if (length >= 70) {
+            $('#contadorCaracteres').css('color', 'orange').css('font-weight', 'normal');
+        } else {
+            $('#contadorCaracteres').css('color', 'inherit').css('font-weight', 'normal');
+        }
+    });
+    
+    // Manejar cambio de tipo de documento
+    $('#tipoDocumento').on('change', function() {
+        const tipo = $(this).val();
+        
+        // Ocultar todos los divs específicos primero
+        $('#divDocumentoBase').slideUp(300);
+        $('#divNotaCredito').slideUp(300);
+        
+        if (tipo === 'FACTURA ELECTRONICA') {
+            // Cargar documentos base disponibles
+            cargarDocumentosBase();
+            $('#divDocumentoBase').slideDown(300);
+        } else if (tipo === 'NOTA DE DEBITO') {
+            // Cargar notas de crédito disponibles
+            cargarNotasCreditoDisponibles();
+            $('#divNotaCredito').slideDown(300);
+        } else {
+            $('#documentoBase').val('').empty().append('<option value="">Sin documento base</option>');
+            $('#notaCreditoBase').val('').empty().append('<option value="">Selecciona una Nota de Crédito</option>');
+        }
+    });
+    
+    function cargarDocumentosBase() {
+        $.ajax({
+            url: '/app/obtener_documentos_base/',
+            method: 'GET',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#documentoBase');
+                    select.empty();
+                    select.append('<option value="">Sin documento base</option>');
+                    
+                    if (response.documentos && response.documentos.length > 0) {
+                        response.documentos.forEach(doc => {
+                            select.append(`<option value="${doc.id}">${doc.display}</option>`);
+                        });
+                    }
+                }
+            },
+            error: function() {
+                console.error('Error al cargar documentos base');
+            }
+        });
+    }
+    
+    function cargarNotasCreditoDisponibles() {
+        $.ajax({
+            url: '/app/obtener_ncs_para_nd/',
+            method: 'GET',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#notaCreditoBase');
+                    select.empty();
+                    select.append('<option value="">Selecciona una Nota de Crédito</option>');
+                    
+                    if (response.ncs && response.ncs.length > 0) {
+                        response.ncs.forEach(nc => {
+                            select.append(`<option value="${nc.id}">${nc.display}</option>`);
+                        });
+                    }
+                }
+            },
+            error: function() {
+                console.error('Error al cargar notas de crédito');
+            }
+        });
+    }
 
     // Variable para evitar múltiples llamadas simultáneas
     let cargandoDTEs = false;
@@ -801,7 +1275,8 @@ th.sorting_desc::after {
                 fecha_fin, 
                 page: page,
                 page_size: 20,
-                search: search
+                search: search,
+                tipo_documento: $('#filtroTipoDocumento').val()
             }),
             success: function (data) {
                 try {
@@ -841,19 +1316,68 @@ th.sorting_desc::after {
                         tbody.append('<tr><td colspan="12" class="text-center text-muted">No se encontraron resultados' + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
                     } else {
                         data.items.forEach(dte => {
+                            // Simplificar la lógica para evitar errores
+                            const esFacturaElectronica = dte.tipo === 'FACTURA ELECTRONICA';
+                            const tieneEstadoValido = dte.estado !== 'Rechazado' && dte.estado_pago !== 'PAGADO';
+                            const sinIncidencias = !dte.incidencias_pendientes || dte.incidencias_pendientes === 0;
+                            const documentoCompleto = !dte.requiere_factura || dte.tiene_factura_anexada;
+                            
+                            const elegiblePagoMasivo = esFacturaElectronica && tieneEstadoValido && sinIncidencias && documentoCompleto;
+                            const saldoPendiente = parseFloat(dte.monto_con_iva || 0) - parseFloat(dte.notas_credito || 0);
+                            
+                            // Info de NC asociada
+                            let facturaAsociadaNumero = 'N/A';
+                            if (dte.factura_asociada_info && dte.factura_asociada_info.factura_numero) {
+                                facturaAsociadaNumero = dte.factura_asociada_info.factura_numero;
+                            }
+                            
                             const fila = `
 <tr>
     <td style="display: none;">${dte.id || ''}</td>
+    <td>
+        ${elegiblePagoMasivo && saldoPendiente > 0
+            ? `<input type="checkbox" class="form-check-input checkbox-factura" 
+                      value="${dte.id}" 
+                      data-proveedor="${dte.nombre}" 
+                      data-proveedor-id="${dte.rut}" 
+                      data-monto="${saldoPendiente}"
+                      data-numero="${dte.numero_documento}"
+                      onchange="actualizarSeleccionMasiva()">`
+            : ''
+        }
+    </td>
     <td>${resaltarBusquedaDTE(dte.nombre || '', search)}</td>
     <td>${resaltarBusquedaDTE(dte.rut || '', search)}</td>
-    <td>${resaltarBusquedaDTE(dte.numero_documento || '', search)}</td>
+    <td>
+        ${resaltarBusquedaDTE(dte.numero_documento || '', search)}
+        ${dte.documento_padre 
+            ? `<br><small class="text-muted">Anexa a: ${dte.documento_padre.tipo} #${dte.documento_padre.numero}</small>`
+            : ''}
+        ${dte.requiere_factura && !dte.tiene_factura_anexada
+            ? '<br><span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> Requiere Factura</span>'
+            : ''}
+        ${dte.requiere_factura && dte.tiene_factura_anexada
+            ? '<br><span class="badge bg-success"><i class="bi bi-check-circle"></i> Factura Anexada</span>'
+            : ''}
+        ${dte.tipo === 'NOTA DE CREDITO'
+            ? (dte.nc_esta_asociada 
+                ? '<br><span class="badge bg-success"><i class="bi bi-link-45deg"></i> Enlazada a Factura #' + facturaAsociadaNumero + '</span>'
+                : '<br><span class="badge bg-secondary"><i class="bi bi-circle"></i> No enlazada</span>'
+            )
+            : ''
+        }
+    </td>
     <td>${resaltarBusquedaDTE(dte.tipo || '', search)}</td>
     <td>${dte.fecha_emision || ''}</td>
-    <td>${dte.fecha_recepcion ?? '-'}</td>
+    <td>${dte.fecha_recepcion || '-'}</td>
     <td>
         $${parseFloat(dte.monto_con_iva || 0).toLocaleString()}
         ${dte.notas_credito > 0
-                                ? `<span class="text-danger">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC)</span>`
+                                ? `<span class="text-danger">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC ${
+                                    dte.notas_credito_numeros && dte.notas_credito_numeros.length > 0 
+                                        ? '#' + dte.notas_credito_numeros.join(', #')
+                                        : ''
+                                })</span>`
                                 : ''}
     </td>
     <td>
@@ -863,7 +1387,18 @@ th.sorting_desc::after {
                                 : ''}
     </td>
     <td><span class="badge bg-${creditoColor(dte.dias_credito_restantes || 0)}">${dte.dias_credito_restantes || 0} días</span></td>
-    <td><span class="badge bg-${estadoColor(dte.estado || '')}">${resaltarBusquedaDTE(dte.estado || '', search)}</span></td>
+    <td>
+        <div class="d-flex flex-column gap-1">
+            <span class="badge bg-${estadoColor(dte.estado || '')}">${resaltarBusquedaDTE(dte.estado || '', search)}</span>
+            ${dte.incidencias_count > 0 
+                ? `<span class="badge bg-${dte.incidencias_pendientes > 0 ? 'danger' : 'success'}" style="font-size: 0.7rem;">
+                    <i class="bi bi-exclamation-triangle"></i> ${dte.incidencias_count} incidencia${dte.incidencias_count > 1 ? 's' : ''}
+                    ${dte.incidencias_pendientes > 0 ? `(${dte.incidencias_pendientes} pend.)` : ''}
+                   </span>`
+                : ''
+            }
+        </div>
+    </td>
    <td>
         <div class="d-flex flex-column gap-1">
             <span class="badge bg-${dte.estado_pago === 'Pagado' ? 'success' : 'warning'}">
@@ -878,22 +1413,66 @@ th.sorting_desc::after {
 
   <td>
     <div class="d-flex flex-wrap justify-content-center gap-1">
-        <button class="btn btn-sm btn-outline-success" title="Pagar" onclick="abrirModalPago(${dte.id || 0}, ${dte.monto_con_iva || 0})">
-            <i class="bi bi-cash-coin"></i>
+        ${dte.tipo === 'NOTA DE CREDITO' 
+            ? `
+                <!-- Acciones específicas para Notas de Crédito -->
+                ${!dte.nc_esta_asociada 
+                    ? `<button class="btn btn-sm btn-outline-danger" title="Eliminar NC" onclick="eliminarDTE(${dte.id || 0})">
+                        <i class="bi bi-trash" style="font-size: 1.1rem;"></i>
+                    </button>`
+                    : '<button class="btn btn-sm btn-outline-success" title="NC asociada a Factura #' + facturaAsociadaNumero + '" disabled>' +
+                        '<i class="bi bi-check-circle-fill" style="font-size: 1.1rem;"></i>' +
+                    '</button>' +
+                    '<button class="btn btn-sm btn-outline-secondary" title="No se puede eliminar - NC está asociada" disabled>' +
+                        '<i class="bi bi-trash" style="font-size: 1.1rem;"></i>' +
+                    '</button>'
+                }
+            `
+            : `
+                <!-- Acciones normales para otros tipos de documento -->
+                ${dte.estado === 'Rechazado' || (dte.incidencias_pendientes && dte.incidencias_pendientes > 0) || (dte.requiere_factura && !dte.tiene_factura_anexada)
+                    ? `<button class="btn btn-sm btn-outline-success" title="${
+                        dte.estado === 'Rechazado' ? 'No disponible para DTEs rechazados' : 
+                        (dte.requiere_factura && !dte.tiene_factura_anexada) ? 'Este documento requiere tener una factura anexada antes de poder pagar' :
+                        'Resuelve las incidencias pendientes antes de registrar pagos'
+                    }" disabled>
+                        <i class="bi bi-cash-coin" style="font-size: 1.1rem;"></i>
+                    </button>`
+                    : `<button class="btn btn-sm btn-outline-success" title="Pagar" onclick="abrirModalPago(${dte.id || 0}, ${dte.monto_con_iva || 0}, ${dte.incidencias_pendientes || 0}, ${dte.requiere_factura ? 'true' : 'false'}, ${dte.tiene_factura_anexada ? 'true' : 'false'})">
+                        <i class="bi bi-cash-coin" style="font-size: 1.1rem;"></i>
+                    </button>`
+                }
+                ${dte.estado === 'Rechazado'
+                    ? `<button class="btn btn-sm btn-outline-info" title="No disponible para DTEs rechazados" disabled>
+                        <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
+                    </button>`
+                    : `<button class="btn btn-sm btn-outline-info" title="Ver pagos" onclick="verPagosDTE(${dte.id || 0})">
+                        <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
+                    </button>`
+                }
+                ${dte.estado === 'Rechazado'
+                    ? `<button class="btn btn-sm btn-outline-warning" title="No disponible para DTEs rechazados" disabled>
+                        <i class="bi bi-pencil-square" style="font-size: 1.1rem;"></i>
+                    </button>`
+                    : `<button class="btn btn-sm btn-outline-warning" title="Editar DTE" onclick="editarDTE(${dte.id || 0})">
+                        <i class="bi bi-pencil-square" style="font-size: 1.1rem;"></i>
+                    </button>`
+                }
+                <button class="btn btn-sm btn-outline-secondary" title="Eliminar DTE" onclick="eliminarDTE(${dte.id || 0})">
+                    <i class="bi bi-trash" style="font-size: 1.1rem;"></i>
+                </button>
+            `
+        }
+        ${dte.tipo === 'FACTURA ELECTRONICA'
+            ? `<button class="btn btn-sm btn-outline-info" title="Anexar NC a Factura" onclick="abrirModalAnexarNCaFactura(${dte.id || 0})">
+                <i class="bi bi-link-45deg" style="font-size: 1.1rem;"></i>
+            </button>`
+            : ''
+        }
+        <button class="btn btn-sm btn-outline-${dte.incidencias_pendientes > 0 ? 'danger' : 'primary'}" style="position: relative;" title="Gestionar Incidencias" onclick="abrirModalIncidencias(${dte.id || 0})">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.1rem;"></i>
+            ${dte.incidencias_count > 0 ? `<span class="badge bg-danger" style="font-size: 0.65rem; position: absolute; top: -5px; right: -5px;">${dte.incidencias_count}</span>` : ''}
         </button>
-        <button class="btn btn-sm btn-outline-info" title="Ver pagos" onclick="verPagosDTE(${dte.id || 0})">
-            <i class="bi bi-chat-left-text"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-warning" title="Editar DTE" onclick="editarDTE(${dte.id || 0})">
-            <i class="bi bi-pencil-square"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-danger" title="Anexar Nota de Crédito" onclick="abrirModalNC(${dte.id || 0})">
-            <i class="bi bi-file-earmark-plus"></i>
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" title="Eliminar DTE" onclick="eliminarDTE(${dte.id || 0})">
-    <i class="bi bi-trash"></i>
-</button>
-
     </div>
 </td>
 
@@ -1001,6 +1580,7 @@ th.sorting_desc::after {
                 $('#modalNuevoDTELabel').text('Editar DTE Compra');
                 $('#formNuevoDTE button[type="submit"]').text('Actualizar DTE');
 
+                // Llenar todos los campos del formulario
                 $('#receptor').val(dte.receptor_id);
                 $('#tipoDocumento').val(dte.tipo_documento);
                 $('#numeroDocumento').val(dte.numero_documento);
@@ -1011,9 +1591,59 @@ th.sorting_desc::after {
                 $('#fechaRecepcion').val(dte.fecha_recepcion || '');
                 $('#estadoDTE').val(dte.estado_dte);
                 $('#estadoPago').val(dte.estado_pago);
-                $('#diasCredito').val(dte.diasCredito);
-                $('#bultos').val(dte.bultos);
-                $('#unidadesProductos').val(dte.unidades_productos);
+                $('#diasCredito').val(dte.diasCredito || 0);
+                $('#bultos').val(dte.bultos || 0);
+                $('#unidadesProductos').val(dte.unidades_productos || 0);
+                
+                // Asegurar que el proveedor se cargue correctamente
+                if (dte.receptor_id) {
+                    // Si no está cargado el select de proveedores, cargarlo primero
+                    if ($('#receptor option').length <= 1) {
+                        cargarEmpresasReceptoras();
+                        // Esperar a que se carguen y luego seleccionar
+                        setTimeout(() => {
+                            $('#receptor').val(dte.receptor_id);
+                        }, 500);
+                    }
+                }
+                
+                // Cargar motivo de rechazo si existe
+                if (dte.motivo_rechazo) {
+                    $('#motivoRechazo').val(dte.motivo_rechazo);
+                    $('#contadorCaracteres').text(dte.motivo_rechazo.length);
+                }
+                
+                // Mostrar campo de motivo si el estado es Rechazado
+                toggleMotivoRechazo();
+                
+                // Manejar documento padre si es factura
+                if (dte.tipo_documento === 'FACTURA ELECTRONICA' && dte.documento_padre_id) {
+                    // Primero cargar los documentos base y luego seleccionar el correcto
+                    cargarDocumentosBase();
+                    $('#divDocumentoBase').show();
+                    // Esperar un poco para que se carguen las opciones
+                    setTimeout(() => {
+                        $('#documentoBase').val(dte.documento_padre_id);
+                    }, 500);
+                } else if (dte.tipo_documento === 'FACTURA ELECTRONICA') {
+                    // Si es factura pero no tiene documento padre, mostrar el campo
+                    cargarDocumentosBase();
+                    $('#divDocumentoBase').show();
+                } else {
+                    $('#divDocumentoBase').hide();
+                    $('#documentoBase').val('');
+                }
+                
+                // Manejar asociación de NC si es una Nota de Crédito
+                if (dte.tipo_documento === 'NOTA DE CREDITO') {
+                    cargarInfoAsociacionNC(dte.id);
+                    $('#divAsociacionNC').show();
+                } else {
+                    $('#divAsociacionNC').hide();
+                }
+                
+                // Cargar información completa para consulta
+                cargarInfoCompletaDTE(dte.id, dte.tipo_documento);
 
                 $('#modalNuevoDTE').data('dte-id', dte.id); // guardamos el ID en el modal
 
@@ -1107,6 +1737,9 @@ th.sorting_desc::after {
         const unidades_productos = $('#unidadesProductos').val();
         const descuento = $('#descuento').val();
         const descuento_con_iva = $('#descuentoConIVA').is(':checked');
+        const motivoRechazo = $('#motivoRechazo').val().trim();
+        const documento_padre_id = $('#documentoBase').val();
+        const nota_credito_base_id = $('#notaCreditoBase').val();
 
         // Validar campos obligatorios
         if (!receptor_id || !numero || !monto || !fechaEmision || !estadoDTE || !estadoPago || !tipoDocumento) {
@@ -1116,6 +1749,38 @@ th.sorting_desc::after {
                 text: 'Por favor completa todos los campos obligatorios.'
             });
             return;
+        }
+        
+        // Validar que si es Nota de Débito, tenga una NC seleccionada
+        if (tipoDocumento === 'NOTA DE DEBITO' && !nota_credito_base_id) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Nota de Crédito requerida',
+                text: 'Debes seleccionar una Nota de Crédito para corregir con esta Nota de Débito.'
+            });
+            return;
+        }
+
+        // Validar motivo de rechazo si el estado es Rechazado
+        if (estadoDTE === 'Rechazado') {
+            if (!motivoRechazo || motivoRechazo.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Motivo de rechazo requerido',
+                    text: 'Debes especificar el motivo del rechazo del DTE.'
+                });
+                $('#motivoRechazo').focus();
+                return;
+            }
+            if (motivoRechazo.length > 100) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Motivo muy largo',
+                    text: 'El motivo de rechazo no puede exceder 100 caracteres.'
+                });
+                $('#motivoRechazo').focus();
+                return;
+            }
         }
 
         // Armar payload
@@ -1133,14 +1798,26 @@ th.sorting_desc::after {
             bultos: bultos || 0,
             unidades_productos: unidades_productos || 0,
             descuento: descuento || 0,
-            descuento_con_iva: descuento_con_iva
+            descuento_con_iva: descuento_con_iva,
+            motivo_rechazo: estadoDTE === 'Rechazado' ? motivoRechazo : null,
+            documento_padre_id: documento_padre_id || null,
+            nota_credito_base_id: nota_credito_base_id || null
         };
 
+        // Debug: mostrar datos que se van a enviar
+        console.log('🆕 DEBUG - Datos del formulario:', dataToSend);
+        
         // Detectar si estamos editando o creando
         const dteId = $('#modalNuevoDTE').data('dte-id');
         const isEditing = dteId !== undefined && dteId !== null;
         const url = isEditing ? `/app/actualizarDteCompras/${dteId}/` : '/app/crearDteCompras/';
         const method = isEditing ? 'PUT' : 'POST';
+        
+        console.log(`🆕 DEBUG - ${isEditing ? 'Editando' : 'Creando'} DTE:`, {
+            url: url,
+            method: method,
+            dteId: dteId
+        });
         const mensajeExito = isEditing ? 'DTE actualizado' : 'DTE registrado';
 
         // Enviar AJAX
@@ -1151,16 +1828,22 @@ th.sorting_desc::after {
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            data: JSON.stringify(data),
+            data: JSON.stringify(dataToSend),
             beforeSend: function () {
+                console.log('🚀 DEBUG - Enviando datos al servidor...');
+                // Comentamos el SweetAlert para poder ver errores en consola
+                /*
                 Swal.fire({
                     title: 'Guardando...',
                     text: 'Por favor espera',
                     allowOutsideClick: false,
                     didOpen: () => Swal.showLoading()
                 });
+                */
             },
             success: function (resp) {
+                console.log('✅ DEBUG - Respuesta exitosa:', resp);
+                
                 if (resp.success) {
                     Swal.fire({
                         icon: 'success',
@@ -1174,6 +1857,7 @@ th.sorting_desc::after {
                     $('#formNuevoDTE')[0].reset();
                     cargarDTEs(currentPageDTE, currentSearchDTE); // Recargar tabla o vista
                 } else {
+                    console.error('❌ DEBUG - Error en respuesta:', resp.error);
                     Swal.fire({
                         icon: 'error',
                         title: 'Error al guardar',
@@ -1182,11 +1866,28 @@ th.sorting_desc::after {
                 }
             },
             error: function (xhr) {
-                const resp = xhr.responseJSON;
+                console.error('❌ DEBUG - Error AJAX completo:', xhr);
+                console.error('❌ DEBUG - Status:', xhr.status);
+                console.error('❌ DEBUG - Response Text:', xhr.responseText);
+                console.error('❌ DEBUG - Response JSON:', xhr.responseJSON);
+                
+                let errorMessage = 'Error de conexión';
+                try {
+                    const resp = xhr.responseJSON;
+                    if (resp && resp.error) {
+                        errorMessage = resp.error;
+                    } else if (xhr.responseText) {
+                        errorMessage = `Error ${xhr.status}: ${xhr.responseText}`;
+                    }
+                } catch (e) {
+                    console.error('Error al parsear respuesta:', e);
+                    errorMessage = `Error ${xhr.status}: ${xhr.statusText}`;
+                }
+                
                 Swal.fire({
                     icon: 'error',
                     title: 'Error de red o servidor',
-                    text: resp?.error || 'No se pudo completar la solicitud.'
+                    text: errorMessage
                 });
             }
         });
@@ -1196,6 +1897,37 @@ th.sorting_desc::after {
         $('#modalNuevoDTELabel').text('Nuevo DTE Compra');
         $('#formNuevoDTE button[type="submit"]').text('Guardar DTE');
         $(this).removeData('dte-id');
+        
+        // Limpiar campo de motivo de rechazo
+        $('#motivoRechazo').val('');
+        $('#contadorCaracteres').text('0');
+        $('#divMotivoRechazo').hide();
+        $('#motivoRechazo').attr('required', false);
+        $('#estadoPago').val('Pendiente');
+        
+        // Limpiar documento base
+        $('#divDocumentoBase').hide();
+        $('#documentoBase').val('').empty().append('<option value="">Sin documento base</option>');
+        
+        // Limpiar asociación NC
+        $('#divAsociacionNC').hide();
+        $('#infoAsociacionNC').empty();
+        $('#accionesAsociacionNC').empty();
+    });
+    
+    // Limpiar modal de asociar NC cuando se cierre
+    $('#modalAsociarNC').on('hidden.bs.modal', function () {
+        // Restaurar valores por defecto
+        $('#modalAsociarNCLabel').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC a Factura');
+        $('.alert-info').html('<i class="bi bi-info-circle me-2"></i>Selecciona una Nota de Crédito para anexar a esta factura.');
+        $('#btnAsociarNC').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC Seleccionada');
+        
+        // Limpiar datos del modal
+        $('#asociarNCDteId').val('');
+        $('#filtroProveedorNC').val('');
+        $('#buscarNC').val('');
+        $('input[name="ncSeleccionada"]').prop('checked', false);
+        $('#btnAsociarNC').prop('disabled', true);
     });
 
     function cargarEmpresasReceptoras() {
@@ -1219,7 +1951,29 @@ th.sorting_desc::after {
             }
         });
     }
-    function abrirModalPago(dteId, montoTotal) {
+    function abrirModalPago(dteId, montoTotal, incidenciasPendientes = 0, requiereFactura = false, tieneFactura = false) {
+        if (incidenciasPendientes && incidenciasPendientes > 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Incidencias pendientes',
+                text: 'Debes resolver las incidencias pendientes antes de registrar pagos.'
+            });
+            return;
+        }
+        
+        // Validar si requiere factura y no la tiene
+        if (requiereFactura === true || requiereFactura === 'true') {
+            if (tieneFactura === false || tieneFactura === 'false') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Factura requerida',
+                    text: 'Este documento (Cotización o Guía) requiere tener una factura anexada antes de poder registrar pagos.',
+                    confirmButtonText: 'Entendido'
+                });
+                return;
+            }
+        }
+
         // Resetear todos los campos
         $('#pagoEditId').val('');
         $('#pagoDteId').val(dteId);
@@ -1457,6 +2211,7 @@ th.sorting_desc::after {
         $('#ncDteId').val(dteId);
         $('#ncNumero').val('');
         $('#ncMonto').val('');
+        $('#ncMotivo').val('');
         cargarNotasCredito(dteId);
         const modal = new bootstrap.Modal(document.getElementById('modalNotasCredito'));
         modal.show();
@@ -1467,14 +2222,16 @@ th.sorting_desc::after {
             tbody.empty();
 
             if (data.length === 0) {
-                tbody.append('<tr><td colspan="3" class="text-center">Sin notas de crédito asignadas.</td></tr>');
+                tbody.append('<tr><td colspan="4" class="text-center">Sin notas de crédito asignadas.</td></tr>');
             } else {
                 data.forEach(nc => {
+                    const motivo = nc.notas || '-';
                     const fila = `
                     <tr>
-                        <td>${nc.voucher}</td>
-                        <td>$${parseFloat(nc.monto).toLocaleString()}</td>
-                        <td>
+                        <td class="text-center">${nc.voucher}</td>
+                        <td class="text-center">$${parseFloat(nc.monto).toLocaleString()}</td>
+                        <td class="text-start">${motivo}</td>
+                        <td class="text-center">
                             <button class="btn btn-sm btn-outline-danger" onclick="eliminarNotaCredito(${nc.id})">
                                 <i class="bi bi-trash"></i>
                             </button>
@@ -1491,9 +2248,30 @@ th.sorting_desc::after {
         const dteId = $('#ncDteId').val();
         const numero = $('#ncNumero').val();
         const monto = parseFloat($('#ncMonto').val());
+        const motivo = $('#ncMotivo').val().trim();
 
         if (!numero || isNaN(monto) || monto <= 0) {
             Swal.fire('Datos inválidos', 'Completa los campos correctamente.', 'warning');
+            return;
+        }
+
+        if (!motivo || motivo.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Motivo requerido',
+                text: 'Debes especificar el motivo de la nota de crédito.'
+            });
+            $('#ncMotivo').focus();
+            return;
+        }
+
+        if (motivo.length > 100) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Motivo muy largo',
+                text: 'El motivo no puede exceder 100 caracteres.'
+            });
+            $('#ncMotivo').focus();
             return;
         }
 
@@ -1506,16 +2284,30 @@ th.sorting_desc::after {
                 dte_id: dteId,
                 metodo_pago: 'Nota de Crédito',
                 voucher: numero,
-                monto: monto
+                monto: monto,
+                notas: motivo
             }),
-            success: () => {
+            success: (response) => {
+                if (response.success === false) {
+                    Swal.fire('Error', response.error || 'No se pudo agregar la NC.', 'error');
+                    return;
+                }
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Nota de crédito agregada',
+                    text: 'La NC se agregó correctamente.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
                 cargarNotasCredito(dteId);
                 $('#ncNumero').val('');
                 $('#ncMonto').val('');
+                $('#ncMotivo').val('');
                 cargarDTEs(currentPageDTE, currentSearchDTE);
             },
-            error: () => {
-                Swal.fire('Error', 'No se pudo agregar la NC.', 'error');
+            error: (xhr) => {
+                const response = xhr.responseJSON;
+                Swal.fire('Error', response?.error || 'No se pudo agregar la NC.', 'error');
             }
         });
     });
@@ -1541,6 +2333,656 @@ th.sorting_desc::after {
                     },
                     error: () => {
                         Swal.fire('Error', 'No se pudo eliminar la NC.', 'error');
+                    }
+                });
+            }
+        });
+    }
+
+    // ========== PAGO MASIVO ==========
+    
+    function actualizarSeleccionMasiva() {
+        const checkboxes = $('.checkbox-factura:checked');
+        const cantidad = checkboxes.length;
+        
+        $('#contadorSeleccionadas').text(cantidad);
+        
+        if (cantidad > 0) {
+            $('#btnPagoMasivo').show();
+            
+            // Validar que todas sean del mismo proveedor
+            const proveedores = new Set();
+            checkboxes.each(function() {
+                proveedores.add($(this).data('proveedor-id'));
+            });
+            
+            if (proveedores.size > 1) {
+                $('#btnPagoMasivo').addClass('btn-warning').removeClass('btn-primary');
+                $('#btnPagoMasivo').attr('title', 'Advertencia: Facturas de diferentes proveedores seleccionadas');
+            } else {
+                $('#btnPagoMasivo').addClass('btn-primary').removeClass('btn-warning');
+                $('#btnPagoMasivo').attr('title', 'Procesar pago masivo');
+            }
+        } else {
+            $('#btnPagoMasivo').hide();
+        }
+    }
+    
+    // Seleccionar/Deseleccionar todas las facturas elegibles
+    $('#selectAllFacturas').on('change', function() {
+        const isChecked = $(this).is(':checked');
+        $('.checkbox-factura').prop('checked', isChecked);
+        actualizarSeleccionMasiva();
+    });
+    
+    function abrirModalPagoMasivo() {
+        const checkboxes = $('.checkbox-factura:checked');
+        
+        if (checkboxes.length === 0) {
+            Swal.fire('Error', 'No hay facturas seleccionadas', 'warning');
+            return;
+        }
+        
+        // Validar que todas sean del mismo proveedor
+        const proveedores = new Set();
+        const facturas = [];
+        let totalMonto = 0;
+        
+        checkboxes.each(function() {
+            const proveedor = $(this).data('proveedor-id');
+            const monto = parseFloat($(this).data('monto'));
+            
+            proveedores.add(proveedor);
+            facturas.push({
+                id: $(this).val(),
+                numero: $(this).data('numero'),
+                proveedor: $(this).data('proveedor'),
+                monto: monto
+            });
+            totalMonto += monto;
+        });
+        
+        if (proveedores.size > 1) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Proveedores diferentes',
+                text: 'Solo puedes procesar pagos masivos para facturas del mismo proveedor. Por favor, selecciona facturas de un solo proveedor.',
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+        
+        // Llenar el modal
+        $('#cantidadFacturasMasivo').text(facturas.length);
+        $('#totalPagoMasivo').text(totalMonto.toLocaleString());
+        
+        // Llenar tabla de facturas seleccionadas
+        const tbody = $('#tablaFacturasSeleccionadas');
+        tbody.empty();
+        
+        facturas.forEach(factura => {
+            tbody.append(`
+                <tr>
+                    <td>#${factura.numero}</td>
+                    <td>${factura.proveedor}</td>
+                    <td>$${factura.monto.toLocaleString()}</td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="quitarFacturaSeleccion(${factura.id})">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+        });
+        
+        // Mostrar resumen
+        $('#resumenFacturasSeleccionadas').html(`
+            <strong>${facturas.length} facturas</strong> del proveedor <strong>${facturas[0].proveedor}</strong><br>
+            <strong>Total: $${totalMonto.toLocaleString()}</strong>
+        `);
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalPagoMasivo'));
+        modal.show();
+    }
+    
+    function quitarFacturaSeleccion(facturaId) {
+        $(`.checkbox-factura[value="${facturaId}"]`).prop('checked', false);
+        actualizarSeleccionMasiva();
+        abrirModalPagoMasivo(); // Recargar el modal
+    }
+    
+    // Contador de caracteres para observaciones
+    $('#observacionesMasivo').on('input', function() {
+        const length = $(this).val().length;
+        $('#contadorObservacionesMasivo').text(length);
+        
+        if (length >= 180) {
+            $('#contadorObservacionesMasivo').css('color', 'red').css('font-weight', 'bold');
+        } else if (length >= 150) {
+            $('#contadorObservacionesMasivo').css('color', 'orange').css('font-weight', 'normal');
+        } else {
+            $('#contadorObservacionesMasivo').css('color', 'inherit').css('font-weight', 'normal');
+        }
+    });
+    
+    // Procesar pago masivo
+    $('#formPagoMasivo').on('submit', function(e) {
+        e.preventDefault();
+        
+        const checkboxes = $('.checkbox-factura:checked');
+        const metodoPago = $('#metodoPagoMasivo').val();
+        const voucher = $('#voucherMasivo').val().trim();
+        const observaciones = $('#observacionesMasivo').val().trim();
+        
+        if (checkboxes.length === 0) {
+            Swal.fire('Error', 'No hay facturas seleccionadas', 'warning');
+            return;
+        }
+        
+        if (!metodoPago) {
+            Swal.fire('Error', 'Selecciona un método de pago', 'warning');
+            return;
+        }
+        
+        // Recopilar IDs y montos
+        const facturas = [];
+        checkboxes.each(function() {
+            facturas.push({
+                id: $(this).val(),
+                monto: parseFloat($(this).data('monto'))
+            });
+        });
+        
+        // Confirmar pago masivo
+        Swal.fire({
+            title: '¿Procesar pago masivo?',
+            html: `Se procesarán <strong>${facturas.length} facturas</strong><br>Total: <strong>$${facturas.reduce((sum, f) => sum + f.monto, 0).toLocaleString()}</strong>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, procesar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                procesarPagoMasivo(facturas, metodoPago, voucher, observaciones);
+            }
+        });
+    });
+    
+    function procesarPagoMasivo(facturas, metodoPago, voucher, observaciones) {
+        $.ajax({
+            url: '/app/procesar_pago_masivo/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                facturas: facturas,
+                metodo_pago: metodoPago,
+                voucher: voucher,
+                observaciones: observaciones
+            }),
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Pago masivo procesado',
+                        html: `<strong>${response.procesadas}</strong> facturas procesadas correctamente<br>Total: <strong>$${response.total_procesado.toLocaleString()}</strong>`,
+                        timer: 3000
+                    });
+                    
+                    $('#modalPagoMasivo').modal('hide');
+                    
+                    // Limpiar selecciones
+                    $('.checkbox-factura').prop('checked', false);
+                    $('#selectAllFacturas').prop('checked', false);
+                    actualizarSeleccionMasiva();
+                    
+                    // Recargar tabla
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                } else {
+                    Swal.fire('Error', response.error || 'Error al procesar pago masivo', 'error');
+                }
+            },
+            error: function() {
+                Swal.fire('Error', 'Error de conexión al procesar pago masivo', 'error');
+            }
+        });
+    }
+
+    // ========== GESTIÓN DE ASOCIACIÓN NC EN EDITAR ==========
+    
+    function cargarInfoAsociacionNC(ncId) {
+        $.ajax({
+            url: `/app/obtener_info_asociacion_nc/${ncId}/`,
+            method: 'GET',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    const info = response.info;
+                    const infoDiv = $('#infoAsociacionNC');
+                    const accionesDiv = $('#accionesAsociacionNC');
+                    
+                    if (info.esta_asociada) {
+                        infoDiv.html(`
+                            <div class="alert alert-success mb-2">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <strong>Esta NC está enlazada a:</strong><br>
+                                Factura #${info.factura_numero} - ${info.factura_proveedor}<br>
+                                <small class="text-muted">Monto: $${parseFloat(info.monto_nc).toLocaleString()}</small>
+                            </div>
+                        `);
+                        
+                        accionesDiv.html(`
+                            <button type="button" class="btn btn-warning btn-sm" onclick="desasociarNC(${ncId})">
+                                <i class="bi bi-unlink me-1"></i>Desenlazar de Factura
+                            </button>
+                        `);
+                    } else {
+                        infoDiv.html(`
+                            <div class="alert alert-info mb-2">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Esta Nota de Crédito no está enlazada a ninguna factura.
+                            </div>
+                        `);
+                        
+                        accionesDiv.html(`
+                            <button type="button" class="btn btn-primary btn-sm" onclick="enlazarNCDesdeEditar(${ncId})">
+                                <i class="bi bi-link-45deg me-1"></i>Enlazar a Factura
+                            </button>
+                        `);
+                    }
+                }
+            },
+            error: function() {
+                $('#infoAsociacionNC').html(`
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Error al cargar información de asociación
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    function desasociarNC(ncId) {
+        Swal.fire({
+            title: '¿Desenlazar Nota de Crédito?',
+            text: 'Esto eliminará la asociación entre la NC y la factura.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, desenlazar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/app/desasociar_nc/${ncId}/`,
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire('Éxito', 'NC desenlazada correctamente', 'success');
+                            cargarInfoAsociacionNC(ncId); // Recargar info
+                            cargarDTEs(currentPageDTE, currentSearchDTE); // Actualizar tabla
+                        } else {
+                            Swal.fire('Error', response.error || 'Error al desenlazar NC', 'error');
+                        }
+                    },
+                    error: function() {
+                        Swal.fire('Error', 'Error de conexión', 'error');
+                    }
+                });
+            }
+        });
+    }
+    
+    function enlazarNCDesdeEditar(ncId) {
+        // Cerrar modal de editar y abrir modal de enlazar
+        $('#modalNuevoDTE').modal('hide');
+        setTimeout(() => {
+            abrirModalAnexarNCaFactura(ncId);
+        }, 300);
+    }
+
+    // ========== ANEXAR NC A FACTURA ==========
+    
+    function abrirModalAnexarNCaFactura(dteId) {
+        // Reutilizar el modal existente pero cambiar el contexto
+        $('#asociarNCDteId').val(dteId); // Guardar el ID de la factura
+        $('#modalAsociarNCLabel').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC a esta Factura');
+        $('.alert-info').html('<i class="bi bi-info-circle me-2"></i>Selecciona una Nota de Crédito para anexar a esta factura.');
+        
+        // Cargar NCs disponibles (comportamiento normal)
+        cargarNCsDisponibles();
+        cargarProveedoresParaFiltro();
+        
+        // Cambiar el texto del botón
+        $('#btnAsociarNC').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC Seleccionada');
+        
+        // NO guardar nc-id porque estamos seleccionando la NC, no la factura
+        $('#modalAsociarNC').removeData('nc-id');
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalAsociarNC'));
+        modal.show();
+    }
+    
+
+    // ========== ASOCIAR NC EXISTENTE ==========
+    
+    function abrirModalAsociarNC(dteId) {
+        $('#asociarNCDteId').val(dteId);
+        cargarNCsDisponibles();
+        cargarProveedoresParaFiltro();
+        const modal = new bootstrap.Modal(document.getElementById('modalAsociarNC'));
+        modal.show();
+    }
+    
+    function cargarNCsDisponibles(filtroProveedor = '', busqueda = '') {
+        const tbody = $('#tablaNCsDisponiblesBody');
+        tbody.html('<tr><td colspan="6" class="text-center text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando notas de crédito...</td></tr>');
+        
+        $.ajax({
+            url: '/app/obtener_ncs_disponibles/',
+            method: 'GET',
+            data: {
+                proveedor: filtroProveedor,
+                busqueda: busqueda
+            },
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                tbody.empty();
+                
+                if (response.success && response.ncs && response.ncs.length > 0) {
+                    response.ncs.forEach(nc => {
+                        const fila = `
+                        <tr>
+                            <td>
+                                <input type="radio" name="ncSeleccionada" value="${nc.id}" class="form-check-input" 
+                                       onchange="habilitarBotonAsociar()">
+                            </td>
+                            <td>${nc.numero_documento}</td>
+                            <td>${nc.proveedor}</td>
+                            <td>${nc.fecha_emision}</td>
+                            <td>$${parseFloat(nc.monto_con_iva).toLocaleString()}</td>
+                            <td><span class="badge bg-${nc.estado === 'Aceptado' ? 'success' : 'warning'}">${nc.estado}</span></td>
+                        </tr>`;
+                        tbody.append(fila);
+                    });
+                } else {
+                    tbody.append('<tr><td colspan="6" class="text-center text-muted">No hay notas de crédito disponibles para asociar</td></tr>');
+                }
+            },
+            error: function() {
+                tbody.html('<tr><td colspan="6" class="text-center text-danger">Error al cargar las notas de crédito</td></tr>');
+            }
+        });
+    }
+    
+    function cargarProveedoresParaFiltro() {
+        $.ajax({
+            url: '/app/empresas_proveedoras/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(data) {
+                const select = $('#filtroProveedorNC');
+                select.empty().append('<option value="">Todos los proveedores</option>');
+                data.forEach(emp => {
+                    select.append(`<option value="${emp.id}">${emp.nombre}</option>`);
+                });
+            }
+        });
+    }
+    
+    function habilitarBotonAsociar() {
+        const seleccionado = $('input[name="ncSeleccionada"]:checked').length > 0;
+        $('#btnAsociarNC').prop('disabled', !seleccionado);
+    }
+    
+    // Event listeners para filtros
+    $('#filtroProveedorNC, #buscarNC').on('change keyup', function() {
+        const proveedor = $('#filtroProveedorNC').val();
+        const busqueda = $('#buscarNC').val();
+        cargarNCsDisponibles(proveedor, busqueda);
+    });
+    
+    // Asociar NC seleccionada
+    $('#btnAsociarNC').on('click', function() {
+        const ncId = $('input[name="ncSeleccionada"]:checked').val();
+        const dteId = $('#asociarNCDteId').val();
+        
+        if (!ncId) {
+            Swal.fire('Error', 'Selecciona una Nota de Crédito', 'warning');
+            return;
+        }
+        
+        if (!dteId) {
+            Swal.fire('Error', 'Error: No se identificó la factura', 'error');
+            return;
+        }
+        
+        $.ajax({
+            url: '/app/asociar_nc_existente/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                nc_id: ncId,
+                dte_id: dteId
+            }),
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire('Éxito', 'Nota de Crédito anexada correctamente', 'success');
+                    $('#modalAsociarNC').modal('hide');
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                } else {
+                    Swal.fire('Error', response.error || 'Error al anexar la NC', 'error');
+                }
+            },
+            error: function() {
+                Swal.fire('Error', 'Error de conexión al anexar la NC', 'error');
+            }
+        });
+    });
+
+    // ========== GESTIÓN DE INCIDENCIAS ==========
+    
+    function abrirModalIncidencias(dteId) {
+        $('#incidenciaDteId').val(dteId);
+        $('#incidenciaTipo').val('');
+        $('#incidenciaDescripcion').val('');
+        cargarIncidencias(dteId);
+        const modal = new bootstrap.Modal(document.getElementById('modalIncidencias'));
+        modal.show();
+    }
+    
+    function cargarIncidencias(dteId) {
+        $.get(`/app/incidencias/${dteId}/`, function (data) {
+            const tbody = $('#tablaIncidenciasBody');
+            tbody.empty();
+            
+            if (data.length === 0) {
+                tbody.append('<tr><td colspan="5" class="text-center text-muted">Sin incidencias registradas</td></tr>');
+            } else {
+                data.forEach(inc => {
+                    const estadoBadge = inc.estado === 'PENDIENTE' 
+                        ? 'danger' 
+                        : inc.estado === 'EN_GESTION' 
+                        ? 'warning' 
+                        : 'success';
+                    
+                    const fila = `
+                    <tr>
+                        <td><span class="badge bg-info">${inc.tipo_display}</span></td>
+                        <td style="word-break: break-word;">${inc.descripcion}</td>
+                        <td><span class="badge bg-${estadoBadge}">${inc.estado_display}</span></td>
+                        <td><small>${inc.fecha_registro}</small></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                ${inc.estado !== 'RESUELTO' 
+                                    ? `<button class="btn btn-outline-warning" onclick="cambiarEstadoIncidencia(${inc.id}, 'EN_GESTION')" title="Marcar en gestión">
+                                        <i class="bi bi-hourglass-split"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success" onclick="resolverIncidencia(${inc.id})" title="Resolver">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>`
+                                    : '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Resuelto</span>'
+                                }
+                                <button class="btn btn-outline-danger" onclick="eliminarIncidencia(${inc.id})" title="Eliminar">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>`;
+                    tbody.append(fila);
+                });
+            }
+        }).fail(function() {
+            Swal.fire('Error', 'No se pudieron cargar las incidencias.', 'error');
+        });
+    }
+    
+    $('#formIncidencia').on('submit', function (e) {
+        e.preventDefault();
+        
+        const dteId = $('#incidenciaDteId').val();
+        const tipo = $('#incidenciaTipo').val();
+        const descripcion = $('#incidenciaDescripcion').val().trim();
+        
+        if (!tipo || !descripcion) {
+            Swal.fire('Datos inválidos', 'Completa todos los campos.', 'warning');
+            return;
+        }
+        
+        if (descripcion.length < 10) {
+            Swal.fire('Descripción muy corta', 'La descripción debe tener al menos 10 caracteres.', 'warning');
+            return;
+        }
+        
+        $.ajax({
+            url: '/app/incidencias/crear/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                dte_id: dteId,
+                tipo: tipo,
+                descripcion: descripcion
+            }),
+            success: (response) => {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Incidencia creada',
+                        text: response.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    $('#incidenciaTipo').val('');
+                    $('#incidenciaDescripcion').val('');
+                    cargarIncidencias(dteId);
+                    cargarDTEs(currentPageDTE, currentSearchDTE); // Refrescar tabla principal
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: (xhr) => {
+                const response = xhr.responseJSON;
+                Swal.fire('Error', response?.error || 'No se pudo crear la incidencia.', 'error');
+            }
+        });
+    });
+    
+    function cambiarEstadoIncidencia(incidenciaId, nuevoEstado) {
+        $.ajax({
+            url: `/app/incidencias/actualizar/${incidenciaId}/`,
+            method: 'PUT',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ estado: nuevoEstado }),
+            success: () => {
+                const dteId = $('#incidenciaDteId').val();
+                cargarIncidencias(dteId);
+                cargarDTEs(currentPageDTE, currentSearchDTE);
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Estado actualizado',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            },
+            error: () => {
+                Swal.fire('Error', 'No se pudo actualizar el estado.', 'error');
+            }
+        });
+    }
+    
+    function resolverIncidencia(incidenciaId) {
+        Swal.fire({
+            title: 'Resolver incidencia',
+            input: 'textarea',
+            inputLabel: 'Notas de resolución (opcional)',
+            inputPlaceholder: 'Escribe cómo se resolvió la incidencia...',
+            showCancelButton: true,
+            confirmButtonText: 'Resolver',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#28a745'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/app/incidencias/actualizar/${incidenciaId}/`,
+                    method: 'PUT',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    data: JSON.stringify({
+                        estado: 'RESUELTO',
+                        notas_resolucion: result.value || ''
+                    }),
+                    success: () => {
+                        const dteId = $('#incidenciaDteId').val();
+                        cargarIncidencias(dteId);
+                        cargarDTEs(currentPageDTE, currentSearchDTE);
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Incidencia resuelta',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    },
+                    error: () => {
+                        Swal.fire('Error', 'No se pudo resolver la incidencia.', 'error');
+                    }
+                });
+            }
+        });
+    }
+    
+    function eliminarIncidencia(incidenciaId) {
+        Swal.fire({
+            title: '¿Eliminar incidencia?',
+            text: 'Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#d33'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/app/incidencias/eliminar/${incidenciaId}/`,
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    success: () => {
+                        const dteId = $('#incidenciaDteId').val();
+                        cargarIncidencias(dteId);
+                        cargarDTEs(currentPageDTE, currentSearchDTE);
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Incidencia eliminada',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    },
+                    error: () => {
+                        Swal.fire('Error', 'No se pudo eliminar la incidencia.', 'error');
                     }
                 });
             }
