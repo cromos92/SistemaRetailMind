@@ -661,12 +661,15 @@ class Ticket(models.Model):
     ])
     
     # ✅ CAMPOS PARA FACTURACIÓN ELECTRÓNICA (Acepta)
-    tipo_dte = models.CharField(max_length=20, blank=True, null=True, choices=[
+    tipo_dte = models.CharField(max_length=30, blank=True, null=True, choices=[
         ('TICKET', 'Ticket (sin DTE)'),
         ('BOLETA', 'Boleta Manual'),
         ('BOLETA_ELECTRONICA', 'Boleta Electrónica - 39'),
         ('FACTURA_ELECTRONICA', 'Factura Electrónica - 33'),
         ('FACTURA_EXENTA', 'Factura Exenta - 34'),
+        ('TICKET_COBRO_CAMBIO', 'Ticket Cobro Cambio'),
+        ('TICKET_DEVOLUCION', 'Ticket Devolución'),
+        ('TICKET_CAMBIO_DIRECTO', 'Ticket Cambio Directo'),
     ], default='TICKET', verbose_name='Tipo de Documento')
     
     folio_dte = models.IntegerField(blank=True, null=True, verbose_name='Folio DTE', help_text='Folio del documento electrónico generado')
