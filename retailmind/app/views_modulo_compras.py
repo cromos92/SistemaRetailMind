@@ -865,10 +865,11 @@ def eliminar_dte(request, dte_id):
 def dashboard_compras_estrategico(request):
     """Dashboard estratégico de compras con métricas avanzadas basado en datos reales"""
     try:
-        from datetime import datetime
+        from datetime import datetime, timedelta
+        from django.db.models.functions import TruncMonth
         
         # Parámetros de filtro
-        anio = request.GET.get('anio', datetime.now().year)
+        anio = int(request.GET.get('anio', datetime.now().year))
         temporada = request.GET.get('temporada', '')
         proveedor_id = request.GET.get('proveedor', '')
         responsable = request.GET.get('responsable', '')
@@ -1044,9 +1045,9 @@ def dashboard_compras_estrategico(request):
                 estado = 'Retrasado'
             
             rendimiento_detallado.append({
-                'nombre': compra.nombre,
-                'proveedor': compra.empresa.nombre,
-                'temporada': compra.temporada,
+                'nombre': compra.nombre if hasattr(compra, 'nombre') and compra.nombre else f'Compra #{compra.id}',
+                'proveedor': compra.empresa.nombre if compra.empresa else 'Sin proveedor',
+                'temporada': compra.temporada if hasattr(compra, 'temporada') and compra.temporada else 'N/A',
                 'cumplimiento': cumplimiento_compra,
                 'roi': roi_compra,
                 'rotacion': round(unidades_recibidas / max(unidades_esperadas, 1), 2),
@@ -1097,13 +1098,103 @@ def dashboard_compras_estrategico(request):
                     'mensaje': f'Revisar desempeño de {len(proveedores_bajo_cumplimiento)} proveedor(es) con bajo cumplimiento.'
                 })
         
-        # ===== TENDENCIAS (simuladas por ahora) =====
+        # ===== COMPRAS POR MES (para gráfico de tendencias) =====
+        compras_por_mes = []
+        for mes in range(1, 13):
+            compras_mes = compras_query.filter(fecha__month=mes)
+            if compras_mes.exists():
+                productos_mes = Compras_Producto.objects.filter(compras__in=compras_mes.values_list('id', flat=True))
+                inversion_mes = productos_mes.aggregate(
+                    total=Sum(F('costo') * F('compras_producto_talla__stock'))
+                )['total'] or 0
+                
+                compras_por_mes.append({
+                    'mes': mes,
+                    'nombre_mes': datetime(anio, mes, 1).strftime('%B'),
+                    'total_compras': compras_mes.count(),
+                    'inversion': float(inversion_mes) if inversion_mes else 0
+                })
+        
+        # ===== TENDENCIAS (calculadas) =====
+        # Calcular tendencias comparando con período anterior
+        compras_anterior = Compras.objects.filter(fecha__year=anio-1)
+        if temporada:
+            compras_anterior = compras_anterior.filter(temporada__icontains=temporada)
+        if proveedor_id:
+            compras_anterior = compras_anterior.filter(empresa_id=proveedor_id)
+        if responsable:
+            compras_anterior = compras_anterior.filter(responsable=responsable)
+            
+        compras_anterior_ids = list(compras_anterior.values_list('id', flat=True))
+        
+        # Cumplimiento anterior
+        tallas_anterior = Compras_Producto_Talla.objects.filter(
+            compra_producto__compras__in=compras_anterior_ids
+        )
+        esperadas_anterior = tallas_anterior.aggregate(total=Sum('stock'))['total'] or 1
+        
+        recepciones_anterior = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__compra_producto__compras__in=compras_anterior_ids
+        )
+        recepcionadas_anterior = recepciones_anterior.aggregate(total=Sum('stockArribado'))['total'] or 0
+        cumplimiento_anterior = (recepcionadas_anterior / esperadas_anterior * 100) if esperadas_anterior > 0 else 0
+        
+        # ROI anterior
+        productos_anterior = Compras_Producto.objects.filter(compras__in=compras_anterior_ids)
+        inversion_anterior = productos_anterior.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 1
+        valor_anterior = productos_anterior.aggregate(
+            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        roi_anterior = ((valor_anterior - inversion_anterior) / inversion_anterior * 100) if inversion_anterior > 0 else 0
+        
         tendencias = {
-            'trend_cumplimiento': 5.2 if cumplimiento_general >= 80 else -3.5,
-            'trend_roi': 8.5 if roi_promedio >= 20 else -2.1,
-            'trend_rotacion': 0,
-            'trend_precision': 2.3 if precision_pronostico >= 80 else -4.2
+            'trend_cumplimiento': round(cumplimiento_general - cumplimiento_anterior, 1),
+            'trend_roi': round(roi_promedio - roi_anterior, 1),
+            'trend_rotacion': 0,  # Se puede calcular con datos de ventas si están disponibles
+            'trend_precision': round(precision_pronostico - cumplimiento_anterior, 1)
         }
+        
+        # ===== TOP 5 PROVEEDORES POR INVERSIÓN =====
+        top_proveedores = []
+        proveedores_inversiones = {}
+        for proveedor in proveedores:
+            compras_proveedor = compras_query.filter(empresa_id=proveedor['empresa__id'])
+            compras_proveedor_ids = list(compras_proveedor.values_list('id', flat=True))
+            
+            productos_prov = Compras_Producto.objects.filter(compras__in=compras_proveedor_ids)
+            inversion_prov = productos_prov.aggregate(
+                total=Sum(F('costo') * F('compras_producto_talla__stock'))
+            )['total'] or 0
+            
+            if inversion_prov > 0:
+                proveedores_inversiones[proveedor['empresa__nombre']] = float(inversion_prov)
+        
+        # Ordenar y tomar top 5
+        top_proveedores = sorted(
+            [{'proveedor': k, 'inversion': v} for k, v in proveedores_inversiones.items()],
+            key=lambda x: x['inversion'],
+            reverse=True
+        )[:5]
+        
+        # ===== PRODUCTOS CON MAYOR INVERSIÓN =====
+        top_productos = []
+        productos_con_inversion = Compras_Producto.objects.filter(
+            compras__in=compras_ids
+        ).annotate(
+            inversion_total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        ).order_by('-inversion_total')[:10]
+        
+        for prod in productos_con_inversion:
+            top_productos.append({
+                'nombre': prod.nombre,
+                'marca': prod.atributo1 or '-',
+                'inversion': float(prod.inversion_total) if prod.inversion_total else 0,
+                'unidades': Compras_Producto_Talla.objects.filter(compra_producto=prod).aggregate(
+                    total=Sum('stock')
+                )['total'] or 0
+            })
         
         # ===== RESPUESTA FINAL =====
         response_data = {
@@ -1116,6 +1207,9 @@ def dashboard_compras_estrategico(request):
             'rendimiento_detallado': rendimiento_detallado,
             'alertas': alertas,
             'recomendaciones': recomendaciones,
+            'compras_por_mes': compras_por_mes,
+            'top_proveedores': top_proveedores,
+            'top_productos': top_productos,
             **tendencias,
             # Métricas adicionales
             'metricas_adicionales': {
@@ -1124,7 +1218,8 @@ def dashboard_compras_estrategico(request):
                 'total_unidades_esperadas': total_unidades_esperadas,
                 'total_unidades_recepcionadas': total_unidades_recepcionadas,
                 'inversion_total': float(inversion_total) if inversion_total else 0,
-                'valor_venta_esperado': float(valor_venta_esperado) if valor_venta_esperado else 0
+                'valor_venta_esperado': float(valor_venta_esperado) if valor_venta_esperado else 0,
+                'ganancia_esperada': float(valor_venta_esperado - inversion_total) if (valor_venta_esperado and inversion_total) else 0
             }
         }
         

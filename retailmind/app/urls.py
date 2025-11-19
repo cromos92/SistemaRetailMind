@@ -70,9 +70,14 @@ from .views_modulo_ventas import (
     buscar_ticket_para_cambio,
     buscar_documento_cambio,
     buscar_productos_para_cambio,
+    # Funciones Códigos de Autorización Dinámicos
+    obtener_codigo_autorizacion_actual,
+    validar_codigo_autorizacion,
     # Funciones Clientes POS
     guardar_cliente_pos,
     enviar_ticket_email,
+    # Funciones Búsqueda Productos POS
+    buscar_productos_pos_avanzado,
     # Funciones Dashboard de Ventas
     dashboard_ventas,
     obtener_indicadores_globales_ventas,
@@ -191,6 +196,16 @@ from .views_modulo_requerimientos import (
     obtener_estadisticas_requerimientos,
     exportar_requerimientos,
 )
+from .views_permisos import (
+    # Gestión de permisos
+    gestion_permisos,
+    obtener_permisos_rol,
+    guardar_permiso,
+    guardar_permisos_masivos,
+    copiar_permisos_rol,
+    gestionar_modulos_opciones,
+    estadisticas_permisos,
+)
 from .views_transbank_sdk import (
     # Vistas
     gestion_transbank_pos_sdk,
@@ -211,6 +226,12 @@ from .views_transbank_sdk import (
     totales,
     detalles,
     cerrar_dia,
+)
+from .views_dashboard_mejorado import (
+    # Dashboard Integral Mejorado
+    dashboard_integral_mejorado,
+    obtener_metricas_dashboard_integral,
+    exportar_dashboard_integral_excel,
 )
 from django.urls import path
 from django.conf.urls.static import static
@@ -431,6 +452,7 @@ urlpatterns = [
     path('api/buscar-cliente/', buscar_cliente_rut, name='buscar_cliente_rut'),
     path('api/guardar-cliente-pos/', guardar_cliente_pos, name='guardar_cliente_pos'),
     path('api/enviar-ticket-email/', enviar_ticket_email, name='enviar_ticket_email'),
+    path('api/buscar-productos-pos-avanzado/', buscar_productos_pos_avanzado, name='buscar_productos_pos_avanzado'),
     
     # === GESTIÓN DE DOCUMENTOS DE VENTAS ===
     path('ventas/documentos/', gestion_ventas_documentos, name='gestion_ventas_documentos'),
@@ -554,6 +576,10 @@ urlpatterns = [
     path('ventas/api/aprobar-cambio-generar-ticket/', aprobar_cambio_generar_ticket, name='aprobar_cambio_generar_ticket'),
     path('ventas/api/validar-codigo-vendedor/', validar_codigo_vendedor, name='validar_codigo_vendedor'),
     path('ventas/api/cancelar-cambio-devolucion/', cancelar_cambio_devolucion, name='cancelar_cambio_devolucion'),
+    
+    # === APIs para Códigos de Autorización Dinámicos ===
+    path('ventas/api/codigo-autorizacion/actual/', obtener_codigo_autorizacion_actual, name='obtener_codigo_autorizacion_actual'),
+    path('ventas/api/codigo-autorizacion/validar/', validar_codigo_autorizacion, name='validar_codigo_autorizacion'),
     path('ventas/api/ejecutar-cambio-devolucion/', ejecutar_cambio_devolucion, name='ejecutar_cambio_devolucion'),
     path('ventas/api/registrar-pago-diferencia/', registrar_pago_diferencia, name='registrar_pago_diferencia'),
     path('ventas/api/completar-cambio-devolucion/', completar_cambio_devolucion, name='completar_cambio_devolucion'),
@@ -699,5 +725,29 @@ urlpatterns = [
     path('api/requerimientos/crear-cliente/', crear_cliente_rapido, name='api_crear_cliente_requerimiento'),
     path('api/requerimientos/estadisticas/', obtener_estadisticas_requerimientos, name='api_estadisticas_requerimientos'),
     path('api/requerimientos/exportar/', exportar_requerimientos, name='api_exportar_requerimientos'),
+
+    # ========== MÓDULO DE GESTIÓN DE PERMISOS ==========
+    # Vista principal de gestión de permisos
+    path('permisos/gestion/', gestion_permisos, name='gestion_permisos'),
+    
+    # APIs de permisos
+    path('permisos/obtener-permisos-rol/', obtener_permisos_rol, name='obtener_permisos_rol'),
+    path('permisos/guardar-permiso/', guardar_permiso, name='guardar_permiso'),
+    path('permisos/guardar-permisos-masivos/', guardar_permisos_masivos, name='guardar_permisos_masivos'),
+    path('permisos/copiar-permisos-rol/', copiar_permisos_rol, name='copiar_permisos_rol'),
+    
+    # Gestión de módulos y opciones
+    path('permisos/modulos-opciones/', gestionar_modulos_opciones, name='gestionar_modulos_opciones'),
+    
+    # Estadísticas
+    path('permisos/estadisticas/', estadisticas_permisos, name='estadisticas_permisos'),
+
+    # ========== DASHBOARD INTEGRAL MEJORADO ==========
+    # Vista principal del dashboard integral
+    path('dashboard-integral/', dashboard_integral_mejorado, name='dashboard_integral_mejorado'),
+    
+    # APIs del dashboard
+    path('api/dashboard-integral/metricas/', obtener_metricas_dashboard_integral, name='obtener_metricas_dashboard_integral'),
+    path('api/dashboard-integral/exportar/', exportar_dashboard_integral_excel, name='exportar_dashboard_integral_excel'),
 
 ]

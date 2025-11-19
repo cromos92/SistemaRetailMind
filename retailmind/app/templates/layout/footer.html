@@ -121,6 +121,169 @@ setInterval(checkSession, 3600000);  // 1 hora = 60*60*1000 milisegundos
 
     });
 </script>
+
+<!-- Script para Código de Autorización Dinámico -->
+<script>
+// ========== SISTEMA DE CÓDIGOS DE AUTORIZACIÓN DINÁMICOS ==========
+
+let intervaloActualizacionCodigo = null;
+
+function actualizarCodigoAutorizacion() {
+    // Solo ejecutar si el widget existe (usuario es admin o jefe local)
+    if (!document.getElementById('codigo-autorizacion-widget')) {
+        return;
+    }
+    
+    const displayCodigo = document.getElementById('codigo-autorizacion-display');
+    const displayValidez = document.getElementById('codigo-validez-display');
+    const displayTiempoRestante = document.getElementById('codigo-tiempo-restante');
+    const btnRefresh = document.getElementById('btn-refresh-codigo');
+    
+    // Mostrar loading
+    if (displayCodigo) {
+        displayCodigo.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+    if (btnRefresh) {
+        btnRefresh.disabled = true;
+    }
+    
+    // Llamar a la API
+    fetch('/app/ventas/api/codigo-autorizacion/actual/', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.codigo) {
+            // Actualizar código
+            if (displayCodigo) {
+                displayCodigo.textContent = data.codigo.codigo;
+                
+                // Animar el código
+                displayCodigo.style.color = '#28a745';
+                setTimeout(() => {
+                    displayCodigo.style.color = '';
+                }, 1000);
+            }
+            
+            // Actualizar validez con formato mejorado
+            if (displayValidez) {
+                const minutos = data.codigo.minutos_restantes;
+                if (minutos < 15) {
+                    displayValidez.innerHTML = `Expira a las ${data.codigo.valido_hasta} <span class="text-danger fw-bold">(${minutos} min!)</span>`;
+                } else {
+                    displayValidez.textContent = `Válido hasta las ${data.codigo.valido_hasta} (${minutos} min)`;
+                }
+            }
+            
+            // Limpiar el tiempo restante ya que se muestra en validez
+            if (displayTiempoRestante) {
+                displayTiempoRestante.textContent = '';
+            }
+        } else {
+            if (displayCodigo) {
+                displayCodigo.textContent = 'ERROR';
+            }
+            console.error('Error al obtener código:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error al actualizar código de autorización:', error);
+        if (displayCodigo) {
+            displayCodigo.textContent = 'ERROR';
+        }
+    })
+    .finally(() => {
+        if (btnRefresh) {
+            btnRefresh.disabled = false;
+        }
+    });
+}
+
+// Inicializar al cargar la página
+$(document).ready(function() {
+    // Solo ejecutar si el widget existe
+    if (document.getElementById('codigo-autorizacion-widget')) {
+        // Actualizar inmediatamente
+        actualizarCodigoAutorizacion();
+        
+        // Actualizar cada 5 minutos
+        intervaloActualizacionCodigo = setInterval(actualizarCodigoAutorizacion, 5 * 60 * 1000);
+    }
+});
+
+// Función para copiar código al portapapeles
+function copiarCodigoAutorizacion() {
+    const codigo = document.getElementById('codigo-autorizacion-display')?.textContent;
+    const btnCopiar = document.getElementById('btn-copiar-codigo');
+    
+    if (!codigo || codigo === '------' || codigo === 'ERROR') {
+        Swal.fire({
+            icon: 'warning',
+            title: 'No hay código disponible',
+            text: 'Espera a que se genere el código',
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        });
+        return;
+    }
+    
+    // Deshabilitar botón temporalmente
+    if (btnCopiar) {
+        btnCopiar.disabled = true;
+        const iconoOriginal = btnCopiar.innerHTML;
+        btnCopiar.innerHTML = '<i class="bx bx-check fs-14"></i>';
+    }
+    
+    // Copiar al portapapeles
+    navigator.clipboard.writeText(codigo).then(() => {
+        Swal.fire({
+            icon: 'success',
+            title: '✓ Código Copiado',
+            html: `<div class="fs-3 fw-bold font-monospace mb-2">${codigo}</div>
+                   <p class="mb-0">El código ha sido copiado al portapapeles</p>`,
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end',
+            background: '#d4edda',
+            iconColor: '#28a745'
+        });
+        
+        // Restaurar botón después de 1 segundo
+        setTimeout(() => {
+            if (btnCopiar) {
+                btnCopiar.disabled = false;
+                btnCopiar.innerHTML = '<i class="bx bx-copy fs-14"></i>';
+            }
+        }, 1000);
+    }).catch(err => {
+        console.error('Error al copiar:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error al copiar',
+            text: 'No se pudo copiar el código al portapapeles',
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        });
+        
+        // Restaurar botón en caso de error
+        if (btnCopiar) {
+            btnCopiar.disabled = false;
+            btnCopiar.innerHTML = '<i class="bx bx-copy fs-14"></i>';
+        }
+    });
+}
+
+</script>
 <div id="fullscreenLoader" style="
     display: none;
     position: fixed;

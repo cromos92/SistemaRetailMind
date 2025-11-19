@@ -83,6 +83,39 @@
                             </button>
                         </div>
 
+                        <!-- Widget de Código de Autorización Dinámico (Solo para Administradores y Jefes de Local) -->
+                        {% if user.rol == 'administrador' or user.rol == 'jefe_local' %}
+                        <div class="ms-3 header-item d-none d-lg-flex" id="codigo-autorizacion-widget">
+                            <div class="d-flex align-items-center bg-soft-warning px-3 py-2 rounded" style="border: 2px solid #ffc107;">
+                                <div class="me-2">
+                                    <i class='bx bx-shield-quarter fs-20 text-warning'></i>
+                                </div>
+                                <div>
+                                    <small class="d-block text-muted" style="font-size: 0.7rem; line-height: 1;">Código de Autorización</small>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <strong id="codigo-autorizacion-display" class="text-dark fs-16 fw-bold font-monospace me-1" style="letter-spacing: 2px;">------</strong>
+                                        <button class="btn btn-sm btn-success p-0 px-1" 
+                                                onclick="copiarCodigoAutorizacion()" 
+                                                id="btn-copiar-codigo"
+                                                title="Copiar código">
+                                            <i class='bx bx-copy fs-14'></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning p-0 px-1" 
+                                                onclick="actualizarCodigoAutorizacion()" 
+                                                id="btn-refresh-codigo"
+                                                title="Actualizar código">
+                                            <i class='bx bx-refresh fs-14'></i>
+                                        </button>
+                                    </div>
+                                    <small class="d-block text-muted" style="font-size: 0.65rem; line-height: 1;">
+                                        <span id="codigo-validez-display">Cargando...</span> 
+                                        <span class="text-danger fw-bold" id="codigo-tiempo-restante"></span>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <div class="dropdown topbar-head-dropdown ms-1 header-item" id="notificationDropdown">
                             <button type="button"
                                 class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle shadow-none"
@@ -458,6 +491,11 @@
                                 <ul class="nav nav-sm flex-column">
 
                                     <li class="nav-item">
+                                        <a href="{% url 'verHome' %}" class="nav-link" data-key="t-dashboard-general">
+                                            <i class="ri-dashboard-3-line me-1"></i> Dashboard General
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
                                         <a href="{% url 'dashboard_ventas' %}" class="nav-link" data-key="t-dashboard-ventas">
                                             <i class="ri-dashboard-line me-1"></i> Dashboard Ventas
                                         </a>
@@ -483,30 +521,9 @@
                                         </div>
                                     </li>
                                     <li class="nav-item">
-                                        <a href="charts-echarts.html" class="nav-link" data-key="t-echarts"> Dashboard
-                                            Documentos
-
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a class="nav-link menu-link collapsed" href="#dashboardCompras" data-bs-toggle="collapse"
-                                            role="button" aria-expanded="false" aria-controls="dashboardCompras">
+                                        <a href="/app/verDashboardCompras/" class="nav-link" data-key="t-dashboard-compras">
                                             <i class="ri-shopping-bag-line me-1"></i> Dashboard de Compras
                                         </a>
-                                        <div class="menu-dropdown collapse" id="dashboardCompras">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="/app/verDashboardCompras/" class="nav-link" data-key="t-chartjs">
-                                                        <i class="ri-graph-up-line me-1"></i> Dashboard Estratégico
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="/app/verDiagnosticoCompras/" class="nav-link" data-key="t-echarts">
-                                                        <i class="ri-search-line me-1"></i> Diagnóstico de Datos
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
                                     </li>
 
 
@@ -835,7 +852,7 @@
                                         </a>
                                     </li>
                                     <li class="nav-item">
-                                        <a href="charts-chartjs.html" class="nav-link" data-key="t-chartjs">
+                                        <a href="{% url 'gestion_permisos' %}" class="nav-link" data-key="t-gestion-permisos">
                                             <i class="bi bi-shield-lock"></i> Gestion Permisos
                                         </a>
                                     </li>

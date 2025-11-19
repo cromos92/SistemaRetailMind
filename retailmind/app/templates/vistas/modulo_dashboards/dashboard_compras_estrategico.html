@@ -280,6 +280,73 @@
         </div>
     </div>
 
+    <!-- Nuevos Gráficos -->
+    <div class="row mb-4">
+        <!-- Tendencia de Inversión Mensual -->
+        <div class="col-lg-12">
+            <div class="card dashboard-card border-0">
+                <div class="card-header bg-transparent border-0">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up-arrow me-2"></i>Evolución de Inversión Mensual
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartInversionMensual"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Proveedores y Productos -->
+    <div class="row mb-4">
+        <!-- Top 5 Proveedores -->
+        <div class="col-lg-6">
+            <div class="card dashboard-card border-0">
+                <div class="card-header bg-transparent border-0">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-trophy me-2 text-warning"></i>Top 5 Proveedores por Inversión
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartTopProveedores"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top 10 Productos -->
+        <div class="col-lg-6">
+            <div class="card dashboard-card border-0">
+                <div class="card-header bg-transparent border-0">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-box-seam me-2 text-info"></i>Top 10 Productos con Mayor Inversión
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0" id="tablaTopProductos">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Producto</th>
+                                    <th>Marca</th>
+                                    <th class="text-end">Unidades</th>
+                                    <th class="text-end">Inversión</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyTopProductos">
+                                <!-- Datos dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabla de Rendimiento Detallado -->
     <div class="card dashboard-card border-0">
         <div class="card-header bg-transparent border-0">
@@ -469,7 +536,13 @@ function actualizarDashboard() {
         method: 'GET',
         data: filtros,
         success: function(data) {
+            console.log('Dashboard data received:', data);
             dashboardData = data;
+            
+            // Log específico para rendimiento detallado
+            console.log('Rendimiento detallado:', data.rendimiento_detallado);
+            console.log('Total items en rendimiento:', data.rendimiento_detallado ? data.rendimiento_detallado.length : 0);
+            
             actualizarKPIs();
             actualizarGraficos();
             actualizarTabla();
@@ -487,8 +560,24 @@ function actualizarDashboard() {
         },
         error: function(xhr, status, error) {
             hideGlobalLoader();
-            console.error('Error:', xhr.responseText);
-            Swal.fire('Error', 'No se pudo cargar el dashboard: ' + error, 'error');
+            console.error('Error al cargar dashboard:', error);
+            console.error('Response:', xhr.responseText);
+            
+            // Intentar parsear el error para mostrar más detalles
+            try {
+                const errorData = JSON.parse(xhr.responseText);
+                const errorMsg = errorData.error || error;
+                const traceback = errorData.traceback || '';
+                
+                Swal.fire({
+                    title: 'Error al cargar el dashboard',
+                    html: `<p>${errorMsg}</p>${traceback ? '<pre class="text-start">' + traceback + '</pre>' : ''}`,
+                    icon: 'error',
+                    width: '800px'
+                });
+            } catch(e) {
+                Swal.fire('Error', 'No se pudo cargar el dashboard: ' + error, 'error');
+            }
         }
     });
 }
@@ -545,6 +634,9 @@ function actualizarTendencia(elementId, trend) {
 function actualizarGraficos() {
     actualizarGraficoCumplimiento();
     actualizarGraficoROI();
+    actualizarGraficoInversionMensual();
+    actualizarGraficoTopProveedores();
+    actualizarTablaTopProductos();
 }
 
 // Gráfico de cumplimiento por proveedor
@@ -555,13 +647,47 @@ function actualizarGraficoCumplimiento() {
         charts.cumplimiento.destroy();
     }
     
+    const proveedores = dashboardData.cumplimiento_proveedores || [];
+    
+    // Si no hay datos, mostrar gráfico vacío con mensaje
+    if (proveedores.length === 0) {
+        charts.cumplimiento = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Sin datos'],
+                datasets: [{
+                    label: 'Cumplimiento (%)',
+                    data: [0],
+                    backgroundColor: 'rgba(200, 200, 200, 0.5)',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'No hay datos de proveedores disponibles'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+        return;
+    }
+    
     charts.cumplimiento = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: dashboardData.cumplimiento_proveedores.map(p => p.proveedor),
+            labels: proveedores.map(p => p.proveedor),
             datasets: [{
                 label: 'Cumplimiento (%)',
-                data: dashboardData.cumplimiento_proveedores.map(p => p.cumplimiento),
+                data: proveedores.map(p => p.cumplimiento),
                 backgroundColor: 'rgba(54, 162, 235, 0.8)',
                 borderColor: 'rgba(54, 162, 235, 1)',
                 borderWidth: 1
@@ -588,12 +714,42 @@ function actualizarGraficoROI() {
         charts.roi.destroy();
     }
     
+    const temporadas = dashboardData.roi_temporadas || [];
+    
+    // Si no hay datos, mostrar gráfico vacío con mensaje
+    if (temporadas.length === 0) {
+        charts.roi = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Sin datos'],
+                datasets: [{
+                    data: [100],
+                    backgroundColor: ['rgba(200, 200, 200, 0.5)']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'No hay datos de temporadas disponibles'
+                    },
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        return;
+    }
+    
     charts.roi = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: dashboardData.roi_temporadas.map(t => t.temporada),
+            labels: temporadas.map(t => t.temporada),
             datasets: [{
-                data: dashboardData.roi_temporadas.map(t => t.roi),
+                data: temporadas.map(t => t.roi),
                 backgroundColor: [
                     'rgba(255, 99, 132, 0.8)',
                     'rgba(54, 162, 235, 0.8)',
@@ -604,8 +760,197 @@ function actualizarGraficoROI() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + context.parsed + '%';
+                        }
+                    }
+                }
+            }
         }
+    });
+}
+
+// Gráfico de inversión mensual
+function actualizarGraficoInversionMensual() {
+    const ctx = document.getElementById('chartInversionMensual').getContext('2d');
+    
+    if (charts.inversionMensual) {
+        charts.inversionMensual.destroy();
+    }
+    
+    const comprasPorMes = dashboardData.compras_por_mes || [];
+    
+    charts.inversionMensual = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: comprasPorMes.map(m => m.nombre_mes),
+            datasets: [
+                {
+                    label: 'Inversión ($)',
+                    data: comprasPorMes.map(m => m.inversion),
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'N° Compras',
+                    data: comprasPorMes.map(m => m.total_compras),
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    tension: 0.4,
+                    fill: false,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.datasetIndex === 0) {
+                                label += '$' + formatMoney(context.parsed.y);
+                            } else {
+                                label += context.parsed.y;
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + formatMoney(value);
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de top proveedores
+function actualizarGraficoTopProveedores() {
+    const ctx = document.getElementById('chartTopProveedores').getContext('2d');
+    
+    if (charts.topProveedores) {
+        charts.topProveedores.destroy();
+    }
+    
+    const topProveedores = dashboardData.top_proveedores || [];
+    
+    charts.topProveedores = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: topProveedores.map(p => p.proveedor),
+            datasets: [{
+                label: 'Inversión ($)',
+                data: topProveedores.map(p => p.inversion),
+                backgroundColor: [
+                    'rgba(255, 159, 64, 0.8)',
+                    'rgba(54, 162, 235, 0.8)',
+                    'rgba(255, 205, 86, 0.8)',
+                    'rgba(75, 192, 192, 0.8)',
+                    'rgba(153, 102, 255, 0.8)'
+                ],
+                borderColor: [
+                    'rgba(255, 159, 64, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 205, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Inversión: $' + formatMoney(context.parsed.x);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + formatMoney(value);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Actualizar tabla de top productos
+function actualizarTablaTopProductos() {
+    const tbody = $('#tbodyTopProductos');
+    tbody.empty();
+    
+    const topProductos = dashboardData.top_productos || [];
+    
+    if (topProductos.length === 0) {
+        tbody.append('<tr><td colspan="5" class="text-center text-muted">Sin datos disponibles</td></tr>');
+        return;
+    }
+    
+    topProductos.forEach((producto, index) => {
+        const fila = `
+            <tr>
+                <td><span class="badge ${index < 3 ? 'bg-warning' : 'bg-secondary'}">${index + 1}</span></td>
+                <td>${producto.nombre}</td>
+                <td><span class="badge bg-info">${producto.marca}</span></td>
+                <td class="text-end">${producto.unidades.toLocaleString()}</td>
+                <td class="text-end fw-bold">$${formatMoney(producto.inversion)}</td>
+            </tr>
+        `;
+        tbody.append(fila);
     });
 }
 
@@ -614,12 +959,27 @@ function actualizarTabla() {
     const tbody = $('#tbodyRendimiento');
     tbody.empty();
     
+    // Verificar si hay datos disponibles
+    if (!dashboardData.rendimiento_detallado || dashboardData.rendimiento_detallado.length === 0) {
+        const filaVacia = `
+            <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                    No hay datos de rendimiento disponibles para el período seleccionado.
+                    <br><small>Las compras aparecerán aquí cuando registres compras en el sistema.</small>
+                </td>
+            </tr>
+        `;
+        tbody.append(filaVacia);
+        return;
+    }
+    
     dashboardData.rendimiento_detallado.forEach(function(item) {
         const fila = `
             <tr>
-                <td>${item.nombre}</td>
-                <td>${item.proveedor}</td>
-                <td>${item.temporada}</td>
+                <td>${item.nombre || 'N/A'}</td>
+                <td>${item.proveedor || 'N/A'}</td>
+                <td>${item.temporada || 'N/A'}</td>
                 <td>
                     <div class="d-flex align-items-center">
                         <div class="progress flex-grow-1 me-2" style="height: 6px;">
@@ -670,7 +1030,19 @@ function actualizarAlertas() {
     const lista = $('#listaAlertas');
     lista.empty();
     
-    dashboardData.alertas.forEach(function(alerta) {
+    const alertas = dashboardData.alertas || [];
+    
+    if (alertas.length === 0) {
+        lista.append(`
+            <li class="text-muted">
+                <i class="bi bi-check-circle text-success me-2"></i>
+                No hay alertas en este momento
+            </li>
+        `);
+        return;
+    }
+    
+    alertas.forEach(function(alerta) {
         const item = `
             <li class="mb-2">
                 <i class="bi bi-exclamation-circle text-warning me-2"></i>
@@ -686,7 +1058,19 @@ function actualizarRecomendaciones() {
     const lista = $('#listaRecomendaciones');
     lista.empty();
     
-    dashboardData.recomendaciones.forEach(function(recomendacion) {
+    const recomendaciones = dashboardData.recomendaciones || [];
+    
+    if (recomendaciones.length === 0) {
+        lista.append(`
+            <li class="text-muted">
+                <i class="bi bi-info-circle text-info me-2"></i>
+                No hay recomendaciones en este momento
+            </li>
+        `);
+        return;
+    }
+    
+    recomendaciones.forEach(function(recomendacion) {
         const item = `
             <li class="mb-2">
                 <i class="bi bi-check-circle text-info me-2"></i>

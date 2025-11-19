@@ -774,6 +774,14 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
         
         # Registrar movimiento de salida
         from .views import registrar_movimiento_producto
+        # ✅ Determinar referencia externa: usar DTE si está disponible, si no usar correlativo del ticket
+        if referencia_externa:
+            ref_final = referencia_externa
+        elif ticket:
+            ref_final = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
+        else:
+            ref_final = None
+        
         registrar_movimiento_producto(
             producto_talla=producto_talla,
             concepto='VENTA' if ticket else 'SALIDA',
@@ -781,7 +789,7 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
             responsable=responsable,
             ticket=ticket,
             observaciones=observaciones,
-            referencia_externa=referencia_externa
+            referencia_externa=ref_final
         )
         
         return lotes_consumidos

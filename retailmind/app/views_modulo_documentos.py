@@ -1885,9 +1885,21 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         'descuento_global': descuento_global
     }
     
-    # Preparar referencias (si hay)
+    # Preparar referencias (sistema nuevo de múltiples referencias)
     referencias = []
-    if ticket.referencia_tipo and ticket.referencia_folio:
+    
+    # ✅ PRIORITARIO: Leer referencias del nuevo modelo (múltiples)
+    referencias_modelo = ticket.referencias.all()
+    if referencias_modelo.exists():
+        for ref in referencias_modelo:
+            referencias.append({
+                'tipo_documento': ref.tipo_documento,
+                'folio': ref.folio,
+                'fecha': ref.fecha.strftime('%Y-%m-%d'),
+                'razon': ''
+            })
+    # ⚠️ FALLBACK: Si no hay referencias nuevas, usar campos antiguos (retrocompatibilidad)
+    elif ticket.referencia_tipo and ticket.referencia_folio:
         referencias.append({
             'tipo_documento': ticket.referencia_tipo,
             'folio': ticket.referencia_folio,

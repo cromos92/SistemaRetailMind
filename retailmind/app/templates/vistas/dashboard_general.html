@@ -1,0 +1,600 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+/* ========== ESTILOS GENERALES DEL DASHBOARD ========== */
+.dashboard-card {
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    border: none;
+    overflow: hidden;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.metric-value {
+    font-size: 2.8rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+    line-height: 1;
+}
+
+.metric-label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+}
+
+.metric-icon {
+    font-size: 3rem;
+    opacity: 0.15;
+    position: absolute;
+    right: 15px;
+    top: 15px;
+}
+
+.stat-card {
+    position: relative;
+    overflow: hidden;
+    padding: 1.5rem;
+}
+
+.section-header {
+    border-left: 4px solid;
+    padding-left: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.section-header h5 {
+    font-weight: 700;
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.badge-count {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+    border-radius: 20px;
+    font-weight: 600;
+}
+
+.progress-custom {
+    height: 8px;
+    border-radius: 10px;
+    margin-top: 0.5rem;
+}
+
+.quick-link {
+    display: block;
+    padding: 1rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.3s;
+    border: 1px solid #e9ecef;
+}
+
+.quick-link:hover {
+    background: #f8f9fa;
+    border-color: #007bff;
+    transform: translateX(5px);
+}
+
+.alert-custom {
+    border-left: 4px solid;
+    border-radius: 8px;
+}
+
+.chart-container-small {
+    height: 200px;
+    position: relative;
+}
+
+/* Colores temáticos por módulo */
+.modulo-ventas { border-left-color: #28a745; }
+.modulo-requerimientos { border-left-color: #ffc107; }
+.modulo-dte { border-left-color: #007bff; }
+.modulo-regularizaciones { border-left-color: #dc3545; }
+
+.bg-ventas { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+.bg-requerimientos { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); }
+.bg-dte { background: linear-gradient(135deg, #007bff 0%, #6f42c1 100%); }
+.bg-regularizaciones { background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%); }
+
+.text-ventas { color: #28a745 !important; }
+.text-requerimientos { color: #ffc107 !important; }
+.text-dte { color: #007bff !important; }
+.text-regularizaciones { color: #dc3545 !important; }
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.table-dashboard {
+    font-size: 0.9rem;
+}
+
+.table-dashboard th {
+    background: #f8f9fa;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    color: #495057;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.35rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-success { background: #d4edda; color: #155724; }
+.status-warning { background: #fff3cd; color: #856404; }
+.status-danger { background: #f8d7da; color: #721c24; }
+.status-info { background: #d1ecf1; color: #0c5460; }
+.status-secondary { background: #e2e3e5; color: #383d41; }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Encabezado del Dashboard -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-1"><i class="ri-dashboard-3-line me-2"></i>Dashboard General</h4>
+                        <p class="text-muted mb-0">Vista consolidada de operaciones - {{ fecha_actual|date:"d/m/Y" }}</p>
+                    </div>
+                    <div>
+                        <button class="btn btn-soft-primary" onclick="location.reload()">
+                            <i class="ri-refresh-line me-1"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== MÓDULO VENTAS - CAMBIOS Y DEVOLUCIONES ========== -->
+        <div class="section-header modulo-ventas">
+            <h5><i class="ri-shopping-cart-2-line me-2"></i>Módulo Ventas - Cambios y Devoluciones</h5>
+        </div>
+
+        <div class="kpi-grid">
+            <!-- Completados -->
+            <div class="card dashboard-card bg-ventas text-white stat-card">
+                <div class="card-body">
+                    <i class="ri-checkbox-circle-line metric-icon"></i>
+                    <div class="metric-value">{{ cambios.completados }}</div>
+                    <div class="metric-label text-white-50">Cambios Completados</div>
+                </div>
+            </div>
+
+            <!-- Pendientes de Cobro -->
+            <div class="card dashboard-card border-warning stat-card">
+                <div class="card-body">
+                    <i class="ri-money-dollar-circle-line metric-icon text-warning"></i>
+                    <div class="metric-value text-warning">{{ cambios.pendientes_cobro }}</div>
+                    <div class="metric-label">Pendientes de Cobro</div>
+                    {% if cambios.pendientes_cobro > 0 %}
+                    <a href="{% url 'gestion_cambios_devoluciones' %}" class="btn btn-sm btn-warning mt-2">
+                        <i class="ri-eye-line me-1"></i> Ver Pendientes
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- En Proceso -->
+            <div class="card dashboard-card border-info stat-card">
+                <div class="card-body">
+                    <i class="ri-loader-4-line metric-icon text-info"></i>
+                    <div class="metric-value text-info">{{ cambios.en_proceso }}</div>
+                    <div class="metric-label">En Proceso</div>
+                </div>
+            </div>
+
+            <!-- Rechazados/Cancelados -->
+            <div class="card dashboard-card border-danger stat-card">
+                <div class="card-body">
+                    <i class="ri-close-circle-line metric-icon text-danger"></i>
+                    <div class="metric-value text-danger">{{ cambios.rechazados }}</div>
+                    <div class="metric-label">Rechazados/Cancelados</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalles de Cambios -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-bar-chart-box-line me-2"></i>Resumen del Mes</h6>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Total de Cambios:</span>
+                            <strong>{{ cambios.total_mes }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Monto Total:</span>
+                            <strong>${{ cambios.monto_mes|floatformat:0 }}</strong>
+                        </div>
+                        {% if tendencia_cambios != 0 %}
+                        <div class="mt-3">
+                            <span class="badge {% if tendencia_cambios > 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                <i class="ri-arrow-{% if tendencia_cambios > 0 %}up{% else %}down{% endif %}-line"></i>
+                                {{ tendencia_cambios_abs }} respecto al mes anterior
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-pie-chart-line me-2"></i>Cambios por Tipo</h6>
+                        {% if cambios_por_tipo %}
+                        <table class="table table-sm table-dashboard mb-0">
+                            <tbody>
+                                {% for tipo in cambios_por_tipo %}
+                                <tr>
+                                    <td>{{ tipo.tipo_operacion }}</td>
+                                    <td class="text-end"><strong>{{ tipo.cantidad }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-muted mb-0">No hay datos para este mes</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== MÓDULO REQUERIMIENTOS ========== -->
+        <div class="section-header modulo-requerimientos">
+            <h5><i class="ri-customer-service-2-line me-2"></i>Módulo Requerimientos</h5>
+        </div>
+
+        <div class="kpi-grid">
+            <!-- Pendientes -->
+            <div class="card dashboard-card border-warning stat-card">
+                <div class="card-body">
+                    <i class="ri-time-line metric-icon text-warning"></i>
+                    <div class="metric-value text-warning">{{ requerimientos.pendientes }}</div>
+                    <div class="metric-label">Pendientes</div>
+                    {% if requerimientos.pendientes > 0 %}
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="ri-calendar-line me-1"></i>
+                            Antigüedad promedio: {{ requerimientos.dias_promedio_pendientes }} días
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Esperando Respuesta -->
+            <div class="card dashboard-card bg-requerimientos text-white stat-card">
+                <div class="card-body">
+                    <i class="ri-mail-send-line metric-icon"></i>
+                    <div class="metric-value">{{ requerimientos.esperando_respuesta }}</div>
+                    <div class="metric-label text-white-50">Esperando Respuesta</div>
+                </div>
+            </div>
+
+            <!-- Aprobados -->
+            <div class="card dashboard-card border-success stat-card">
+                <div class="card-body">
+                    <i class="ri-checkbox-circle-line metric-icon text-success"></i>
+                    <div class="metric-value text-success">{{ requerimientos.aprobados }}</div>
+                    <div class="metric-label">Aprobados</div>
+                </div>
+            </div>
+
+            <!-- Rechazados -->
+            <div class="card dashboard-card border-danger stat-card">
+                <div class="card-body">
+                    <i class="ri-close-circle-line metric-icon text-danger"></i>
+                    <div class="metric-value text-danger">{{ requerimientos.rechazados }}</div>
+                    <div class="metric-label">Rechazados</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalles de Requerimientos -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-list-check me-2"></i>Estado General</h6>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Total Requerimientos:</span>
+                            <strong>{{ requerimientos.total }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Creados Este Mes:</span>
+                            <strong>{{ requerimientos.total_mes }}</strong>
+                        </div>
+                        <div class="mt-3">
+                            <a href="{% url 'modulo_requerimientos' %}" class="btn btn-sm btn-warning">
+                                <i class="ri-external-link-line me-1"></i> Gestionar Requerimientos
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-pie-chart-2-line me-2"></i>Por Tipo</h6>
+                        {% if requerimientos_por_tipo %}
+                        <table class="table table-sm table-dashboard mb-0">
+                            <tbody>
+                                {% for tipo in requerimientos_por_tipo %}
+                                <tr>
+                                    <td>{{ tipo.tipo }}</td>
+                                    <td class="text-end"><strong>{{ tipo.cantidad }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-muted mb-0">No hay datos para este mes</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== MÓDULO DTE ========== -->
+        <div class="section-header modulo-dte">
+            <h5><i class="ri-file-text-line me-2"></i>Módulo Documentos Tributarios (DTE)</h5>
+        </div>
+
+        <div class="kpi-grid">
+            <!-- Emitidos Este Mes -->
+            <div class="card dashboard-card bg-dte text-white stat-card">
+                <div class="card-body">
+                    <i class="ri-file-add-line metric-icon"></i>
+                    <div class="metric-value">{{ dtes.emitidos_mes }}</div>
+                    <div class="metric-label text-white-50">DTEs Emitidos Este Mes</div>
+                    <div class="mt-2 text-white-50">
+                        <small>Monto: ${{ dtes.monto_emitido_mes|floatformat:0 }}</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recepcionados -->
+            <div class="card dashboard-card border-success stat-card">
+                <div class="card-body">
+                    <i class="ri-inbox-line metric-icon text-success"></i>
+                    <div class="metric-value text-success">{{ dtes.recepcionados }}</div>
+                    <div class="metric-label">Recepcionados</div>
+                </div>
+            </div>
+
+            <!-- En Regularización -->
+            <div class="card dashboard-card border-warning stat-card">
+                <div class="card-body">
+                    <i class="ri-alert-line metric-icon text-warning"></i>
+                    <div class="metric-value text-warning">{{ dtes.en_regularizacion }}</div>
+                    <div class="metric-label">En Regularización</div>
+                    {% if dtes.en_regularizacion > 0 %}
+                    <a href="{% url 'regularizar_recepciones' %}" class="btn btn-sm btn-warning mt-2">
+                        <i class="ri-external-link-line me-1"></i> Regularizar
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Pendientes de Pago -->
+            <div class="card dashboard-card border-danger stat-card">
+                <div class="card-body">
+                    <i class="ri-money-dollar-circle-line metric-icon text-danger"></i>
+                    <div class="metric-value text-danger">{{ dtes.pendientes_pago }}</div>
+                    <div class="metric-label">Pendientes de Pago</div>
+                    <div class="mt-2">
+                        <small class="text-muted">Monto: ${{ dtes.monto_pendiente_pago|floatformat:0 }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalles de DTEs -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-file-list-3-line me-2"></i>DTEs por Tipo de Documento (Este Mes)</h6>
+                        {% if dtes_por_tipo %}
+                        <div class="table-responsive">
+                            <table class="table table-dashboard table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo de Documento</th>
+                                        <th class="text-center">Cantidad</th>
+                                        <th class="text-end">Monto Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for dte in dtes_por_tipo %}
+                                    <tr>
+                                        <td><strong>{{ dte.tipo_documento }}</strong></td>
+                                        <td class="text-center">
+                                            <span class="badge bg-primary">{{ dte.cantidad }}</span>
+                                        </td>
+                                        <td class="text-end">${{ dte.monto|floatformat:0 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">No hay DTEs emitidos este mes</p>
+                        {% endif %}
+                        <div class="mt-3">
+                            <a href="{% url 'emision_dte' %}" class="btn btn-sm btn-primary">
+                                <i class="ri-add-line me-1"></i> Emitir DTE
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== MÓDULO REGULARIZACIONES ========== -->
+        <div class="section-header modulo-regularizaciones">
+            <h5><i class="ri-settings-3-line me-2"></i>Módulo Regularizaciones</h5>
+        </div>
+
+        <div class="kpi-grid">
+            <!-- Pendientes -->
+            <div class="card dashboard-card border-warning stat-card">
+                <div class="card-body">
+                    <i class="ri-time-line metric-icon text-warning"></i>
+                    <div class="metric-value text-warning">{{ regularizaciones.pendientes }}</div>
+                    <div class="metric-label">Pendientes de Revisión</div>
+                </div>
+            </div>
+
+            <!-- En Revisión -->
+            <div class="card dashboard-card border-info stat-card">
+                <div class="card-body">
+                    <i class="ri-search-eye-line metric-icon text-info"></i>
+                    <div class="metric-value text-info">{{ regularizaciones.en_revision }}</div>
+                    <div class="metric-label">En Revisión</div>
+                </div>
+            </div>
+
+            <!-- Aprobadas -->
+            <div class="card dashboard-card border-success stat-card">
+                <div class="card-body">
+                    <i class="ri-checkbox-circle-line metric-icon text-success"></i>
+                    <div class="metric-value text-success">{{ regularizaciones.aprobadas }}</div>
+                    <div class="metric-label">Aprobadas</div>
+                </div>
+            </div>
+
+            <!-- Ejecutadas -->
+            <div class="card dashboard-card bg-regularizaciones text-white stat-card">
+                <div class="card-body">
+                    <i class="ri-check-double-line metric-icon"></i>
+                    <div class="metric-value">{{ regularizaciones.ejecutadas }}</div>
+                    <div class="metric-label text-white-50">Ejecutadas</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalles de Regularizaciones -->
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-dashboard-line me-2"></i>Estado General</h6>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Total Solicitudes:</span>
+                            <strong>{{ regularizaciones.total }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Completadas:</span>
+                            <strong class="text-success">{{ regularizaciones.completadas }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Rechazadas:</span>
+                            <strong class="text-danger">{{ regularizaciones.rechazadas }}</strong>
+                        </div>
+                        <div class="mt-3">
+                            <a href="{% url 'regularizar_recepciones' %}" class="btn btn-sm btn-danger">
+                                <i class="ri-external-link-line me-1"></i> Ver Regularizaciones
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-error-warning-line me-2"></i>Problemas Frecuentes</h6>
+                        {% if regularizaciones_por_tipo %}
+                        <table class="table table-sm table-dashboard mb-0">
+                            <tbody>
+                                {% for tipo in regularizaciones_por_tipo %}
+                                <tr>
+                                    <td>{{ tipo.tipo_problema }}</td>
+                                    <td class="text-end"><strong>{{ tipo.cantidad }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-muted mb-0">No hay datos para este mes</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Accesos Rápidos -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card dashboard-card">
+                    <div class="card-body">
+                        <h6 class="card-title mb-3"><i class="ri-links-line me-2"></i>Accesos Rápidos</h6>
+                        <div class="row">
+                            <div class="col-md-3 mb-2">
+                                <a href="{% url 'gestion_cambios_devoluciones' %}" class="quick-link">
+                                    <i class="ri-shopping-cart-2-line text-success me-2"></i>
+                                    Cambios y Devoluciones
+                                </a>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <a href="{% url 'modulo_requerimientos' %}" class="quick-link">
+                                    <i class="ri-customer-service-2-line text-warning me-2"></i>
+                                    Requerimientos
+                                </a>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <a href="{% url 'emision_dte' %}" class="quick-link">
+                                    <i class="ri-file-text-line text-primary me-2"></i>
+                                    Emisión DTE
+                                </a>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <a href="{% url 'regularizar_recepciones' %}" class="quick-link">
+                                    <i class="ri-settings-3-line text-danger me-2"></i>
+                                    Regularizaciones
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+
+<script src="{% static 'libs/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'libs/simplebar/simplebar.min.js' %}"></script>
+<script src="{% static 'libs/node-waves/waves.min.js' %}"></script>
+<script src="{% static 'libs/feather-icons/feather.min.js' %}"></script>
+<script src="{% static 'js/pages/plugins/lord-icon-2.1.0.js' %}"></script>
+<script src="{% static 'js/plugins.js' %}"></script>
+<script src="{% static 'js/app.js' %}"></script>
+

@@ -4,6 +4,17 @@
 {% include '../../layout/menu.html' %}
 {% csrf_token %}
 
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+        transition: transform 0.2s ease;
+    }
+    .cursor-pointer:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+</style>
+
 <div class="page-content">
     <div class="container-fluid">
         
@@ -25,11 +36,11 @@
         <!-- Alertas de Seguimiento (solo para Admin/Supervisor) -->
         <div class="row" id="alertas-seguimiento" style="display:none;">
             <div class="col-12">
-                <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                    <i class="ri-alarm-warning-line me-2"></i>
-                    <strong>¡Atención!</strong> Hay <span id="count-sin-respuesta">0</span> requerimiento(s) con más de 7 días sin respuesta del proveedor.
+                <div class="alert alert-warning alert-border-left alert-dismissible fade show" role="alert">
+                    <i class="ri-alarm-warning-line me-2 align-middle fs-16"></i>
+                    <strong>¡Atención!</strong> Hay <span id="count-sin-respuesta" class="fw-bold">0</span> requerimiento(s) esperando respuesta del proveedor por más de 7 días.
                     <button type="button" class="btn btn-sm btn-warning ms-3" onclick="filtrarSinRespuesta()">
-                        <i class="ri-eye-line me-1"></i>Ver Todos
+                        <i class="ri-eye-line me-1"></i>Ver Requerimientos
                     </button>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
@@ -63,11 +74,11 @@
             </div>
 
             <div class="col-xl-3 col-md-6">
-                <div class="card card-animate">
+                <div class="card card-animate cursor-pointer" onclick="filtrarPorEstado('PENDIENTE')">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
                             <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Pendientes / Revisión</p>
+                                <p class="text-uppercase fw-medium text-muted mb-0">Pendientes</p>
                             </div>
                         </div>
                         <div class="d-flex align-items-end justify-content-between mt-4">
@@ -87,22 +98,22 @@
             </div>
 
             <div class="col-xl-3 col-md-6">
-                <div class="card card-animate cursor-pointer" onclick="filtrarSinRespuesta()">
+                <div class="card card-animate cursor-pointer" onclick="filtrarPorEstado('ESPERANDO_RESPUESTA')">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
                             <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Sin Respuesta +7d</p>
+                                <p class="text-uppercase fw-medium text-muted mb-0">Esperando Proveedor</p>
                             </div>
                         </div>
                         <div class="d-flex align-items-end justify-content-between mt-4">
                             <div>
                                 <h4 class="fs-22 fw-semibold ff-secondary mb-4">
-                                    <span class="counter-value text-danger" id="sin-respuesta">0</span>
+                                    <span class="counter-value text-primary" id="esperando-proveedor">0</span>
                                 </h4>
                             </div>
                             <div class="avatar-sm flex-shrink-0">
-                                <span class="avatar-title bg-soft-danger rounded fs-3">
-                                    <i class="bx bx-error-circle text-danger"></i>
+                                <span class="avatar-title bg-soft-primary rounded fs-3">
+                                    <i class="bx bx-mail-send text-primary"></i>
                                 </span>
                             </div>
                         </div>
@@ -111,17 +122,17 @@
             </div>
 
             <div class="col-xl-3 col-md-6">
-                <div class="card card-animate">
+                <div class="card card-animate cursor-pointer" onclick="filtrarAprobados()">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
                             <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Completados</p>
+                                <p class="text-uppercase fw-medium text-muted mb-0">Aprobados</p>
                             </div>
                         </div>
                         <div class="d-flex align-items-end justify-content-between mt-4">
                             <div>
                                 <h4 class="fs-22 fw-semibold ff-secondary mb-4">
-                                    <span class="counter-value" id="completados">0</span>
+                                    <span class="counter-value text-success" id="aprobados">0</span>
                                 </h4>
                             </div>
                             <div class="avatar-sm flex-shrink-0">
@@ -172,12 +183,10 @@
                                         <select class="form-select" id="filtro-estado" name="estado">
                                             <option value="">Todos</option>
                                             <option value="PENDIENTE">Pendiente</option>
-                                            <option value="EN_REVISION">En Revisión</option>
                                             <option value="ESPERANDO_RESPUESTA">Esperando Proveedor</option>
                                             <option value="APROBADO">Aprobado</option>
                                             <option value="RECHAZADO">Rechazado</option>
-                                            <option value="EN_PROCESO">En Proceso</option>
-                                            <option value="COMPLETADO">Completado</option>
+                                            <option value="CANCELADO">Cancelado</option>
                                         </select>
                                     </div>
                                 </div>
@@ -285,13 +294,20 @@ function cargarEstadisticas() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // Total de requerimientos
                 document.getElementById('total-requerimientos').textContent = data.estadisticas.total;
-                document.getElementById('pendientes').textContent = (
-                    (data.estadisticas.por_estado.PENDIENTE?.cantidad || 0) +
-                    (data.estadisticas.por_estado.EN_REVISION?.cantidad || 0)
-                );
-                document.getElementById('sin-respuesta').textContent = data.estadisticas.sin_respuesta_7dias || 0;
-                document.getElementById('completados').textContent = data.estadisticas.por_estado.COMPLETADO?.cantidad || 0;
+                
+                // Pendientes (solo PENDIENTE)
+                document.getElementById('pendientes').textContent = 
+                    data.estadisticas.por_estado.PENDIENTE?.cantidad || 0;
+                
+                // Esperando Respuesta del Proveedor
+                document.getElementById('esperando-proveedor').textContent = 
+                    data.estadisticas.por_estado.ESPERANDO_RESPUESTA?.cantidad || 0;
+                
+                // Aprobados
+                document.getElementById('aprobados').textContent = 
+                    data.estadisticas.por_estado.APROBADO?.cantidad || 0;
             }
         })
         .catch(error => console.error('Error al cargar estadísticas:', error));
@@ -401,12 +417,9 @@ function mostrarRequerimientos(requerimientos) {
 function obtenerBadgeEstado(codigo, nombre) {
     const badges = {
         'PENDIENTE': 'warning',
-        'EN_REVISION': 'info',
         'ESPERANDO_RESPUESTA': 'primary',
         'APROBADO': 'success',
         'RECHAZADO': 'danger',
-        'EN_PROCESO': 'info',
-        'COMPLETADO': 'success',
         'CANCELADO': 'secondary'
     };
     const color = badges[codigo] || 'secondary';
@@ -510,13 +523,27 @@ function enviarRecordatorioRapido(requerimientoId) {
     });
 }
 
-// Filtrar requerimientos sin respuesta > 7 días (click en card)
+// Filtrar por estado específico (click en tarjetas)
+function filtrarPorEstado(estado) {
+    filtrosActuales = { estado: estado };
+    document.getElementById('filtro-estado').value = estado;
+    document.getElementById('filtros-section').style.display = 'block';
+    cargarRequerimientos(1);
+}
+
+// Filtrar aprobados
+function filtrarAprobados() {
+    filtrarPorEstado('APROBADO');
+}
+
+// Filtrar requerimientos sin respuesta > 7 días
 function filtrarSinRespuesta() {
     filtrosActuales = {
         estado: 'ESPERANDO_RESPUESTA',
         sin_respuesta: 'true'
     };
     document.getElementById('filtro-estado').value = 'ESPERANDO_RESPUESTA';
+    document.getElementById('filtro-sin-respuesta').value = 'true';
     document.getElementById('filtros-section').style.display = 'block';
     cargarRequerimientos(1);
 }

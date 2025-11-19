@@ -1,0 +1,577 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+<div class="page-content">
+    <div class="container-fluid">
+        <!-- Encabezado -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">
+                        <i class="ri-shield-user-line me-2"></i>
+                        Gestión de Permisos por Rol
+                    </h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item">Configuración</li>
+                            <li class="breadcrumb-item active">Gestión de Permisos</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tarjetas de estadísticas -->
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Total Módulos</p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <i class="ri-folder-line display-6 text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-2">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ total_modulos }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Total Opciones</p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <i class="ri-menu-line display-6 text-success"></i>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-2">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ total_opciones }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Total Permisos</p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <i class="ri-shield-check-line display-6 text-info"></i>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-2">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ total_permisos }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+                <div class="card card-animate">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <p class="text-uppercase fw-medium text-muted mb-0">Roles Definidos</p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <i class="ri-user-settings-line display-6 text-warning"></i>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-end justify-content-between mt-2">
+                            <div>
+                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ roles|length }}</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel principal -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <h5 class="card-title mb-md-0">
+                                    <i class="ri-settings-3-line me-1"></i>
+                                    Configurar Permisos
+                                </h5>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="d-flex justify-content-md-end flex-wrap gap-2">
+                                    <select id="rolSelector" class="form-select" style="width: auto;">
+                                        <option value="">-- Seleccionar Rol --</option>
+                                        {% for rol_codigo, rol_nombre in roles %}
+                                        <option value="{{ rol_codigo }}">{{ rol_nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-success" id="btnGuardarTodo" disabled>
+                                        <i class="ri-save-line me-1"></i> Guardar Todos los Cambios
+                                    </button>
+                                    <button class="btn btn-info" id="btnCopiarPermisos" disabled>
+                                        <i class="ri-file-copy-line me-1"></i> Copiar de Otro Rol
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Mensaje inicial -->
+                        <div id="mensajeInicial" class="text-center text-muted py-5">
+                            <i class="ri-shield-user-line display-1 text-muted mb-3"></i>
+                            <p class="fs-15">Selecciona un rol para configurar sus permisos</p>
+                        </div>
+
+                        <!-- Contenedor de permisos -->
+                        <div id="permisosContainer" style="display: none;">
+                            <!-- Configuración de límite de descuento -->
+                            <div class="alert alert-info border-0 mb-4">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h5 class="alert-heading mb-2">
+                                            <i class="ri-percent-line me-2"></i>
+                                            Límite de Descuento para este Rol
+                                        </h5>
+                                        <p class="mb-0 text-muted small">
+                                            Define el porcentaje máximo de descuento que puede aplicar este rol en las ventas.
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="row align-items-center">
+                                            <div class="col-md-8">
+                                                <label for="limiteDescuento" class="form-label mb-1 small">Porcentaje máximo (%)</label>
+                                                <input type="number" 
+                                                       class="form-control form-control-lg" 
+                                                       id="limiteDescuento" 
+                                                       min="0" 
+                                                       max="100" 
+                                                       step="0.01"
+                                                       placeholder="Ej: 15.00">
+                                            </div>
+                                            <div class="col-md-4 text-center">
+                                                <div class="mt-3">
+                                                    <span class="badge bg-primary fs-14 py-2 px-3" id="badgeLimite">0%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Permisos por módulo -->
+                            <div id="modulosPermisosContainer">
+                                <!-- Aquí se cargarán los permisos dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para copiar permisos -->
+<div class="modal fade" id="modalCopiarPermisos" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-file-copy-line me-2"></i>
+                    Copiar Permisos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Copiar permisos desde:</p>
+                <select id="rolOrigenCopiar" class="form-select mb-3">
+                    <option value="">-- Seleccionar Rol Origen --</option>
+                    {% for rol_codigo, rol_nombre in roles %}
+                    <option value="{{ rol_codigo }}">{{ rol_nombre }}</option>
+                    {% endfor %}
+                </select>
+                <p>Hacia: <strong id="rolDestinoCopiar"></strong></p>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="sobrescribirPermisos">
+                    <label class="form-check-label" for="sobrescribirPermisos">
+                        Sobrescribir permisos existentes
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarCopiar">
+                    <i class="ri-checkbox-circle-line me-1"></i> Copiar Permisos
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.permiso-modulo {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: #f8f9fa;
+}
+
+.permiso-modulo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.opcion-row {
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: white;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s;
+}
+
+.opcion-row:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.permiso-checkbox {
+    margin: 0 5px;
+}
+
+.sub-opcion-row {
+    margin-left: 30px;
+    background: #f1f3f5;
+}
+
+.permiso-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #6c757d;
+}
+</style>
+
+<script>
+let rolActual = null;
+let permisosModificados = {};
+
+// Cargar permisos cuando se selecciona un rol
+document.getElementById('rolSelector').addEventListener('change', function() {
+    const rol = this.value;
+    if (rol) {
+        cargarPermisosRol(rol);
+        document.getElementById('btnGuardarTodo').disabled = false;
+        document.getElementById('btnCopiarPermisos').disabled = false;
+    } else {
+        document.getElementById('mensajeInicial').style.display = 'block';
+        document.getElementById('permisosContainer').style.display = 'none';
+        document.getElementById('btnGuardarTodo').disabled = true;
+        document.getElementById('btnCopiarPermisos').disabled = true;
+    }
+});
+
+function cargarPermisosRol(rol) {
+    rolActual = rol;
+    permisosModificados = {};
+    
+    fetch(`/app/permisos/obtener-permisos-rol/?rol=${rol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Establecer límite de descuento
+                const limiteDescuento = data.limite_descuento || 0;
+                document.getElementById('limiteDescuento').value = limiteDescuento;
+                document.getElementById('badgeLimite').textContent = limiteDescuento + '%';
+                
+                renderizarPermisos(data.modulos);
+                document.getElementById('mensajeInicial').style.display = 'none';
+                document.getElementById('permisosContainer').style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error al cargar permisos', 'error');
+        });
+}
+
+function renderizarPermisos(modulos) {
+    const container = document.getElementById('modulosPermisosContainer');
+    container.innerHTML = '';
+    
+    modulos.forEach(modulo => {
+        const moduloDiv = document.createElement('div');
+        moduloDiv.className = 'permiso-modulo';
+        
+        let html = `
+            <div class="permiso-modulo-header">
+                <h5 class="mb-0">
+                    <i class="${modulo.icono || 'ri-folder-line'} me-2"></i>
+                    ${modulo.nombre}
+                </h5>
+            </div>
+        `;
+        
+        modulo.opciones.forEach(opcion => {
+            html += renderizarOpcion(opcion, false);
+            
+            if (opcion.subopciones && opcion.subopciones.length > 0) {
+                opcion.subopciones.forEach(subopcion => {
+                    html += renderizarOpcion(subopcion, true);
+                });
+            }
+        });
+        
+        moduloDiv.innerHTML = html;
+        container.appendChild(moduloDiv);
+    });
+    
+    // Agregar event listeners para checkboxes
+    document.querySelectorAll('.permiso-check').forEach(checkbox => {
+        checkbox.addEventListener('change', marcarCambio);
+    });
+}
+
+function renderizarOpcion(opcion, esSubopcion) {
+    const permisos = opcion.permisos;
+    const rowClass = esSubopcion ? 'opcion-row sub-opcion-row' : 'opcion-row';
+    
+    return `
+        <div class="${rowClass}">
+            <div class="flex-grow-1">
+                <i class="${opcion.icono || 'ri-file-line'} me-2 text-muted"></i>
+                <strong>${opcion.nombre}</strong>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input permiso-check" type="checkbox" 
+                           data-opcion-id="${opcion.id}" data-permiso="puede_ver"
+                           ${permisos.puede_ver ? 'checked' : ''}>
+                    <label class="permiso-label">Ver</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input permiso-check" type="checkbox" 
+                           data-opcion-id="${opcion.id}" data-permiso="puede_crear"
+                           ${permisos.puede_crear ? 'checked' : ''}>
+                    <label class="permiso-label">Crear</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input permiso-check" type="checkbox" 
+                           data-opcion-id="${opcion.id}" data-permiso="puede_editar"
+                           ${permisos.puede_editar ? 'checked' : ''}>
+                    <label class="permiso-label">Editar</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input permiso-check" type="checkbox" 
+                           data-opcion-id="${opcion.id}" data-permiso="puede_eliminar"
+                           ${permisos.puede_eliminar ? 'checked' : ''}>
+                    <label class="permiso-label">Eliminar</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input permiso-check" type="checkbox" 
+                           data-opcion-id="${opcion.id}" data-permiso="puede_exportar"
+                           ${permisos.puede_exportar ? 'checked' : ''}>
+                    <label class="permiso-label">Exportar</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input permiso-check" type="checkbox" 
+                           data-opcion-id="${opcion.id}" data-permiso="puede_aprobar"
+                           ${permisos.puede_aprobar ? 'checked' : ''}>
+                    <label class="permiso-label">Aprobar</label>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function marcarCambio(event) {
+    const opcionId = event.target.dataset.opcionId;
+    const permiso = event.target.dataset.permiso;
+    const valor = event.target.checked;
+    
+    if (!permisosModificados[opcionId]) {
+        permisosModificados[opcionId] = {};
+    }
+    permisosModificados[opcionId][permiso] = valor;
+}
+
+// Actualizar badge de límite de descuento
+document.getElementById('limiteDescuento').addEventListener('input', function() {
+    const valor = parseFloat(this.value) || 0;
+    document.getElementById('badgeLimite').textContent = valor + '%';
+});
+
+// Guardar todos los cambios
+document.getElementById('btnGuardarTodo').addEventListener('click', function() {
+    const limiteDescuento = parseFloat(document.getElementById('limiteDescuento').value) || 0;
+    
+    // Validar límite de descuento
+    if (limiteDescuento < 0 || limiteDescuento > 100) {
+        Swal.fire('Error', 'El límite de descuento debe estar entre 0 y 100', 'error');
+        return;
+    }
+    
+    // Verificar si hay cambios (permisos o límite de descuento modificado)
+    if (Object.keys(permisosModificados).length === 0) {
+        // Si no hay cambios de permisos, al menos guardar el límite de descuento
+        // Necesitamos al menos un permiso para actualizar
+        Swal.fire({
+            title: 'Guardar configuración',
+            text: 'Se guardará el límite de descuento para este rol',
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                guardarConfiguracion(limiteDescuento);
+            }
+        });
+        return;
+    }
+    
+    guardarConfiguracion(limiteDescuento);
+});
+
+function guardarConfiguracion(limiteDescuento) {
+    const permisosArray = Object.keys(permisosModificados).map(opcionId => ({
+        opcion_id: opcionId,
+        permisos: permisosModificados[opcionId]
+    }));
+    
+    // Si no hay permisos modificados, obtener todos los permisos actuales
+    if (permisosArray.length === 0) {
+        // Recopilar todos los checkboxes actuales
+        const todosPermisos = [];
+        document.querySelectorAll('.permiso-check').forEach(checkbox => {
+            const opcionId = checkbox.dataset.opcionId;
+            if (!todosPermisos.find(p => p.opcion_id === opcionId)) {
+                const checks = document.querySelectorAll(`[data-opcion-id="${opcionId}"]`);
+                const permisos = {};
+                checks.forEach(check => {
+                    permisos[check.dataset.permiso] = check.checked;
+                });
+                todosPermisos.push({
+                    opcion_id: opcionId,
+                    permisos: permisos
+                });
+            }
+        });
+        permisosArray.push(...todosPermisos);
+    }
+    
+    fetch('/app/permisos/guardar-permisos-masivos/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            rol: rolActual,
+            permisos: permisosArray,
+            limite_descuento: limiteDescuento
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire('Éxito', data.mensaje, 'success');
+            permisosModificados = {};
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al guardar', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al guardar permisos', 'error');
+    });
+}
+
+// Copiar permisos
+document.getElementById('btnCopiarPermisos').addEventListener('click', function() {
+    const rolNombre = document.getElementById('rolSelector').selectedOptions[0].text;
+    document.getElementById('rolDestinoCopiar').textContent = rolNombre;
+    new bootstrap.Modal(document.getElementById('modalCopiarPermisos')).show();
+});
+
+document.getElementById('btnConfirmarCopiar').addEventListener('click', function() {
+    const rolOrigen = document.getElementById('rolOrigenCopiar').value;
+    const sobrescribir = document.getElementById('sobrescribirPermisos').checked;
+    
+    if (!rolOrigen) {
+        Swal.fire('Error', 'Selecciona un rol origen', 'error');
+        return;
+    }
+    
+    fetch('/app/permisos/copiar-permisos-rol/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            rol_origen: rolOrigen,
+            rol_destino: rolActual,
+            sobrescribir: sobrescribir
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire('Éxito', data.mensaje, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('modalCopiarPermisos')).hide();
+            cargarPermisosRol(rolActual); // Recargar permisos
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al copiar', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al copiar permisos', 'error');
+    });
+});
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+
+{% include 'layout/footer.html' %}
+

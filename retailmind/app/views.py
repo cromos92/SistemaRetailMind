@@ -3632,8 +3632,206 @@ def obtener_productos_base(request):
 # Create your views here.
 @login_required
 def verHome(request):
-   
-    return render(request, 'vistas/modulo_administracion/home1.html' )
+    """
+    Dashboard general que engloba módulos de ventas, DTE y requerimientos
+    con indicadores clave de negocio
+    """
+    try:
+        from .models import (
+            CambioDevolucion, 
+            Requerimiento, 
+            Solicitud_Regularizacion,
+            PagoCambioDevolucion
+        )
+        from datetime import datetime, timedelta
+        from django.db.models import Sum, Count, Q, Avg
+        
+        # Obtener sucursal y empresa actual
+        sucursal_id = request.session.get('idSucursalActual')
+        empresa_id = request.session.get('idEmpresaActual')
+        
+        # Fechas para filtros
+        hoy = timezone.now().date()
+        inicio_mes = hoy.replace(day=1)
+        mes_pasado = (inicio_mes - timedelta(days=1)).replace(day=1)
+        
+        # ========== MÓDULO CAMBIOS Y DEVOLUCIONES ==========
+        cambios_base = CambioDevolucion.objects.all()
+        if sucursal_id:
+            cambios_base = cambios_base.filter(sucursal_id=sucursal_id)
+        
+        cambios_data = {
+            'completados': cambios_base.filter(estado='COMPLETADO').count(),
+            'pendientes_cobro': cambios_base.filter(estado='EJECUTADO_COBRO_PENDIENTE').count(),
+            'en_proceso': cambios_base.filter(
+                estado__in=['SOLICITADO', 'EN_PROCESO', 'APROBADO', 'EJECUTADO']
+            ).count(),
+            'rechazados': cambios_base.filter(estado__in=['RECHAZADO', 'CANCELADO']).count(),
+            'total_mes': cambios_base.filter(fecha_solicitud__gte=inicio_mes).count(),
+            'monto_mes': cambios_base.filter(
+                fecha_solicitud__gte=inicio_mes
+            ).aggregate(total=Sum('monto_nuevo'))['total'] or 0,
+        }
+        
+        # Cambios por tipo de operación
+        cambios_por_tipo = cambios_base.filter(
+            fecha_solicitud__gte=inicio_mes
+        ).values('tipo_operacion').annotate(
+            cantidad=Count('id')
+        ).order_by('-cantidad')[:5]
+        
+        # ========== MÓDULO REQUERIMIENTOS ==========
+        requerimientos_base = Requerimiento.objects.all()
+        if sucursal_id:
+            requerimientos_base = requerimientos_base.filter(sucursal_id=sucursal_id)
+        
+        requerimientos_data = {
+            'pendientes': requerimientos_base.filter(estado='PENDIENTE').count(),
+            'esperando_respuesta': requerimientos_base.filter(estado='ESPERANDO_RESPUESTA').count(),
+            'aprobados': requerimientos_base.filter(estado='APROBADO').count(),
+            'rechazados': requerimientos_base.filter(estado='RECHAZADO').count(),
+            'total': requerimientos_base.count(),
+            'total_mes': requerimientos_base.filter(fecha_creacion__gte=inicio_mes).count(),
+        }
+        
+        # Requerimientos por tipo
+        requerimientos_por_tipo = requerimientos_base.filter(
+            fecha_creacion__gte=inicio_mes
+        ).values('tipo').annotate(
+            cantidad=Count('id')
+        ).order_by('-cantidad')
+        
+        # Antigüedad promedio de pendientes
+        requerimientos_pendientes = requerimientos_base.filter(estado='PENDIENTE')
+        if requerimientos_pendientes.exists():
+            # Calcular días de antigüedad para cada requerimiento pendiente
+            total_dias = 0
+            for req in requerimientos_pendientes:
+                dias_antiguedad = (hoy - req.fecha_creacion.date()).days
+                total_dias += dias_antiguedad
+            dias_promedio = total_dias // requerimientos_pendientes.count() if requerimientos_pendientes.count() > 0 else 0
+        else:
+            dias_promedio = 0
+        requerimientos_data['dias_promedio_pendientes'] = dias_promedio
+        
+        # ========== MÓDULO DTE ==========
+        dtes_base = Dte.objects.all()
+        if sucursal_id:
+            dtes_base = dtes_base.filter(sucursal_id=sucursal_id)
+        if empresa_id:
+            dtes_base = dtes_base.filter(emisor_id=empresa_id)
+        
+        dtes_data = {
+            'emitidos_mes': dtes_base.filter(
+                fecha_emision__gte=inicio_mes,
+                estado_dte='EMITIDO'
+            ).count(),
+            'recepcionados': dtes_base.filter(
+                estado_dte__in=['RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL']
+            ).count(),
+            'en_regularizacion': dtes_base.filter(estado_dte='EN_REGULARIZACION').count(),
+            'pendientes_pago': dtes_base.filter(
+                estado_pago='PENDIENTE',
+                tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+            ).count(),
+            'monto_emitido_mes': dtes_base.filter(
+                fecha_emision__gte=inicio_mes
+            ).aggregate(total=Sum('monto_con_iva'))['total'] or 0,
+            'monto_pendiente_pago': dtes_base.filter(
+                estado_pago='PENDIENTE'
+            ).aggregate(total=Sum('monto_con_iva'))['total'] or 0,
+        }
+        
+        # DTEs por tipo de documento del mes
+        dtes_por_tipo = dtes_base.filter(
+            fecha_emision__gte=inicio_mes
+        ).values('tipo_documento').annotate(
+            cantidad=Count('id'),
+            monto=Sum('monto_con_iva')
+        ).order_by('-cantidad')
+        
+        # ========== MÓDULO REGULARIZACIONES ==========
+        regularizaciones_base = Solicitud_Regularizacion.objects.all()
+        if sucursal_id:
+            regularizaciones_base = regularizaciones_base.filter(
+                Q(sucursal_solicitante_id=sucursal_id) | Q(sucursal_emisora_id=sucursal_id)
+            )
+        
+        regularizaciones_data = {
+            'pendientes': regularizaciones_base.filter(estado='PENDIENTE').count(),
+            'en_revision': regularizaciones_base.filter(estado='EN_REVISION').count(),
+            'aprobadas': regularizaciones_base.filter(estado='APROBADA').count(),
+            'ejecutadas': regularizaciones_base.filter(estado='EJECUTADA').count(),
+            'completadas': regularizaciones_base.filter(estado='COMPLETADA').count(),
+            'rechazadas': regularizaciones_base.filter(estado='RECHAZADA').count(),
+            'total': regularizaciones_base.count(),
+        }
+        
+        # Regularizaciones por tipo de problema
+        regularizaciones_por_tipo = regularizaciones_base.filter(
+            fecha_solicitud__gte=inicio_mes
+        ).values('tipo_problema').annotate(
+            cantidad=Count('id')
+        ).order_by('-cantidad')[:5]
+        
+        # ========== INDICADORES GENERALES ==========
+        # Calcular tendencias (comparar con mes pasado)
+        cambios_mes_pasado = CambioDevolucion.objects.filter(
+            fecha_solicitud__gte=mes_pasado,
+            fecha_solicitud__lt=inicio_mes
+        )
+        if sucursal_id:
+            cambios_mes_pasado = cambios_mes_pasado.filter(sucursal_id=sucursal_id)
+        
+        tendencia_cambios = cambios_data['total_mes'] - cambios_mes_pasado.count()
+        tendencia_cambios_abs = abs(tendencia_cambios)
+        
+        # Preparar contexto
+        context = {
+            # Datos de cambios y devoluciones
+            'cambios': cambios_data,
+            'cambios_por_tipo': list(cambios_por_tipo),
+            'tendencia_cambios': tendencia_cambios,
+            'tendencia_cambios_abs': tendencia_cambios_abs,
+            
+            # Datos de requerimientos
+            'requerimientos': requerimientos_data,
+            'requerimientos_por_tipo': list(requerimientos_por_tipo),
+            
+            # Datos de DTEs
+            'dtes': dtes_data,
+            'dtes_por_tipo': list(dtes_por_tipo),
+            
+            # Datos de regularizaciones
+            'regularizaciones': regularizaciones_data,
+            'regularizaciones_por_tipo': list(regularizaciones_por_tipo),
+            
+            # Información general
+            'fecha_actual': hoy,
+            'inicio_mes': inicio_mes,
+        }
+        
+        return render(request, 'vistas/dashboard_general.html', context)
+        
+    except Exception as e:
+        import traceback
+        print(f"Error en verHome/dashboard_general: {str(e)}")
+        print(traceback.format_exc())
+        # En caso de error, renderizar template vacío con mensaje
+        return render(request, 'vistas/dashboard_general.html', {
+            'cambios': {'completados': 0, 'pendientes_cobro': 0, 'en_proceso': 0, 'rechazados': 0, 'total_mes': 0, 'monto_mes': 0},
+            'requerimientos': {'pendientes': 0, 'esperando_respuesta': 0, 'aprobados': 0, 'rechazados': 0, 'total': 0, 'total_mes': 0, 'dias_promedio_pendientes': 0},
+            'dtes': {'emitidos_mes': 0, 'recepcionados': 0, 'en_regularizacion': 0, 'pendientes_pago': 0, 'monto_emitido_mes': 0, 'monto_pendiente_pago': 0},
+            'regularizaciones': {'pendientes': 0, 'en_revision': 0, 'aprobadas': 0, 'ejecutadas': 0, 'completadas': 0, 'rechazadas': 0, 'total': 0},
+            'cambios_por_tipo': [],
+            'requerimientos_por_tipo': [],
+            'dtes_por_tipo': [],
+            'regularizaciones_por_tipo': [],
+            'tendencia_cambios': 0,
+            'tendencia_cambios_abs': 0,
+            'fecha_actual': timezone.now().date(),
+            'inicio_mes': timezone.now().date().replace(day=1),
+        })
 @login_required
 def verGestionCompras(request):
     # Esta vista solo maneja GET requests para mostrar la página
@@ -7257,6 +7455,14 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
     sucursal_origen_mov = ticket.sucursal if ticket and ticket.sucursal else getattr(producto_talla.producto, 'sucursal', None)
     sobreprecio_mov = producto_talla.producto.sobreprecio if producto_talla.producto and hasattr(producto_talla.producto, 'sobreprecio') else 0
     
+    # ✅ Determinar referencia externa: usar DTE si está disponible, si no usar correlativo del ticket
+    if referencia_externa:
+        ref_final = referencia_externa
+    elif ticket:
+        ref_final = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
+    else:
+        ref_final = None
+    
     movimiento = Movimientos_Producto.objects.create(
         ticket=ticket,
         ProductoTalla=producto_talla,
@@ -7269,7 +7475,7 @@ def consumir_stock_fifo(producto_talla, cantidad_requerida, responsable, ticket=
         tipo_movimiento='EGRESO',
         responsable=responsable if isinstance(responsable, str) else responsable.username,
         observaciones=observaciones or f'Consumo FIFO - {cantidad_requerida} unidades',
-        referencia_externa=referencia_externa or (f'TICKET_{ticket.correlativo}' if ticket else None)
+        referencia_externa=ref_final
     )
     
     print(f"✓ Movimiento #{movimiento.id} creado: {movimiento.concepto} - Cantidad: {movimiento.cantidad} - SKU: {producto_talla.sku}")
@@ -10877,8 +11083,17 @@ def obtener_productos_sucursal(request):
         # Preparar datos para JSON
         productos_data = []
         for producto in productos:
-            # Calcular stock total
-            stock_total = sum(pt.stock for pt in producto.producto_talla.all())
+            # Obtener todas las tallas del producto
+            todas_las_tallas = producto.producto_talla.all()
+            
+            # Si solo_con_stock está activado, filtrar solo tallas con stock > 0
+            if solo_con_stock:
+                tallas_a_mostrar = [pt for pt in todas_las_tallas if pt.stock > 0]
+            else:
+                tallas_a_mostrar = todas_las_tallas
+            
+            # Calcular stock total de las tallas a mostrar
+            stock_total = sum(pt.stock for pt in tallas_a_mostrar)
             
             # Obtener tallas con stock
             tallas_stock = [
@@ -10887,7 +11102,7 @@ def obtener_productos_sucursal(request):
                     'stock': pt.stock,
                     'sku': pt.sku
                 }
-                for pt in producto.producto_talla.all()
+                for pt in tallas_a_mostrar
             ]
             
             productos_data.append({

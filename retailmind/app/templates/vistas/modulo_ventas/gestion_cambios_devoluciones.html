@@ -1150,88 +1150,197 @@
 
 <!-- Modal: Aprobar y Generar Ticket -->
 <div class="modal fade" id="modalAprobarCambio" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">
+            <div class="modal-header bg-success text-white py-2">
+                <h5 class="modal-title mb-0">
                     <i class="ri-check-line"></i> Aprobar Cambio/Devolución y Generar Ticket
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-success border-success">
-                    <i class="ri-information-line"></i> 
-                    <strong>Al aprobar se generará automáticamente un ticket de venta</strong> 
-                    con los productos del cambio/devolución.
-                </div>
-                
-                <!-- Resumen del Cambio -->
-                <div class="card bg-light mb-3">
-                    <div class="card-body">
-                        <h6 class="mb-3"><i class="ri-file-list-3-line"></i> Resumen de la Operación</h6>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p class="mb-2"><strong>Operación:</strong> <span id="aprobar-num-operacion">-</span></p>
-                                <p class="mb-2"><strong>Tipo:</strong> <span id="aprobar-tipo">-</span></p>
-                                <p class="mb-2"><strong>Cliente:</strong> <span id="aprobar-cliente">-</span></p>
-                            </div>
-                            <div class="col-md-6">
-                                <p class="mb-2"><strong>Productos Devueltos:</strong> <span class="text-danger" id="aprobar-total-devuelto">$0</span></p>
-                                <p class="mb-2"><strong>Productos Nuevos:</strong> <span class="text-success" id="aprobar-total-nuevo">$0</span></p>
-                                <p class="mb-2"><strong class="fs-5">Diferencia:</strong> <span class="fs-5 fw-bold" id="aprobar-diferencia">$0</span></p>
-                            </div>
+            <div class="modal-body p-3">
+                <!-- Resumen Compacto -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <div class="border rounded p-2 bg-light">
+                            <small class="text-muted d-block">Operación #</small>
+                            <strong id="aprobar-num-operacion">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="border rounded p-2 bg-light">
+                            <small class="text-muted d-block">Cliente</small>
+                            <strong id="aprobar-cliente" class="small">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-2 text-center" style="background: #fee;">
+                            <small class="text-muted d-block">Devueltos</small>
+                            <strong class="text-danger" id="aprobar-total-devuelto">$0</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-2 text-center" style="background: #efe;">
+                            <small class="text-muted d-block">Nuevos</small>
+                            <strong class="text-success" id="aprobar-total-nuevo">$0</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="border rounded p-2 text-center bg-warning bg-opacity-10">
+                            <small class="text-muted d-block">Diferencia</small>
+                            <strong class="fs-5" id="aprobar-diferencia">$0</strong>
                         </div>
                     </div>
                 </div>
 
-                <!-- Código de Vendedor -->
-                <div class="card border-warning mb-3">
-                    <div class="card-header bg-warning text-dark">
-                        <i class="ri-shield-user-line"></i> Validación de Vendedor
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-warning mb-3">
-                            <i class="ri-error-warning-line"></i> 
-                            <strong>Requerido:</strong> Ingrese el código del vendedor que procesará la venta.
-                        </div>
-                        
-                        <div class="row">
+                <!-- Tabs para Productos y Autorizaciones -->
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-productos-aprobar">
+                            <i class="ri-box-3-line"></i> Productos
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-autorizaciones-aprobar">
+                            <i class="ri-shield-keyhole-line"></i> Autorizaciones <span class="badge bg-danger">Requerido</span>
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content border border-top-0 p-3">
+                    <!-- TAB: Productos -->
+                    <div class="tab-pane fade show active" id="tab-productos-aprobar">
+                        <div class="row g-3">
+                            <!-- Productos Devueltos -->
                             <div class="col-md-6">
-                                <label class="form-label fw-bold">
-                                    <i class="ri-key-line"></i> Código de Vendedor <span class="text-danger">*</span>
-                                </label>
-                                <div class="input-group input-group-lg">
-                                    <span class="input-group-text">
-                                        <i class="ri-user-line"></i>
-                                    </span>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           id="input-codigo-vendedor-aprobacion" 
-                                           placeholder="Código del vendedor"
-                                           autocomplete="off"
-                                           required>
-                                    <button class="btn btn-primary" onclick="validarCodigoVendedorAprobacion()">
-                                        <i class="ri-checkbox-line"></i> Validar
-                                    </button>
+                                <div class="card border-danger mb-0">
+                                    <div class="card-header bg-danger text-white py-1 px-2">
+                                        <small><i class="ri-arrow-left-line"></i> <strong>Productos Devueltos</strong></small>
+                                    </div>
+                                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr style="font-size: 0.85rem;">
+                                                    <th>Artículo</th>
+                                                    <th width="60">Talla</th>
+                                                    <th width="50" class="text-center">Cant.</th>
+                                                    <th width="80" class="text-end">Subtotal</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="aprobar-productos-devueltos" style="font-size: 0.85rem;">
+                                                <tr>
+                                                    <td colspan="4" class="text-center text-muted py-2">
+                                                        <i class="ri-loader-4-line"></i> Cargando...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                                <small class="text-muted">El vendedor debe ingresar su código personal</small>
                             </div>
+
+                            <!-- Productos Nuevos -->
                             <div class="col-md-6">
-                                <div id="info-vendedor-validado" style="display: none;" class="alert alert-success mb-0 mt-4">
-                                    <i class="ri-checkbox-circle-line"></i> 
-                                    <strong>Vendedor validado:</strong> <span id="nombre-vendedor-validado">-</span>
+                                <div class="card border-success mb-0">
+                                    <div class="card-header bg-success text-white py-1 px-2">
+                                        <small><i class="ri-arrow-right-line"></i> <strong>Productos Nuevos</strong></small>
+                                    </div>
+                                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                        <table class="table table-sm table-hover mb-0">
+                                            <thead class="table-light sticky-top">
+                                                <tr style="font-size: 0.85rem;">
+                                                    <th>Artículo</th>
+                                                    <th width="60">Talla</th>
+                                                    <th width="50" class="text-center">Cant.</th>
+                                                    <th width="80" class="text-end">Subtotal</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="aprobar-productos-nuevos" style="font-size: 0.85rem;">
+                                                <tr>
+                                                    <td colspan="4" class="text-center text-muted py-2">
+                                                        <i class="ri-loader-4-line"></i> Cargando...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Observaciones -->
-                <div class="mb-3">
-                    <label class="form-label fw-bold">
-                        <i class="ri-message-3-line"></i> Observaciones de Aprobación <span class="text-muted">(Opcional)</span>
-                    </label>
-                    <textarea class="form-control" id="textarea-observaciones-aprobacion" rows="3" placeholder="Observaciones sobre la aprobación..."></textarea>
+
+                    <!-- TAB: Autorizaciones -->
+                    <div class="tab-pane fade" id="tab-autorizaciones-aprobar">
+                        <div class="row g-3">
+                            <!-- Código de Vendedor -->
+                            <div class="col-md-6">
+                                <div class="card border-warning mb-0">
+                                    <div class="card-header bg-warning text-dark py-2 px-3">
+                                        <strong><i class="ri-user-line"></i> Vendedor</strong>
+                                    </div>
+                                    <div class="card-body p-3">
+                                        <label class="form-label fw-bold small mb-1">Código de Vendedor <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="input-codigo-vendedor-aprobacion" 
+                                                   placeholder="Código"
+                                                   autocomplete="off"
+                                                   required>
+                                            <button class="btn btn-primary btn-sm" onclick="validarCodigoVendedorAprobacion()">
+                                                <i class="ri-checkbox-line"></i> Validar
+                                            </button>
+                                        </div>
+                                        <div id="info-vendedor-validado" style="display: none;" class="alert alert-success p-2 mt-2 mb-0">
+                                            <small><i class="ri-checkbox-circle-line"></i> <strong>Validado:</strong> <span id="nombre-vendedor-validado">-</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Código de Autorización -->
+                            <div class="col-md-6">
+                                <div class="card border-danger mb-0" style="border-width: 2px;">
+                                    <div class="card-header bg-danger text-white py-2 px-3">
+                                        <strong><i class="ri-shield-keyhole-line"></i> Autorización Supervisor</strong>
+                                    </div>
+                                    <div class="card-body p-3">
+                                        <label class="form-label fw-bold small mb-1">Código de Autorización <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <input type="text" 
+                                                   class="form-control fw-bold text-center" 
+                                                   id="input-codigo-autorizacion-aprobacion" 
+                                                   placeholder="000000"
+                                                   autocomplete="off"
+                                                   maxlength="6"
+                                                   style="letter-spacing: 3px;"
+                                                   required>
+                                            <button class="btn btn-danger btn-sm" onclick="validarCodigoAutorizacionAprobacion()">
+                                                <i class="ri-checkbox-line"></i> Validar
+                                            </button>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">
+                                            <i class="ri-information-line"></i> Solicitar código al Administrador o Jefe de Local
+                                        </small>
+                                        <div id="info-autorizacion-validada" style="display: none;" class="alert alert-success p-2 mt-2 mb-0">
+                                            <small><i class="ri-shield-check-line"></i> <strong>Válido hasta:</strong> <span id="autorizacion-valido-hasta">--:--</span></small>
+                                        </div>
+                                        <div id="info-autorizacion-error" style="display: none;" class="alert alert-danger p-2 mt-2 mb-0">
+                                            <small><i class="ri-close-circle-line"></i> <strong id="autorizacion-error-mensaje">Código inválido</strong></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Observaciones -->
+                        <div class="mt-3">
+                            <label class="form-label fw-bold small mb-1">
+                                <i class="ri-message-3-line"></i> Observaciones <span class="text-muted">(Opcional)</span>
+                            </label>
+                            <textarea class="form-control" id="textarea-observaciones-aprobacion" rows="2" placeholder="Observaciones..."></textarea>
+                        </div>
+                    </div>
                 </div>
                 
                 <input type="hidden" id="vendedor-id-validado">
@@ -3623,7 +3732,7 @@ function mostrarDetalleCambio(data) {
 function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     cambioActual = { id: cambioId, tipo_operacion: tipo, monto_original: montoDevuelto, monto_nuevo: montoNuevo };
     
-    // Llenar resumen en modal de aprobación
+    // Llenar resumen básico en modal de aprobación
     $('#aprobar-num-operacion').text(cambioId);
     $('#aprobar-tipo').text(tipo === 'CAMBIO' ? 'Cambio' : 'Devolución');
     $('#aprobar-total-devuelto').text('$' + formatearNumero(montoDevuelto));
@@ -3631,19 +3740,42 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     
     const diferencia = montoNuevo - montoDevuelto;
     if (diferencia > 0) {
-        $('#aprobar-diferencia').text('+$' + formatearNumero(diferencia)).addClass('text-danger');
+        $('#aprobar-diferencia').text('+$' + formatearNumero(diferencia)).removeClass('text-success').addClass('text-danger');
     } else if (diferencia < 0) {
-        $('#aprobar-diferencia').text('-$' + formatearNumero(Math.abs(diferencia))).addClass('text-success');
+        $('#aprobar-diferencia').text('-$' + formatearNumero(Math.abs(diferencia))).removeClass('text-danger').addClass('text-success');
     } else {
-        $('#aprobar-diferencia').text('$0').addClass('text-success');
+        $('#aprobar-diferencia').text('$0').removeClass('text-danger').addClass('text-success');
     }
     
-    // Limpiar formulario
+    // Limpiar formulario y resetear validaciones
     $('#textarea-observaciones-aprobacion').val('');
     $('#input-codigo-vendedor-aprobacion').val('');
     $('#vendedor-id-validado').val('');
     $('#info-vendedor-validado').hide();
+    $('#input-codigo-autorizacion-aprobacion').val('');
+    $('#info-autorizacion-validada').hide();
+    $('#info-autorizacion-error').hide();
     $('#btn-confirmar-aprobacion').prop('disabled', true);
+    
+    // Resetear variables de validación
+    vendedorValidado = false;
+    autorizacionValidada = false;
+    
+    // Mostrar loading en las tablas
+    $('#aprobar-productos-devueltos').html(`
+        <tr>
+            <td colspan="6" class="text-center text-muted py-3">
+                <i class="ri-loader-4-line"></i> Cargando productos...
+            </td>
+        </tr>
+    `);
+    $('#aprobar-productos-nuevos').html(`
+        <tr>
+            <td colspan="6" class="text-center text-muted py-3">
+                <i class="ri-loader-4-line"></i> Cargando productos...
+            </td>
+        </tr>
+    `);
     
     // Cerrar modal de detalle y abrir modal de aprobación
     $('#modalDetalleCambio').modal('hide');
@@ -3651,6 +3783,132 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
     setTimeout(() => {
         $('#modalAprobarCambio').modal('show');
         $('#input-codigo-vendedor-aprobacion').focus();
+        
+        // Cargar datos completos del cambio para llenar las tablas de productos
+        $.ajax({
+            url: `/app/ventas/api/cambio-detalle/${cambioId}/`,
+            method: 'GET',
+            success: function(data) {
+                console.log('Datos recibidos:', data); // Debug
+                
+                // Manejar diferentes estructuras de respuesta
+                const cambio = data.cambio_devolucion || data.cambio || data;
+                const productos = data.productos || [];
+                
+                // Actualizar cliente si está disponible
+                if (cambio && cambio.cliente_nombre) {
+                    $('#aprobar-cliente').text(cambio.cliente_nombre);
+                } else if (cambio && cambio.ticket_original && cambio.ticket_original.cliente_nombre) {
+                    $('#aprobar-cliente').text(cambio.ticket_original.cliente_nombre);
+                }
+                
+                // Llenar tabla de productos DEVUELTOS (SALIENTES)
+                const tbodyDevueltos = $('#aprobar-productos-devueltos');
+                tbodyDevueltos.empty();
+                
+                let totalDevueltos = 0;
+                if (productos.length > 0) {
+                    productos.forEach(producto => {
+                        if (producto.producto_original) {
+                            const subtotal = (producto.cantidad_cambio || producto.cantidad) * (producto.precio_original_unitario || producto.precio_unitario || 0);
+                            totalDevueltos += subtotal;
+                            
+                            tbodyDevueltos.append(`
+                                <tr>
+                                    <td>
+                                        <strong>${producto.producto_original.articulo || producto.producto_original.nombre || '-'}</strong>
+                                        <br><small class="text-muted">${producto.producto_original.sku || '-'}</small>
+                                    </td>
+                                    <td><span class="badge bg-secondary">${producto.producto_original.talla || '-'}</span></td>
+                                    <td class="text-center"><span class="badge bg-danger">${producto.cantidad_cambio || producto.cantidad || 0}</span></td>
+                                    <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
+                                </tr>
+                            `);
+                        }
+                    });
+                }
+                
+                if (totalDevueltos === 0) {
+                    tbodyDevueltos.append(`
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-2">
+                                <i class="ri-information-line"></i> No hay productos devueltos
+                            </td>
+                        </tr>
+                    `);
+                }
+                
+                // Llenar tabla de productos NUEVOS (ENTRANTES)
+                const tbodyNuevos = $('#aprobar-productos-nuevos');
+                tbodyNuevos.empty();
+                
+                let totalNuevos = 0;
+                if (productos.length > 0) {
+                    productos.forEach(producto => {
+                        if (producto.producto_nuevo) {
+                            const cantidad = producto.cantidad_nueva || producto.cantidad || 0;
+                            const precio = producto.producto_nuevo.precio_unitario || 0;
+                            const subtotal = cantidad * precio;
+                            totalNuevos += subtotal;
+                            
+                            tbodyNuevos.append(`
+                                <tr>
+                                    <td>
+                                        <strong>${producto.producto_nuevo.articulo || producto.producto_nuevo.nombre || '-'}</strong>
+                                        <br><small class="text-muted">${producto.producto_nuevo.sku || '-'}</small>
+                                    </td>
+                                    <td><span class="badge bg-info">${producto.producto_nuevo.talla || '-'}</span></td>
+                                    <td class="text-center"><span class="badge bg-success">${cantidad}</span></td>
+                                    <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
+                                </tr>
+                            `);
+                        }
+                    });
+                }
+                
+                if (totalNuevos === 0) {
+                    tbodyNuevos.append(`
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-2">
+                                <i class="ri-information-line"></i> No hay productos nuevos - Solo devolución
+                            </td>
+                        </tr>
+                    `);
+                }
+                
+                // Actualizar los totales con los datos reales calculados
+                $('#aprobar-total-devuelto').text('$' + formatearNumero(totalDevueltos));
+                $('#aprobar-total-nuevo').text('$' + formatearNumero(totalNuevos));
+                
+                const diferenciaReal = totalNuevos - totalDevueltos;
+                if (diferenciaReal > 0) {
+                    $('#aprobar-diferencia').text('+$' + formatearNumero(diferenciaReal)).removeClass('text-success').addClass('text-danger');
+                } else if (diferenciaReal < 0) {
+                    $('#aprobar-diferencia').text('-$' + formatearNumero(Math.abs(diferenciaReal))).removeClass('text-danger').addClass('text-success');
+                } else {
+                    $('#aprobar-diferencia').text('$0').removeClass('text-danger').addClass('text-success');
+                }
+            },
+            error: function(xhr) {
+                console.error('Error al cargar detalles del cambio:', xhr);
+                console.error('Response:', xhr.responseText);
+                
+                $('#aprobar-productos-devueltos').html(`
+                    <tr>
+                        <td colspan="4" class="text-center text-danger py-2">
+                            <i class="ri-error-warning-line"></i> Error al cargar productos devueltos
+                        </td>
+                    </tr>
+                `);
+                $('#aprobar-productos-nuevos').html(`
+                    <tr>
+                        <td colspan="4" class="text-center text-danger py-2">
+                            <i class="ri-error-warning-line"></i> Error al cargar productos nuevos
+                        </td>
+                    </tr>
+                `);
+            }
+        });
     }, 300);
 }
 
@@ -3658,6 +3916,10 @@ function aprobarCambio(cambioId) {
     // Función legacy - redirige a la nueva
     aprobarCambioConDatos(cambioId, 'CAMBIO', 0, 0);
 }
+
+// Variables para controlar las validaciones
+let vendedorValidado = false;
+let autorizacionValidada = false;
 
 function validarCodigoVendedorAprobacion() {
     const codigo = $('#input-codigo-vendedor-aprobacion').val().trim();
@@ -3692,7 +3954,10 @@ function validarCodigoVendedorAprobacion() {
                 $('#vendedor-id-validado').val(response.vendedor.id);
                 $('#nombre-vendedor-validado').text(response.vendedor.nombre_completo);
                 $('#info-vendedor-validado').show();
-                $('#btn-confirmar-aprobacion').prop('disabled', false);
+                vendedorValidado = true;
+                
+                // Verificar si ambos están validados
+                verificarValidacionesCompletas();
                 
                 Swal.fire({
                     icon: 'success',
@@ -3705,6 +3970,7 @@ function validarCodigoVendedorAprobacion() {
                 mostrarError(response.error || 'Código de vendedor inválido');
                 $('#vendedor-id-validado').val('');
                 $('#info-vendedor-validado').hide();
+                vendedorValidado = false;
                 $('#btn-confirmar-aprobacion').prop('disabled', true);
             }
         },
@@ -3713,9 +3979,109 @@ function validarCodigoVendedorAprobacion() {
             mostrarError('Error al validar vendedor');
             $('#vendedor-id-validado').val('');
             $('#info-vendedor-validado').hide();
+            vendedorValidado = false;
             $('#btn-confirmar-aprobacion').prop('disabled', true);
         }
     });
+}
+
+function validarCodigoAutorizacionAprobacion() {
+    const codigo = $('#input-codigo-autorizacion-aprobacion').val().trim();
+    
+    if (!codigo) {
+        mostrarError('Ingrese el código de autorización');
+        return;
+    }
+    
+    if (codigo.length !== 6 || !/^\d{6}$/.test(codigo)) {
+        mostrarError('El código debe ser de 6 dígitos numéricos');
+        return;
+    }
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Validando código de autorización...',
+        html: '<i class="ri-shield-keyhole-line fs-1 text-warning"></i><br>Verificando con el sistema...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: '/app/ventas/api/codigo-autorizacion/validar/',
+        method: 'POST',
+        data: JSON.stringify({
+            codigo: codigo,
+            tipo_operacion: 'APROBACION_CAMBIO',
+            cambio_id: cambioActual?.id || null
+        }),
+        contentType: 'application/json',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        success: function(response) {
+            Swal.close();
+            
+            if (response.success) {
+                // Código de autorización válido
+                $('#autorizacion-valido-hasta').text(response.codigo.valido_hasta);
+                $('#info-autorizacion-validada').show();
+                $('#info-autorizacion-error').hide();
+                autorizacionValidada = true;
+                
+                // Verificar si ambos están validados
+                verificarValidacionesCompletas();
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: '✓ Autorización Aprobada',
+                    html: `<p class="mb-0">${response.mensaje}</p><p class="small text-muted mt-2">Código válido hasta: ${response.codigo.valido_hasta}</p>`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                // Código inválido
+                $('#autorizacion-error-mensaje').text(response.error || 'Código de autorización inválido');
+                $('#info-autorizacion-error').show();
+                $('#info-autorizacion-validada').hide();
+                autorizacionValidada = false;
+                $('#btn-confirmar-aprobacion').prop('disabled', true);
+                
+                mostrarError(response.error || 'Código de autorización inválido');
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            const errorMsg = xhr.responseJSON?.error || 'Error al validar código de autorización';
+            $('#autorizacion-error-mensaje').text(errorMsg);
+            $('#info-autorizacion-error').show();
+            $('#info-autorizacion-validada').hide();
+            autorizacionValidada = false;
+            $('#btn-confirmar-aprobacion').prop('disabled', true);
+            mostrarError(errorMsg);
+        }
+    });
+}
+
+function verificarValidacionesCompletas() {
+    // Habilitar el botón solo si ambas validaciones están completas
+    if (vendedorValidado && autorizacionValidada) {
+        $('#btn-confirmar-aprobacion').prop('disabled', false);
+        
+        // Opcional: mostrar mensaje de éxito
+        Swal.fire({
+            icon: 'success',
+            title: '✓ Validaciones Completas',
+            text: 'Todas las validaciones han sido completadas. Puede proceder con la aprobación.',
+            timer: 2000,
+            showConfirmButton: false,
+            toast: true,
+            position: 'top-end'
+        });
+    } else {
+        $('#btn-confirmar-aprobacion').prop('disabled', true);
+    }
 }
 
 function cancelarCambio(cambioId) {

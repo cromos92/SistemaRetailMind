@@ -380,7 +380,17 @@
                     <div class="card card-simple bg-primary text-white">
                         <div class="card-body text-center">
                             <i class="ri-bank-card-line" style="font-size: 2rem;"></i>
-                            <h6 class="mt-2">Transbank/Tarjetas</h6>
+                            <h6 class="mt-2 text-whiteFecha	Cajera/Usuario	Efectivo	Cierre POS	Depósitos	Diferencia	Estado	Acciones
+18/11/2025	Javier Araya	Teórico: $43.980
+Físico: $0
++ Depósitos: $56.000
+= Total Real: $56.000
+
+Diferencia: +$12.020	Teórico: $0
+$90.000 (+$90.000)	$56.000
+1 depósito(s)	+$102.020 💰
+Total: $$56.000
+Dif. Cajero: $-43.980	⚠️ Con Diferencias	">Transbank/Tarjetas</h6>
                             <div class="monto-grande text-white" id="totalTarjetas">$0</div>
                             <small>Pagos con tarjeta</small>
                         </div>
@@ -391,7 +401,7 @@
                     <div class="card card-simple bg-info text-white">
                         <div class="card-body text-center">
                             <i class="ri-shopping-cart-line" style="font-size: 2rem;"></i>
-                            <h6 class="mt-2">Venta Internet</h6>
+                            <h6 class="mt-2 text-white">Venta Internet</h6>
                             <div class="monto-grande text-white" id="totalInternet">$0</div>
                             <small>Webpay, Mercadopago, etc</small>
                         </div>
@@ -402,7 +412,7 @@
                     <div class="card card-simple bg-dark text-white">
                         <div class="card-body text-center">
                             <i class="ri-calculator-line" style="font-size: 2rem;"></i>
-                            <h6 class="mt-2">Venta Total</h6>
+                            <h6 class="mt-2 text-white">Venta Total</h6>
                             <div class="monto-grande text-white" id="ventaTotal">$0</div>
                             <small>Total del día</small>
                         </div>
@@ -763,20 +773,110 @@
             </div>
         </div>
 
-        <!-- Historial de Cuadraturas -->
+        <!-- Indicadores Mensuales -->
         <div class="row mt-5">
             <div class="col-12">
+                <h5 class="mb-3"><i class="ri-dashboard-line"></i> Indicadores del Mes</h5>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-success mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white mb-1">✅ Cuadraturas OK</h6>
+                                <h2 class="mb-0" id="indicator-ok">-</h2>
+                                <small>Sin diferencias</small>
+                            </div>
+                            <i class="ri-check-double-line" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-warning mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white mb-1">⚠️ Con Diferencias</h6>
+                                <h2 class="mb-0" id="indicator-diferencias">-</h2>
+                                <small>Requieren revisión</small>
+                            </div>
+                            <i class="ri-alert-line" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-danger mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white mb-1">📅 Días Pendientes</h6>
+                                <h2 class="mb-0" id="indicator-pendientes">-</h2>
+                                <small>Sin cuadratura</small>
+                            </div>
+                            <i class="ri-calendar-close-line" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-title text-white mb-1">📊 Total del Mes</h6>
+                                <h2 class="mb-0" id="indicator-total">-</h2>
+                                <small>Cuadraturas realizadas</small>
+                            </div>
+                            <i class="ri-file-list-line" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Historial de Cuadraturas -->
+        <div class="row mt-3">
+            <div class="col-12">
                 <div class="card card-simple">
-                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="ri-history-line"></i> Historial de Cuadraturas</h6>
-                        <div>
-                            <input type="date" class="form-control form-control-sm d-inline-block" style="width:auto;" id="filtroFecha" placeholder="Filtrar por fecha">
-                            <button class="btn btn-sm btn-primary" onclick="cargarHistorial()">
-                                <i class="ri-search-line"></i> Buscar
-                            </button>
-                            <button class="btn btn-sm btn-secondary" onclick="limpiarFiltroFecha()" title="Ver todas">
-                                <i class="ri-refresh-line"></i>
-                            </button>
+                    <div class="card-header bg-light">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h6 class="mb-0"><i class="ri-history-line"></i> Historial de Cuadraturas</h6>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex gap-2 justify-content-end flex-wrap">
+                                    <!-- Filtros Rápidos -->
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filtrarHoy()">
+                                        <i class="ri-calendar-check-line"></i> Hoy
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filtrarEstaSemana()">
+                                        <i class="ri-calendar-2-line"></i> Esta Semana
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filtrarEsteMes()">
+                                        <i class="ri-calendar-line"></i> Este Mes
+                                    </button>
+                                    
+                                    <!-- Selector de Fecha -->
+                                    <input type="date" class="form-control form-control-sm" style="width:150px;" id="filtroFecha" title="Filtrar por fecha específica">
+                                    
+                                    <!-- Filtro por Estado -->
+                                    <select class="form-select form-select-sm" style="width:150px;" id="filtroEstado" onchange="aplicarFiltros()">
+                                        <option value="">Todos los estados</option>
+                                        <option value="CERRADO">✅ Solo OK</option>
+                                        <option value="CON_DIFERENCIAS">⚠️ Con Diferencias</option>
+                                    </select>
+                                    
+                                    <!-- Botones de Acción -->
+                                    <button class="btn btn-sm btn-primary" onclick="aplicarFiltros()">
+                                        <i class="ri-search-line"></i> Buscar
+                                    </button>
+                                    <button class="btn btn-sm btn-secondary" onclick="limpiarFiltros()" title="Limpiar filtros">
+                                        <i class="ri-refresh-line"></i> Limpiar
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -1089,15 +1189,18 @@ $(document).ready(function() {
     
     // Ejecutar búsqueda inicial automáticamente
     buscarCuadratura();
+    
+    // Cargar indicadores del mes actual
+    filtrarEsteMes();
 });
 
 function configurarLimitesFecha() {
     const hoy = new Date();
-    const hace60Dias = new Date();
-    hace60Dias.setDate(hace60Dias.getDate() - 60);
+    const hace7Dias = new Date();
+    hace7Dias.setDate(hace7Dias.getDate() - 7);
     
-    // Establecer límites en el input date
-    $('#fechaCuadraturaSelector').attr('min', hace60Dias.toISOString().split('T')[0]);
+    // Establecer límites en el input date - máximo 7 días atrás
+    $('#fechaCuadraturaSelector').attr('min', hace7Dias.toISOString().split('T')[0]);
     $('#fechaCuadraturaSelector').attr('max', hoy.toISOString().split('T')[0]);
 }
 
@@ -1166,6 +1269,7 @@ function cargarHistorialConSucursal(fecha) {
         success: function(response) {
             if(response.success && response.arqueos.length > 0) {
                 cargarHistorialTabla(response.arqueos);
+                calcularIndicadores(response.arqueos); // Calcular indicadores
             } else {
                 $('#historialTabla').html(`
                     <tr>
@@ -1175,6 +1279,7 @@ function cargarHistorialConSucursal(fecha) {
                         </td>
                     </tr>
                 `);
+                calcularIndicadores([]); // Indicadores vacíos
             }
         },
         error: function(xhr) {
@@ -1201,46 +1306,63 @@ function cargarHistorialTabla(arqueos) {
         const diferencia = arqueo.diferencia_efectivo || 0;
         const diferenciaTransbank = arqueo.diferencia_transbank || 0;
         
-        let estadoClass = '';
-        let estadoIcon = '';
-        if(arqueo.estado_codigo === 'CERRADO') {
-            estadoClass = 'bg-success';
-            estadoIcon = '✅';
-        } else if(arqueo.estado_codigo === 'CON_DIFERENCIAS') {
-            estadoClass = 'bg-warning';
-            estadoIcon = '⚠️';
-        } else {
-            estadoClass = 'bg-info';
-            estadoIcon = '📝';
-        }
+        // NUEVA LÓGICA: Diferencia = (Físico + Depósitos) - Teórico
+        const totalEfectivoReal = arqueo.total_efectivo_real || (arqueo.efectivo_fisico + arqueo.total_depositos);
+        const diferenciaEfectivo = arqueo.diferencia_efectivo || 0;
+        const diferenciaCajero = arqueo.diferencia_cajero || 0;
+        const diferenciaTotal = arqueo.diferencia_total_real || 0;
         
-        // Usar diferencia real que considera depósitos
-        const diferenciaEfectivoReal = arqueo.diferencia_efectivo_real || 0;
-        const diferenciaTotal = arqueo.diferencia_total_real || (diferenciaEfectivoReal + diferenciaTransbank);
+        // Estado detallado basado en diferencias específicas
+        let estadoHtml = '';
+        const tieneDifEfectivo = Math.abs(diferenciaEfectivo) > 0;
+        const tieneDifTransbank = Math.abs(diferenciaTransbank) > 0;
+        
+        if(!tieneDifEfectivo && !tieneDifTransbank) {
+            // Todo OK - Sin diferencias
+            estadoHtml = '<span class="badge bg-success">✅ Finalizado</span>';
+        } else {
+            // Hay diferencias - mostrar detalles
+            estadoHtml = '<div>';
+            
+            if(tieneDifEfectivo) {
+                const colorEf = diferenciaEfectivo > 0 ? 'bg-success' : 'bg-danger';
+                const iconEf = diferenciaEfectivo > 0 ? '💰' : '❌';
+                estadoHtml += `<span class="badge ${colorEf} mb-1">${iconEf} Efectivo: ${diferenciaEfectivo >= 0 ? '+' : ''}${formatearMoneda(diferenciaEfectivo)}</span><br>`;
+            }
+            
+            if(tieneDifTransbank) {
+                const colorTbk = diferenciaTransbank > 0 ? 'bg-success' : 'bg-danger';
+                const iconTbk = diferenciaTransbank > 0 ? '💰' : '❌';
+                estadoHtml += `<span class="badge ${colorTbk}">${iconTbk} Transbank: ${diferenciaTransbank >= 0 ? '+' : ''}${formatearMoneda(diferenciaTransbank)}</span>`;
+            }
+            
+            estadoHtml += '</div>';
+        }
         
         let diferenciaHtml = '';
         if(diferenciaTotal === 0) {
             diferenciaHtml = '<span class="text-success fw-bold">$0 ✅</span>';
         } else if(diferenciaTotal > 0) {
-            diferenciaHtml = '<span class="text-warning fw-bold">+' + formatearMoneda(diferenciaTotal) + ' ⚠️</span>';
+            diferenciaHtml = '<span class="text-success fw-bold">+' + formatearMoneda(diferenciaTotal) + ' 💰</span>';
         } else {
-            // Si hay depósitos y la diferencia es negativa, puede ser depósito excedente (a favor)
-            if(arqueo.total_depositos > 0 && arqueo.efectivo_en_caja < 0) {
-                const depositoExcedente = Math.abs(arqueo.efectivo_en_caja);
-                diferenciaHtml = '<span class="text-info fw-bold">Dep. Excedente: +' + formatearMoneda(depositoExcedente) + ' 💰</span>';
-            } else {
-                diferenciaHtml = '<span class="text-danger fw-bold">' + formatearMoneda(diferenciaTotal) + ' ❌</span>';
-            }
+            diferenciaHtml = '<span class="text-danger fw-bold">' + formatearMoneda(diferenciaTotal) + ' ❌</span>';
         }
         
-        // Mostrar desglose si hay depósitos
-        if(arqueo.total_depositos > 0) {
-            diferenciaHtml += '<br><small class="text-muted">';
-            diferenciaHtml += 'Depósitos: ' + formatearMoneda(arqueo.total_depositos);
-            if(arqueo.efectivo_en_caja < 0) {
-                diferenciaHtml += ' (Excedente: +' + formatearMoneda(Math.abs(arqueo.efectivo_en_caja)) + ')';
+        // Mostrar desglose detallado
+        if(arqueo.total_depositos > 0 || diferenciaCajero !== 0 || diferenciaTransbank !== 0) {
+            diferenciaHtml += '<br><small class="text-muted">Total Efectivo: ' + formatearMoneda(totalEfectivoReal) + '</small>';
+            
+            // Diferencia del cajero (Físico vs Teórico)
+            if(diferenciaCajero !== 0) {
+                const colorCajero = diferenciaCajero > 0 ? 'text-success' : 'text-danger';
+                diferenciaHtml += `<br><small class="${colorCajero}">Dif. Cajero: ${diferenciaCajero >= 0 ? '+' : ''}${formatearMoneda(diferenciaCajero)}</small>`;
             }
-            diferenciaHtml += '</small>';
+            
+            // Diferencia de Transbank (Cierre POS vs Teórico)
+            if(diferenciaTransbank !== 0) {
+                const colorTransbank = diferenciaTransbank > 0 ? 'text-success' : 'text-danger';
+                diferenciaHtml += `<br><small class="${colorTransbank}">Dif. Transbank: ${diferenciaTransbank >= 0 ? '+' : ''}${formatearMoneda(diferenciaTransbank)}</small>`;
+            }
         }
         
         let cierrePOSHtml = '';
@@ -1269,13 +1391,13 @@ function cargarHistorialTabla(arqueos) {
                     ${arqueo.total_depositos > 0 ? `
                         <div>
                             <strong>Físico: ${formatearMoneda(arqueo.efectivo_fisico)}</strong>
-                            <br><small class="text-info">- Depósitos: ${formatearMoneda(arqueo.total_depositos)}</small>
-                            <br><strong class="text-primary">= En Caja: ${formatearMoneda(arqueo.efectivo_en_caja)}</strong>
+                            <br><small class="text-info">+ Depósitos: ${formatearMoneda(arqueo.total_depositos)}</small>
+                            <br><strong class="text-success">= Total Real: ${formatearMoneda(totalEfectivoReal)}</strong>
                         </div>
                     ` : `
-                        <strong>${formatearMoneda(arqueo.efectivo_fisico)}</strong>
+                        <strong>Físico: ${formatearMoneda(arqueo.efectivo_fisico)}</strong>
                     `}
-                    ${diferenciaEfectivoReal !== 0 ? `<br><small class="${diferenciaEfectivoReal > 0 ? 'text-warning' : 'text-danger'}">(${diferenciaEfectivoReal >= 0 ? '+' : ''}${formatearMoneda(diferenciaEfectivoReal)})</small>` : ''}
+                    ${diferenciaEfectivo !== 0 ? `<br><small class="${diferenciaEfectivo > 0 ? 'text-success' : 'text-danger'}">Diferencia: ${diferenciaEfectivo >= 0 ? '+' : ''}${formatearMoneda(diferenciaEfectivo)}</small>` : ''}
                 </td>
                 <td>${cierrePOSHtml}</td>
                 <td>
@@ -1284,7 +1406,7 @@ function cargarHistorialTabla(arqueos) {
                 </td>
                 <td>${diferenciaHtml}</td>
                 <td>
-                    <span class="badge ${estadoClass}">${estadoIcon} ${arqueo.estado}</span>
+                    ${estadoHtml}
                 </td>
                 <td>
                     <button class="btn btn-sm btn-info" onclick="verDetalleArqueo(${arqueo.id})" title="Ver detalle completo">
@@ -1327,14 +1449,15 @@ function cambiarFechaCuadratura() {
         return;
     }
     
-    // Validación: máximo 60 días
-    if(diferenciaDias > 60) {
+    // Validación: máximo 7 días
+    if(diferenciaDias > 7) {
         Swal.fire({
             icon: 'error',
             title: '❌ Fecha Muy Antigua',
             html: `
-                <p>Solo puedes hacer cuadratura de los últimos <strong>60 días</strong></p>
+                <p>Solo puedes hacer cuadratura de los últimos <strong>7 días</strong></p>
                 <p class="text-muted small">La fecha seleccionada es de hace ${diferenciaDias} días</p>
+                <p class="mt-2"><small>Las cuadraturas deben hacerse oportunamente para mantener el control de caja actualizado.</small></p>
             `,
             confirmButtonText: 'Entendido'
         });
@@ -2262,7 +2385,7 @@ function mostrarModalDetalleArqueo(arqueo) {
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title">
+                        <h5 class="modal-title text-white">
                             <i class="ri-file-list-3-line"></i> Detalle de Cuadratura
                         </h5>
                         <button type="button" class="btn-close btn-close-white" onclick="cerrarModalDetalle()"></button>
@@ -2406,6 +2529,25 @@ function mostrarModalDetalleArqueo(arqueo) {
                             </div>
                             ` : ''}
                             
+                            <!-- Orden de Compra -->
+                            ${arqueo.total_orden_compra_teorico > 0 ? `
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-purple" style="border-color: #7c3aed !important;">
+                                    <div class="card-header text-white" style="background-color: #7c3aed;">
+                                        <strong class="text-white">📋 Orden de Compra</strong>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm mb-0">
+                                            <tr class="table-light fw-bold">
+                                                <td>Total OC:</td>
+                                                <td class="text-end">${formatearMoneda(arqueo.total_orden_compra_teorico)}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            ` : ''}
+                            
                             <!-- Tarjetas Comerciales -->
                             <div class="col-md-4 mb-3">
                                 <div class="card border-warning">
@@ -2431,7 +2573,7 @@ function mostrarModalDetalleArqueo(arqueo) {
                             <div class="col-md-4 mb-3">
                                 <div class="card border-info">
                                     <div class="card-header bg-info text-white">
-                                        <strong>🌐 Venta Internet</strong>
+                                        <strong class="text-white">🌐 Venta Internet</strong>
                                     </div>
                                     <div class="card-body">
                                         <table class="table table-sm mb-0">
@@ -2773,6 +2915,174 @@ function limpiarFiltroFecha() {
     cargarHistorial();
 }
 
+// ========== NUEVOS FILTROS RÁPIDOS ==========
+
+function filtrarHoy() {
+    const hoy = new Date().toISOString().split('T')[0];
+    $('#filtroFecha').val(hoy);
+    $('#filtroEstado').val('');
+    aplicarFiltros();
+}
+
+function filtrarEstaSemana() {
+    // No establecemos fecha específica, limpiamos filtro de fecha
+    // El backend ya trae por defecto el mes actual
+    $('#filtroFecha').val('');
+    $('#filtroEstado').val('');
+    
+    // Cargar todo el mes y luego filtrar visualmente esta semana
+    cargarHistorialConFiltros('', '', true);
+}
+
+function filtrarEsteMes() {
+    $('#filtroFecha').val('');
+    $('#filtroEstado').val('');
+    aplicarFiltros();
+}
+
+function aplicarFiltros() {
+    const fecha = $('#filtroFecha').val();
+    const estado = $('#filtroEstado').val();
+    cargarHistorialConFiltros(fecha, estado, false);
+}
+
+function limpiarFiltros() {
+    $('#filtroFecha').val('');
+    $('#filtroEstado').val('');
+    aplicarFiltros();
+}
+
+function cargarHistorialConFiltros(fecha, estado, soloEstaSemana) {
+    const url = new URL('/app/api/cuadratura/listar/', window.location.origin);
+    if(fecha) url.searchParams.append('fecha', fecha);
+    
+    // Mostrar loading
+    $('#historialTabla').html(`
+        <tr>
+            <td colspan="8" class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2 text-muted">Cargando cuadraturas...</p>
+            </td>
+        </tr>
+    `);
+    
+    $.ajax({
+        url: url.toString(),
+        method: 'GET',
+        success: function(response) {
+            if(response.success && response.arqueos.length > 0) {
+                let arqueosFiltrados = response.arqueos;
+                
+                // Filtrar por estado si está seleccionado
+                if(estado) {
+                    arqueosFiltrados = arqueosFiltrados.filter(a => a.estado_codigo === estado);
+                }
+                
+                // Filtrar por semana si se solicita
+                if(soloEstaSemana) {
+                    const hoy = new Date();
+                    const inicioDeSemana = new Date(hoy);
+                    inicioDeSemana.setDate(hoy.getDate() - hoy.getDay()); // Domingo
+                    
+                    arqueosFiltrados = arqueosFiltrados.filter(a => {
+                        const fechaArqueo = convertirFecha(a.fecha_arqueo);
+                        return fechaArqueo >= inicioDeSemana;
+                    });
+                }
+                
+                if(arqueosFiltrados.length > 0) {
+                    cargarHistorialTabla(arqueosFiltrados);
+                    calcularIndicadores(response.arqueos); // Siempre calcular con todos
+                } else {
+                    $('#historialTabla').html(`
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">
+                                <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                                <p class="mt-2">No hay cuadraturas que coincidan con los filtros</p>
+                            </td>
+                        </tr>
+                    `);
+                    calcularIndicadores(response.arqueos);
+                }
+            } else {
+                $('#historialTabla').html(`
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            <i class="ri-inbox-line" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No hay cuadraturas registradas</p>
+                        </td>
+                    </tr>
+                `);
+                calcularIndicadores([]);
+            }
+        },
+        error: function(xhr) {
+            console.error('Error al cargar historial:', xhr);
+            $('#historialTabla').html(`
+                <tr>
+                    <td colspan="8" class="text-center text-danger">
+                        <i class="ri-alert-line" style="font-size: 2rem;"></i>
+                        <p class="mt-2">Error al cargar historial</p>
+                    </td>
+                </tr>
+            `);
+        }
+    });
+}
+
+function convertirFecha(fechaStr) {
+    // Convertir dd/mm/yyyy a objeto Date
+    const partes = fechaStr.split('/');
+    return new Date(partes[2], partes[1] - 1, partes[0]);
+}
+
+function calcularIndicadores(arqueos) {
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    
+    // Contar cuadraturas por estado REAL (basado en diferencias)
+    let cuadraturasOK = 0;
+    let cuadraturasConDiferencias = 0;
+    
+    arqueos.forEach(arqueo => {
+        const difEfectivo = Math.abs(arqueo.diferencia_efectivo || 0);
+        const difTransbank = Math.abs(arqueo.diferencia_transbank || 0);
+        
+        // Si no hay diferencias en ninguno, está OK
+        if(difEfectivo === 0 && difTransbank === 0) {
+            cuadraturasOK++;
+        } else {
+            // Hay diferencias
+            cuadraturasConDiferencias++;
+        }
+    });
+    
+    // Calcular días pendientes (días del mes sin cuadratura)
+    const fechasConCuadratura = new Set();
+    arqueos.forEach(arqueo => {
+        fechasConCuadratura.add(arqueo.fecha_arqueo);
+    });
+    
+    let diasPendientes = 0;
+    for(let d = new Date(primerDiaMes); d <= hoy; d.setDate(d.getDate() + 1)) {
+        const fechaStr = ('0' + d.getDate()).slice(-2) + '/' + 
+                        ('0' + (d.getMonth() + 1)).slice(-2) + '/' + 
+                        d.getFullYear();
+        if(!fechasConCuadratura.has(fechaStr)) {
+            diasPendientes++;
+        }
+    }
+    
+    // Actualizar indicadores
+    $('#indicator-ok').text(cuadraturasOK);
+    $('#indicator-diferencias').text(cuadraturasConDiferencias);
+    $('#indicator-pendientes').text(diasPendientes);
+    $('#indicator-total').text(arqueos.length);
+}
+
 // ========== GESTIÓN DE DEPÓSITOS ==========
 
 function abrirGestionDepositos(arqueoId) {
@@ -2926,11 +3236,26 @@ function agregarNuevoDeposito() {
                 $('#gd_deposito_comprobante').val('');
                 $('#gd_deposito_observaciones').val('');
                 
-                // Recargar lista de depósitos
-                abrirGestionDepositos(arqueoId);
-                
-                // Recargar historial en background
-                cargarHistorial();
+                // RECARGAR SOLO LOS DATOS sin volver a abrir el modal
+                $.ajax({
+                    url: `/app/api/cuadratura/detalle/${arqueoId}/`,
+                    method: 'GET',
+                    success: function(detailResponse) {
+                        if(detailResponse.success) {
+                            const arqueo = detailResponse.arqueo;
+                            
+                            // Actualizar info del arqueo
+                            $('#gd_efectivo_fisico').text(formatearMoneda(arqueo.total_efectivo_fisico));
+                            
+                            // Badge de estado
+                            const estadoBadge = arqueo.estado === 'CERRADO' ? 'bg-success' : 'bg-warning';
+                            $('#gd_estado').removeClass('bg-success bg-warning bg-secondary').addClass(estadoBadge).text(arqueo.estado);
+                            
+                            // Recargar lista de depósitos
+                            cargarListaDepositos(arqueo);
+                        }
+                    }
+                });
                 
                 // Mostrar notificación de éxito
                 Swal.fire({
@@ -2991,11 +3316,26 @@ function eliminarDeposito(depositoId) {
                     if(response.success) {
                         const arqueoId = $('#gd_arqueo_id').val();
                         
-                        // Recargar lista de depósitos
-                        abrirGestionDepositos(arqueoId);
-                        
-                        // Recargar historial en background
-                        cargarHistorial();
+                        // RECARGAR SOLO LOS DATOS sin volver a abrir el modal
+                        $.ajax({
+                            url: `/app/api/cuadratura/detalle/${arqueoId}/`,
+                            method: 'GET',
+                            success: function(detailResponse) {
+                                if(detailResponse.success) {
+                                    const arqueo = detailResponse.arqueo;
+                                    
+                                    // Actualizar info del arqueo
+                                    $('#gd_efectivo_fisico').text(formatearMoneda(arqueo.total_efectivo_fisico));
+                                    
+                                    // Badge de estado
+                                    const estadoBadge = arqueo.estado === 'CERRADO' ? 'bg-success' : 'bg-warning';
+                                    $('#gd_estado').removeClass('bg-success bg-warning bg-secondary').addClass(estadoBadge).text(arqueo.estado);
+                                    
+                                    // Recargar lista de depósitos
+                                    cargarListaDepositos(arqueo);
+                                }
+                            }
+                        });
                         
                         // Mostrar notificación de éxito
                         Swal.fire({
@@ -3641,9 +3981,13 @@ function generarResumenMetodosPago(cuadratura) {
                                 <td>👷 Crédito Trabajador:</td>
                                 <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_credito_trabajador || 0)}</td>
                             </tr>
+                            <tr>
+                                <td>📋 Orden de Compra:</td>
+                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_orden_compra || 0)}</td>
+                            </tr>
                             <tr class="table-light">
                                 <td><strong>TOTAL:</strong></td>
-                                <td class="text-end fw-bold">${formatearMoneda((cuadratura.total_efectivo || 0) + (cuadratura.total_transferencia || 0) + (cuadratura.total_credito_trabajador || 0))}</td>
+                                <td class="text-end fw-bold">${formatearMoneda((cuadratura.total_efectivo || 0) + (cuadratura.total_transferencia || 0) + (cuadratura.total_credito_trabajador || 0) + (cuadratura.total_orden_compra || 0))}</td>
                             </tr>
                         </table>
                     </div>
@@ -3700,7 +4044,7 @@ function generarResumenMetodosPago(cuadratura) {
             <div class="col-md-6 mb-3">
                 <div class="card border-info">
                     <div class="card-header bg-info text-white">
-                        <strong><i class="ri-global-line"></i> Venta Internet</strong>
+                        <strong class="text-white"><i class="ri-global-line"></i> Venta Internet</strong>
                     </div>
                     <div class="card-body">
                         <table class="table table-sm mb-0">

@@ -155,6 +155,7 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th scope="col" class="fs-5 fw-bold">#Ticket</th>
+                                        <th scope="col" class="fs-5 fw-bold">Tipo</th>
                                         <th scope="col" class="fs-5 fw-bold">Hora</th>
                                         <th scope="col" class="fs-5 fw-bold">Cliente</th>
                                         <th scope="col" class="fs-5 fw-bold">Vendedor</th>
@@ -165,7 +166,7 @@
                                 </thead>
                                 <tbody id="tbodyTickets">
                                     <tr>
-                                        <td colspan="7" class="text-center py-4">
+                                        <td colspan="8" class="text-center py-4">
                                             <div class="spinner-border text-primary" role="status">
                                                 <span class="visually-hidden">Cargando...</span>
                                             </div>
@@ -363,7 +364,6 @@
                                                     <input class="form-check-input" type="radio" name="tipoDocumento" id="tipoBoletaPapel" value="BOLETA_PAPEL">
                                                     <label class="form-check-label card h-100" for="tipoBoletaPapel">
                                                         <div class="card-body text-center p-3">
-                                                            <i class="ri-file-text-line display-4 text-info mb-2"></i>
                                                             <h6 class="card-title">Boleta Papel</h6>
                                                             <p class="card-text small text-muted">Boleta física sin generación TXT</p>
                                                             <div class="badge bg-info" id="correlativos-BOLETA_PAPEL">
@@ -398,42 +398,24 @@
                                             </div>
                                         </div>
                                         
-                                        <!-- ✅ REFERENCIA A DOCUMENTOS (solo para Facturas) -->
+                                        <!-- ✅ REFERENCIA A DOCUMENTOS (solo para Facturas) - MÚLTIPLES REFERENCIAS -->
                                         <div id="seccionReferencia" class="mt-3" style="display: none;">
                                             <div class="card border-warning">
-                                                <div class="card-header bg-warning bg-soft">
+                                                <div class="card-header bg-warning bg-soft d-flex justify-content-between align-items-center">
                                                     <h6 class="mb-0 text-warning">
-                                                        <i class="ri-link"></i> Referencia a Documento Comercial (Opcional)
+                                                        <i class="ri-link"></i> Referencias a Documentos Comerciales (Opcional)
                                                     </h6>
+                                                    <button type="button" class="btn btn-sm btn-success" onclick="agregarReferencia()">
+                                                        <i class="ri-add-line"></i> Agregar Referencia
+                                                    </button>
                                                 </div>
                                                 <div class="card-body">
-                                                    <div class="row g-3">
-                                                        <div class="col-md-4">
-                                                            <label class="form-label">Tipo de Documento</label>
-                                                            <select class="form-select" id="referenciatipo">
-                                                                <option value="">-- Sin referencia --</option>
-                                                                <option value="801">801 - Orden de Compra</option>
-                                                                <option value="52">52 - Guía de Despacho</option>
-                                                                <option value="803">803 - Contrato</option>
-                                                                <option value="HES">HES - Hoja Entrada Servicio</option>
-                                                            </select>
-                                                        </div>
-                                                        <div class="col-md-4">
-                                                            <label class="form-label">Folio / Número</label>
-                                                            <input type="text" class="form-control" id="referenciaFolio" placeholder="Ej: OC-98765">
-                                                        </div>
-                                                        <div class="col-md-4">
-                                                            <label class="form-label">Fecha Documento</label>
-                                                            <input type="date" class="form-control" id="referenciaFecha">
-                                                        </div>
-                                                        <div class="col-12">
-                                                            <label class="form-label">Observaciones <span class="text-muted">(Opcional)</span></label>
-                                                            <textarea class="form-control" id="referenciaObservaciones" rows="3" placeholder="Notas adicionales sobre la referencia o la venta..."></textarea>
-                                                        </div>
+                                                    <div id="contenedorReferencias">
+                                                        <!-- Las referencias se agregarán aquí dinámicamente -->
                                                     </div>
                                                     <small class="text-muted">
                                                         <i class="ri-information-line"></i> 
-                                                        Si el cliente entregó una Orden de Compra, Guía o Contrato, puede referenciarla aquí.
+                                                        Si el cliente entregó una Orden de Compra, Guía o Contrato, puede referenciarla aquí. Puede agregar múltiples referencias.
                                                     </small>
                                                 </div>
                                             </div>
@@ -443,8 +425,8 @@
 
                                 <!-- Datos del Cliente -->
                                 <div class="card shadow">
-                                    <div class="card-header bg-primary text-white">
-                                        <h4 class="mb-0">
+                                    <div class="card-header bg-primary">
+                                        <h4 class="mb-0  text-white">
                                             <i class="ri-user-line"></i> Datos del Cliente
                                             <small class="ms-2" id="requeridoCliente">(Requerido para documentos tributarios)</small>
                                         </h4>
@@ -464,11 +446,14 @@
                                                            placeholder="11111111-1"
                                                            maxlength="10">
                                                     <button class="btn btn-primary" onclick="buscarClientePorRut()">
-                                                        Buscar
+                                                        <i class="ri-search-line me-1"></i>Buscar
+                                                    </button>
+                                                    <button class="btn btn-secondary" onclick="cargarClienteGenerico()" data-bs-toggle="tooltip" title="Usar cliente genérico para ventas sin datos del cliente">
+                                                        <i class="ri-user-line me-1"></i>Cliente Genérico
                                                     </button>
                                                 </div>
                                                 <div class="invalid-feedback" id="rutError"></div>
-                                                <small class="text-muted">Formato: 11111111-1 (sin puntos)</small>
+                                                <small class="text-muted">Formato: 11111111-1 (sin puntos) | Cliente genérico: 66666666-6</small>
                                             </div>
                                             <div class="col-md-6" id="busquedaEmpresaSection" style="display: none;">
                                                 <label class="form-label fw-medium">Buscar Empresa por RUT</label>
@@ -509,12 +494,12 @@
                                         <form id="formCliente">
                                             <div class="row g-3">
                                                 <div class="col-md-6">
-                                                    <label class="form-label fw-medium fs-5" id="labelNombre">Nombre/Razón Social</label>
-                                                    <input type="text" class="form-control form-control-lg" id="clienteNombre">
+                                                    <label class="form-label fw-medium fs-5 text-dark" id="labelNombre">Nombre/Razón Social</label>
+                                                    <input type="text" class="form-control form-control-lg" id="clienteNombre" placeholder="Ingrese nombre completo">
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label class="form-label fw-medium fs-5" id="labelRut">RUT</label>
-                                                    <input type="text" class="form-control form-control-lg" id="clienteRut">
+                                                    <label class="form-label fw-medium fs-5 text-dark" id="labelRut">RUT</label>
+                                                    <input type="text" class="form-control form-control-lg" id="clienteRut" placeholder="12345678-9">
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label class="form-label fs-5">Email</label>
@@ -672,6 +657,13 @@
                                                     style="border: 2px dashed;">
                                                     <i class="ri-bank-line fs-4 d-block mb-1"></i>
                                                     <span class="fw-bold">CRÉDITO EXTERNO</span>
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-purple w-100 py-3" onclick="agregarPago('ORDEN_COMPRA')"
+                                                    style="border: 2px solid #7c3aed;">
+                                                    <i class="ri-file-list-3-line fs-4 d-block mb-1"></i>
+                                                    <span class="fw-bold">ORDEN COMPRA</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -863,6 +855,11 @@
                         <label class="form-label">N° Voucher/Autorización</label>
                         <input type="text" class="form-control" id="pagoVoucher" placeholder="Opcional">
                     </div>
+                    <div class="mb-3" id="campoOrdenCompra" style="display: none;">
+                        <label class="form-label fw-bold text-purple">N° Orden de Compra *</label>
+                        <input type="text" class="form-control" id="pagoNumeroOrdenCompra" placeholder="Ej: OC-2024-001">
+                        <small class="text-muted">Ingrese el número de la orden de compra del cliente</small>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Notas</label>
                         <textarea class="form-control" id="pagoNotas" rows="2" placeholder="Observaciones del pago (opcional)"></textarea>
@@ -881,7 +878,7 @@
 
 <!-- Modal Agregar Producto -->
 <div class="modal fade" id="modalAgregarProducto" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title">
@@ -890,10 +887,10 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <!-- Búsqueda por SKU -->
+                <!-- Búsqueda -->
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <label class="form-label">Buscar por SKU</label>
+                        <label class="form-label fw-bold">Buscar por SKU</label>
                         <div class="input-group">
                             <input type="text" class="form-control" id="buscarSkuModal" placeholder="Ingrese SKU">
                             <button class="btn btn-primary" onclick="buscarProductoPorSkuModal()">
@@ -902,58 +899,152 @@
                         </div>
                     </div>
                     <div class="col-md-8">
-                        <label class="form-label">Buscar por nombre</label>
+                        <label class="form-label fw-bold">Buscar por Marca, Artículo, Color, etc.</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" id="buscarNombreModal" placeholder="Nombre del producto">
-                            <button class="btn btn-primary" onclick="buscarProductoPorNombreModal()">
-                                <i class="ri-search-line"></i>
+                            <input type="text" class="form-control" id="buscarAvanzadoModal" placeholder="Buscar por marca, artículo, color, material...">
+                            <button class="btn btn-primary" onclick="buscarProductosAvanzadoModal()">
+                                <i class="ri-search-line"></i> Buscar
                             </button>
+                        </div>
+                        <small class="text-muted">Ingrese al menos 2 caracteres para buscar</small>
+                    </div>
+                </div>
+
+                <!-- Tabla de resultados de búsqueda avanzada -->
+                <div id="resultadosBusquedaAvanzada" class="mb-3" style="display: none;">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">
+                                <i class="ri-list-check"></i> Resultados de Búsqueda 
+                                <span class="badge bg-primary" id="totalResultados">0</span>
+                            </h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover table-sm mb-0">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>SKU</th>
+                                            <th>Artículo</th>
+                                            <th>Marca</th>
+                                            <th>Color</th>
+                                            <th>Talla</th>
+                                            <th>Stock</th>
+                                            <th>Precio</th>
+                                            <th>Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyResultadosProductos">
+                                        <!-- Resultados dinámicos -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <hr>
 
-                <!-- Formulario de producto -->
-                <form id="formProducto">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label class="form-label">SKU *</label>
-                            <input type="text" class="form-control" id="productoSku" readonly>
-                        </div>
-                        <div class="col-md-5">
-                            <label class="form-label">Artículo *</label>
-                            <input type="text" class="form-control" id="productoArticulo" readonly>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Descripción</label>
-                            <input type="text" class="form-control" id="productoDescripcion" readonly>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Marca</label>
-                            <input type="text" class="form-control" id="productoMarca" readonly>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Talla</label>
-                            <input type="text" class="form-control" id="productoTalla" readonly>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Stock</label>
-                            <input type="number" class="form-control" id="productoStock" readonly>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Precio *</label>
-                            <div class="input-group">
-                                <span class="input-group-text">$</span>
-                                <input type="number" class="form-control" id="productoPrecio" min="0">
+                <!-- Producto seleccionado - Vista mejorada -->
+                <div id="contenedorProductoSeleccionado" class="d-none">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">
+                                    <i class="ri-checkbox-circle-line"></i> Producto Seleccionado
+                                </h6>
+                                <button type="button" class="btn btn-sm btn-light" onclick="limpiarProductoSeleccionado()">
+                                    <i class="ri-close-line"></i> Limpiar
+                                </button>
                             </div>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Cantidad *</label>
-                            <input type="number" class="form-control" id="productoCantidad" value="1" min="1">
+                        <div class="card-body">
+                            <!-- Info visual del producto -->
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <div class="alert alert-success mb-0">
+                                        <div class="row align-items-center">
+                                            <div class="col-md-6">
+                                                <h5 class="mb-1">
+                                                    <strong id="productoSeleccionadoNombre">-</strong>
+                                                </h5>
+                                                <p class="mb-0">
+                                                    <span class="badge bg-dark me-2">SKU: <span id="productoSeleccionadoSku">-</span></span>
+                                                    <span class="badge bg-info me-2">Talla: <span id="productoSeleccionadoTalla">-</span></span>
+                                                    <span class="badge bg-warning text-dark">Stock: <span id="productoSeleccionadoStock">0</span></span>
+                                                    <span class="badge bg-danger ms-2 d-none" id="badgeEnCarrito">Ya en carrito</span>
+                                                </p>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <small class="text-muted d-block">Marca / Color</small>
+                                                <strong id="productoSeleccionadoMarca">-</strong> / 
+                                                <span id="productoSeleccionadoColor">-</span>
+                                            </div>
+                                            <div class="col-md-3 text-end">
+                                                <small class="text-muted d-block">Precio Unitario</small>
+                                                <h4 class="mb-0 text-success">$<span id="productoSeleccionadoPrecio">0</span></h4>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Controles de cantidad y precio -->
+                            <form id="formProducto">
+                                <div class="row g-3 align-items-end">
+                                    <input type="hidden" id="productoSku">
+                                    <input type="hidden" id="productoArticulo">
+                                    <input type="hidden" id="productoDescripcion">
+                                    <input type="hidden" id="productoMarca">
+                                    <input type="hidden" id="productoTalla">
+                                    <input type="hidden" id="productoStock">
+                                    <input type="hidden" id="productoColor">
+                                    
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">
+                                            <i class="ri-price-tag-3-line"></i> Precio de Venta *
+                                        </label>
+                                        <div class="input-group input-group-lg">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" class="form-control" id="productoPrecio" min="0" onchange="actualizarSubtotalModal()">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">
+                                            <i class="ri-shopping-cart-line"></i> Cantidad *
+                                        </label>
+                                        <div class="input-group input-group-lg">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="ajustarCantidadModal(-1)">
+                                                <i class="ri-subtract-line"></i>
+                                            </button>
+                                            <input type="number" class="form-control text-center fw-bold" id="productoCantidad" value="1" min="1" onchange="validarCantidadModal()">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="ajustarCantidadModal(1)">
+                                                <i class="ri-add-line"></i>
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">Máximo: <span id="maxCantidadDisponible">0</span></small>
+                                    </div>
+                                    
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold">Subtotal</label>
+                                        <div class="alert alert-info mb-0 text-center">
+                                            <h4 class="mb-0">$<span id="subtotalProductoModal">0</span></h4>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <!-- Alerta de stock en carrito -->
+                            <div class="alert alert-warning mt-3 d-none" id="alertStockCarrito">
+                                <i class="ri-alert-line"></i> 
+                                <strong>Producto ya en carrito:</strong> 
+                                Cantidad actual: <strong><span id="cantidadEnCarrito">0</span></strong>. 
+                                Disponible para agregar: <strong><span id="disponibleParaAgregar">0</span></strong>
+                            </div>
                         </div>
                     </div>
-                </form>
+                </div>
 
                 <div class="alert alert-info mt-3 d-none" id="alertProductoInfo">
                     <i class="ri-information-line"></i> <span id="mensajeProductoInfo"></span>
@@ -991,6 +1082,28 @@
                     </div>
                 </div>
 
+                <!-- Límite de descuento por rol -->
+                {% if limite_descuento_rol and limite_descuento_rol > 0 %}
+                <div class="alert alert-warning border-0 mb-3">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <i class="ri-shield-check-line me-2"></i>
+                            <strong>Límite de descuento para tu rol:</strong>
+                        </div>
+                        <div>
+                            <span class="badge bg-warning text-dark fs-5">{{ limite_descuento_rol|floatformat:2 }}%</span>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-danger border-0 mb-3">
+                    <div class="d-flex align-items-center">
+                        <i class="ri-error-warning-line me-2"></i>
+                        <strong>No tienes permiso para aplicar descuentos</strong>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Selector de tipo de descuento -->
                 <div class="mb-3">
                     <label class="form-label fw-bold">Tipo de Descuento</label>
@@ -1017,9 +1130,18 @@
                     <label class="form-label fw-bold" id="labelValorDescuento">Valor del Descuento</label>
                     <div class="input-group">
                         <span class="input-group-text" id="descuentoSimbolo">%</span>
-                        <input type="number" class="form-control form-control-lg" id="valorDescuentoProducto" placeholder="0" min="0" step="1" oninput="actualizarPreviewDescuento()">
+                        <input type="number" class="form-control form-control-lg" id="valorDescuentoProducto" placeholder="0" min="0" {% if limite_descuento_rol %}max="{{ limite_descuento_rol }}"{% endif %} step="0.01" oninput="actualizarPreviewDescuento()">
                     </div>
-                    <small class="text-muted" id="descuentoAyuda">Ingrese el porcentaje de descuento (0-100)</small>
+                    <small class="text-muted" id="descuentoAyuda">
+                        {% if limite_descuento_rol and limite_descuento_rol > 0 %}
+                            Ingrese el porcentaje de descuento (0-{{ limite_descuento_rol|floatformat:2 }}%)
+                        {% else %}
+                            No tiene permisos para aplicar descuentos
+                        {% endif %}
+                    </small>
+                    <div id="advertenciaLimiteDescuento" class="text-danger fw-bold mt-1" style="display: none;">
+                        <i class="ri-alert-line"></i> Excede el límite permitido
+                    </div>
                 </div>
 
                 <!-- Preview del descuento -->
@@ -1363,15 +1485,129 @@ document.addEventListener('DOMContentLoaded', function() {
     // === FUNCIONES DEL DASHBOARD ===
     
     function establecerFechaActual() {
-        // Establecer fecha actual en el campo de referencia
-        const hoy = new Date().toISOString().split('T')[0];
-        document.getElementById('referenciaFecha').value = hoy;
+        // Ya no se usa - se establece al agregar cada referencia
     }
     
     function inicializarDashboard() {
         mostrarVista('dashboard');
         actualizarDashboard();
     }
+
+    // === FUNCIONES PARA MANEJAR MÚLTIPLES REFERENCIAS ===
+    let contadorReferencias = 0;
+    let referenciasData = [];
+
+    // ⚡ Hacer funciones globales para que sean accesibles desde onclick
+    window.agregarReferencia = function() {
+        const hoy = new Date().toISOString().split('T')[0];
+        contadorReferencias++;
+        const idReferencia = `ref-${contadorReferencias}`;
+        
+        const htmlReferencia = `
+            <div class="card mb-3 border-start border-4 border-warning" id="${idReferencia}" data-ref-id="${contadorReferencias}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0 text-warning">
+                            <i class="ri-file-list-line"></i> Referencia #${contadorReferencias}
+                        </h6>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="eliminarReferencia('${idReferencia}')">
+                            <i class="ri-delete-bin-line"></i> Eliminar
+                        </button>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Tipo de Documento</label>
+                            <select class="form-select" id="refTipo-${contadorReferencias}" required>
+                                <option value="">-- Seleccione --</option>
+                                <option value="801">801 - Orden de Compra</option>
+                                <option value="52">52 - Guía de Despacho</option>
+                                <option value="803">803 - Contrato</option>
+                                <option value="HES">HES - Hoja Entrada Servicio</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Folio / Número</label>
+                            <input type="text" class="form-control" id="refFolio-${contadorReferencias}" placeholder="Ej: OC-98765" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Fecha Documento</label>
+                            <input type="date" class="form-control" id="refFecha-${contadorReferencias}" value="${hoy}" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observaciones <span class="text-muted">(Opcional)</span></label>
+                            <textarea class="form-control" id="refObs-${contadorReferencias}" rows="2" placeholder="Notas sobre esta referencia..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('contenedorReferencias').insertAdjacentHTML('beforeend', htmlReferencia);
+        mostrarNotificacion('Referencia agregada. Complete los datos.', 'success');
+    };
+
+    window.eliminarReferencia = function(idReferencia) {
+        const elemento = document.getElementById(idReferencia);
+        if (elemento) {
+            elemento.remove();
+            mostrarNotificacion('Referencia eliminada', 'info');
+        }
+    };
+
+    window.obtenerReferencias = function() {
+        const referencias = [];
+        const contenedor = document.getElementById('contenedorReferencias');
+        const tarjetas = contenedor.querySelectorAll('.card');
+        
+        tarjetas.forEach((tarjeta) => {
+            const refId = tarjeta.getAttribute('data-ref-id');
+            const tipo = document.getElementById(`refTipo-${refId}`)?.value;
+            const folio = document.getElementById(`refFolio-${refId}`)?.value;
+            const fecha = document.getElementById(`refFecha-${refId}`)?.value;
+            const observaciones = document.getElementById(`refObs-${refId}`)?.value || '';
+            
+            if (tipo && folio && fecha) {
+                referencias.push({
+                    tipo_documento: tipo,
+                    folio: folio,
+                    fecha: fecha,
+                    observaciones: observaciones
+                });
+            }
+        });
+        
+        return referencias;
+    };
+
+    window.validarReferencias = function() {
+        const contenedor = document.getElementById('contenedorReferencias');
+        const tarjetas = contenedor.querySelectorAll('.card');
+        
+        for (const tarjeta of tarjetas) {
+            const refId = tarjeta.getAttribute('data-ref-id');
+            const tipo = document.getElementById(`refTipo-${refId}`)?.value;
+            const folio = document.getElementById(`refFolio-${refId}`)?.value;
+            const fecha = document.getElementById(`refFecha-${refId}`)?.value;
+            
+            if (!tipo) {
+                mostrarNotificacion('Debe seleccionar el tipo de documento en todas las referencias', 'warning');
+                document.getElementById(`refTipo-${refId}`).focus();
+                return false;
+            }
+            if (!folio) {
+                mostrarNotificacion('Debe ingresar el folio/número en todas las referencias', 'warning');
+                document.getElementById(`refFolio-${refId}`).focus();
+                return false;
+            }
+            if (!fecha) {
+                mostrarNotificacion('Debe ingresar la fecha en todas las referencias', 'warning');
+                document.getElementById(`refFecha-${refId}`).focus();
+                return false;
+            }
+        }
+        
+        return true;
+    };
 
     function actualizarDashboard() {
         // Cargar estadísticas del día
@@ -1502,7 +1738,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!tickets || tickets.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center py-4">
+                    <td colspan="8" class="text-center py-4">
                         <i class="ri-checkbox-circle-line display-4 text-success"></i>
                         <p class="text-success mt-2 fw-bold">¡Excelente! No hay tickets pendientes</p>
                         <small class="text-muted">Todos los tickets han sido procesados</small>
@@ -1547,10 +1783,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             }
             
+            // Determinar el tipo de ticket y su badge
+            const tipoTicket = ticket.tipo_ticket || 'Venta';
+            const tipoTicketClass = ticket.tipo_ticket_class || 'primary';
+            const tipoDetalle = ticket.tipo_detalle || 'Venta Normal';
+            
             return `
                 <tr style="font-size: 1rem; cursor: pointer;" onclick="pagarTicket(${ticket.correlativo})" title="Clic para pagar ticket">
                     <td>
                         <span class="fw-bold fs-5">#${ticket.correlativo}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-${tipoTicketClass} fs-6" title="${tipoDetalle}">
+                            ${tipoTicket}
+                        </span>
                     </td>
                     <td class="fs-6">${ticket.hora}</td>
                     <td>
@@ -1856,12 +2102,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         <small class="text-muted">${producto.descripcion || ''}</small>
                     </div>
                 </td>
-                <td><span class="badge bg-info">${producto.talla || '-'}</span></td>
+                <td>
+                    <span class="badge bg-info">${producto.talla || '-'}</span>
+                    ${producto.stock ? `<br><small class="text-muted">Stock: ${producto.stock}</small>` : ''}
+                </td>
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm text-center" 
-                           value="${producto.cantidad}" min="1" 
+                           value="${producto.cantidad}" 
+                           min="1" 
+                           max="${producto.stock || 999}" 
                            onchange="cambiarCantidadProducto(${index}, this.value)"
-                           style="width: 60px;">
+                           title="Stock disponible: ${producto.stock || 0}"
+                           style="width: 70px;">
+                    <small class="text-muted d-block">Máx: ${producto.stock || 0}</small>
                 </td>
                 <td class="text-end">
                     ${descuento > 0 ? `
@@ -2150,6 +2403,49 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    // Función para cargar cliente genérico
+    window.cargarClienteGenerico = function() {
+        const clienteGenerico = {
+            rut: '66666666-6',
+            nombre: 'Cliente Genérico',
+            email: 'generico@test.cl',
+            telefono: '999999999',
+            giro: 'Particular',
+            comuna: 'Santiago',
+            ciudad: 'Santiago',
+            direccion: 'Sin dirección',
+            telefono_secundario: '',
+            email_facturacion: ''
+        };
+        
+        // Llenar el campo de búsqueda
+        document.getElementById('buscarRut').value = clienteGenerico.rut;
+        
+        // Llenar el formulario con datos genéricos
+        llenarFormularioCliente(clienteGenerico);
+        
+        // Ocultar mensaje de cliente encontrado
+        const clienteEncontrado = document.getElementById('clienteEncontrado');
+        if (clienteEncontrado) {
+            clienteEncontrado.classList.add('d-none');
+        }
+        
+        // Ocultar mensaje de empresa encontrada
+        const empresaEncontrada = document.getElementById('empresaEncontrada');
+        if (empresaEncontrada) {
+            empresaEncontrada.classList.add('d-none');
+        }
+        
+        // Mostrar notificación
+        mostrarNotificacion('Cliente genérico cargado (RUT: 66666666-6)', 'success');
+        
+        // Scroll suave al formulario de cliente
+        const formularioCliente = document.querySelector('#clienteNombre');
+        if (formularioCliente) {
+            formularioCliente.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
     function llenarFormularioCliente(cliente) {
         document.getElementById('clienteNombre').value = cliente.nombre || '';
         document.getElementById('clienteRut').value = cliente.rut || '';
@@ -2249,22 +2545,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            // Validar referencias si hay tipo de documento seleccionado
-            const tipoReferencia = document.getElementById('referenciatipo').value;
-            if (tipoReferencia) {
-                const folioReferencia = document.getElementById('referenciaFolio').value.trim();
-                const fechaReferencia = document.getElementById('referenciaFecha').value;
-                
-                if (!folioReferencia) {
-                    mostrarNotificacion('Si selecciona un tipo de referencia, debe ingresar el folio/número', 'warning');
-                    document.getElementById('referenciaFolio').focus();
-                    return false;
-                }
-                
-                if (!fechaReferencia) {
-                    mostrarNotificacion('Si selecciona un tipo de referencia, debe ingresar la fecha del documento', 'warning');
-                    document.getElementById('referenciaFecha').focus();
-                    return false;
+            // ✅ Validar referencias múltiples si existen (nuevo sistema)
+            const contenedorRefs = document.getElementById('contenedorReferencias');
+            if (contenedorRefs && contenedorRefs.querySelectorAll('.card').length > 0) {
+                // Si hay referencias agregadas, validarlas
+                if (!validarReferencias()) {
+                    return false; // La función validarReferencias ya muestra los mensajes
                 }
             }
 
@@ -2341,12 +2627,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const campoTarjeta = document.getElementById('campoTarjeta');
         const campoVoucher = document.getElementById('campoVoucher');
         const campoVuelto = document.getElementById('campoVuelto');
+        const campoOrdenCompra = document.getElementById('campoOrdenCompra');
         
         // ✅ Mostrar campos de tarjeta y voucher para TARJETA_CREDITO, TARJETA_DEBITO y VENTA_INTERNET
         if (metodo.includes('TARJETA') || metodo === 'VENTA_INTERNET') {
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
             campoVuelto.style.display = 'none';
+            campoOrdenCompra.style.display = 'none';
             
             // ✅ Cambiar labels y opciones según el método
             const labelTarjeta = document.querySelector('#campoTarjeta label');
@@ -2382,9 +2670,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     <option value="DINERS">Diners Club</option>
                 `;
             }
+        } else if (metodo === 'ORDEN_COMPRA') {
+            // ✅ Mostrar campo de orden de compra
+            campoTarjeta.style.display = 'none';
+            campoVoucher.style.display = 'none';
+            campoVuelto.style.display = 'none';
+            campoOrdenCompra.style.display = 'block';
         } else {
             campoTarjeta.style.display = 'none';
             campoVoucher.style.display = 'none';
+            campoOrdenCompra.style.display = 'none';
             // Mostrar campo de vuelto solo para efectivo
             if (metodo === 'EFECTIVO') {
                 campoVuelto.style.display = 'block';
@@ -2439,6 +2734,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let monto = parseInt(document.getElementById('pagoMonto').value) || 0;
         const tipoTarjeta = document.getElementById('pagoTipoTarjeta').value;
         const voucher = document.getElementById('pagoVoucher').value.trim();
+        const numeroOrdenCompra = document.getElementById('pagoNumeroOrdenCompra').value.trim();
         const notas = document.getElementById('pagoNotas').value.trim();
 
         if (monto <= 0) {
@@ -2466,6 +2762,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        // ✅ VALIDAR ORDEN_COMPRA (número de orden)
+        if (metodo === 'ORDEN_COMPRA') {
+            if (!numeroOrdenCompra) {
+                mostrarNotificacion('Debe ingresar el número de orden de compra', 'warning');
+                return;
+            }
+        }
+
         // ✅ Validar que el pago no exceda el saldo pendiente
         const saldoPendiente = calcularSaldoPendiente();
         if (monto > saldoPendiente) {
@@ -2484,6 +2788,7 @@ document.addEventListener('DOMContentLoaded', function() {
             monto: monto,
             tipo_tarjeta: tipoTarjeta,
             voucher: voucher,
+            numero_orden_compra: numeroOrdenCompra,
             notas: notas
         };
 
@@ -2523,7 +2828,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             return `
-            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 ${pago.metodo_pago === 'CREDITO_TRABAJADOR' ? 'border-warning bg-warning bg-opacity-10' : ''} ${pago.metodo_pago === 'VENTA_INTERNET' ? 'border-secondary bg-light' : ''} ${pago.metodo_pago === 'CREDITO_EXTERNO' ? 'border-info bg-info bg-opacity-10' : ''}">
+            <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 ${pago.metodo_pago === 'CREDITO_TRABAJADOR' ? 'border-warning bg-warning bg-opacity-10' : ''} ${pago.metodo_pago === 'VENTA_INTERNET' ? 'border-secondary bg-light' : ''} ${pago.metodo_pago === 'CREDITO_EXTERNO' ? 'border-info bg-info bg-opacity-10' : ''} ${pago.metodo_pago === 'ORDEN_COMPRA' ? 'border-purple bg-purple bg-opacity-10' : ''}">
                 <div>
                     <strong>${obtenerNombreMetodoPago(pago.metodo_pago)}</strong>
                     ${pago.metodo_pago === 'CREDITO_TRABAJADOR' && pago.trabajador_nombre ? `
@@ -2543,6 +2848,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     ` : ''}
                     ${pago.metodo_pago === 'CREDITO_EXTERNO' && datosConvenio && datosConvenio.nombre ? `
                         <br><small class="text-muted"><i class="ri-user-3-line"></i> ${datosConvenio.nombre} - ${datosConvenio.rut}</small>
+                    ` : ''}
+                    ${pago.metodo_pago === 'ORDEN_COMPRA' && pago.numero_orden_compra ? `
+                        <br><small class="text-muted"><i class="ri-file-list-3-line"></i> OC: ${pago.numero_orden_compra}</small>
                     ` : ''}
                     <br>
                     <small class="text-muted fw-bold">${formatearMoneda(pago.monto)}</small>
@@ -2611,8 +2919,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Limpiar formulario
         document.getElementById('formProducto').reset();
         document.getElementById('buscarSkuModal').value = '';
-        document.getElementById('buscarNombreModal').value = '';
+        document.getElementById('buscarAvanzadoModal').value = '';
         document.getElementById('alertProductoInfo').classList.add('d-none');
+        
+        // Ocultar tabla de resultados
+        document.getElementById('resultadosBusquedaAvanzada').style.display = 'none';
+        document.getElementById('tbodyResultadosProductos').innerHTML = '';
+        document.getElementById('totalResultados').textContent = '0';
+        
+        // Limpiar formulario de producto seleccionado
+        limpiarFormularioProductoModal();
         
         // Mostrar modal
         new bootstrap.Modal(document.getElementById('modalAgregarProducto')).show();
@@ -2642,20 +2958,173 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    function buscarProductoPorNombreModal() {
-        mostrarNotificacion('Funcionalidad en desarrollo. Use búsqueda por SKU', 'info');
+    function buscarProductosAvanzadoModal() {
+        const searchTerm = document.getElementById('buscarAvanzadoModal').value.trim();
+        
+        if (!searchTerm || searchTerm.length < 2) {
+            mostrarNotificacion('Ingrese al menos 2 caracteres para buscar', 'warning');
+            return;
+        }
+
+        // Mostrar loading
+        const tbody = document.getElementById('tbodyResultadosProductos');
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center"><div class="spinner-border spinner-border-sm"></div> Buscando...</td></tr>';
+        document.getElementById('resultadosBusquedaAvanzada').style.display = 'block';
+
+        fetch(`/app/api/buscar-productos-pos-avanzado/?search=${encodeURIComponent(searchTerm)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.productos && data.productos.length > 0) {
+                    mostrarResultadosProductos(data.productos);
+                    mostrarNotificacion(`${data.productos.length} producto(s) encontrado(s)`, 'success');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No se encontraron productos disponibles</td></tr>';
+                    document.getElementById('totalResultados').textContent = '0';
+                    mostrarNotificacion(data.error || 'No se encontraron productos', 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error al buscar productos</td></tr>';
+                mostrarNotificacion('Error al buscar productos', 'error');
+            });
+    }
+
+    function mostrarResultadosProductos(productos) {
+        const tbody = document.getElementById('tbodyResultadosProductos');
+        document.getElementById('totalResultados').textContent = productos.length;
+        
+        tbody.innerHTML = productos.map(producto => `
+            <tr>
+                <td><strong>${producto.sku}</strong></td>
+                <td>${producto.articulo}</td>
+                <td>${producto.marca || '-'}</td>
+                <td>${producto.color || '-'}</td>
+                <td>${producto.talla || '-'}</td>
+                <td><span class="badge bg-info">${producto.stock}</span></td>
+                <td><strong>$${producto.precio_venta.toLocaleString('es-CL')}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick='seleccionarProductoDesdeTabla(${JSON.stringify(producto)})'>
+                        <i class="ri-add-circle-line"></i> Seleccionar
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function seleccionarProductoDesdeTabla(producto) {
+        // Llenar formulario con producto seleccionado
+        llenarFormularioProducto(producto);
+        
+        // Ocultar tabla de resultados
+        document.getElementById('resultadosBusquedaAvanzada').style.display = 'none';
+        
+        // Limpiar campo de búsqueda avanzada
+        document.getElementById('buscarAvanzadoModal').value = '';
+        
+        // Mostrar notificación
+        mostrarNotificacion('Producto seleccionado. Ajuste cantidad y precio si es necesario.', 'success');
     }
 
     function llenarFormularioProducto(producto) {
+        // Campos ocultos
         document.getElementById('productoSku').value = producto.sku || '';
         document.getElementById('productoArticulo').value = producto.articulo || '';
         document.getElementById('productoDescripcion').value = producto.descripcion || '';
         document.getElementById('productoMarca').value = producto.marca || '';
         document.getElementById('productoTalla').value = producto.talla || '';
         document.getElementById('productoStock').value = producto.stock || 0;
+        document.getElementById('productoColor').value = producto.color || '';
+        
+        // Campos visuales
+        document.getElementById('productoSeleccionadoNombre').textContent = producto.articulo || '-';
+        document.getElementById('productoSeleccionadoSku').textContent = producto.sku || '-';
+        document.getElementById('productoSeleccionadoTalla').textContent = producto.talla || '-';
+        document.getElementById('productoSeleccionadoStock').textContent = producto.stock || 0;
+        document.getElementById('productoSeleccionadoMarca').textContent = producto.marca || '-';
+        document.getElementById('productoSeleccionadoColor').textContent = producto.color || '-';
+        document.getElementById('productoSeleccionadoPrecio').textContent = (producto.precio_venta || 0).toLocaleString('es-CL');
+        
+        // Controles
         document.getElementById('productoPrecio').value = producto.precio_venta || 0;
         document.getElementById('productoCantidad').value = 1;
-        document.getElementById('productoCantidad').max = producto.stock || 999;
+        
+        // Verificar si el producto ya está en el carrito
+        const productoEnCarrito = ticketActual.productos.find(p => p.sku == producto.sku);
+        
+        console.log(`🔍 Verificando producto en carrito: SKU=${producto.sku}, EnCarrito=${productoEnCarrito ? 'SÍ' : 'NO'}`);
+        
+        if (productoEnCarrito) {
+            // Producto ya está en el carrito
+            const cantidadEnCarrito = productoEnCarrito.cantidad;
+            const disponibleParaAgregar = producto.stock - cantidadEnCarrito;
+            
+            console.log(`⚠️ Producto YA en carrito: EnCarrito=${cantidadEnCarrito}, Stock=${producto.stock}, Disponible=${disponibleParaAgregar}`);
+            
+            // Mostrar alertas visuales
+            document.getElementById('badgeEnCarrito').classList.remove('d-none');
+            document.getElementById('alertStockCarrito').classList.remove('d-none');
+            document.getElementById('cantidadEnCarrito').textContent = cantidadEnCarrito;
+            document.getElementById('disponibleParaAgregar').textContent = disponibleParaAgregar;
+            document.getElementById('maxCantidadDisponible').textContent = disponibleParaAgregar;
+            document.getElementById('productoCantidad').max = disponibleParaAgregar;
+            
+            // Si NO hay stock disponible para agregar
+            if (disponibleParaAgregar <= 0) {
+                // Cambiar alerta a rojo y más visible
+                const alertElement = document.getElementById('alertStockCarrito');
+                alertElement.classList.remove('alert-warning');
+                alertElement.classList.add('alert-danger');
+                alertElement.innerHTML = `
+                    <i class="ri-alert-fill"></i> 
+                    <strong>⚠️ NO SE PUEDE AGREGAR MÁS STOCK</strong><br>
+                    Cantidad actual en el ticket: <strong>${cantidadEnCarrito} unidades</strong><br>
+                    Stock total disponible: <strong>${producto.stock} unidades</strong><br>
+                    <span class="text-danger fw-bold">Ya tienes todo el stock disponible en el carrito</span>
+                `;
+                
+                // Deshabilitar cantidad y mostrar 0
+                document.getElementById('productoCantidad').value = 0;
+                document.getElementById('productoCantidad').disabled = true;
+                
+                mostrarNotificacion(
+                    `⚠️ Este producto ya está en el ticket con TODO el stock disponible (${cantidadEnCarrito}/${producto.stock})`,
+                    'warning',
+                    4000
+                );
+            } else {
+                // Hay stock disponible - resetear estilos
+                const alertElement = document.getElementById('alertStockCarrito');
+                alertElement.classList.remove('alert-danger');
+                alertElement.classList.add('alert-warning');
+                alertElement.innerHTML = `
+                    <i class="ri-alert-line"></i> 
+                    <strong>Producto ya en carrito:</strong> 
+                    Cantidad actual: <strong><span id="cantidadEnCarrito">${cantidadEnCarrito}</span></strong>. 
+                    Disponible para agregar: <strong><span id="disponibleParaAgregar">${disponibleParaAgregar}</span></strong>
+                `;
+                
+                // Habilitar cantidad
+                document.getElementById('productoCantidad').value = 1;
+                document.getElementById('productoCantidad').disabled = false;
+            }
+        } else {
+            // Producto NO está en el carrito
+            console.log(`✅ Producto NO está en carrito, stock completo disponible: ${producto.stock}`);
+            
+            document.getElementById('badgeEnCarrito').classList.add('d-none');
+            document.getElementById('alertStockCarrito').classList.add('d-none');
+            document.getElementById('maxCantidadDisponible').textContent = producto.stock || 0;
+            document.getElementById('productoCantidad').max = producto.stock || 999;
+            document.getElementById('productoCantidad').value = 1;
+            document.getElementById('productoCantidad').disabled = false;
+        }
+        
+        // Mostrar contenedor de producto seleccionado
+        document.getElementById('contenedorProductoSeleccionado').classList.remove('d-none');
+        
+        // Actualizar subtotal
+        actualizarSubtotalModal();
     }
 
     function limpiarFormularioProductoModal() {
@@ -2667,6 +3136,59 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('productoStock').value = '';
         document.getElementById('productoPrecio').value = '';
         document.getElementById('productoCantidad').value = 1;
+        document.getElementById('contenedorProductoSeleccionado').classList.add('d-none');
+    }
+
+    function limpiarProductoSeleccionado() {
+        limpiarFormularioProductoModal();
+        mostrarNotificacion('Producto deseleccionado', 'info');
+    }
+
+    function ajustarCantidadModal(incremento) {
+        const cantidadInput = document.getElementById('productoCantidad');
+        const cantidadActual = parseInt(cantidadInput.value) || 1;
+        const maxCantidad = parseInt(cantidadInput.max) || 1;
+        const nuevaCantidad = cantidadActual + incremento;
+        
+        if (nuevaCantidad >= 1 && nuevaCantidad <= maxCantidad) {
+            cantidadInput.value = nuevaCantidad;
+            actualizarSubtotalModal();
+        } else if (nuevaCantidad > maxCantidad) {
+            mostrarNotificacion(`Máximo disponible: ${maxCantidad}`, 'warning');
+        } else {
+            mostrarNotificacion('La cantidad mínima es 1', 'warning');
+        }
+    }
+
+    function validarCantidadModal() {
+        const cantidadInput = document.getElementById('productoCantidad');
+        const cantidad = parseInt(cantidadInput.value) || 1;
+        const maxCantidad = parseInt(cantidadInput.max) || 1;
+        
+        if (cantidad < 1) {
+            cantidadInput.value = 1;
+            mostrarNotificacion('La cantidad mínima es 1', 'warning');
+        } else if (cantidad > maxCantidad) {
+            cantidadInput.value = maxCantidad;
+            mostrarNotificacion(`Máximo disponible: ${maxCantidad}`, 'warning');
+        }
+        
+        actualizarSubtotalModal();
+    }
+
+    function actualizarSubtotalModal() {
+        const precio = parseInt(document.getElementById('productoPrecio').value) || 0;
+        const cantidad = parseInt(document.getElementById('productoCantidad').value) || 0;
+        const subtotal = precio * cantidad;
+        
+        document.getElementById('subtotalProductoModal').textContent = subtotal.toLocaleString('es-CL');
+        
+        // Validar si puede agregar (verificar stock disponible)
+        const maxDisponible = parseInt(document.getElementById('productoCantidad').max) || 0;
+        if (cantidad > maxDisponible) {
+            document.getElementById('productoCantidad').value = maxDisponible;
+            mostrarNotificacion(`⚠️ Cantidad ajustada al máximo disponible: ${maxDisponible}`, 'warning');
+        }
     }
 
     function confirmarAgregarProducto() {
@@ -2676,55 +3198,109 @@ document.addEventListener('DOMContentLoaded', function() {
         const precio = parseInt(document.getElementById('productoPrecio').value) || 0;
         const stock = parseInt(document.getElementById('productoStock').value) || 0;
 
-        // Validaciones
+        console.log(`🔍 Validando agregar producto: SKU=${sku}, Cantidad=${cantidad}, Stock=${stock}`);
+
+        // Validaciones básicas
         if (!sku || !articulo) {
-            mostrarNotificacion('Debe buscar un producto válido', 'warning');
+            mostrarNotificacion('❌ Debe buscar un producto válido', 'warning');
             return;
         }
 
         if (cantidad <= 0) {
-            mostrarNotificacion('La cantidad debe ser mayor a 0', 'warning');
-            return;
-        }
-
-        if (cantidad > stock) {
-            mostrarNotificacion(`Stock insuficiente. Disponible: ${stock}`, 'error');
+            mostrarNotificacion('❌ La cantidad debe ser mayor a 0', 'warning');
             return;
         }
 
         if (precio <= 0) {
-            mostrarNotificacion('El precio debe ser mayor a 0', 'warning');
+            mostrarNotificacion('❌ El precio debe ser mayor a 0', 'warning');
             return;
         }
 
-        // Crear objeto producto
-        const nuevoProducto = {
-            sku: sku,
-            articulo: articulo,
-            descripcion: document.getElementById('productoDescripcion').value.trim(),
-            marca: document.getElementById('productoMarca').value.trim(),
-            talla: document.getElementById('productoTalla').value.trim(),
-            cantidad: cantidad,
-            precio_unitario: precio,
-            precio: precio,
-            subtotal: precio * cantidad,
-            stock: stock
-        };
+        // Validar stock disponible total
+        if (stock <= 0) {
+            mostrarNotificacion('❌ Este producto no tiene stock disponible', 'error');
+            return;
+        }
 
         // Verificar si el producto ya existe en el ticket
-        const productoExistente = ticketActual.productos.find(p => p.sku === sku);
+        const productoExistente = ticketActual.productos.find(p => p.sku == sku);
+        
         if (productoExistente) {
-            // Actualizar cantidad
-            const nuevaCantidad = productoExistente.cantidad + cantidad;
-            if (nuevaCantidad > stock) {
-                mostrarNotificacion(`Stock insuficiente. Máximo disponible: ${stock}`, 'error');
+            // Producto YA existe en el carrito - Validar stock total
+            const cantidadEnCarrito = productoExistente.cantidad;
+            const nuevaCantidadTotal = cantidadEnCarrito + cantidad;
+            
+            console.log(`⚠️ Producto YA en carrito: EnCarrito=${cantidadEnCarrito}, Agregar=${cantidad}, Total=${nuevaCantidadTotal}, Stock=${stock}`);
+            
+            if (nuevaCantidadTotal > stock) {
+                const exceso = nuevaCantidadTotal - stock;
+                const disponibleParaAgregar = stock - cantidadEnCarrito;
+                
+                mostrarNotificacion(
+                    `❌ STOCK INSUFICIENTE\n\n` +
+                    `🛒 Ya tienes: ${cantidadEnCarrito} unidades en el ticket\n` +
+                    `📦 Stock total: ${stock} unidades\n` +
+                    `➕ Intentas agregar: ${cantidad} unidades\n` +
+                    `🔴 Exceso: ${exceso} unidades\n\n` +
+                    `✅ Máximo que puedes agregar: ${disponibleParaAgregar} unidades`,
+                    'error',
+                    6000
+                );
                 return;
             }
-            productoExistente.cantidad = nuevaCantidad;
-            productoExistente.subtotal = productoExistente.precio_unitario * nuevaCantidad;
+            
+            // Actualizar cantidad del producto existente
+            productoExistente.cantidad = nuevaCantidadTotal;
+            productoExistente.subtotal = productoExistente.precio_unitario * nuevaCantidadTotal;
+            
+            console.log(`✅ Cantidad actualizada correctamente`);
+            mostrarNotificacion(
+                `✅ Cantidad actualizada\n` +
+                `${cantidadEnCarrito} + ${cantidad} = ${nuevaCantidadTotal} unidades\n` +
+                `📦 Stock restante: ${stock - nuevaCantidadTotal}`,
+                'success'
+            );
         } else {
+            // Producto NUEVO - Validar stock disponible
+            console.log(`🆕 Producto nuevo, validando stock: ${cantidad} <= ${stock}`);
+            
+            if (cantidad > stock) {
+                const exceso = cantidad - stock;
+                mostrarNotificacion(
+                    `❌ STOCK INSUFICIENTE\n\n` +
+                    `📦 Stock disponible: ${stock} unidades\n` +
+                    `🛒 Intentas agregar: ${cantidad} unidades\n` +
+                    `🔴 Exceso: ${exceso} unidades`,
+                    'error',
+                    5000
+                );
+                return;
+            }
+            
+            // Crear objeto producto
+            const nuevoProducto = {
+                sku: sku,
+                articulo: articulo,
+                descripcion: document.getElementById('productoDescripcion').value.trim(),
+                marca: document.getElementById('productoMarca').value.trim(),
+                talla: document.getElementById('productoTalla').value.trim(),
+                cantidad: cantidad,
+                precio_unitario: precio,
+                precio: precio,
+                subtotal: precio * cantidad,
+                stock: stock
+            };
+            
             // Agregar nuevo producto
             ticketActual.productos.push(nuevoProducto);
+            
+            console.log(`✅ Producto agregado correctamente`);
+            mostrarNotificacion(
+                `✅ Producto agregado al ticket\n` +
+                `Cantidad: ${cantidad} unidades\n` +
+                `📦 Stock restante: ${stock - cantidad}`,
+                'success'
+            );
         }
 
         // Actualizar totales del ticket
@@ -2736,36 +3312,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Cerrar modal
         bootstrap.Modal.getInstance(document.getElementById('modalAgregarProducto')).hide();
-
-        mostrarNotificacion('Producto agregado al ticket', 'success');
     }
 
     function cambiarCantidadProducto(index, nuevaCantidad) {
-        nuevaCantidad = parseInt(nuevaCantidad) || 1;
+        const cantidadInput = parseInt(nuevaCantidad);
+        
+        // Validar que sea un número válido
+        if (isNaN(cantidadInput) || cantidadInput < 1) {
+            mostrarNotificacion('❌ Ingrese una cantidad válida (mínimo 1)', 'warning');
+            cargarProductosTicket(ticketActual.productos);
+            return;
+        }
 
         if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
-            mostrarNotificacion('Error al actualizar cantidad', 'error');
+            mostrarNotificacion('❌ Error: Producto no encontrado en el ticket', 'error');
+            cargarProductosTicket(ticketActual.productos);
             return;
         }
 
         const producto = ticketActual.productos[index];
-        const stock = producto.stock || 999;
+        const stock = producto.stock || 0;
+        const cantidadAnterior = producto.cantidad;
 
-        if (nuevaCantidad <= 0) {
-            mostrarNotificacion('La cantidad debe ser mayor a 0', 'warning');
-            cargarProductosTicket(ticketActual.productos); // Recargar con valor anterior
+        // Validación: cantidad mínima
+        if (cantidadInput <= 0) {
+            mostrarNotificacion('❌ La cantidad debe ser mayor a 0', 'warning');
+            cargarProductosTicket(ticketActual.productos);
             return;
         }
 
-        if (nuevaCantidad > stock) {
-            mostrarNotificacion(`Stock insuficiente. Máximo: ${stock}`, 'error');
-            cargarProductosTicket(ticketActual.productos); // Recargar con valor anterior
+        // Validación: stock disponible
+        if (stock <= 0) {
+            mostrarNotificacion(
+                `❌ ${producto.articulo || 'Producto'} sin stock disponible`, 
+                'error'
+            );
+            cargarProductosTicket(ticketActual.productos);
+            return;
+        }
+
+        if (cantidadInput > stock) {
+            mostrarNotificacion(
+                `❌ Stock insuficiente para ${producto.articulo || 'producto'}.\n` +
+                `📦 Disponible: ${stock} unidades\n` +
+                `🛒 Solicitado: ${cantidadInput} unidades\n` +
+                `⚠️ Exceso: ${cantidadInput - stock} unidades`, 
+                'error',
+                5000  // Mostrar por 5 segundos
+            );
+            cargarProductosTicket(ticketActual.productos);
             return;
         }
 
         // Actualizar cantidad y subtotal
-        producto.cantidad = nuevaCantidad;
-        producto.subtotal = (producto.precio_unitario || producto.precio) * nuevaCantidad;
+        producto.cantidad = cantidadInput;
+        producto.subtotal = (producto.precio_unitario || producto.precio) * cantidadInput;
 
         // Recalcular totales
         recalcularTotalesTicket();
@@ -2774,7 +3375,15 @@ document.addEventListener('DOMContentLoaded', function() {
         cargarProductosTicket(ticketActual.productos);
         actualizarResumenVenta();
 
-        mostrarNotificacion('Cantidad actualizada', 'success');
+        // Notificación exitosa con detalle
+        if (cantidadInput !== cantidadAnterior) {
+            const stockRestante = stock - cantidadInput;
+            mostrarNotificacion(
+                `✅ Cantidad actualizada: ${cantidadAnterior} → ${cantidadInput}\n` +
+                `📦 Stock restante: ${stockRestante} unidades`, 
+                'success'
+            );
+        }
     }
 
     function eliminarProductoTicket(index) {
@@ -2832,6 +3441,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // === FUNCIONES DE DESCUENTOS POR PRODUCTO ===
 
     let productoDescuentoIndex = null;
+    const LIMITE_DESCUENTO_ROL = parseFloat('{{ limite_descuento_rol|default:"0" }}') || 0; // Límite de descuento por rol
 
     function mostrarModalDescuento(index) {
         if (!ticketActual || !ticketActual.productos || !ticketActual.productos[index]) {
@@ -2906,9 +3516,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // OPCIÓN 1: Porcentaje
             simbolo.textContent = '%';
             label.textContent = 'Porcentaje de Descuento';
-            ayuda.textContent = 'Ingrese el porcentaje de descuento (0-100)';
+            ayuda.textContent = `Ingrese el porcentaje de descuento (0-${LIMITE_DESCUENTO_ROL}%)`;
             montoDescuento = Math.round((precioOriginal * Math.min(valorInput, 100)) / 100);
             precioFinal = precioOriginal - montoDescuento;
+            
+            // Validar límite de descuento por rol
+            const advertencia = document.getElementById('advertenciaLimiteDescuento');
+            if (valorInput > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+                advertencia.style.display = 'block';
+                document.getElementById('valorDescuentoProducto').classList.add('is-invalid');
+            } else {
+                advertencia.style.display = 'none';
+                document.getElementById('valorDescuentoProducto').classList.remove('is-invalid');
+            }
             
         } else if (tipoDescuento === 'MONTO') {
             // OPCIÓN 2: Monto de Descuento
@@ -2917,6 +3537,18 @@ document.addEventListener('DOMContentLoaded', function() {
             ayuda.textContent = 'Ingrese el monto de descuento en pesos';
             montoDescuento = Math.min(Math.round(valorInput), precioOriginal);
             precioFinal = precioOriginal - montoDescuento;
+            
+            // Validar límite de descuento por rol (convertir monto a porcentaje)
+            const porcentajeDescuento = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
+            const advertencia = document.getElementById('advertenciaLimiteDescuento');
+            if (porcentajeDescuento > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+                advertencia.style.display = 'block';
+                advertencia.innerHTML = `<i class="ri-alert-line"></i> Este descuento equivale a ${porcentajeDescuento.toFixed(1)}%, excede el límite permitido de ${LIMITE_DESCUENTO_ROL}%`;
+                document.getElementById('valorDescuentoProducto').classList.add('is-invalid');
+            } else {
+                advertencia.style.display = 'none';
+                document.getElementById('valorDescuentoProducto').classList.remove('is-invalid');
+            }
             
         } else if (tipoDescuento === 'PRECIO_FINAL') {
             // OPCIÓN 3: Precio Final (NUEVA)
@@ -2927,6 +3559,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // El usuario ingresa el precio final, calculamos el descuento
             precioFinal = Math.max(0, Math.min(Math.round(valorInput), precioOriginal));
             montoDescuento = precioOriginal - precioFinal;
+            
+            // Validar límite de descuento por rol (convertir a porcentaje)
+            const porcentajeDescuento = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
+            const advertencia = document.getElementById('advertenciaLimiteDescuento');
+            if (porcentajeDescuento > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+                advertencia.style.display = 'block';
+                advertencia.innerHTML = `<i class="ri-alert-line"></i> Este precio equivale a ${porcentajeDescuento.toFixed(1)}% de descuento, excede el límite permitido de ${LIMITE_DESCUENTO_ROL}%`;
+                document.getElementById('valorDescuentoProducto').classList.add('is-invalid');
+            } else {
+                advertencia.style.display = 'none';
+                document.getElementById('valorDescuentoProducto').classList.remove('is-invalid');
+            }
         }
 
         // Actualizar preview
@@ -2955,6 +3599,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarNotificacion('El porcentaje debe estar entre 0 y 100', 'warning');
                 return;
             }
+            // Validar límite de descuento por rol
+            if (valorInput > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+                mostrarNotificacion(`❌ El porcentaje de descuento (${valorInput}%) excede el límite permitido para tu rol (${LIMITE_DESCUENTO_ROL}%)`, 'error');
+                return;
+            }
             montoDescuento = Math.round((precioOriginal * valorInput) / 100);
             tipoDescuentoTexto = `${valorInput}%`;
             
@@ -2965,6 +3614,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             montoDescuento = Math.round(valorInput);
+            // Validar límite de descuento por rol (convertir monto a porcentaje)
+            const porcentajeDescuento = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
+            if (porcentajeDescuento > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+                mostrarNotificacion(`❌ Este descuento equivale a ${porcentajeDescuento.toFixed(1)}%, excede el límite permitido para tu rol (${LIMITE_DESCUENTO_ROL}%)`, 'error');
+                return;
+            }
             tipoDescuentoTexto = formatearMoneda(valorInput);
             
         } else if (tipoDescuento === 'PRECIO_FINAL') {
@@ -2980,11 +3635,23 @@ document.addEventListener('DOMContentLoaded', function() {
             // Calcular descuento a partir del precio final deseado
             const precioFinalDeseado = Math.round(valorInput);
             montoDescuento = precioOriginal - precioFinalDeseado;
+            // Validar límite de descuento por rol (convertir a porcentaje)
+            const porcentajeDescuento = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
+            if (porcentajeDescuento > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
+                mostrarNotificacion(`❌ Este precio equivale a ${porcentajeDescuento.toFixed(1)}% de descuento, excede el límite permitido para tu rol (${LIMITE_DESCUENTO_ROL}%)`, 'error');
+                return;
+            }
             tipoDescuentoTexto = `Precio final: ${formatearMoneda(precioFinalDeseado)}`;
         }
         
         if (montoDescuento <= 0) {
             mostrarNotificacion('Ingrese un descuento válido (el precio final debe ser menor al original)', 'warning');
+            return;
+        }
+        
+        // Validar que el usuario tenga permisos para aplicar descuentos
+        if (LIMITE_DESCUENTO_ROL === 0) {
+            mostrarNotificacion('❌ No tienes permisos para aplicar descuentos. Contacta al administrador.', 'error');
             return;
         }
 
@@ -3086,14 +3753,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Obtener el tipo de documento seleccionado en el paso 2
         const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'BOLETA_ELECTRONICA';
 
-        // ✅ Obtener datos de referencia (solo para facturas)
-        const referenciaData = {};
+        // ✅ Obtener MÚLTIPLES REFERENCIAS (solo para facturas)
+        let referencias = [];
         if (tipoDocumento === 'FACTURA_ELECTRONICA') {
-            const refTipo = document.getElementById('referenciatipo')?.value;
-            if (refTipo) {
-                referenciaData.referencia_tipo = refTipo;
-                referenciaData.referencia_folio = document.getElementById('referenciaFolio')?.value || '';
-                referenciaData.referencia_fecha = document.getElementById('referenciaFecha')?.value || '';
+            referencias = obtenerReferencias();
+            
+            // Validar referencias si existen
+            if (referencias.length > 0) {
+                if (!validarReferencias()) {
+                    return; // Detener si hay errores en las referencias
+                }
             }
         }
 
@@ -3104,7 +3773,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tipo_documento: tipoDocumento,
             estado: 'PAGADO',
             metodo_pago_principal: pagosActuales.length > 0 ? pagosActuales[0].metodo_pago : 'EFECTIVO',
-            ...referenciaData  // ✅ Incluir referencia si existe
+            referencias: referencias  // ✅ Array de referencias múltiples
         };
 
         fetch(apiUrls.registrarPagos(ticketActual.ticket_id), {
@@ -3115,7 +3784,16 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify(payload),
         })
-        .then(response => response.json())
+        .then(response => {
+            // ✅ Verificar si la respuesta es OK antes de parsear JSON
+            if (!response.ok) {
+                return response.text().then(text => {
+                    console.error('❌ Error del servidor:', text.substring(0, 500));
+                    throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
+                });
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 // Si hay crédito de trabajador en los pagos, descontar del crédito
@@ -3889,7 +4567,8 @@ document.addEventListener('DOMContentLoaded', function() {
             'TBK_DEBITO_POS': 'POS Transbank Débito',
             'TBK_CREDITO_POS': 'POS Transbank Crédito',
             'TBK_PREPAGO_POS': 'POS Transbank Prepago',
-            'VENTA_INTERNET': 'Venta Internet'
+            'VENTA_INTERNET': 'Venta Internet',
+            'ORDEN_COMPRA': 'Orden de Compra'
         };
         return nombres[metodo] || metodo;
     }
@@ -4044,6 +4723,79 @@ document.addEventListener('DOMContentLoaded', function() {
         if (valor.length > 1) {
             e.target.value = formatearRut(valor);
         }
+        // Limpiar validación visual al escribir
+        e.target.classList.remove('is-valid', 'is-invalid');
+    });
+
+    // Validación visual del RUT al salir del campo
+    document.getElementById('clienteRut').addEventListener('blur', function(e) {
+        const rut = e.target.value.trim();
+        const labelRut = document.getElementById('labelRut');
+        const campoNombre = document.getElementById('clienteNombre');
+        const labelNombre = document.getElementById('labelNombre');
+        
+        if (!rut) {
+            e.target.classList.remove('is-valid', 'is-invalid');
+            return;
+        }
+        
+        // Validar formato y dígito verificador
+        if (validarRutChileno(rut)) {
+            // RUT VÁLIDO - Poner en VERDE
+            e.target.classList.remove('is-invalid');
+            e.target.classList.add('is-valid');
+            labelRut.classList.remove('text-dark');
+            labelRut.classList.add('text-success');
+            
+            // Buscar cliente automáticamente
+            fetch(`{% url "buscar_cliente_rut" %}?rut=${encodeURIComponent(rut)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.cliente) {
+                        // Cliente encontrado - llenar datos
+                        campoNombre.value = data.cliente.nombre || '';
+                        document.getElementById('clienteEmail').value = data.cliente.email || '';
+                        document.getElementById('clienteTelefono').value = data.cliente.telefono || '';
+                        
+                        // Poner nombre también en verde
+                        campoNombre.classList.add('is-valid');
+                        labelNombre.classList.remove('text-dark');
+                        labelNombre.classList.add('text-success');
+                        
+                        mostrarNotificacion('Cliente encontrado y cargado', 'success');
+                    }
+                })
+                .catch(error => {
+                    console.log('Cliente no encontrado en BD, puede continuar con nuevo cliente');
+                });
+        } else {
+            // RUT INVÁLIDO - Poner en ROJO
+            e.target.classList.remove('is-valid');
+            e.target.classList.add('is-invalid');
+            labelRut.classList.remove('text-dark', 'text-success');
+            labelRut.classList.add('text-danger');
+            mostrarNotificacion('RUT inválido', 'error');
+        }
+    });
+
+    // Validación visual del nombre
+    document.getElementById('clienteNombre').addEventListener('blur', function(e) {
+        const nombre = e.target.value.trim();
+        const labelNombre = document.getElementById('labelNombre');
+        
+        if (nombre.length >= 3) {
+            e.target.classList.remove('is-invalid');
+            e.target.classList.add('is-valid');
+            labelNombre.classList.remove('text-dark');
+            labelNombre.classList.add('text-success');
+        } else if (nombre.length > 0) {
+            e.target.classList.remove('is-valid');
+            e.target.classList.add('is-invalid');
+        } else {
+            e.target.classList.remove('is-valid', 'is-invalid');
+            labelNombre.classList.remove('text-success', 'text-danger');
+            labelNombre.classList.add('text-dark');
+        }
     });
 
     // Event listeners para el modal de agregar producto
@@ -4051,16 +4803,18 @@ document.addEventListener('DOMContentLoaded', function() {
     if (buscarSkuModal) {
         buscarSkuModal.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
+                e.preventDefault();
                 buscarProductoPorSkuModal();
             }
         });
     }
 
-    const buscarNombreModal = document.getElementById('buscarNombreModal');
-    if (buscarNombreModal) {
-        buscarNombreModal.addEventListener('keypress', function(e) {
+    const buscarAvanzadoModal = document.getElementById('buscarAvanzadoModal');
+    if (buscarAvanzadoModal) {
+        buscarAvanzadoModal.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                buscarProductoPorNombreModal();
+                e.preventDefault();
+                buscarProductosAvanzadoModal();
             }
         });
     }
@@ -4157,11 +4911,15 @@ document.addEventListener('DOMContentLoaded', function() {
         Object.values(campos).forEach(campo => {
             if (campo) {
                 campo.required = false;
+                campo.classList.remove('is-valid', 'is-invalid');
             }
         });
         
-        labelNombre.classList.remove('text-danger');
-        labelRut.classList.remove('text-danger');
+        // Resetear labels - USAR COLOR NEGRO en lugar de rojo
+        labelNombre.classList.remove('text-danger', 'text-success', 'text-dark');
+        labelRut.classList.remove('text-danger', 'text-success', 'text-dark');
+        labelNombre.classList.add('text-dark');
+        labelRut.classList.add('text-dark');
 
         // Aplicar requerimientos según el tipo de documento
         if (tipo === 'BOLETA_ELECTRONICA' || tipo === 'BOLETA_PAPEL') {
@@ -4171,10 +4929,8 @@ document.addEventListener('DOMContentLoaded', function() {
             campos.email.required = true;
             campos.telefono.required = false; // Teléfono opcional
             
-            labelNombre.innerHTML = 'Nombre/Razón Social <span class="text-danger">*</span>';
-            labelRut.innerHTML = 'RUT <span class="text-danger">*</span>';
-            labelNombre.classList.add('text-danger');
-            labelRut.classList.add('text-danger');
+            labelNombre.innerHTML = 'Nombre/Razón Social <span class="text-muted">*</span>';
+            labelRut.innerHTML = 'RUT <span class="text-muted">*</span>';
         } else if (tipo === 'FACTURA_ELECTRONICA') {
             // FACTURA: Datos de facturación obligatorios (teléfono opcional)
             campos.nombre.required = true;
@@ -4182,10 +4938,8 @@ document.addEventListener('DOMContentLoaded', function() {
             campos.email.required = true;
             campos.telefono.required = false; // Teléfono opcional
             
-            labelNombre.innerHTML = 'Razón Social <span class="text-danger">*</span>';
-            labelRut.innerHTML = 'RUT Empresa <span class="text-danger">*</span>';
-            labelNombre.classList.add('text-danger');
-            labelRut.classList.add('text-danger');
+            labelNombre.innerHTML = 'Razón Social <span class="text-muted">*</span>';
+            labelRut.innerHTML = 'RUT Empresa <span class="text-muted">*</span>';
         }
     }
 
@@ -4214,7 +4968,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Funciones de edición de productos
     window.mostrarModalAgregarProducto = mostrarModalAgregarProducto;
     window.buscarProductoPorSkuModal = buscarProductoPorSkuModal;
-    window.buscarProductoPorNombreModal = buscarProductoPorNombreModal;
+    window.buscarProductosAvanzadoModal = buscarProductosAvanzadoModal;
+    window.mostrarResultadosProductos = mostrarResultadosProductos;
+    window.seleccionarProductoDesdeTabla = seleccionarProductoDesdeTabla;
+    window.limpiarProductoSeleccionado = limpiarProductoSeleccionado;
+    window.ajustarCantidadModal = ajustarCantidadModal;
+    window.validarCantidadModal = validarCantidadModal;
+    window.actualizarSubtotalModal = actualizarSubtotalModal;
     window.confirmarAgregarProducto = confirmarAgregarProducto;
     window.cambiarCantidadProducto = cambiarCantidadProducto;
     window.eliminarProductoTicket = eliminarProductoTicket;

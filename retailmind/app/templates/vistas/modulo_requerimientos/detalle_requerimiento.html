@@ -491,31 +491,12 @@ function mostrarAccionesDisponibles(req) {
     html += (rolBadges[rol] || '') + '<br>';
     
     // PENDIENTE o EN_REVISION - Acciones de revisión
+    // NOTA: Botones de Revisar, Aprobar y Rechazar eliminados - se usa "Cambiar Estado" en su lugar
     if (req.estado_codigo === 'PENDIENTE' || req.estado_codigo === 'EN_REVISION') {
-        if (permisos.puede_revisar && req.estado_codigo === 'PENDIENTE') {
-            html += `
-                <button class="btn btn-info w-100 mb-2" onclick="marcarEnRevision()">
-                    <i class="ri-eye-line me-1"></i> Revisar Ahora
-                </button>`;
-        }
-        
-        if (permisos.puede_aprobar) {
-            html += `
-                <button class="btn btn-success w-100 mb-2" onclick="aprobarRequerimiento()">
-                    <i class="ri-check-line me-1"></i> Aprobar
-                </button>`;
-        }
-        
-        if (permisos.puede_rechazar) {
-            html += `
-                <button class="btn btn-danger w-100 mb-2" onclick="rechazarRequerimiento()">
-                    <i class="ri-close-line me-1"></i> Rechazar
-                </button>`;
-        }
-        
+        // Solo mantener botón de enviar a proveedor si tiene permisos y hay proveedor
         if (permisos.puede_enviar_proveedor && req.proveedor.id) {
             html += `
-                <button class="btn btn-primary w-100 mb-2" onclick="enviarAProveedor()">
+                <button class="btn btn-primary w-100 mb-2" onclick="enviarAProveedorMejorado()">
                     <i class="ri-mail-send-line me-1"></i> Enviar a Proveedor
                 </button>`;
         }
@@ -788,17 +769,71 @@ function cambiarEstadoRapido(nuevoEstado, comentario) {
 
 // ========== ACCIONES CON PROVEEDOR ==========
 
-// Enviar a proveedor
+// Enviar a proveedor (versión original - mantener por compatibilidad)
 function enviarAProveedor() {
+    enviarAProveedorMejorado();
+}
+
+// Enviar a proveedor mejorado con preview del correo
+function enviarAProveedorMejorado() {
+    // Generar preview del correo
+    const previewHTML = `
+        <div style="text-align: left; max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 15px; border-radius: 5px; background: #f8f9fa;">
+            <div style="background: #405189; color: white; padding: 15px; text-align: center; margin: -15px -15px 15px -15px;">
+                <h3 style="margin: 0;">Requerimiento de ${datosRequerimiento.tipo}</h3>
+                <p style="font-size: 20px; margin: 10px 0 0 0;">${datosRequerimiento.numero_requerimiento}</p>
+            </div>
+            
+            <div style="background: white; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
+                <h4 style="color: #405189; margin-top: 0;">Estimado proveedor ${datosRequerimiento.proveedor.nombre},</h4>
+                <p>Se ha generado un requerimiento que requiere su atención:</p>
+            </div>
+            
+            <div style="background: white; padding: 15px; margin-bottom: 15px; border-radius: 5px;">
+                <h4 style="color: #405189; margin-top: 0;">Información del Producto</h4>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>SKU:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.sku}</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Producto:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.nombre_producto}</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Documento:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.tipo_documento || 'N/A'} ${datosRequerimiento.numero_boleta || ''}</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #dee2e6;"><strong>Fecha Compra:</strong></td><td style="padding: 8px; border-bottom: 1px solid #dee2e6;">${datosRequerimiento.fecha_compra || 'N/A'}</td></tr>
+                </table>
+                
+                <h4 style="color: #405189; margin-top: 20px;">Descripción del Problema</h4>
+                <div style="background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107;">
+                    <p><strong>Motivo:</strong> ${datosRequerimiento.motivo}</p>
+                    <p><strong>Descripción:</strong> ${datosRequerimiento.descripcion_problema || 'N/A'}</p>
+                </div>
+                
+                <h4 style="color: #405189; margin-top: 20px;">Información del Cliente</h4>
+                <p><strong>Nombre:</strong> ${datosRequerimiento.cliente_nombre}</p>
+                <p><strong>RUT:</strong> ${datosRequerimiento.cliente_rut || 'N/A'}</p>
+                <p><strong>Contacto:</strong> ${datosRequerimiento.cliente_telefono || 'N/A'}</p>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #d1ecf1; border-left: 4px solid #0dcaf0;">
+                    <p style="margin: 0;"><strong>📎 Se adjuntan ${datosRequerimiento.fotos.length} foto(s) del producto/problema</strong></p>
+                </div>
+                
+                <p style="margin-top: 20px;">Por favor, revise este requerimiento y responda indicando si procede o no.</p>
+            </div>
+        </div>
+    `;
+    
     Swal.fire({
-        title: 'Enviar a Proveedor',
+        title: 'Vista Previa del Correo a Enviar',
         html: `
-            <p>¿Enviar este requerimiento a <strong>${datosRequerimiento.proveedor.nombre}</strong>?</p>
-            <p class="text-muted small">Se enviará un correo con todos los detalles y ${datosRequerimiento.fotos.length} foto(s) adjunta(s)</p>
+            <div class="text-start mb-3">
+                <p><strong>Para:</strong> ${datosRequerimiento.proveedor.nombre}</p>
+                <p><strong>Correo:</strong> ${datosRequerimiento.correo_proveedor_destino || datosRequerimiento.proveedor.correoVendedor || 'No configurado'}</p>
+                <p><strong>Asunto:</strong> Requerimiento de ${datosRequerimiento.tipo} - ${datosRequerimiento.numero_requerimiento}</p>
+                <p><strong>Adjuntos:</strong> ${datosRequerimiento.fotos.length} foto(s)</p>
+            </div>
+            <hr>
+            ${previewHTML}
         `,
-        icon: 'question',
+        icon: 'info',
+        width: '800px',
         showCancelButton: true,
-        confirmButtonText: '<i class="ri-mail-send-line me-1"></i> Sí, enviar correo',
+        confirmButtonText: '<i class="ri-mail-send-line me-1"></i> Enviar Correo',
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#405189',
         showLoaderOnConfirm: true,
@@ -827,11 +862,15 @@ function enviarAProveedor() {
         if (result.isConfirmed && result.value) {
             Swal.fire({
                 icon: 'success',
-                title: 'Enviado Exitosamente',
+                title: '✅ Correo Enviado Exitosamente',
                 html: `
-                    <p>${result.value.message}</p>
-                    <p class="text-muted small">Correo: ${result.value.correo_destino}</p>
-                    <p class="text-muted small">Fecha: ${result.value.fecha_envio}</p>
+                    <div class="alert alert-success">
+                        <p><strong>${result.value.message}</strong></p>
+                        <p class="mb-1"><i class="ri-mail-line me-1"></i> <strong>Correo:</strong> ${result.value.correo_destino}</p>
+                        <p class="mb-1"><i class="ri-calendar-line me-1"></i> <strong>Fecha:</strong> ${result.value.fecha_envio}</p>
+                        <hr>
+                        <p class="mb-0 small text-muted"><i class="ri-information-line me-1"></i> El envío ha sido registrado en el historial del requerimiento. Todos los usuarios podrán ver que se envió el correo al proveedor.</p>
+                    </div>
                 `,
             });
             cargarRequerimiento();

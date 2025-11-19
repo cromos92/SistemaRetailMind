@@ -3390,6 +3390,10 @@ function addTallasToDetalle(tallas, productOverride = null) {
     const tbody = $('#detalleBody');
     $('#emptyRow').remove();
     
+    // Contador de tallas agregadas exitosamente
+    let tallasAgregadas = 0;
+    let tallasConStockInsuficiente = 0;
+    
     // Crear una fila por cada talla seleccionada
     tallas.forEach(talla => {
         // ═══════════════════════════════════════════════════════════════
@@ -3412,24 +3416,7 @@ function addTallasToDetalle(tallas, productOverride = null) {
             
             // Validar que no exceda el stock disponible
             if (nuevaCantidad > stockMax) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Stock Insuficiente',
-                    html: `
-                        <p><strong>No se puede agregar esta cantidad</strong></p>
-                        <div class="alert alert-warning mt-3">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <ul class="list-unstyled mb-0 mt-2">
-                                <li>📦 Stock disponible: <strong>${stockMax}</strong> unidades</li>
-                                <li>📋 Ya en detalle: <strong>${cantidadActual}</strong> unidades</li>
-                                <li>➕ Intentando agregar: <strong>${talla.cantidad}</strong> unidades</li>
-                                <li class="text-danger mt-2">❌ Total: <strong>${nuevaCantidad}</strong> unidades (excede stock)</li>
-                            </ul>
-                        </div>
-                        <p class="mt-2">Puede agregar máximo <strong>${stockMax - cantidadActual}</strong> unidades más.</p>
-                    `,
-                    confirmButtonText: 'Entendido'
-                });
+                tallasConStockInsuficiente++;
                 console.error(`❌ Stock insuficiente: ${nuevaCantidad} > ${stockMax}`);
                 return; // No agregar
             }
@@ -3458,6 +3445,9 @@ function addTallasToDetalle(tallas, productOverride = null) {
                 existingRow.removeClass('table-warning');
             }, 1500);
             
+            // Incrementar contador de tallas agregadas exitosamente
+            tallasAgregadas++;
+            
             // Los totales se recalcularán automáticamente con los listeners
             
             return; // No crear nueva fila
@@ -3468,6 +3458,13 @@ function addTallasToDetalle(tallas, productOverride = null) {
         // ═══════════════════════════════════════════════════════════════
         
         console.log('➕ Creando nueva fila para producto/talla');
+        
+        // Validar stock disponible antes de crear la fila
+        if (talla.cantidad > talla.stock) {
+            tallasConStockInsuficiente++;
+            console.error(`❌ Stock insuficiente para talla nueva: cantidad ${talla.cantidad} > stock ${talla.stock}`);
+            return; // No crear fila
+        }
         
         // Obtener costo y sobreprecio desde talla o producto
         const costo = parseInt(talla.costo || currentProduct.costo || 0);
@@ -3511,6 +3508,9 @@ function addTallasToDetalle(tallas, productOverride = null) {
             subtotal: talla.subtotal
         }]);
         tbody.append($row);
+        
+        // Incrementar contador de tallas agregadas exitosamente
+        tallasAgregadas++;
         
         console.log(`✅ Nueva fila agregada - SKU: ${talla.sku}, Talla: ${talla.talla}, Cantidad: ${talla.cantidad}`);
     });
@@ -3559,14 +3559,42 @@ function addTallasToDetalle(tallas, productOverride = null) {
     
     // Actualizar resumen en tiempo real (ya no necesitamos panel lateral)
     
-    const actionText = window.editingProductRow ? 'actualizadas' : 'agregadas';
-    Swal.fire({
-        icon: 'success',
-        title: `Tallas ${actionText}`,
-        text: `Se ${actionText} ${tallas.length} tallas al detalle`,
-        timer: 2000,
-        showConfirmButton: false
-    });
+    // Mostrar mensaje apropiado según el resultado
+    if (tallasAgregadas > 0) {
+        // Se agregaron tallas exitosamente
+        const actionText = window.editingProductRow ? 'actualizadas' : 'agregadas';
+        Swal.fire({
+            icon: 'success',
+            title: `Tallas ${actionText}`,
+            text: `Se ${actionText} ${tallasAgregadas} talla${tallasAgregadas > 1 ? 's' : ''} al detalle`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } else if (tallasConStockInsuficiente > 0) {
+        // No se agregó ninguna talla por falta de stock
+        Swal.fire({
+            icon: 'warning',
+            title: 'No se pueden agregar productos',
+            html: `
+                <p><strong>No hay stock disponible</strong></p>
+                <div class="alert alert-warning mt-3">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <p class="mb-0 mt-2">Las tallas seleccionadas no poseen stock suficiente para ser agregadas.</p>
+                </div>
+                <p class="mt-2 text-muted">Verifique el stock disponible e intente nuevamente.</p>
+            `,
+            confirmButtonText: 'Entendido'
+        });
+    } else {
+        // Caso raro: no se seleccionaron tallas
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin cambios',
+            text: 'No se realizaron cambios en el detalle',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
 }
 
 function eliminarFilaDetalle(button) {

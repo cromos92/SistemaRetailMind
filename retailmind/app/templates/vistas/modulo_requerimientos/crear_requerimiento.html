@@ -695,15 +695,10 @@ document.getElementById('form-requerimiento').addEventListener('submit', functio
                 icon: 'success',
                 title: '¡Requerimiento creado!',
                 text: `Número de requerimiento: ${data.numero_requerimiento}`,
-                confirmButtonText: 'Ver requerimiento',
-                showCancelButton: true,
-                cancelButtonText: 'Ir a lista'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    window.location.href = `/app/requerimientos/${data.requerimiento_id}/`;
-                } else {
-                    window.location.href = '{% url "modulo_requerimientos" %}';
-                }
+                confirmButtonText: 'Aceptar'
+            }).then(() => {
+                // Redirigir siempre a la lista de requerimientos
+                window.location.href = '/app/requerimientos/';
             });
         } else {
             Swal.fire('Error', data.error || 'No se pudo crear el requerimiento', 'error');

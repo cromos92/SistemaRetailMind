@@ -403,15 +403,13 @@
                                         <th>Ventas Realizadas</th>
                                         <th>Total Vendido</th>
                                         <th>Ticket Promedio</th>
-                                        <th>Comisión %</th>
-                                        <th>Comisión Total</th>
                                         <th>% Participación</th>
                                         <th>Rendimiento</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td colspan="9" class="text-center text-muted">
+                                        <td colspan="7" class="text-center text-muted">
                                             <div class="spinner-border spinner-border-sm" role="status">
                                                 <span class="visually-hidden">Cargando...</span>
                                             </div>
@@ -922,6 +920,17 @@ function actualizarGraficoEvolucion(datos) {
         chartEvolucionVentas.destroy();
     }
     
+    // Validar que haya datos
+    if (!datos || datos.length === 0) {
+        // Mostrar mensaje de sin datos
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#6c757d';
+        ctx.textAlign = 'center';
+        ctx.fillText('No hay datos de ventas en este período', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        return;
+    }
+    
     chartEvolucionVentas = new Chart(ctx, {
         type: 'line',
         data: {
@@ -1073,6 +1082,12 @@ function actualizarGraficoTopVendedores(datos) {
     }
     
     if (!datos || datos.length === 0) {
+        // Mostrar mensaje de sin datos
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#6c757d';
+        ctx.textAlign = 'center';
+        ctx.fillText('No hay datos de vendedores', ctx.canvas.width / 2, ctx.canvas.height / 2);
         return;
     }
     
@@ -1122,6 +1137,16 @@ function actualizarGraficoCambiosMotivo(datos) {
         chartCambiosPorMotivo.destroy();
     }
     
+    if (!datos || datos.length === 0) {
+        // Mostrar mensaje de sin datos
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#6c757d';
+        ctx.textAlign = 'center';
+        ctx.fillText('No hay cambios o devoluciones', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        return;
+    }
+    
     chartCambiosPorMotivo = new Chart(ctx, {
         type: 'pie',
         data: {
@@ -1149,6 +1174,16 @@ function actualizarGraficoVentasPorHora(datos) {
         chartVentasPorHora.destroy();
     }
     
+    if (!datos || datos.length === 0) {
+        // Mostrar mensaje de sin datos
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#6c757d';
+        ctx.textAlign = 'center';
+        ctx.fillText('No hay datos para mostrar', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        return;
+    }
+    
     chartVentasPorHora = new Chart(ctx, {
         type: 'line',
         data: {
@@ -1166,10 +1201,24 @@ function actualizarGraficoVentasPorHora(datos) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Ventas: $' + formatNumber(context.parsed.y);
+                        }
+                    }
+                }
             },
             scales: {
-                y: { beginAtZero: true }
+                y: { 
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + formatNumber(value);
+                        }
+                    }
+                }
             }
         }
     });
@@ -1181,6 +1230,16 @@ function actualizarGraficoVentasPorDia(datos) {
     
     if (chartVentasPorDia) {
         chartVentasPorDia.destroy();
+    }
+    
+    if (!datos || datos.length === 0) {
+        // Mostrar mensaje de sin datos
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#6c757d';
+        ctx.textAlign = 'center';
+        ctx.fillText('No hay datos para mostrar', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        return;
     }
     
     const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -1199,10 +1258,24 @@ function actualizarGraficoVentasPorDia(datos) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Ventas: $' + formatNumber(context.parsed.y);
+                        }
+                    }
+                }
             },
             scales: {
-                y: { beginAtZero: true }
+                y: { 
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + formatNumber(value);
+                        }
+                    }
+                }
             }
         }
     });
@@ -1214,7 +1287,7 @@ function actualizarTablaVendedores(vendedores) {
     tbody.innerHTML = '';
     
     if (!vendedores || vendedores.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No hay datos de vendedores</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay datos de vendedores</td></tr>';
         return;
     }
     
@@ -1230,8 +1303,6 @@ function actualizarTablaVendedores(vendedores) {
             <td class="text-center">${formatNumber(vendedor.cantidad_ventas || 0)}</td>
             <td class="text-end">${formatMoney(vendedor.total_vendido || 0)}</td>
             <td class="text-end">${formatMoney(vendedor.ticket_promedio || 0)}</td>
-            <td class="text-center">${(vendedor.comision_porcentaje || 0)}%</td>
-            <td class="text-end text-success">${formatMoney(vendedor.comision_total || 0)}</td>
             <td class="text-center">
                 <span class="badge badge-custom bg-primary">${(vendedor.participacion || 0).toFixed(2)}%</span>
             </td>
@@ -1247,13 +1318,25 @@ function actualizarTablaProductos(productos) {
     const tbody = document.querySelector('#tableProductosVendidos tbody');
     tbody.innerHTML = '';
     
+    if (!productos || productos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                    <p class="mt-2">No hay productos vendidos en este período</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
     productos.forEach((producto, index) => {
         const row = tbody.insertRow();
         row.innerHTML = `
             <td>${index + 1}</td>
-            <td>${producto.sku}</td>
-            <td>${producto.nombre}</td>
-            <td>${producto.categoria}</td>
+            <td>${producto.sku || 'N/A'}</td>
+            <td>${producto.nombre || 'Sin nombre'}</td>
+            <td>${producto.categoria || 'Sin categoría'}</td>
             <td class="text-center">${formatNumber(producto.cantidad)}</td>
             <td class="text-end">${formatMoney(producto.total_ventas)}</td>
             <td class="text-end">${formatMoney(producto.precio_promedio)}</td>
