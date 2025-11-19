@@ -5,144 +5,144 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-/* Estilos para controles de paginación y búsqueda */
-.pagination-controls {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-    border: 1px solid #dee2e6;
-}
-
-.search-highlight {
-    background-color: #fff3cd;
-    font-weight: bold;
-}
-
-.page-info {
-    min-width: 120px;
-    text-align: center;
-    font-weight: 500;
-}
-
-.pagination-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Responsive para controles */
-@media (max-width: 768px) {
-    .pagination-controls .row > div {
-        margin-bottom: 10px;
+    /* Estilos para controles de paginación y búsqueda */
+    .pagination-controls {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #dee2e6;
     }
-    
-    .pagination-controls .btn-group {
-        width: 100%;
+
+    .search-highlight {
+        background-color: #fff3cd;
+        font-weight: bold;
     }
-    
-    .pagination-controls .btn-group .btn {
-        flex: 1;
+
+    .page-info {
+        min-width: 120px;
+        text-align: center;
+        font-weight: 500;
     }
-}
 
-th.sorting::after,
-th.sorting_asc::after,
-th.sorting_desc::after {
-    display: none !important;
-}
-.dataTables_filter input {
-    margin-left: auto;
-    display: inline-block;
-}
+    .pagination-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 
-/* Estilos para la gestión de proveedores */
-.sticky-top {
-    position: sticky;
-    top: 0;
-    z-index: 1020;
-    background-color: #f8f9fa;
-}
+    /* Responsive para controles */
+    @media (max-width: 768px) {
+        .pagination-controls .row>div {
+            margin-bottom: 10px;
+        }
 
-.modal-xl {
-    max-width: 1200px;
-}
+        .pagination-controls .btn-group {
+            width: 100%;
+        }
 
-.btn-group-sm .btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-}
+        .pagination-controls .btn-group .btn {
+            flex: 1;
+        }
+    }
 
-/* Mejorar la apariencia de las tablas */
-.table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.1);
-}
+    th.sorting::after,
+    th.sorting_asc::after,
+    th.sorting_desc::after {
+        display: none !important;
+    }
 
-.table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.02);
-}
+    .dataTables_filter input {
+        margin-left: auto;
+        display: inline-block;
+    }
 
-/* Estilos para badges */
-.badge {
-    font-size: 0.75em;
-    padding: 0.35em 0.65em;
-}
+    /* Estilos para la gestión de proveedores */
+    .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 1020;
+        background-color: #f8f9fa;
+    }
 
-/* Animaciones suaves */
-.modal.fade .modal-dialog {
-    transition: transform 0.3s ease-out;
-}
-
-.btn {
-    transition: all 0.2s ease-in-out;
-}
-
-.btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-/* Estilos para formularios */
-.form-control:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.form-label {
-    font-weight: 500;
-    color: #495057;
-}
-
-/* Responsive para móviles */
-@media (max-width: 768px) {
     .modal-xl {
-        max-width: 95%;
-        margin: 1rem auto;
+        max-width: 1200px;
     }
-    
+
     .btn-group-sm .btn {
-        padding: 0.375rem 0.75rem;
-        font-size: 1rem;
-    }
-    
-    .table-responsive {
+        padding: 0.25rem 0.5rem;
         font-size: 0.875rem;
     }
-}
 
-/* Estilos para botones de acciones deshabilitados */
-.btn:disabled,
-.btn.disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    pointer-events: all !important;
-}
+    /* Mejorar la apariencia de las tablas */
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.1);
+    }
 
-.btn:disabled:hover,
-.btn.disabled:hover {
-    transform: none;
-    box-shadow: none;
-}
+    .table-striped tbody tr:nth-of-type(odd) {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
 
+    /* Estilos para badges */
+    .badge {
+        font-size: 0.75em;
+        padding: 0.35em 0.65em;
+    }
+
+    /* Animaciones suaves */
+    .modal.fade .modal-dialog {
+        transition: transform 0.3s ease-out;
+    }
+
+    .btn {
+        transition: all 0.2s ease-in-out;
+    }
+
+    .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Estilos para formularios */
+    .form-control:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    /* Responsive para móviles */
+    @media (max-width: 768px) {
+        .modal-xl {
+            max-width: 95%;
+            margin: 1rem auto;
+        }
+
+        .btn-group-sm .btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 1rem;
+        }
+
+        .table-responsive {
+            font-size: 0.875rem;
+        }
+    }
+
+    /* Estilos para botones de acciones deshabilitados */
+    .btn:disabled,
+    .btn.disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: all !important;
+    }
+
+    .btn:disabled:hover,
+    .btn.disabled:hover {
+        transform: none;
+        box-shadow: none;
+    }
 </style>
 
 <!-- Eliminado overlay custom y CSS -->
@@ -167,25 +167,26 @@ th.sorting_desc::after {
 <div class="page-content">
     <div class="container-fluid">
 
-<style>
-    th.sorting::after,
-th.sorting_asc::after,
-th.sorting_desc::after {
-    display: none !important;
-}
-.dataTables_filter input {
-    margin-left: auto;
-    display: inline-block;
-}
+        <style>
+            th.sorting::after,
+            th.sorting_asc::after,
+            th.sorting_desc::after {
+                display: none !important;
+            }
 
-</style>
+            .dataTables_filter input {
+                margin-left: auto;
+                display: inline-block;
+            }
+        </style>
         <div class="card shadow">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0 text-white">
                     <i class="bi bi-file-earmark-text me-2"></i>Gestión de DTE (Compras)
                 </h5>
                 <div class="d-flex gap-2">
-                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalGestionProveedores">
+                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal"
+                        data-bs-target="#modalGestionProveedores">
                         <i class="bi bi-building me-1"></i>Gestionar Proveedores
                     </button>
                     <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoDTE">
@@ -216,7 +217,8 @@ th.sorting_desc::after {
                 <div class="row mb-3 pagination-controls">
                     <div class="col-md-4">
                         <div class="input-group">
-                            <input type="text" class="form-control" id="searchDTE" placeholder="Buscar por proveedor, RUT, número documento...">
+                            <input type="text" class="form-control" id="searchDTE"
+                                placeholder="Buscar por proveedor, RUT, número documento...">
                             <button class="btn btn-outline-secondary" type="button" id="btnSearchDTE">
                                 <i class="bi bi-search"></i>
                             </button>
@@ -248,8 +250,10 @@ th.sorting_desc::after {
                 <div class="table-responsive mb-4">
                     <div class="d-flex justify-content-between mb-2">
                         <div>
-                            <button class="btn btn-primary" id="btnPagoMasivo" style="display: none;" onclick="abrirModalPagoMasivo()">
-                                <i class="bi bi-cash-stack me-1"></i>Pago Masivo (<span id="contadorSeleccionadas">0</span>)
+                            <button class="btn btn-primary" id="btnPagoMasivo" style="display: none;"
+                                onclick="abrirModalPagoMasivo()">
+                                <i class="bi bi-cash-stack me-1"></i>Pago Masivo (<span
+                                    id="contadorSeleccionadas">0</span>)
                             </button>
                         </div>
                         <div>
@@ -259,14 +263,15 @@ th.sorting_desc::after {
                             </button>
                         </div>
                     </div>
-            <table class="table table-sm table-hover text-center align-middle w-100" id="tablaDTE"
-                style="table-layout: fixed; font-size: 0.875rem;">
+                    <table class="table table-sm table-hover text-center align-middle w-100" id="tablaDTE"
+                        style="table-layout: fixed; font-size: 0.875rem;">
 
                         <thead class="table-light">
                             <tr>
                                 <th style="display: none;">ID</th>
                                 <th style="width: 40px;">
-                                    <input type="checkbox" id="selectAllFacturas" class="form-check-input" title="Seleccionar todas las facturas elegibles">
+                                    <input type="checkbox" id="selectAllFacturas" class="form-check-input"
+                                        title="Seleccionar todas las facturas elegibles">
                                 </th>
                                 <th>Nombre</th>
                                 <th>RUT</th>
@@ -334,20 +339,22 @@ th.sorting_desc::after {
                             </select>
                             <div class="form-text">Selecciona la cotización o guía que regulariza esta factura.</div>
                         </div>
-                        
+
                         <div class="col-12" id="divNotaCredito" style="display: none;">
                             <label for="notaCreditoBase" class="form-label">Nota de Crédito a Corregir</label>
-                            <select id="notaCreditoBase" class="form-select" required>
+                            <select id="notaCreditoBase" class="form-select">
                                 <option value="">Selecciona una Nota de Crédito</option>
                             </select>
-                            <div class="form-text">Selecciona la Nota de Crédito que deseas corregir con esta Nota de Débito.</div>
+                            <div class="form-text">Selecciona la Nota de Crédito que deseas corregir con esta Nota de
+                                Débito.</div>
                         </div>
-                        
+
                         <!-- Información de asociación para NCs -->
                         <div class="col-12" id="divAsociacionNC" style="display: none;">
                             <div class="card border-info">
                                 <div class="card-header bg-info text-white">
-                                    <h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Asociación de Nota de Crédito</h6>
+                                    <h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Asociación de Nota de Crédito
+                                    </h6>
                                 </div>
                                 <div class="card-body">
                                     <div id="infoAsociacionNC">
@@ -359,7 +366,7 @@ th.sorting_desc::after {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Información completa del DTE (solo lectura) -->
                         <div class="col-12" id="divInfoCompleta">
                             <div class="row">
@@ -367,7 +374,8 @@ th.sorting_desc::after {
                                 <div class="col-md-6" id="divHistorialPagos" style="display: none;">
                                     <div class="card border-success">
                                         <div class="card-header bg-success text-white">
-                                            <h6 class="mb-0"><i class="bi bi-cash-stack me-2"></i>Historial de Pagos</h6>
+                                            <h6 class="mb-0"><i class="bi bi-cash-stack me-2"></i>Historial de Pagos
+                                            </h6>
                                         </div>
                                         <div class="card-body">
                                             <div id="listaPagos">
@@ -376,12 +384,13 @@ th.sorting_desc::after {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Incidencias -->
                                 <div class="col-md-6" id="divResumenIncidencias" style="display: none;">
                                     <div class="card border-warning">
                                         <div class="card-header bg-warning text-dark">
-                                            <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Incidencias</h6>
+                                            <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Incidencias
+                                            </h6>
                                         </div>
                                         <div class="card-body">
                                             <div id="resumenIncidencias">
@@ -390,12 +399,13 @@ th.sorting_desc::after {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- Relaciones de Documentos -->
                                 <div class="col-12" id="divRelacionesDoc" style="display: none;">
                                     <div class="card border-primary">
                                         <div class="card-header bg-primary text-white">
-                                            <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Relaciones de Documentos</h6>
+                                            <h6 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Relaciones de
+                                                Documentos</h6>
                                         </div>
                                         <div class="card-body">
                                             <div id="infoRelaciones">
@@ -453,7 +463,8 @@ th.sorting_desc::after {
                                 Motivo de Rechazo <span class="text-danger">*</span>
                                 <small class="text-muted">(máximo 100 caracteres)</small>
                             </label>
-                            <input type="text" class="form-control" id="motivoRechazo" maxlength="100" placeholder="Especifica el motivo del rechazo">
+                            <input type="text" class="form-control" id="motivoRechazo" maxlength="100"
+                                placeholder="Especifica el motivo del rechazo">
                             <div class="form-text">
                                 <span id="contadorCaracteres">0</span>/100 caracteres
                             </div>
@@ -609,7 +620,8 @@ th.sorting_desc::after {
                         </div>
                         <div class="col-md-5">
                             <label for="ncMotivo" class="form-label">Motivo <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="ncMotivo" maxlength="100" placeholder="Motivo de la nota de crédito" required>
+                            <input type="text" class="form-control" id="ncMotivo" maxlength="100"
+                                placeholder="Motivo de la nota de crédito" required>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -648,7 +660,8 @@ th.sorting_desc::after {
                 <h5 class="modal-title" id="modalPagoMasivoLabel">
                     <i class="bi bi-cash-stack me-2"></i>Pago Masivo de Facturas
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Cerrar"></button>
             </div>
             <form id="formPagoMasivo">
                 <div class="modal-body">
@@ -659,7 +672,7 @@ th.sorting_desc::after {
                             <!-- Se llenará dinámicamente -->
                         </div>
                     </div>
-                    
+
                     <!-- Datos del pago -->
                     <div class="row">
                         <div class="col-md-6">
@@ -676,18 +689,18 @@ th.sorting_desc::after {
                             <input type="text" class="form-control" id="voucherMasivo" placeholder="Ej: TRF-2025-001">
                         </div>
                     </div>
-                    
+
                     <div class="row mt-3">
                         <div class="col-12">
                             <label for="observacionesMasivo" class="form-label">Observaciones</label>
-                            <textarea class="form-control" id="observacionesMasivo" rows="3" maxlength="200" 
-                                      placeholder="Información adicional sobre este pago masivo..."></textarea>
+                            <textarea class="form-control" id="observacionesMasivo" rows="3" maxlength="200"
+                                placeholder="Información adicional sobre este pago masivo..."></textarea>
                             <div class="form-text">
                                 <span id="contadorObservacionesMasivo">0</span>/200 caracteres
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Tabla de facturas seleccionadas -->
                     <div class="mt-3">
                         <h6>Facturas a Pagar:</h6>
@@ -707,7 +720,7 @@ th.sorting_desc::after {
                             </table>
                         </div>
                     </div>
-                    
+
                     <div class="row mt-3">
                         <div class="col-md-6">
                             <strong>Total a Pagar: $<span id="totalPagoMasivo">0</span></strong>
@@ -736,16 +749,17 @@ th.sorting_desc::after {
                 <h5 class="modal-title" id="modalAsociarNCLabel">
                     <i class="bi bi-link-45deg me-2"></i>Asociar Nota de Crédito Existente
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="asociarNCDteId">
-                
+
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle me-2"></i>
                     Selecciona una Nota de Crédito existente para asociarla a esta factura.
                 </div>
-                
+
                 <!-- Filtros -->
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -759,7 +773,7 @@ th.sorting_desc::after {
                         <input type="text" id="buscarNC" class="form-control" placeholder="Número de NC...">
                     </div>
                 </div>
-                
+
                 <!-- Tabla de NCs disponibles -->
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -807,7 +821,7 @@ th.sorting_desc::after {
             <form id="formIncidencia">
                 <div class="modal-body">
                     <input type="hidden" id="incidenciaDteId">
-                    
+
                     <!-- Formulario para agregar incidencia -->
                     <div class="card mb-3">
                         <div class="card-header bg-light">
@@ -816,7 +830,8 @@ th.sorting_desc::after {
                         <div class="card-body">
                             <div class="row g-3">
                                 <div class="col-md-4">
-                                    <label for="incidenciaTipo" class="form-label">Tipo de Incidencia <span class="text-danger">*</span></label>
+                                    <label for="incidenciaTipo" class="form-label">Tipo de Incidencia <span
+                                            class="text-danger">*</span></label>
                                     <select class="form-select" id="incidenciaTipo" required>
                                         <option value="">Seleccionar...</option>
                                         <option value="FACTURACION">Error de Facturación</option>
@@ -828,8 +843,10 @@ th.sorting_desc::after {
                                     </select>
                                 </div>
                                 <div class="col-md-8">
-                                    <label for="incidenciaDescripcion" class="form-label">Descripción <span class="text-danger">*</span></label>
-                                    <textarea class="form-control" id="incidenciaDescripcion" rows="2" placeholder="Describe el problema (mínimo 10 caracteres)" required></textarea>
+                                    <label for="incidenciaDescripcion" class="form-label">Descripción <span
+                                            class="text-danger">*</span></label>
+                                    <textarea class="form-control" id="incidenciaDescripcion" rows="2"
+                                        placeholder="Describe el problema (mínimo 10 caracteres)" required></textarea>
                                 </div>
                                 <div class="col-md-12 text-end">
                                     <button type="submit" class="btn btn-primary">
@@ -839,7 +856,7 @@ th.sorting_desc::after {
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Tabla de incidencias -->
                     <div class="card">
                         <div class="card-header bg-light">
@@ -873,7 +890,8 @@ th.sorting_desc::after {
 </div>
 
 <!-- Modal Gestión de Proveedores -->
-<div class="modal fade" id="modalGestionProveedores" tabindex="-1" aria-labelledby="modalGestionProveedoresLabel" aria-hidden="true">
+<div class="modal fade" id="modalGestionProveedores" tabindex="-1" aria-labelledby="modalGestionProveedoresLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
@@ -889,7 +907,8 @@ th.sorting_desc::after {
                         <i class="bi bi-plus-circle me-1"></i>Crear Nuevo Proveedor
                     </button>
                     <div class="input-group" style="max-width: 300px;">
-                        <input type="text" class="form-control" id="searchProveedores" placeholder="Buscar proveedores...">
+                        <input type="text" class="form-control" id="searchProveedores"
+                            placeholder="Buscar proveedores...">
                         <button class="btn btn-outline-secondary" type="button" id="btnSearchProveedores">
                             <i class="bi bi-search"></i>
                         </button>
@@ -937,19 +956,21 @@ th.sorting_desc::after {
 </div>
 
 <!-- Modal Crear/Editar Proveedor -->
-<div class="modal fade" id="modalCrearProveedor" tabindex="-1" aria-labelledby="modalCrearProveedorLabel" aria-hidden="true">
+<div class="modal fade" id="modalCrearProveedor" tabindex="-1" aria-labelledby="modalCrearProveedorLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title" id="modalCrearProveedorLabel">
                     <i class="bi bi-building-add me-2"></i>Crear Nuevo Proveedor
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Cerrar"></button>
             </div>
             <form id="formProveedor">
                 <div class="modal-body">
                     <input type="hidden" id="proveedorId">
-                    
+
                     <div class="row g-3">
                         <!-- Información básica -->
                         <div class="col-md-6">
@@ -960,7 +981,7 @@ th.sorting_desc::after {
                             <label for="rutProveedor" class="form-label">RUT *</label>
                             <input type="text" class="form-control" id="rutProveedor" required>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label for="nombreFantasia" class="form-label">Nombre de Fantasía</label>
                             <input type="text" class="form-control" id="nombreFantasia">
@@ -969,12 +990,12 @@ th.sorting_desc::after {
                             <label for="razonSocial" class="form-label">Razón Social</label>
                             <input type="text" class="form-control" id="razonSocial">
                         </div>
-                        
+
                         <div class="col-12">
                             <label for="giroProveedor" class="form-label">Giro</label>
                             <input type="text" class="form-control" id="giroProveedor">
                         </div>
-                        
+
                         <!-- Dirección -->
                         <div class="col-md-6">
                             <label for="direccionProveedor" class="form-label">Dirección</label>
@@ -988,7 +1009,7 @@ th.sorting_desc::after {
                             <label for="ciudadProveedor" class="form-label">Ciudad</label>
                             <input type="text" class="form-control" id="ciudadProveedor">
                         </div>
-                        
+
                         <!-- Correos -->
                         <div class="col-md-4">
                             <label for="correoVendedor" class="form-label">Correo Vendedor</label>
@@ -1040,18 +1061,18 @@ th.sorting_desc::after {
     function showGlobalLoader() {
         $('#fullscreenLoader').fadeIn(100);
     }
-    
+
     function hideGlobalLoader() {
         $('#fullscreenLoader').fadeOut(100);
     }
-    
+
     // Función para limpiar modales bloqueados
     function limpiarModales() {
         // Cerrar SweetAlert si está abierto
         if (typeof Swal !== 'undefined') {
             Swal.close();
         }
-        
+
         // Limpiar backdrop de Bootstrap que a veces queda residual
         $('.modal-backdrop').remove();
         $('body').removeClass('modal-open');
@@ -1081,7 +1102,7 @@ th.sorting_desc::after {
         }
 
         // Cargar DTEs del mes actual al iniciar con timeout
-        setTimeout(function() {
+        setTimeout(function () {
             cargarDTEs(1, '');
         }, 1000); // Aumentar delay para asegurar que todo esté listo
     });
@@ -1096,20 +1117,20 @@ th.sorting_desc::after {
     });
 
     // Eventos para paginación de DTE
-    $('#btnPrevPageDTE').on('click', function() {
+    $('#btnPrevPageDTE').on('click', function () {
         if (paginationInfoDTE && paginationInfoDTE.has_previous) {
             cargarDTEs(currentPageDTE - 1, currentSearchDTE);
         }
     });
 
-    $('#btnNextPageDTE').on('click', function() {
+    $('#btnNextPageDTE').on('click', function () {
         if (paginationInfoDTE && paginationInfoDTE.has_next) {
             cargarDTEs(currentPageDTE + 1, currentSearchDTE);
         }
     });
 
     // Evento para búsqueda en DTE
-    $('#btnSearchDTE').on('click', function() {
+    $('#btnSearchDTE').on('click', function () {
         const search = $('#searchDTE').val().trim();
         currentSearchDTE = search;
         currentPageDTE = 1;
@@ -1117,14 +1138,14 @@ th.sorting_desc::after {
     });
 
     // Búsqueda al presionar Enter en DTE
-    $('#searchDTE').on('keypress', function(e) {
+    $('#searchDTE').on('keypress', function (e) {
         if (e.which === 13) {
             $('#btnSearchDTE').click();
         }
     });
-    
+
     // Event listener para filtro de tipo de documento
-    $('#filtroTipoDocumento').on('change', function() {
+    $('#filtroTipoDocumento').on('change', function () {
         const search = $('#searchDTE').val().trim();
         currentSearchDTE = search;
         currentPageDTE = 1;
@@ -1138,13 +1159,13 @@ th.sorting_desc::after {
         $('#fechaRecepcion').val(hoy);
         $('#estadoPago').val('Pendiente');
         cargarEmpresasReceptoras();
-        
+
         // Inicializar visibilidad del campo de motivo de rechazo
         toggleMotivoRechazo();
     });
 
     // Mostrar/ocultar campo de motivo de rechazo según el estado DTE
-    $('#estadoDTE').on('change', function() {
+    $('#estadoDTE').on('change', function () {
         toggleMotivoRechazo();
     });
 
@@ -1155,17 +1176,17 @@ th.sorting_desc::after {
             $('#motivoRechazo').attr('required', true);
         } else {
             $('#divMotivoRechazo').slideUp(300);
-            $('#motivoRechazo').attr('required', false);
+            $('#motivoRechazo').removeAttr('required');
             $('#motivoRechazo').val('');
             $('#contadorCaracteres').text('0');
         }
     }
 
     // Contador de caracteres para motivo de rechazo
-    $('#motivoRechazo').on('input', function() {
+    $('#motivoRechazo').on('input', function () {
         const length = $(this).val().length;
         $('#contadorCaracteres').text(length);
-        
+
         // Cambiar color según el límite
         if (length >= 90) {
             $('#contadorCaracteres').css('color', 'red').css('font-weight', 'bold');
@@ -1175,40 +1196,44 @@ th.sorting_desc::after {
             $('#contadorCaracteres').css('color', 'inherit').css('font-weight', 'normal');
         }
     });
-    
+
     // Manejar cambio de tipo de documento
-    $('#tipoDocumento').on('change', function() {
+    $('#tipoDocumento').on('change', function () {
         const tipo = $(this).val();
-        
-        // Ocultar todos los divs específicos primero
+
+        // Ocultar todos los divs específicos primero y quitar required
         $('#divDocumentoBase').slideUp(300);
+        $('#documentoBase').removeAttr('required');
         $('#divNotaCredito').slideUp(300);
-        
+        $('#notaCreditoBase').removeAttr('required');
+
         if (tipo === 'FACTURA ELECTRONICA') {
             // Cargar documentos base disponibles
             cargarDocumentosBase();
             $('#divDocumentoBase').slideDown(300);
+            // No es requerido, es opcional
         } else if (tipo === 'NOTA DE DEBITO') {
             // Cargar notas de crédito disponibles
             cargarNotasCreditoDisponibles();
             $('#divNotaCredito').slideDown(300);
+            $('#notaCreditoBase').attr('required', true);
         } else {
             $('#documentoBase').val('').empty().append('<option value="">Sin documento base</option>');
             $('#notaCreditoBase').val('').empty().append('<option value="">Selecciona una Nota de Crédito</option>');
         }
     });
-    
+
     function cargarDocumentosBase() {
         $.ajax({
             url: '/app/obtener_documentos_base/',
             method: 'GET',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     const select = $('#documentoBase');
                     select.empty();
                     select.append('<option value="">Sin documento base</option>');
-                    
+
                     if (response.documentos && response.documentos.length > 0) {
                         response.documentos.forEach(doc => {
                             select.append(`<option value="${doc.id}">${doc.display}</option>`);
@@ -1216,23 +1241,23 @@ th.sorting_desc::after {
                     }
                 }
             },
-            error: function() {
+            error: function () {
                 console.error('Error al cargar documentos base');
             }
         });
     }
-    
+
     function cargarNotasCreditoDisponibles() {
         $.ajax({
             url: '/app/obtener_ncs_para_nd/',
             method: 'GET',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     const select = $('#notaCreditoBase');
                     select.empty();
                     select.append('<option value="">Selecciona una Nota de Crédito</option>');
-                    
+
                     if (response.ncs && response.ncs.length > 0) {
                         response.ncs.forEach(nc => {
                             select.append(`<option value="${nc.id}">${nc.display}</option>`);
@@ -1240,7 +1265,7 @@ th.sorting_desc::after {
                     }
                 }
             },
-            error: function() {
+            error: function () {
                 console.error('Error al cargar notas de crédito');
             }
         });
@@ -1248,14 +1273,14 @@ th.sorting_desc::after {
 
     // Variable para evitar múltiples llamadas simultáneas
     let cargandoDTEs = false;
-    
+
     function cargarDTEs(page, search) {
         // Evitar múltiples llamadas simultáneas
         if (cargandoDTEs) {
             console.log('Ya se está cargando, ignorando llamada adicional');
             return;
         }
-        
+
         cargandoDTEs = true;
         showGlobalLoader();
 
@@ -1270,9 +1295,9 @@ th.sorting_desc::after {
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            data: JSON.stringify({ 
-                fecha_inicio, 
-                fecha_fin, 
+            data: JSON.stringify({
+                fecha_inicio,
+                fecha_fin,
                 page: page,
                 page_size: 20,
                 search: search,
@@ -1292,13 +1317,13 @@ th.sorting_desc::after {
                     // Limpiar la tabla de forma más agresiva
                     const tbody = $('#tablaDTE tbody');
                     tbody.empty();
-                    
+
                     // Limpiar también cualquier contenido residual
                     $('#tablaDTE').find('tr:not(:first)').remove();
-                    
+
                     // Asegurar que el tbody esté completamente vacío
                     tbody.html('');
-                    
+
                     // Debug: verificar que la tabla esté limpia
                     console.log('Tabla limpia, filas restantes:', tbody.find('tr').length);
 
@@ -1306,7 +1331,7 @@ th.sorting_desc::after {
                     paginationInfoDTE = data.pagination;
                     currentPageDTE = data.pagination.page;
                     currentSearchDTE = data.search || '';
-                    
+
                     // Actualizar controles de paginación
                     $('#pageInfoDTE').text(`Página ${data.pagination.page} de ${data.pagination.total_pages}`);
                     $('#btnPrevPageDTE').prop('disabled', !data.pagination.has_previous);
@@ -1321,51 +1346,51 @@ th.sorting_desc::after {
                             const tieneEstadoValido = dte.estado !== 'Rechazado' && dte.estado_pago !== 'PAGADO';
                             const sinIncidencias = !dte.incidencias_pendientes || dte.incidencias_pendientes === 0;
                             const documentoCompleto = !dte.requiere_factura || dte.tiene_factura_anexada;
-                            
+
                             const elegiblePagoMasivo = esFacturaElectronica && tieneEstadoValido && sinIncidencias && documentoCompleto;
                             const saldoPendiente = parseFloat(dte.monto_con_iva || 0) - parseFloat(dte.notas_credito || 0);
-                            
+
                             // Info de NC asociada
                             let facturaAsociadaNumero = 'N/A';
                             if (dte.factura_asociada_info && dte.factura_asociada_info.factura_numero) {
                                 facturaAsociadaNumero = dte.factura_asociada_info.factura_numero;
                             }
-                            
+
                             const fila = `
 <tr>
     <td style="display: none;">${dte.id || ''}</td>
     <td>
         ${elegiblePagoMasivo && saldoPendiente > 0
-            ? `<input type="checkbox" class="form-check-input checkbox-factura" 
+                                    ? `<input type="checkbox" class="form-check-input checkbox-factura" 
                       value="${dte.id}" 
                       data-proveedor="${dte.nombre}" 
                       data-proveedor-id="${dte.rut}" 
                       data-monto="${saldoPendiente}"
                       data-numero="${dte.numero_documento}"
                       onchange="actualizarSeleccionMasiva()">`
-            : ''
-        }
+                                    : ''
+                                }
     </td>
     <td>${resaltarBusquedaDTE(dte.nombre || '', search)}</td>
     <td>${resaltarBusquedaDTE(dte.rut || '', search)}</td>
     <td>
         ${resaltarBusquedaDTE(dte.numero_documento || '', search)}
-        ${dte.documento_padre 
-            ? `<br><small class="text-muted">Anexa a: ${dte.documento_padre.tipo} #${dte.documento_padre.numero}</small>`
-            : ''}
+        ${dte.documento_padre
+                                    ? `<br><small class="text-muted">Anexa a: ${dte.documento_padre.tipo} #${dte.documento_padre.numero}</small>`
+                                    : ''}
         ${dte.requiere_factura && !dte.tiene_factura_anexada
-            ? '<br><span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> Requiere Factura</span>'
-            : ''}
+                                    ? '<br><span class="badge bg-warning"><i class="bi bi-exclamation-triangle"></i> Requiere Factura</span>'
+                                    : ''}
         ${dte.requiere_factura && dte.tiene_factura_anexada
-            ? '<br><span class="badge bg-success"><i class="bi bi-check-circle"></i> Factura Anexada</span>'
-            : ''}
+                                    ? '<br><span class="badge bg-success"><i class="bi bi-check-circle"></i> Factura Anexada</span>'
+                                    : ''}
         ${dte.tipo === 'NOTA DE CREDITO'
-            ? (dte.nc_esta_asociada 
-                ? '<br><span class="badge bg-success"><i class="bi bi-link-45deg"></i> Enlazada a Factura #' + facturaAsociadaNumero + '</span>'
-                : '<br><span class="badge bg-secondary"><i class="bi bi-circle"></i> No enlazada</span>'
-            )
-            : ''
-        }
+                                    ? (dte.nc_esta_asociada
+                                        ? '<br><span class="badge bg-success"><i class="bi bi-link-45deg"></i> Enlazada a Factura #' + facturaAsociadaNumero + '</span>'
+                                        : '<br><span class="badge bg-secondary"><i class="bi bi-circle"></i> No enlazada</span>'
+                                    )
+                                    : ''
+                                }
     </td>
     <td>${resaltarBusquedaDTE(dte.tipo || '', search)}</td>
     <td>${dte.fecha_emision || ''}</td>
@@ -1373,30 +1398,29 @@ th.sorting_desc::after {
     <td>
         $${parseFloat(dte.monto_con_iva || 0).toLocaleString()}
         ${dte.notas_credito > 0
-                                ? `<span class="text-danger">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC ${
-                                    dte.notas_credito_numeros && dte.notas_credito_numeros.length > 0 
+                                    ? `<span class="text-danger">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC ${dte.notas_credito_numeros && dte.notas_credito_numeros.length > 0
                                         ? '#' + dte.notas_credito_numeros.join(', #')
                                         : ''
-                                })</span>`
-                                : ''}
+                                    })</span>`
+                                    : ''}
     </td>
     <td>
         $${parseFloat(dte.descuento || 0).toLocaleString()} 
         ${dte.descuento > 0
-                                ? `<span class="text-danger">(${calcularPorcentajeDescuento(dte.descuento, dte.monto_con_iva)}%)</span>`
-                                : ''}
+                                    ? `<span class="text-danger">(${calcularPorcentajeDescuento(dte.descuento, dte.monto_con_iva)}%)</span>`
+                                    : ''}
     </td>
     <td><span class="badge bg-${creditoColor(dte.dias_credito_restantes || 0)}">${dte.dias_credito_restantes || 0} días</span></td>
     <td>
         <div class="d-flex flex-column gap-1">
             <span class="badge bg-${estadoColor(dte.estado || '')}">${resaltarBusquedaDTE(dte.estado || '', search)}</span>
-            ${dte.incidencias_count > 0 
-                ? `<span class="badge bg-${dte.incidencias_pendientes > 0 ? 'danger' : 'success'}" style="font-size: 0.7rem;">
+            ${dte.incidencias_count > 0
+                                    ? `<span class="badge bg-${dte.incidencias_pendientes > 0 ? 'danger' : 'success'}" style="font-size: 0.7rem;">
                     <i class="bi bi-exclamation-triangle"></i> ${dte.incidencias_count} incidencia${dte.incidencias_count > 1 ? 's' : ''}
                     ${dte.incidencias_pendientes > 0 ? `(${dte.incidencias_pendientes} pend.)` : ''}
                    </span>`
-                : ''
-            }
+                                    : ''
+                                }
         </div>
     </td>
    <td>
@@ -1413,62 +1437,61 @@ th.sorting_desc::after {
 
   <td>
     <div class="d-flex flex-wrap justify-content-center gap-1">
-        ${dte.tipo === 'NOTA DE CREDITO' 
-            ? `
+        ${dte.tipo === 'NOTA DE CREDITO'
+                                    ? `
                 <!-- Acciones específicas para Notas de Crédito -->
-                ${!dte.nc_esta_asociada 
-                    ? `<button class="btn btn-sm btn-outline-danger" title="Eliminar NC" onclick="eliminarDTE(${dte.id || 0})">
+                ${!dte.nc_esta_asociada
+                                        ? `<button class="btn btn-sm btn-outline-danger" title="Eliminar NC" onclick="eliminarDTE(${dte.id || 0})">
                         <i class="bi bi-trash" style="font-size: 1.1rem;"></i>
                     </button>`
-                    : '<button class="btn btn-sm btn-outline-success" title="NC asociada a Factura #' + facturaAsociadaNumero + '" disabled>' +
-                        '<i class="bi bi-check-circle-fill" style="font-size: 1.1rem;"></i>' +
-                    '</button>' +
-                    '<button class="btn btn-sm btn-outline-secondary" title="No se puede eliminar - NC está asociada" disabled>' +
-                        '<i class="bi bi-trash" style="font-size: 1.1rem;"></i>' +
-                    '</button>'
-                }
+                                        : '<button class="btn btn-sm btn-outline-success" title="NC asociada a Factura #' + facturaAsociadaNumero + '" disabled>' +
+                                        '<i class="bi bi-check-circle-fill" style="font-size: 1.1rem;"></i>' +
+                                        '</button>' +
+                                        '<button class="btn btn-sm btn-outline-secondary" title="No se puede eliminar - NC está asociada" disabled>' +
+                                        '<i class="bi bi-trash" style="font-size: 1.1rem;"></i>' +
+                                        '</button>'
+                                    }
             `
-            : `
+                                    : `
                 <!-- Acciones normales para otros tipos de documento -->
                 ${dte.estado === 'Rechazado' || (dte.incidencias_pendientes && dte.incidencias_pendientes > 0) || (dte.requiere_factura && !dte.tiene_factura_anexada)
-                    ? `<button class="btn btn-sm btn-outline-success" title="${
-                        dte.estado === 'Rechazado' ? 'No disponible para DTEs rechazados' : 
-                        (dte.requiere_factura && !dte.tiene_factura_anexada) ? 'Este documento requiere tener una factura anexada antes de poder pagar' :
-                        'Resuelve las incidencias pendientes antes de registrar pagos'
-                    }" disabled>
+                                        ? `<button class="btn btn-sm btn-outline-success" title="${dte.estado === 'Rechazado' ? 'No disponible para DTEs rechazados' :
+                                            (dte.requiere_factura && !dte.tiene_factura_anexada) ? 'Este documento requiere tener una factura anexada antes de poder pagar' :
+                                                'Resuelve las incidencias pendientes antes de registrar pagos'
+                                        }" disabled>
                         <i class="bi bi-cash-coin" style="font-size: 1.1rem;"></i>
                     </button>`
-                    : `<button class="btn btn-sm btn-outline-success" title="Pagar" onclick="abrirModalPago(${dte.id || 0}, ${dte.monto_con_iva || 0}, ${dte.incidencias_pendientes || 0}, ${dte.requiere_factura ? 'true' : 'false'}, ${dte.tiene_factura_anexada ? 'true' : 'false'})">
+                                        : `<button class="btn btn-sm btn-outline-success" title="Pagar" onclick="abrirModalPago(${dte.id || 0}, ${dte.monto_con_iva || 0}, ${dte.incidencias_pendientes || 0}, ${dte.requiere_factura ? 'true' : 'false'}, ${dte.tiene_factura_anexada ? 'true' : 'false'})">
                         <i class="bi bi-cash-coin" style="font-size: 1.1rem;"></i>
                     </button>`
-                }
+                                    }
                 ${dte.estado === 'Rechazado'
-                    ? `<button class="btn btn-sm btn-outline-info" title="No disponible para DTEs rechazados" disabled>
+                                        ? `<button class="btn btn-sm btn-outline-info" title="No disponible para DTEs rechazados" disabled>
                         <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
                     </button>`
-                    : `<button class="btn btn-sm btn-outline-info" title="Ver pagos" onclick="verPagosDTE(${dte.id || 0})">
+                                        : `<button class="btn btn-sm btn-outline-info" title="Ver pagos" onclick="verPagosDTE(${dte.id || 0})">
                         <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
                     </button>`
-                }
+                                    }
                 ${dte.estado === 'Rechazado'
-                    ? `<button class="btn btn-sm btn-outline-warning" title="No disponible para DTEs rechazados" disabled>
+                                        ? `<button class="btn btn-sm btn-outline-warning" title="No disponible para DTEs rechazados" disabled>
                         <i class="bi bi-pencil-square" style="font-size: 1.1rem;"></i>
                     </button>`
-                    : `<button class="btn btn-sm btn-outline-warning" title="Editar DTE" onclick="editarDTE(${dte.id || 0})">
+                                        : `<button class="btn btn-sm btn-outline-warning" title="Editar DTE" onclick="editarDTE(${dte.id || 0})">
                         <i class="bi bi-pencil-square" style="font-size: 1.1rem;"></i>
                     </button>`
-                }
+                                    }
                 <button class="btn btn-sm btn-outline-secondary" title="Eliminar DTE" onclick="eliminarDTE(${dte.id || 0})">
                     <i class="bi bi-trash" style="font-size: 1.1rem;"></i>
                 </button>
             `
-        }
+                                }
         ${dte.tipo === 'FACTURA ELECTRONICA'
-            ? `<button class="btn btn-sm btn-outline-info" title="Anexar NC a Factura" onclick="abrirModalAnexarNCaFactura(${dte.id || 0})">
+                                    ? `<button class="btn btn-sm btn-outline-info" title="Anexar NC a Factura" onclick="abrirModalAnexarNCaFactura(${dte.id || 0})">
                 <i class="bi bi-link-45deg" style="font-size: 1.1rem;"></i>
             </button>`
-            : ''
-        }
+                                    : ''
+                                }
         <button class="btn btn-sm btn-outline-${dte.incidencias_pendientes > 0 ? 'danger' : 'primary'}" style="position: relative;" title="Gestionar Incidencias" onclick="abrirModalIncidencias(${dte.id || 0})">
             <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.1rem;"></i>
             ${dte.incidencias_count > 0 ? `<span class="badge bg-danger" style="font-size: 0.65rem; position: absolute; top: -5px; right: -5px;">${dte.incidencias_count}</span>` : ''}
@@ -1480,7 +1503,7 @@ th.sorting_desc::after {
                             tbody.append(fila);
                         });
                     }
-                    
+
                     // Debug: verificar cuántas filas se agregaron
                     console.log('Filas agregadas:', tbody.find('tr').length, 'Datos recibidos:', data.items ? data.items.length : 0);
 
@@ -1496,7 +1519,29 @@ th.sorting_desc::after {
                                     autoWidth: false,
                                     destroy: true, // Permite reinicializar
                                     language: {
-                                        url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json'
+                                        "decimal": ",",
+                                        "thousands": ".",
+                                        "info": "Mostrando _START_ a _END_ de _TOTAL_ registros",
+                                        "infoEmpty": "Mostrando 0 a 0 de 0 registros",
+                                        "infoPostFix": "",
+                                        "infoFiltered": "(filtrado de _MAX_ registros totales)",
+                                        "loadingRecords": "Cargando...",
+                                        "lengthMenu": "Mostrar _MENU_ registros",
+                                        "paginate": {
+                                            "first": "Primero",
+                                            "last": "Último",
+                                            "next": "Siguiente",
+                                            "previous": "Anterior"
+                                        },
+                                        "processing": "Procesando...",
+                                        "search": "Buscar:",
+                                        "searchPlaceholder": "",
+                                        "zeroRecords": "No se encontraron registros coincidentes",
+                                        "emptyTable": "No hay datos disponibles en la tabla",
+                                        "aria": {
+                                            "sortAscending": ": activar para ordenar la columna de manera ascendente",
+                                            "sortDescending": ": activar para ordenar la columna de manera descendente"
+                                        }
                                     },
                                     columnDefs: [
                                         { visible: false, targets: [0] }, // Oculta la columna ID
@@ -1527,7 +1572,7 @@ th.sorting_desc::after {
                 hideGlobalLoader();
                 cargandoDTEs = false; // Liberar el flag
                 console.error('Error al cargar DTEs:', xhr.responseText);
-                
+
                 let mensaje = 'Error al obtener los DTEs.';
                 if (status === 'timeout') {
                     mensaje = 'La solicitud tardó demasiado. Intenta nuevamente.';
@@ -1536,41 +1581,41 @@ th.sorting_desc::after {
                 } else if (xhr.status === 404) {
                     mensaje = 'No se encontró el endpoint. Verifica la URL.';
                 }
-                
+
                 Swal.fire('Error', mensaje, 'error');
             }
         });
     }
 
     function eliminarDTE(id) {
-                Swal.fire({
-                    title: '¿Eliminar DTE?',
-                    text: 'Esta acción no se puede deshacer.',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#6c757d',
-                    confirmButtonText: 'Sí, eliminar',
-                    cancelButtonText: 'Cancelar'
-                }).then(result => {
-                    if (result.isConfirmed) {
-                        $.ajax({
-                            url: `/app/eliminarDTE/${id}/`,
-                            method: 'DELETE',
-                            headers: {
-                                'X-CSRFToken': getCookie('csrftoken')
-                            },
-                            success: function () {
-                                Swal.fire('Eliminado', 'El DTE fue eliminado correctamente.', 'success');
-                                cargarDTEs(currentPageDTE, currentSearchDTE);
-                            },
-                            error: function () {
-                                Swal.fire('Error', 'No se pudo eliminar el DTE.', 'error');
-                            }
-                        });
+        Swal.fire({
+            title: '¿Eliminar DTE?',
+            text: 'Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then(result => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/app/eliminarDTE/${id}/`,
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    success: function () {
+                        Swal.fire('Eliminado', 'El DTE fue eliminado correctamente.', 'success');
+                        cargarDTEs(currentPageDTE, currentSearchDTE);
+                    },
+                    error: function () {
+                        Swal.fire('Error', 'No se pudo eliminar el DTE.', 'error');
                     }
                 });
             }
+        });
+    }
 
     function editarDTE(dteId) {
         $.ajax({
@@ -1594,7 +1639,7 @@ th.sorting_desc::after {
                 $('#diasCredito').val(dte.diasCredito || 0);
                 $('#bultos').val(dte.bultos || 0);
                 $('#unidadesProductos').val(dte.unidades_productos || 0);
-                
+
                 // Asegurar que el proveedor se cargue correctamente
                 if (dte.receptor_id) {
                     // Si no está cargado el select de proveedores, cargarlo primero
@@ -1606,16 +1651,16 @@ th.sorting_desc::after {
                         }, 500);
                     }
                 }
-                
+
                 // Cargar motivo de rechazo si existe
                 if (dte.motivo_rechazo) {
                     $('#motivoRechazo').val(dte.motivo_rechazo);
                     $('#contadorCaracteres').text(dte.motivo_rechazo.length);
                 }
-                
+
                 // Mostrar campo de motivo si el estado es Rechazado
                 toggleMotivoRechazo();
-                
+
                 // Manejar documento padre si es factura
                 if (dte.tipo_documento === 'FACTURA ELECTRONICA' && dte.documento_padre_id) {
                     // Primero cargar los documentos base y luego seleccionar el correcto
@@ -1633,7 +1678,7 @@ th.sorting_desc::after {
                     $('#divDocumentoBase').hide();
                     $('#documentoBase').val('');
                 }
-                
+
                 // Manejar asociación de NC si es una Nota de Crédito
                 if (dte.tipo_documento === 'NOTA DE CREDITO') {
                     cargarInfoAsociacionNC(dte.id);
@@ -1641,7 +1686,7 @@ th.sorting_desc::after {
                 } else {
                     $('#divAsociacionNC').hide();
                 }
-                
+
                 // Cargar información completa para consulta
                 cargarInfoCompletaDTE(dte.id, dte.tipo_documento);
 
@@ -1750,7 +1795,7 @@ th.sorting_desc::after {
             });
             return;
         }
-        
+
         // Validar que si es Nota de Débito, tenga una NC seleccionada
         if (tipoDocumento === 'NOTA DE DEBITO' && !nota_credito_base_id) {
             Swal.fire({
@@ -1805,14 +1850,14 @@ th.sorting_desc::after {
         };
 
         // Debug: mostrar datos que se van a enviar
-        console.log('🆕 DEBUG - Datos del formulario:', dataToSend);
-        
+        console.log('🆕 DEBUG - Datos del formulario:', data);
+
         // Detectar si estamos editando o creando
         const dteId = $('#modalNuevoDTE').data('dte-id');
         const isEditing = dteId !== undefined && dteId !== null;
         const url = isEditing ? `/app/actualizarDteCompras/${dteId}/` : '/app/crearDteCompras/';
         const method = isEditing ? 'PUT' : 'POST';
-        
+
         console.log(`🆕 DEBUG - ${isEditing ? 'Editando' : 'Creando'} DTE:`, {
             url: url,
             method: method,
@@ -1828,7 +1873,7 @@ th.sorting_desc::after {
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
             },
-            data: JSON.stringify(dataToSend),
+            data: JSON.stringify(data),
             beforeSend: function () {
                 console.log('🚀 DEBUG - Enviando datos al servidor...');
                 // Comentamos el SweetAlert para poder ver errores en consola
@@ -1843,7 +1888,7 @@ th.sorting_desc::after {
             },
             success: function (resp) {
                 console.log('✅ DEBUG - Respuesta exitosa:', resp);
-                
+
                 if (resp.success) {
                     Swal.fire({
                         icon: 'success',
@@ -1870,7 +1915,7 @@ th.sorting_desc::after {
                 console.error('❌ DEBUG - Status:', xhr.status);
                 console.error('❌ DEBUG - Response Text:', xhr.responseText);
                 console.error('❌ DEBUG - Response JSON:', xhr.responseJSON);
-                
+
                 let errorMessage = 'Error de conexión';
                 try {
                     const resp = xhr.responseJSON;
@@ -1883,7 +1928,7 @@ th.sorting_desc::after {
                     console.error('Error al parsear respuesta:', e);
                     errorMessage = `Error ${xhr.status}: ${xhr.statusText}`;
                 }
-                
+
                 Swal.fire({
                     icon: 'error',
                     title: 'Error de red o servidor',
@@ -1897,31 +1942,37 @@ th.sorting_desc::after {
         $('#modalNuevoDTELabel').text('Nuevo DTE Compra');
         $('#formNuevoDTE button[type="submit"]').text('Guardar DTE');
         $(this).removeData('dte-id');
-        
+
         // Limpiar campo de motivo de rechazo
         $('#motivoRechazo').val('');
         $('#contadorCaracteres').text('0');
         $('#divMotivoRechazo').hide();
-        $('#motivoRechazo').attr('required', false);
+        $('#motivoRechazo').removeAttr('required');
         $('#estadoPago').val('Pendiente');
-        
+
         // Limpiar documento base
         $('#divDocumentoBase').hide();
         $('#documentoBase').val('').empty().append('<option value="">Sin documento base</option>');
-        
+        $('#documentoBase').removeAttr('required');
+
+        // Limpiar nota de crédito base
+        $('#divNotaCredito').hide();
+        $('#notaCreditoBase').val('').empty().append('<option value="">Selecciona una Nota de Crédito</option>');
+        $('#notaCreditoBase').removeAttr('required');
+
         // Limpiar asociación NC
         $('#divAsociacionNC').hide();
         $('#infoAsociacionNC').empty();
         $('#accionesAsociacionNC').empty();
     });
-    
+
     // Limpiar modal de asociar NC cuando se cierre
     $('#modalAsociarNC').on('hidden.bs.modal', function () {
         // Restaurar valores por defecto
         $('#modalAsociarNCLabel').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC a Factura');
         $('.alert-info').html('<i class="bi bi-info-circle me-2"></i>Selecciona una Nota de Crédito para anexar a esta factura.');
         $('#btnAsociarNC').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC Seleccionada');
-        
+
         // Limpiar datos del modal
         $('#asociarNCDteId').val('');
         $('#filtroProveedorNC').val('');
@@ -1960,7 +2011,7 @@ th.sorting_desc::after {
             });
             return;
         }
-        
+
         // Validar si requiere factura y no la tiene
         if (requiereFactura === true || requiereFactura === 'true') {
             if (tieneFactura === false || tieneFactura === 'false') {
@@ -2067,7 +2118,7 @@ th.sorting_desc::after {
             success: function (response) {
                 // Cerrar el loading primero
                 Swal.close();
-                
+
                 // Verificar si la respuesta indica éxito
                 if (response.success === true || response.mensaje) {
                     Swal.fire({
@@ -2084,19 +2135,19 @@ th.sorting_desc::after {
                         } else {
                             $('#modalPago').modal('hide');
                         }
-                        
+
                         $('#formPago')[0].reset();
                         $('#pagoEditId').val('');
-                        
+
                         // Cerrar modal de detalle de pagos si está abierto
                         const detalleModal = bootstrap.Modal.getInstance(document.getElementById('modalDetallePagos'));
                         if (detalleModal) {
                             detalleModal.hide();
                         }
-                        
+
                         // Limpiar cualquier modal residual
                         setTimeout(limpiarModales, 300);
-                        
+
                         // Recargar tabla principal de DTEs (IMPORTANTE para reflejar cambios)
                         cargarDTEs(currentPageDTE, currentSearchDTE);
                     });
@@ -2111,7 +2162,7 @@ th.sorting_desc::after {
             error: function (xhr) {
                 // Cerrar el loading primero
                 Swal.close();
-                
+
                 const res = xhr.responseJSON;
                 Swal.fire({
                     icon: 'error',
@@ -2148,7 +2199,7 @@ th.sorting_desc::after {
                         }).then(() => {
                             // Eliminar la fila de la tabla de pagos
                             $('#tablaPagosDTEBody').find(`tr[data-id="${pagoId}"]`).remove();
-                            
+
                             // Recargar tabla principal de DTEs (IMPORTANTE para reflejar cambios en estado de pago)
                             cargarDTEs(currentPageDTE, currentSearchDTE);
                         });
@@ -2340,22 +2391,22 @@ th.sorting_desc::after {
     }
 
     // ========== PAGO MASIVO ==========
-    
+
     function actualizarSeleccionMasiva() {
         const checkboxes = $('.checkbox-factura:checked');
         const cantidad = checkboxes.length;
-        
+
         $('#contadorSeleccionadas').text(cantidad);
-        
+
         if (cantidad > 0) {
             $('#btnPagoMasivo').show();
-            
+
             // Validar que todas sean del mismo proveedor
             const proveedores = new Set();
-            checkboxes.each(function() {
+            checkboxes.each(function () {
                 proveedores.add($(this).data('proveedor-id'));
             });
-            
+
             if (proveedores.size > 1) {
                 $('#btnPagoMasivo').addClass('btn-warning').removeClass('btn-primary');
                 $('#btnPagoMasivo').attr('title', 'Advertencia: Facturas de diferentes proveedores seleccionadas');
@@ -2367,31 +2418,31 @@ th.sorting_desc::after {
             $('#btnPagoMasivo').hide();
         }
     }
-    
+
     // Seleccionar/Deseleccionar todas las facturas elegibles
-    $('#selectAllFacturas').on('change', function() {
+    $('#selectAllFacturas').on('change', function () {
         const isChecked = $(this).is(':checked');
         $('.checkbox-factura').prop('checked', isChecked);
         actualizarSeleccionMasiva();
     });
-    
+
     function abrirModalPagoMasivo() {
         const checkboxes = $('.checkbox-factura:checked');
-        
+
         if (checkboxes.length === 0) {
             Swal.fire('Error', 'No hay facturas seleccionadas', 'warning');
             return;
         }
-        
+
         // Validar que todas sean del mismo proveedor
         const proveedores = new Set();
         const facturas = [];
         let totalMonto = 0;
-        
-        checkboxes.each(function() {
+
+        checkboxes.each(function () {
             const proveedor = $(this).data('proveedor-id');
             const monto = parseFloat($(this).data('monto'));
-            
+
             proveedores.add(proveedor);
             facturas.push({
                 id: $(this).val(),
@@ -2401,7 +2452,7 @@ th.sorting_desc::after {
             });
             totalMonto += monto;
         });
-        
+
         if (proveedores.size > 1) {
             Swal.fire({
                 icon: 'warning',
@@ -2411,15 +2462,15 @@ th.sorting_desc::after {
             });
             return;
         }
-        
+
         // Llenar el modal
         $('#cantidadFacturasMasivo').text(facturas.length);
         $('#totalPagoMasivo').text(totalMonto.toLocaleString());
-        
+
         // Llenar tabla de facturas seleccionadas
         const tbody = $('#tablaFacturasSeleccionadas');
         tbody.empty();
-        
+
         facturas.forEach(factura => {
             tbody.append(`
                 <tr>
@@ -2434,28 +2485,28 @@ th.sorting_desc::after {
                 </tr>
             `);
         });
-        
+
         // Mostrar resumen
         $('#resumenFacturasSeleccionadas').html(`
             <strong>${facturas.length} facturas</strong> del proveedor <strong>${facturas[0].proveedor}</strong><br>
             <strong>Total: $${totalMonto.toLocaleString()}</strong>
         `);
-        
+
         const modal = new bootstrap.Modal(document.getElementById('modalPagoMasivo'));
         modal.show();
     }
-    
+
     function quitarFacturaSeleccion(facturaId) {
         $(`.checkbox-factura[value="${facturaId}"]`).prop('checked', false);
         actualizarSeleccionMasiva();
         abrirModalPagoMasivo(); // Recargar el modal
     }
-    
+
     // Contador de caracteres para observaciones
-    $('#observacionesMasivo').on('input', function() {
+    $('#observacionesMasivo').on('input', function () {
         const length = $(this).val().length;
         $('#contadorObservacionesMasivo').text(length);
-        
+
         if (length >= 180) {
             $('#contadorObservacionesMasivo').css('color', 'red').css('font-weight', 'bold');
         } else if (length >= 150) {
@@ -2464,35 +2515,35 @@ th.sorting_desc::after {
             $('#contadorObservacionesMasivo').css('color', 'inherit').css('font-weight', 'normal');
         }
     });
-    
+
     // Procesar pago masivo
-    $('#formPagoMasivo').on('submit', function(e) {
+    $('#formPagoMasivo').on('submit', function (e) {
         e.preventDefault();
-        
+
         const checkboxes = $('.checkbox-factura:checked');
         const metodoPago = $('#metodoPagoMasivo').val();
         const voucher = $('#voucherMasivo').val().trim();
         const observaciones = $('#observacionesMasivo').val().trim();
-        
+
         if (checkboxes.length === 0) {
             Swal.fire('Error', 'No hay facturas seleccionadas', 'warning');
             return;
         }
-        
+
         if (!metodoPago) {
             Swal.fire('Error', 'Selecciona un método de pago', 'warning');
             return;
         }
-        
+
         // Recopilar IDs y montos
         const facturas = [];
-        checkboxes.each(function() {
+        checkboxes.each(function () {
             facturas.push({
                 id: $(this).val(),
                 monto: parseFloat($(this).data('monto'))
             });
         });
-        
+
         // Confirmar pago masivo
         Swal.fire({
             title: '¿Procesar pago masivo?',
@@ -2507,7 +2558,7 @@ th.sorting_desc::after {
             }
         });
     });
-    
+
     function procesarPagoMasivo(facturas, metodoPago, voucher, observaciones) {
         $.ajax({
             url: '/app/procesar_pago_masivo/',
@@ -2520,7 +2571,7 @@ th.sorting_desc::after {
                 voucher: voucher,
                 observaciones: observaciones
             }),
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     Swal.fire({
                         icon: 'success',
@@ -2528,39 +2579,39 @@ th.sorting_desc::after {
                         html: `<strong>${response.procesadas}</strong> facturas procesadas correctamente<br>Total: <strong>$${response.total_procesado.toLocaleString()}</strong>`,
                         timer: 3000
                     });
-                    
+
                     $('#modalPagoMasivo').modal('hide');
-                    
+
                     // Limpiar selecciones
                     $('.checkbox-factura').prop('checked', false);
                     $('#selectAllFacturas').prop('checked', false);
                     actualizarSeleccionMasiva();
-                    
+
                     // Recargar tabla
                     cargarDTEs(currentPageDTE, currentSearchDTE);
                 } else {
                     Swal.fire('Error', response.error || 'Error al procesar pago masivo', 'error');
                 }
             },
-            error: function() {
+            error: function () {
                 Swal.fire('Error', 'Error de conexión al procesar pago masivo', 'error');
             }
         });
     }
 
     // ========== GESTIÓN DE ASOCIACIÓN NC EN EDITAR ==========
-    
+
     function cargarInfoAsociacionNC(ncId) {
         $.ajax({
             url: `/app/obtener_info_asociacion_nc/${ncId}/`,
             method: 'GET',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     const info = response.info;
                     const infoDiv = $('#infoAsociacionNC');
                     const accionesDiv = $('#accionesAsociacionNC');
-                    
+
                     if (info.esta_asociada) {
                         infoDiv.html(`
                             <div class="alert alert-success mb-2">
@@ -2570,7 +2621,7 @@ th.sorting_desc::after {
                                 <small class="text-muted">Monto: $${parseFloat(info.monto_nc).toLocaleString()}</small>
                             </div>
                         `);
-                        
+
                         accionesDiv.html(`
                             <button type="button" class="btn btn-warning btn-sm" onclick="desasociarNC(${ncId})">
                                 <i class="bi bi-unlink me-1"></i>Desenlazar de Factura
@@ -2583,7 +2634,7 @@ th.sorting_desc::after {
                                 Esta Nota de Crédito no está enlazada a ninguna factura.
                             </div>
                         `);
-                        
+
                         accionesDiv.html(`
                             <button type="button" class="btn btn-primary btn-sm" onclick="enlazarNCDesdeEditar(${ncId})">
                                 <i class="bi bi-link-45deg me-1"></i>Enlazar a Factura
@@ -2592,7 +2643,7 @@ th.sorting_desc::after {
                     }
                 }
             },
-            error: function() {
+            error: function () {
                 $('#infoAsociacionNC').html(`
                     <div class="alert alert-danger">
                         <i class="bi bi-exclamation-triangle me-2"></i>
@@ -2602,7 +2653,7 @@ th.sorting_desc::after {
             }
         });
     }
-    
+
     function desasociarNC(ncId) {
         Swal.fire({
             title: '¿Desenlazar Nota de Crédito?',
@@ -2617,7 +2668,7 @@ th.sorting_desc::after {
                     url: `/app/desasociar_nc/${ncId}/`,
                     method: 'POST',
                     headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                    success: function(response) {
+                    success: function (response) {
                         if (response.success) {
                             Swal.fire('Éxito', 'NC desenlazada correctamente', 'success');
                             cargarInfoAsociacionNC(ncId); // Recargar info
@@ -2626,14 +2677,14 @@ th.sorting_desc::after {
                             Swal.fire('Error', response.error || 'Error al desenlazar NC', 'error');
                         }
                     },
-                    error: function() {
+                    error: function () {
                         Swal.fire('Error', 'Error de conexión', 'error');
                     }
                 });
             }
         });
     }
-    
+
     function enlazarNCDesdeEditar(ncId) {
         // Cerrar modal de editar y abrir modal de enlazar
         $('#modalNuevoDTE').modal('hide');
@@ -2643,30 +2694,30 @@ th.sorting_desc::after {
     }
 
     // ========== ANEXAR NC A FACTURA ==========
-    
+
     function abrirModalAnexarNCaFactura(dteId) {
         // Reutilizar el modal existente pero cambiar el contexto
         $('#asociarNCDteId').val(dteId); // Guardar el ID de la factura
         $('#modalAsociarNCLabel').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC a esta Factura');
         $('.alert-info').html('<i class="bi bi-info-circle me-2"></i>Selecciona una Nota de Crédito para anexar a esta factura.');
-        
+
         // Cargar NCs disponibles (comportamiento normal)
         cargarNCsDisponibles();
         cargarProveedoresParaFiltro();
-        
+
         // Cambiar el texto del botón
         $('#btnAsociarNC').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC Seleccionada');
-        
+
         // NO guardar nc-id porque estamos seleccionando la NC, no la factura
         $('#modalAsociarNC').removeData('nc-id');
-        
+
         const modal = new bootstrap.Modal(document.getElementById('modalAsociarNC'));
         modal.show();
     }
-    
+
 
     // ========== ASOCIAR NC EXISTENTE ==========
-    
+
     function abrirModalAsociarNC(dteId) {
         $('#asociarNCDteId').val(dteId);
         cargarNCsDisponibles();
@@ -2674,11 +2725,11 @@ th.sorting_desc::after {
         const modal = new bootstrap.Modal(document.getElementById('modalAsociarNC'));
         modal.show();
     }
-    
+
     function cargarNCsDisponibles(filtroProveedor = '', busqueda = '') {
         const tbody = $('#tablaNCsDisponiblesBody');
         tbody.html('<tr><td colspan="6" class="text-center text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando notas de crédito...</td></tr>');
-        
+
         $.ajax({
             url: '/app/obtener_ncs_disponibles/',
             method: 'GET',
@@ -2687,9 +2738,9 @@ th.sorting_desc::after {
                 busqueda: busqueda
             },
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            success: function(response) {
+            success: function (response) {
                 tbody.empty();
-                
+
                 if (response.success && response.ncs && response.ncs.length > 0) {
                     response.ncs.forEach(nc => {
                         const fila = `
@@ -2710,19 +2761,19 @@ th.sorting_desc::after {
                     tbody.append('<tr><td colspan="6" class="text-center text-muted">No hay notas de crédito disponibles para asociar</td></tr>');
                 }
             },
-            error: function() {
+            error: function () {
                 tbody.html('<tr><td colspan="6" class="text-center text-danger">Error al cargar las notas de crédito</td></tr>');
             }
         });
     }
-    
+
     function cargarProveedoresParaFiltro() {
         $.ajax({
             url: '/app/empresas_proveedoras/',
             method: 'POST',
             contentType: 'application/json',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            success: function(data) {
+            success: function (data) {
                 const select = $('#filtroProveedorNC');
                 select.empty().append('<option value="">Todos los proveedores</option>');
                 data.forEach(emp => {
@@ -2731,34 +2782,34 @@ th.sorting_desc::after {
             }
         });
     }
-    
+
     function habilitarBotonAsociar() {
         const seleccionado = $('input[name="ncSeleccionada"]:checked').length > 0;
         $('#btnAsociarNC').prop('disabled', !seleccionado);
     }
-    
+
     // Event listeners para filtros
-    $('#filtroProveedorNC, #buscarNC').on('change keyup', function() {
+    $('#filtroProveedorNC, #buscarNC').on('change keyup', function () {
         const proveedor = $('#filtroProveedorNC').val();
         const busqueda = $('#buscarNC').val();
         cargarNCsDisponibles(proveedor, busqueda);
     });
-    
+
     // Asociar NC seleccionada
-    $('#btnAsociarNC').on('click', function() {
+    $('#btnAsociarNC').on('click', function () {
         const ncId = $('input[name="ncSeleccionada"]:checked').val();
         const dteId = $('#asociarNCDteId').val();
-        
+
         if (!ncId) {
             Swal.fire('Error', 'Selecciona una Nota de Crédito', 'warning');
             return;
         }
-        
+
         if (!dteId) {
             Swal.fire('Error', 'Error: No se identificó la factura', 'error');
             return;
         }
-        
+
         $.ajax({
             url: '/app/asociar_nc_existente/',
             method: 'POST',
@@ -2768,7 +2819,7 @@ th.sorting_desc::after {
                 nc_id: ncId,
                 dte_id: dteId
             }),
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     Swal.fire('Éxito', 'Nota de Crédito anexada correctamente', 'success');
                     $('#modalAsociarNC').modal('hide');
@@ -2777,14 +2828,14 @@ th.sorting_desc::after {
                     Swal.fire('Error', response.error || 'Error al anexar la NC', 'error');
                 }
             },
-            error: function() {
+            error: function () {
                 Swal.fire('Error', 'Error de conexión al anexar la NC', 'error');
             }
         });
     });
 
     // ========== GESTIÓN DE INCIDENCIAS ==========
-    
+
     function abrirModalIncidencias(dteId) {
         $('#incidenciaDteId').val(dteId);
         $('#incidenciaTipo').val('');
@@ -2793,22 +2844,22 @@ th.sorting_desc::after {
         const modal = new bootstrap.Modal(document.getElementById('modalIncidencias'));
         modal.show();
     }
-    
+
     function cargarIncidencias(dteId) {
         $.get(`/app/incidencias/${dteId}/`, function (data) {
             const tbody = $('#tablaIncidenciasBody');
             tbody.empty();
-            
+
             if (data.length === 0) {
                 tbody.append('<tr><td colspan="5" class="text-center text-muted">Sin incidencias registradas</td></tr>');
             } else {
                 data.forEach(inc => {
-                    const estadoBadge = inc.estado === 'PENDIENTE' 
-                        ? 'danger' 
-                        : inc.estado === 'EN_GESTION' 
-                        ? 'warning' 
-                        : 'success';
-                    
+                    const estadoBadge = inc.estado === 'PENDIENTE'
+                        ? 'danger'
+                        : inc.estado === 'EN_GESTION'
+                            ? 'warning'
+                            : 'success';
+
                     const fila = `
                     <tr>
                         <td><span class="badge bg-info">${inc.tipo_display}</span></td>
@@ -2817,15 +2868,15 @@ th.sorting_desc::after {
                         <td><small>${inc.fecha_registro}</small></td>
                         <td>
                             <div class="btn-group btn-group-sm">
-                                ${inc.estado !== 'RESUELTO' 
-                                    ? `<button class="btn btn-outline-warning" onclick="cambiarEstadoIncidencia(${inc.id}, 'EN_GESTION')" title="Marcar en gestión">
+                                ${inc.estado !== 'RESUELTO'
+                            ? `<button class="btn btn-outline-warning" onclick="cambiarEstadoIncidencia(${inc.id}, 'EN_GESTION')" title="Marcar en gestión">
                                         <i class="bi bi-hourglass-split"></i>
                                     </button>
                                     <button class="btn btn-outline-success" onclick="resolverIncidencia(${inc.id})" title="Resolver">
                                         <i class="bi bi-check-circle"></i>
                                     </button>`
-                                    : '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Resuelto</span>'
-                                }
+                            : '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Resuelto</span>'
+                        }
                                 <button class="btn btn-outline-danger" onclick="eliminarIncidencia(${inc.id})" title="Eliminar">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -2835,28 +2886,28 @@ th.sorting_desc::after {
                     tbody.append(fila);
                 });
             }
-        }).fail(function() {
+        }).fail(function () {
             Swal.fire('Error', 'No se pudieron cargar las incidencias.', 'error');
         });
     }
-    
+
     $('#formIncidencia').on('submit', function (e) {
         e.preventDefault();
-        
+
         const dteId = $('#incidenciaDteId').val();
         const tipo = $('#incidenciaTipo').val();
         const descripcion = $('#incidenciaDescripcion').val().trim();
-        
+
         if (!tipo || !descripcion) {
             Swal.fire('Datos inválidos', 'Completa todos los campos.', 'warning');
             return;
         }
-        
+
         if (descripcion.length < 10) {
             Swal.fire('Descripción muy corta', 'La descripción debe tener al menos 10 caracteres.', 'warning');
             return;
         }
-        
+
         $.ajax({
             url: '/app/incidencias/crear/',
             method: 'POST',
@@ -2890,7 +2941,7 @@ th.sorting_desc::after {
             }
         });
     });
-    
+
     function cambiarEstadoIncidencia(incidenciaId, nuevoEstado) {
         $.ajax({
             url: `/app/incidencias/actualizar/${incidenciaId}/`,
@@ -2914,7 +2965,7 @@ th.sorting_desc::after {
             }
         });
     }
-    
+
     function resolverIncidencia(incidenciaId) {
         Swal.fire({
             title: 'Resolver incidencia',
@@ -2954,7 +3005,7 @@ th.sorting_desc::after {
             }
         });
     }
-    
+
     function eliminarIncidencia(incidenciaId) {
         Swal.fire({
             title: '¿Eliminar incidencia?',
@@ -2992,30 +3043,30 @@ th.sorting_desc::after {
     // Función para resaltar términos de búsqueda en DTE
     function resaltarBusquedaDTE(texto, busqueda) {
         if (!busqueda || !texto) return texto;
-        
+
         // Convertir a string si no lo es
         const textoStr = String(texto);
         const busquedaStr = String(busqueda);
-        
+
         const regex = new RegExp(`(${busquedaStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
         return textoStr.replace(regex, '<span class="search-highlight">$1</span>');
     }
 
     // ========== GESTIÓN DE PROVEEDORES ==========
-    
+
     // Variables para paginación de proveedores
     let currentPageProveedores = 1;
     let currentSearchProveedores = '';
     let paginationInfoProveedores = null;
 
     // Cargar proveedores al abrir el modal
-    $('#modalGestionProveedores').on('show.bs.modal', function() {
+    $('#modalGestionProveedores').on('show.bs.modal', function () {
         cargarProveedores(1, '');
     });
 
     function cargarProveedores(page, search) {
         showGlobalLoader();
-        
+
         $.ajax({
             url: '/app/listar_proveedores/',
             method: 'GET',
@@ -3024,22 +3075,22 @@ th.sorting_desc::after {
                 page_size: 10,
                 search: search
             },
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     const tbody = $('#tablaProveedores');
                     tbody.empty();
-                    
+
                     // Actualizar información de paginación
                     paginationInfoProveedores = response.pagination;
                     currentPageProveedores = response.pagination.page;
                     currentSearchProveedores = response.search || '';
-                    
+
                     // Actualizar controles
                     $('#pageInfoProveedores').text(`Página ${response.pagination.page} de ${response.pagination.total_pages}`);
                     $('#btnPrevProveedores').prop('disabled', !response.pagination.has_previous);
                     $('#btnNextProveedores').prop('disabled', !response.pagination.has_next);
                     $('#infoProveedores').text(`Mostrando ${response.data.length} de ${response.pagination.total_count} proveedores`);
-                    
+
                     if (response.data.length === 0) {
                         tbody.append('<tr><td colspan="7" class="text-center text-muted">No se encontraron proveedores</td></tr>');
                     } else {
@@ -3072,7 +3123,7 @@ th.sorting_desc::after {
                 }
                 hideGlobalLoader();
             },
-            error: function() {
+            error: function () {
                 hideGlobalLoader();
                 Swal.fire('Error', 'Error de conexión al cargar proveedores', 'error');
             }
@@ -3088,36 +3139,36 @@ th.sorting_desc::after {
     }
 
     // Eventos de paginación para proveedores
-    $('#btnPrevProveedores').on('click', function() {
+    $('#btnPrevProveedores').on('click', function () {
         if (paginationInfoProveedores && paginationInfoProveedores.has_previous) {
             cargarProveedores(currentPageProveedores - 1, currentSearchProveedores);
         }
     });
 
-    $('#btnNextProveedores').on('click', function() {
+    $('#btnNextProveedores').on('click', function () {
         if (paginationInfoProveedores && paginationInfoProveedores.has_next) {
             cargarProveedores(currentPageProveedores + 1, currentSearchProveedores);
         }
     });
 
     // Búsqueda de proveedores
-    $('#btnSearchProveedores').on('click', function() {
+    $('#btnSearchProveedores').on('click', function () {
         const search = $('#searchProveedores').val().trim();
         currentSearchProveedores = search;
         currentPageProveedores = 1;
         cargarProveedores(1, search);
     });
 
-    $('#searchProveedores').on('keypress', function(e) {
+    $('#searchProveedores').on('keypress', function (e) {
         if (e.which === 13) {
             $('#btnSearchProveedores').click();
         }
     });
 
     // Formulario de proveedor
-    $('#formProveedor').on('submit', function(e) {
+    $('#formProveedor').on('submit', function (e) {
         e.preventDefault();
-        
+
         const proveedorId = $('#proveedorId').val();
         const data = {
             nombre: $('#nombreProveedor').val(),
@@ -3145,14 +3196,14 @@ th.sorting_desc::after {
             { campo: 'ciudad', label: 'Ciudad' },
             { campo: 'correoVendedor', label: 'Correo Vendedor' }
         ];
-        
+
         const camposFaltantes = [];
         for (const item of camposObligatorios) {
             if (!data[item.campo] || data[item.campo].trim() === '') {
                 camposFaltantes.push(item.label);
             }
         }
-        
+
         if (camposFaltantes.length > 0) {
             Swal.fire({
                 icon: 'warning',
@@ -3162,18 +3213,18 @@ th.sorting_desc::after {
             });
             return;
         }
-        
+
         // Validar formato de RUT básico en frontend
         const rutLimpio = data.rut.replace(/[.-]/g, '').toUpperCase();
         if (!/^\d{7,8}[0-9K]$/.test(rutLimpio)) {
             Swal.fire('Error', 'El RUT debe tener 7 u 8 dígitos seguidos de un dígito verificador (0-9 o K)', 'error');
             return;
         }
-        
+
         // Validar formato de correos
         const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         const correosInvalidos = [];
-        
+
         if (data.correoVendedor && !emailRegex.test(data.correoVendedor)) {
             correosInvalidos.push('Correo Vendedor');
         }
@@ -3183,7 +3234,7 @@ th.sorting_desc::after {
         if (data.correoAdministrador && !emailRegex.test(data.correoAdministrador)) {
             correosInvalidos.push('Correo Administrador');
         }
-        
+
         if (correosInvalidos.length > 0) {
             Swal.fire({
                 icon: 'warning',
@@ -3203,7 +3254,7 @@ th.sorting_desc::after {
             contentType: 'application/json',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             data: JSON.stringify(data),
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     Swal.fire({
                         icon: 'success',
@@ -3212,32 +3263,32 @@ th.sorting_desc::after {
                         timer: 2000,
                         showConfirmButton: false
                     });
-                    
+
                     $('#modalCrearProveedor').modal('hide');
                     $('#formProveedor')[0].reset();
                     $('#proveedorId').val('');
-                    
+
                     // Recargar lista de proveedores
                     cargarProveedores(currentPageProveedores, currentSearchProveedores);
-                    
+
                     // Recargar select de proveedores en el modal de DTE
                     cargarEmpresasReceptoras();
                 } else {
                     Swal.fire('Error', response.error || 'Error al guardar proveedor', 'error');
                 }
             },
-            error: function(xhr) {
+            error: function (xhr) {
                 const response = xhr.responseJSON;
                 let mensajeError = 'Error de conexión';
-                
+
                 if (response && response.error) {
                     // Si hay múltiples errores separados por ' | ', mostrarlos en lista
                     if (response.error.includes(' | ')) {
                         const errores = response.error.split(' | ');
-                        mensajeError = '<ul style="text-align: left;">' + 
-                            errores.map(error => `<li>${error}</li>`).join('') + 
+                        mensajeError = '<ul style="text-align: left;">' +
+                            errores.map(error => `<li>${error}</li>`).join('') +
                             '</ul>';
-                        
+
                         Swal.fire({
                             icon: 'error',
                             title: 'Errores de Validación',
@@ -3258,10 +3309,10 @@ th.sorting_desc::after {
         $.ajax({
             url: `/app/gestionar_proveedor/${proveedorId}/`,
             method: 'GET',
-            success: function(response) {
+            success: function (response) {
                 if (response.success) {
                     const proveedor = response.proveedor;
-                    
+
                     // Llenar formulario
                     $('#proveedorId').val(proveedor.id);
                     $('#nombreProveedor').val(proveedor.nombre);
@@ -3275,18 +3326,18 @@ th.sorting_desc::after {
                     $('#correoVendedor').val(proveedor.correoVendedor);
                     $('#correoIntercambio').val(proveedor.correoIntercambio);
                     $('#correoAdministrador').val(proveedor.correoAdministrador);
-                    
+
                     // Cambiar título del modal
                     $('#modalCrearProveedorLabel').html('<i class="bi bi-building-edit me-2"></i>Editar Proveedor');
                     $('#formProveedor button[type="submit"]').html('<i class="bi bi-save me-1"></i>Actualizar Proveedor');
-                    
+
                     // Mostrar modal
                     $('#modalCrearProveedor').modal('show');
                 } else {
                     Swal.fire('Error', response.error || 'Error al cargar proveedor', 'error');
                 }
             },
-            error: function() {
+            error: function () {
                 Swal.fire('Error', 'Error de conexión al cargar proveedor', 'error');
             }
         });
@@ -3308,7 +3359,7 @@ th.sorting_desc::after {
                     url: `/app/gestionar_proveedor/${proveedorId}/`,
                     method: 'DELETE',
                     headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                    success: function(response) {
+                    success: function (response) {
                         if (response.success) {
                             Swal.fire('Eliminado', response.message, 'success');
                             cargarProveedores(currentPageProveedores, currentSearchProveedores);
@@ -3317,7 +3368,7 @@ th.sorting_desc::after {
                             Swal.fire('Error', response.error || 'Error al eliminar proveedor', 'error');
                         }
                     },
-                    error: function(xhr) {
+                    error: function (xhr) {
                         const response = xhr.responseJSON;
                         Swal.fire('Error', response?.error || 'Error de conexión', 'error');
                     }
@@ -3327,7 +3378,7 @@ th.sorting_desc::after {
     }
 
     // Resetear formulario al cerrar modal
-    $('#modalCrearProveedor').on('hidden.bs.modal', function() {
+    $('#modalCrearProveedor').on('hidden.bs.modal', function () {
         $('#formProveedor')[0].reset();
         $('#proveedorId').val('');
         $('#modalCrearProveedorLabel').html('<i class="bi bi-building-add me-2"></i>Crear Nuevo Proveedor');
@@ -3335,7 +3386,7 @@ th.sorting_desc::after {
     });
 
     // Limpiar al cerrar modal de pago
-    $('#modalPago').on('hidden.bs.modal', function() {
+    $('#modalPago').on('hidden.bs.modal', function () {
         limpiarModales();
         $('#formPago')[0].reset();
         $('#pagoEditId').val('');
@@ -3343,7 +3394,7 @@ th.sorting_desc::after {
     });
 
     // Limpiar al cerrar modal de detalle de pagos
-    $('#modalDetallePagos').on('hidden.bs.modal', function() {
+    $('#modalDetallePagos').on('hidden.bs.modal', function () {
         limpiarModales();
     });
 
