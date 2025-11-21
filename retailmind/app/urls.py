@@ -557,6 +557,7 @@ urlpatterns = [
     # Vista principal con SDK oficial de Transbank
     path('pos/transbank/', gestion_transbank_pos_sdk, name='gestion_transbank_pos_sdk'),
     path('pos/transbank-manual/', gestion_transbank_pos_manual, name='gestion_transbank_pos_manual'),
+    path('testTransbank/', lambda request: render(request, 'test_transbank_pos.html'), name='test_transbank'),
     
     # APIs sin base de datos - Conexión directa a puerto serial
     path('pos/transbank/puertos/', listar_puertos, name='transbank_sdk_listar_puertos'),

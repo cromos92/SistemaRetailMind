@@ -1,0 +1,682 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Test POS Transbank - Web Serial SDK</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body { background: #f8f9fa; }
+        .card { box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .card-header { font-weight: 600; }
+        #estado-conexion { font-weight: bold; padding: 10px; border-radius: 5px; }
+        .estado-conectado { background: #d4edda; color: #155724; }
+        .estado-desconectado { background: #f8d7da; color: #721c24; }
+        #resultado { 
+            background: #2d2d2d; 
+            color: #f8f8f2; 
+            padding: 20px; 
+            border-radius: 5px; 
+            max-height: 500px; 
+            overflow-y: auto; 
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .json-key { color: #66d9ef; }
+        .json-string { color: #a6e22e; }
+        .json-number { color: #ae81ff; }
+        .json-boolean { color: #fd971f; }
+        .loading-spinner { display: none; }
+        .timestamp { color: #999; font-size: 0.85em; }
+        .btn-copy { position: absolute; top: 10px; right: 10px; }
+        #console-log { 
+            background: #1e1e1e; 
+            color: #d4d4d4; 
+            padding: 15px; 
+            border-radius: 5px; 
+            max-height: 300px; 
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .log-info { color: #3794ff; }
+        .log-success { color: #89d185; }
+        .log-error { color: #f48771; }
+        .log-warning { color: #e5c07b; }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="display-5">
+                    <i class="bi bi-credit-card-2-front"></i> Test POS Transbank
+                    <span class="badge bg-primary">Web Serial SDK</span>
+                </h1>
+                <p class="text-muted">Prueba todos los métodos del SDK sin agente</p>
+            </div>
+        </div>
+
+        <!-- Estado de Conexión -->
+        <div class="alert alert-secondary" role="alert">
+            <strong>Estado:</strong> 
+            <span id="estado-conexion" class="estado-desconectado">
+                🔴 Desconectado
+            </span>
+            <span class="loading-spinner ms-3">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span id="loading-text">Procesando...</span>
+            </span>
+        </div>
+
+        <!-- 1. SECCIÓN DE CONEXIÓN -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-plug"></i> 1. Conexión
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Baudrate</label>
+                        <input type="number" id="baudrate" class="form-control" value="115200" placeholder="115200">
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button class="btn btn-primary me-2" onclick="autoConectar()">
+                            <i class="bi bi-lightning-charge"></i> Auto Conectar
+                        </button>
+                        <button class="btn btn-secondary" onclick="poll()">
+                            <i class="bi bi-arrow-repeat"></i> Poll
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. SECCIÓN DE CONFIGURACIÓN -->
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <i class="bi bi-key"></i> 2. Configuración
+            </div>
+            <div class="card-body">
+                <button class="btn btn-warning" onclick="cargarLlaves()">
+                    <i class="bi bi-download"></i> Cargar Llaves (loadKeys)
+                </button>
+                <small class="text-muted d-block mt-2">
+                    ⚠️ Ejecutar 1 vez al día o tras conectar. Puede tardar 30-60 segundos.
+                </small>
+            </div>
+        </div>
+
+        <!-- 3. SECCIÓN DE VENTAS -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-cart-check"></i> 3. Ventas y Transacciones
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Monto ($)</label>
+                        <input type="number" id="monto-venta" class="form-control" value="1000" placeholder="1000">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Ticket</label>
+                        <input type="text" id="ticket-venta" class="form-control" value="TKT-001" placeholder="TKT-001">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button class="btn btn-success" onclick="realizarVenta()">
+                            <i class="bi bi-cash"></i> Realizar Venta (sale)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Operation ID (para anular)</label>
+                        <input type="number" id="operation-id" class="form-control" value="1" placeholder="21">
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <button class="btn btn-danger" onclick="anularVenta()">
+                            <i class="bi bi-x-circle"></i> Anular Venta (refund)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <button class="btn btn-info" onclick="obtenerUltimaVenta()">
+                            <i class="bi bi-receipt"></i> Última Venta (getLastSale)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. SECCIÓN DE REPORTES -->
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-bar-chart"></i> 4. Reportes del Día
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <button class="btn btn-info w-100" onclick="obtenerTotales()">
+                            <i class="bi bi-calculator"></i> Totales del Día (getTotals)
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-info w-100" onclick="obtenerDetalles()">
+                            <i class="bi bi-list-ul"></i> Detalle de Ventas (getDetails)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="print-on-pos">
+                    <label class="form-check-label" for="print-on-pos">
+                        Imprimir en POS (si no, imprime en caja)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. SECCIÓN DE CIERRE -->
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <i class="bi bi-box-arrow-right"></i> 5. Cierre y Modo Normal
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <button class="btn btn-danger w-100" onclick="cerrarDia()">
+                            <i class="bi bi-door-closed"></i> Cierre de Caja (closeDay)
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-secondary w-100" onclick="cambiarModoNormal()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Modo Normal (changeToNormalMode)
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block mt-2">
+                    ⚠️ El cierre de caja debe realizarse al final del día
+                </small>
+            </div>
+        </div>
+
+        <!-- SECCIÓN DE RESULTADOS -->
+        <div class="card">
+            <div class="card-header bg-dark text-white position-relative">
+                <i class="bi bi-code-square"></i> Resultados
+                <button class="btn btn-sm btn-outline-light btn-copy" onclick="copiarResultado()">
+                    <i class="bi bi-clipboard"></i> Copiar
+                </button>
+            </div>
+            <div class="card-body">
+                <pre id="resultado">Esperando operación...</pre>
+            </div>
+        </div>
+
+        <!-- SECCIÓN DE CONSOLE LOG -->
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <i class="bi bi-terminal"></i> Console Log
+                <button class="btn btn-sm btn-outline-light float-end" onclick="limpiarConsole()">
+                    <i class="bi bi-trash"></i> Limpiar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="console-log">
+                    <div class="log-entry log-info">Sistema iniciado - Esperando operaciones...</div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="text-center text-muted mt-4 mb-3">
+            <small>
+                💻 Solo funciona en Chrome/Edge modernos | 🔌 Requiere permisos USB del navegador
+            </small>
+        </footer>
+    </div>
+
+    <!-- SDK de Transbank Web Serial -->
+    <script src="{% static 'js/transbank-web-serial.js' %}"></script>
+    
+    <script>
+        // Variable global para el POS
+        let pos = null;
+        
+        // Inicializar cuando el DOM y Transbank estén listos
+        window.addEventListener('DOMContentLoaded', function() {
+            try {
+                if (typeof Transbank !== 'undefined' && Transbank.POS && Transbank.POS.Integrado) {
+                    // Transbank.POS.Integrado ya es una instancia, NO usar "new"
+                    pos = Transbank.POS.Integrado;
+                    agregarLog('SDK de Transbank cargado correctamente', 'success');
+                    console.log('✅ POS inicializado:', pos);
+                } else {
+                    agregarLog('ERROR: SDK de Transbank no encontrado', 'error');
+                    console.error('❌ Transbank no está disponible. Verifica que el archivo transbank-web-serial.js esté cargado.');
+                }
+            } catch(error) {
+                agregarLog(`ERROR inicializando POS: ${error.message}`, 'error');
+                console.error('❌ Error al inicializar POS:', error);
+            }
+        });
+        
+        // ==================== FUNCIONES DE UI ====================
+        
+        function mostrarLoading(texto = 'Procesando...') {
+            document.getElementById('loading-text').textContent = texto;
+            document.querySelector('.loading-spinner').style.display = 'inline-block';
+        }
+
+        function ocultarLoading() {
+            document.querySelector('.loading-spinner').style.display = 'none';
+        }
+
+        function actualizarEstado(conectado) {
+            const estadoEl = document.getElementById('estado-conexion');
+            if (conectado) {
+                estadoEl.className = 'estado-conectado';
+                estadoEl.innerHTML = '🟢 Conectado';
+            } else {
+                estadoEl.className = 'estado-desconectado';
+                estadoEl.innerHTML = '🔴 Desconectado';
+            }
+        }
+
+        function mostrarResultado(data, esExito = true) {
+            const timestamp = new Date().toLocaleString('es-CL');
+            const jsonFormateado = JSON.stringify(data, null, 2);
+            const jsonColoreado = colorearJSON(jsonFormateado);
+            
+            document.getElementById('resultado').innerHTML = `
+                <span class="timestamp">${timestamp}</span>
+                <br>
+                ${jsonColoreado}
+            `;
+
+            // Auto-scroll al resultado
+            document.getElementById('resultado').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function colorearJSON(json) {
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'json-number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        function agregarLog(mensaje, tipo = 'info') {
+            const timestamp = new Date().toLocaleTimeString('es-CL');
+            const icono = {
+                'info': 'ℹ️',
+                'success': '✅',
+                'error': '❌',
+                'warning': '⚠️'
+            }[tipo] || 'ℹ️';
+
+            const log = document.createElement('div');
+            log.className = `log-entry log-${tipo}`;
+            log.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${icono} ${mensaje}`;
+            
+            const consoleLog = document.getElementById('console-log');
+            consoleLog.appendChild(log);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+
+        function limpiarConsole() {
+            document.getElementById('console-log').innerHTML = '<div class="log-entry log-info">Console limpiado</div>';
+        }
+
+        function copiarResultado() {
+            const texto = document.getElementById('resultado').innerText;
+            navigator.clipboard.writeText(texto).then(() => {
+                alert('✅ Resultado copiado al portapapeles');
+            });
+        }
+
+        function validarCampos(campos) {
+            for (let campo of campos) {
+                if (!campo.value || campo.value.trim() === '') {
+                    alert(`⚠️ Por favor complete el campo: ${campo.placeholder || campo.id}`);
+                    campo.focus();
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // ==================== FUNCIONES POS ====================
+        
+        function verificarPOSInicializado() {
+            if (!pos) {
+                agregarLog('ERROR: POS no inicializado. Verifica que el SDK esté cargado.', 'error');
+                alert('❌ Error: El SDK de Transbank no está cargado.\n\nVerifica que exista el archivo:\n/static/js/transbank-web-serial.js');
+                return false;
+            }
+            return true;
+        }
+
+        // 1. CONEXIÓN
+        async function autoConectar() {
+            if (!verificarPOSInicializado()) return;
+            
+            const baudrate = parseInt(document.getElementById('baudrate').value);
+            
+            if (!baudrate) {
+                alert('⚠️ Ingrese un baudrate válido');
+                return;
+            }
+
+            agregarLog(`Iniciando autoconexión (baudrate: ${baudrate})...`, 'info');
+            mostrarLoading('Conectando al POS...');
+
+            try {
+                const resultado = await pos.autoConnect(baudrate);
+                agregarLog('Conexión exitosa!', 'success');
+                actualizarEstado(true);
+                mostrarResultado({
+                    success: true,
+                    message: 'Conectado exitosamente',
+                    baudrate: baudrate,
+                    timestamp: new Date().toISOString(),
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error de conexión: ${error.message}`, 'error');
+                actualizarEstado(false);
+                mostrarResultado({
+                    success: false,
+                    error: error.message,
+                    stack: error.stack
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        async function poll() {
+            if (!verificarPOSInicializado()) return;
+            
+            agregarLog('Ejecutando POLL...', 'info');
+            mostrarLoading('Verificando conexión...');
+
+            try {
+                const resultado = await pos.poll();
+                agregarLog('Poll exitoso - POS conectado', 'success');
+                actualizarEstado(true);
+                mostrarResultado({
+                    success: true,
+                    poll_result: resultado,
+                    timestamp: new Date().toISOString()
+                });
+            } catch(error) {
+                agregarLog(`Poll falló: ${error.message}`, 'error');
+                actualizarEstado(false);
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        // 2. CONFIGURACIÓN
+        async function cargarLlaves() {
+            if (!verificarPOSInicializado()) return;
+            
+            agregarLog('Iniciando carga de llaves...', 'warning');
+            mostrarLoading('Cargando llaves (puede tardar 30-60s)...');
+
+            try {
+                const resultado = await pos.loadKeys();
+                agregarLog('Llaves cargadas correctamente', 'success');
+                mostrarResultado({
+                    success: true,
+                    message: 'Llaves cargadas exitosamente',
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error cargando llaves: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        // 3. VENTAS
+        async function realizarVenta() {
+            if (!verificarPOSInicializado()) return;
+            
+            const montoInput = document.getElementById('monto-venta');
+            const ticketInput = document.getElementById('ticket-venta');
+
+            if (!validarCampos([montoInput, ticketInput])) return;
+
+            const monto = parseInt(montoInput.value);
+            const ticket = ticketInput.value;
+
+            if (monto <= 0) {
+                alert('⚠️ El monto debe ser mayor a 0');
+                return;
+            }
+
+            agregarLog(`Iniciando venta: $${monto} - Ticket: ${ticket}`, 'info');
+            mostrarLoading('Procesando venta en POS...');
+
+            try {
+                const resultado = await pos.sale(monto, ticket);
+                agregarLog(`Venta aprobada! Código: ${resultado.authorization_code || 'N/A'}`, 'success');
+                mostrarResultado({
+                    success: true,
+                    message: 'Venta exitosa',
+                    monto: monto,
+                    ticket: ticket,
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Venta rechazada: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        async function anularVenta() {
+            if (!verificarPOSInicializado()) return;
+            
+            const operationIdInput = document.getElementById('operation-id');
+
+            if (!validarCampos([operationIdInput])) return;
+
+            const operationId = parseInt(operationIdInput.value);
+
+            agregarLog(`Anulando operación ID: ${operationId}`, 'warning');
+            mostrarLoading('Procesando anulación...');
+
+            try {
+                const resultado = await pos.refund(operationId);
+                agregarLog('Anulación exitosa', 'success');
+                mostrarResultado({
+                    success: true,
+                    message: 'Venta anulada correctamente',
+                    operation_id: operationId,
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error en anulación: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        async function obtenerUltimaVenta() {
+            if (!verificarPOSInicializado()) return;
+            
+            agregarLog('Consultando última venta...', 'info');
+            mostrarLoading('Obteniendo última venta...');
+
+            try {
+                const resultado = await pos.getLastSale();
+                agregarLog('Última venta obtenida', 'success');
+                mostrarResultado({
+                    success: true,
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error obteniendo última venta: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        // 4. REPORTES
+        async function obtenerTotales() {
+            if (!verificarPOSInicializado()) return;
+            
+            agregarLog('Consultando totales del día...', 'info');
+            mostrarLoading('Obteniendo totales...');
+
+            try {
+                const resultado = await pos.getTotals();
+                agregarLog(`Totales obtenidos: ${resultado.tx_count || 0} transacciones`, 'success');
+                mostrarResultado({
+                    success: true,
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error obteniendo totales: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        async function obtenerDetalles() {
+            if (!verificarPOSInicializado()) return;
+            
+            const printOnPos = document.getElementById('print-on-pos').checked;
+
+            agregarLog(`Consultando detalles (imprimir en ${printOnPos ? 'POS' : 'caja'})...`, 'info');
+            mostrarLoading('Obteniendo detalles...');
+
+            try {
+                const resultado = await pos.getDetails(printOnPos);
+                agregarLog('Detalles obtenidos', 'success');
+                mostrarResultado({
+                    success: true,
+                    print_on_pos: printOnPos,
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error obteniendo detalles: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        // 5. CIERRE
+        async function cerrarDia() {
+            if (!verificarPOSInicializado()) return;
+            
+            if (!confirm('⚠️ ¿Está seguro de realizar el cierre de caja?')) return;
+
+            agregarLog('Iniciando cierre de día...', 'warning');
+            mostrarLoading('Cerrando día...');
+
+            try {
+                const resultado = await pos.closeDay();
+                agregarLog('Cierre de día exitoso', 'success');
+                mostrarResultado({
+                    success: true,
+                    message: 'Cierre de caja completado',
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error en cierre: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        async function cambiarModoNormal() {
+            if (!verificarPOSInicializado()) return;
+            
+            agregarLog('Cambiando a modo normal...', 'info');
+            mostrarLoading('Cambiando modo...');
+
+            try {
+                const resultado = await pos.changeToNormalMode();
+                agregarLog('Modo normal activado', 'success');
+                mostrarResultado({
+                    success: true,
+                    message: 'Modo normal activado',
+                    ...resultado
+                });
+            } catch(error) {
+                agregarLog(`Error cambiando modo: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        // ==================== INIT ====================
+        console.log('🔧 Test POS Transbank cargado');
+        
+        // Log inicial solo después de que el DOM esté listo
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                agregarLog('Sistema listo para probar', 'success');
+            });
+        } else {
+            agregarLog('Sistema listo para probar', 'success');
+        }
+    </script>
+</body>
+</html>
+
