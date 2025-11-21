@@ -78,6 +78,19 @@
                 <i class="bi bi-plug"></i> 1. Conexión
             </div>
             <div class="card-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-12">
+                        <button class="btn btn-outline-primary me-2" onclick="listarPuertosDisponibles()">
+                            <i class="bi bi-list"></i> Listar Puertos Disponibles
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="solicitarPuerto()">
+                            <i class="bi bi-usb-symbol"></i> Solicitar Acceso a Puerto
+                        </button>
+                        <small class="text-muted d-block mt-2">
+                            💡 Si es la primera vez, debes solicitar acceso al puerto USB del POS
+                        </small>
+                    </div>
+                </div>
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Baudrate</label>
@@ -372,6 +385,115 @@
             return true;
         }
 
+        // FUNCIONES DE PUERTOS (Web Serial API)
+        async function listarPuertosDisponibles() {
+            agregarLog('Listando puertos seriales disponibles...', 'info');
+            mostrarLoading('Consultando puertos...');
+
+            try {
+                // Verificar soporte de Web Serial API
+                if (!('serial' in navigator)) {
+                    alert('❌ Tu navegador no soporta Web Serial API.\n\nUsa Chrome o Edge versión 89+');
+                    agregarLog('Web Serial API no soportada', 'error');
+                    return;
+                }
+
+                // Obtener puertos autorizados
+                const puertos = await navigator.serial.getPorts();
+                
+                if (puertos.length === 0) {
+                    agregarLog('No hay puertos autorizados. Solicita acceso primero.', 'warning');
+                    mostrarResultado({
+                        success: false,
+                        message: 'No hay puertos USB autorizados',
+                        puertos: [],
+                        help: 'Haz click en "Solicitar Acceso a Puerto" para dar permisos al POS'
+                    });
+                    return;
+                }
+
+                // Obtener información de cada puerto
+                const infosPuertos = [];
+                for (let i = 0; i < puertos.length; i++) {
+                    const puerto = puertos[i];
+                    const info = puerto.getInfo();
+                    infosPuertos.push({
+                        index: i,
+                        usbVendorId: info.usbVendorId || 'N/A',
+                        usbProductId: info.usbProductId || 'N/A',
+                        vendorIdHex: info.usbVendorId ? '0x' + info.usbVendorId.toString(16).toUpperCase() : 'N/A',
+                        productIdHex: info.usbProductId ? '0x' + info.usbProductId.toString(16).toUpperCase() : 'N/A',
+                        isOpen: puerto.readable !== null
+                    });
+                }
+
+                agregarLog(`Se encontraron ${puertos.length} puerto(s) autorizado(s)`, 'success');
+                mostrarResultado({
+                    success: true,
+                    totalPuertos: puertos.length,
+                    puertos: infosPuertos,
+                    note: 'Los POS Verifone VX520 suelen tener VendorId: 0x11CA'
+                });
+
+            } catch(error) {
+                agregarLog(`Error listando puertos: ${error.message}`, 'error');
+                mostrarResultado({
+                    success: false,
+                    error: error.message || String(error)
+                }, false);
+            } finally {
+                ocultarLoading();
+            }
+        }
+
+        async function solicitarPuerto() {
+            agregarLog('Solicitando acceso a puerto USB...', 'info');
+            mostrarLoading('Esperando selección de puerto...');
+
+            try {
+                // Verificar soporte de Web Serial API
+                if (!('serial' in navigator)) {
+                    alert('❌ Tu navegador no soporta Web Serial API.\n\nUsa Chrome o Edge versión 89+');
+                    agregarLog('Web Serial API no soportada', 'error');
+                    return;
+                }
+
+                // Solicitar acceso (abre diálogo del navegador)
+                const puerto = await navigator.serial.requestPort();
+                const info = puerto.getInfo();
+
+                agregarLog('Puerto autorizado correctamente', 'success');
+                mostrarResultado({
+                    success: true,
+                    message: 'Puerto USB autorizado',
+                    puerto: {
+                        usbVendorId: info.usbVendorId || 'N/A',
+                        usbProductId: info.usbProductId || 'N/A',
+                        vendorIdHex: info.usbVendorId ? '0x' + info.usbVendorId.toString(16).toUpperCase() : 'N/A',
+                        productIdHex: info.usbProductId ? '0x' + info.usbProductId.toString(16).toUpperCase() : 'N/A'
+                    },
+                    nextStep: 'Ahora puedes usar "Auto Conectar"'
+                });
+
+            } catch(error) {
+                if (error.name === 'NotFoundError') {
+                    agregarLog('No se seleccionó ningún puerto', 'warning');
+                    mostrarResultado({
+                        success: false,
+                        error: 'Usuario canceló la selección de puerto'
+                    }, false);
+                } else {
+                    agregarLog(`Error solicitando puerto: ${error.message}`, 'error');
+                    mostrarResultado({
+                        success: false,
+                        error: error.message || String(error)
+                    }, false);
+                }
+            } finally {
+                ocultarLoading();
+            }
+        }
+
         // 1. CONEXIÓN
         async function autoConectar() {
             if (!verificarPOSInicializado()) return;
@@ -388,22 +510,48 @@
 
             try {
                 const resultado = await pos.autoConnect(baudrate);
-                agregarLog('Conexión exitosa!', 'success');
-                actualizarEstado(true);
-                mostrarResultado({
-                    success: true,
-                    message: 'Conectado exitosamente',
-                    baudrate: baudrate,
-                    timestamp: new Date().toISOString(),
-                    ...resultado
-                });
+                
+                // Verificar si realmente se conectó
+                if (resultado === true || resultado === false) {
+                    if (resultado) {
+                        agregarLog('Conexión exitosa!', 'success');
+                        actualizarEstado(true);
+                        mostrarResultado({
+                            success: true,
+                            message: 'Conectado exitosamente al POS',
+                            baudrate: baudrate,
+                            timestamp: new Date().toISOString(),
+                            connected: resultado
+                        });
+                    } else {
+                        agregarLog('No se pudo conectar - Puerto no encontrado o sin permisos', 'error');
+                        actualizarEstado(false);
+                        mostrarResultado({
+                            success: false,
+                            error: 'No se encontró ningún puerto POS o no se otorgaron permisos USB',
+                            help: 'Asegúrate de que el POS esté conectado y encendido'
+                        }, false);
+                    }
+                } else {
+                    agregarLog('Conexión exitosa!', 'success');
+                    actualizarEstado(true);
+                    mostrarResultado({
+                        success: true,
+                        message: 'Conectado exitosamente',
+                        baudrate: baudrate,
+                        timestamp: new Date().toISOString(),
+                        resultado: resultado
+                    });
+                }
             } catch(error) {
-                agregarLog(`Error de conexión: ${error.message}`, 'error');
+                agregarLog(`Error de conexión: ${error.message || error}`, 'error');
                 actualizarEstado(false);
                 mostrarResultado({
                     success: false,
-                    error: error.message,
-                    stack: error.stack
+                    error: error.message || String(error),
+                    errorType: error.name || 'Error',
+                    stack: error.stack,
+                    fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
                 }, false);
             } finally {
                 ocultarLoading();
@@ -453,10 +601,15 @@
                     ...resultado
                 });
             } catch(error) {
-                agregarLog(`Error cargando llaves: ${error.message}`, 'error');
+                const errorMsg = error.message || error || 'Error desconocido al cargar llaves';
+                agregarLog(`Error cargando llaves: ${errorMsg}`, 'error');
                 mostrarResultado({
                     success: false,
-                    error: error.message
+                    error: errorMsg,
+                    errorType: error.name || 'Error',
+                    errorString: String(error),
+                    fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+                    help: '¿El POS está conectado, encendido y con conexión a internet?'
                 }, false);
             } finally {
                 ocultarLoading();
@@ -485,7 +638,7 @@
 
             try {
                 const resultado = await pos.sale(monto, ticket);
-                agregarLog(`Venta aprobada! Código: ${resultado.authorization_code || 'N/A'}`, 'success');
+                agregarLog(`Venta aprobada! Código: ${resultado.authorizationCode || 'N/A'}`, 'success');
                 mostrarResultado({
                     success: true,
                     message: 'Venta exitosa',
@@ -494,10 +647,15 @@
                     ...resultado
                 });
             } catch(error) {
-                agregarLog(`Venta rechazada: ${error.message}`, 'error');
+                const errorMsg = error.message || error || 'Error desconocido en la venta';
+                agregarLog(`Venta rechazada: ${errorMsg}`, 'error');
                 mostrarResultado({
                     success: false,
-                    error: error.message
+                    error: errorMsg,
+                    errorType: error.name || 'Error',
+                    errorString: String(error),
+                    fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+                    help: '¿El POS está conectado y las llaves cargadas?'
                 }, false);
             } finally {
                 ocultarLoading();
@@ -550,10 +708,15 @@
                     ...resultado
                 });
             } catch(error) {
-                agregarLog(`Error obteniendo última venta: ${error.message}`, 'error');
+                const errorMsg = error.message || error || 'Error desconocido';
+                agregarLog(`Error obteniendo última venta: ${errorMsg}`, 'error');
                 mostrarResultado({
                     success: false,
-                    error: error.message
+                    error: errorMsg,
+                    errorType: error.name || 'Error',
+                    errorString: String(error),
+                    fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+                    help: '¿El POS está conectado y encendido?'
                 }, false);
             } finally {
                 ocultarLoading();
