@@ -91,15 +91,18 @@ def obtener_producto_edicion(request, producto_id):
         # Obtener variaciones/tallas
         variaciones = []
         for pt in producto.producto_talla.all():
-            # Calcular stock total desde lotes FIFO
-            lotes_activos = LoteProducto.objects.filter(
-                producto_talla=pt,
-                activo=True
-            ).order_by('created_at')  # Corrección: created_at en lugar de fecha_creacion
+            # Calcular stock usando lógica híbrida
+            stock_total = pt.stock_total() if hasattr(pt, 'stock_total') else pt.stock
             
-            stock_total = sum(
-                lote.cantidad_disponible for lote in lotes_activos
-            )
+            # Obtener lotes FIFO (si existen)
+            try:
+                lotes_activos = LoteProducto.objects.filter(
+                    producto_talla=pt,
+                    activo=True
+                ).order_by('created_at')
+            except NameError:
+                # Si LoteProducto no está importado o no existe
+                lotes_activos = []
             
             # Obtener información de lotes
             lotes_data = []
@@ -112,7 +115,7 @@ def obtener_producto_edicion(request, producto_id):
                     'costo_unitario': float(lote.costo_unitario),
                     'sobreprecio_unitario': float(lote.sobreprecio_unitario),
                     'precio_venta_unitario': float(lote.precio_venta_unitario),
-                    'fecha_creacion': lote.created_at.strftime('%d/%m/%Y %H:%M'),  # Corrección: created_at
+                    'fecha_creacion': lote.created_at.strftime('%d/%m/%Y %H:%M'),
                     'fecha_vencimiento': lote.fecha_vencimiento.strftime('%d/%m/%Y') if lote.fecha_vencimiento else None,
                 })
             
@@ -120,9 +123,9 @@ def obtener_producto_edicion(request, producto_id):
                 'id': pt.id,
                 'sku': pt.sku,
                 'talla': pt.talla,
-                'stock_db': pt.stock,  # Stock guardado en BD
-                'stock_total': stock_total,  # Stock calculado desde lotes
-                'activo': True,  # Producto_Talla no tiene campo activo, asumimos True
+                'stock_db': pt.stock,  # Stock guardado en BD (Legacy)
+                'stock_total': stock_total,  # Stock real disponible (Híbrido)
+                'activo': True,
                 'lotes': lotes_data
             })
         

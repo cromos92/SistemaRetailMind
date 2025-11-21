@@ -30,7 +30,7 @@ from .models import (
 @login_required
 def verGestionCompras(request):
     """Vista principal para gestión de compras"""
-    empresas = Empresa.objects.all()
+    empresas = Empresa.objects.filter(esProveedor=True).order_by('nombre')
     return render(request, 'vistas/modulo_compras/gestionCompras.html', {'empresas': empresas})
 
 
@@ -312,6 +312,10 @@ def obtener_dte(request, dte_id):
             'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
             'emisor': dte.emisor.nombre,
             'receptor': dte.receptor.nombre if dte.receptor else '',
+            'empresa_receptora_id': dte.receptor.id if dte.receptor else None,
+            'empresa_receptora_nombre': dte.receptor.nombre if dte.receptor else '',
+            'sucursal_receptora_id': dte.sucursal.id if dte.sucursal else None,
+            'sucursal_receptora_nombre': dte.sucursal.alias if dte.sucursal else '',
             'subtotal': float(dte.subtotal),
             'iva': float(dte.iva),
             'total': float(dte.total),

@@ -7957,10 +7957,12 @@ def buscar_documento_cambio(request):
             query = Dte.objects.select_related('vendedor', 'receptor', 'sucursal').prefetch_related(
                 'dte_productos__productoTalla__producto'
             ).filter(
-                numero_documento=numero
+                numero_documento=numero,
+                sucursal_id=sucursal_id  # ✅ FILTRAR POR SUCURSAL ACTUAL
             )
             
             print(f"🔍 Paso 2 - Aplicando filtros...")
+            print(f"  Filtro sucursal_id={sucursal_id}")
             
             # Filtrar por tipo de transacción (solo ventas)
             query = query.filter(tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'])
@@ -7980,6 +7982,13 @@ def buscar_documento_cambio(request):
                     return JsonResponse({
                         'success': False,
                         'error': f'DTE #{numero} no encontrado en el sistema.'
+                    })
+                
+                # Verificar si existe en otra sucursal
+                if dte_existe.sucursal_id != sucursal_id:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'DTE #{numero} pertenece a otra sucursal ({dte_existe.sucursal.nombreSucursal}). Solo puede procesar documentos de la sucursal actual.'
                     })
                 
                 # El DTE existe, verificar por qué no pasó los filtros

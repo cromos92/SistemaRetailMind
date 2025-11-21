@@ -16,6 +16,7 @@ urlpatterns = [
     # Acciones específicas
     path('resetear-password/<int:usuario_id>/', views.resetear_password, name='resetear_password'),
     path('toggle-estado/<int:usuario_id>/', views.toggle_estado_usuario, name='toggle_estado_usuario'),
+    path('asignar-sucursal/<int:usuario_id>/', views.asignar_sucursal_sesion, name='asignar_sucursal_sesion'),
     
     # Exportación
     path('exportar/', views.exportar_usuarios, name='exportar_usuarios'),

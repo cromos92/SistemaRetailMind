@@ -315,16 +315,28 @@
                 <div class="modal-body">
                     <div class="row g-3">
 
-                        <!-- Receptor y Tipo Documento -->
-                        <div class="col-md-8">
-                            <label for="receptor" class="form-label">Empresa Receptora (Proveedor)</label>
-                            <select id="receptor" class="form-select" required>
+                        <!-- Empresa emisora (proveedor) y receptora -->
+                        <div class="col-md-6">
+                            <label for="receptor" class="form-label">Empresa Emisora (Proveedor)</label>
+                            <select id="receptor" class="form-select select2" required>
                                 <option value="">Selecciona una empresa</option>
                             </select>
+                            <div class="form-text">
+                                Selecciona la empresa que emite el DTE.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="empresaReceptora" class="form-label">Empresa Recepciona (Empresa - Sucursal)</label>
+                            <select id="empresaReceptora" class="form-select select2" required>
+                                <option value="">Selecciona la empresa que recibirá el DTE</option>
+                            </select>
+                            <div class="form-text">
+                                Por defecto se utiliza la empresa y sucursal con la que iniciaste sesión.
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label for="tipoDocumento" class="form-label">Tipo de Documento</label>
-                            <select id="tipoDocumento" class="form-select" required>
+                            <select id="tipoDocumento" class="form-select select2" required>
                                 <option value="FACTURA ELECTRONICA">Factura Electrónica</option>
                                 <option value="GUIA">Guía Despacho</option>
                                 <option value="COTIZACION">Cotización</option>
@@ -334,7 +346,7 @@
                         </div>
                         <div class="col-12" id="divDocumentoBase" style="display: none;">
                             <label for="documentoBase" class="form-label">Documento Base (Cotización / Guía)</label>
-                            <select id="documentoBase" class="form-select">
+                            <select id="documentoBase" class="form-select select2">
                                 <option value="">Sin documento base</option>
                             </select>
                             <div class="form-text">Selecciona la cotización o guía que regulariza esta factura.</div>
@@ -342,7 +354,7 @@
 
                         <div class="col-12" id="divNotaCredito" style="display: none;">
                             <label for="notaCreditoBase" class="form-label">Nota de Crédito a Corregir</label>
-                            <select id="notaCreditoBase" class="form-select">
+                            <select id="notaCreditoBase" class="form-select select2">
                                 <option value="">Selecciona una Nota de Crédito</option>
                             </select>
                             <div class="form-text">Selecciona la Nota de Crédito que deseas corregir con esta Nota de
@@ -450,7 +462,7 @@
                         <!-- Estado DTE y Estado Pago -->
                         <div class="col-md-6">
                             <label for="estadoDTE" class="form-label">Estado DTE</label>
-                            <select id="estadoDTE" class="form-select" required>
+                            <select id="estadoDTE" class="form-select select2" required>
                                 <option value="Aceptado">Aceptado</option>
                                 <option value="Rechazado">Rechazado</option>
                             </select>
@@ -517,7 +529,7 @@
                     <!-- Método de pago -->
                     <div class="mb-3">
                         <label for="metodoPago" class="form-label">Método de pago</label>
-                        <select class="form-select" id="metodoPago" required>
+                        <select class="form-select select2" id="metodoPago" required>
                             <option value="">Seleccionar...</option>
                             <option value="Efectivo">Efectivo</option>
                             <option value="Transferencia">Transferencia</option>
@@ -1158,10 +1170,37 @@
         $('#fechaEmision').val(hoy);
         $('#fechaRecepcion').val(hoy);
         $('#estadoPago').val('Pendiente');
+        const modal = $(this);
+        const valorEmpresaRecepcion = modal.data('empresa-recepcion-value') || null;
         cargarEmpresasReceptoras();
+        cargarEmpresasRecepcion(valorEmpresaRecepcion);
+        modal.removeData('empresa-recepcion-value');
 
         // Inicializar visibilidad del campo de motivo de rechazo
         toggleMotivoRechazo();
+        
+        // Inicializar Select2 en los demás selects del modal
+        setTimeout(function() {
+            // Tipo de Documento
+            if (!$('#tipoDocumento').hasClass('select2-hidden-accessible')) {
+                $('#tipoDocumento').select2({
+                    width: '100%',
+                    dropdownParent: $('#modalNuevoDTE'),
+                    placeholder: 'Selecciona tipo de documento',
+                    minimumResultsForSearch: Infinity // Sin búsqueda (pocas opciones)
+                });
+            }
+            
+            // Estado DTE
+            if (!$('#estadoDTE').hasClass('select2-hidden-accessible')) {
+                $('#estadoDTE').select2({
+                    width: '100%',
+                    dropdownParent: $('#modalNuevoDTE'),
+                    placeholder: 'Selecciona estado',
+                    minimumResultsForSearch: Infinity // Sin búsqueda (pocas opciones)
+                });
+            }
+        }, 100);
     });
 
     // Mostrar/ocultar campo de motivo de rechazo según el estado DTE
@@ -1624,6 +1663,9 @@
             success: function (dte) {
                 $('#modalNuevoDTELabel').text('Editar DTE Compra');
                 $('#formNuevoDTE button[type="submit"]').text('Actualizar DTE');
+                const empresaRecepcionId = dte.empresa_receptora_id ? dte.empresa_receptora_id : '';
+                const sucursalRecepcionId = dte.sucursal_receptora_id ? dte.sucursal_receptora_id : '';
+                $('#modalNuevoDTE').data('empresa-recepcion-value', `${empresaRecepcionId}||${sucursalRecepcionId}`);
 
                 // Llenar todos los campos del formulario
                 $('#receptor').val(dte.receptor_id);
@@ -1785,6 +1827,7 @@
         const motivoRechazo = $('#motivoRechazo').val().trim();
         const documento_padre_id = $('#documentoBase').val();
         const nota_credito_base_id = $('#notaCreditoBase').val();
+        const empresaRecepcionSeleccion = obtenerEmpresaRecepcionSeleccionada();
 
         // Validar campos obligatorios
         if (!receptor_id || !numero || !monto || !fechaEmision || !estadoDTE || !estadoPago || !tipoDocumento) {
@@ -1848,6 +1891,8 @@
             documento_padre_id: documento_padre_id || null,
             nota_credito_base_id: nota_credito_base_id || null
         };
+        data.empresa_receptora_id = empresaRecepcionSeleccion.empresa_id;
+        data.sucursal_receptora_id = empresaRecepcionSeleccion.sucursal_id;
 
         // Debug: mostrar datos que se van a enviar
         console.log('🆕 DEBUG - Datos del formulario:', data);
@@ -1938,10 +1983,31 @@
         });
     });
     $('#modalNuevoDTE').on('hidden.bs.modal', function () {
+        // Destruir Select2 antes de resetear
+        if ($('#receptor').hasClass('select2-hidden-accessible')) {
+            $('#receptor').select2('destroy');
+        }
+        if ($('#tipoDocumento').hasClass('select2-hidden-accessible')) {
+            $('#tipoDocumento').select2('destroy');
+        }
+        if ($('#estadoDTE').hasClass('select2-hidden-accessible')) {
+            $('#estadoDTE').select2('destroy');
+        }
+        if ($('#documentoBase').hasClass('select2-hidden-accessible')) {
+            $('#documentoBase').select2('destroy');
+        }
+        if ($('#notaCreditoBase').hasClass('select2-hidden-accessible')) {
+            $('#notaCreditoBase').select2('destroy');
+        }
+        if ($('#empresaReceptora').hasClass('select2-hidden-accessible')) {
+            $('#empresaReceptora').select2('destroy');
+        }
+        
         $('#formNuevoDTE')[0].reset();
         $('#modalNuevoDTELabel').text('Nuevo DTE Compra');
         $('#formNuevoDTE button[type="submit"]').text('Guardar DTE');
         $(this).removeData('dte-id');
+        $(this).removeData('empresa-recepcion-value');
 
         // Limpiar campo de motivo de rechazo
         $('#motivoRechazo').val('');
@@ -1964,6 +2030,8 @@
         $('#divAsociacionNC').hide();
         $('#infoAsociacionNC').empty();
         $('#accionesAsociacionNC').empty();
+        $('#empresaReceptora').empty().append('<option value="">Selecciona la empresa que recibirá el DTE</option>');
+        $('#empresaReceptora').prop('disabled', false);
     });
 
     // Limpiar modal de asociar NC cuando se cierre
@@ -1983,7 +2051,7 @@
 
     function cargarEmpresasReceptoras() {
         $.ajax({
-            url: '/app/empresas_proveedoras/',  // Asegurate de tener esta URL
+            url: '/app/empresas_proveedoras/',
             method: 'POST',
             contentType: 'application/json',
             headers: {
@@ -1991,17 +2059,118 @@
             },
             success: function (data) {
                 const select = $('#receptor');
+                
+                // Destruir Select2 si ya existe
+                if (select.hasClass('select2-hidden-accessible')) {
+                    select.select2('destroy');
+                }
+                
+                // Limpiar y cargar opciones
                 select.empty().append('<option value="">Selecciona una empresa</option>');
 
                 data.forEach(emp => {
                     select.append(`<option value="${emp.id}">${emp.nombre} (${emp.rut})</option>`);
                 });
+                
+                // Inicializar Select2 con búsqueda habilitada
+                select.select2({
+                    width: '100%',
+                    dropdownParent: $('#modalNuevoDTE'),
+                    placeholder: 'Selecciona una empresa',
+                    allowClear: true,
+                    language: { 
+                        noResults: function() { 
+                            return "No se encontraron proveedores"; 
+                        },
+                        searching: function() {
+                            return "Buscando...";
+                        }
+                    },
+                    // Habilitar búsqueda siempre (incluso con pocas opciones)
+                    minimumResultsForSearch: 0
+                });
             },
             error: function () {
                 console.error('Error al cargar empresas proveedoras.');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'No se pudieron cargar las empresas proveedoras'
+                });
             }
         });
     }
+
+    function cargarEmpresasRecepcion(valorSeleccionado = null) {
+        return $.ajax({
+            url: '/app/empresas_receptoras/',
+            method: 'GET',
+            success: function (data) {
+                const select = $('#empresaReceptora');
+                if (select.hasClass('select2-hidden-accessible')) {
+                    select.select2('destroy');
+                }
+
+                select.empty();
+
+                if (!data || data.length === 0) {
+                    select.append('<option value="">No hay empresas receptoras disponibles</option>');
+                    select.prop('disabled', true);
+                    return;
+                }
+
+                select.prop('disabled', false);
+
+                let defaultValue = null;
+                data.forEach(item => {
+                    const value = item.value || `${item.empresa_id}||${item.sucursal_id ?? ''}`;
+                    const option = $('<option>')
+                        .val(value)
+                        .text(item.display)
+                        .attr('data-empresa-id', item.empresa_id)
+                        .attr('data-sucursal-id', item.sucursal_id ?? '');
+                    if (item.is_default && !defaultValue) {
+                        defaultValue = value;
+                    }
+                    select.append(option);
+                });
+
+                const valueToSet = valorSeleccionado || defaultValue || select.find('option:first').val();
+                if (valueToSet) {
+                    select.val(valueToSet);
+                }
+
+                select.select2({
+                    width: '100%',
+                    dropdownParent: $('#modalNuevoDTE'),
+                    placeholder: 'Selecciona empresa receptora',
+                    allowClear: false,
+                    language: {
+                        noResults: function () { return 'Sin resultados'; },
+                        searching: function () { return 'Buscando...'; }
+                    }
+                });
+
+                select.trigger('change');
+            },
+            error: function () {
+                console.error('Error al cargar empresas receptoras');
+            }
+        });
+    }
+
+    function obtenerEmpresaRecepcionSeleccionada() {
+        const value = $('#empresaReceptora').val();
+        if (!value || value === '') {
+            return { empresa_id: null, sucursal_id: null };
+        }
+        const partes = value.split('||');
+        return {
+            empresa_id: partes[0] || null,
+            sucursal_id: partes[1] || null
+        };
+    }
+
     function abrirModalPago(dteId, montoTotal, incidenciasPendientes = 0, requiereFactura = false, tieneFactura = false) {
         if (incidenciasPendientes && incidenciasPendientes > 0) {
             Swal.fire({
@@ -2058,6 +2227,16 @@
                 $('#pagarTodo').off('change').on('change', function () {
                     $('#montoPago').val(this.checked ? saldo : '');
                 });
+
+                // Inicializar Select2 en método de pago
+                if (!$('#metodoPago').hasClass('select2-hidden-accessible')) {
+                    $('#metodoPago').select2({
+                        width: '100%',
+                        dropdownParent: $('#modalPago'),
+                        placeholder: 'Seleccionar método de pago',
+                        minimumResultsForSearch: Infinity // Sin búsqueda (pocas opciones)
+                    });
+                }
 
                 const modal = new bootstrap.Modal(document.getElementById('modalPago'));
                 modal.show();

@@ -1,0 +1,464 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+
+<style>
+    .resumen-container {
+        max-width: 100%;
+        margin: 0 auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+
+    .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .header h1 {
+        font-size: 2.5em;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .controls {
+        padding: 25px 30px;
+        background: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .control-group label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.9em;
+    }
+
+    .control-group select,
+    .control-group input {
+        padding: 10px 15px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: all 0.3s ease;
+        min-width: 200px;
+    }
+
+    .control-group select:focus,
+    .control-group input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .btn {
+        padding: 12px 25px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        align-self: flex-end;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-success {
+        background: #28a745;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #218838;
+        transform: translateY(-2px);
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px;
+        font-size: 1.2em;
+        color: #667eea;
+    }
+
+    .tabla-resumen {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+        margin: 20px 0;
+    }
+
+    .tabla-resumen thead {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .tabla-resumen th {
+        padding: 15px 12px;
+        text-align: left;
+        font-weight: 700;
+        border: 1px solid rgba(255,255,255,0.3);
+    }
+
+    .tabla-resumen td {
+        padding: 12px;
+        border: 1px solid #dee2e6;
+    }
+
+    .tabla-resumen tbody tr:hover {
+        background: #f3f4ff;
+    }
+
+    .tabla-resumen tbody tr:nth-child(even) {
+        background: #f8f9fa;
+    }
+
+    .tabla-resumen tfoot {
+        background: #ffc107;
+        font-weight: 700;
+        font-size: 1.1em;
+    }
+
+    .tabla-resumen tfoot td {
+        padding: 15px 12px;
+        border: 2px solid #f39c12;
+    }
+
+    .td-numero {
+        text-align: right;
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+    }
+
+    .td-sucursal {
+        font-weight: 700;
+        color: #667eea;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6c757d;
+    }
+
+    .empty-state i {
+        font-size: 4em;
+        color: #dee2e6;
+        margin-bottom: 20px;
+    }
+
+    .tarjetas-totales {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        padding: 30px;
+        background: #f8f9fa;
+    }
+
+    .tarjeta-total {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        text-align: center;
+        border-top: 4px solid #667eea;
+    }
+
+    .tarjeta-total h3 {
+        font-size: 0.9em;
+        color: #6c757d;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+    }
+
+    .tarjeta-total .valor {
+        font-size: 2em;
+        font-weight: 700;
+        color: #667eea;
+    }
+
+    @media print {
+        .controls, .btn {
+            display: none;
+        }
+    }
+</style>
+
+<div class="resumen-container">
+    <div class="header">
+        <h1>📊 Resumen de Existencias por Sucursal</h1>
+        <p>Totales consolidados de inventario</p>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="filtro-marca">Marca (Opcional):</label>
+            <select id="filtro-marca">
+                <option value="">Todas las marcas</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="filtro-categoria">Categoría (Opcional):</label>
+            <select id="filtro-categoria">
+                <option value="">Todas las categorías</option>
+            </select>
+        </div>
+
+        <button class="btn btn-primary" onclick="cargarResumen()">
+            🔄 Generar Resumen
+        </button>
+
+        <button class="btn btn-success" onclick="exportarExcel()">
+            📥 Exportar a Excel
+        </button>
+    </div>
+
+    <div id="totales-container"></div>
+
+    <div id="contenido-resumen" class="p-4">
+        <div class="empty-state">
+            <i>📊</i>
+            <p><strong>Haz clic en "Generar Resumen" para ver los datos</strong></p>
+            <p style="color: #6c757d; font-size: 0.9em;">Opcionalmente puedes filtrar por marca o categoría</p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Cargar filtros al iniciar
+document.addEventListener('DOMContentLoaded', function() {
+    cargarMarcas();
+    cargarCategorias();
+    // Cargar automáticamente el resumen
+    cargarResumen();
+});
+
+// Cargar marcas
+async function cargarMarcas() {
+    try {
+        const response = await fetch('/app/obtener_marcas/');
+        const data = await response.json();
+        
+        const select = document.getElementById('filtro-marca');
+        
+        data.forEach(marca => {
+            const option = document.createElement('option');
+            option.value = marca.id;
+            option.textContent = marca.valor;
+            select.appendChild(option);
+        });
+        
+        console.log('✅ Marcas cargadas:', data.length);
+    } catch (error) {
+        console.error('Error al cargar marcas:', error);
+    }
+}
+
+// Cargar categorías
+async function cargarCategorias() {
+    try {
+        const response = await fetch('/app/obtener_categorias/');
+        const data = await response.json();
+        
+        const select = document.getElementById('filtro-categoria');
+        
+        data.forEach(categoria => {
+            const option = document.createElement('option');
+            option.value = categoria.id;
+            option.textContent = categoria.nombre;
+            select.appendChild(option);
+        });
+        
+        console.log('✅ Categorías cargadas:', data.length);
+    } catch (error) {
+        console.error('Error al cargar categorías:', error);
+    }
+}
+
+// Cargar resumen
+async function cargarResumen() {
+    const marcaId = document.getElementById('filtro-marca').value;
+    const categoriaId = document.getElementById('filtro-categoria').value;
+    
+    const contenido = document.getElementById('contenido-resumen');
+    contenido.innerHTML = '<div class="loading">⏳ Generando resumen...</div>';
+    
+    try {
+        let url = '/app/api/resumen-existencias/';
+        const params = new URLSearchParams();
+        
+        if (marcaId) params.append('marca_id', marcaId);
+        if (categoriaId) params.append('categoria_id', categoriaId);
+        
+        if (params.toString()) url += '?' + params.toString();
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderizarTotales(data.total_general);
+            renderizarResumen(data.datos);
+        } else {
+            contenido.innerHTML = `<div class="empty-state"><i>⚠️</i><p>${data.error || 'Error al cargar datos'}</p></div>`;
+        }
+    } catch (error) {
+        console.error('Error al cargar resumen:', error);
+        contenido.innerHTML = '<div class="empty-state"><i>⚠️</i><p>Error al cargar el resumen</p></div>';
+    }
+}
+
+// Renderizar totales generales
+function renderizarTotales(totales) {
+    const container = document.getElementById('totales-container');
+    
+    const html = `
+        <div class="tarjetas-totales">
+            <div class="tarjeta-total">
+                <h3>Total Pares</h3>
+                <div class="valor">${formatearNumero(totales.pares)}</div>
+            </div>
+            <div class="tarjeta-total" style="border-top-color: #28a745;">
+                <h3>Total Costo</h3>
+                <div class="valor" style="color: #28a745;">$${formatearNumero(totales.costo)}</div>
+            </div>
+            <div class="tarjeta-total" style="border-top-color: #ffc107;">
+                <h3>Total Precio Interno</h3>
+                <div class="valor" style="color: #ffc107;">$${formatearNumero(totales.precio_interno)}</div>
+            </div>
+            <div class="tarjeta-total" style="border-top-color: #dc3545;">
+                <h3>Total Precio Venta</h3>
+                <div class="valor" style="color: #dc3545;">$${formatearNumero(totales.precio_venta)}</div>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Renderizar tabla de resumen
+function renderizarResumen(datos) {
+    const contenido = document.getElementById('contenido-resumen');
+    
+    if (!datos || datos.length === 0) {
+        contenido.innerHTML = `
+            <div class="empty-state">
+                <i>📦</i>
+                <p>No se encontraron existencias para los filtros seleccionados</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Calcular totales
+    const totales = {
+        pares: datos.reduce((sum, item) => sum + item.total_pares, 0),
+        costo: datos.reduce((sum, item) => sum + item.total_costo, 0),
+        precio_interno: datos.reduce((sum, item) => sum + item.total_precio_interno, 0),
+        precio_venta: datos.reduce((sum, item) => sum + item.total_precio_venta, 0)
+    };
+    
+    let html = `
+        <table class="tabla-resumen">
+            <thead>
+                <tr>
+                    <th>Sucursal</th>
+                    <th>Dirección</th>
+                    <th class="td-numero">Total Pares</th>
+                    <th class="td-numero">Total Costo</th>
+                    <th class="td-numero">Total Precio Interno</th>
+                    <th class="td-numero">Total Precio Venta</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    datos.forEach(item => {
+        html += `
+            <tr>
+                <td class="td-sucursal">${item.sucursal}</td>
+                <td>${item.direccion}</td>
+                <td class="td-numero">${formatearNumero(item.total_pares)}</td>
+                <td class="td-numero">$${formatearNumero(item.total_costo)}</td>
+                <td class="td-numero">$${formatearNumero(item.total_precio_interno)}</td>
+                <td class="td-numero">$${formatearNumero(item.total_precio_venta)}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2" style="text-align: right;">TOTALES:</td>
+                    <td class="td-numero">${formatearNumero(totales.pares)}</td>
+                    <td class="td-numero">$${formatearNumero(totales.costo)}</td>
+                    <td class="td-numero">$${formatearNumero(totales.precio_interno)}</td>
+                    <td class="td-numero">$${formatearNumero(totales.precio_venta)}</td>
+                </tr>
+            </tfoot>
+        </table>
+    `;
+    
+    contenido.innerHTML = html;
+}
+
+// Formatear números
+function formatearNumero(num) {
+    if (!num) return '0';
+    return parseFloat(num).toLocaleString('es-CL', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    });
+}
+
+// Exportar a Excel
+function exportarExcel() {
+    const marcaId = document.getElementById('filtro-marca').value;
+    const categoriaId = document.getElementById('filtro-categoria').value;
+    
+    let url = '/app/api/exportar-resumen-existencias-excel/';
+    const params = new URLSearchParams();
+    
+    if (marcaId) params.append('marca_id', marcaId);
+    if (categoriaId) params.append('categoria_id', categoriaId);
+    
+    if (params.toString()) url += '?' + params.toString();
+    
+    window.location.href = url;
+}
+</script>
+
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+

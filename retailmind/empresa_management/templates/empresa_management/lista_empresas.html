@@ -492,6 +492,7 @@
                 <div class="alert alert-info">
                     <h6 class="mb-1">
                         <i class="bi bi-info-circle me-2"></i>Empresa: <span id="empresaSucursalesNombre"></span>
+                        <small class="text-muted ms-2">(ID: <span id="empresaSucursalesId"></span>)</small>
                     </h6>
                     <small class="text-muted">Gestiona las sucursales de esta empresa</small>
                 </div>
@@ -1149,6 +1150,7 @@ let modoEdicionSucursal = false;
 function gestionarSucursales(empresaId, empresaNombre) {
     empresaSeleccionadaSucursales = empresaId;
     $('#empresaSucursalesNombre').text(empresaNombre);
+    $('#empresaSucursalesId').text(empresaId);
     $('#modalSucursales').modal('show');
     cargarSucursales(empresaId);
 }

@@ -147,7 +147,7 @@
                                 <div class="col-12">
                                     <div class="d-flex justify-content-end align-items-center gap-2">
                                         <button type="button" class="btn btn-info" 
-                                                onclick="window.open('http://localhost:8000/app/productos-sucursal/', '_blank')">
+                                                onclick="window.open('/app/productos-sucursal/', '_blank')">
                                             <i class="ri-external-link-line me-1"></i>
                                             Buscar En Otra Sucursal
                                         </button>
@@ -849,23 +849,43 @@ $(document).ready(function() {
             return;
         }
 
+        // Calcular cantidad total del mismo SKU en el ticket (sin importar el precio)
+        const cantidadTotalEnTicket = productosTicket
+            .filter(p => p.sku === sku)
+            .reduce((sum, p) => sum + p.cantidad, 0);
+        
+        // Validar stock total considerando todos los productos con el mismo SKU
+        const cantidadTotalPropuesta = cantidadTotalEnTicket + cantidad;
+        if (cantidadTotalPropuesta > stock) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Stock insuficiente',
+                html: `
+                    <p>No hay suficiente stock disponible para este producto.</p>
+                    <p><strong>Stock disponible:</strong> ${stock} unidades</p>
+                    <p><strong>Ya tienes en el ticket:</strong> ${cantidadTotalEnTicket} unidades</p>
+                    <p><strong>Intentas agregar:</strong> ${cantidad} unidades</p>
+                    <p><strong>Total propuesto:</strong> ${cantidadTotalPropuesta} unidades</p>
+                    <br>
+                    <p>Máximo que puedes agregar: <strong>${stock - cantidadTotalEnTicket}</strong> unidades</p>
+                `,
+                confirmButtonText: 'Entendido'
+            });
+            return;
+        }
+
         // Verificar si el producto ya está en el ticket con el mismo precio
         const productoExistente = productosTicket.find(p => p.sku === sku && p.precio === precio);
         
         if (productoExistente) {
             // Mismo producto, mismo precio -> Agregar cantidad
-            const nuevaCantidad = productoExistente.cantidad + cantidad;
-            if (nuevaCantidad > stock) {
-                Swal.fire('Error', `Stock insuficiente. Ya tienes ${productoExistente.cantidad} en el ticket. Máximo disponible: ${stock}`, 'error');
-                return;
-            }
-            productoExistente.cantidad = nuevaCantidad;
+            productoExistente.cantidad += cantidad;
             productoExistente.subtotal = productoExistente.cantidad * productoExistente.precio;
             
             Swal.fire({
                 icon: 'success',
                 title: 'Cantidad actualizada',
-                text: `Se agregaron ${cantidad} unidades. Total: ${nuevaCantidad}`,
+                text: `Se agregaron ${cantidad} unidades. Total en esta línea: ${productoExistente.cantidad}`,
                 timer: 1500,
                 showConfirmButton: false
             });
@@ -882,6 +902,9 @@ $(document).ready(function() {
                         <p>Este producto ya está en el ticket con otro precio:</p>
                         <p><strong>Precio existente:</strong> $${productoMismoPrecio.precio.toLocaleString()}</p>
                         <p><strong>Nuevo precio:</strong> $${precio.toLocaleString()}</p>
+                        <p><strong>Cantidad total en ticket:</strong> ${cantidadTotalEnTicket} unidades</p>
+                        <p><strong>Stock disponible:</strong> ${stock} unidades</p>
+                        <br>
                         <p>Se creará una línea separada en el ticket.</p>
                     `,
                     showCancelButton: true,
@@ -891,6 +914,10 @@ $(document).ready(function() {
                 }).then((result) => {
                     if (result.isConfirmed) {
                         agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock);
+                        actualizarTablaTicket();
+                        actualizarTotales();
+                        limpiarFormularioProducto();
+                        $('#skuProducto').focus();
                     }
                 });
                 return;
@@ -1029,12 +1056,27 @@ $(document).ready(function() {
                 return;
             }
             
-            // Validar contra el stock
-            if (nuevaCantidad > producto.stock) {
+            // Calcular cantidad total del mismo SKU en el ticket (excluyendo este producto)
+            const cantidadTotalOtros = productosTicket
+                .filter(p => p.sku === producto.sku && p.id !== id)
+                .reduce((sum, p) => sum + p.cantidad, 0);
+            
+            // Validar stock total considerando todos los productos con el mismo SKU
+            const cantidadTotalPropuesta = cantidadTotalOtros + nuevaCantidad;
+            if (cantidadTotalPropuesta > producto.stock) {
                 Swal.fire({
                     icon: 'error',
                     title: 'Stock insuficiente',
-                    text: `La cantidad máxima disponible es ${producto.stock}`,
+                    html: `
+                        <p>No hay suficiente stock disponible para este producto.</p>
+                        <p><strong>SKU:</strong> ${producto.sku}</p>
+                        <p><strong>Stock disponible:</strong> ${producto.stock} unidades</p>
+                        <p><strong>Otras líneas del mismo SKU:</strong> ${cantidadTotalOtros} unidades</p>
+                        <p><strong>Cantidad que intentas poner:</strong> ${nuevaCantidad} unidades</p>
+                        <p><strong>Total propuesto:</strong> ${cantidadTotalPropuesta} unidades</p>
+                        <br>
+                        <p>Máximo que puedes poner en esta línea: <strong>${producto.stock - cantidadTotalOtros}</strong> unidades</p>
+                    `,
                     confirmButtonText: 'Entendido'
                 });
                 $(this).val(producto.cantidad);
@@ -1060,9 +1102,28 @@ $(document).ready(function() {
                 $(this).val(1);
             }
             
-            // Si excede el stock, ajustar al máximo
-            if (!isNaN(cantidad) && cantidad > producto.stock) {
-                $(this).val(producto.stock);
+            // Calcular cantidad total del mismo SKU (excluyendo este producto)
+            const cantidadTotalOtros = productosTicket
+                .filter(p => p.sku === producto.sku && p.id !== id)
+                .reduce((sum, p) => sum + p.cantidad, 0);
+            
+            const stockDisponibleParaEstaLinea = producto.stock - cantidadTotalOtros;
+            
+            // Si excede el stock disponible para esta línea, ajustar al máximo
+            if (!isNaN(cantidad) && stockDisponibleParaEstaLinea > 0 && cantidad > stockDisponibleParaEstaLinea) {
+                $(this).val(stockDisponibleParaEstaLinea);
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Cantidad ajustada',
+                    html: `
+                        <p>La cantidad no puede exceder el stock disponible.</p>
+                        <p><strong>Stock total:</strong> ${producto.stock}</p>
+                        <p><strong>Otras líneas del mismo SKU:</strong> ${cantidadTotalOtros}</p>
+                        <p><strong>Máximo para esta línea:</strong> ${stockDisponibleParaEstaLinea}</p>
+                    `,
+                    timer: 3000,
+                    showConfirmButton: false
+                });
             }
         }
     });

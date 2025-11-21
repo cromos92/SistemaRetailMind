@@ -694,14 +694,14 @@
                                             required>
                                             <option value="">-- Seleccionar guía --</option>
                                         </select>
-                                        <button type="button" class="btn btn-outline-secondary" id="btnConfigGuiaTalla">
-                                            <i class="bi bi-plus-lg"></i>
+                                        <button type="button" class="btn btn-outline-secondary" id="btnConfigGuiaTalla" title="Crear guía de talla">
+                                            <i class="bi bi-plus-lg me-1"></i>Crear
                                         </button>
-                                        <button type="button" class="btn btn-outline-warning" id="btnEditarGuiaTalla">
-                                            <i class="bi bi-pencil-square"></i>
+                                        <button type="button" class="btn btn-outline-warning" id="btnEditarGuiaTalla" title="Editar guía de talla">
+                                            <i class="bi bi-pencil-square me-1"></i>Editar
                                         </button>
-                                        <button type="button" class="btn btn-outline-danger" id="btnEliminarGuiaTalla">
-                                            <i class="bi bi-trash"></i>
+                                        <button type="button" class="btn btn-outline-danger" id="btnEliminarGuiaTalla" title="Eliminar guía de talla">
+                                            <i class="bi bi-trash me-1"></i>Eliminar
                                         </button>
 
                                     </div>
@@ -884,14 +884,14 @@
                                             required>
                                             <option value="">-- Seleccionar guía --</option>
                                         </select>
-                                        <button type="button" class="btn btn-outline-secondary" id="btnConfigGuiaTallaManual">
-                                            <i class="bi bi-plus-lg"></i>
+                                        <button type="button" class="btn btn-outline-secondary" id="btnConfigGuiaTallaManual" title="Crear guía de talla">
+                                            <i class="bi bi-plus-lg me-1"></i>Crear
                                         </button>
-                                        <button type="button" class="btn btn-outline-warning" id="btnEditarGuiaTallaManual">
-                                            <i class="bi bi-pencil-square"></i>
+                                        <button type="button" class="btn btn-outline-warning" id="btnEditarGuiaTallaManual" title="Editar guía de talla">
+                                            <i class="bi bi-pencil-square me-1"></i>Editar
                                         </button>
-                                        <button type="button" class="btn btn-outline-danger" id="btnEliminarGuiaTallaManual">
-                                            <i class="bi bi-trash"></i>
+                                        <button type="button" class="btn btn-outline-danger" id="btnEliminarGuiaTallaManual" title="Eliminar guía de talla">
+                                            <i class="bi bi-trash me-1"></i>Eliminar
                                         </button>
                                     </div>
                                 </div>
@@ -1165,8 +1165,14 @@
 
                     <!-- Comparación de Precios -->
                     <div class="card mb-3">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="bi bi-currency-dollar me-2"></i>Comparación de Precios</h6>
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="bi bi-currency-dollar me-2"></i>Costos y Precios</h6>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chkActualizarPrecios" checked>
+                                <label class="form-check-label fw-bold text-primary" for="chkActualizarPrecios">
+                                    <i class="bi bi-pencil-square me-1"></i>Modificar Costos y Precios
+                                </label>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
@@ -1174,63 +1180,53 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th>Campo</th>
-                                            <th>Valor Actual</th>
-                                            <th>Nuevo Valor</th>
-                                            <th>Acción</th>
+                                            <th class="text-end">Valor Actual</th>
+                                            <th class="text-end">Nuevo Valor</th>
+                                            <th class="text-center">Cambio</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr id="rowCosto">
                                             <td><strong>Costo</strong></td>
-                                            <td id="costoActual" class="text-muted"></td>
-                                            <td id="costoNuevo"></td>
-                                            <td>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="chkActualizarCosto" checked>
-                                                    <label class="form-check-label" for="chkActualizarCosto">Actualizar</label>
-                                                </div>
-                                            </td>
+                                            <td id="costoActual" class="text-muted text-end"></td>
+                                            <td id="costoNuevo" class="text-end"></td>
+                                            <td id="cambioIconoCosto" class="text-center">-</td>
                                         </tr>
                                         <tr id="rowSobreprecio">
                                             <td><strong>Sobreprecio</strong></td>
-                                            <td id="sobreprecioActual" class="text-muted"></td>
-                                            <td id="sobreprecioNuevo"></td>
-                                            <td>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="chkActualizarSobreprecio" checked>
-                                                    <label class="form-check-label" for="chkActualizarSobreprecio">Actualizar</label>
-                                                </div>
-                                            </td>
+                                            <td id="sobreprecioActual" class="text-muted text-end"></td>
+                                            <td id="sobreprecioNuevo" class="text-end"></td>
+                                            <td id="cambioIconoSobreprecio" class="text-center">-</td>
                                         </tr>
                                         <tr id="rowPrecioVenta">
                                             <td><strong>Precio Venta</strong></td>
-                                            <td id="precioVentaActual" class="text-muted"></td>
-                                            <td id="precioVentaNuevo"></td>
-                                            <td>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="chkActualizarPrecioVenta" checked>
-                                                    <label class="form-check-label" for="chkActualizarPrecioVenta">Actualizar</label>
-                                                </div>
-                                            </td>
+                                            <td id="precioVentaActual" class="text-muted text-end"></td>
+                                            <td id="precioVentaNuevo" class="text-end"></td>
+                                            <td id="cambioIconoPrecioVenta" class="text-center">-</td>
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                            <div class="alert alert-info alert-sm mb-0">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <small>Al activar esta opción se actualizarán <strong>TODOS los precios y costos</strong> con los valores nuevos.</small>
                             </div>
                         </div>
                     </div>
 
                     <!-- Comparación de Tallas -->
                     <div class="card mb-3">
-                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0"><i class="bi bi-list-ul me-2"></i>Comparación de Tallas</h6>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="chkAgregarTallas" checked>
-                                <label class="form-check-label" for="chkAgregarTallas">Agregar nuevas tallas</label>
-                            </div>
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="bi bi-list-ul me-2"></i>Tallas a Agregar/Actualizar</h6>
                         </div>
                         <div class="card-body">
                             <div id="comparacionTallas" style="max-height: 300px; overflow-y: auto;">
                                 <!-- Se llenará dinámicamente -->
+                            </div>
+                            <div class="alert alert-success alert-sm mb-0 mt-2">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <small><strong>Tallas nuevas:</strong> Se crearán automáticamente.<br>
+                                <strong>Tallas existentes:</strong> Se actualizará el stock sumando las nuevas unidades.</small>
                             </div>
                         </div>
                     </div>
@@ -3959,6 +3955,19 @@ $('#formCrearProductoManual').on('submit', function(e) {
     });
     
     const formData = $(this).serialize();
+    
+    // ✅ DEBUG: Verificar cuántas tallas se están enviando
+    const tallasEnviadas = $(this).find('input[name="talla[]"]').map(function() {
+        return $(this).val();
+    }).get();
+    const stocksEnviados = $(this).find('input[name="stock[]"]').map(function() {
+        return $(this).val();
+    }).get();
+    
+    console.log('📦 Tallas a enviar:', tallasEnviadas);
+    console.log('📦 Stocks a enviar:', stocksEnviados);
+    console.log('📦 FormData serializado:', formData);
+    
     $.ajax({
         url: '/app/crear_producto_manual/',
         type: 'POST',
@@ -4018,30 +4027,41 @@ function mostrarModalProductoExistente(res) {
     $('#precioVentaActual').text(formatearPrecio(precioVentaActual));
     $('#precioVentaNuevo').text(formatearPrecio(precioVentaNuevo));
     
-    // Resaltar diferencias
+    // Resaltar diferencias y marcar checkbox
+    let hayDiferencias = false;
+    
     if (costoActual !== costoNuevo) {
         $('#rowCosto').addClass('table-warning');
         $('#costoNuevo').addClass('text-success fw-bold');
+        $('#cambioIconoCosto').html('<i class="bi bi-arrow-right-circle-fill text-success"></i>');
+        hayDiferencias = true;
     } else {
         $('#rowCosto').removeClass('table-warning');
-        $('#chkActualizarCosto').prop('checked', false);
+        $('#cambioIconoCosto').html('<span class="text-muted">=</span>');
     }
     
     if (sobreprecioActual !== sobreprecioNuevo) {
         $('#rowSobreprecio').addClass('table-warning');
         $('#sobreprecioNuevo').addClass('text-success fw-bold');
+        $('#cambioIconoSobreprecio').html('<i class="bi bi-arrow-right-circle-fill text-success"></i>');
+        hayDiferencias = true;
     } else {
         $('#rowSobreprecio').removeClass('table-warning');
-        $('#chkActualizarSobreprecio').prop('checked', false);
+        $('#cambioIconoSobreprecio').html('<span class="text-muted">=</span>');
     }
     
     if (precioVentaActual !== precioVentaNuevo) {
         $('#rowPrecioVenta').addClass('table-warning');
         $('#precioVentaNuevo').addClass('text-success fw-bold');
+        $('#cambioIconoPrecioVenta').html('<i class="bi bi-arrow-right-circle-fill text-success"></i>');
+        hayDiferencias = true;
     } else {
         $('#rowPrecioVenta').removeClass('table-warning');
-        $('#chkActualizarPrecioVenta').prop('checked', false);
+        $('#cambioIconoPrecioVenta').html('<span class="text-muted">=</span>');
     }
+    
+    // Marcar/desmarcar checkbox principal según si hay diferencias
+    $('#chkActualizarPrecios').prop('checked', hayDiferencias);
     
     // Comparar tallas
     const tallasExistentes = datosProductoExistente.tallas.map(t => t.talla);
@@ -4112,13 +4132,18 @@ $('#btnConfirmarActualizacion').on('click', function() {
         return;
     }
     
-    const actualizarPrecios = $('#chkActualizarCosto').is(':checked') || 
-                              $('#chkActualizarSobreprecio').is(':checked') || 
-                              $('#chkActualizarPrecioVenta').is(':checked');
-    const agregarTallas = $('#chkAgregarTallas').is(':checked');
+    // Verificar qué se va a actualizar
+    const actualizarPrecios = $('#chkActualizarPrecios').is(':checked');
+    const agregarTallas = datosFormularioOriginal.tallas && datosFormularioOriginal.tallas.length > 0;
+    
+    console.log('🔧 Opciones de actualización:', {
+        actualizarPrecios,
+        agregarTallas,
+        tallasDisponibles: datosFormularioOriginal.tallas.length
+    });
     
     if (!actualizarPrecios && !agregarTallas) {
-        showErrorAlert('Error', 'Debes seleccionar al menos una opción para actualizar.');
+        showErrorAlert('Error', 'Debes seleccionar al menos una opción para actualizar o agregar tallas.');
         return;
     }
     
@@ -4134,15 +4159,19 @@ $('#btnConfirmarActualizacion').on('click', function() {
         dte_id: dteId
     };
     
+    // Si se actualizan precios, enviar TODOS los valores nuevos
     if (actualizarPrecios) {
         datosActualizacion.costo = parseFloat(datosFormularioOriginal.costo);
         datosActualizacion.sobreprecio = parseFloat(datosFormularioOriginal.sobreprecio);
         datosActualizacion.precioventa = parseFloat(datosFormularioOriginal.precioventa);
     }
     
+    // Siempre enviar las tallas si hay (el backend decide si actualiza o crea)
     if (agregarTallas) {
         datosActualizacion.tallas = datosFormularioOriginal.tallas;
     }
+    
+    console.log('📤 Enviando datos al servidor:', datosActualizacion);
     
     // Deshabilitar botón mientras se procesa
     const btn = $(this);
@@ -4156,6 +4185,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
         data: JSON.stringify(datosActualizacion),
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(res) {
+            console.log('📥 Respuesta del servidor:', res);
             if (res.success) {
                 let mensaje = 'Producto actualizado correctamente.\n\n';
                 if (res.cambios && res.cambios.length > 0) {
@@ -4184,6 +4214,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
             }
         },
         error: function(xhr) {
+            console.error('❌ Error en la actualización:', xhr);
             const error = xhr.responseJSON?.error || 'Error inesperado al actualizar el producto.';
             showErrorAlert('Error', error);
             btn.prop('disabled', false).html('<i class="bi bi-check-circle me-2"></i>Actualizar Producto');
@@ -4435,11 +4466,11 @@ $('#btnConfirmarActualizacion').on('click', function() {
                         <div class="btn-group btn-group-sm" role="group">
                             <button type="button" class="btn btn-outline-primary btnSeleccionarProducto" 
                                     data-producto-id="${producto.id}" title="Copiar datos">
-                                <i class="bi bi-copy"></i>
+                                <i class="bi bi-clipboard-check me-1"></i>Copiar
                             </button>
                             <button type="button" class="btn btn-outline-info btnVerTallas" 
                                     data-producto-id="${producto.id}" title="Ver tallas">
-                                <i class="bi bi-list-ul"></i>
+                                <i class="bi bi-list-ul me-1"></i>Tallas
                             </button>
                         </div>
                     </td>
@@ -5696,6 +5727,8 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     color: item.color || '-',
                     genero: item.genero || '-',
                     stock_total: 0,
+                    costo: item.costo || 0,
+                    precioventa: item.precioventa || 0,
                     tallas_count: 0,
                     tallas: [],
                     activo: true
@@ -5704,12 +5737,16 @@ $('#btnConfirmarActualizacion').on('click', function() {
             
             // Agregar talla al producto
             const producto = productosMap.get(clave);
+            const stock_talla = parseInt(item.stock) || 0;
             producto.tallas.push({
                 talla: item.talla,
                 sku: item.sku,
-                id_talla: item.id
+                id_talla: item.id,
+                stock: stock_talla
             });
             producto.tallas_count = producto.tallas.length;
+            // ✅ ACTUALIZAR STOCK TOTAL sumando el stock de esta talla
+            producto.stock_total += stock_talla;
         });
         
         // Convertir Map a Array
@@ -5748,6 +5785,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                             <th>Marca</th>
                             <th>Color</th>
                             <th>Género</th>
+                            <th>Precio</th>
                             <th>Stock Total</th>
                             <th>Tallas</th>
                             <th width="150">Acciones</th>
@@ -5762,6 +5800,13 @@ $('#btnConfirmarActualizacion').on('click', function() {
             const estadoBadge = producto.activo ? 
                 '<span class="badge bg-success">Activo</span>' : 
                 '<span class="badge bg-secondary">Inactivo</span>';
+            
+            // Formatear precio
+            const precioFormateado = new Intl.NumberFormat('es-CL', {
+                style: 'currency',
+                currency: 'CLP',
+                minimumFractionDigits: 0
+            }).format(producto.precioventa);
 
             html += `
                 <tr>
@@ -5770,6 +5815,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     <td>${producto.marca || '-'}</td>
                     <td>${producto.color || '-'}</td>
                     <td>${producto.genero || '-'}</td>
+                    <td><strong class="text-success">${precioFormateado}</strong></td>
                     <td class="${stockClass}">
                         <strong>${producto.stock_total}</strong> unid.
                     </td>

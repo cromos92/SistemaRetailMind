@@ -20,6 +20,7 @@ import csv
 from datetime import datetime, timedelta
 
 from .models import Usuario, LogAcceso
+from app.models import Sucursal, EmpresaUser
 
 # ========== FUNCIONES DE VALIDACIÓN ==========
 
@@ -458,6 +459,49 @@ def obtener_usuario(request, usuario_id):
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
         
+        # Obtener TODAS las sucursales del sistema
+        todas_sucursales = Sucursal.objects.select_related('empresa').order_by('empresa__nombre', 'alias')
+        
+        # Obtener las sucursales ya asignadas al usuario
+        empresas_usuario = EmpresaUser.objects.filter(
+            user=usuario,
+            status=True,
+            sucursal__isnull=False
+        ).select_related('sucursal', 'empresa')
+        
+        # Crear diccionario de sucursales del usuario para búsqueda rápida
+        sucursales_usuario_dict = {}
+        sucursal_actual = None
+        
+        for eu in empresas_usuario:
+            sucursales_usuario_dict[eu.sucursal.id] = {
+                'asignada': True,
+                'active': eu.active,
+                'empresa_user_id': eu.id
+            }
+            if eu.active:
+                sucursal_actual = {
+                    'id': eu.sucursal.id,
+                    'alias': eu.sucursal.alias,
+                    'nombre': eu.sucursal.alias,  # En app.models solo hay alias
+                    'empresa': eu.empresa.nombre
+                }
+        
+        # Preparar lista de todas las sucursales con información de asignación
+        sucursales_disponibles = []
+        for sucursal in todas_sucursales:
+            info_usuario = sucursales_usuario_dict.get(sucursal.id, {})
+            sucursal_data = {
+                'id': sucursal.id,
+                'alias': sucursal.alias,
+                'nombre': sucursal.alias,  # En app.models solo hay alias
+                'empresa': sucursal.empresa.nombre,
+                'empresa_id': sucursal.empresa.id,
+                'asignada': info_usuario.get('asignada', False),
+                'active': info_usuario.get('active', False)
+            }
+            sucursales_disponibles.append(sucursal_data)
+        
         return JsonResponse({
             'success': True,
             'usuario': {
@@ -478,7 +522,9 @@ def obtener_usuario(request, usuario_id):
                 'puede_editar_usuarios': usuario.puede_editar_usuarios,
                 'puede_eliminar_usuarios': usuario.puede_eliminar_usuarios,
                 'is_staff': usuario.is_staff,
-                'is_superuser': usuario.is_superuser
+                'is_superuser': usuario.is_superuser,
+                'sucursales_disponibles': sucursales_disponibles,
+                'sucursal_actual': sucursal_actual
             }
         })
         
@@ -488,6 +534,8 @@ def obtener_usuario(request, usuario_id):
             'error': 'Usuario no encontrado'
         }, status=404)
     except Exception as e:
+        import traceback
+        print("Error completo:", traceback.format_exc())
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -600,6 +648,93 @@ def exportar_usuarios(request):
         
         return response
         
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+@require_POST
+@login_required
+@csrf_exempt
+def asignar_sucursal_sesion(request, usuario_id):
+    """
+    Asignar sucursal a la sesión del usuario
+    """
+    try:
+        data = json.loads(request.body)
+        sucursal_id = data.get('sucursal_id')
+        
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe seleccionar una sucursal'
+            }, status=400)
+        
+        # Obtener la sucursal
+        try:
+            sucursal = Sucursal.objects.select_related('empresa').get(id=sucursal_id)
+        except Sucursal.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Sucursal no encontrada'
+            }, status=404)
+        
+        # Buscar si ya existe un EmpresaUser para este usuario y sucursal
+        empresa_user = EmpresaUser.objects.filter(
+            user_id=usuario_id,
+            sucursal_id=sucursal_id,
+            empresa_id=sucursal.empresa.id
+        ).first()
+        
+        if empresa_user:
+            # Ya existe, solo activarlo
+            empresa_user.status = True
+            empresa_user.active = False  # Se activará después
+            empresa_user.save()
+        else:
+            # No existe, crear nuevo registro
+            empresa_user = EmpresaUser.objects.create(
+                user_id=usuario_id,
+                sucursal_id=sucursal_id,
+                empresa_id=sucursal.empresa.id,
+                status=True,
+                active=False
+            )
+        
+        # Desactivar todas las sucursales del usuario
+        EmpresaUser.objects.filter(user_id=usuario_id).update(active=False)
+        
+        # Activar la sucursal seleccionada
+        empresa_user.active = True
+        empresa_user.save()
+        
+        # Si es el usuario actual, actualizar la sesión
+        if request.user.id == usuario_id:
+            request.session['idEmpresaActual'] = sucursal.empresa.id
+            request.session['empresaActual'] = sucursal.empresa.id
+            request.session['nombreEmpresaActual'] = sucursal.empresa.nombre
+            request.session['rutEmpresaActual'] = sucursal.empresa.rut
+            request.session['idSucursalActual'] = sucursal.id
+            request.session['sucursalActual'] = sucursal.id
+            request.session['alias'] = sucursal.alias
+            request.session['direccionSucursal'] = sucursal.direccion
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sucursal "{sucursal.alias}" asignada exitosamente a {Usuario.objects.get(id=usuario_id).get_full_name()}',
+            'sucursal': {
+                'id': sucursal.id,
+                'alias': sucursal.alias,
+                'nombre': sucursal.alias  # app.models.Sucursal solo tiene alias
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
     except Exception as e:
         return JsonResponse({
             'success': False,

@@ -134,13 +134,13 @@
     <!-- page-content -->
 
 <!-- Modal Crear Usuario -->
-<div class="modal fade" id="modalCrearUsuario" tabindex="-1" role="dialog">
+<div class="modal fade" id="modalCrearUsuario" tabindex="-1" role="dialog" aria-labelledby="modalCrearUsuarioLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Crear Nuevo Usuario</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
+                <h5 class="modal-title" id="modalCrearUsuarioLabel">Crear Nuevo Usuario</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
@@ -247,13 +247,13 @@
 </div>
 
 <!-- Modal Editar Usuario -->
-<div class="modal fade" id="modalEditarUsuario" tabindex="-1" role="dialog">
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" role="dialog" aria-labelledby="modalEditarUsuarioLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Editar Usuario</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
+                <h5 class="modal-title" id="modalEditarUsuarioLabel">Editar Usuario</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
@@ -262,6 +262,38 @@
                 </div>
                 <form id="formEditarUsuario">
                     <input type="hidden" name="usuario_id" id="editUsuarioId">
+                    
+                    <!-- Sección de Sucursales -->
+                    <div id="seccionSucursales" class="mb-4" style="display: none;">
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="ri-building-line"></i> Gestión de Sucursal</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-warning" role="alert">
+                                    <i class="ri-information-line"></i> 
+                                    <strong>Importante:</strong> Seleccione una sucursal y haga clic en "Asignar a Sesión" para establecerla como sucursal activa para este usuario.
+                                    Las sucursales marcadas con ✓ ya están asignadas al usuario.
+                                </div>
+                                <div class="form-group">
+                                    <label><strong>Sucursal *</strong></label>
+                                    <select class="form-control" id="selectSucursal">
+                                        <option value="">Seleccione una sucursal...</option>
+                                    </select>
+                                </div>
+                                <div id="sucursalActualInfo" class="alert alert-success mb-3" style="display: none;">
+                                    <i class="ri-checkbox-circle-fill"></i> 
+                                    <strong id="sucursalActualTexto"></strong>
+                                </div>
+                                <div class="text-right">
+                                    <button type="button" class="btn btn-success" id="btnAsignarSucursal">
+                                        <i class="ri-check-line"></i> Asignar a Sesión
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -421,6 +453,48 @@ $.ajaxSetup({
 
 $(document).ready(function() {
     cargarUsuarios();
+    
+    // Manejador para asignar sucursal a sesión
+    $(document).on('click', '#btnAsignarSucursal', function() {
+        const usuarioId = $('#editUsuarioId').val();
+        const sucursalId = $('#selectSucursal').val();
+        
+        if (!sucursalId) {
+            mostrarError('Debe seleccionar una sucursal');
+            return;
+        }
+        
+        if (confirm('¿Desea asignar esta sucursal como sucursal activa para este usuario?')) {
+            $.ajax({
+                url: '{% url "users:asignar_sucursal_sesion" 0 %}'.replace('0', usuarioId),
+                method: 'POST',
+                data: JSON.stringify({
+                    sucursal_id: sucursalId
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    if (response.success) {
+                        mostrarExito(response.message);
+                        $('#sucursalActualInfo').show();
+                        $('#sucursalActualTexto').text(`Sucursal activa: ${response.sucursal.alias}`);
+                        
+                        // Si es el usuario actual, recargar la página para actualizar la sesión
+                        if (usuarioId == '{{ request.user.id }}') {
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1500);
+                        }
+                    } else {
+                        mostrarError(response.error || 'Error al asignar sucursal');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error al asignar sucursal:', error);
+                    mostrarError('Error de conexión al asignar sucursal');
+                }
+            });
+        }
+    });
 });
 
 function cargarUsuarios() {
@@ -560,11 +634,15 @@ function crearUsuario() {
 }
 
 function editarUsuario(usuarioId) {
+    console.log('🔧 Abriendo modal para editar usuario:', usuarioId);
+    
     // Cargar datos del usuario
     $.ajax({
         url: '{% url "users:obtener_usuario" 0 %}'.replace('0', usuarioId),
         method: 'GET',
         success: function(response) {
+            console.log('✅ Datos del usuario cargados:', response);
+            
             if (response.success) {
                 const usuario = response.usuario;
                 
@@ -594,14 +672,51 @@ function editarUsuario(usuarioId) {
                     $('#permisosSection').hide();
                 }
                 
+                // Manejar sucursales - SIEMPRE mostrar la sección
+                console.log('📋 Sucursales disponibles:', usuario.sucursales_disponibles);
+                if (usuario.sucursales_disponibles && usuario.sucursales_disponibles.length > 0) {
+                    console.log('✅ Mostrando sección de sucursales con', usuario.sucursales_disponibles.length, 'opciones');
+                    $('#seccionSucursales').show();
+                    
+                    // Limpiar y llenar select de sucursales
+                    const $selectSucursal = $('#selectSucursal');
+                    $selectSucursal.empty();
+                    $selectSucursal.append('<option value="">Seleccione una sucursal...</option>');
+                    
+                    usuario.sucursales_disponibles.forEach(function(sucursal) {
+                        const selected = sucursal.active ? 'selected' : '';
+                        const badge = sucursal.asignada ? ' ✓' : '';
+                        $selectSucursal.append(
+                            `<option value="${sucursal.id}" ${selected}>
+                                ${sucursal.alias} - ${sucursal.empresa}${badge}
+                            </option>`
+                        );
+                    });
+                    
+                    // Mostrar sucursal actual si existe
+                    if (usuario.sucursal_actual) {
+                        $('#sucursalActualInfo').show();
+                        $('#sucursalActualTexto').text(`Sucursal activa: ${usuario.sucursal_actual.alias}`);
+                    } else {
+                        $('#sucursalActualInfo').hide();
+                        $('#sucursalActualTexto').text('Sin sucursal activa');
+                    }
+                } else {
+                    console.log('⚠️ No hay sucursales disponibles en el sistema');
+                    $('#seccionSucursales').hide();
+                }
+                
                 // Mostrar modal
+                console.log('🎭 Mostrando modal...');
                 $('#modalEditarUsuario').modal('show');
             } else {
                 mostrarError(response.error || 'Error al cargar datos del usuario');
             }
         },
         error: function(xhr, status, error) {
-            console.error('Error al cargar usuario:', error);
+            console.error('❌ Error al cargar usuario:', error);
+            console.error('Status:', status);
+            console.error('Response:', xhr.responseText);
             mostrarError('Error de conexión al cargar datos del usuario');
         }
     });

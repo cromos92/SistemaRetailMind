@@ -26,9 +26,28 @@ class Empresa(models.Model):
         return self.nombre
 
 class Sucursal(models.Model):
+    """Modelo para sucursales de la empresa"""
+    
+    # Campos que existen actualmente en la BD
     alias = models.CharField(max_length=100)
-    direccion = models.CharField(max_length=100)
-    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    direccion = models.CharField(max_length=100)  # Ajusta la longitud si es diferente
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='sucursales_app')
+    
+    # CAMPOS ADICIONALES - Descomenta después de ejecutar: python manage.py migrate app
+    # nombre = models.CharField(max_length=200, verbose_name="Nombre Completo", blank=True, null=True)
+    # comuna = models.CharField(max_length=100, verbose_name="Comuna", blank=True, null=True)
+    # ciudad = models.CharField(max_length=100, verbose_name="Ciudad", blank=True, null=True)
+    # telefono = models.CharField(max_length=20, verbose_name="Teléfono", blank=True, null=True)
+    # email = models.EmailField(verbose_name="Email", blank=True, null=True)
+    # activa = models.BooleanField(default=True, verbose_name="Activa")
+    # created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    # updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
+    
+    class Meta:
+        verbose_name = "Sucursal"
+        verbose_name_plural = "Sucursales"
+        ordering = ['alias']
+    
     def __str__(self):
         return self.alias
 class EmpresaUser(models.Model):

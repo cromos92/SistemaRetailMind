@@ -1,0 +1,530 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+.sucursal-card {
+    transition: all 0.3s ease;
+    border-left: 4px solid #0ab39c;
+}
+
+.sucursal-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.sucursal-inactive {
+    border-left-color: #dc3545;
+    opacity: 0.7;
+}
+
+.badge-activa {
+    background-color: #0ab39c;
+}
+
+.badge-inactiva {
+    background-color: #dc3545;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 0.2em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border 0.75s linear infinite;
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Título de página -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">
+                        <i class="ri-building-2-line text-primary me-2"></i>
+                        Gestión de Sucursales
+                    </h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="javascript: void(0);">Configuración</a></li>
+                            <li class="breadcrumb-item active">Gestión de Sucursales</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información de empresa -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Empresa:</strong> {{ empresa.nombre }}
+                    {% if empresa.rut %}
+                    <span class="ms-3">
+                        <i class="ri-file-text-line me-1"></i>
+                        <strong>RUT:</strong> {{ empresa.rut }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Controles superiores -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="ri-search-line"></i>
+                                    </span>
+                                    <input type="text" class="form-control" id="searchInput" 
+                                           placeholder="Buscar por alias o dirección...">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <!-- Filtros removidos, solo búsqueda simple -->
+                            </div>
+                            <div class="col-md-3 text-end">
+                                {% if puede_crear %}
+                                <button type="button" class="btn btn-success" id="btnNuevaSucursal">
+                                    <i class="ri-add-line me-1"></i>
+                                    Nueva Sucursal
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de sucursales -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-list-check me-2"></i>
+                            Lista de Sucursales
+                            <span class="badge bg-primary ms-2" id="totalSucursales">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th width="30%">Alias</th>
+                                        <th width="40%">Dirección</th>
+                                        <th width="20%">Empresa</th>
+                                        <th width="10%" class="text-end">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaSucursales">
+                                    <tr id="loadingRow">
+                                        <td colspan="4" class="text-center py-5">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Cargando...</span>
+                                            </div>
+                                            <p class="mt-2 text-muted">Cargando sucursales...</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Paginación -->
+                        <div class="row mt-3">
+                            <div class="col-sm-12 col-md-5">
+                                <div class="dataTables_info" id="infoTabla"></div>
+                            </div>
+                            <div class="col-sm-12 col-md-7">
+                                <div class="dataTables_paginate">
+                                    <nav>
+                                        <ul class="pagination pagination-sm justify-content-end mb-0" id="paginacion">
+                                        </ul>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal para crear/editar sucursal -->
+<div class="modal fade" id="modalSucursal" tabindex="-1" aria-labelledby="modalSucursalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title text-white" id="modalSucursalLabel">
+                    <i class="ri-building-2-line me-2"></i>
+                    Nueva Sucursal
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formSucursal">
+                <div class="modal-body">
+                    <input type="hidden" id="sucursalId">
+                    
+                    <div class="row g-3">
+                        <!-- Alias -->
+                        <div class="col-12">
+                            <label for="inputAlias" class="form-label">
+                                <i class="ri-price-tag-3-line me-1"></i>
+                                Alias <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="inputAlias" required
+                                   placeholder="Ej: EDEL, PAO1, NICK1">
+                            <small class="text-muted">Identificador único de la sucursal</small>
+                        </div>
+
+                        <!-- Dirección -->
+                        <div class="col-12">
+                            <label for="inputDireccion" class="form-label">
+                                <i class="ri-map-pin-line me-1"></i>
+                                Dirección <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control" id="inputDireccion" required
+                                   placeholder="Dirección completa de la sucursal">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="ri-close-line me-1"></i>
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success" id="btnGuardarSucursal">
+                        <i class="ri-save-line me-1"></i>
+                        Guardar Sucursal
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+$(document).ready(function() {
+    const csrftoken = $('[name=csrfmiddlewaretoken]').val();
+    let paginaActual = 1;
+    let modoEdicion = false;
+
+    // Cargar sucursales al inicio
+    cargarSucursales();
+
+    // Búsqueda con Enter
+    $('#searchInput').keypress(function(e) {
+        if (e.which === 13) {
+            paginaActual = 1;
+            cargarSucursales();
+        }
+    });
+    
+    // Búsqueda en tiempo real (con delay)
+    let searchTimeout;
+    $('#searchInput').on('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            paginaActual = 1;
+            cargarSucursales();
+        }, 500);
+    });
+
+    // Abrir modal para nueva sucursal
+    $('#btnNuevaSucursal').click(function() {
+        modoEdicion = false;
+        $('#modalSucursalLabel').html('<i class="ri-building-2-line me-2"></i> Nueva Sucursal');
+        $('#formSucursal')[0].reset();
+        $('#sucursalId').val('');
+        $('#inputActiva').prop('checked', true);
+        $('#modalSucursal').modal('show');
+    });
+
+    // Guardar sucursal
+    $('#formSucursal').submit(function(e) {
+        e.preventDefault();
+        guardarSucursal();
+    });
+
+    // Delegación de eventos para botones de acción
+    $(document).on('click', '.btn-editar', function() {
+        const sucursalId = $(this).data('id');
+        editarSucursal(sucursalId);
+    });
+
+    $(document).on('click', '.btn-eliminar', function() {
+        const sucursalId = $(this).data('id');
+        const alias = $(this).data('alias');
+        eliminarSucursal(sucursalId, alias);
+    });
+
+    $(document).on('click', '.btn-activar', function() {
+        const sucursalId = $(this).data('id');
+        const alias = $(this).data('alias');
+        activarSucursal(sucursalId, alias);
+    });
+
+    // Función para cargar sucursales
+    function cargarSucursales() {
+        const search = $('#searchInput').val();
+
+        $.ajax({
+            url: '/app/gestion-sucursales/listar/',
+            method: 'GET',
+            data: {
+                search: search,
+                page: paginaActual,
+                page_size: 10
+            },
+            beforeSend: function() {
+                $('#loadingRow').show();
+            },
+            success: function(response) {
+                if (response.success) {
+                    renderizarTabla(response.sucursales);
+                    renderizarPaginacion(response.pagination);
+                    $('#totalSucursales').text(response.pagination.total_items);
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function(xhr) {
+                Swal.fire('Error', 'Error al cargar las sucursales', 'error');
+                console.error(xhr);
+            },
+            complete: function() {
+                $('#loadingRow').hide();
+            }
+        });
+    }
+
+    // Renderizar tabla
+    function renderizarTabla(sucursales) {
+        const tbody = $('#tablaSucursales');
+        tbody.empty();
+
+        if (sucursales.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="4" class="text-center py-4">
+                        <i class="ri-inbox-line" style="font-size: 3rem; color: #ccc;"></i>
+                        <p class="text-muted mt-2">No se encontraron sucursales</p>
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        sucursales.forEach(function(sucursal) {
+            tbody.append(`
+                <tr>
+                    <td><strong>${sucursal.alias}</strong></td>
+                    <td>${sucursal.direccion}</td>
+                    <td><span class="badge bg-info">${sucursal.empresa_nombre || 'N/A'}</span></td>
+                    <td class="text-end">
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-sm btn-primary btn-editar" data-id="${sucursal.id}" title="Editar">
+                                <i class="ri-edit-line"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger btn-eliminar" data-id="${sucursal.id}" data-alias="${sucursal.alias}" title="Eliminar">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `);
+        });
+    }
+
+    // Renderizar paginación
+    function renderizarPaginacion(pagination) {
+        const info = `Mostrando ${((pagination.current_page - 1) * pagination.page_size) + 1} a ${Math.min(pagination.current_page * pagination.page_size, pagination.total_items)} de ${pagination.total_items} sucursales`;
+        $('#infoTabla').text(info);
+
+        const paginacion = $('#paginacion');
+        paginacion.empty();
+
+        if (pagination.total_pages <= 1) return;
+
+        // Botón anterior
+        paginacion.append(`
+            <li class="page-item ${!pagination.has_previous ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${pagination.current_page - 1}">
+                    <i class="ri-arrow-left-s-line"></i>
+                </a>
+            </li>
+        `);
+
+        // Páginas
+        for (let i = 1; i <= pagination.total_pages; i++) {
+            if (i === 1 || i === pagination.total_pages || (i >= pagination.current_page - 2 && i <= pagination.current_page + 2)) {
+                paginacion.append(`
+                    <li class="page-item ${i === pagination.current_page ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>
+                `);
+            } else if (i === pagination.current_page - 3 || i === pagination.current_page + 3) {
+                paginacion.append(`<li class="page-item disabled"><span class="page-link">...</span></li>`);
+            }
+        }
+
+        // Botón siguiente
+        paginacion.append(`
+            <li class="page-item ${!pagination.has_next ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${pagination.current_page + 1}">
+                    <i class="ri-arrow-right-s-line"></i>
+                </a>
+            </li>
+        `);
+
+        // Evento click en paginación
+        $('#paginacion .page-link').click(function(e) {
+            e.preventDefault();
+            const page = $(this).data('page');
+            if (page && page !== paginaActual) {
+                paginaActual = page;
+                cargarSucursales();
+            }
+        });
+    }
+
+    // Guardar sucursal
+    function guardarSucursal() {
+        const sucursalId = $('#sucursalId').val();
+        const url = sucursalId 
+            ? `/app/gestion-sucursales/editar/${sucursalId}/`
+            : '/app/gestion-sucursales/crear/';
+
+        const datos = {
+            alias: $('#inputAlias').val(),
+            direccion: $('#inputDireccion').val(),
+        };
+
+        $.ajax({
+            url: url,
+            method: 'POST',
+            data: datos,
+            headers: {
+                'X-CSRFToken': csrftoken
+            },
+            beforeSend: function() {
+                $('#btnGuardarSucursal').prop('disabled', true).html(
+                    '<span class="loading-spinner me-1"></span> Guardando...'
+                );
+            },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Éxito!',
+                        text: response.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    $('#modalSucursal').modal('hide');
+                    cargarSucursales();
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function(xhr) {
+                Swal.fire('Error', 'Error al guardar la sucursal', 'error');
+                console.error(xhr);
+            },
+            complete: function() {
+                $('#btnGuardarSucursal').prop('disabled', false).html(
+                    '<i class="ri-save-line me-1"></i> Guardar Sucursal'
+                );
+            }
+        });
+    }
+
+    // Editar sucursal
+    function editarSucursal(sucursalId) {
+        $.ajax({
+            url: `/app/gestion-sucursales/${sucursalId}/`,
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    modoEdicion = true;
+                    const sucursal = response.sucursal;
+                    
+                    $('#modalSucursalLabel').html('<i class="ri-edit-line me-2"></i> Editar Sucursal');
+                    $('#sucursalId').val(sucursal.id);
+                    $('#inputAlias').val(sucursal.alias);
+                    $('#inputDireccion').val(sucursal.direccion);
+                    
+                    $('#modalSucursal').modal('show');
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function(xhr) {
+                Swal.fire('Error', 'Error al cargar los datos de la sucursal', 'error');
+                console.error(xhr);
+            }
+        });
+    }
+
+    // Eliminar sucursal
+    function eliminarSucursal(sucursalId, alias) {
+        Swal.fire({
+            title: '¿Eliminar sucursal?',
+            html: `¿Estás seguro de que deseas eliminar la sucursal <strong>"${alias}"</strong>?<br><br>
+                   <small class="text-muted text-danger">⚠️ Esta acción no se puede deshacer si la sucursal no tiene datos relacionados.</small>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/app/gestion-sucursales/eliminar/${sucursalId}/`,
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: '¡Eliminada!',
+                                text: response.message,
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                            cargarSucursales();
+                        } else {
+                            Swal.fire('Error', response.error, 'error');
+                        }
+                    },
+                    error: function(xhr) {
+                        Swal.fire('Error', 'Error al eliminar la sucursal', 'error');
+                        console.error(xhr);
+                    }
+                });
+            }
+        });
+    }
+});
+</script>
+

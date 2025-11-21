@@ -3980,16 +3980,33 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Generar ticket de cambio
-        const ventanaImpresion = window.open('', '_blank', 'width=300,height=600');
-        ventanaImpresion.document.write(generarHtmlTicketCambio(ticketActual));
-        ventanaImpresion.document.close();
-        
-        ventanaImpresion.onload = function() {
-            ventanaImpresion.print();
-        };
-        
-        mostrarNotificacion('Preparando ticket de cambio...', 'info');
+        try {
+            // Generar ticket de cambio
+            const ventanaImpresion = window.open('', '_blank', 'width=320,height=600');
+            
+            if (!ventanaImpresion) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'No se pudo abrir la ventana de impresión. Verifique que no esté bloqueada por el navegador.'
+                });
+                return;
+            }
+            
+            const htmlTicket = generarHtmlTicketCambio(ticketActual);
+            ventanaImpresion.document.write(htmlTicket);
+            ventanaImpresion.document.close();
+            
+            mostrarNotificacion('Ticket de cambio preparado para impresión', 'success');
+            
+        } catch (error) {
+            console.error('Error al imprimir ticket de cambio:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al imprimir',
+                text: 'Ocurrió un error al preparar el ticket de cambio: ' + error.message
+            });
+        }
     }
 
     function enviarPorEmail() {
@@ -4120,20 +4137,24 @@ document.addEventListener('DOMContentLoaded', function() {
         Swal.fire({
             title: '🎫 Ticket de Cambio',
             html: `
-                <p>¿Desea imprimir un ticket de cambio?</p>
+                <p class="mb-3">¿Desea imprimir un <strong>Ticket de Cambio</strong> para el cliente?</p>
+                <div class="alert alert-info">
+                    <small>Este ticket permitirá al cliente realizar cambios de productos en el módulo de cambios/devoluciones.</small>
+                </div>
                 <div class="mt-3">
                     <label class="form-label">Cantidad de tickets:</label>
-                    <input type="number" id="cantidadTicketsCambio" class="form-control text-center" value="1" min="1" max="10" style="font-size: 1.2rem;">
+                    <input type="number" id="cantidadTicketsCambio" class="form-control text-center" value="1" min="1" max="5" style="font-size: 1.2rem;">
                 </div>
             `,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: '<i class="ri-printer-line"></i> Imprimir',
+            confirmButtonText: '<i class="ri-printer-line"></i> Sí, Imprimir',
             cancelButtonText: 'No, gracias',
+            confirmButtonColor: '#f59e0b',
             preConfirm: () => {
                 const cantidad = document.getElementById('cantidadTicketsCambio').value;
-                if (!cantidad || cantidad < 1) {
-                    Swal.showValidationMessage('Ingrese una cantidad válida');
+                if (!cantidad || cantidad < 1 || cantidad > 5) {
+                    Swal.showValidationMessage('Ingrese una cantidad válida (1-5)');
                     return false;
                 }
                 return cantidad;
@@ -4141,14 +4162,67 @@ document.addEventListener('DOMContentLoaded', function() {
         }).then((result) => {
             if (result.isConfirmed) {
                 const cantidad = result.value;
-                // Imprimir ticket de cambio
-                imprimirTicketsCambio(ticketId, cantidad);
+                // Cargar datos del ticket antes de imprimir
+                cargarTicketParaCambio(ticketId, cantidad);
             } else {
                 // No quiere ticket de cambio, volver al dashboard
-                volverAlDashboard();
-                actualizarDashboard();
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Proceso Completado',
+                    text: 'Venta y DTE generados exitosamente',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    volverAlDashboard();
+                    actualizarDashboard();
+                });
             }
         });
+    }
+    
+    // ✅ Función para cargar datos del ticket antes de imprimir
+    async function cargarTicketParaCambio(ticketId, cantidad) {
+        try {
+            Swal.fire({
+                title: 'Cargando datos del ticket...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            const response = await fetch(`/app/api/tickets/${ticketId}/`);
+            
+            if (response.ok) {
+                const ticketData = await response.json();
+                Swal.close();
+                
+                // Actualizar ticketActual con los datos completos
+                ticketActual = ticketData;
+                
+                // Imprimir tickets de cambio
+                imprimirTicketsCambio(ticketId, cantidad);
+            } else {
+                throw new Error('No se pudo cargar el ticket');
+            }
+        } catch (error) {
+            console.error('Error al cargar ticket:', error);
+            Swal.fire({
+                icon: 'warning',
+                title: 'Advertencia',
+                text: 'No se pudo cargar los datos completos del ticket, pero puede imprimir el ticket de cambio básico.',
+                showCancelButton: true,
+                confirmButtonText: 'Imprimir de todos modos',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    imprimirTicketsCambio(ticketId, cantidad);
+                } else {
+                    volverAlDashboard();
+                    actualizarDashboard();
+                }
+            });
+        }
     }
     
     // ✅ Función para imprimir tickets de cambio
@@ -4278,38 +4352,179 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function generarHtmlTicketCambio(ticketData) {
+        // Obtener información de la sucursal y empresa
+        const nombreEmpresa = '{{ request.user.empresa.nombreEmpresa|default:"EMPRESA" }}';
+        const nombreSucursal = '{{ sucursal_actual.nombreSucursal|default:"SUCURSAL" }}' || ticketData.sucursal_nombre || 'SUCURSAL';
+        const fechaActual = new Date();
+        const fechaVencimiento = new Date(fechaActual.getTime() + (15 * 24 * 60 * 60 * 1000)); // +15 días
+        
+        // Formatear productos
+        let productosHtml = '';
+        if (ticketData.productos && Array.isArray(ticketData.productos)) {
+            ticketData.productos.forEach(prod => {
+                const nombreProducto = prod.nombre || prod.descripcion || '';
+                const talla = prod.talla ? ` - ${prod.talla}` : '';
+                const cantidad = prod.cantidad || prod.stock || 1;
+                const precio = prod.precio || prod.precio_unitario || 0;
+                
+                productosHtml += `
+                    <div class="item">
+                        ${cantidad}x ${nombreProducto}${talla}
+                        <span style="float:right">$${precio.toLocaleString()}</span>
+                    </div>
+                `;
+            });
+        }
+        
+        const total = ticketData.totales?.total || ticketData.total || 0;
+        const ticketId = ticketData.ticket_id || ticketData.correlativo || 'N/A';
+        
+        // Información del DTE asociado (si existe)
+        const dteInfo = ticketData.dte_numero ? `
+            <div class="section">
+                <div class="importante">DOCUMENTO TRIBUTARIO</div>
+                <div style="text-align: center;">
+                    DTE N&deg;: <strong>${ticketData.dte_numero}</strong><br>
+                    ${ticketData.dte_tipo || 'Boleta Electrónica'}
+                </div>
+            </div>
+        ` : '';
+        
         return `
             <!DOCTYPE html>
             <html>
             <head>
                 <meta charset="UTF-8">
-                <title>Ticket Cambio #${ticketData.ticket_id}</title>
+                <title>Ticket Cambio #${ticketId}</title>
                 <style>
-                    body { font-family: monospace; font-size: 12px; width: 80mm; padding: 5mm; }
-                    .header { text-align: center; border-bottom: 1px dashed #000; margin-bottom: 10px; padding-bottom: 10px; }
-                    .item { margin: 5px 0; }
-                    @media print { body { width: 80mm; } @page { size: 80mm auto; margin: 0; } }
+                    body { 
+                        font-family: 'Courier New', monospace; 
+                        font-size: 11px; 
+                        width: 72mm; 
+                        padding: 2mm; 
+                        margin: 0;
+                        line-height: 1.4;
+                    }
+                    .header { 
+                        text-align: center; 
+                        border-bottom: 1px dashed #000; 
+                        margin-bottom: 8px; 
+                        padding-bottom: 8px; 
+                    }
+                    .empresa {
+                        font-weight: bold;
+                        font-size: 13px;
+                        margin-bottom: 3px;
+                    }
+                    .titulo-cambio {
+                        font-weight: bold;
+                        font-size: 14px;
+                        margin: 8px 0;
+                        background: #000;
+                        color: #fff;
+                        padding: 5px;
+                    }
+                    .item { 
+                        margin: 3px 0; 
+                        font-size: 10px;
+                    }
+                    .section {
+                        margin: 10px 0;
+                        padding: 8px 0;
+                        border-top: 1px dashed #000;
+                    }
+                    .total {
+                        font-weight: bold;
+                        font-size: 13px;
+                        margin-top: 10px;
+                        padding-top: 8px;
+                        border-top: 2px solid #000;
+                        text-align: right;
+                    }
+                    .footer {
+                        text-align: center;
+                        font-size: 9px;
+                        margin-top: 10px;
+                        padding-top: 8px;
+                        border-top: 1px dashed #000;
+                    }
+                    .importante {
+                        font-weight: bold;
+                        text-align: center;
+                        margin: 5px 0;
+                    }
+                    ul {
+                        margin: 5px 0;
+                        padding-left: 15px;
+                        font-size: 9px;
+                    }
+                    @media print { 
+                        body { 
+                            width: 72mm; 
+                        } 
+                        @page { 
+                            size: 72mm auto; 
+                            margin: 0; 
+                        } 
+                    }
                 </style>
             </head>
-            <body>
+            <body onload="window.print(); window.close();">
                 <div class="header">
-                    <strong>TICKET DE CAMBIO</strong><br>
-                    Ticket Original: #${ticketData.ticket_id}<br>
-                    ${new Date().toLocaleString()}<br>
-                    Válido por 15 días
+                    <div class="empresa">${nombreEmpresa}</div>
+                    <div>${nombreSucursal}</div>
+                    <div class="titulo-cambio">*** TICKET DE CAMBIO ***</div>
+                    <div style="margin-top: 5px;">
+                        Ticket Original: #${ticketId}<br>
+                        Fecha Emisi&oacute;n: ${fechaActual.toLocaleDateString('es-CL')}<br>
+                        ${fechaActual.toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'})}
+                    </div>
                 </div>
-                <div class="items">
-                    <p>Este ticket es válido para realizar cambios de productos.</p>
-                    <p><strong>Condiciones:</strong></p>
+                
+                ${dteInfo}
+                
+                <div class="section">
+                    <div class="importante">PRODUCTOS ORIGINALES</div>
+                    ${productosHtml || '<div class="item">Ver detalle en ticket de venta</div>'}
+                </div>
+                
+                <div class="total">
+                    MONTO TOTAL: $${total.toLocaleString('es-CL')}
+                </div>
+                
+                <div class="section">
+                    <div class="importante">V&Aacute;LIDO HASTA:</div>
+                    <div style="text-align: center; font-size: 12px; font-weight: bold;">
+                        ${fechaVencimiento.toLocaleDateString('es-CL')}
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <div class="importante">CONDICIONES DE CAMBIO:</div>
                     <ul>
                         <li>Producto en perfecto estado</li>
-                        <li>Con etiquetas originales</li>
-                        <li>Dentro de 15 días corridos</li>
-                        <li>NO se devuelve dinero</li>
+                        <li>Con etiquetas y embalaje original</li>
+                        <li>V&aacute;lido por 15 d&iacute;as corridos</li>
+                        <li>NO se devuelve dinero en efectivo</li>
+                        <li>Presentar este ticket para cambios</li>
+                        <li>Solo en esta sucursal</li>
                     </ul>
                 </div>
-                <div class="total">
-                    Monto: $${ticketData.totales?.total?.toLocaleString() || 0}
+                
+                <div class="footer">
+                    <div style="font-weight: bold; margin-bottom: 5px;">
+                        PRESENTE ESTE TICKET PARA REALIZAR EL CAMBIO
+                    </div>
+                    <div style="margin-top: 5px;">
+                        <strong>Para realizar el cambio, acuda con:</strong><br>
+                        • Este ticket<br>
+                        • Productos a cambiar<br>
+                        • Documento tributario (si tiene)
+                    </div>
+                    <div style="margin-top: 8px; padding-top: 5px; border-top: 1px dashed #000;">
+                        Ticket #${ticketId} - Sistema RetailMind<br>
+                        Impreso: ${new Date().toLocaleString('es-CL')}
+                    </div>
                 </div>
             </body>
             </html>

@@ -567,9 +567,9 @@
                     </div>
                     <div class="row">
                         <div class="col-md-4">
-                            <label class="form-label fw-bold">Fecha de Compra <span class="text-muted">(Opcional)</span></label>
-                            <input type="date" class="form-control form-control-lg" id="input-fecha-compra">
-                            <small class="text-muted">Si no recuerda la fecha, déjela vacía</small>
+                            <label class="form-label fw-bold">Fecha de Compra <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control form-control-lg" id="input-fecha-compra" required>
+                            <small class="text-muted">Fecha de emisión del documento</small>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label fw-bold">Número de DTE (Factura/Boleta) *</label>
@@ -2324,8 +2324,9 @@ function resetearFormularioNuevoCambio() {
     actualizarStepper();
     
     // Resetear formulario
-    $('#input-ticket-correlativo').val('');
-    $('#input-fecha-compra').val('');
+    $('#input-ticket-correlativo').val('').prop('disabled', false);
+    $('#input-fecha-compra').val('').prop('disabled', false);
+    $('.btn-primary:contains("Buscar")').prop('disabled', false);
     $('#info-ticket').hide();
     $('#paso-seleccionar-productos').hide();
     $('#paso-resumen').hide();
@@ -2352,6 +2353,17 @@ function resetearFormularioNuevoCambio() {
 }
 
 function buscarDocumentoParaCambio() {
+    // ✅ PREVENIR BÚSQUEDA SI YA HAY RESULTADOS
+    if (ticketActual !== null) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Documento ya cargado',
+            text: 'Ya tiene un documento cargado. Por favor, limpie la búsqueda antes de buscar otro.',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+    
     const numero = $('#input-ticket-correlativo').val().trim();
     const fecha = $('#input-fecha-compra').val();
     
@@ -2363,6 +2375,17 @@ function buscarDocumentoParaCambio() {
             text: 'Ingrese el número del DTE (Factura o Boleta)'
         });
         $('#input-ticket-correlativo').focus();
+        return;
+    }
+    
+    // ✅ VALIDAR QUE LA FECHA SEA OBLIGATORIA
+    if (!fecha) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Fecha requerida',
+            text: 'Debe ingresar la fecha de compra del documento'
+        });
+        $('#input-fecha-compra').focus();
         return;
     }
     
@@ -2381,6 +2404,11 @@ function buscarDocumentoParaCambio() {
             if (response.success) {
                 ticketActual = response.documento;
                 mostrarInformacionDocumento(response.documento);
+                
+                // ✅ DESHABILITAR CAMPOS Y BOTÓN DE BÚSQUEDA DESPUÉS DE ENCONTRAR
+                $('#input-ticket-correlativo').prop('disabled', true);
+                $('#input-fecha-compra').prop('disabled', true);
+                $('.btn-primary:contains("Buscar")').prop('disabled', true);
                 
                 if (response.documento.puede_cambiar) {
                     $('#btn-siguiente').show();
@@ -2544,7 +2572,7 @@ function buscarDocumentoParaCambio() {
                             Verifique que:
                             <br>• El número de DTE sea correcto
                             <br>• La fecha de compra coincida
-                            <br>• El documento pertenezca a esta sucursal
+                            <br>• El documento pertenezca a <strong>esta sucursal</strong>
                         </p>
                     `
                 });
@@ -2557,14 +2585,26 @@ function buscarDocumentoParaCambio() {
 }
 
 function limpiarBusqueda() {
-    $('#input-ticket-correlativo').val('');
-    $('#input-fecha-compra').val('');
+    // ✅ RE-HABILITAR CAMPOS Y BOTÓN DE BÚSQUEDA
+    $('#input-ticket-correlativo').val('').prop('disabled', false);
+    $('#input-fecha-compra').val('').prop('disabled', false);
+    $('.btn-primary:contains("Buscar")').prop('disabled', false);
+    
     $('#info-ticket').hide();
     $('#paso-seleccionar-productos').hide();
     $('#btn-siguiente').hide();
     ticketActual = null;
     productosOriginales = [];
     productosNuevos = [];
+    
+    // Mostrar mensaje informativo
+    Swal.fire({
+        icon: 'info',
+        title: 'Búsqueda limpiada',
+        text: 'Puede realizar una nueva búsqueda',
+        timer: 1500,
+        showConfirmButton: false
+    });
 }
 
 // Mantener compatibilidad con función anterior

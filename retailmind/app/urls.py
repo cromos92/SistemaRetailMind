@@ -3,6 +3,8 @@ from . import views
 from django.shortcuts import render
 from . import views_modulo_compras
 from . import views_modulo_reportes
+from . import views_gestion_sucursales
+from . import views_resumen_existencias
 from .views_modulo_ventas import (
     # Funciones POS Dashboard
     pos_dashboard,
@@ -258,7 +260,8 @@ urlpatterns = [
      path('verGestionDteCompras/', views.verGestionDteCompras, name='verGestionDteCompras'),
      path('crearDteCompras/', views.crearDteCompras, name='crearDteCompras'),
      path('actualizarDteCompras/<int:dte_id>/', views.actualizarDteCompras, name='actualizarDteCompras'),
-     path('empresas_proveedoras/', views_modulo_compras.empresas_proveedoras, name='empresas_proveedoras'),
+    path('empresas_proveedoras/', views_modulo_compras.empresas_proveedoras, name='empresas_proveedoras'),
+    path('empresas_receptoras/', views.empresas_receptoras, name='empresas_receptoras'),
      path('cargarDteCompra/', views.cargarDteCompra, name='cargarDteCompra'),
      path('registrarPagoDTE/', views.registrarPagoDTE, name='registrarPagoDTE'),
      path('obtenerDetallePago/<int:dte_id>/', views.obtenerDetallePago, name='obtenerDetallePago'),
@@ -423,6 +426,14 @@ urlpatterns = [
     
     # === URLs PARA GESTIÓN DE USUARIOS ===
     path('gestion_usuarios/', views.gestion_usuarios_redirect, name='gestion_usuarios'),
+    
+    # === URLs PARA GESTIÓN DE SUCURSALES ===
+    path('gestion-sucursales/', views_gestion_sucursales.gestion_sucursales, name='gestion_sucursales'),
+    path('gestion-sucursales/listar/', views_gestion_sucursales.listar_sucursales_tabla, name='listar_sucursales_tabla'),
+    path('gestion-sucursales/crear/', views_gestion_sucursales.crear_sucursal, name='crear_sucursal'),
+    path('gestion-sucursales/<int:sucursal_id>/', views_gestion_sucursales.obtener_sucursal, name='obtener_sucursal'),
+    path('gestion-sucursales/editar/<int:sucursal_id>/', views_gestion_sucursales.editar_sucursal, name='editar_sucursal'),
+    path('gestion-sucursales/eliminar/<int:sucursal_id>/', views_gestion_sucursales.eliminar_sucursal, name='eliminar_sucursal'),
     
     # ========== GESTIÓN DE CAMBIO DE EMPRESA/SUCURSAL ==========
     path('cambiar-empresa/', views.cambiar_empresa, name='cambiar_empresa'),
@@ -700,6 +711,11 @@ urlpatterns = [
     path('reportes/existencias-sucursal/', views_modulo_reportes.ver_reporte_existencias_sucursal, name='ver_reporte_existencias_sucursal'),
     path('api/reporte-existencias-sucursal/', views_modulo_reportes.obtener_reporte_existencias_sucursal, name='obtener_reporte_existencias_sucursal'),
     path('api/exportar-existencias-sucursal-excel/', views_modulo_reportes.exportar_existencias_sucursal_excel, name='exportar_existencias_sucursal_excel'),
+    
+    # Reporte de resumen de existencias
+    path('reportes/resumen-existencias/', views_resumen_existencias.ver_resumen_existencias, name='ver_resumen_existencias'),
+    path('api/resumen-existencias/', views_resumen_existencias.obtener_resumen_existencias, name='obtener_resumen_existencias'),
+    path('api/exportar-resumen-existencias-excel/', views_resumen_existencias.exportar_resumen_existencias_excel, name='exportar_resumen_existencias_excel'),
 
     # ========== MÓDULO DE REQUERIMIENTOS DE GARANTÍAS ==========
     # Vistas principales

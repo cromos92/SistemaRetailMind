@@ -3836,7 +3836,7 @@ def verHome(request):
 def verGestionCompras(request):
     # Esta vista solo maneja GET requests para mostrar la página
     # Los POST requests para crear compras se manejan en la vista crear_compra
-    empresas = Empresa.objects.all()  # Lista para usar en el select del modal
+    empresas = Empresa.objects.filter(esProveedor=True).order_by('nombre')  # Solo proveedores
     return render(request, 'vistas/modulo_compras/gestionCompras.html', {'empresas': empresas})
  
 @login_required
@@ -4352,7 +4352,11 @@ def obtener_dte(request, dte_id):
             'bultos': dte.bultos,
             'unidades_productos': dte.unidades_productos,
             'motivo_rechazo': dte.motivo_rechazo if dte.motivo_rechazo else '',
-            'documento_padre_id': dte.documento_padre.id if dte.documento_padre else None
+            'documento_padre_id': dte.documento_padre.id if dte.documento_padre else None,
+            'empresa_receptora_id': dte.receptor.id if dte.receptor else None,
+            'empresa_receptora_nombre': dte.receptor.nombre if dte.receptor else '',
+            'sucursal_receptora_id': dte.sucursal.id if dte.sucursal else None,
+            'sucursal_receptora_nombre': dte.sucursal.alias if dte.sucursal else ''
         })
     except Dte.DoesNotExist:
         return JsonResponse({'error': 'DTE no encontrado'}, status=404)
@@ -4366,7 +4370,7 @@ def obtener_dte_compras(request):
         dtes = Dte.objects.filter(
             tipo_transaccion='COMPRA',
             fecha_emision__range=[fecha_inicio, fecha_fin]
-        ).select_related('emisor')
+        ).select_related('emisor').order_by('-fecha_emision', '-id')
 
         resultado = [{
             'id': d.id,
@@ -4395,19 +4399,40 @@ def crearDteCompras(request):
             print(f"🆕 DEBUG - Creando DTE, datos recibidos:")
             print(f"   - Body: {request.body}")
             data = json.loads(request.body)
+            
+            empresa_session_id = request.session.get('idEmpresaActual')
+            sucursal_session_id = request.session.get('idSucursalActual')
+
+            def _parse_int(value):
+                if value in (None, '', 'null', 'None'):
+                    return None
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+
+            empresa_session_id = _parse_int(empresa_session_id)
+            sucursal_session_id = _parse_int(sucursal_session_id)
             print(f"   - Data parseada: {data}")
 
             # Datos desde sesión
-            empresa_emisor_id = request.session.get('idEmpresaActual')
-            sucursal_id = request.session.get('idSucursalActual')
+            empresa_session_id = request.session.get('idEmpresaActual')
+            sucursal_session_id = request.session.get('idSucursalActual')
             responsable = request.session.get('nombreUsuario', 'Sistema')
 
-            if not empresa_emisor_id or not sucursal_id:
-                return JsonResponse({'success': False, 'error': 'No se pudo identificar la empresa o sucursal actual.'})
+            def _parse_int(value):
+                if value in (None, '', 'null', 'None'):
+                    return None
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
 
-            # Obtener objetos relacionados
-            empresa_emisor = Empresa.objects.get(id=empresa_emisor_id)
-            sucursal = Sucursal.objects.get(id=sucursal_id)
+            empresa_session_id = _parse_int(empresa_session_id)
+            sucursal_session_id = _parse_int(sucursal_session_id)
+
+            if not empresa_session_id:
+                return JsonResponse({'success': False, 'error': 'No se pudo identificar la empresa actual en sesión.'})
 
             # Datos del request
             receptor_id = data.get('receptor_id')
@@ -4479,13 +4504,35 @@ def crearDteCompras(request):
                 except Dte.DoesNotExist:
                     return JsonResponse({'success': False, 'error': 'Documento base no encontrado.'})
 
+            # Determinar empresa y sucursal receptora (nosotros)
+            empresa_receptora_id = _parse_int(data.get('empresa_receptora_id')) or empresa_session_id
+            if not empresa_receptora_id:
+                return JsonResponse({'success': False, 'error': 'Empresa receptora no válida.'})
+
+            if 'sucursal_receptora_id' in data:
+                sucursal_receptora_id = _parse_int(data.get('sucursal_receptora_id'))
+            else:
+                sucursal_receptora_id = sucursal_session_id
+
+            try:
+                empresa_receptora = Empresa.objects.get(id=empresa_receptora_id)
+            except Empresa.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Empresa receptora no válida.'})
+
+            sucursal_receptora = None
+            if sucursal_receptora_id:
+                try:
+                    sucursal_receptora = Sucursal.objects.get(id=sucursal_receptora_id)
+                except Sucursal.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Sucursal receptora no válida.'})
+
             # Debug para creación de NC
             if tipo_documento == 'Nota de Crédito':
                 print(f"🆕 DEBUG - Creando Nota de Crédito:")
                 print(f"   - Tipo documento: {tipo_documento}")
                 print(f"   - Número: {numero_documento}")
                 print(f"   - Emisor ID: {receptor_id}")
-                print(f"   - Receptor ID: {empresa_emisor_id}")
+                print(f"   - Receptor ID: {empresa_receptora_id}")
             
             # Crear DTE
             # IMPORTANTE: En un DTE de COMPRAS:
@@ -4493,7 +4540,7 @@ def crearDteCompras(request):
             # - Receptor = Nosotros (quien compra/recibe la factura)
             nuevo_dte = Dte.objects.create(
                 emisor=receptor,  # El proveedor es quien emite la factura
-                receptor=empresa_emisor,  # Nosotros recibimos la factura
+                receptor=empresa_receptora,  # Nosotros recibimos la factura
                 numero_documento=numero_documento,
                 tipo_documento=tipo_documento,
                 monto_con_iva=monto_con_iva,
@@ -4509,7 +4556,7 @@ def crearDteCompras(request):
                 bultos=bultos,
                 unidades_productos=unidades_productos,
                 tipo_transaccion='COMPRA',
-                sucursal=sucursal,
+                sucursal=sucursal_receptora,
                 motivo_rechazo=motivo_rechazo,
                 documento_padre=documento_padre
             )
@@ -4584,6 +4631,28 @@ def actualizarDteCompras(request, dte_id):
             except Empresa.DoesNotExist:
                 return JsonResponse({'success': False, 'error': 'Empresa receptora no válida.'})
             
+            # Determinar empresa y sucursal receptora (nosotros)
+            empresa_receptora_id = _parse_int(data.get('empresa_receptora_id')) or empresa_session_id or dte.receptor_id
+            if not empresa_receptora_id:
+                return JsonResponse({'success': False, 'error': 'Empresa receptora no válida.'})
+
+            if 'sucursal_receptora_id' in data:
+                sucursal_receptora_id = _parse_int(data.get('sucursal_receptora_id'))
+            else:
+                sucursal_receptora_id = dte.sucursal_id if dte.sucursal_id else sucursal_session_id
+
+            try:
+                empresa_receptora = Empresa.objects.get(id=empresa_receptora_id)
+            except Empresa.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Empresa receptora no válida.'})
+
+            sucursal_receptora = None
+            if sucursal_receptora_id:
+                try:
+                    sucursal_receptora = Sucursal.objects.get(id=sucursal_receptora_id)
+                except Sucursal.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Sucursal receptora no válida.'})
+
             # Validar duplicado (excluyendo el DTE actual)
             if Dte.objects.filter(
                 numero_documento=numero_documento,
@@ -4618,7 +4687,7 @@ def actualizarDteCompras(request, dte_id):
             # - Emisor = Proveedor (quien nos vende/emite la factura)
             # - Receptor = Nosotros (quien compra/recibe la factura)
             dte.emisor = receptor  # El proveedor es quien emite la factura
-            dte.receptor = dte.receptor  # Mantener el receptor original (nosotros)
+            dte.receptor = empresa_receptora  # Empresa receptora seleccionada
             dte.numero_documento = numero_documento
             dte.tipo_documento = tipo_documento
             dte.monto_con_iva = monto_con_iva
@@ -4634,6 +4703,7 @@ def actualizarDteCompras(request, dte_id):
             dte.unidades_productos = unidades_productos
             dte.motivo_rechazo = motivo_rechazo
             dte.documento_padre = documento_padre
+            dte.sucursal = sucursal_receptora
             dte.save()
             
             return JsonResponse({'success': True, 'id': dte.id, 'message': 'DTE actualizado correctamente'})
@@ -4664,6 +4734,88 @@ def empresas_proveedoras(request):
             return JsonResponse({'error': str(e)}, status=400)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+
+@login_required
+@require_GET
+def empresas_receptoras(request):
+    try:
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        sucursal_actual_id = request.session.get('idSucursalActual')
+
+        def _parse_int(value):
+            if value in (None, '', 'null', 'None'):
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        empresa_actual_id = _parse_int(empresa_actual_id)
+        sucursal_actual_id = _parse_int(sucursal_actual_id)
+
+        combos = EmpresaUser.objects.filter(
+            user=request.user,
+            status=True
+        ).select_related('empresa', 'sucursal')
+
+        seen = set()
+        data = []
+
+        for eu in combos:
+            empresa = eu.empresa
+            sucursal = eu.sucursal
+            key = (empresa.id, sucursal.id if sucursal else None)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+            display = empresa.nombre if not sucursal else f"{empresa.nombre} — {sucursal.alias}"
+            is_default = (
+                empresa_actual_id == empresa.id and (
+                    (sucursal is None and sucursal_actual_id is None) or
+                    (sucursal is not None and sucursal_actual_id == sucursal.id)
+                )
+            )
+
+            data.append({
+                'empresa_id': empresa.id,
+                'empresa_nombre': empresa.nombre,
+                'sucursal_id': sucursal.id if sucursal else None,
+                'sucursal_nombre': sucursal.alias if sucursal else '',
+                'display': display,
+                'value': f"{empresa.id}||{sucursal.id if sucursal else ''}",
+                'is_default': is_default
+            })
+
+        if not data and empresa_actual_id:
+            try:
+                empresa = Empresa.objects.get(id=empresa_actual_id)
+                sucursal = Sucursal.objects.get(id=sucursal_actual_id) if sucursal_actual_id else None
+                display = empresa.nombre if not sucursal else f"{empresa.nombre} — {sucursal.alias}"
+                data.append({
+                    'empresa_id': empresa.id,
+                    'empresa_nombre': empresa.nombre,
+                    'sucursal_id': sucursal.id if sucursal else None,
+                    'sucursal_nombre': sucursal.alias if sucursal else '',
+                    'display': display,
+                    'value': f"{empresa.id}||{sucursal.id if sucursal else ''}",
+                    'is_default': True
+                })
+            except Empresa.DoesNotExist:
+                pass
+            except Sucursal.DoesNotExist:
+                pass
+
+        if data:
+            data.sort(key=lambda item: item['display'].lower())
+            data.sort(key=lambda item: 0 if item['is_default'] else 1)
+
+        return JsonResponse(data, safe=False)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 def cargarDteCompra(request):
     if request.method == 'POST':
         try:
@@ -4713,6 +4865,9 @@ def cargarDteCompra(request):
                     Q(estado_pago__icontains=search) |
                     Q(dte_asociado__voucher__icontains=search)
                 ).distinct()
+
+            # Ordenar por fecha de emisión descendente (más nuevo primero)
+            dtes_query = dtes_query.order_by('-fecha_emision', '-id')
 
             # Contar total de registros para paginación
             total_count = dtes_query.count()
@@ -6486,21 +6641,53 @@ def facturas_pendientes(request):
     Permite filtrar por número de factura con ?q= y por proveedor con ?proveedor_id=.
     """
     empresa_id = request.session.get('idEmpresaActual')
-    proveedor_id = request.GET.get('proveedor_id')  # <- lo recibimos por GET
+    try:
+        empresa_id = int(empresa_id) if empresa_id is not None else None
+    except (TypeError, ValueError):
+        empresa_id = None
+    
+    proveedor_id = request.GET.get('proveedor_id')
+    try:
+        proveedor_id = int(proveedor_id) if proveedor_id else None
+    except (TypeError, ValueError):
+        proveedor_id = None
+    
     q = request.GET.get('q', '').strip()
 
     facturas = Dte.objects.filter(
-        tipo_transaccion='COMPRA',
-        emisor_id=empresa_id
-    ).select_related('receptor')  # Incluir el proveedor (receptor)
+        tipo_transaccion='COMPRA'
+    ).select_related('emisor')
+    
+    if empresa_id:
+        facturas = facturas.filter(
+            Q(receptor_id=empresa_id) | Q(emisor_id=empresa_id)
+        )
+    else:
+        # Fallback: usar empresas asociadas al usuario
+        empresas_usuario = EmpresaUser.objects.filter(
+            user=request.user
+        ).values_list('empresa_id', flat=True)
+        
+        if empresas_usuario:
+            facturas = facturas.filter(receptor_id__in=list(empresas_usuario))
     
     if proveedor_id:
-        facturas = facturas.filter(receptor_id=proveedor_id)
+        try:
+            from .models import Empresa
+            prov = Empresa.objects.get(id=proveedor_id)
+            if prov.rut:
+                facturas = facturas.filter(
+                    Q(emisor_id=proveedor_id) | Q(emisor__rut=prov.rut)
+                )
+            else:
+                facturas = facturas.filter(emisor_id=proveedor_id)
+        except Exception:
+            facturas = facturas.filter(emisor_id=proveedor_id)
     if q:
         facturas = facturas.filter(numero_documento__icontains=q)
 
     # Excluir facturas que ya están completamente recepcionadas
-    facturas = facturas.values('id', 'numero_documento', 'monto_con_iva', 'receptor__nombre')
+    facturas = facturas.values('id', 'numero_documento', 'monto_con_iva', 'emisor__nombre')
     ids = [f['id'] for f in facturas]
     from django.db.models import Sum, F
     from .models import Productos_Recepcionados
@@ -6515,14 +6702,14 @@ def facturas_pendientes(request):
     disponibles = []
     for f in facturas:
         usado = usado_map.get(f['id'], 0) or 0
-        if usado < float(f['monto_con_iva']):
-            disponibles.append({
-                'id': f['id'],
-                'text': str(f['numero_documento']),
-                'monto': float(f['monto_con_iva']),
-                'usado': float(usado),
-                'proveedor_nombre': f['receptor__nombre'] or ''
-            })
+        # Devolvemos la factura SIEMPRE, sin validar si tiene saldo
+        disponibles.append({
+            'id': f['id'],
+            'text': str(f['numero_documento']),
+            'monto': float(f['monto_con_iva']),
+            'usado': float(usado),
+            'proveedor_nombre': f['emisor__nombre'] or ''
+        })
 
     # Formato para select2 con proveedor incluido
     return JsonResponse([
@@ -6609,10 +6796,10 @@ def obtener_movimientos_producto(request):
         referencia = m.referencia_externa or ''
         if m.tipo_movimiento == 'TRASPASO' and m.sucursal_destino:
             referencia = f"Destino: {m.sucursal_destino.alias}"
+        elif m.dte:
+            referencia = f"{m.dte.tipo_documento} #{m.dte.numero_documento}"
         elif m.ticket:
             referencia = f"Ticket #{m.ticket.correlativo}"
-        elif m.dte:
-            referencia = f"{m.dte.tipo_documento} {m.dte.numero_documento}"
         def limpiar_prefijo(valor):
             if not valor:
                 return ''
@@ -6692,6 +6879,10 @@ def obtener_productos(request):
         marca = limpiar_prefijo(prod.atributo1.valor if prod.atributo1 else '')
         color = limpiar_prefijo(prod.atributo2.valor if prod.atributo2 else '')
         genero = limpiar_prefijo(prod.atributo3.valor if prod.atributo3 else '')
+        
+        # Calcular stock según sistema híbrido
+        stock = pt.stock_total() if hasattr(pt, 'stock_total') else pt.stock
+        
         text = f"{prod.articulo} - {prod.descripcion} | Marca: {marca} | Color: {color} | Género: {genero} | Talla: {pt.talla} | SKU: {pt.sku}"
         results.append({
             'id': pt.id,
@@ -6700,7 +6891,11 @@ def obtener_productos(request):
             'marca': marca,
             'color': color,
             'genero': genero,
-            'talla': pt.talla
+            'talla': pt.talla,
+            'stock': stock,
+            'costo': prod.costo,
+            'sobreprecio': prod.sobreprecio,
+            'precioventa': prod.precioventa
         })
     return JsonResponse({
         'results': results,
@@ -6922,6 +7117,13 @@ def crear_producto_manual(request):
         skus = request.POST.getlist('sku[]')
         guias_talla_manual = request.POST.getlist('guia_talla_manual[]')
         
+        # ✅ DEBUG: Ver qué tallas se reciben
+        print(f"📦 Backend recibió:")
+        print(f"   Tallas: {tallas}")
+        print(f"   Stocks: {stocks}")
+        print(f"   SKUs: {skus}")
+        print(f"   Total tallas: {len(tallas)}")
+        
         # Validaciones básicas
         if not all([proveedor_id, dte_id, articulo, atributo1, atributo2, atributo3, categoria_id, tipo_talla, costo, precioventa]):
             return JsonResponse({'success': False, 'error': 'Todos los campos obligatorios deben estar completos'})
@@ -6983,16 +7185,30 @@ def crear_producto_manual(request):
             }
             
             # Preparar tallas del formulario
+            tallas_procesadas = {}  # ✅ Usar dict para eliminar duplicados
             for i, talla in enumerate(tallas):
                 if not talla.strip():
                     continue
+                talla_limpia = talla.strip()
                 stock = int(stocks[i]) if i < len(stocks) else 1
                 sku = skus[i] if i < len(skus) else ''
-                datos_nuevos['tallas'].append({
-                    'talla': talla.strip(),
-                    'stock': stock,
-                    'sku': sku
-                })
+                
+                # Si la talla ya fue procesada, sumar el stock
+                if talla_limpia in tallas_procesadas:
+                    tallas_procesadas[talla_limpia]['stock'] += stock
+                    print(f"⚠️ Talla duplicada en formulario: {talla_limpia}, sumando stock")
+                else:
+                    tallas_procesadas[talla_limpia] = {
+                        'talla': talla_limpia,
+                        'stock': stock,
+                        'sku': sku
+                    }
+            
+            # Convertir dict a lista
+            datos_nuevos['tallas'] = list(tallas_procesadas.values())
+            
+            print(f"✅ Tallas procesadas (sin duplicados): {len(datos_nuevos['tallas'])}")
+            print(f"   Detalle: {datos_nuevos['tallas']}")
             
             return JsonResponse({
                 'success': False,
@@ -7020,13 +7236,21 @@ def crear_producto_manual(request):
         )
         
         # Crear variantes de talla
+        tallas_creadas = {}  # ✅ Usar dict para eliminar duplicados
         for i, talla in enumerate(tallas):
             if not talla.strip():
                 continue
                 
+            talla_limpia = talla.strip()
             stock = int(stocks[i]) if i < len(stocks) else 1
             sku = skus[i] if i < len(skus) else ''
             guia_talla_manual_id = guias_talla_manual[i] if i < len(guias_talla_manual) else None
+            
+            # Si la talla ya fue procesada, sumar el stock
+            if talla_limpia in tallas_creadas:
+                tallas_creadas[talla_limpia]['stock'] += stock
+                print(f"⚠️ Talla duplicada detectada: {talla_limpia}, sumando stock (total: {tallas_creadas[talla_limpia]['stock']})")
+                continue
             
             # Generar SKU si no se proporcionó
             if not sku:
@@ -7035,11 +7259,24 @@ def crear_producto_manual(request):
             # Crear variante de talla
             producto_talla = Producto_Talla.objects.create(
                 producto=producto,
-                talla=talla.strip(),
+                talla=talla_limpia,
                 stock=stock,
                 sku=sku,
                 guia_talla_id=guia_talla_manual_id if guia_talla_manual_id else None
             )
+            
+            tallas_creadas[talla_limpia] = {
+                'producto_talla': producto_talla,
+                'stock': stock,
+                'sku': sku
+            }
+            
+            print(f"✅ Talla {talla_limpia} creada: Stock={stock}, SKU={sku}")
+            
+        # Registrar movimientos para las tallas creadas
+        for talla_nombre, talla_info in tallas_creadas.items():
+            producto_talla = talla_info['producto_talla']
+            stock = talla_info['stock']
             
             # Registrar movimiento de ingreso inicial
             registrar_movimiento_producto(
@@ -7051,6 +7288,7 @@ def crear_producto_manual(request):
                 observaciones=f'Creación manual - DTE: {dte.numero_documento}',
                 referencia_externa=f'Manual-{dte.numero_documento}'
             )
+            print(f"📝 Movimiento registrado para talla {talla_nombre}: +{stock}")
         
         return JsonResponse({
             'success': True,
@@ -7088,24 +7326,33 @@ def actualizar_producto_existente(request):
             nuevo_precioventa = Decimal(data.get('precioventa', producto.precioventa))
             
             precio_cambiado = False
+            
+            # Guardar valores anteriores para mostrar cambios correctamente
+            costo_anterior = producto.costo
+            sobreprecio_anterior = producto.sobreprecio
+            precioventa_anterior = producto.precioventa
+            
             if producto.costo != nuevo_costo:
                 producto.costo = nuevo_costo
                 precio_cambiado = True
-                cambios_realizados.append(f'Costo: ${producto.costo:,.0f} → ${nuevo_costo:,.0f}')
+                cambios_realizados.append(f'Costo: ${costo_anterior:,.0f} → ${nuevo_costo:,.0f}')
             
             if producto.sobreprecio != nuevo_sobreprecio:
                 producto.sobreprecio = nuevo_sobreprecio
                 precio_cambiado = True
-                cambios_realizados.append(f'Sobreprecio: ${producto.sobreprecio:,.0f} → ${nuevo_sobreprecio:,.0f}')
+                cambios_realizados.append(f'Sobreprecio: ${sobreprecio_anterior:,.0f} → ${nuevo_sobreprecio:,.0f}')
             
             if producto.precioventa != nuevo_precioventa:
                 producto.precioventa = nuevo_precioventa
                 producto.precioSugerido = nuevo_precioventa
                 precio_cambiado = True
-                cambios_realizados.append(f'Precio Venta: ${producto.precioventa:,.0f} → ${nuevo_precioventa:,.0f}')
+                cambios_realizados.append(f'Precio Venta: ${precioventa_anterior:,.0f} → ${nuevo_precioventa:,.0f}')
             
             if precio_cambiado:
                 producto.save()
+                print(f"✅ Producto {producto.id} actualizado - Costo: {producto.costo}, Sobreprecio: {producto.sobreprecio}, PrecioVenta: {producto.precioventa}")
+            else:
+                print(f"⚠️ No hubo cambios en precios para producto {producto.id}")
         
         # Agregar nuevas tallas si se solicita
         if agregar_tallas:
@@ -7113,15 +7360,34 @@ def actualizar_producto_existente(request):
             dte_id = data.get('dte_id')
             dte = get_object_or_404(Dte, id=dte_id) if dte_id else None
             
+            # ✅ ELIMINAR DUPLICADOS: Agrupar tallas por nombre y sumar stocks
+            tallas_agrupadas = {}
+            for talla_data in tallas_nuevas:
+                talla_nombre = talla_data.get('talla', '').strip()
+                if not talla_nombre:
+                    continue
+                    
+                if talla_nombre in tallas_agrupadas:
+                    # Talla duplicada: sumar stock
+                    tallas_agrupadas[talla_nombre]['stock'] += int(talla_data.get('stock', 0))
+                    print(f"⚠️ Talla duplicada detectada: {talla_nombre}, sumando stock")
+                else:
+                    # Primera vez que aparece esta talla
+                    tallas_agrupadas[talla_nombre] = {
+                        'talla': talla_nombre,
+                        'stock': int(talla_data.get('stock', 0)),
+                        'sku': talla_data.get('sku', '')
+                    }
+            
+            print(f"📊 Tallas recibidas: {len(tallas_nuevas)}, Tallas únicas: {len(tallas_agrupadas)}")
+            
             # Obtener tallas existentes
             tallas_existentes = set(
                 Producto_Talla.objects.filter(producto=producto).values_list('talla', flat=True)
             )
             
-            for talla_data in tallas_nuevas:
-                talla = talla_data.get('talla', '').strip()
-                if not talla:
-                    continue
+            for talla_nombre, talla_data in tallas_agrupadas.items():
+                talla = talla_data['talla']
                 
                 # Verificar si la talla ya existe
                 if talla in tallas_existentes:
@@ -7132,7 +7398,7 @@ def actualizar_producto_existente(request):
                     ).first()
                     
                     if producto_talla:
-                        stock_adicional = int(talla_data.get('stock', 0))
+                        stock_adicional = talla_data['stock']
                         if stock_adicional > 0:
                             # Sumar stock adicional al existente
                             producto_talla.stock += stock_adicional
@@ -7149,10 +7415,11 @@ def actualizar_producto_existente(request):
                                 referencia_externa=f'Manual-{dte.numero_documento if dte else "N/A"}'
                             )
                             stock_final = producto_talla.stock
+                            print(f"✅ Talla {talla} actualizada: +{stock_adicional} → Total: {stock_final}")
                             cambios_realizados.append(f'Talla {talla}: Stock actualizado (+{stock_adicional}, total: {stock_final})')
                 else:
                     # Crear nueva talla
-                    stock = int(talla_data.get('stock', 1))
+                    stock = talla_data['stock']
                     sku = talla_data.get('sku', '')
                     
                     # Generar SKU si no se proporcionó
