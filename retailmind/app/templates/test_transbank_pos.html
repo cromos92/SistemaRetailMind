@@ -543,7 +543,7 @@
             mostrarLoading('Obteniendo última venta...');
 
             try {
-                const resultado = await pos.getLastSale();
+                const resultado = await pos.lastSale();
                 agregarLog('Última venta obtenida', 'success');
                 mostrarResultado({
                     success: true,
@@ -594,7 +594,7 @@
             mostrarLoading('Obteniendo detalles...');
 
             try {
-                const resultado = await pos.getDetails(printOnPos);
+                const resultado = await pos.salesDetail(printOnPos);
                 agregarLog('Detalles obtenidos', 'success');
                 mostrarResultado({
                     success: true,
@@ -647,7 +647,7 @@
             mostrarLoading('Cambiando modo...');
 
             try {
-                const resultado = await pos.changeToNormalMode();
+                const resultado = await pos.setNormalMode();
                 agregarLog('Modo normal activado', 'success');
                 mostrarResultado({
                     success: true,
