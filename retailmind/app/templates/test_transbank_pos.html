@@ -757,18 +757,77 @@
             mostrarLoading('Obteniendo detalles...');
 
             try {
+                // DEBUG: Ver qué tipo de resultado retorna
+                console.log('Llamando a pos.salesDetail con printOnPos:', printOnPos);
                 const resultado = await pos.salesDetail(printOnPos);
-                agregarLog('Detalles obtenidos', 'success');
-                mostrarResultado({
-                    success: true,
-                    print_on_pos: printOnPos,
-                    ...resultado
-                });
+                console.log('Resultado de salesDetail:', resultado);
+                console.log('Tipo de resultado:', typeof resultado);
+                console.log('Es array?', Array.isArray(resultado));
+                console.log('Es promise?', resultado instanceof Promise);
+                
+                // salesDetail retorna un array de ventas
+                if (Array.isArray(resultado)) {
+                    if (resultado.length === 0) {
+                        agregarLog('No hay ventas en el detalle', 'warning');
+                        mostrarResultado({
+                            success: true,
+                            message: 'No hay ventas registradas en el POS',
+                            print_on_pos: printOnPos,
+                            totalVentas: 0,
+                            ventas: [],
+                            debug: {
+                                tipoResultado: typeof resultado,
+                                esArray: true,
+                                longitud: resultado.length
+                            }
+                        });
+                    } else {
+                        agregarLog(`Detalles obtenidos: ${resultado.length} venta(s)`, 'success');
+                        mostrarResultado({
+                            success: true,
+                            print_on_pos: printOnPos,
+                            totalVentas: resultado.length,
+                            ventas: resultado,
+                            debug: {
+                                tipoResultado: typeof resultado,
+                                esArray: true,
+                                longitud: resultado.length
+                            }
+                        });
+                    }
+                } else if (resultado && typeof resultado === 'object') {
+                    // Si es un objeto pero no array
+                    agregarLog('Detalles obtenidos (formato objeto)', 'success');
+                    mostrarResultado({
+                        success: true,
+                        print_on_pos: printOnPos,
+                        resultado: resultado,
+                        debug: {
+                            tipoResultado: typeof resultado,
+                            esArray: false,
+                            keys: Object.keys(resultado)
+                        }
+                    });
+                } else {
+                    // Otro tipo de resultado
+                    agregarLog(`Detalles obtenidos (tipo: ${typeof resultado})`, 'success');
+                    mostrarResultado({
+                        success: true,
+                        print_on_pos: printOnPos,
+                        resultado: resultado,
+                        debug: {
+                            tipoResultado: typeof resultado,
+                            valorDirecto: String(resultado)
+                        }
+                    });
+                }
             } catch(error) {
+                console.error('Error en salesDetail:', error);
                 agregarLog(`Error obteniendo detalles: ${error.message}`, 'error');
                 mostrarResultado({
                     success: false,
-                    error: error.message
+                    error: error.message,
+                    errorCompleto: error
                 }, false);
             } finally {
                 ocultarLoading();
