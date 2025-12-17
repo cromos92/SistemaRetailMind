@@ -790,7 +790,41 @@ function resetearPassword(usuarioId) {
             method: 'POST',
             success: function(response) {
                 if (response.success) {
-                    mostrarExito(response.message);
+                    // Si no se envió el email, mostrar la contraseña
+                    if (!response.email_enviado && response.nueva_password) {
+                        Swal.fire({
+                            title: 'Contraseña Reseteada',
+                            html: `
+                                <div class="text-start">
+                                    <p><strong>Usuario:</strong> ${response.usuario.nombre}</p>
+                                    <p><strong>Email:</strong> ${response.usuario.email}</p>
+                                    <hr>
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        <strong>Email no configurado</strong>
+                                        <br>La contraseña no pudo enviarse por correo.
+                                    </div>
+                                    <div class="alert alert-info">
+                                        <p class="mb-2"><strong>Nueva contraseña temporal:</strong></p>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" value="${response.nueva_password}" id="passwordTemp" readonly>
+                                            <button class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText('${response.nueva_password}'); Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'Copiado', timer: 1500, showConfirmButton: false})">
+                                                <i class="bi bi-clipboard"></i> Copiar
+                                            </button>
+                                        </div>
+                                        <small class="text-muted d-block mt-2">
+                                            Por favor, copia esta contraseña y envíala al usuario de forma segura.
+                                        </small>
+                                    </div>
+                                </div>
+                            `,
+                            icon: 'warning',
+                            width: 600,
+                            confirmButtonText: 'Entendido'
+                        });
+                    } else {
+                        mostrarExito(response.message);
+                    }
                 } else {
                     mostrarError(response.error || 'Error al resetear contraseña');
                 }

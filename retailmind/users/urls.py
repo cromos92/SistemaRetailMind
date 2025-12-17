@@ -20,4 +20,10 @@ urlpatterns = [
     
     # Exportación
     path('exportar/', views.exportar_usuarios, name='exportar_usuarios'),
+    
+    # Perfil de usuario
+    path('mi-perfil/', views.mi_perfil, name='mi_perfil'),
+    path('actualizar-perfil/', views.actualizar_perfil, name='actualizar_perfil'),
+    path('cambiar-password/', views.cambiar_password, name='cambiar_password'),
+    path('subir-foto-perfil/', views.subir_foto_perfil, name='subir_foto_perfil'),
 ]

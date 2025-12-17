@@ -185,6 +185,36 @@
                     <i class="bi bi-file-earmark-text me-2"></i>Gestión de DTE (Compras)
                 </h5>
                 <div class="d-flex gap-2">
+                    <!-- Dropdown de Importación -->
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-cloud-upload me-1"></i>Importar
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="{% url 'ver_importacion_proveedores' %}">
+                                    <i class="bi bi-building text-primary me-2"></i>Importar Proveedores
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'ver_importacion_dtes' %}">
+                                    <i class="bi bi-receipt text-success me-2"></i>Importar DTEs
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'descargar_formato_proveedores' %}">
+                                    <i class="bi bi-download text-secondary me-2"></i>Formato Proveedores
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'descargar_formato_dtes' %}?tipo=rut">
+                                    <i class="bi bi-download text-secondary me-2"></i>Formato DTEs
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
                     <button class="btn btn-warning btn-sm" data-bs-toggle="modal"
                         data-bs-target="#modalGestionProveedores">
                         <i class="bi bi-building me-1"></i>Gestionar Proveedores
@@ -199,12 +229,18 @@
                 <!-- Filtros -->
                 <form id="formBuscarDTE" class="row g-3 mb-4">
                     <div class="col-md-3">
-                        <label for="fechaInicio" class="form-label">Fecha de Inicio</label>
+                        <label for="fechaInicio" class="form-label">
+                            <i class="bi bi-calendar-event me-1"></i>Fecha de Inicio
+                        </label>
                         <input type="date" class="form-control" id="fechaInicio" name="fecha_inicio">
+                        <small class="text-muted">Por defecto: Primer día del mes actual</small>
                     </div>
                     <div class="col-md-3">
-                        <label for="fechaFin" class="form-label">Fecha de Término</label>
+                        <label for="fechaFin" class="form-label">
+                            <i class="bi bi-calendar-check me-1"></i>Fecha de Término
+                        </label>
                         <input type="date" class="form-control" id="fechaFin" name="fecha_fin">
+                        <small class="text-muted">Por defecto: Hoy</small>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <button type="submit" class="btn btn-success w-100">
@@ -212,6 +248,78 @@
                         </button>
                     </div>
                 </form>
+
+                <!-- Panel de KPIs de Pendientes y Vencimiento -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card border-primary">
+                            <div class="card-body">
+                                <!-- Fila 1: Resumen General -->
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <div class="card bg-warning-subtle border-warning">
+                                            <div class="card-body text-center py-3">
+                                                <i class="bi bi-file-earmark-text fs-1 text-warning"></i>
+                                                <h3 class="mb-1 mt-2" id="cantidadPendientes">0</h3>
+                                                <p class="text-muted mb-0 small">Documentos Pendientes</p>
+                                                <h5 class="text-danger mb-0 mt-2" id="montoPendiente">$0</h5>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3">
+                                        <div class="card bg-danger-subtle border-danger">
+                                            <div class="card-body text-center py-3">
+                                                <i class="bi bi-exclamation-circle-fill fs-1 text-danger"></i>
+                                                <h3 class="mb-1 mt-2 text-danger" id="cantidadVencidos">0</h3>
+                                                <p class="text-muted mb-0 small">Documentos Vencidos</p>
+                                                <h6 class="text-danger mb-0 mt-2 small" id="montoVencidos">$0</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3">
+                                        <div class="card bg-warning-subtle border-warning">
+                                            <div class="card-body text-center py-3">
+                                                <i class="bi bi-clock-history fs-1 text-warning"></i>
+                                                <h3 class="mb-1 mt-2 text-warning" id="cantidadPorVencer">0</h3>
+                                                <p class="text-muted mb-0 small">Por Vencer (7 días)</p>
+                                                <h6 class="text-warning mb-0 mt-2 small" id="montoPorVencer">$0</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-3">
+                                        <div class="card bg-success-subtle border-success">
+                                            <div class="card-body text-center py-3">
+                                                <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+                                                <h3 class="mb-1 mt-2 text-success" id="cantidadAlDia">0</h3>
+                                                <p class="text-muted mb-0 small">Al Día (+7 días)</p>
+                                                <h6 class="text-success mb-0 mt-2 small" id="montoAlDia">$0</h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Fila 2: Acciones -->
+                                <div class="row">
+                                    <div class="col-md-12 text-center">
+                                        <span class="badge bg-info me-2" id="periodoActualBadge">Año 2025</span>
+                                        <button class="btn btn-sm btn-danger me-2" onclick="filtrarVencidos()">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Ver Vencidos
+                                        </button>
+                                        <button class="btn btn-sm btn-warning me-2" onclick="filtrarPorVencer()">
+                                            <i class="bi bi-clock me-1"></i>Ver Por Vencer
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" onclick="filtrarPendientes()">
+                                            <i class="bi bi-filter me-1"></i>Ver Todos Pendientes
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Controles de búsqueda y paginación -->
                 <div class="row mb-3 pagination-controls">
@@ -289,6 +397,28 @@
                         </thead>
                         <tbody></tbody>
                     </table>
+                </div>
+                
+                <!-- Paginación inferior -->
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted" id="infoPaginacionDTE">
+                                    Mostrando <span id="registrosVisibles">0</span> de <span id="totalRegistrosDTE">0</span> DTEs
+                                </span>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary" id="btnPrevPageDTE2" disabled>
+                                    <i class="bi bi-chevron-left"></i> Anterior
+                                </button>
+                                <span class="btn btn-outline-secondary" id="pageInfoDTE2">Página 1 de 1</span>
+                                <button type="button" class="btn btn-outline-primary" id="btnNextPageDTE2" disabled>
+                                    Siguiente <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
             </div>
@@ -1097,14 +1227,120 @@
     let currentSearchDTE = '';
     let paginationInfoDTE = null;
 
+    // Función para actualizar resumen de pendientes del año con KPIs de vencimiento
+    function actualizarResumenPendientes() {
+        $.ajax({
+            url: '/app/api/resumen-pendientes-anio/',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    // Total pendientes
+                    $('#cantidadPendientes').text(response.cantidad_pendientes);
+                    $('#montoPendiente').text('$' + response.monto_pendiente.toLocaleString('es-CL'));
+                    
+                    // Vencidos
+                    $('#cantidadVencidos').text(response.vencidos);
+                    $('#montoVencidos').text('$' + response.monto_vencidos.toLocaleString('es-CL'));
+                    
+                    // Por vencer (próximos 7 días)
+                    $('#cantidadPorVencer').text(response.por_vencer_pronto);
+                    $('#montoPorVencer').text('$' + response.monto_por_vencer.toLocaleString('es-CL'));
+                    
+                    // Al día
+                    $('#cantidadAlDia').text(response.al_dia);
+                    $('#montoAlDia').text('$' + response.monto_al_dia.toLocaleString('es-CL'));
+                    
+                    // Período
+                    $('#periodoActualBadge').text(`Año ${response.anio}`);
+                    
+                    console.log('📊 KPIs de vencimiento:', response);
+                }
+            },
+            error: function(xhr) {
+                console.error('Error al obtener resumen de pendientes:', xhr);
+            }
+        });
+    }
+    
+    // Función para filtrar todos los pendientes del año
+    function filtrarPendientes() {
+        const hoy = new Date();
+        const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
+        const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
+        const formato = date => date.toISOString().split('T')[0];
+        
+        $('#fechaInicio').val(formato(primerDiaAnio));
+        $('#fechaFin').val(formato(ultimoDiaAnio));
+        
+        Swal.fire({
+            title: 'Todos los Pendientes',
+            html: `Mostrando todos los DTEs pendientes del año <strong>${hoy.getFullYear()}</strong>`,
+            icon: 'info',
+            timer: 2000,
+            showConfirmButton: false
+        });
+        
+        currentPageDTE = 1;
+        currentSearchDTE = '';
+        cargarDTEs(1, '', 'pendientes');  // ⭐ Pasar filtro
+    }
+    
+    // Función para filtrar solo vencidos
+    function filtrarVencidos() {
+        const hoy = new Date();
+        const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
+        const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
+        const formato = date => date.toISOString().split('T')[0];
+        
+        $('#fechaInicio').val(formato(primerDiaAnio));
+        $('#fechaFin').val(formato(ultimoDiaAnio));
+        
+        Swal.fire({
+            title: 'Documentos Vencidos',
+            html: `Mostrando DTEs con fecha de vencimiento <strong class="text-danger">VENCIDA</strong><br><small>Requieren atención urgente</small>`,
+            icon: 'error',
+            timer: 2500,
+            showConfirmButton: false
+        });
+        
+        currentPageDTE = 1;
+        currentSearchDTE = '';
+        cargarDTEs(1, '', 'vencidos');  // ⭐ Pasar filtro
+    }
+    
+    // Función para filtrar por vencer próximamente
+    function filtrarPorVencer() {
+        const hoy = new Date();
+        const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
+        const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
+        const formato = date => date.toISOString().split('T')[0];
+        
+        $('#fechaInicio').val(formato(primerDiaAnio));
+        $('#fechaFin').val(formato(ultimoDiaAnio));
+        
+        Swal.fire({
+            title: 'Por Vencer Pronto',
+            html: `Mostrando DTEs que vencen en los <strong>próximos 7 días</strong><br><small class="text-muted">Planifica tus pagos</small>`,
+            icon: 'warning',
+            timer: 2500,
+            showConfirmButton: false
+        });
+        
+        currentPageDTE = 1;
+        currentSearchDTE = '';
+        cargarDTEs(1, '', 'por_vencer');  // ⭐ Pasar filtro
+    }
+
     // Al cargar la página
     $(document).ready(function () {
         const hoy = new Date();
-        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);  // Primer día del mes actual
         const formato = date => date.toISOString().split('T')[0];
 
-        $('#fechaInicio').val(formato(primerDiaMes));
+        $('#fechaInicio').val(formato(primerDiaMes));  // Desde inicio del mes actual
         $('#fechaFin').val(formato(hoy));
+        
+        console.log(`📅 Filtro: Desde ${formato(primerDiaMes)} hasta ${formato(hoy)}`);
 
         // Verificar que DataTables esté disponible
         if (typeof $.fn.DataTable === 'undefined') {
@@ -1115,7 +1351,8 @@
 
         // Cargar DTEs del mes actual al iniciar con timeout
         setTimeout(function () {
-            cargarDTEs(1, '');
+            filtroVencimientoActual = '';
+            cargarDTEs(1, '', '');
         }, 1000); // Aumentar delay para asegurar que todo esté listo
     });
 
@@ -1124,20 +1361,21 @@
         e.preventDefault();
         currentPageDTE = 1;
         currentSearchDTE = '';
+        filtroVencimientoActual = '';  // Limpiar filtro de vencimiento
         $('#searchDTE').val('');
-        cargarDTEs(1, '');
+        cargarDTEs(1, '', '');
     });
 
-    // Eventos para paginación de DTE
-    $('#btnPrevPageDTE').on('click', function () {
+    // Eventos para paginación de DTE (superior e inferior)
+    $('#btnPrevPageDTE, #btnPrevPageDTE2').on('click', function () {
         if (paginationInfoDTE && paginationInfoDTE.has_previous) {
-            cargarDTEs(currentPageDTE - 1, currentSearchDTE);
+            cargarDTEs(currentPageDTE - 1, currentSearchDTE, filtroVencimientoActual);
         }
     });
 
-    $('#btnNextPageDTE').on('click', function () {
+    $('#btnNextPageDTE, #btnNextPageDTE2').on('click', function () {
         if (paginationInfoDTE && paginationInfoDTE.has_next) {
-            cargarDTEs(currentPageDTE + 1, currentSearchDTE);
+            cargarDTEs(currentPageDTE + 1, currentSearchDTE, filtroVencimientoActual);
         }
     });
 
@@ -1146,7 +1384,8 @@
         const search = $('#searchDTE').val().trim();
         currentSearchDTE = search;
         currentPageDTE = 1;
-        cargarDTEs(1, search);
+        filtroVencimientoActual = '';
+        cargarDTEs(1, search, '');
     });
 
     // Búsqueda al presionar Enter en DTE
@@ -1313,7 +1552,10 @@
     // Variable para evitar múltiples llamadas simultáneas
     let cargandoDTEs = false;
 
-    function cargarDTEs(page, search) {
+    // Variable global para el filtro de vencimiento actual
+    let filtroVencimientoActual = '';
+    
+    function cargarDTEs(page, search, filtroVencimiento = '') {
         // Evitar múltiples llamadas simultáneas
         if (cargandoDTEs) {
             console.log('Ya se está cargando, ignorando llamada adicional');
@@ -1325,6 +1567,11 @@
 
         const fecha_inicio = $('#fechaInicio').val();
         const fecha_fin = $('#fechaFin').val();
+        
+        // Usar filtro de vencimiento si se proporciona, sino mantener el actual
+        if (filtroVencimiento) {
+            filtroVencimientoActual = filtroVencimiento;
+        }
 
         $.ajax({
             url: '/app/cargarDteCompra/',
@@ -1340,7 +1587,8 @@
                 page: page,
                 page_size: 20,
                 search: search,
-                tipo_documento: $('#filtroTipoDocumento').val()
+                tipo_documento: $('#filtroTipoDocumento').val(),
+                filtro_vencimiento: filtroVencimientoActual
             }),
             success: function (data) {
                 try {
@@ -1371,22 +1619,44 @@
                     currentPageDTE = data.pagination.page;
                     currentSearchDTE = data.search || '';
 
-                    // Actualizar controles de paginación
-                    $('#pageInfoDTE').text(`Página ${data.pagination.page} de ${data.pagination.total_pages}`);
+                    // Actualizar controles de paginación (superior e inferior)
+                    console.log('📊 Paginación recibida:', data.pagination);
+                    const paginacionTexto = `Página ${data.pagination.page} de ${data.pagination.total_pages}`;
+                    $('#pageInfoDTE').text(paginacionTexto);
+                    $('#pageInfoDTE2').text(paginacionTexto);
                     $('#btnPrevPageDTE').prop('disabled', !data.pagination.has_previous);
                     $('#btnNextPageDTE').prop('disabled', !data.pagination.has_next);
+                    $('#btnPrevPageDTE2').prop('disabled', !data.pagination.has_previous);
+                    $('#btnNextPageDTE2').prop('disabled', !data.pagination.has_next);
+                    
+                    // Actualizar info de registros
+                    const inicio = (data.pagination.page - 1) * data.pagination.page_size + 1;
+                    const fin = Math.min(data.pagination.page * data.pagination.page_size, data.pagination.total_count);
+                    $('#registrosVisibles').text(`${inicio}-${fin}`);
+                    $('#totalRegistrosDTE').text(data.pagination.total_count);
+                    
+                    // Actualizar resumen de pendientes del año completo
+                    actualizarResumenPendientes();
+                    
+                    // Mostrar/ocultar controles según haya más de una página
+                    if (data.pagination.total_pages > 1) {
+                        $('.pagination-controls').show();
+                    }
 
                     if (!data.items || data.items.length === 0) {
                         tbody.append('<tr><td colspan="12" class="text-center text-muted">No se encontraron resultados' + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
                     } else {
                         data.items.forEach(dte => {
                             // Simplificar la lógica para evitar errores
-                            const esFacturaElectronica = dte.tipo === 'FACTURA ELECTRONICA';
-                            const tieneEstadoValido = dte.estado !== 'Rechazado' && dte.estado_pago !== 'PAGADO';
+                            // Verificar si es factura (código 33 o texto completo)
+                            const esFacturaElectronica = dte.tipo === 'FACTURA ELECTRONICA' || dte.tipo === '33' || dte.tipo === 'FACTURA';
+                            const tieneEstadoValido = dte.estado !== 'Rechazado' && dte.estado_pago !== 'Pagado';
                             const sinIncidencias = !dte.incidencias_pendientes || dte.incidencias_pendientes === 0;
                             const documentoCompleto = !dte.requiere_factura || dte.tiene_factura_anexada;
 
                             const elegiblePagoMasivo = esFacturaElectronica && tieneEstadoValido && sinIncidencias && documentoCompleto;
+                            
+                            console.log(`DTE ${dte.numero_documento}: tipo='${dte.tipo}', elegible=${elegiblePagoMasivo}`);
                             const saldoPendiente = parseFloat(dte.monto_con_iva || 0) - parseFloat(dte.notas_credito || 0);
 
                             // Info de NC asociada
@@ -1551,30 +1821,20 @@
                         // Verificar que DataTables esté disponible
                         if (typeof $.fn.DataTable !== 'undefined') {
                             try {
-                                // Inicializar DataTable después de llenar la tabla
+                                // Inicializar DataTable sin paginación (usamos paginación del servidor)
                                 $('#tablaDTE').DataTable({
                                     responsive: true,
                                     scrollX: true,
                                     autoWidth: false,
-                                    destroy: true, // Permite reinicializar
+                                    destroy: true,
+                                    paging: false,  // ⭐ Desactivar paginación de DataTables
+                                    searching: false,  // ⭐ Desactivar búsqueda (usamos la del servidor)
+                                    info: false,  // ⭐ Desactivar info (usamos la custom)
                                     language: {
                                         "decimal": ",",
                                         "thousands": ".",
-                                        "info": "Mostrando _START_ a _END_ de _TOTAL_ registros",
-                                        "infoEmpty": "Mostrando 0 a 0 de 0 registros",
-                                        "infoPostFix": "",
-                                        "infoFiltered": "(filtrado de _MAX_ registros totales)",
                                         "loadingRecords": "Cargando...",
-                                        "lengthMenu": "Mostrar _MENU_ registros",
-                                        "paginate": {
-                                            "first": "Primero",
-                                            "last": "Último",
-                                            "next": "Siguiente",
-                                            "previous": "Anterior"
-                                        },
                                         "processing": "Procesando...",
-                                        "search": "Buscar:",
-                                        "searchPlaceholder": "",
                                         "zeroRecords": "No se encontraron registros coincidentes",
                                         "emptyTable": "No hay datos disponibles en la tabla",
                                         "aria": {
@@ -1626,32 +1886,73 @@
         });
     }
 
-    function eliminarDTE(id) {
-        Swal.fire({
-            title: '¿Eliminar DTE?',
-            text: 'Esta acción no se puede deshacer.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then(result => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: `/app/eliminarDTE/${id}/`,
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    success: function () {
-                        Swal.fire('Eliminado', 'El DTE fue eliminado correctamente.', 'success');
-                        cargarDTEs(currentPageDTE, currentSearchDTE);
-                    },
-                    error: function () {
-                        Swal.fire('Error', 'No se pudo eliminar el DTE.', 'error');
-                    }
-                });
+    function eliminarDTE(id, forzar = false) {
+        if (!forzar) {
+            Swal.fire({
+                title: '¿Eliminar DTE?',
+                text: 'Esta acción no se puede deshacer.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then(result => {
+                if (result.isConfirmed) {
+                    intentarEliminarDTE(id, false);
+                }
+            });
+        } else {
+            intentarEliminarDTE(id, true);
+        }
+    }
+    
+    function intentarEliminarDTE(id, forzar) {
+        $.ajax({
+            url: `/app/eliminarDTE/${id}/`,
+            method: 'DELETE',
+            contentType: 'application/json',
+            data: JSON.stringify({ forzar: forzar }),
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            success: function (response) {
+                Swal.fire('Eliminado', response.message || 'El DTE fue eliminado correctamente.', 'success');
+                cargarDTEs(currentPageDTE, currentSearchDTE);
+                actualizarResumenPendientes();
+            },
+            error: function (xhr) {
+                const response = xhr.responseJSON;
+                
+                // Si hay datos relacionados y se puede forzar
+                if (response && response.puede_forzar) {
+                    const detalles = response.productos_count ? 
+                        `<br><br><small class="text-muted">El DTE tiene ${response.productos_count} producto(s) asociado(s)</small>` : '';
+                    
+                    Swal.fire({
+                        title: 'DTE con Datos Relacionados',
+                        html: `<p>${response.error}</p>${detalles}
+                               <hr>
+                               <p class="text-warning mb-0"><strong>⚠️ Datos de Prueba:</strong><br>
+                               ¿Deseas eliminarlo forzadamente?<br>
+                               <small>Esto eliminará el DTE y todos sus datos asociados.</small></p>`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        showDenyButton: true,
+                        confirmButtonColor: '#dc3545',
+                        denyButtonColor: '#6c757d',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: '🗑️ Forzar Eliminación',
+                        denyButtonText: 'Cancelar',
+                        cancelButtonText: 'Cancelar'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            eliminarDTE(id, true);
+                        }
+                    });
+                } else {
+                    Swal.fire('Error', response?.error || 'No se pudo eliminar el DTE.', 'error');
+                }
             }
         });
     }

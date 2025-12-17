@@ -302,6 +302,11 @@ function copiarCodigoAutorizacion() {
     </div>
 </div>
 
+<!-- Widget de Asistente IA -->
+{% if user.is_authenticated %}
+{% include 'assistant/widget.html' %}
+{% endif %}
+
 </body>
 
 </html>

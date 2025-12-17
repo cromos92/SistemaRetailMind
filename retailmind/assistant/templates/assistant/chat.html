@@ -1,0 +1,801 @@
+{% extends 'layout/header.html' %}
+{% load static %}
+
+{% block title %}Asistente RetailMind{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-1">🤖 Asistente RetailMind</h4>
+                    <p class="text-muted mb-0">Tu asistente inteligente para consultas del ERP</p>
+                </div>
+                <div>
+                    <a href="{% url 'verHome' %}" class="btn btn-secondary btn-sm">
+                        <i class="ri-arrow-left-line"></i> Volver
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="assistant-container">
+                        <!-- Header del Chat -->
+                        <div class="assistant-header">
+                            <div class="assistant-header-left">
+                                <div class="assistant-avatar">
+                                    <i class="ri-robot-2-line"></i>
+                                </div>
+                                <div class="assistant-info">
+                                    <h5 class="mb-0 text-white">Asistente RetailMind</h5>
+                                    <span class="assistant-status">
+                                        <span class="status-dot"></span>
+                                        En línea
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="assistant-header-right">
+                                <button type="button" class="btn btn-sm btn-light" onclick="nuevaConversacion()" title="Nueva conversación">
+                                    <i class="ri-refresh-line"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Chat Messages -->
+                        <div class="assistant-messages" id="chatMessages">
+                            <!-- Mensaje de bienvenida -->
+                            <div class="message assistant-message">
+                                <div class="message-avatar">
+                                    <i class="ri-robot-2-line"></i>
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-bubble">
+                                        <p>¡Hola <strong>{{ user_name }}</strong>! 👋</p>
+                                        <p>Soy tu asistente de RetailMind. Puedo ayudarte con:</p>
+                                        <ul>
+                                            <li>📊 Consultas de ventas y estadísticas</li>
+                                            <li>📦 Información de inventario y stock</li>
+                                            <li>📄 Estado de facturas y pagos</li>
+                                            <li>💰 Cuadratura de caja</li>
+                                            <li>👥 Búsqueda de clientes y proveedores</li>
+                                        </ul>
+                                        <p>¿En qué puedo ayudarte hoy?</p>
+                                    </div>
+                                    <div class="message-time">Ahora</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Actions -->
+                        <div class="quick-actions" id="quickActions">
+                            <button type="button" class="quick-action-btn" onclick="enviarSugerencia('¿Cuánto vendimos hoy?')">
+                                💰 Ventas de hoy
+                            </button>
+                            <button type="button" class="quick-action-btn" onclick="enviarSugerencia('¿Qué productos tienen stock bajo?')">
+                                📦 Stock bajo
+                            </button>
+                            <button type="button" class="quick-action-btn" onclick="enviarSugerencia('¿Cuáles son las facturas vencidas?')">
+                                📄 Facturas vencidas
+                            </button>
+                            <button type="button" class="quick-action-btn" onclick="enviarSugerencia('Dame un resumen del día')">
+                                📊 Resumen diario
+                            </button>
+                        </div>
+                        
+                        <!-- Input Area -->
+                        <div class="assistant-input-area">
+                            <form id="chatForm" onsubmit="enviarMensaje(event)">
+                                <div class="input-wrapper">
+                                    <textarea 
+                                        id="userInput" 
+                                        placeholder="Escribe tu pregunta aquí..." 
+                                        rows="1"
+                                        maxlength="2000"
+                                        onkeydown="handleKeyDown(event)"
+                                    ></textarea>
+                                    <button type="submit" class="send-btn" id="sendBtn">
+                                        <i class="ri-send-plane-fill"></i>
+                                    </button>
+                                </div>
+                            </form>
+                            <div class="input-hint">
+                                <span>Presiona Enter para enviar • Shift+Enter para nueva línea</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Feedback -->
+<div class="modal fade" id="feedbackModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">¿Qué te pareció esta respuesta?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="feedbackMessageId">
+                <input type="hidden" id="feedbackPregunta">
+                <input type="hidden" id="feedbackRespuesta">
+                
+                <div class="rating-buttons text-center mb-3">
+                    <button type="button" class="btn btn-outline-danger rating-btn" data-rating="1">
+                        1 👎
+                    </button>
+                    <button type="button" class="btn btn-outline-warning rating-btn" data-rating="2">
+                        2 😕
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary rating-btn" data-rating="3">
+                        3 😐
+                    </button>
+                    <button type="button" class="btn btn-outline-info rating-btn" data-rating="4">
+                        4 🙂
+                    </button>
+                    <button type="button" class="btn btn-outline-success rating-btn" data-rating="5">
+                        5 👍
+                    </button>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Comentario adicional (opcional)</label>
+                    <textarea id="feedbackComentario" class="form-control" rows="3" placeholder="¿Cómo podemos mejorar?"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="enviarFeedback()">Enviar feedback</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ==================== ESTILOS DEL ASISTENTE ==================== */
+
+.assistant-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 280px);
+    min-height: 500px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e9f2 100%);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Header */
+.assistant-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+}
+
+.assistant-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.assistant-avatar {
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.assistant-info h5 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.assistant-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Messages Area */
+.assistant-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.message {
+    display: flex;
+    gap: 10px;
+    max-width: 85%;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user-message {
+    flex-direction: row-reverse;
+    align-self: flex-end;
+}
+
+.message.assistant-message {
+    align-self: flex-start;
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.assistant-message .message-avatar {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+}
+
+.user-message .message-avatar {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: white;
+}
+
+.message-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.message-bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.assistant-message .message-bubble {
+    background: white;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.user-message .message-bubble {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message-bubble p {
+    margin: 0 0 8px 0;
+}
+
+.message-bubble p:last-child {
+    margin-bottom: 0;
+}
+
+.message-bubble ul {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.message-bubble li {
+    margin: 4px 0;
+}
+
+.message-time {
+    font-size: 11px;
+    color: #9ca3af;
+    padding: 0 4px;
+}
+
+/* Feedback buttons */
+.message-feedback {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.feedback-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.feedback-btn:hover {
+    background: #f3f4f6;
+}
+
+/* Typing indicator */
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px;
+    background: white;
+    border-radius: 12px;
+    width: fit-content;
+}
+
+.typing-indicator span {
+    width: 8px;
+    height: 8px;
+    background: #9ca3af;
+    border-radius: 50%;
+    animation: typing 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    overflow-x: auto;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+}
+
+.quick-action-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+    border-radius: 16px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-action-btn:hover {
+    background: #f3f4f6;
+    border-color: #405189;
+    color: #405189;
+}
+
+/* Input Area */
+.assistant-input-area {
+    padding: 12px 16px;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: #f3f4f6;
+    border-radius: 20px;
+    padding: 6px 6px 6px 14px;
+}
+
+.input-wrapper textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-size: 14px;
+    line-height: 1.5;
+    max-height: 100px;
+    padding: 6px 0;
+}
+
+.input-wrapper textarea:focus {
+    outline: none;
+}
+
+.send-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.send-btn:hover {
+    transform: scale(1.05);
+}
+
+.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.input-hint {
+    text-align: center;
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 6px;
+}
+
+/* Rating buttons */
+.rating-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.rating-btn {
+    width: 50px;
+    font-size: 14px;
+}
+
+.rating-btn.active {
+    transform: scale(1.1);
+}
+</style>
+
+<script>
+// ==================== VARIABLES GLOBALES ====================
+const sessionId = '{{ session_id }}';
+let isProcessing = false;
+let selectedRating = null;
+
+// ==================== FUNCIONES PRINCIPALES ====================
+
+async function enviarMensaje(event) {
+    if (event) event.preventDefault();
+    
+    const input = document.getElementById('userInput');
+    const message = input.value.trim();
+    
+    if (!message || isProcessing) return;
+    
+    // Mostrar mensaje del usuario
+    agregarMensaje(message, 'user');
+    input.value = '';
+    autoResizeTextarea(input);
+    
+    // Ocultar acciones rápidas
+    document.getElementById('quickActions').style.display = 'none';
+    
+    // Mostrar indicador de escritura
+    mostrarTyping();
+    
+    isProcessing = true;
+    document.getElementById('sendBtn').disabled = true;
+    
+    try {
+        const response = await fetch('{% url "assistant:api_chat" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                message: message,
+                session_id: sessionId
+            })
+        });
+        
+        const data = await response.json();
+        
+        // Ocultar indicador de escritura
+        ocultarTyping();
+        
+        if (data.success) {
+            agregarMensaje(data.response, 'assistant', data.message_id);
+        } else {
+            agregarMensaje('😔 ' + (data.error || 'Error al procesar tu mensaje'), 'assistant');
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        ocultarTyping();
+        agregarMensaje('😔 Error de conexión. Por favor, intenta de nuevo.', 'assistant');
+    } finally {
+        isProcessing = false;
+        document.getElementById('sendBtn').disabled = false;
+    }
+}
+
+function agregarMensaje(contenido, rol, messageId = null) {
+    const container = document.getElementById('chatMessages');
+    const isUser = rol === 'user';
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+    
+    const avatar = isUser ? '<i class="ri-user-line"></i>' : '<i class="ri-robot-2-line"></i>';
+    const time = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    
+    // Renderizar markdown básico para respuestas del asistente
+    const renderedContent = isUser ? escapeHtml(contenido) : renderMarkdown(contenido);
+    
+    let feedbackHtml = '';
+    if (!isUser && messageId) {
+        feedbackHtml = `
+            <div class="message-feedback">
+                <button class="feedback-btn" onclick="abrirFeedback(${messageId}, true)">
+                    👍 Útil
+                </button>
+                <button class="feedback-btn" onclick="abrirFeedback(${messageId}, false)">
+                    👎 No útil
+                </button>
+            </div>
+        `;
+    }
+    
+    messageDiv.innerHTML = `
+        <div class="message-avatar">${avatar}</div>
+        <div class="message-content">
+            <div class="message-bubble">${renderedContent}</div>
+            <div class="message-time">${time}</div>
+            ${feedbackHtml}
+        </div>
+    `;
+    
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function mostrarTyping() {
+    const container = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.id = 'typingIndicator';
+    typingDiv.className = 'message assistant-message';
+    typingDiv.innerHTML = `
+        <div class="message-avatar"><i class="ri-robot-2-line"></i></div>
+        <div class="message-content">
+            <div class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    `;
+    container.appendChild(typingDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function ocultarTyping() {
+    const typing = document.getElementById('typingIndicator');
+    if (typing) typing.remove();
+}
+
+function enviarSugerencia(texto) {
+    document.getElementById('userInput').value = texto;
+    enviarMensaje();
+}
+
+async function nuevaConversacion() {
+    if (!confirm('¿Iniciar una nueva conversación? Se perderá el historial actual.')) return;
+    
+    try {
+        const response = await fetch('{% url "assistant:api_new_conversation" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// ==================== FEEDBACK ====================
+
+function abrirFeedback(messageId, isPositive) {
+    document.getElementById('feedbackMessageId').value = messageId;
+    selectedRating = isPositive ? 5 : 2;
+    actualizarBotonesRating();
+    
+    const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+    modal.show();
+}
+
+function actualizarBotonesRating() {
+    document.querySelectorAll('.rating-btn').forEach(btn => {
+        btn.classList.remove('active', 'btn-primary');
+        
+        if (parseInt(btn.dataset.rating) === selectedRating) {
+            btn.classList.add('active', 'btn-primary');
+        }
+    });
+}
+
+document.querySelectorAll('.rating-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        selectedRating = parseInt(this.dataset.rating);
+        actualizarBotonesRating();
+    });
+});
+
+async function enviarFeedback() {
+    if (!selectedRating) {
+        alert('Por favor, selecciona una calificación');
+        return;
+    }
+    
+    const messageId = document.getElementById('feedbackMessageId').value;
+    const comentario = document.getElementById('feedbackComentario').value;
+    
+    try {
+        const response = await fetch('{% url "assistant:api_feedback" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                message_id: messageId,
+                session_id: sessionId,
+                rating: selectedRating,
+                tipo_feedback: selectedRating >= 4 ? 'UTIL' : 'NO_UTIL',
+                comentario: comentario
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
+            Swal.fire({
+                icon: 'success',
+                title: '¡Gracias!',
+                text: 'Tu feedback ha sido enviado',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// ==================== UTILIDADES ====================
+
+function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        enviarMensaje();
+    }
+}
+
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px';
+}
+
+document.getElementById('userInput').addEventListener('input', function() {
+    autoResizeTextarea(this);
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function renderMarkdown(text) {
+    let html = text;
+    
+    // Headers
+    html = html.replace(/^### (.*$)/gm, '<h6>$1</h6>');
+    html = html.replace(/^## (.*$)/gm, '<h5>$1</h5>');
+    html = html.replace(/^# (.*$)/gm, '<h4>$1</h4>');
+    
+    // Bold
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Italic
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    
+    // Code blocks
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    
+    // Inline code
+    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+    
+    // Line breaks
+    html = html.replace(/\n/g, '<br>');
+    
+    // Clean up
+    html = html.replace(/(<br>){3,}/g, '<br><br>');
+    
+    return html;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// ==================== CARGAR HISTORIAL ====================
+
+async function cargarHistorial() {
+    try {
+        const response = await fetch(`{% url "assistant:api_history" %}?session_id=${sessionId}`);
+        const data = await response.json();
+        
+        if (data.success && data.messages.length > 0) {
+            const container = document.getElementById('chatMessages');
+            container.innerHTML = '';
+            
+            data.messages.forEach(msg => {
+                agregarMensaje(msg.content, msg.role, msg.id);
+            });
+            
+            document.getElementById('quickActions').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error cargando historial:', error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', cargarHistorial);
+</script>
+{% endblock %}

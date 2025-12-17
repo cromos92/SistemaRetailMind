@@ -376,29 +376,28 @@
                                 </span>
                             </button>
                             <div class="dropdown-menu dropdown-menu-end">
-                                <!-- item-->
+                                <!-- Header -->
                                 <h6 class="dropdown-header">
                                     <i class="ri-user-line text-primary me-1"></i>
                                     Bienvenido {{ user.first_name|default:user.username|capfirst }}!
                                 </h6>
                                 <div class="dropdown-divider"></div>
-                                <a class="dropdown-item" href="">
+                                
+                                <!-- Mi Perfil -->
+                                <a class="dropdown-item" href="{% url 'users:mi_perfil' %}">
                                     <i class="ri-user-settings-line text-primary fs-16 align-middle me-1"></i>
                                     <span class="align-middle">Mi Perfil</span>
                                 </a>
+                                
+                                <!-- Cambiar Sucursal -->
                                 <a class="dropdown-item" href="{% url 'cambiar_empresa' %}">
                                     <i class="ri-building-line text-success fs-16 align-middle me-1"></i>
                                     <span class="align-middle">Cambiar Empresa/Sucursal</span>
                                 </a>
-                                <a class="dropdown-item" href="">
-                                    <i class="ri-settings-3-line text-info fs-16 align-middle me-1"></i>
-                                    <span class="align-middle">Configuración</span>
-                                </a>
-                                <a class="dropdown-item" href="">
-                                    <i class="ri-question-line text-warning fs-16 align-middle me-1"></i>
-                                    <span class="align-middle">Ayuda</span>
-                                </a>
+                                
                                 <div class="dropdown-divider"></div>
+                                
+                                <!-- Cerrar Sesión -->
                                 <a class="dropdown-item" href="{% url 'logout' %}">
                                     <i class="ri-logout-circle-line text-danger fs-16 align-middle me-1"></i>
                                     <span class="align-middle">Cerrar Sesión</span>

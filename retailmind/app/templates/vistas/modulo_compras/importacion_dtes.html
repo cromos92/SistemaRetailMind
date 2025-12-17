@@ -1,0 +1,553 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+.card-importacion {
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.upload-zone {
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-zone:hover {
+    border-color: #0d6efd;
+    background-color: #e7f1ff;
+}
+
+.upload-zone.drag-over {
+    border-color: #198754;
+    background-color: #d1e7dd;
+}
+
+.file-info {
+    display: none;
+    margin-top: 20px;
+}
+
+.result-table {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.error-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Breadcrumb -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Importación de DTEs de Compras</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item"><a href="{% url 'verGestionDteCompras' %}">Gestión DTEs</a></li>
+                            <li class="breadcrumb-item active">Importar DTEs</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instrucciones -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="alert alert-info alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Instrucciones:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Selecciona cómo deseas identificar a los proveedores: por <strong>RUT</strong> o por <strong>ID</strong></li>
+                        <li>Descarga el formato o exporta tus DTEs actuales para editarlos</li>
+                        <li>Completa el archivo con los datos de tus DTEs de compras</li>
+                        <li>Campos obligatorios: <strong>identificador de proveedor</strong> (RUT o ID), <strong>número de documento</strong> y <strong>monto_con_iva</strong></li>
+                        <li>El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos, solo guión)</li>
+                        <li>Usa el <strong>monto con IVA</strong> (monto total de la factura) - el sistema calculará el neto automáticamente</li>
+                        <li>También puedes usar <strong>monto_neto</strong> si lo prefieres - el sistema calculará el total</li>
+                        <li>El campo <strong>responsable</strong> no es necesario - se asignará automáticamente tu usuario</li>
+                        <li>El campo <strong>receptor</strong> (tu empresa) se asigna automáticamente</li>
+                        <li>Todos los DTEs se importan con estado de pago <strong>"Pendiente"</strong> para que registres los pagos después</li>
+                        <li>Los proveedores deben existir previamente en el sistema</li>
+                        <li>Formatos aceptados: CSV (.csv), Excel (.xlsx, .xls)</li>
+                    </ul>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuración -->
+        <div class="row mb-3">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h6 class="mb-0 text-white">
+                            <i class="bi bi-gear me-2"></i>
+                            Configuración de Importación
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row align-items-center mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Identificar proveedor por:</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="tipoBusqueda" id="tipoRut" value="rut" checked>
+                                    <label class="btn btn-outline-primary" for="tipoRut">
+                                        <i class="bi bi-person-badge me-1"></i> RUT del Proveedor
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="tipoBusqueda" id="tipoId" value="id">
+                                    <label class="btn btn-outline-primary" for="tipoId">
+                                        <i class="bi bi-hash me-1"></i> ID del Proveedor
+                                    </label>
+                                </div>
+                                <small class="text-muted d-block mt-2" id="helpText">
+                                    El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos)
+                                </small>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button type="button" class="btn btn-info me-2" id="btnDescargarFormato">
+                                    <i class="bi bi-download me-1"></i> Descargar Formato
+                                </button>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                        <i class="bi bi-file-earmark-arrow-down me-1"></i> Exportar Actuales
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#" id="btnExportarDtesCSV">
+                                            <i class="bi bi-file-earmark-text me-2"></i>Exportar CSV
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="#" id="btnExportarDtesExcel">
+                                            <i class="bi bi-file-earmark-excel me-2"></i>Exportar Excel
+                                        </a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Modo de importación para DTEs -->
+                        <div class="row">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-arrow-repeat me-1"></i>
+                                    Modo de Importación:
+                                </label>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="modoActualizacionDte" id="modoDteSoloCrear" value="solo_crear" checked>
+                                            <label class="form-check-label" for="modoDteSoloCrear">
+                                                <strong>Solo Crear</strong>
+                                                <br><small class="text-muted">Omite DTEs duplicados (recomendado)</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="modoActualizacionDte" id="modoDteCrearActualizar" value="crear_y_actualizar">
+                                            <label class="form-check-label" for="modoDteCrearActualizar">
+                                                <strong>Crear y Actualizar</strong>
+                                                <br><small class="text-muted">Crea nuevos y actualiza existentes</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card principal -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card card-importacion">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0 text-white">
+                            <i class="bi bi-file-earmark-arrow-up me-2"></i>
+                            Cargar Archivo de DTEs
+                        </h5>
+                    </div>
+                    
+                    <div class="card-body">
+                        <!-- Zona de carga -->
+                        <div class="upload-zone" id="uploadZone">
+                            <i class="bi bi-cloud-arrow-up display-1 text-primary"></i>
+                            <h5 class="mt-3">Arrastra tu archivo aquí</h5>
+                            <p class="text-muted">o haz clic para seleccionar</p>
+                            <p class="mt-2">
+                                <span class="badge bg-success">CSV</span>
+                                <span class="badge bg-success">XLSX</span>
+                                <span class="badge bg-success">XLS</span>
+                            </p>
+                            <input type="file" id="archivoDtes" accept=".csv,.xlsx,.xls" style="display: none;">
+                        </div>
+
+                        <!-- Información del archivo -->
+                        <div class="file-info" id="fileInfo">
+                            <div class="alert alert-success">
+                                <i class="bi bi-file-earmark-check me-2"></i>
+                                <strong>Archivo seleccionado:</strong> <span id="fileName"></span>
+                                <button type="button" class="btn-close float-end" id="btnRemoveFile"></button>
+                            </div>
+                        </div>
+
+                        <!-- Vista previa -->
+                        <div id="previewSection" style="display: none;">
+                            <hr>
+                            <h6 class="mb-3">
+                                <i class="bi bi-eye me-2"></i>
+                                Vista Previa (primeras 10 filas)
+                            </h6>
+                            <div class="table-responsive result-table">
+                                <table class="table table-bordered table-sm" id="previewTable">
+                                    <thead class="table-light"></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <div class="alert alert-warning" id="previewWarning" style="display: none;">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Se muestran solo las primeras 10 filas. El archivo completo será procesado al importar.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'verGestionDteCompras' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left me-1"></i> Volver a DTEs
+                            </a>
+                            <button type="button" class="btn btn-primary" id="btnImportar" disabled>
+                                <i class="bi bi-cloud-upload me-1"></i> Importar DTEs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        <div class="row mt-4" id="resultSection" style="display: none;">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="card-title mb-0 text-white">
+                            <i class="bi bi-check-circle me-2"></i>
+                            Resultado de la Importación
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="resultSummary"></div>
+                        
+                        <!-- Errores -->
+                        <div id="errorSection" style="display: none;" class="mt-3">
+                            <h6 class="text-danger">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                Errores Encontrados:
+                            </h6>
+                            <div class="error-list">
+                                <ul id="errorList" class="list-group"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+    let archivoSeleccionado = null;
+
+    $(document).ready(function() {
+        initDragAndDrop();
+        initEventHandlers();
+    });
+
+    function initDragAndDrop() {
+        const uploadZone = $('#uploadZone');
+        
+        uploadZone.on('click', function() {
+            $('#archivoDtes').click();
+        });
+
+        uploadZone.on('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $(this).addClass('drag-over');
+        });
+
+        uploadZone.on('dragleave', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $(this).removeClass('drag-over');
+        });
+
+        uploadZone.on('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $(this).removeClass('drag-over');
+            
+            const files = e.originalEvent.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+
+        $('#archivoDtes').on('change', function(e) {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+    }
+
+    function initEventHandlers() {
+        $('input[name="tipoBusqueda"]').on('change', function() {
+            const tipo = $('input[name="tipoBusqueda"]:checked').val();
+            if (tipo === 'rut') {
+                $('#helpText').html('El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos)');
+            } else {
+                $('#helpText').text('El ID es el número único del proveedor en el sistema');
+            }
+        });
+
+        $('#btnDescargarFormato').on('click', function() {
+            const tipo = $('input[name="tipoBusqueda"]:checked').val();
+            window.location.href = "{% url 'descargar_formato_dtes' %}?tipo=" + tipo;
+        });
+
+        $('#btnExportarDtesCSV').on('click', function(e) {
+            e.preventDefault();
+            const tipo = $('input[name="tipoBusqueda"]:checked').val();
+            window.location.href = "{% url 'exportar_dtes_actuales' %}?tipo=" + tipo;
+        });
+
+        $('#btnExportarDtesExcel').on('click', function(e) {
+            e.preventDefault();
+            const tipo = $('input[name="tipoBusqueda"]:checked').val();
+            window.location.href = "{% url 'exportar_dtes_excel' %}?tipo=" + tipo;
+        });
+
+        $('#btnRemoveFile').on('click', function() {
+            resetForm();
+        });
+
+        $('#btnImportar').on('click', function() {
+            importarDtes();
+        });
+    }
+
+    function handleFileSelect(file) {
+        archivoSeleccionado = file;
+        $('#fileName').text(file.name);
+        $('#fileInfo').show();
+        $('#btnImportar').prop('disabled', false);
+        
+        // Mostrar vista previa
+        mostrarVistaPrevia(file);
+    }
+
+    function mostrarVistaPrevia(file) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            try {
+                let data;
+                
+                if (file.name.endsWith('.csv')) {
+                    const text = e.target.result;
+                    const lines = text.split('\n');
+                    const headers = lines[0].split(',');
+                    
+                    data = [];
+                    for (let i = 1; i < Math.min(lines.length, 11); i++) {
+                        if (lines[i].trim()) {
+                            const values = lines[i].split(',');
+                            const row = {};
+                            headers.forEach((header, index) => {
+                                row[header.trim()] = values[index] ? values[index].trim() : '';
+                            });
+                            data.push(row);
+                        }
+                    }
+                } else {
+                    const workbook = XLSX.read(e.target.result, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    data = jsonData.slice(0, 10);
+                }
+                
+                renderPreview(data);
+                
+            } catch (error) {
+                Swal.fire('Error', 'No se pudo leer el archivo: ' + error.message, 'error');
+            }
+        };
+        
+        if (file.name.endsWith('.csv')) {
+            reader.readAsText(file);
+        } else {
+            reader.readAsArrayBuffer(file);
+        }
+    }
+
+    function renderPreview(data) {
+        if (data.length === 0) return;
+        
+        const thead = $('#previewTable thead');
+        const tbody = $('#previewTable tbody');
+        
+        thead.empty();
+        tbody.empty();
+        
+        const headers = Object.keys(data[0]);
+        let headerRow = '<tr>';
+        headers.forEach(header => {
+            headerRow += `<th>${header}</th>`;
+        });
+        headerRow += '</tr>';
+        thead.append(headerRow);
+        
+        data.forEach(row => {
+            let tr = '<tr>';
+            headers.forEach(header => {
+                tr += `<td>${row[header] || ''}</td>`;
+            });
+            tr += '</tr>';
+            tbody.append(tr);
+        });
+        
+        $('#previewSection').show();
+        if (data.length >= 10) {
+            $('#previewWarning').show();
+        }
+    }
+
+    function importarDtes() {
+        if (!archivoSeleccionado) {
+            Swal.fire('Advertencia', 'Por favor selecciona un archivo', 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('archivo_dtes', archivoSeleccionado);
+        formData.append('tipo_busqueda', $('input[name="tipoBusqueda"]:checked').val());
+        formData.append('modo_actualizacion', $('input[name="modoActualizacionDte"]:checked').val());
+
+        Swal.fire({
+            title: 'Importando...',
+            text: 'Por favor espera mientras se procesan los DTEs',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: "{% url 'importar_dtes_csv' %}",
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            success: function(response) {
+                Swal.close();
+                
+                if (response.success) {
+                    mostrarResultados(response);
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function(xhr) {
+                Swal.close();
+                const errorMsg = xhr.responseJSON?.error || 'Error al procesar la solicitud';
+                Swal.fire('Error', errorMsg, 'error');
+            }
+        });
+    }
+
+    function mostrarResultados(response) {
+        let summaryHTML = '<div class="alert alert-success">';
+        summaryHTML += `<h5><i class="bi bi-check-circle me-2"></i>Importación Completada</h5>`;
+        summaryHTML += `<p class="mb-1"><strong>DTEs creados:</strong> ${response.dtes_creados}</p>`;
+        if (response.dtes_actualizados > 0) {
+            summaryHTML += `<p class="mb-1"><strong>DTEs actualizados:</strong> ${response.dtes_actualizados}</p>`;
+        }
+        if (response.dtes_omitidos > 0) {
+            summaryHTML += `<p class="mb-0 text-warning"><strong>DTEs omitidos:</strong> ${response.dtes_omitidos}</p>`;
+        }
+        summaryHTML += '</div>';
+        
+        $('#resultSummary').html(summaryHTML);
+        
+        if (response.errores && response.errores.length > 0) {
+            $('#errorList').empty();
+            response.errores.forEach(error => {
+                $('#errorList').append(`<li class="list-group-item list-group-item-danger">${error}</li>`);
+            });
+            $('#errorSection').show();
+        }
+        
+        $('#resultSection').show();
+        
+        Swal.fire({
+            icon: 'success',
+            title: 'Importación Exitosa',
+            html: `<div class="text-start">
+                <p class="mb-2"><strong>${response.message}</strong></p>
+                <p class="mb-0 small text-muted">Los DTEs están disponibles en Gestión de DTEs</p>
+            </div>`,
+            confirmButtonText: 'Ir a Gestión de DTEs',
+            confirmButtonColor: '#0d6efd'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = "{% url 'verGestionDteCompras' %}";
+            }
+        });
+    }
+
+    function resetForm() {
+        archivoSeleccionado = null;
+        $('#archivoDtes').val('');
+        $('#fileInfo').hide();
+        $('#previewSection').hide();
+        $('#resultSection').hide();
+        $('#btnImportar').prop('disabled', true);
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>

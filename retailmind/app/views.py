@@ -4826,6 +4826,7 @@ def cargarDteCompra(request):
             page_size = data.get('page_size', 20)  # 20 registros por página
             search = data.get('search', '').strip()
             tipo_documento_filtro = data.get('tipo_documento', '').strip()
+            filtro_vencimiento = data.get('filtro_vencimiento', '').strip()  # 'vencidos', 'por_vencer', 'pendientes'
 
             if not fecha_inicio or not fecha_fin:
                 return JsonResponse({'error': 'Fechas inválidas'}, status=400)
@@ -4843,12 +4844,13 @@ def cargarDteCompra(request):
                 return JsonResponse({'error': 'Empresa no identificada en sesión'}, status=403)
 
             # Query base optimizada
-            # Para DTEs de COMPRA: emisor = proveedor, receptor = nosotros
+            # Para DTEs de COMPRA: emisor = proveedor, receptor = nosotros (opcional)
             dtes_query = Dte.objects.filter(
                 tipo_transaccion='COMPRA',
-                receptor_id=empresa_id,  # Filtramos por receptor (nosotros)
                 fecha_emision__range=(fecha_inicio, fecha_fin)
-            ).select_related('emisor')  # El proveedor es el emisor
+            ).filter(
+                Q(receptor_id=empresa_id) | Q(receptor__isnull=True)  # Mostrar con o sin receptor
+            ).select_related('emisor', 'receptor')  # El proveedor es el emisor
 
             # Aplicar filtro por tipo de documento si se proporciona
             if tipo_documento_filtro:
@@ -4869,6 +4871,28 @@ def cargarDteCompra(request):
             # Ordenar por fecha de emisión descendente (más nuevo primero)
             dtes_query = dtes_query.order_by('-fecha_emision', '-id')
 
+            # Aplicar filtro de vencimiento si se especifica
+            if filtro_vencimiento:
+                hoy = date.today()
+                
+                # Solo aplicar a pendientes
+                dtes_query = dtes_query.filter(Q(estado_pago='Pendiente') | Q(estado_pago='Parcial'))
+                
+                if filtro_vencimiento == 'vencidos':
+                    # DTEs con fecha_vencimiento < hoy
+                    dtes_query = dtes_query.filter(fecha_vencimiento__lt=hoy)
+                elif filtro_vencimiento == 'por_vencer':
+                    # DTEs que vencen en próximos 7 días
+                    from datetime import timedelta
+                    fecha_limite = hoy + timedelta(days=7)
+                    dtes_query = dtes_query.filter(
+                        fecha_vencimiento__gte=hoy,
+                        fecha_vencimiento__lte=fecha_limite
+                    )
+                elif filtro_vencimiento == 'pendientes':
+                    # Solo pendientes, sin filtro adicional
+                    pass
+            
             # Contar total de registros para paginación
             total_count = dtes_query.count()
             

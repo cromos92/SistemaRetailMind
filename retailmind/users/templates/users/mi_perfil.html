@@ -1,0 +1,265 @@
+{% load static %}
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Breadcrumb -->
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Mi Perfil</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item active">Mi Perfil</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="card-title mb-0 text-white">
+                            <i class="ri-user-settings-line me-2"></i>
+                            Información Personal
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Foto de perfil -->
+                            <div class="col-md-3 text-center">
+                                <img src="{% static 'images/users/user-dummy-img.jpg' %}" 
+                                     class="rounded-circle img-thumbnail mb-3" 
+                                     width="150" 
+                                     id="fotoPerfil"
+                                     alt="Foto de perfil">
+                                <div>
+                                    <button class="btn btn-primary btn-sm" disabled title="Funcionalidad próximamente">
+                                        <i class="ri-image-edit-line me-1"></i>
+                                        Cambiar Foto
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Información del usuario -->
+                            <div class="col-md-9">
+                                <h5 class="mb-3">Datos Personales</h5>
+                                
+                                <!-- Formulario -->
+                                <form id="formPerfil">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Nombre</label>
+                                            <input type="text" class="form-control" 
+                                                   name="first_name" 
+                                                   value="{{ user.first_name }}"
+                                                   required>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Apellido</label>
+                                            <input type="text" class="form-control" 
+                                                   name="last_name" 
+                                                   value="{{ user.last_name }}"
+                                                   required>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Email</label>
+                                            <input type="email" class="form-control" 
+                                                   name="email" 
+                                                   value="{{ user.email }}"
+                                                   required>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Teléfono</label>
+                                            <input type="text" class="form-control" 
+                                                   name="telefono" 
+                                                   value="{{ user.telefono|default:'' }}"
+                                                   placeholder="+56912345678">
+                                        </div>
+                                        <div class="col-md-12 mb-3">
+                                            <label class="form-label fw-bold">Usuario</label>
+                                            <input type="text" class="form-control" 
+                                                   value="{{ user.username }}"
+                                                   disabled>
+                                            <small class="text-muted">El nombre de usuario no se puede cambiar</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="ri-save-line me-1"></i>
+                                        Guardar Cambios
+                                    </button>
+                                </form>
+                                
+                                <hr class="my-4">
+                                
+                                <!-- Cambiar contraseña -->
+                                <h5 class="mb-3">Seguridad</h5>
+                                <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalCambiarPassword">
+                                    <i class="ri-lock-password-line me-1"></i>
+                                    Cambiar Contraseña
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+<!-- Modal Cambiar Contraseña -->
+<div class="modal fade" id="modalCambiarPassword" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">
+                    <i class="ri-lock-password-line me-2"></i>
+                    Cambiar Contraseña
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formCambiarPassword">
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña Actual</label>
+                        <input type="password" class="form-control" name="password_actual" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nueva Contraseña</label>
+                        <input type="password" class="form-control" name="password_nueva" required minlength="6">
+                        <small class="text-muted">Mínimo 6 caracteres</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirmar Nueva Contraseña</label>
+                        <input type="password" class="form-control" name="password_confirmar" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" form="formCambiarPassword" class="btn btn-warning">
+                    <i class="ri-check-line me-1"></i>
+                    Cambiar Contraseña
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
+
+<script>
+// Actualizar perfil
+$('#formPerfil').on('submit', function(e) {
+    e.preventDefault();
+    
+    const data = {
+        first_name: $('input[name="first_name"]').val(),
+        last_name: $('input[name="last_name"]').val(),
+        email: $('input[name="email"]').val(),
+        telefono: $('input[name="telefono"]').val()
+    };
+    
+    $.ajax({
+        url: '{% url "users:actualizar_perfil" %}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: {'X-CSRFToken': getCookie('csrftoken')},
+        success: function(response) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Perfil Actualizado',
+                text: response.message,
+                timer: 2000
+            });
+        },
+        error: function(xhr) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: xhr.responseJSON?.error || 'Error al actualizar perfil'
+            });
+        }
+    });
+});
+
+// Cambiar contraseña
+$('#formCambiarPassword').on('submit', function(e) {
+    e.preventDefault();
+    
+    const nueva = $('input[name="password_nueva"]').val();
+    const confirmar = $('input[name="password_confirmar"]').val();
+    
+    if (nueva !== confirmar) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Las contraseñas no coinciden'
+        });
+        return;
+    }
+    
+    if (nueva.length < 6) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'La contraseña debe tener al menos 6 caracteres'
+        });
+        return;
+    }
+    
+    const data = {
+        password_actual: $('input[name="password_actual"]').val(),
+        password_nueva: nueva
+    };
+    
+    $.ajax({
+        url: '{% url "users:cambiar_password" %}',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        headers: {'X-CSRFToken': getCookie('csrftoken')},
+        success: function(response) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Contraseña Cambiada',
+                text: response.message,
+                timer: 2000
+            }).then(() => {
+                $('#modalCambiarPassword').modal('hide');
+                $('#formCambiarPassword')[0].reset();
+            });
+        },
+        error: function(xhr) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: xhr.responseJSON?.error || 'Error al cambiar contraseña'
+            });
+        }
+    });
+});
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>

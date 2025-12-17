@@ -3,7 +3,11 @@ from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
 from app.models import EmpresaUser
-def login_view(request): 
+def login_view(request):
+    # Si el usuario ya está autenticado, redirigir al home
+    if request.user.is_authenticated:
+        return redirect('verHome')
+    
     if request.method == 'POST':
         email = request.POST['email'].lower()
         password = request.POST['password-input']

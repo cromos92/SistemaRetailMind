@@ -69,9 +69,11 @@ def listar_sucursales_tabla(request):
         page_size = int(request.GET.get('page_size', 10))
         
         # Construir query
-        sucursales = Sucursal.objects.filter(
-            empresa=empresa_user.empresa
-        ).select_related('empresa')
+        # Opción 1: Solo sucursales de tu empresa (más seguro)
+        # sucursales = Sucursal.objects.filter(empresa=empresa_user.empresa).select_related('empresa')
+        
+        # Opción 2: Todas las sucursales (modo administrador)
+        sucursales = Sucursal.objects.all().select_related('empresa')
         
         # Aplicar búsqueda (solo alias y dirección)
         if search:

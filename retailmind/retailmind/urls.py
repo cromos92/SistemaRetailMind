@@ -26,6 +26,7 @@ urlpatterns = [
     path('app/', include('app.urls')),
     path('empresa_management/', include('empresa_management.urls')),
     path('users/', include('users.urls')),  # Nueva aplicación de usuarios
+    path('assistant/', include('assistant.urls')),  # Asistente Conversacional
     path('', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
 ]

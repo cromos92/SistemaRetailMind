@@ -134,7 +134,7 @@ def gestion_usuarios(request):
     # Verificar permisos
     if not request.user.tiene_permiso_usuarios('crear') and not request.user.is_superuser:
         messages.error(request, "No tienes permisos para acceder a la gestión de usuarios")
-        return redirect('app:verHome')
+        return redirect('verHome')
     
     return render(request, 'users/gestion_usuarios.html')
 
@@ -563,16 +563,28 @@ def resetear_password(request, usuario_id):
         usuario.set_password(nueva_password)
         usuario.save()
         
-        # Enviar correo con nueva contraseña
+        # Intentar enviar correo
+        email_enviado = False
+        mensaje_email = ""
+        
         try:
             enviar_nueva_password(usuario, nueva_password)
-            mensaje = f"Contraseña reseteada y enviada por correo a {usuario.email}"
+            email_enviado = True
+            mensaje_email = f"y enviada por correo a {usuario.email}"
         except Exception as e:
-            mensaje = f"Contraseña reseteada pero hubo un error al enviar el correo: {str(e)}"
+            print(f"⚠️ Error al enviar email: {str(e)}")
+            mensaje_email = "(email no configurado)"
         
         return JsonResponse({
             'success': True,
-            'message': mensaje
+            'message': f"Contraseña reseteada exitosamente {mensaje_email}",
+            'email_enviado': email_enviado,
+            'nueva_password': nueva_password if not email_enviado else None,  # ⭐ Mostrar si no se envió
+            'usuario': {
+                'nombre': usuario.get_full_name(),
+                'email': usuario.email,
+                'username': usuario.username
+            }
         })
         
     except Usuario.DoesNotExist:
@@ -814,3 +826,113 @@ def enviar_nueva_password(usuario, nueva_password):
     except Exception as e:
         print(f"Error enviando correo: {e}")
         raise e
+
+
+# ========== PERFIL DE USUARIO ==========
+
+@login_required
+def mi_perfil(request):
+    """Vista del perfil del usuario actual"""
+    try:
+        return render(request, 'users/mi_perfil.html', {
+            'usuario': request.user
+        })
+    except Exception as e:
+        print(f"❌ Error en mi_perfil: {str(e)}")
+        from django.http import HttpResponse
+        return HttpResponse(f"Error: {str(e)}", status=500)
+
+@login_required
+@require_POST
+@csrf_exempt
+def actualizar_perfil(request):
+    """Actualizar datos del perfil del usuario"""
+    try:
+        data = json.loads(request.body)
+        usuario = request.user
+        
+        # Actualizar campos editables
+        usuario.first_name = data.get('first_name', usuario.first_name).strip()
+        usuario.last_name = data.get('last_name', usuario.last_name).strip()
+        usuario.email = data.get('email', usuario.email).strip()
+        usuario.telefono = data.get('telefono', usuario.telefono or '').strip()
+        usuario.direccion = data.get('direccion', usuario.direccion or '').strip()
+        usuario.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Perfil actualizado exitosamente'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+@login_required
+@require_POST
+@csrf_exempt
+def cambiar_password(request):
+    """Cambiar contraseña del usuario actual"""
+    try:
+        data = json.loads(request.body)
+        usuario = request.user
+        
+        password_actual = data.get('password_actual', '').strip()
+        password_nueva = data.get('password_nueva', '').strip()
+        
+        if not password_actual or not password_nueva:
+            return JsonResponse({
+                'success': False,
+                'error': 'Todos los campos son obligatorios'
+            }, status=400)
+        
+        # Verificar contraseña actual
+        if not usuario.check_password(password_actual):
+            return JsonResponse({
+                'success': False,
+                'error': 'La contraseña actual es incorrecta'
+            }, status=400)
+        
+        # Cambiar contraseña
+        usuario.set_password(password_nueva)
+        usuario.save()
+        
+        # Actualizar sesión para no cerrar sesión
+        from django.contrib.auth import update_session_auth_hash
+        update_session_auth_hash(request, usuario)
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Contraseña cambiada exitosamente'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+@login_required
+@require_POST
+@csrf_exempt
+def subir_foto_perfil(request):
+    """Subir foto de perfil del usuario (placeholder)"""
+    try:
+        if 'foto' not in request.FILES:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se proporcionó ninguna imagen'
+            }, status=400)
+        
+        # TODO: Implementar guardado de foto
+        # Por ahora, retornar éxito
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Funcionalidad de foto en desarrollo'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

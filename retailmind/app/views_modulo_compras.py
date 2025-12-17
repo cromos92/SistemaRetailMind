@@ -21,7 +21,7 @@ from decimal import Decimal
 from .models import (
     Compras, Compras_Producto, Compras_Producto_Talla, Dte, Dte_Detalle_Pago, 
     Dte_Productos, Empresa, Producto, Producto_Talla, Productos_Recepcionados,
-    Sucursal, EmpresaUser, Movimientos_Producto, LoteProducto
+    Sucursal, EmpresaUser, Movimientos_Producto, LoteProducto, Dte_Incidencia
 )
 
 
@@ -375,16 +375,21 @@ def obtener_dte_compras(request):
         # Serializar datos
         dtes_data = []
         for dte in dtes_page:
+            # Calcular IVA
+            iva = dte.monto_con_iva - dte.monto_neto
+            
             dtes_data.append({
                 'id': dte.id,
-                'numero_dte': dte.numero_dte,
+                'numero_dte': dte.numero_documento,  # Corregido: numero_documento
                 'tipo_documento': dte.tipo_documento,
                 'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y'),
                 'emisor': dte.emisor.nombre,
-                'subtotal': float(dte.subtotal),
-                'iva': float(dte.iva),
-                'total': float(dte.total),
+                'emisor_rut': dte.emisor.rut if dte.emisor else '',
+                'subtotal': float(dte.monto_neto),  # Corregido: monto_neto
+                'iva': float(iva),  # Calculado
+                'total': float(dte.monto_con_iva),  # Corregido: monto_con_iva
                 'estado_dte': dte.estado_dte,
+                'estado_pago': dte.estado_pago,
                 'fecha_recepcion': dte.fecha_recepcion.strftime('%d/%m/%Y') if dte.fecha_recepcion else None
             })
         
@@ -830,23 +835,83 @@ def eliminar_dte(request, dte_id):
     """Eliminar DTE de compras"""
     if request.method == 'DELETE':
         try:
+            import json
+            body = json.loads(request.body) if request.body else {}
+            forzar = body.get('forzar', False)  # Parámetro para forzar eliminación
+            
             dte = get_object_or_404(Dte, id=dte_id)
             
-            # Verificar si se puede eliminar
-            if dte.estado_dte == 'PAGADO':
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No se puede eliminar un DTE pagado'
-                })
+            # Si no es forzado, hacer validaciones normales
+            if not forzar:
+                # Verificar si se puede eliminar
+                if dte.estado_pago == 'Pagado':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'No se puede eliminar un DTE pagado',
+                        'puede_forzar': True
+                    }, status=400)
+                
+                # Verificar si tiene recepciones asociadas
+                if dte.fecha_recepcion:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'No se puede eliminar un DTE que ya fue recepcionado',
+                        'puede_forzar': True
+                    }, status=400)
+                
+                # Verificar si tiene productos asociados
+                productos_dte = Dte_Productos.objects.filter(dte=dte).count()
+                if productos_dte > 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'No se puede eliminar un DTE con {productos_dte} producto(s) asociado(s)',
+                        'puede_forzar': True,
+                        'productos_count': productos_dte
+                    }, status=400)
+                
+                # Verificar si tiene Notas de Crédito asociadas
+                if dte.tipo_documento in ['FACTURA ELECTRONICA', '33', 'FACTURA']:
+                    nc_asociadas = Dte_Detalle_Pago.objects.filter(
+                        dte=dte,
+                        metodo_pago='Nota de Crédito'
+                    ).count()
+                    
+                    if nc_asociadas > 0:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'No se puede eliminar una factura con {nc_asociadas} Nota(s) de Crédito asociada(s)',
+                            'puede_forzar': True
+                        }, status=400)
+                
+                # Verificar si es una NC enlazada a una factura
+                if dte.tipo_documento in ['NOTA DE CREDITO', '61', 'NC']:
+                    pago_nc = Dte_Detalle_Pago.objects.filter(
+                        voucher=str(dte.numero_documento),
+                        metodo_pago='Nota de Crédito'
+                    ).first()
+                    
+                    if pago_nc:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'No se puede eliminar una NC enlazada a la Factura #{pago_nc.dte.numero_documento}',
+                            'puede_forzar': True
+                        }, status=400)
             
-            # Verificar si tiene recepciones asociadas
-            if dte.fecha_recepcion:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No se puede eliminar un DTE que ya fue recepcionado'
-                })
-            
-            dte.delete()
+            # Eliminación forzada o sin restricciones
+            if forzar:
+                with transaction.atomic():
+                    # Eliminar productos asociados
+                    Dte_Productos.objects.filter(dte=dte).delete()
+                    
+                    # Eliminar pagos/NCs asociadas
+                    Dte_Detalle_Pago.objects.filter(dte=dte).delete()
+                    
+                    # Eliminar el DTE
+                    dte.delete()
+                    
+                print(f"🗑️ DTE #{dte.numero_documento} eliminado forzadamente (ID={dte_id})")
+            else:
+                dte.delete()
             
             return JsonResponse({
                 'success': True,
@@ -857,9 +922,9 @@ def eliminar_dte(request, dte_id):
             return JsonResponse({
                 'success': False,
                 'error': f'Error al eliminar DTE: {str(e)}'
-            })
+            }, status=500)
     
-    return JsonResponse({'success': False, 'error': 'Método no permitido'})
+    return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
 
 # ========== DASHBOARDS DE COMPRAS ==========
@@ -1360,3 +1425,1314 @@ def obtenerDetalleComprasPorParametros(request):
         'success': True,
         'message': 'Funcionalidad en desarrollo'
     })
+
+
+@login_required
+@require_GET
+def obtener_resumen_pendientes_anio(request):
+    """Obtener resumen de DTEs pendientes del año actual con KPIs de vencimiento"""
+    try:
+        from datetime import datetime, date
+        
+        # Obtener año actual
+        ahora = datetime.now()
+        anio_actual = ahora.year
+        hoy = date.today()
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        
+        # Query para DTEs de compra del año actual
+        queryset = Dte.objects.filter(
+            tipo_transaccion='COMPRA',
+            fecha_emision__year=anio_actual
+        ).filter(
+            Q(receptor_id=empresa_actual_id) | Q(receptor__isnull=True)
+        )
+        
+        # Contar pendientes
+        pendientes = queryset.filter(
+            Q(estado_pago='Pendiente') | Q(estado_pago='Parcial')
+        )
+        
+        cantidad_pendientes = pendientes.count()
+        
+        # Calcular monto total pendiente y clasificar por vencimiento
+        monto_total_pendiente = 0
+        vencidos = 0  # Ya pasó la fecha de vencimiento
+        por_vencer_pronto = 0  # Vencen en los próximos 7 días
+        al_dia = 0  # Más de 7 días para vencer
+        
+        monto_vencidos = 0
+        monto_por_vencer = 0
+        monto_al_dia = 0
+        
+        for dte in pendientes:
+            monto_dte = dte.monto_con_iva
+            
+            # Restar notas de crédito asociadas
+            notas_credito = Dte_Detalle_Pago.objects.filter(
+                dte=dte,
+                metodo_pago='Nota de Crédito'
+            ).aggregate(total=Sum('monto'))['total'] or 0
+            
+            saldo_pendiente = float(monto_dte - notas_credito)
+            monto_total_pendiente += saldo_pendiente
+            
+            # Clasificar por vencimiento
+            dias_hasta_vencimiento = (dte.fecha_vencimiento - hoy).days
+            
+            if dias_hasta_vencimiento < 0:
+                # Ya venció
+                vencidos += 1
+                monto_vencidos += saldo_pendiente
+            elif dias_hasta_vencimiento <= 7:
+                # Por vencer en 7 días o menos
+                por_vencer_pronto += 1
+                monto_por_vencer += saldo_pendiente
+            else:
+                # Al día (más de 7 días)
+                al_dia += 1
+                monto_al_dia += saldo_pendiente
+        
+        # Estadísticas adicionales
+        total_dtes = queryset.count()
+        pagados = queryset.filter(estado_pago='Pagado').count()
+        
+        return JsonResponse({
+            'success': True,
+            'anio': anio_actual,
+            'cantidad_pendientes': cantidad_pendientes,
+            'monto_pendiente': monto_total_pendiente,
+            'total_dtes': total_dtes,
+            'pagados': pagados,
+            # KPIs de vencimiento
+            'vencidos': vencidos,
+            'monto_vencidos': monto_vencidos,
+            'por_vencer_pronto': por_vencer_pronto,
+            'monto_por_vencer': monto_por_vencer,
+            'al_dia': al_dia,
+            'monto_al_dia': monto_al_dia
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener resumen: {str(e)}'
+        })
+
+
+# ========== EXPORTACIÓN DE COMPRAS ACTUALES ==========
+
+@require_GET
+@login_required
+def exportar_compras_excel(request):
+    """Exportar compras actuales a Excel con productos y detalles"""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        
+        anio = request.GET.get('anio', timezone.now().year)
+        
+        # Obtener compras del año
+        compras = Compras.objects.filter(fecha__year=anio).select_related('empresa').order_by('-fecha')
+        
+        if not compras.exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'No hay compras para el año {anio}'
+            })
+        
+        # Crear workbook
+        wb = openpyxl.Workbook()
+        
+        # Hoja 1: Resumen de Compras
+        ws_resumen = wb.active
+        ws_resumen.title = "Resumen Compras"
+        
+        # Estilos
+        header_fill = PatternFill(start_color="0066CC", end_color="0066CC", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True, size=11)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Encabezados
+        headers_resumen = [
+            'ID', 'Proveedor', 'RUT Proveedor', 'Nombre Compra', 'Temporada',
+            'Fecha Inicio', 'Fecha Término', 'Fecha Registro', 'Responsable',
+            'Total Productos', 'Total Unidades', 'Costo Total', 'Venta Esperada', 'Recepcionado'
+        ]
+        
+        for col, header in enumerate(headers_resumen, start=1):
+            cell = ws_resumen.cell(row=1, column=col)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+        
+        # Datos
+        for row_idx, compra in enumerate(compras, start=2):
+            # Calcular totales
+            productos = Compras_Producto.objects.filter(compras=compra)
+            total_productos = productos.count()
+            
+            total_unidades = Compras_Producto_Talla.objects.filter(
+                compra_producto__compras=compra
+            ).aggregate(total=Sum('stock'))['total'] or 0
+            
+            costo_total = productos.aggregate(
+                total=Sum(F('costo') * F('compras_producto_talla__stock'))
+            )['total'] or 0
+            
+            venta_esperada = productos.aggregate(
+                total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+            )['total'] or 0
+            
+            recepcionado = Productos_Recepcionados.objects.filter(
+                compra_producto_talla__compra_producto__compras=compra
+            ).aggregate(total=Sum('stockArribado'))['total'] or 0
+            
+            # Escribir datos
+            rut_proveedor = ''
+            if compra.empresa and compra.empresa.rut:
+                rut_proveedor = compra.empresa.rut.replace('.', '')
+            
+            ws_resumen.cell(row=row_idx, column=1, value=compra.id)
+            ws_resumen.cell(row=row_idx, column=2, value=compra.empresa.nombre if compra.empresa else '')
+            ws_resumen.cell(row=row_idx, column=3, value=rut_proveedor)
+            ws_resumen.cell(row=row_idx, column=4, value=compra.nombre)
+            ws_resumen.cell(row=row_idx, column=5, value=compra.temporada)
+            ws_resumen.cell(row=row_idx, column=6, value=compra.fechaInicioTemporada)
+            ws_resumen.cell(row=row_idx, column=7, value=compra.fechaTerminoTemporada)
+            ws_resumen.cell(row=row_idx, column=8, value=compra.fecha)
+            ws_resumen.cell(row=row_idx, column=9, value=compra.responsable)
+            ws_resumen.cell(row=row_idx, column=10, value=total_productos)
+            ws_resumen.cell(row=row_idx, column=11, value=total_unidades)
+            ws_resumen.cell(row=row_idx, column=12, value=float(costo_total) if costo_total else 0)
+            ws_resumen.cell(row=row_idx, column=13, value=float(venta_esperada) if venta_esperada else 0)
+            ws_resumen.cell(row=row_idx, column=14, value=recepcionado)
+            
+            # Aplicar bordes
+            for col in range(1, 15):
+                ws_resumen.cell(row=row_idx, column=col).border = border
+        
+        # Ajustar ancho de columnas
+        for col in ws_resumen.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws_resumen.column_dimensions[column].width = adjusted_width
+        
+        # Hoja 2: Detalle de Productos
+        ws_detalle = wb.create_sheet("Detalle Productos")
+        
+        headers_detalle = [
+            'ID Compra', 'Nombre Compra', 'Proveedor', 'Nombre Producto',
+            'Descripción', 'Marca', 'Color', 'Género', 'Costo', 'Precio Sugerido',
+            'Talla', 'Stock', 'Recepcionado', 'Factura DTE'
+        ]
+        
+        for col, header in enumerate(headers_detalle, start=1):
+            cell = ws_detalle.cell(row=1, column=col)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+        
+        # Datos de productos
+        row_idx = 2
+        for compra in compras:
+            productos = Compras_Producto.objects.filter(compras=compra).prefetch_related('compras_producto_talla')
+            
+            for producto in productos:
+                tallas = Compras_Producto_Talla.objects.filter(compra_producto=producto)
+                
+                for talla in tallas:
+                    # Obtener recepción si existe
+                    recepcion = Productos_Recepcionados.objects.filter(
+                        compra_producto_talla=talla
+                    ).first()
+                    
+                    recepcionado = recepcion.stockArribado if recepcion else 0
+                    
+                    # Obtener factura asociada si existe
+                    factura = ''
+                    if recepcion and recepcion.dte:
+                        factura = f"{recepcion.dte.numero_documento}"
+                    
+                    ws_detalle.cell(row=row_idx, column=1, value=compra.id)
+                    ws_detalle.cell(row=row_idx, column=2, value=compra.nombre)
+                    ws_detalle.cell(row=row_idx, column=3, value=compra.empresa.nombre if compra.empresa else '')
+                    ws_detalle.cell(row=row_idx, column=4, value=producto.nombre)
+                    ws_detalle.cell(row=row_idx, column=5, value=producto.descripcion or '')
+                    ws_detalle.cell(row=row_idx, column=6, value=producto.atributo1)
+                    ws_detalle.cell(row=row_idx, column=7, value=producto.atributo2)
+                    ws_detalle.cell(row=row_idx, column=8, value=producto.atributo3)
+                    ws_detalle.cell(row=row_idx, column=9, value=producto.costo)
+                    ws_detalle.cell(row=row_idx, column=10, value=producto.precioSugerido)
+                    ws_detalle.cell(row=row_idx, column=11, value=talla.talla)
+                    ws_detalle.cell(row=row_idx, column=12, value=talla.stock)
+                    ws_detalle.cell(row=row_idx, column=13, value=recepcionado)
+                    ws_detalle.cell(row=row_idx, column=14, value=factura)
+                    
+                    # Aplicar bordes
+                    for col in range(1, 15):
+                        ws_detalle.cell(row=row_idx, column=col).border = border
+                    
+                    row_idx += 1
+        
+        # Ajustar ancho de columnas en detalle
+        for col in ws_detalle.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws_detalle.column_dimensions[column].width = adjusted_width
+        
+        # Preparar respuesta
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="compras_{anio}.xlsx"'
+        
+        wb.save(response)
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar compras: {str(e)}'
+        })
+
+
+@require_GET
+@login_required
+def exportar_compras_csv(request):
+    """Exportar compras actuales a CSV"""
+    try:
+        anio = request.GET.get('anio', timezone.now().year)
+        
+        # Obtener compras del año
+        compras = Compras.objects.filter(fecha__year=anio).select_related('empresa').order_by('-fecha')
+        
+        if not compras.exists():
+            return JsonResponse({
+                'success': False,
+                'error': f'No hay compras para el año {anio}'
+            })
+        
+        # Crear respuesta CSV
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="compras_{anio}.csv"'
+        response.write('\ufeff')  # BOM para UTF-8
+        
+        writer = csv.writer(response)
+        
+        # Encabezados
+        writer.writerow([
+            'ID Compra', 'Proveedor', 'RUT Proveedor', 'Nombre Compra', 'Temporada',
+            'Fecha Inicio', 'Fecha Término', 'Fecha Registro', 'Responsable',
+            'Nombre Producto', 'Descripción', 'Marca', 'Color', 'Género',
+            'Costo', 'Precio Sugerido', 'Talla', 'Stock', 'Recepcionado', 'Factura DTE'
+        ])
+        
+        # Datos
+        for compra in compras:
+            productos = Compras_Producto.objects.filter(compras=compra).prefetch_related('compras_producto_talla')
+            
+            for producto in productos:
+                tallas = Compras_Producto_Talla.objects.filter(compra_producto=producto)
+                
+                for talla in tallas:
+                    # Obtener recepción si existe
+                    recepcion = Productos_Recepcionados.objects.filter(
+                        compra_producto_talla=talla
+                    ).first()
+                    
+                    recepcionado = recepcion.stockArribado if recepcion else 0
+                    factura = ''
+                    if recepcion and recepcion.dte:
+                        factura = str(recepcion.dte.numero_documento)
+                    
+                    # Limpiar RUT (sin puntos)
+                    rut_proveedor = ''
+                    if compra.empresa and compra.empresa.rut:
+                        rut_proveedor = compra.empresa.rut.replace('.', '')
+                    
+                    writer.writerow([
+                        compra.id,
+                        compra.empresa.nombre if compra.empresa else '',
+                        rut_proveedor,
+                        compra.nombre,
+                        compra.temporada,
+                        compra.fechaInicioTemporada.strftime('%Y-%m-%d') if compra.fechaInicioTemporada else '',
+                        compra.fechaTerminoTemporada.strftime('%Y-%m-%d') if compra.fechaTerminoTemporada else '',
+                        compra.fecha.strftime('%Y-%m-%d'),
+                        compra.responsable,
+                        producto.nombre,
+                        producto.descripcion or '',
+                        producto.atributo1,
+                        producto.atributo2,
+                        producto.atributo3,
+                        producto.costo,
+                        producto.precioSugerido,
+                        talla.talla,
+                        talla.stock,
+                        recepcionado,
+                        factura
+                    ])
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar compras: {str(e)}'
+        })
+
+
+# ========== GESTIÓN DE PROVEEDORES - IMPORTACIÓN ==========
+
+@login_required
+def ver_importacion_proveedores(request):
+    """Vista para importar proveedores desde CSV/Excel"""
+    return render(request, 'vistas/modulo_compras/importacion_proveedores.html')
+
+
+@require_POST
+def importar_proveedores_csv(request):
+    """Importar proveedores desde archivo CSV/Excel"""
+    try:
+        archivo = request.FILES.get('archivo_proveedores')
+        if not archivo:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se proporcionó ningún archivo'
+            })
+        
+        # Obtener modo de importación
+        modo_actualizacion = request.POST.get('modo_actualizacion', 'crear_y_actualizar')
+        
+        # Validar extensión
+        nombre_archivo = archivo.name.lower()
+        if not (nombre_archivo.endswith('.csv') or nombre_archivo.endswith('.xlsx') or nombre_archivo.endswith('.xls')):
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de archivo no válido. Use CSV o Excel (.xlsx, .xls)'
+            })
+        
+        # Leer datos según formato
+        if nombre_archivo.endswith('.csv'):
+            # Leer CSV
+            decoded_file = archivo.read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            datos = list(reader)
+        else:
+            # Leer Excel
+            import openpyxl
+            wb = openpyxl.load_workbook(archivo)
+            ws = wb.active
+            
+            # Obtener encabezados (primera fila) y limpiarlos
+            headers = []
+            for cell in ws[1]:
+                header = str(cell.value or '').strip().lower()
+                headers.append(header)
+            
+            # Leer datos
+            datos = []
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if any(row):  # Saltar filas vacías
+                    row_dict = {}
+                    for i, value in enumerate(row):
+                        if i < len(headers):
+                            # Convertir None a string vacío
+                            row_dict[headers[i]] = str(value) if value is not None else ''
+                    datos.append(row_dict)
+        
+        # DEBUG: Mostrar headers leídos
+        if datos and len(datos) > 0:
+            print("🔍 DEBUG - Headers leídos:", list(datos[0].keys()))
+            print("🔍 DEBUG - Primera fila:", datos[0])
+        
+        # Procesar datos
+        proveedores_creados = 0
+        proveedores_actualizados = 0
+        proveedores_omitidos = 0
+        errores = []
+        
+        with transaction.atomic():
+            for idx, fila in enumerate(datos, start=2):
+                try:
+                    # Validar campos requeridos
+                    rut = str(fila.get('rut', '') or '').strip()
+                    nombre = str(fila.get('nombre', '') or '').strip()
+                    
+                    # Verificar si la fila está completamente vacía
+                    valores_fila = [str(v or '').strip() for v in fila.values()]
+                    if not any(valores_fila):
+                        # Fila vacía, ignorar silenciosamente
+                        continue
+                    
+                    # Si hay algún dato pero falta RUT o nombre, reportar error
+                    if not rut or not nombre:
+                        # DEBUG: Mostrar qué se está recibiendo
+                        print(f"❌ DEBUG - Fila {idx} - RUT: '{rut}', Nombre: '{nombre}'")
+                        print(f"   Datos fila: {fila}")
+                        # Solo reportar error si hay otros datos en la fila
+                        if any(valores_fila):
+                            errores.append(f'Fila {idx}: RUT y Nombre son requeridos (RUT="{rut}", Nombre="{nombre}")')
+                        continue
+                    
+                    # Validar formato RUT (básico)
+                    if not validar_rut_basico(rut):
+                        errores.append(f'Fila {idx}: RUT "{rut}" no válido')
+                        continue
+                    
+                    # Verificar si el proveedor ya existe
+                    proveedor_existente = Empresa.objects.filter(rut=rut).first()
+                    
+                    # Preparar datos del proveedor (usar minúsculas para keys)
+                    datos_proveedor = {
+                        'rut': rut,
+                        'nombre': nombre,
+                        'nombre_fantasia': str(fila.get('nombre_fantasia', fila.get('nombre', nombre))).strip(),
+                        'razon_social': str(fila.get('razon_social', fila.get('nombre', nombre))).strip(),
+                        'giro': str(fila.get('giro', '')).strip() or 'Sin especificar',
+                        'direccion': str(fila.get('direccion', '')).strip() or 'Sin especificar',
+                        'comuna': str(fila.get('comuna', '')).strip() or 'Sin especificar',
+                        'ciudad': str(fila.get('ciudad', '')).strip() or 'Sin especificar',
+                        'esProveedor': True,
+                        'correoVendedor': str(fila.get('correo_vendedor', '') or fila.get('email', '')).strip() or 'sin@correo.com',
+                        'correoIntercambio': str(fila.get('correo_intercambio', '') or fila.get('email', '')).strip() or 'sin@correo.com',
+                        'correoAdministrador': str(fila.get('correo_administrador', '') or fila.get('email', '')).strip() or 'sin@correo.com',
+                        'acteco': str(fila.get('acteco', '')).strip() or None,
+                        'contacto1': str(fila.get('telefono', '') or fila.get('contacto1', '')).strip() or None,
+                        'contacto2': str(fila.get('contacto2', '')).strip() or None,
+                    }
+                    
+                    if proveedor_existente:
+                        if modo_actualizacion == 'crear_y_actualizar':
+                            # Actualizar proveedor existente
+                            for key, value in datos_proveedor.items():
+                                setattr(proveedor_existente, key, value)
+                            proveedor_existente.save()
+                            proveedores_actualizados += 1
+                        elif modo_actualizacion == 'solo_crear':
+                            # Omitir proveedores existentes
+                            proveedores_omitidos += 1
+                        elif modo_actualizacion == 'solo_actualizar':
+                            # Actualizar solo proveedores existentes
+                            for key, value in datos_proveedor.items():
+                                setattr(proveedor_existente, key, value)
+                            proveedor_existente.save()
+                            proveedores_actualizados += 1
+                    else:
+                        if modo_actualizacion in ['crear_y_actualizar', 'solo_crear']:
+                            # Crear nuevo proveedor
+                            Empresa.objects.create(**datos_proveedor)
+                            proveedores_creados += 1
+                        else:
+                            # Modo solo_actualizar: omitir nuevos
+                            proveedores_omitidos += 1
+                        
+                except Exception as e:
+                    errores.append(f'Fila {idx}: {str(e)}')
+                    continue
+        
+        # Preparar mensaje de respuesta
+        mensaje = []
+        if proveedores_creados > 0:
+            mensaje.append(f'{proveedores_creados} proveedores creados')
+        if proveedores_actualizados > 0:
+            mensaje.append(f'{proveedores_actualizados} proveedores actualizados')
+        if proveedores_omitidos > 0:
+            mensaje.append(f'{proveedores_omitidos} proveedores omitidos')
+        
+        return JsonResponse({
+            'success': True,
+            'message': ', '.join(mensaje) if mensaje else 'No se procesaron proveedores',
+            'proveedores_creados': proveedores_creados,
+            'proveedores_actualizados': proveedores_actualizados,
+            'proveedores_omitidos': proveedores_omitidos,
+            'errores': errores
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al importar proveedores: {str(e)}'
+        })
+
+
+def validar_rut_basico(rut):
+    """
+    Validación de formato RUT chileno
+    Acepta formatos: 76123456-7, 76.123.456-7
+    """
+    # Eliminar puntos y espacios
+    rut_limpio = rut.replace('.', '').replace(' ', '').upper()
+    
+    # Validar que tenga guión
+    if '-' not in rut_limpio:
+        return False
+    
+    # Separar número y dígito verificador por guión
+    partes = rut_limpio.split('-')
+    if len(partes) != 2:
+        return False
+    
+    numero = partes[0]
+    dv = partes[1]
+    
+    # Validar longitud
+    if len(numero) < 7 or len(numero) > 8:
+        return False
+    
+    # Validar que el número sea numérico
+    if not numero.isdigit():
+        return False
+    
+    # Validar DV (debe ser dígito o K)
+    if not (dv.isdigit() or dv == 'K'):
+        return False
+    
+    # Calcular dígito verificador
+    suma = 0
+    multiplicador = 2
+    
+    for digit in reversed(numero):
+        suma += int(digit) * multiplicador
+        multiplicador += 1
+        if multiplicador > 7:
+            multiplicador = 2
+    
+    resto = suma % 11
+    dv_calculado = 11 - resto
+    
+    if dv_calculado == 11:
+        dv_calculado = '0'
+    elif dv_calculado == 10:
+        dv_calculado = 'K'
+    else:
+        dv_calculado = str(dv_calculado)
+    
+    return dv == dv_calculado
+
+
+@require_GET
+def descargar_formato_proveedores(request):
+    """Descargar formato CSV de ejemplo para importar proveedores"""
+    try:
+        # Crear respuesta CSV
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="formato_proveedores.csv"'
+        response.write('\ufeff')  # BOM para UTF-8
+        
+        writer = csv.writer(response)
+        
+        # Encabezados
+        writer.writerow([
+            'rut', 'nombre', 'nombre_fantasia', 'razon_social', 
+            'giro', 'direccion', 'comuna', 'ciudad',
+            'email', 'telefono', 'acteco'
+        ])
+        
+        # Filas de ejemplo (RUT sin puntos)
+        writer.writerow([
+            '76123456-7', 
+            'Empresa Ejemplo SPA', 
+            'Ejemplo', 
+            'Empresa Ejemplo Sociedad por Acciones',
+            'Comercio al por mayor',
+            'Av. Principal 123',
+            'Santiago',
+            'Santiago',
+            'contacto@ejemplo.cl',
+            '+56912345678',
+            '471010'
+        ])
+        writer.writerow([
+            '77234567-8', 
+            'Distribuidora ABC Ltda', 
+            'ABC Distribuidora', 
+            'Distribuidora ABC Limitada',
+            'Distribución de productos',
+            'Calle Comercio 456',
+            'Providencia',
+            'Santiago',
+            'ventas@abc.cl',
+            '+56987654321',
+            '471020'
+        ])
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar formato: {str(e)}'
+        })
+
+
+@require_GET
+def exportar_proveedores_actuales(request):
+    """Exportar todos los proveedores actuales a CSV"""
+    try:
+        # Obtener proveedores
+        proveedores = Empresa.objects.filter(esProveedor=True).order_by('nombre')
+        
+        # Crear respuesta CSV
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="proveedores_actuales.csv"'
+        response.write('\ufeff')  # BOM para UTF-8
+        
+        writer = csv.writer(response)
+        
+        # Encabezados
+        writer.writerow([
+            'id', 'rut', 'nombre', 'nombre_fantasia', 'razon_social', 
+            'giro', 'direccion', 'comuna', 'ciudad',
+            'email', 'telefono', 'acteco'
+        ])
+        
+        # Datos
+        for proveedor in proveedores:
+            # Limpiar RUT (sin puntos)
+            rut_limpio = proveedor.rut.replace('.', '') if proveedor.rut else ''
+            
+            writer.writerow([
+                proveedor.id,
+                rut_limpio,
+                proveedor.nombre,
+                proveedor.nombre_fantasia,
+                proveedor.razon_social,
+                proveedor.giro,
+                proveedor.direccion,
+                proveedor.comuna,
+                proveedor.ciudad,
+                proveedor.correoVendedor or proveedor.correoIntercambio or proveedor.correoAdministrador,
+                proveedor.contacto1 or '',
+                proveedor.acteco or ''
+            ])
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar proveedores: {str(e)}'
+        })
+
+
+@require_GET
+def exportar_proveedores_excel(request):
+    """Exportar proveedores actuales a Excel"""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        # Obtener proveedores
+        proveedores = Empresa.objects.filter(esProveedor=True).order_by('nombre')
+        
+        # Crear workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Proveedores"
+        
+        # Estilos
+        header_fill = PatternFill(start_color="0066CC", end_color="0066CC", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        
+        # Encabezados
+        headers = [
+            'ID', 'RUT', 'Nombre', 'Nombre Fantasía', 'Razón Social',
+            'Giro', 'Dirección', 'Comuna', 'Ciudad',
+            'Email', 'Teléfono', 'Acteco'
+        ]
+        
+        for col, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Datos
+        for row_idx, proveedor in enumerate(proveedores, start=2):
+            # Limpiar RUT (sin puntos)
+            rut_limpio = proveedor.rut.replace('.', '') if proveedor.rut else ''
+            
+            ws.cell(row=row_idx, column=1, value=proveedor.id)
+            ws.cell(row=row_idx, column=2, value=rut_limpio)
+            ws.cell(row=row_idx, column=3, value=proveedor.nombre)
+            ws.cell(row=row_idx, column=4, value=proveedor.nombre_fantasia)
+            ws.cell(row=row_idx, column=5, value=proveedor.razon_social)
+            ws.cell(row=row_idx, column=6, value=proveedor.giro)
+            ws.cell(row=row_idx, column=7, value=proveedor.direccion)
+            ws.cell(row=row_idx, column=8, value=proveedor.comuna)
+            ws.cell(row=row_idx, column=9, value=proveedor.ciudad)
+            ws.cell(row=row_idx, column=10, value=proveedor.correoVendedor or proveedor.correoIntercambio or proveedor.correoAdministrador)
+            ws.cell(row=row_idx, column=11, value=proveedor.contacto1 or '')
+            ws.cell(row=row_idx, column=12, value=proveedor.acteco or '')
+        
+        # Ajustar ancho de columnas
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # Preparar respuesta
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="proveedores_actuales.xlsx"'
+        
+        wb.save(response)
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar a Excel: {str(e)}'
+        })
+
+
+# ========== GESTIÓN DE DTEs - IMPORTACIÓN ==========
+
+@login_required
+def ver_importacion_dtes(request):
+    """Vista para importar DTEs desde CSV/Excel"""
+    # Obtener proveedores para el selector
+    proveedores = Empresa.objects.filter(esProveedor=True).order_by('nombre')
+    return render(request, 'vistas/modulo_compras/importacion_dtes.html', {
+        'proveedores': proveedores
+    })
+
+
+@require_POST
+def importar_dtes_csv(request):
+    """Importar DTEs desde archivo CSV/Excel"""
+    try:
+        archivo = request.FILES.get('archivo_dtes')
+        if not archivo:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se proporcionó ningún archivo'
+            })
+        
+        # Obtener parámetros adicionales
+        tipo_busqueda = request.POST.get('tipo_busqueda', 'rut')  # 'rut' o 'id'
+        modo_actualizacion = request.POST.get('modo_actualizacion', 'solo_crear')  # 'solo_crear' o 'crear_y_actualizar'
+        
+        # Validar extensión
+        nombre_archivo = archivo.name.lower()
+        if not (nombre_archivo.endswith('.csv') or nombre_archivo.endswith('.xlsx') or nombre_archivo.endswith('.xls')):
+            return JsonResponse({
+                'success': False,
+                'error': 'Formato de archivo no válido. Use CSV o Excel (.xlsx, .xls)'
+            })
+        
+        # Leer datos según formato
+        if nombre_archivo.endswith('.csv'):
+            decoded_file = archivo.read().decode('utf-8').splitlines()
+            reader = csv.DictReader(decoded_file)
+            datos = list(reader)
+        else:
+            import openpyxl
+            wb = openpyxl.load_workbook(archivo)
+            ws = wb.active
+            
+            # Obtener encabezados (primera fila) y limpiarlos
+            headers = []
+            for cell in ws[1]:
+                header = str(cell.value or '').strip().lower()
+                headers.append(header)
+            
+            # Leer datos
+            datos = []
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if any(row):
+                    row_dict = {}
+                    for i, value in enumerate(row):
+                        if i < len(headers):
+                            # Convertir None a string vacío
+                            row_dict[headers[i]] = str(value) if value is not None else ''
+                    datos.append(row_dict)
+        
+        # DEBUG: Mostrar headers leídos
+        if datos and len(datos) > 0:
+            print("🔍 DEBUG DTEs - Headers leídos:", list(datos[0].keys()))
+            print("🔍 DEBUG DTEs - Primera fila:", datos[0])
+        
+        # Procesar DTEs
+        dtes_creados = 0
+        dtes_actualizados = 0
+        dtes_omitidos = 0
+        errores = []
+        
+        with transaction.atomic():
+            for idx, fila in enumerate(datos, start=2):
+                try:
+                    # Verificar si la fila está completamente vacía
+                    valores_fila = [str(v or '').strip() for v in fila.values()]
+                    if not any(valores_fila):
+                        # Fila vacía, ignorar silenciosamente
+                        continue
+                    
+                    # Buscar proveedor (emisor) - usar minúsculas para compatibilidad
+                    if tipo_busqueda == 'rut':
+                        rut_proveedor = str(fila.get('rut_proveedor', '') or fila.get('rut_emisor', '') or '').strip()
+                        if not rut_proveedor:
+                            errores.append(f'Fila {idx}: RUT de proveedor requerido')
+                            continue
+                        
+                        # Buscar con RUT limpio (sin puntos)
+                        rut_busqueda = rut_proveedor.replace('.', '').replace(' ', '')
+                        emisor = Empresa.objects.filter(rut=rut_busqueda, esProveedor=True).first()
+                        if not emisor:
+                            # Intentar buscar con el RUT original
+                            emisor = Empresa.objects.filter(rut=rut_proveedor, esProveedor=True).first()
+                        if not emisor:
+                            errores.append(f'Fila {idx}: Proveedor con RUT "{rut_proveedor}" no encontrado')
+                            continue
+                    else:  # id
+                        id_proveedor = str(fila.get('id_proveedor', '') or fila.get('proveedor_id', '') or '').strip()
+                        if not id_proveedor:
+                            errores.append(f'Fila {idx}: ID de proveedor requerido')
+                            continue
+                        emisor = Empresa.objects.filter(id=int(id_proveedor), esProveedor=True).first()
+                        if not emisor:
+                            errores.append(f'Fila {idx}: Proveedor con ID "{id_proveedor}" no encontrado')
+                            continue
+                    
+                    # Validar campos requeridos del DTE
+                    numero_documento = str(fila.get('numero_documento', fila.get('numero_dte', '')) or '').strip()
+                    tipo_documento = str(fila.get('tipo_documento', '33') or '33').strip()
+                    
+                    if not numero_documento:
+                        errores.append(f'Fila {idx}: Número de documento requerido')
+                        continue
+                    
+                    # Calcular montos: Acepta monto_neto O monto_con_iva
+                    monto_neto_str = str(fila.get('monto_neto', fila.get('subtotal', '')) or '').strip().replace(',', '.')
+                    monto_con_iva_str = str(fila.get('monto_con_iva', fila.get('total', fila.get('monto_total', ''))) or '').strip().replace(',', '.')
+                    
+                    if monto_neto_str and monto_neto_str != '0':
+                        # Si viene monto_neto, calcular IVA y total
+                        monto_neto = Decimal(monto_neto_str)
+                        iva = monto_neto * Decimal('0.19')
+                        total = monto_neto + iva
+                    elif monto_con_iva_str and monto_con_iva_str != '0':
+                        # Si viene monto_con_iva (total), calcular monto_neto
+                        total = Decimal(monto_con_iva_str)
+                        monto_neto = total / Decimal('1.19')
+                        iva = total - monto_neto
+                    else:
+                        errores.append(f'Fila {idx}: Debe proporcionar monto_neto O monto_con_iva')
+                        continue
+                    
+                    # Fechas
+                    from datetime import datetime, timedelta
+                    fecha_emision_str = str(fila.get('fecha_emision', '') or '').strip()
+                    print(f"🔍 Fila {idx} - fecha_emision del CSV: '{fecha_emision_str}'")
+                    
+                    if fecha_emision_str and fecha_emision_str != 'None' and fecha_emision_str != '':
+                        # Si viene con hora (formato Excel datetime), extraer solo la fecha
+                        if ' ' in fecha_emision_str:
+                            fecha_emision_str = fecha_emision_str.split(' ')[0]
+                            print(f"📅 Fecha limpiada (sin hora): '{fecha_emision_str}'")
+                        
+                        try:
+                            # Intentar YYYY-MM-DD
+                            fecha_emision = datetime.strptime(fecha_emision_str, '%Y-%m-%d').date()
+                            print(f"✅ Fecha parseada (YYYY-MM-DD): {fecha_emision}")
+                        except:
+                            try:
+                                # Intentar DD/MM/YYYY
+                                fecha_emision = datetime.strptime(fecha_emision_str, '%d/%m/%Y').date()
+                                print(f"✅ Fecha parseada (DD/MM/YYYY): {fecha_emision}")
+                            except:
+                                try:
+                                    # Intentar DD-MM-YYYY
+                                    fecha_emision = datetime.strptime(fecha_emision_str, '%d-%m-%Y').date()
+                                    print(f"✅ Fecha parseada (DD-MM-YYYY): {fecha_emision}")
+                                except:
+                                    fecha_emision = timezone.now().date()
+                                    print(f"⚠️ Fecha no se pudo parsear, usando hoy: {fecha_emision}")
+                    else:
+                        fecha_emision = timezone.now().date()
+                        print(f"⚠️ Sin fecha en CSV, usando hoy: {fecha_emision}")
+                    
+                    dias_credito_str = str(fila.get('dias_credito', '30') or '30').strip()
+                    dias_credito = int(dias_credito_str) if dias_credito_str and dias_credito_str.isdigit() else 30
+                    fecha_vencimiento = fecha_emision + timedelta(days=dias_credito)
+                    
+                    # Preparar campos numéricos ANTES de verificar duplicados
+                    bultos_str = str(fila.get('bultos', '') or '').strip()
+                    bultos = int(bultos_str) if bultos_str and bultos_str.isdigit() else 0
+                    
+                    unidades_str = str(fila.get('unidades', '') or '').strip()
+                    unidades = int(unidades_str) if unidades_str and unidades_str.isdigit() else 0
+                    
+                    descuento_str = str(fila.get('descuento', '') or '').strip().replace(',', '.')
+                    descuento = Decimal(descuento_str) if descuento_str and descuento_str != '' else Decimal('0')
+                    
+                    referencias = str(fila.get('referencias', '') or '').strip()
+                    
+                    # Verificar si el DTE ya existe
+                    dte_existente = Dte.objects.filter(
+                        emisor=emisor,
+                        numero_documento=int(numero_documento),
+                        tipo_documento=tipo_documento
+                    ).first()
+                    
+                    if dte_existente:
+                        if modo_actualizacion == 'crear_y_actualizar':
+                            # Actualizar DTE existente
+                            dte_existente.monto_neto = monto_neto
+                            dte_existente.monto_con_iva = total
+                            dte_existente.fecha_emision = fecha_emision
+                            dte_existente.fecha_vencimiento = fecha_vencimiento
+                            dte_existente.diasCredito = dias_credito
+                            dte_existente.bultos = bultos
+                            dte_existente.unidades_productos = unidades
+                            dte_existente.descuento = descuento
+                            dte_existente.referencias = referencias
+                            dte_existente.save()
+                            dtes_actualizados += 1
+                            print(f"🔄 DTE actualizado: ID={dte_existente.id}, Número={dte_existente.numero_documento}, Fecha={fecha_emision}")
+                            continue
+                        else:
+                            # Modo solo_crear: omitir duplicados
+                            dtes_omitidos += 1
+                            continue
+                    
+                    # Obtener empresa actual del usuario (receptor)
+                    empresa_actual_id = request.session.get('idEmpresaActual')
+                    receptor_id = fila.get('receptor_id') if fila.get('receptor_id') else empresa_actual_id
+                    
+                    # Crear DTE (responsable y receptor automáticos)
+                    dte = Dte.objects.create(
+                        emisor=emisor,
+                        receptor_id=receptor_id,  # Empresa actual o especificada
+                        numero_documento=int(numero_documento),
+                        tipo_documento=tipo_documento,
+                        monto_neto=monto_neto,
+                        monto_con_iva=total,
+                        estado_pago='Pendiente',  # Siempre pendiente para que el usuario registre el pago
+                        estado_dte='EMITIDO',  # Estado por defecto
+                        responsable=request.user.username,  # Usuario que importa
+                        fecha_emision=fecha_emision,
+                        fecha_vencimiento=fecha_vencimiento,
+                        diasCredito=dias_credito,
+                        bultos=bultos,
+                        unidades_productos=unidades,
+                        descuento=descuento,
+                        tipo_transaccion='COMPRA',
+                        referencias=referencias
+                    )
+                    
+                    dtes_creados += 1
+                    print(f"✅ DTE creado: ID={dte.id}, Número={dte.numero_documento}, Emisor={emisor.nombre}, Receptor={receptor_id}")
+                    
+                except Exception as e:
+                    errores.append(f'Fila {idx}: {str(e)}')
+                    print(f"❌ Error en fila {idx}: {str(e)}")
+                    continue
+        
+        print(f"📊 Resumen importación DTEs: {dtes_creados} creados, {dtes_actualizados} actualizados, {dtes_omitidos} omitidos, {len(errores)} errores")
+        
+        # Preparar mensaje
+        mensaje = []
+        if dtes_creados > 0:
+            mensaje.append(f'{dtes_creados} DTEs creados')
+        if dtes_actualizados > 0:
+            mensaje.append(f'{dtes_actualizados} DTEs actualizados')
+        if dtes_omitidos > 0:
+            mensaje.append(f'{dtes_omitidos} DTEs omitidos (duplicados)')
+        
+        return JsonResponse({
+            'success': True,
+            'message': ', '.join(mensaje) if mensaje else 'No se procesaron DTEs',
+            'dtes_creados': dtes_creados,
+            'dtes_actualizados': dtes_actualizados,
+            'dtes_omitidos': dtes_omitidos,
+            'errores': errores
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al importar DTEs: {str(e)}'
+        })
+
+
+@require_GET
+def descargar_formato_dtes(request):
+    """Descargar formato CSV de ejemplo para importar DTEs"""
+    try:
+        tipo_busqueda = request.GET.get('tipo', 'rut')  # 'rut' o 'id'
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="formato_dtes.csv"'
+        response.write('\ufeff')  # BOM para UTF-8
+        
+        writer = csv.writer(response)
+        
+        # Encabezados según tipo de búsqueda (sin responsable)
+        # IMPORTANTE: Los nombres deben coincidir EXACTAMENTE con lo que busca el código
+        if tipo_busqueda == 'rut':
+            writer.writerow([
+                'rut_proveedor', 
+                'numero_documento', 
+                'tipo_documento', 
+                'fecha_emision', 
+                'monto_con_iva', 
+                'dias_credito', 
+                'bultos', 
+                'unidades', 
+                'referencias'
+            ])
+            # Ejemplo 1 (RUT sin puntos, monto con IVA)
+            writer.writerow([
+                '76123456-7', '12345', '33', 
+                '2024-12-11', '119000', '30',
+                '2', '50', 'Orden de Compra 001'
+            ])
+            # Ejemplo 2
+            writer.writerow([
+                '77234567-8', '12346', '33', 
+                '2024-12-10', '297500', '45',
+                '5', '100', 'Orden de Compra 002'
+            ])
+        else:  # id
+            writer.writerow([
+                'id_proveedor', 
+                'numero_documento', 
+                'tipo_documento', 
+                'fecha_emision', 
+                'monto_con_iva', 
+                'dias_credito',
+                'bultos', 
+                'unidades', 
+                'referencias'
+            ])
+            writer.writerow([
+                '1', '12345', '33',
+                '2024-12-11', '119000', '30',
+                '2', '50', 'Orden de Compra 001'
+            ])
+            writer.writerow([
+                '2', '12346', '33',
+                '2024-12-10', '297500', '45',
+                '5', '100', 'Orden de Compra 002'
+            ])
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar formato: {str(e)}'
+        })
+
+
+@require_GET
+def exportar_dtes_actuales(request):
+    """Exportar DTEs de compras actuales a CSV"""
+    try:
+        tipo_exportacion = request.GET.get('tipo', 'rut')  # 'rut' o 'id'
+        
+        # Obtener DTEs de compras
+        dtes = Dte.objects.filter(tipo_transaccion='COMPRA').select_related('emisor').order_by('-fecha_emision')
+        
+        # Crear respuesta CSV
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="dtes_compras_actuales.csv"'
+        response.write('\ufeff')  # BOM para UTF-8
+        
+        writer = csv.writer(response)
+        
+        # Encabezados según tipo
+        if tipo_exportacion == 'rut':
+            writer.writerow([
+                'id_dte', 'rut_proveedor', 'nombre_proveedor', 'numero_documento', 'tipo_documento',
+                'fecha_emision', 'monto_neto', 'monto_iva', 'total', 'dias_credito',
+                'bultos', 'unidades', 'referencias', 'estado_dte', 'estado_pago'
+            ])
+            
+            for dte in dtes:
+                # Limpiar RUT (sin puntos)
+                rut_limpio = dte.emisor.rut.replace('.', '') if dte.emisor.rut else ''
+                
+                writer.writerow([
+                    dte.id,
+                    rut_limpio,
+                    dte.emisor.nombre,
+                    dte.numero_documento,
+                    dte.tipo_documento,
+                    dte.fecha_emision.strftime('%Y-%m-%d'),
+                    float(dte.monto_neto),
+                    float(dte.monto_con_iva - dte.monto_neto),
+                    float(dte.monto_con_iva),
+                    dte.diasCredito,
+                    dte.bultos,
+                    dte.unidades_productos,
+                    dte.referencias or '',
+                    dte.estado_dte,
+                    dte.estado_pago
+                ])
+        else:  # id
+            writer.writerow([
+                'id_dte', 'id_proveedor', 'nombre_proveedor', 'numero_documento', 'tipo_documento',
+                'fecha_emision', 'monto_neto', 'monto_iva', 'total', 'dias_credito',
+                'bultos', 'unidades', 'referencias', 'estado_dte', 'estado_pago'
+            ])
+            
+            for dte in dtes:
+                writer.writerow([
+                    dte.id,
+                    dte.emisor.id,
+                    dte.emisor.nombre,
+                    dte.numero_documento,
+                    dte.tipo_documento,
+                    dte.fecha_emision.strftime('%Y-%m-%d'),
+                    float(dte.monto_neto),
+                    float(dte.monto_con_iva - dte.monto_neto),
+                    float(dte.monto_con_iva),
+                    dte.diasCredito,
+                    dte.bultos,
+                    dte.unidades_productos,
+                    dte.referencias or '',
+                    dte.estado_dte,
+                    dte.estado_pago
+                ])
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar DTEs: {str(e)}'
+        })
+
+
+@require_GET
+def exportar_dtes_excel(request):
+    """Exportar DTEs de compras actuales a Excel"""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from datetime import datetime
+        
+        tipo_exportacion = request.GET.get('tipo', 'rut')
+        
+        # Obtener DTEs
+        dtes = Dte.objects.filter(tipo_transaccion='COMPRA').select_related('emisor').order_by('-fecha_emision')
+        
+        # Crear workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "DTEs Compras"
+        
+        # Estilos
+        header_fill = PatternFill(start_color="0066CC", end_color="0066CC", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        
+        # Encabezados
+        if tipo_exportacion == 'rut':
+            headers = [
+                'ID DTE', 'RUT Proveedor', 'Nombre Proveedor', 'Nº Documento', 'Tipo',
+                'Fecha Emisión', 'Monto Neto', 'IVA', 'Total', 'Días Crédito',
+                'Bultos', 'Unidades', 'Referencias', 'Estado DTE', 'Estado Pago'
+            ]
+        else:
+            headers = [
+                'ID DTE', 'ID Proveedor', 'Nombre Proveedor', 'Nº Documento', 'Tipo',
+                'Fecha Emisión', 'Monto Neto', 'IVA', 'Total', 'Días Crédito',
+                'Bultos', 'Unidades', 'Referencias', 'Estado DTE', 'Estado Pago'
+            ]
+        
+        for col, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Datos
+        for row_idx, dte in enumerate(dtes, start=2):
+            if tipo_exportacion == 'rut':
+                # Limpiar RUT (sin puntos)
+                rut_limpio = dte.emisor.rut.replace('.', '') if dte.emisor.rut else ''
+                ws.cell(row=row_idx, column=1, value=dte.id)
+                ws.cell(row=row_idx, column=2, value=rut_limpio)
+            else:
+                ws.cell(row=row_idx, column=1, value=dte.id)
+                ws.cell(row=row_idx, column=2, value=dte.emisor.id)
+            
+            ws.cell(row=row_idx, column=3, value=dte.emisor.nombre)
+            ws.cell(row=row_idx, column=4, value=dte.numero_documento)
+            ws.cell(row=row_idx, column=5, value=dte.tipo_documento)
+            ws.cell(row=row_idx, column=6, value=dte.fecha_emision)
+            ws.cell(row=row_idx, column=7, value=float(dte.monto_neto))
+            ws.cell(row=row_idx, column=8, value=float(dte.monto_con_iva - dte.monto_neto))
+            ws.cell(row=row_idx, column=9, value=float(dte.monto_con_iva))
+            ws.cell(row=row_idx, column=10, value=dte.diasCredito)
+            ws.cell(row=row_idx, column=11, value=dte.bultos)
+            ws.cell(row=row_idx, column=12, value=dte.unidades_productos)
+            ws.cell(row=row_idx, column=13, value=dte.referencias or '')
+            ws.cell(row=row_idx, column=14, value=dte.estado_dte)
+            ws.cell(row=row_idx, column=15, value=dte.estado_pago)
+        
+        # Ajustar ancho de columnas
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column].width = adjusted_width
+        
+        # Preparar respuesta
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="dtes_compras_actuales.xlsx"'
+        
+        wb.save(response)
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar a Excel: {str(e)}'
+        })

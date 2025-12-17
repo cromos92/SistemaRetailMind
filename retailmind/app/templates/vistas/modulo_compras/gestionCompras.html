@@ -189,9 +189,41 @@
                         <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalCrearCompra">
                             <i class="bi bi-plus-lg me-1"></i> Crear Compra
                         </button>
-                        <button type="button" class="btn btn-outline-secondary" id="btnDescargarFormatoCSV" data-bs-toggle="tooltip" title="Descargar formato CSV compra">
-                            <i class="bi bi-download"></i> <span class="d-none d-md-inline">Formato CSV</span>
-                        </button>
+                        
+                        <!-- Dropdown de Exportar -->
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download me-1"></i> Exportar
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <h6 class="dropdown-header">
+                                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Compras Actuales
+                                    </h6>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="#" id="btnExportarComprasExcel">
+                                        <i class="bi bi-file-earmark-excel text-success me-2"></i>Exportar a Excel
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="#" id="btnExportarComprasCSV">
+                                        <i class="bi bi-file-earmark-text text-primary me-2"></i>Exportar a CSV
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <h6 class="dropdown-header">
+                                        <i class="bi bi-file-earmark-code me-1"></i>Formato de Ejemplo
+                                    </h6>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="#" id="btnDescargarFormatoCSV">
+                                        <i class="bi bi-download text-secondary me-2"></i>Formato CSV Productos
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
 
                 </div>
@@ -323,14 +355,15 @@
             </div>
         </div>
 
-        <!-- Modal CSV -->
+        <!-- Modal CSV Mejorado -->
         <div class="modal fade" id="modalImportarCSV" tabindex="-1" aria-labelledby="modalImportarCSVLabel"
             aria-hidden="true">
             <div class="modal-dialog modal-xl modal-dialog-centered">
                 <div class="modal-content shadow-lg border-0">
-                    <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title text-white" id="modalImportarCSVLabel">
-                            Importar Compra mediante CSV
+                    <div class="modal-header bg-gradient-primary text-white">
+                        <h5 class="modal-title text-white d-flex align-items-center" id="modalImportarCSVLabel">
+                            <i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>
+                            Importar Productos desde Excel/CSV
                         </h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                             aria-label="Cerrar"></button>
@@ -338,62 +371,176 @@
 
                     <div class="modal-body">
                         <input type="hidden" id="globalIDCompra">
-                        <!-- Input de archivo -->
-                        <div class="mb-4">
-                            <label for="archivoCSV" class="form-label fw-bold">
-                                <i class="bi bi-file-earmark-arrow-up me-1"></i>Seleccionar archivo CSV
-                            </label>
-                            <input type="file" class="form-control" id="archivoCSV" accept=".csv,.xlsx">
+                        
+                        <!-- Instrucciones Mejoradas -->
+                        <div class="alert alert-info alert-dismissible fade show mb-4" role="alert">
+                            <div class="d-flex">
+                                <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+                                <div>
+                                    <h6 class="alert-heading mb-2">📋 Instrucciones de Importación</h6>
+                                    <ol class="mb-0 small">
+                                        <li><strong>Descarga el formato:</strong> Usa el botón "Formato CSV" en la página principal</li>
+                                        <li><strong>Completa los datos:</strong> Asegúrate de llenar todas las columnas obligatorias</li>
+                                        <li><strong>Arrastra o selecciona:</strong> Puedes arrastrar el archivo o hacer clic para seleccionar</li>
+                                        <li><strong>Revisa la vista previa:</strong> Verifica los datos antes de importar</li>
+                                        <li><strong>Importa:</strong> Haz clic en "Importar Datos" para procesar</li>
+                                    </ol>
+                                    <hr class="my-2">
+                                    <p class="mb-0 small">
+                                        <i class="bi bi-check-circle text-success me-1"></i>
+                                        <strong>Formatos aceptados:</strong> 
+                                        <span class="badge bg-success ms-1">Excel (.xlsx)</span>
+                                        <span class="badge bg-success ms-1">CSV (.csv)</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
 
-                        <div class="d-flex justify-content-end mb-3">
-                            <button class="btn btn-outline-info" id="btnCargarCSV">
-                                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Cargar archivo
-                            </button>
+                        <!-- Zona de Drag & Drop Mejorada -->
+                        <div class="card mb-4 border-2 border-dashed csv-upload-zone" id="csvUploadZone">
+                            <div class="card-body text-center py-5">
+                                <i class="bi bi-cloud-arrow-up-fill display-1 text-primary mb-3"></i>
+                                <h5 class="mb-2">Arrastra tu archivo aquí</h5>
+                                <p class="text-muted mb-3">o haz clic para seleccionar desde tu computadora</p>
+                                <input type="file" class="d-none" id="archivoCSV" accept=".csv,.xlsx,.xls">
+                                <button type="button" class="btn btn-primary" onclick="$('#archivoCSV').click()">
+                                    <i class="bi bi-folder2-open me-2"></i>Seleccionar Archivo
+                                </button>
+                                <div class="mt-3">
+                                    <small class="text-muted">Tamaño máximo: Sin límite | Formatos: CSV, XLSX</small>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="table-responsive border rounded p-2" style="max-height: 400px; overflow-y: auto;">
-                            <table class="table table-hover align-middle mb-0" id="tablaCSVPreview" style="position: relative;">
-                                <thead class="table-light text-center" style="position: sticky; top: 0; z-index: 2;">
-                                    <tr>
-                                        <th>Nombre (Artículo)</th>
-                                        <th>Descripcion</th>
-                                        <th>Atributo 1 (Marca)</th>
-                                        <th>Atributo 2 (Color)</th>
-                                        <th>Atributo 3 (Género)</th>
-                                        <th>Costo C/U</th>
-                                        <th>Precio Sug.</th>
-                                        <th>Stock</th>
-                                        <th>Talla</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="text-center"></tbody>
-                                <tfoot class="table-secondary fw-bold text-end"
-                                    style="position: sticky; bottom: 0; background-color: #f1f1f1; z-index: 2;">
-                                    <tr>
-                                        <td colspan="7" class="text-end">Totales:</td>
-                                        <td id="totalPares" class="text-center">0</td>
-                                        <td id="totalCosto" class="text-end">
-                                            <i class="bi bi-calculator"></i>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
+                        <!-- Información del archivo seleccionado -->
+                        <div id="fileInfoCSV" class="alert alert-success d-none mb-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-file-earmark-check-fill me-2"></i>
+                                    <strong>Archivo seleccionado:</strong> <span id="csvFileName"></span>
+                                    <span class="badge bg-success ms-2" id="csvFileSize"></span>
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-info me-2" id="btnCargarCSV">
+                                        <i class="bi bi-eye me-1"></i>Vista Previa
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnRemoveCSV">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Vista Previa de Datos -->
+                        <div id="csvPreviewSection" class="d-none">
+                            <div class="card border-primary mb-3">
+                                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-table me-2"></i>Vista Previa de Datos
+                                    </h6>
+                                    <span class="badge bg-light text-dark" id="totalRegistros">0 registros</span>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+                                        <table class="table table-hover table-sm mb-0" id="tablaCSVPreview">
+                                            <thead class="table-primary sticky-top">
+                                                <tr class="text-center">
+                                                    <th width="5%">#</th>
+                                                    <th>Nombre (Artículo)</th>
+                                                    <th>Descripción</th>
+                                                    <th>Marca</th>
+                                                    <th>Color</th>
+                                                    <th>Género</th>
+                                                    <th width="8%">Costo</th>
+                                                    <th width="8%">Precio</th>
+                                                    <th width="6%">Stock</th>
+                                                    <th width="6%">Talla</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="text-center"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-light">
+                                    <div class="row text-center">
+                                        <div class="col-md-4">
+                                            <div class="p-2">
+                                                <i class="bi bi-boxes text-primary fs-4"></i>
+                                                <div class="mt-1">
+                                                    <small class="text-muted d-block">Total Unidades</small>
+                                                    <strong class="fs-5" id="totalPares">0</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 border-start border-end">
+                                            <div class="p-2">
+                                                <i class="bi bi-currency-dollar text-success fs-4"></i>
+                                                <div class="mt-1">
+                                                    <small class="text-muted d-block">Inversión Total</small>
+                                                    <strong class="fs-5 text-success" id="totalCosto">$0</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="p-2">
+                                                <i class="bi bi-graph-up text-info fs-4"></i>
+                                                <div class="mt-1">
+                                                    <small class="text-muted d-block">Venta Esperada</small>
+                                                    <strong class="fs-5 text-info" id="totalVenta">$0</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Alerta de registros masivos -->
+                            <div id="alertRegistrosMasivos" class="alert alert-warning d-none">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                <strong>Nota:</strong> Se están mostrando solo las primeras <strong>500 filas</strong> como vista previa.
+                                El archivo completo (<strong id="totalFilasCompletas">0</strong> filas) será procesado al importar.
+                            </div>
                         </div>
 
                     </div>
 
-                    <div class="modal-footer bg-light">
-                        <button type="button" class="btn btn-outline-danger" data-bs-dismiss="modal">
+                    <div class="modal-footer bg-light border-top">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                             <i class="bi bi-x-circle me-1"></i>Cancelar
                         </button>
-                        <button type="button" class="btn btn-success" id="btnImportarCSV">
-                            <i class="bi bi-cloud-arrow-up me-1"></i>Importar Datos
+                        <button type="button" class="btn btn-success" id="btnImportarCSV" disabled>
+                            <i class="bi bi-cloud-upload me-1"></i>Importar Datos
                         </button>
                     </div>
                 </div>
             </div>
         </div>
+
+        <style>
+        .csv-upload-zone {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        }
+        .csv-upload-zone:hover {
+            border-color: #0d6efd !important;
+            background: linear-gradient(135deg, #e7f1ff 0%, #cfe2ff 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+        }
+        .csv-upload-zone.drag-over {
+            border-color: #198754 !important;
+            background: linear-gradient(135deg, #d1e7dd 0%, #badbcc 100%);
+            transform: scale(1.02);
+        }
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        }
+        .border-dashed {
+            border-style: dashed !important;
+        }
+        </style>
 
         <div class="modal fade" id="modalRecepcionProductos" tabindex="-1" aria-labelledby="modalRecepcionLabel"
             aria-hidden="true">
@@ -1327,87 +1474,240 @@ const GestionCompras = (function() {
         $('#tablaRecepcionProductos tbody').empty();
     });
 
-// Variable global para todos los registros cargados
+// ========== IMPORTACIÓN CSV MEJORADA ==========
 let todosLosRegistrosCSV = [];
-$('#btnCargarCSV').on('click', function () {
-    const archivo = document.getElementById('archivoCSV').files[0];
-    if (!archivo) return showError('Seleccioná un archivo Excel o CSV.');
+let archivoCSVActual = null;
+
+// Inicializar drag & drop para CSV
+$(document).ready(function() {
+    const uploadZone = $('#csvUploadZone');
+    
+    // Click en la zona
+    uploadZone.on('click', function() {
+        $('#archivoCSV').click();
+    });
+
+    // Drag & Drop events
+    uploadZone.on('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).addClass('drag-over');
+    });
+
+    uploadZone.on('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('drag-over');
+    });
+
+    uploadZone.on('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('drag-over');
+        
+        const files = e.originalEvent.dataTransfer.files;
+        if (files.length > 0) {
+            $('#archivoCSV')[0].files = files;
+            manejarSeleccionArchivoCSV(files[0]);
+        }
+    });
+
+    // Cambio de archivo manual
+    $('#archivoCSV').on('change', function(e) {
+        if (e.target.files.length > 0) {
+            manejarSeleccionArchivoCSV(e.target.files[0]);
+        }
+    });
+
+    // Remover archivo
+    $('#btnRemoveCSV').on('click', function() {
+        resetCSVUpload();
+    });
+
+    // Limpiar al cerrar modal
+    $('#modalImportarCSV').on('hidden.bs.modal', function() {
+        resetCSVUpload();
+    });
+});
+
+function manejarSeleccionArchivoCSV(archivo) {
+    if (!archivo) return;
+    
+    // Validar extensión
+    const extension = archivo.name.split('.').pop().toLowerCase();
+    if (!['csv', 'xlsx', 'xls'].includes(extension)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Formato no válido',
+            text: 'Solo se aceptan archivos CSV o Excel (.csv, .xlsx, .xls)'
+        });
+        return;
+    }
+    
+    archivoCSVActual = archivo;
+    
+    // Mostrar info del archivo
+    $('#csvFileName').text(archivo.name);
+    const sizeKB = (archivo.size / 1024).toFixed(2);
+    const sizeMB = (archivo.size / (1024 * 1024)).toFixed(2);
+    $('#csvFileSize').text(sizeKB > 1024 ? `${sizeMB} MB` : `${sizeKB} KB`);
+    $('#fileInfoCSV').removeClass('d-none');
+    
+    // Habilitar botón de vista previa
+    $('#btnCargarCSV').prop('disabled', false);
+}
+
+$('#btnCargarCSV').on('click', function() {
+    const archivo = archivoCSVActual || document.getElementById('archivoCSV').files[0];
+    if (!archivo) {
+        Swal.fire('Advertencia', 'Por favor selecciona un archivo primero', 'warning');
+        return;
+    }
+
+    // Mostrar loading
+    Swal.fire({
+        title: 'Procesando archivo...',
+        html: 'Por favor espera mientras se lee el archivo',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
 
     const tbody = $('#tablaCSVPreview tbody');
     tbody.empty();
 
     const reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = function(e) {
         let data, rows = [];
         try {
-            if (archivo.name.endsWith('.xlsx')) {
+            if (archivo.name.endsWith('.xlsx') || archivo.name.endsWith('.xls')) {
                 if (typeof XLSX === 'undefined') {
-                    showError('No se encontró la librería XLSX. Asegúrate de que está cargada.');
+                    Swal.fire('Error', 'Librería XLSX no encontrada', 'error');
                     return;
                 }
-                console.log('Leyendo archivo Excel:', archivo.name);
                 const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                 data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                console.log('Datos leídos:', data);
-                rows = data.slice(1); // Omitir encabezado
+                rows = data.slice(1);
             } else {
                 data = e.target.result.trim().split('\n').map(line => line.split(','));
                 rows = data.slice(1);
             }
+
+            // Filtrar registros válidos
+            todosLosRegistrosCSV = rows.filter(cols => cols.length >= 9);
+
+            if (todosLosRegistrosCSV.length === 0) {
+                Swal.fire('Advertencia', 'No se encontraron registros válidos en el archivo', 'warning');
+                return;
+            }
+
+            // Calcular totales
+            let totalPares = 0;
+            let totalCosto = 0;
+            let totalVenta = 0;
+            let registrosValidos = 0;
+
+            todosLosRegistrosCSV.forEach((cols) => {
+                const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+                const costo = parseFloat((costoStr || '0').toString().replace(/\./g, '').replace(',', '.'));
+                const stock = parseInt((stockStr || '0').toString().replace(/\./g, ''));
+                const precio = parseFloat((precioStr || '0').toString().replace(/\./g, '').replace(',', '.'));
+                
+                if (nombre && !isNaN(costo) && !isNaN(precio) && !isNaN(stock)) {
+                    totalPares += stock;
+                    totalCosto += costo * stock;
+                    totalVenta += precio * stock;
+                    registrosValidos++;
+                }
+            });
+
+            // Actualizar totales
+            $('#totalPares').text(totalPares.toLocaleString());
+            $('#totalCosto').text(`$${totalCosto.toLocaleString()}`);
+            $('#totalVenta').text(`$${totalVenta.toLocaleString()}`);
+            $('#totalRegistros').text(`${registrosValidos} registros válidos`);
+
+            // Renderizar vista previa
+            const MAX_PREVIEW = 500;
+            todosLosRegistrosCSV.slice(0, MAX_PREVIEW).forEach((cols, index) => {
+                const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
+                const costo = parseFloat((costoStr || '0').toString().replace(/\./g, '').replace(',', '.'));
+                const stock = parseInt((stockStr || '0').toString().replace(/\./g, ''));
+                const precio = parseFloat((precioStr || '0').toString().replace(/\./g, '').replace(',', '.'));
+                
+                const isValid = nombre && !isNaN(costo) && !isNaN(precio) && !isNaN(stock);
+                const rowClass = isValid ? '' : 'table-danger';
+                
+                const row = `
+                    <tr class="${rowClass}">
+                        <td><small class="text-muted">${index + 1}</small></td>
+                        <td class="text-start">${nombre || '<span class="text-danger">Sin nombre</span>'}</td>
+                        <td class="text-start"><small>${descripcion || '-'}</small></td>
+                        <td>${marca || '-'}</td>
+                        <td>${color || '-'}</td>
+                        <td>${genero || '-'}</td>
+                        <td class="text-end">$${costo.toLocaleString()}</td>
+                        <td class="text-end">$${precio.toLocaleString()}</td>
+                        <td><span class="badge bg-primary">${stock}</span></td>
+                        <td><span class="badge bg-secondary">${talla || '-'}</span></td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            // Mostrar alerta si hay muchos registros
+            if (todosLosRegistrosCSV.length > MAX_PREVIEW) {
+                $('#totalFilasCompletas').text(todosLosRegistrosCSV.length);
+                $('#alertRegistrosMasivos').removeClass('d-none');
+            }
+
+            // Mostrar sección de preview
+            $('#csvPreviewSection').removeClass('d-none');
+            $('#btnImportarCSV').prop('disabled', false);
+
+            // Cerrar loading
+            Swal.close();
+
+            // Mensaje de éxito
+            Swal.fire({
+                icon: 'success',
+                title: 'Archivo procesado',
+                html: `<strong>${registrosValidos}</strong> registros válidos encontrados<br>
+                       <strong>${totalPares.toLocaleString()}</strong> unidades totales<br>
+                       <strong>$${totalCosto.toLocaleString()}</strong> inversión total`,
+                timer: 3000,
+                showConfirmButton: false
+            });
+
         } catch (err) {
-            showError('Error al leer el archivo: ' + err.message);
-            return;
-        }
-        // Guardar todos los registros en variable global
-        todosLosRegistrosCSV = rows.filter(cols => cols.length >= 9);
-
-        // Calcular totales sobre todos los registros
-        let totalPares = 0;
-        let totalCosto = 0;
-        todosLosRegistrosCSV.forEach((cols) => {
-            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
-            const costo = parseFloat((costoStr || '').toString().replace(/\./g, '').replace(',', '.'));
-            const stock = parseInt((stockStr || '').toString().replace(/\./g, ''));
-            const precio = parseFloat((precioStr || '').toString().replace(/\./g, '').replace(',', '.'));
-            if (!nombre || !descripcion || !marca || !color || !genero || isNaN(costo) || isNaN(precio) || isNaN(stock) || !talla) return;
-            totalPares += stock;
-            totalCosto += costo * stock;
-        });
-        $('#totalPares').text(totalPares);
-        $('#totalCosto').html(`$${totalCosto.toLocaleString()} <i class='bi bi-calculator'></i>`);
-
-        // Mostrar solo la vista previa
-        const MAX_PREVIEW = 500;
-        todosLosRegistrosCSV.slice(0, MAX_PREVIEW).forEach((cols) => {
-            const [nombre, descripcion, marca, color, genero, costoStr, precioStr, stockStr, talla] = cols.map(v => v ? v.toString().trim() : '');
-            const costo = parseFloat(costoStr.replace(/\./g, '').replace(',', '.'));
-            const stock = parseInt(stockStr.replace(/\./g, ''));
-            const row = `
-                <tr>
-                    <td>${nombre}</td>
-                    <td>${descripcion}</td>
-                    <td>${marca}</td>
-                    <td>${color}</td>
-                    <td>${genero}</td>
-                    <td>$${costo.toLocaleString()}</td>
-                    <td>$${parseFloat(precioStr.replace(/\./g, '').replace(',', '.')).toLocaleString()}</td>
-                    <td>${stock}</td>
-                    <td>${talla}</td>
-                </tr>
-            `;
-            tbody.append(row);
-        });
-        if (todosLosRegistrosCSV.length > MAX_PREVIEW) {
-            tbody.append(`<tr><td colspan="9" class="text-center text-danger fw-bold">Mostrando solo las primeras ${MAX_PREVIEW} filas de ${todosLosRegistrosCSV.length}. El archivo completo será procesado al importar.</td></tr>`);
+            Swal.fire('Error', 'Error al leer el archivo: ' + err.message, 'error');
+            console.error('Error al procesar CSV:', err);
         }
     };
-    if (archivo.name.endsWith('.xlsx')) {
+
+    if (archivo.name.endsWith('.xlsx') || archivo.name.endsWith('.xls')) {
         reader.readAsArrayBuffer(archivo);
     } else {
         reader.readAsText(archivo);
     }
 });
+
+function resetCSVUpload() {
+    archivoCSVActual = null;
+    todosLosRegistrosCSV = [];
+    $('#archivoCSV').val('');
+    $('#fileInfoCSV').addClass('d-none');
+    $('#csvPreviewSection').addClass('d-none');
+    $('#alertRegistrosMasivos').addClass('d-none');
+    $('#btnImportarCSV').prop('disabled', true);
+    $('#tablaCSVPreview tbody').empty();
+    $('#totalPares').text('0');
+    $('#totalCosto').text('$0');
+    $('#totalVenta').text('$0');
+    $('#totalRegistros').text('0 registros');
+}
 
 
         $('#formCrearCompra').on('submit', function (e) {
@@ -1968,46 +2268,184 @@ $('#btnCargarCSV').on('click', function () {
         });
     });
 
-    // Descargar formato CSV de compra
+    // Descargar formato CSV de compra con formato mejorado
     $(document).on('click', '#btnDescargarFormatoCSV', function() {
-        // Generar el contenido del Excel de ejemplo
-        const wb = XLSX.utils.book_new();
-        const ws_data = [
-            [
-                'Nombre (Artículo)',
-                'Descripcion',
-                'Atributo 1 (Marca)',
-                'Atributo 2 (Color)',
-                'Atributo 3 (Género)',
-                'Costo C/U',
-                'Precio Sug.',
-                'Stock',
-                'Talla'
-            ],
-            [
-                'Ejemplo Producto',
-                'Descripción ejemplo',
-                'MarcaX',
-                'Rojo',
-                'Hombre',
-                10000,
-                12000,
-                5,
-                42
-            ]
-        ];
-        const ws = XLSX.utils.aoa_to_sheet(ws_data);
-        XLSX.utils.book_append_sheet(wb, ws, 'FormatoCompra');
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'formato_compra.xlsx';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Mostrar loading
+        Swal.fire({
+            title: 'Generando formato...',
+            html: 'Creando archivo Excel con ejemplos',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            const wb = XLSX.utils.book_new();
+            
+            // Hoja 1: Formato de importación
+            const ws_data = [
+                // Encabezados
+                [
+                    'Nombre (Artículo)',
+                    'Descripcion',
+                    'Atributo 1 (Marca)',
+                    'Atributo 2 (Color)',
+                    'Atributo 3 (Género)',
+                    'Costo C/U',
+                    'Precio Sug.',
+                    'Stock',
+                    'Talla'
+                ],
+                // Ejemplo 1
+                [
+                    'Zapatilla Deportiva',
+                    'Zapatilla running para hombre',
+                    'Nike',
+                    'Negro',
+                    'Hombre',
+                    35000,
+                    45000,
+                    10,
+                    42
+                ],
+                // Ejemplo 2
+                [
+                    'Polera Casual',
+                    'Polera manga corta algodón',
+                    'Adidas',
+                    'Azul',
+                    'Mujer',
+                    8000,
+                    12000,
+                    15,
+                    'M'
+                ],
+                // Ejemplo 3
+                [
+                    'Pantalón Jean',
+                    'Jean clásico corte recto',
+                    'Levi\'s',
+                    'Azul oscuro',
+                    'Unisex',
+                    25000,
+                    35000,
+                    8,
+                    '32'
+                ],
+                // Ejemplo 4
+                [
+                    'Chaqueta Impermeable',
+                    'Chaqueta cortaviento impermeable',
+                    'The North Face',
+                    'Rojo',
+                    'Hombre',
+                    55000,
+                    75000,
+                    5,
+                    'L'
+                ],
+                // Fila vacía para que el usuario complete
+                [
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    ''
+                ]
+            ];
+            
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+            
+            // Ajustar ancho de columnas
+            ws['!cols'] = [
+                { wch: 25 }, // Nombre
+                { wch: 30 }, // Descripción
+                { wch: 15 }, // Marca
+                { wch: 15 }, // Color
+                { wch: 12 }, // Género
+                { wch: 12 }, // Costo
+                { wch: 12 }, // Precio
+                { wch: 8 },  // Stock
+                { wch: 8 }   // Talla
+            ];
+            
+            XLSX.utils.book_append_sheet(wb, ws, 'Formato Compra');
+            
+            // Hoja 2: Instrucciones
+            const ws_instrucciones = XLSX.utils.aoa_to_sheet([
+                ['INSTRUCCIONES PARA IMPORTAR PRODUCTOS'],
+                [''],
+                ['1. COLUMNAS OBLIGATORIAS:'],
+                ['   - Nombre (Artículo): Nombre del producto'],
+                ['   - Descripcion: Descripción del producto'],
+                ['   - Atributo 1 (Marca): Marca del producto'],
+                ['   - Atributo 2 (Color): Color del producto'],
+                ['   - Atributo 3 (Género): Género (Hombre/Mujer/Unisex/Niño)'],
+                ['   - Costo C/U: Costo unitario (solo números, sin símbolos)'],
+                ['   - Precio Sug.: Precio de venta sugerido (solo números)'],
+                ['   - Stock: Cantidad de unidades (número entero)'],
+                ['   - Talla: Talla del producto (puede ser número o texto)'],
+                [''],
+                ['2. FORMATO DE DATOS:'],
+                ['   - Los costos y precios deben ser números sin puntos ni comas'],
+                ['   - Ejemplo correcto: 10000 (no $10.000)'],
+                ['   - El stock debe ser un número entero positivo'],
+                ['   - La talla puede ser número (42) o texto (M, L, XL)'],
+                [''],
+                ['3. EJEMPLOS:'],
+                ['   Ver la hoja "Formato Compra" para ejemplos completos'],
+                [''],
+                ['4. PROCESO DE IMPORTACIÓN:'],
+                ['   1. Completa este archivo con tus productos'],
+                ['   2. Guarda el archivo'],
+                ['   3. En el sistema, selecciona la compra correspondiente'],
+                ['   4. Haz clic en "Cargar CSV"'],
+                ['   5. Selecciona este archivo'],
+                ['   6. Revisa la vista previa'],
+                ['   7. Haz clic en "Importar Datos"'],
+                [''],
+                ['5. NOTAS IMPORTANTES:'],
+                ['   - Puedes agregar tantas filas como productos tengas'],
+                ['   - Asegúrate de no dejar columnas vacías en registros válidos'],
+                ['   - Los registros incompletos serán ignorados'],
+                ['   - El sistema calculará automáticamente los totales'],
+                [''],
+                ['¿Necesitas ayuda? Contacta al administrador del sistema.']
+            ]);
+            
+            ws_instrucciones['!cols'] = [{ wch: 70 }];
+            XLSX.utils.book_append_sheet(wb, ws_instrucciones, 'Instrucciones');
+            
+            // Generar archivo
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'formato_importacion_compra.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Cerrar loading y mostrar éxito
+            Swal.fire({
+                icon: 'success',
+                title: 'Formato descargado',
+                html: 'El archivo <strong>formato_importacion_compra.xlsx</strong> ha sido descargado.<br><br>' +
+                      '<small>Incluye ejemplos e instrucciones completas.</small>',
+                confirmButtonText: 'Entendido'
+            });
+            
+        } catch (error) {
+            Swal.fire('Error', 'No se pudo generar el formato: ' + error.message, 'error');
+            console.error('Error al generar formato:', error);
+        }
     });
 
     function cargarDtesDisponiblesManual() {
@@ -2024,5 +2462,50 @@ $('#btnCargarCSV').on('click', function () {
             select.trigger('change.select2');
         });
     }
+
+    // ========== EXPORTACIÓN DE COMPRAS ACTUALES ==========
+    
+    $('#btnExportarComprasExcel').on('click', function(e) {
+        e.preventDefault();
+        
+        const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+        
+        Swal.fire({
+            title: 'Exportando compras...',
+            html: `Generando archivo Excel con las compras del año ${anio}`,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        window.location.href = `/app/api/exportar-compras-excel/?anio=${anio}`;
+        
+        setTimeout(() => {
+            Swal.close();
+            Swal.fire({
+                icon: 'success',
+                title: 'Exportación completada',
+                text: 'El archivo se ha descargado correctamente',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }, 1500);
+    });
+
+    $('#btnExportarComprasCSV').on('click', function(e) {
+        e.preventDefault();
+        
+        const anio = $('#anioSeleccionado').val() || new Date().getFullYear();
+        window.location.href = `/app/api/exportar-compras-csv/?anio=${anio}`;
+        
+        Swal.fire({
+            icon: 'success',
+            title: 'Descargando CSV...',
+            text: `Compras del año ${anio}`,
+            timer: 1500,
+            showConfirmButton: false
+        });
+    });
 
 </script>

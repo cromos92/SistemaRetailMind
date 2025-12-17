@@ -1,0 +1,902 @@
+{% load static %}
+<!-- ==================== WIDGET FLOTANTE ASISTENTE IA ==================== -->
+
+<!-- Botón Flotante -->
+<div class="ai-fab" id="aiFab" onclick="toggleAIChat()">
+    <div class="ai-fab-icon">
+        <span class="ai-emoji">🤖</span>
+    </div>
+    <div class="ai-fab-pulse"></div>
+    <span class="ai-fab-badge" id="aiFabBadge" style="display: none;">1</span>
+</div>
+
+<!-- Chat Widget -->
+<div class="ai-chat-widget" id="aiChatWidget">
+    <!-- Header -->
+    <div class="ai-chat-header">
+        <div class="ai-chat-header-left">
+            <div class="ai-avatar">
+                <span>🤖</span>
+                <span class="ai-status-dot"></span>
+            </div>
+            <div class="ai-header-info">
+                <h6>Asistente RetailMind</h6>
+                <span class="ai-status-text">En línea</span>
+            </div>
+        </div>
+        <div class="ai-chat-header-right">
+            <button class="ai-header-btn" onclick="nuevaConversacionWidget()" title="Nueva conversación">
+                <i class="bx bx-revision"></i>
+            </button>
+            <button class="ai-header-btn" onclick="toggleAIChat()" title="Cerrar">
+                <i class="bx bx-x"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Messages Container -->
+    <div class="ai-chat-messages" id="aiChatMessages">
+        <!-- Mensaje de bienvenida -->
+        <div class="ai-message ai-message-assistant">
+            <div class="ai-message-avatar">
+                <span>🤖</span>
+            </div>
+            <div class="ai-message-content">
+                <div class="ai-message-bubble">
+                    ¡Hola! 👋 Soy tu asistente de RetailMind. ¿En qué puedo ayudarte?
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador de Proceso IA -->
+    <div class="ai-process-indicator" id="aiProcessIndicator" style="display: none;">
+        <div class="ai-process-header">
+            <span class="ai-brain-icon">🧠</span>
+            <span>Procesando tu consulta...</span>
+        </div>
+        <div class="ai-process-steps" id="aiProcessSteps">
+            <!-- Los pasos se agregan dinámicamente -->
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="ai-quick-actions" id="aiQuickActions">
+        <button onclick="enviarConsultaWidget('¿Cuánto vendimos hoy?')">💰 Ventas hoy</button>
+        <button onclick="enviarConsultaWidget('¿Qué productos tienen stock bajo?')">📦 Stock bajo</button>
+        <button onclick="enviarConsultaWidget('Dame un resumen del día')">📊 Resumen</button>
+    </div>
+
+    <!-- Input Area -->
+    <div class="ai-chat-input">
+        <div class="ai-input-wrapper">
+            <textarea 
+                id="aiUserInput" 
+                placeholder="Escribe tu pregunta..." 
+                rows="1"
+                onkeydown="handleAIKeyDown(event)"
+            ></textarea>
+            <button class="ai-send-btn" id="aiSendBtn" onclick="enviarMensajeWidget()">
+                <i class="bx bx-send"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ==================== ESTILOS WIDGET FLOTANTE ==================== */
+
+/* Botón Flotante FAB */
+.ai-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.4);
+    cursor: pointer;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.ai-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(64, 81, 137, 0.5);
+}
+
+.ai-fab-icon {
+    color: white;
+    font-size: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.ai-fab-icon .ai-emoji {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.ai-brain-icon {
+    font-size: 18px;
+    animation: pulse 1s infinite;
+}
+
+.ai-fab.open .ai-fab-icon {
+    transform: rotate(360deg);
+}
+
+.ai-fab-pulse {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    animation: fabPulse 2s infinite;
+    z-index: -1;
+}
+
+@keyframes fabPulse {
+    0% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 0; }
+    100% { transform: scale(1); opacity: 0; }
+}
+
+.ai-fab-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 22px;
+    height: 22px;
+    background: #f06548;
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+}
+
+/* Chat Widget */
+.ai-chat-widget {
+    position: fixed;
+    bottom: 100px;
+    right: 24px;
+    width: 380px;
+    max-height: 600px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s ease;
+}
+
+.ai-chat-widget.open {
+    display: flex;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Header */
+.ai-chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+}
+
+.ai-chat-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ai-avatar {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.ai-status-dot {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 10px;
+    height: 10px;
+    background: #4ade80;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.ai-header-info h6 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ai-status-text {
+    font-size: 11px;
+    opacity: 0.9;
+}
+
+.ai-chat-header-right {
+    display: flex;
+    gap: 4px;
+}
+
+.ai-header-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.ai-header-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* Messages */
+.ai-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 320px;
+    min-height: 200px;
+    background: #f8f9fa;
+}
+
+.ai-message {
+    display: flex;
+    gap: 8px;
+    max-width: 90%;
+    animation: fadeInMsg 0.3s ease;
+}
+
+@keyframes fadeInMsg {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-message-assistant {
+    align-self: flex-start;
+}
+
+.ai-message-user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.ai-message-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.ai-message-assistant .ai-message-avatar {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    font-size: 16px;
+}
+
+.ai-message-user .ai-message-avatar {
+    background: #e5e7eb;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.ai-message-bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.ai-message-assistant .ai-message-bubble {
+    background: white;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.ai-message-user .ai-message-bubble {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+/* ==================== INDICADOR DE PROCESO IA ==================== */
+.ai-process-indicator {
+    background: #fff8e6;
+    border-top: 1px solid #ffd966;
+    padding: 12px 16px;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 200px; }
+}
+
+.ai-process-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #b45309;
+    margin-bottom: 10px;
+}
+
+.ai-process-header i {
+    font-size: 16px;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.ai-process-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-process-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #78716c;
+    padding: 6px 10px;
+    background: white;
+    border-radius: 6px;
+    animation: fadeInStep 0.3s ease;
+}
+
+@keyframes fadeInStep {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.ai-step-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+}
+
+.ai-step-icon.pending {
+    background: #e5e7eb;
+    color: #9ca3af;
+}
+
+.ai-step-icon.loading {
+    background: #fef3c7;
+    color: #d97706;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.ai-step-icon.done {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.ai-step-icon.error {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.ai-step-text {
+    flex: 1;
+}
+
+.ai-step-time {
+    font-size: 10px;
+    color: #9ca3af;
+}
+
+/* Quick Actions */
+.ai-quick-actions {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+}
+
+.ai-quick-actions button {
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ai-quick-actions button:hover {
+    background: #f3f4f6;
+    border-color: #405189;
+    color: #405189;
+}
+
+/* Input */
+.ai-chat-input {
+    padding: 12px;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+}
+
+.ai-input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: #f3f4f6;
+    border-radius: 20px;
+    padding: 4px 4px 4px 14px;
+}
+
+.ai-input-wrapper textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-size: 13px;
+    line-height: 1.4;
+    max-height: 80px;
+    padding: 6px 0;
+    font-family: inherit;
+}
+
+.ai-input-wrapper textarea:focus {
+    outline: none;
+}
+
+.ai-send-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.ai-send-btn:hover {
+    transform: scale(1.05);
+}
+
+.ai-send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Typing Indicator */
+.ai-typing {
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px;
+    background: white;
+    border-radius: 12px;
+    width: fit-content;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.ai-typing span {
+    width: 6px;
+    height: 6px;
+    background: #9ca3af;
+    border-radius: 50%;
+    animation: typingBounce 1.4s infinite;
+}
+
+.ai-typing span:nth-child(2) { animation-delay: 0.2s; }
+.ai-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .ai-chat-widget {
+        width: calc(100% - 20px);
+        right: 10px;
+        bottom: 80px;
+        max-height: 70vh;
+    }
+    
+    .ai-fab {
+        width: 54px;
+        height: 54px;
+        bottom: 16px;
+        right: 16px;
+    }
+}
+</style>
+
+<script>
+// ==================== VARIABLES DEL WIDGET ====================
+let aiWidgetOpen = false;
+let aiWidgetProcessing = false;
+let aiWidgetSessionId = 'widget_{{ request.user.id }}_' + new Date().toISOString().split('T')[0];
+let aiCurrentSteps = [];
+
+// ==================== FUNCIONES PRINCIPALES ====================
+
+function toggleAIChat() {
+    const widget = document.getElementById('aiChatWidget');
+    const fab = document.getElementById('aiFab');
+    
+    aiWidgetOpen = !aiWidgetOpen;
+    
+    if (aiWidgetOpen) {
+        widget.classList.add('open');
+        fab.classList.add('open');
+        document.getElementById('aiUserInput').focus();
+        // Ocultar badge
+        document.getElementById('aiFabBadge').style.display = 'none';
+    } else {
+        widget.classList.remove('open');
+        fab.classList.remove('open');
+    }
+}
+
+async function enviarMensajeWidget() {
+    const input = document.getElementById('aiUserInput');
+    const message = input.value.trim();
+    
+    if (!message || aiWidgetProcessing) return;
+    
+    // Agregar mensaje del usuario
+    agregarMensajeWidget(message, 'user');
+    input.value = '';
+    autoResizeAITextarea(input);
+    
+    // Ocultar quick actions
+    document.getElementById('aiQuickActions').style.display = 'none';
+    
+    // Iniciar proceso
+    aiWidgetProcessing = true;
+    document.getElementById('aiSendBtn').disabled = true;
+    
+    // Mostrar indicador de proceso
+    mostrarProcesoIA([
+        { id: 'analyzing', text: 'Analizando tu pregunta...', status: 'loading' },
+    ]);
+    
+    try {
+        const response = await fetch('{% url "assistant:api_chat" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookieWidget('csrftoken')
+            },
+            body: JSON.stringify({
+                message: message,
+                session_id: aiWidgetSessionId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Actualizar pasos según herramientas usadas
+            if (data.tools_used && data.tools_used.length > 0) {
+                actualizarPasosHerramientas(data.tools_used);
+            } else {
+                actualizarPasoIA('analyzing', 'done', 'Consulta procesada');
+            }
+            
+            // Pequeña pausa para mostrar los pasos completados
+            await new Promise(r => setTimeout(r, 500));
+            
+            // Ocultar indicador y mostrar respuesta
+            ocultarProcesoIA();
+            agregarMensajeWidget(data.response, 'assistant');
+        } else {
+            actualizarPasoIA('analyzing', 'error', 'Error al procesar');
+            await new Promise(r => setTimeout(r, 500));
+            ocultarProcesoIA();
+            agregarMensajeWidget('😔 ' + (data.error || 'Error al procesar tu mensaje'), 'assistant');
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        actualizarPasoIA('analyzing', 'error', 'Error de conexión');
+        await new Promise(r => setTimeout(r, 500));
+        ocultarProcesoIA();
+        agregarMensajeWidget('😔 Error de conexión. Intenta de nuevo.', 'assistant');
+    } finally {
+        aiWidgetProcessing = false;
+        document.getElementById('aiSendBtn').disabled = false;
+    }
+}
+
+function enviarConsultaWidget(texto) {
+    document.getElementById('aiUserInput').value = texto;
+    enviarMensajeWidget();
+}
+
+// ==================== INDICADOR DE PROCESO ====================
+
+function mostrarProcesoIA(steps) {
+    const indicator = document.getElementById('aiProcessIndicator');
+    const stepsContainer = document.getElementById('aiProcessSteps');
+    
+    aiCurrentSteps = steps;
+    stepsContainer.innerHTML = '';
+    
+    steps.forEach(step => {
+        const stepEl = document.createElement('div');
+        stepEl.className = 'ai-process-step';
+        stepEl.id = `ai-step-${step.id}`;
+        stepEl.innerHTML = `
+            <div class="ai-step-icon ${step.status}">
+                ${getStepIcon(step.status)}
+            </div>
+            <span class="ai-step-text">${step.text}</span>
+            <span class="ai-step-time"></span>
+        `;
+        stepsContainer.appendChild(stepEl);
+    });
+    
+    indicator.style.display = 'block';
+}
+
+function actualizarPasoIA(stepId, status, newText = null) {
+    const stepEl = document.getElementById(`ai-step-${stepId}`);
+    if (!stepEl) return;
+    
+    const iconEl = stepEl.querySelector('.ai-step-icon');
+    const textEl = stepEl.querySelector('.ai-step-text');
+    
+    iconEl.className = `ai-step-icon ${status}`;
+    iconEl.innerHTML = getStepIcon(status);
+    
+    if (newText) {
+        textEl.textContent = newText;
+    }
+}
+
+function agregarPasoIA(id, text, status = 'loading') {
+    const stepsContainer = document.getElementById('aiProcessSteps');
+    
+    const stepEl = document.createElement('div');
+    stepEl.className = 'ai-process-step';
+    stepEl.id = `ai-step-${id}`;
+    stepEl.innerHTML = `
+        <div class="ai-step-icon ${status}">
+            ${getStepIcon(status)}
+        </div>
+        <span class="ai-step-text">${text}</span>
+        <span class="ai-step-time"></span>
+    `;
+    stepsContainer.appendChild(stepEl);
+}
+
+function actualizarPasosHerramientas(tools) {
+    // Marcar análisis como completado
+    actualizarPasoIA('analyzing', 'done', 'Pregunta analizada');
+    
+    // Agregar pasos por cada herramienta usada
+    tools.forEach((tool, index) => {
+        setTimeout(() => {
+            const toolName = formatToolName(tool);
+            agregarPasoIA(`tool-${index}`, `Consultando: ${toolName}`, 'loading');
+            
+            // Marcar como completado después de un momento
+            setTimeout(() => {
+                actualizarPasoIA(`tool-${index}`, 'done', `✓ ${toolName}`);
+            }, 300);
+        }, index * 200);
+    });
+}
+
+function formatToolName(toolName) {
+    const toolNames = {
+        'get_mis_ventas': 'Ventas del día',
+        'get_estadisticas_ventas': 'Estadísticas de ventas',
+        'get_productos_stock_bajo': 'Productos con stock bajo',
+        'buscar_producto': 'Búsqueda de productos',
+        'get_dtes_pendientes': 'Facturas pendientes',
+        'get_dtes_vencidos': 'Facturas vencidas',
+        'get_cuadratura_dia': 'Cuadratura de caja',
+        'buscar_cliente': 'Búsqueda de clientes',
+        'get_resumen_diario': 'Resumen del día',
+        'get_proveedores': 'Lista de proveedores',
+        'get_creditos_trabajadores': 'Créditos de trabajadores',
+        'get_info_usuario': 'Información del usuario'
+    };
+    return toolNames[toolName] || toolName.replace(/_/g, ' ');
+}
+
+function ocultarProcesoIA() {
+    document.getElementById('aiProcessIndicator').style.display = 'none';
+}
+
+function getStepIcon(status) {
+    switch(status) {
+        case 'pending': return '<i class="ri-time-line"></i>';
+        case 'loading': return '<i class="ri-loader-4-line"></i>';
+        case 'done': return '<i class="ri-check-line"></i>';
+        case 'error': return '<i class="ri-close-line"></i>';
+        default: return '<i class="ri-more-line"></i>';
+    }
+}
+
+// ==================== MENSAJES ====================
+
+function agregarMensajeWidget(contenido, rol) {
+    const container = document.getElementById('aiChatMessages');
+    const isUser = rol === 'user';
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `ai-message ai-message-${isUser ? 'user' : 'assistant'}`;
+    
+    const avatar = isUser ? '👤' : '🤖';
+    const renderedContent = isUser ? escapeHtmlWidget(contenido) : renderMarkdownWidget(contenido);
+    
+    messageDiv.innerHTML = `
+        <div class="ai-message-avatar"><span>${avatar}</span></div>
+        <div class="ai-message-content">
+            <div class="ai-message-bubble">${renderedContent}</div>
+        </div>
+    `;
+    
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+async function nuevaConversacionWidget() {
+    try {
+        await fetch('{% url "assistant:api_new_conversation" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookieWidget('csrftoken')
+            }
+        });
+        
+        // Limpiar mensajes
+        const container = document.getElementById('aiChatMessages');
+        container.innerHTML = `
+            <div class="ai-message ai-message-assistant">
+                <div class="ai-message-avatar">
+                    <span>🤖</span>
+                </div>
+                <div class="ai-message-content">
+                    <div class="ai-message-bubble">
+                        ¡Hola! 👋 Nueva conversación iniciada. ¿En qué puedo ayudarte?
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Mostrar quick actions
+        document.getElementById('aiQuickActions').style.display = 'flex';
+        
+        // Generar nuevo session ID
+        aiWidgetSessionId = 'widget_{{ request.user.id }}_' + Date.now();
+        
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// ==================== UTILIDADES ====================
+
+function handleAIKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        enviarMensajeWidget();
+    }
+}
+
+function autoResizeAITextarea(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px';
+}
+
+document.getElementById('aiUserInput')?.addEventListener('input', function() {
+    autoResizeAITextarea(this);
+});
+
+function escapeHtmlWidget(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function renderMarkdownWidget(text) {
+    let html = text;
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+    html = html.replace(/\n/g, '<br>');
+    return html;
+}
+
+function getCookieWidget(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Cerrar con Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && aiWidgetOpen) {
+        toggleAIChat();
+    }
+});
+</script>

@@ -28,7 +28,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u6k00%6(jlc5r(j2l34j7d=1mn8&_xaam4^t_*c3=oa7%_e-_7')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+# DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+DEBUG = True  # Temporalmente activado para ver errores
 
 # ALLOWED_HOSTS configuration
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
@@ -58,7 +59,8 @@ INSTALLED_APPS = [
     'rest_framework',  # Django REST Framework
     'users',  # Nueva aplicación de usuarios
     'app',
-    'empresa_management'
+    'empresa_management',
+    'assistant',  # Asistente Conversacional con Claude
 ]
 
 MIDDLEWARE = [
@@ -199,6 +201,8 @@ STATICFILES_DIRS = [
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# ========== EMAIL configurado más abajo ==========
+
 # Whitenoise configuration for static files
 # Use CompressedStaticFilesStorage instead of Manifest for Railway
 if 'RAILWAY_ENVIRONMENT' in os.environ:
@@ -230,17 +234,23 @@ if not DEBUG:
 
 # Configuración de autenticación
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'app:verHome'
+LOGIN_REDIRECT_URL = 'verHome'
 LOGOUT_REDIRECT_URL = 'login'
 
-# Configuración de correo electrónico
+# ========== CONFIGURACIÓN DE EMAIL - MAILERSEND ==========
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST = 'smtp.mailersend.net'  # ⭐ Directo, sin variables de entorno
+EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = f'RetailMind <{EMAIL_HOST_USER}>'
+EMAIL_HOST_USER = 'MS_hBDdVA@test-zkq340eke90gd796.mlsender.net'
+EMAIL_HOST_PASSWORD = 'mssp.6Ju4Glc.7dnvo4do7m6g5r86.ioWUg6N'
+DEFAULT_FROM_EMAIL = 'MS_hBDdVA@test-zkq340eke90gd796.mlsender.net'
+
+# ===== ALTERNATIVA: GMAIL SMTP =====
+# Si prefieres Gmail, cambia a:
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_HOST_USER = 'tu-email@gmail.com'
+# EMAIL_HOST_PASSWORD = 'tu-app-password'
 
 # Configuración de seguridad
 PASSWORD_RESET_TIMEOUT = 86400  # 24 horas
@@ -267,3 +277,18 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
 }
+
+# ========== CONFIGURACIÓN DEL ASISTENTE CONVERSACIONAL ==========
+# API Key de Anthropic (Claude)
+# Obtener en: https://console.anthropic.com/
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+
+# Configuración de Langfuse para tracing y observabilidad
+# Obtener en: https://langfuse.com/
+LANGFUSE_SECRET_KEY = os.environ.get('LANGFUSE_SECRET_KEY', '')
+LANGFUSE_PUBLIC_KEY = os.environ.get('LANGFUSE_PUBLIC_KEY', '')
+LANGFUSE_HOST = os.environ.get('LANGFUSE_HOST', 'https://cloud.langfuse.com')
+
+# Configuración del Asistente
+ASSISTANT_MAX_MESSAGES_PER_SESSION = 50  # Máximo de mensajes por sesión
+ASSISTANT_SESSION_TIMEOUT_HOURS = 24  # Tiempo de vida de una sesión

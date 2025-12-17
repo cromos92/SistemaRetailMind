@@ -38,6 +38,11 @@ class Usuario(AbstractUser):
     token_reset_password = models.UUIDField(default=uuid.uuid4, editable=False)
     fecha_token_reset = models.DateTimeField(null=True, blank=True)
     
+    # Campos de autenticación 2FA
+    requiere_2fa = models.BooleanField(default=False, verbose_name="Requiere Autenticación en 2 Pasos")
+    codigo_2fa = models.CharField(max_length=6, null=True, blank=True, verbose_name="Código 2FA Temporal")
+    fecha_codigo_2fa = models.DateTimeField(null=True, blank=True, verbose_name="Fecha Generación Código 2FA")
+    
     # Campos de permisos
     puede_crear_usuarios = models.BooleanField(default=False, verbose_name="Puede Crear Usuarios")
     puede_editar_usuarios = models.BooleanField(default=False, verbose_name="Puede Editar Usuarios")
@@ -132,6 +137,28 @@ class Usuario(AbstractUser):
         }
         
         return permisos.get(permiso, False)
+    
+    def generar_codigo_2fa(self):
+        """Genera un código 2FA de 6 dígitos"""
+        import random
+        codigo = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        self.codigo_2fa = codigo
+        self.fecha_codigo_2fa = timezone.now()
+        self.save(update_fields=['codigo_2fa', 'fecha_codigo_2fa'])
+        return codigo
+    
+    def validar_codigo_2fa(self, codigo, minutos_expiracion=10):
+        """Valida el código 2FA"""
+        if not self.codigo_2fa or not self.fecha_codigo_2fa:
+            return False
+        
+        # Verificar expiración
+        tiempo_expiracion = timezone.now() - timezone.timedelta(minutes=minutos_expiracion)
+        if self.fecha_codigo_2fa < tiempo_expiracion:
+            return False
+        
+        # Verificar código
+        return self.codigo_2fa == codigo
 
 class LogAcceso(models.Model):
     """
