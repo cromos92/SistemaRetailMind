@@ -89,7 +89,7 @@
 /* Botón Flotante FAB */
 .ai-fab {
     position: fixed;
-    bottom: 24px;
+    bottom: 80px;
     right: 24px;
     width: 60px;
     height: 60px;
@@ -168,7 +168,7 @@
 /* Chat Widget */
 .ai-chat-widget {
     position: fixed;
-    bottom: 100px;
+    bottom: 150px;
     right: 24px;
     width: 380px;
     max-height: 600px;
@@ -420,12 +420,6 @@
 .ai-step-icon.loading {
     background: #fef3c7;
     color: #d97706;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
 }
 
 .ai-step-icon.done {
@@ -563,14 +557,14 @@
     .ai-chat-widget {
         width: calc(100% - 20px);
         right: 10px;
-        bottom: 80px;
-        max-height: 70vh;
+        bottom: 140px;
+        max-height: 60vh;
     }
     
     .ai-fab {
         width: 54px;
         height: 54px;
-        bottom: 16px;
+        bottom: 70px;
         right: 16px;
     }
 }
@@ -778,11 +772,11 @@ function ocultarProcesoIA() {
 
 function getStepIcon(status) {
     switch(status) {
-        case 'pending': return '<i class="ri-time-line"></i>';
-        case 'loading': return '<i class="ri-loader-4-line"></i>';
-        case 'done': return '<i class="ri-check-line"></i>';
-        case 'error': return '<i class="ri-close-line"></i>';
-        default: return '<i class="ri-more-line"></i>';
+        case 'pending': return '<i class="bx bx-time"></i>';
+        case 'loading': return '<i class="bx bx-loader-alt bx-spin"></i>';
+        case 'done': return '<i class="bx bx-check"></i>';
+        case 'error': return '<i class="bx bx-x"></i>';
+        default: return '<i class="bx bx-dots-horizontal-rounded"></i>';
     }
 }
 
