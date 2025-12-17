@@ -22,6 +22,11 @@ def login_view(request):
         user = authenticate(request, username=user.username, password=password)
         if user is not None:
             login(request, user)
+            
+            # Verificar si el usuario necesita cambiar su contraseña
+            if hasattr(user, 'requiere_cambio_password') and user.requiere_cambio_password:
+                messages.warning(request, '🔐 Debes cambiar tu contraseña temporal para continuar.')
+                return redirect('cambiar_password_obligatorio')
 
             try:
                 # Buscar todas las empresas activas del usuario

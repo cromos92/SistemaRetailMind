@@ -244,6 +244,8 @@ urlpatterns = [
      path('home/', views.verHome, name='verHome'),
      path('ruta_a_check_session/', views.verHome, name='check_session'),
      path('verResetPassword/', views.ver_resetPassword, name='verResetPassword'),
+     path('verResetPasswordSuccess/', views.verResetPasswordSuccess, name='verResetPasswordSuccess'),
+     path('cambiar-password/', views.cambiar_password_obligatorio, name='cambiar_password_obligatorio'),
      #Modulo Compras
      path('verGestionCompras/', views.verGestionCompras, name='verGestionCompras'),
      path('dashboard_compras_estrategico/', views_modulo_compras.dashboard_compras_estrategico, name='dashboard_compras_estrategico'),

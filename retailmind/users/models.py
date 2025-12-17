@@ -43,6 +43,9 @@ class Usuario(AbstractUser):
     codigo_2fa = models.CharField(max_length=6, null=True, blank=True, verbose_name="Código 2FA Temporal")
     fecha_codigo_2fa = models.DateTimeField(null=True, blank=True, verbose_name="Fecha Generación Código 2FA")
     
+    # Campo para forzar cambio de contraseña
+    requiere_cambio_password = models.BooleanField(default=False, verbose_name="Requiere Cambio de Contraseña")
+    
     # Campos de permisos
     puede_crear_usuarios = models.BooleanField(default=False, verbose_name="Puede Crear Usuarios")
     puede_editar_usuarios = models.BooleanField(default=False, verbose_name="Puede Editar Usuarios")
@@ -159,6 +162,31 @@ class Usuario(AbstractUser):
         
         # Verificar código
         return self.codigo_2fa == codigo
+    
+    def generar_password_temporal(self):
+        """
+        Genera una contraseña temporal de 6 dígitos numéricos.
+        Establece que el usuario debe cambiar la contraseña al iniciar sesión.
+        
+        Returns:
+            str: Contraseña temporal de 6 dígitos
+        """
+        import random
+        # Generar 6 dígitos numéricos
+        password_temporal = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        
+        # Establecer la contraseña
+        self.set_password(password_temporal)
+        
+        # Marcar que requiere cambio de contraseña
+        self.requiere_cambio_password = True
+        
+        # Actualizar fecha del token
+        self.fecha_token_reset = timezone.now()
+        
+        self.save()
+        
+        return password_temporal
 
 class LogAcceso(models.Model):
     """

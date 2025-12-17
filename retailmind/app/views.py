@@ -3884,11 +3884,196 @@ def verGestionDteCompras(request):
 
 
 def ver_resetPassword(request):
+    """
+    Vista para recuperación de contraseña.
+    Genera una contraseña temporal de 6 dígitos y la envía por correo.
+    """
     if request.method == 'POST':
-        email = request.POST['email']
-      
-         
+        from users.models import Usuario
+        from django.core.mail import send_mail
+        from django.conf import settings
+        from django.http import JsonResponse
+        
+        email = request.POST.get('email', '').strip()
+        
+        if not email:
+            return JsonResponse({
+                'success': False,
+                'errors': 'Por favor ingresa tu correo electrónico'
+            }, status=400)
+        
+        try:
+            # Buscar usuario por email
+            usuario = Usuario.objects.filter(email__iexact=email).first()
+            
+            if not usuario:
+                # Por seguridad, no revelar si el email existe o no
+                return JsonResponse({
+                    'success': True,
+                    'redirect_url': '/app/verResetPassword/success/',
+                    'message': 'Si el correo existe, recibirás instrucciones'
+                })
+            
+            if not usuario.is_active:
+                return JsonResponse({
+                    'success': False,
+                    'errors': 'Esta cuenta está desactivada. Contacta al administrador.'
+                }, status=400)
+            
+            # Generar contraseña temporal de 6 dígitos
+            password_temporal = usuario.generar_password_temporal()
+            
+            # Preparar y enviar el correo
+            asunto = '🔐 RetailMind - Tu Nueva Contraseña Temporal'
+            mensaje = f"""
+¡Hola {usuario.get_full_name() or usuario.username}!
+
+Has solicitado restablecer tu contraseña en RetailMind.
+
+Tu nueva contraseña temporal es:
+
+    🔑  {password_temporal}
+
+📌 IMPORTANTE:
+• Esta contraseña es de un solo uso
+• Al iniciar sesión, el sistema te pedirá crear una nueva contraseña
+• Si no solicitaste este cambio, contacta al administrador
+
+Para iniciar sesión, ve a: {request.build_absolute_uri('/app/login/')}
+
+Saludos,
+Equipo RetailMind
+            """
+            
+            mensaje_html = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); padding: 20px; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0; text-align: center;">🔐 RetailMind</h1>
+        </div>
+        
+        <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+            <p>¡Hola <strong>{usuario.get_full_name() or usuario.username}</strong>!</p>
+            
+            <p>Has solicitado restablecer tu contraseña en RetailMind.</p>
+            
+            <div style="background: white; border: 2px dashed #0ab39c; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0;">
+                <p style="margin: 0; color: #666;">Tu nueva contraseña temporal es:</p>
+                <h2 style="color: #405189; font-size: 36px; letter-spacing: 8px; margin: 10px 0;">
+                    {password_temporal}
+                </h2>
+            </div>
+            
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                <strong>📌 IMPORTANTE:</strong>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                    <li>Esta contraseña es de <strong>un solo uso</strong></li>
+                    <li>Al iniciar sesión, el sistema te pedirá crear una nueva contraseña</li>
+                    <li>Si no solicitaste este cambio, contacta al administrador</li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="{request.build_absolute_uri('/app/login/')}" 
+                   style="background: #405189; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Iniciar Sesión
+                </a>
+            </div>
+        </div>
+        
+        <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+            Equipo RetailMind<br>
+            Este es un correo automático, no responder.
+        </p>
+    </div>
+</body>
+</html>
+            """
+            
+            # Enviar correo
+            send_mail(
+                subject=asunto,
+                message=mensaje,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                html_message=mensaje_html,
+                fail_silently=False
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'redirect_url': '/app/verResetPasswordSuccess/',
+                'message': 'Correo enviado exitosamente'
+            })
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en reset password: {str(e)}")
+            
+            return JsonResponse({
+                'success': False,
+                'errors': 'Error al enviar el correo. Intenta de nuevo.'
+            }, status=500)
+    
     return render(request, 'registration/passwordReset.html')
+
+
+def verResetPasswordSuccess(request):
+    """Vista de éxito después de enviar el correo de recuperación"""
+    return render(request, 'registration/success_reset.html')
+
+
+@login_required
+def cambiar_password_obligatorio(request):
+    """
+    Vista para cambio obligatorio de contraseña.
+    Se muestra cuando el usuario inicia sesión con una contraseña temporal.
+    """
+    from django.contrib.auth import update_session_auth_hash
+    
+    user = request.user
+    
+    # Si el usuario no requiere cambio, redirigir al home
+    if not getattr(user, 'requiere_cambio_password', False):
+        return redirect('verHome')
+    
+    if request.method == 'POST':
+        nueva_password = request.POST.get('nueva_password', '')
+        confirmar_password = request.POST.get('confirmar_password', '')
+        
+        # Validaciones
+        if not nueva_password or not confirmar_password:
+            messages.error(request, 'Por favor completa todos los campos.')
+            return render(request, 'registration/cambiar_password_obligatorio.html')
+        
+        if nueva_password != confirmar_password:
+            messages.error(request, 'Las contraseñas no coinciden.')
+            return render(request, 'registration/cambiar_password_obligatorio.html')
+        
+        if len(nueva_password) < 6:
+            messages.error(request, 'La contraseña debe tener al menos 6 caracteres.')
+            return render(request, 'registration/cambiar_password_obligatorio.html')
+        
+        # Verificar que no sea solo números (la contraseña temporal)
+        if nueva_password.isdigit() and len(nueva_password) == 6:
+            messages.error(request, 'La nueva contraseña no puede ser igual a la temporal. Usa una combinación más segura.')
+            return render(request, 'registration/cambiar_password_obligatorio.html')
+        
+        # Cambiar la contraseña
+        user.set_password(nueva_password)
+        user.requiere_cambio_password = False
+        user.save()
+        
+        # Mantener la sesión activa
+        update_session_auth_hash(request, user)
+        
+        messages.success(request, '✅ ¡Contraseña actualizada exitosamente! Ya puedes usar el sistema.')
+        return redirect('verHome')
+    
+    return render(request, 'registration/cambiar_password_obligatorio.html')
+
 
 def obtenerDetalleComprasPorParametros(request):
    
