@@ -31,3 +31,5 @@ else:
     print("\nDATABASE_URL: No configurada (usando SQLite)")
 
 print("\n======================================\n")
+
+

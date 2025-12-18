@@ -294,3 +294,5 @@ DEFAULT_FROM_EMAIL = 'MS_hBDdVA@test-zkq340eke90gd796.mlsender.net'
 **¡Sistema RetailMind con funcionalidades de nivel empresarial!** 🎉✅
 
 ¿Quieres que en la próxima sesión implemente el "Olvidaste contraseña" en login y el 2FA? O prefieres resolver primero el tema de las migraciones?
+
+
