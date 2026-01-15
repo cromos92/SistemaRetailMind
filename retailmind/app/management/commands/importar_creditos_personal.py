@@ -20,8 +20,6 @@ from django.contrib.auth import get_user_model
 from app.models import (
     CreditoTrabajador,
     PagoCreditoTrabajador,
-    Dte,
-    Dte_Detalle_Pago,
     Empresa,
     Sucursal,
     Vendedor,
@@ -350,29 +348,8 @@ class Command(BaseCommand):
                 continue
 
             # === EXTERNOS ===
-            dte = None
-            if dte_asociado:
-                dte = Dte.objects.filter(id=dte_asociado).first()
-            if not dte and folio:
-                dte = Dte.objects.filter(numero_documento=folio).first()
-
-            if dte:
-                nota = f'CP:{row["ID"]} | estado:{estado} | pagado:{pagado}'
-                if Dte_Detalle_Pago.objects.filter(dte_id=dte.id, notas__contains=f'CP:{row["ID"]}').exists():
-                    stats['skip_dup_dte_pago'] += 1
-                else:
-                    if not dry_run:
-                        Dte_Detalle_Pago.objects.create(
-                            dte_id=dte.id,
-                            metodo_pago='ORDEN_COMPRA' if 'ORDEN COMPRA' in tipo_cliente_norm else 'CREDITO_EXTERNO',
-                            tipo_tarjeta=None,
-                            voucher=None,
-                            monto=monto,
-                            notas=nota
-                        )
-                    stats['dte_pagos_externos'] += 1
-            else:
-                stats['externos_sin_dte'] += 1
+            # No se crean pagos DTE desde este import
+            stats['externos_sin_dte'] += 1
 
             if externo_en_creditos:
                 vendedor_id = vendedores_by_rut.get(rut_norm)

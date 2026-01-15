@@ -133,6 +133,22 @@ def crear_credito_trabajador(request):
 def cargar_creditos_trabajadores(request):
     """Cargar créditos con filtros y paginación"""
     try:
+        def normalize_fecha(fecha_str):
+            if not fecha_str:
+                return None
+            fecha_str = fecha_str.strip()
+            if '/' in fecha_str:
+                partes = fecha_str.split('/')
+            elif '-' in fecha_str:
+                partes = fecha_str.split('-')
+            else:
+                return fecha_str
+            if len(partes) != 3:
+                return fecha_str
+            if len(partes[0]) == 2:
+                return f"{partes[2]}-{partes[1]}-{partes[0]}"
+            return fecha_str
+
         data = json.loads(request.body)
         
         # Parámetros de filtro
@@ -164,26 +180,13 @@ def cargar_creditos_trabajadores(request):
             empresa_origen_id=empresa_actual_id
         ).select_related('trabajador', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por')
         
-        # Aplicar filtros - convertir formato de fecha DD-MM-YYYY a YYYY-MM-DD
+        # Aplicar filtros de fecha (DD/MM/YYYY o DD-MM-YYYY)
+        fecha_inicio = normalize_fecha(fecha_inicio)
+        fecha_fin = normalize_fecha(fecha_fin)
         if fecha_inicio:
-            try:
-                # Intentar convertir de DD-MM-YYYY a YYYY-MM-DD
-                if '-' in fecha_inicio and len(fecha_inicio.split('-')[0]) == 2:
-                    partes = fecha_inicio.split('-')
-                    fecha_inicio = f"{partes[2]}-{partes[1]}-{partes[0]}"
-                queryset = queryset.filter(fecha_solicitud__date__gte=fecha_inicio)
-            except:
-                pass
-        
+            queryset = queryset.filter(fecha_solicitud__date__gte=fecha_inicio)
         if fecha_fin:
-            try:
-                # Intentar convertir de DD-MM-YYYY a YYYY-MM-DD
-                if '-' in fecha_fin and len(fecha_fin.split('-')[0]) == 2:
-                    partes = fecha_fin.split('-')
-                    fecha_fin = f"{partes[2]}-{partes[1]}-{partes[0]}"
-                queryset = queryset.filter(fecha_solicitud__date__lte=fecha_fin)
-            except:
-                pass
+            queryset = queryset.filter(fecha_solicitud__date__lte=fecha_fin)
         
         if estado:
             queryset = queryset.filter(estado=estado)
@@ -1115,6 +1118,21 @@ def obtener_sucursales_empresa(request):
 def reporte_creditos_trabajadores(request):
     """Generar reporte de créditos de trabajadores"""
     try:
+        def normalize_fecha(fecha_str):
+            if not fecha_str:
+                return None
+            fecha_str = fecha_str.strip()
+            if '/' in fecha_str:
+                partes = fecha_str.split('/')
+            elif '-' in fecha_str:
+                partes = fecha_str.split('-')
+            else:
+                return fecha_str
+            if len(partes) != 3:
+                return fecha_str
+            if len(partes[0]) == 2:
+                return f"{partes[2]}-{partes[1]}-{partes[0]}"
+            return fecha_str
         # Obtener empresa actual
         empresa_actual_id = request.session.get('idEmpresaActual')
         if not empresa_actual_id:
@@ -1123,30 +1141,16 @@ def reporte_creditos_trabajadores(request):
                 'error': 'No hay empresa activa en la sesión'
             }, status=400)
         
-        fecha_inicio = request.GET.get('fecha_inicio')
-        fecha_fin = request.GET.get('fecha_fin')
+        fecha_inicio = normalize_fecha(request.GET.get('fecha_inicio'))
+        fecha_fin = normalize_fecha(request.GET.get('fecha_fin'))
 
         # Estadísticas generales
         creditos = CreditoTrabajador.objects.filter(empresa_origen_id=empresa_actual_id)
 
-        # Aplicar filtros de fecha si vienen
         if fecha_inicio:
-            try:
-                if '-' in fecha_inicio and len(fecha_inicio.split('-')[0]) == 2:
-                    partes = fecha_inicio.split('-')
-                    fecha_inicio = f"{partes[2]}-{partes[1]}-{partes[0]}"
-                creditos = creditos.filter(fecha_solicitud__date__gte=fecha_inicio)
-            except Exception:
-                pass
-        
+            creditos = creditos.filter(fecha_solicitud__date__gte=fecha_inicio)
         if fecha_fin:
-            try:
-                if '-' in fecha_fin and len(fecha_fin.split('-')[0]) == 2:
-                    partes = fecha_fin.split('-')
-                    fecha_fin = f"{partes[2]}-{partes[1]}-{partes[0]}"
-                creditos = creditos.filter(fecha_solicitud__date__lte=fecha_fin)
-            except Exception:
-                pass
+            creditos = creditos.filter(fecha_solicitud__date__lte=fecha_fin)
         
         total_creditos = creditos.count()
         total_monto_solicitado = creditos.aggregate(
