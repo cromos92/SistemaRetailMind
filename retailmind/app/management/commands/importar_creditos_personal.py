@@ -352,19 +352,28 @@ class Command(BaseCommand):
             stats['externos_sin_dte'] += 1
 
             if externo_en_creditos:
-                vendedor_id = vendedores_by_rut.get(rut_norm)
-                if not vendedor_id:
-                    if not dry_run:
-                        nuevo = Vendedor.objects.create(
-                            codigo_vendedor=f'EXT-{row["ID"]}',
-                            rut=rut or None,
-                            nombre=cliente or f'Externo {row["ID"]}',
-                            empresa_id=empresa_id,
-                        )
-                        vendedor_id = nuevo.id
-                        vendedores_by_rut[_normalizar_rut(nuevo.rut)] = nuevo.id if nuevo.rut else vendedor_id
-                    else:
-                        vendedor_id = -1
+                vendedor_id = None
+                codigo_ext = f'EXT-{row["ID"]}'
+                if not dry_run:
+                    vendedor, _created = Vendedor.objects.get_or_create(
+                        codigo_vendedor=codigo_ext,
+                        defaults={
+                            'rut': rut or None,
+                            'nombre': cliente or f'Externo {row["ID"]}',
+                            'empresa_id': empresa_id,
+                        }
+                    )
+                    # Siempre forzar nombre/rut desde cliente para evitar asignaciones incorrectas
+                    vendedor.nombre = cliente or vendedor.nombre
+                    vendedor.rut = rut or vendedor.rut
+                    if empresa_id and not vendedor.empresa_id:
+                        vendedor.empresa_id = empresa_id
+                    vendedor.save()
+                    vendedor_id = vendedor.id
+                    if vendedor.rut:
+                        vendedores_by_rut[_normalizar_rut(vendedor.rut)] = vendedor.id
+                else:
+                    vendedor_id = -1
 
                 if vendedor_id and empresa_id:
                     if not sucursal_id:
