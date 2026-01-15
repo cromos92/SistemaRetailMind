@@ -59,6 +59,16 @@ def _estado_credito(estado_raw, monto, pagado, force_aprobado=False):
     return 'ACTIVO'
 
 
+def _add_months(base_date, months):
+    if not base_date:
+        return None
+    year = base_date.year + (base_date.month - 1 + months) // 12
+    month = (base_date.month - 1 + months) % 12 + 1
+    day = min(base_date.day, [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+                              31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
+    return base_date.replace(year=year, month=month, day=day)
+
+
 class Command(BaseCommand):
     help = 'Importa creditos_personal (MySQL) a créditos/pagos/DTE'
 
@@ -234,10 +244,10 @@ class Command(BaseCommand):
             # Fechas
             if fecha:
                 fecha_dt = timezone.make_aware(datetime.combine(fecha, time.min))
-                fecha_venc = fecha
+                fecha_venc = _add_months(fecha, 3)
             else:
                 fecha_dt = timezone.now()
-                fecha_venc = timezone.now().date()
+                fecha_venc = _add_months(timezone.now().date(), 3)
 
             # === INTERNOS ===
             if is_interno:
@@ -311,12 +321,10 @@ class Command(BaseCommand):
                                 monto_solicitado=monto,
                                 monto_aprobado=monto,
                                 monto_pagado=pagado,
-                                fecha_solicitud=fecha_dt,
                                 fecha_vencimiento=fecha_venc,
                                 estado=_estado_credito(estado, monto, pagado, force_aprobado=True),
                                 solicitado_por=user,
                                 autorizado_por=user,
-                                fecha_aprobacion=fecha_dt,
                                 motivo_solicitud='Importado desde creditos_personal',
                                 observaciones_solicitud=(
                                     f'ID:{row["ID"]} | tipo:{tipo_cliente_raw} | empresa:{empresa_nombre} | '
@@ -324,6 +332,10 @@ class Command(BaseCommand):
                                 )
                             )
                             stats['creditos_internos'] += 1
+                            CreditoTrabajador.objects.filter(id=credito.id).update(
+                                fecha_solicitud=fecha_dt,
+                                fecha_aprobacion=fecha_dt
+                            )
                         if pagado and pagado > 0:
                             if not credito.pagos.exists():
                                 PagoCreditoTrabajador.objects.create(
@@ -423,12 +435,10 @@ class Command(BaseCommand):
                                         monto_solicitado=monto,
                                         monto_aprobado=monto,
                                         monto_pagado=pagado,
-                                        fecha_solicitud=fecha_dt,
                                         fecha_vencimiento=fecha_venc,
                                         estado=_estado_credito(estado, monto, pagado, force_aprobado=True),
                                         solicitado_por=user,
                                         autorizado_por=user,
-                                        fecha_aprobacion=fecha_dt,
                                         motivo_solicitud='Crédito externo importado',
                                         observaciones_solicitud=(
                                             f'ID:{row["ID"]} | cliente:{cliente} | empresa:{empresa_nombre} | '
@@ -436,6 +446,10 @@ class Command(BaseCommand):
                                         )
                                     )
                                     stats['creditos_externos'] += 1
+                                    CreditoTrabajador.objects.filter(id=credito.id).update(
+                                        fecha_solicitud=fecha_dt,
+                                        fecha_aprobacion=fecha_dt
+                                    )
                                 if pagado and pagado > 0:
                                     if not credito.pagos.exists():
                                         PagoCreditoTrabajador.objects.create(

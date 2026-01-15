@@ -2159,8 +2159,10 @@ $(document).ready(function() {
     
     function limpiarFiltros() {
         $('#form-filtros')[0].reset();
+        setFiltrosMesActual();
         currentPage = 1;
         loadCreditos();
+        loadEstadisticas();
     }
     
     // Funciones globales (llamadas desde HTML)
