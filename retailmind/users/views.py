@@ -189,6 +189,17 @@ def listar_usuarios(request):
         # Preparar datos para JSON
         usuarios_data = []
         for usuario in usuarios_page:
+            empresa_actual = EmpresaUser.objects.filter(
+                user=usuario,
+                active=True
+            ).select_related('empresa', 'sucursal').first()
+            empresa_actual_nombre = None
+            sucursal_actual_alias = None
+            if empresa_actual:
+                empresa_actual_nombre = empresa_actual.empresa.nombre
+                if empresa_actual.sucursal:
+                    sucursal_actual_alias = empresa_actual.sucursal.alias
+
             usuarios_data.append({
                 'id': usuario.id,
                 'username': usuario.username,
@@ -198,6 +209,8 @@ def listar_usuarios(request):
                 'rut': usuario.rut,
                 'telefono': usuario.telefono,
                 'empresa': usuario.empresa,
+                'empresa_actual': empresa_actual_nombre,
+                'sucursal_actual': sucursal_actual_alias,
                 'cargo': usuario.cargo,
                 'rol': usuario.rol,
                 'rol_display': usuario.get_rol_display(),
@@ -267,7 +280,7 @@ def crear_usuario(request):
                 'error': ' | '.join(errores)
             }, status=400)
         
-        # Generar contraseña temporal
+        # Crear contraseña temporal y forzar cambio al primer acceso
         password_temp = get_random_string(12)
         
         # Crear usuario
@@ -286,15 +299,18 @@ def crear_usuario(request):
             rol=data.get('rol', 'vendedor'),
             fecha_nacimiento=data.get('fecha_nacimiento'),
             es_activo=data.get('es_activo', True),
+            requiere_2fa=data.get('requiere_2fa', False),
             puede_crear_usuarios=data.get('puede_crear_usuarios', False),
             puede_editar_usuarios=data.get('puede_editar_usuarios', False),
             puede_eliminar_usuarios=data.get('puede_eliminar_usuarios', False),
             is_staff=data.get('is_staff', False)
         )
+        password_temp = usuario.generar_password_temporal()
         
         # Enviar correo con credenciales
         try:
-            enviar_credenciales_usuario(usuario, password_temp)
+            login_url = getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/') + '/'
+            enviar_credenciales_usuario(usuario, password_temp, login_url=login_url)
             mensaje_correo = " y se han enviado las credenciales por correo"
         except Exception as e:
             mensaje_correo = f" pero hubo un error al enviar el correo: {str(e)}"
@@ -378,6 +394,7 @@ def editar_usuario(request, usuario_id):
         usuario.cargo = data.get('cargo', usuario.cargo).strip() if data.get('cargo') else usuario.cargo
         usuario.departamento = data.get('departamento', usuario.departamento).strip() if data.get('departamento') else usuario.departamento
         usuario.rol = data.get('rol', usuario.rol)
+        usuario.requiere_2fa = data.get('requiere_2fa', usuario.requiere_2fa)
         
         # Actualizar permisos solo si el usuario actual tiene permisos de superuser
         if request.user.is_superuser:
@@ -535,6 +552,7 @@ def obtener_usuario(request, usuario_id):
                 'departamento': usuario.departamento or '',
                 'rol': usuario.rol,
                 'es_activo': usuario.es_activo,
+                'requiere_2fa': usuario.requiere_2fa,
                 'puede_crear_usuarios': usuario.puede_crear_usuarios,
                 'puede_editar_usuarios': usuario.puede_editar_usuarios,
                 'puede_eliminar_usuarios': usuario.puede_eliminar_usuarios,
@@ -776,7 +794,7 @@ def asignar_sucursal_sesion(request, usuario_id):
 
 # ========== FUNCIONES DE CORREO ==========
 
-def enviar_credenciales_usuario(usuario, password):
+def enviar_credenciales_usuario(usuario, password, login_url=None):
     """
     Envía las credenciales de un nuevo usuario por correo con template HTML
     """
@@ -785,6 +803,7 @@ def enviar_credenciales_usuario(usuario, password):
     subject = '🎉 Bienvenido a NEXO - Tus Credenciales de Acceso'
     
     # Mensaje en texto plano (fallback)
+    login_url = login_url or (settings.SITE_URL if hasattr(settings, 'SITE_URL') else 'http://localhost:8000')
     text_message = f"""
 Hola {usuario.get_full_name()},
 
@@ -796,9 +815,9 @@ Usuario: {usuario.username}
 Contraseña: {password}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ IMPORTANTE: Por seguridad, cambia tu contraseña en tu primer acceso.
+⚠️ IMPORTANTE: Por seguridad, debes cambiar tu contraseña en tu primer acceso.
 
-Para ingresar al sistema, visita: {settings.SITE_URL if hasattr(settings, 'SITE_URL') else 'http://localhost:8000'}
+Para ingresar al sistema, visita: {login_url}
 
 Si tienes alguna duda, contacta al administrador del sistema.
 
@@ -855,8 +874,10 @@ Equipo NEXO
                 </div>
                 
                 <div class="warning">
-                    <strong>⚠️ Importante:</strong> Por seguridad, te recomendamos cambiar tu contraseña en tu primer acceso al sistema.
+                    <strong>⚠️ Importante:</strong> Por seguridad, debes cambiar tu contraseña en tu primer acceso al sistema.
                 </div>
+
+                <a class="btn" href="{login_url}">Iniciar sesión</a>
                 
                 <p style="color: #4A4A5A;">Si tienes alguna pregunta, no dudes en contactar al administrador del sistema.</p>
             </div>

@@ -28,6 +28,7 @@ urlpatterns = [
     path('users/', include('users.urls')),  # Nueva aplicación de usuarios
     path('assistant/', include('assistant.urls')),  # Asistente Conversacional
     path('', views.login_view, name='login'),
+    path('login-2fa/', views.login_2fa_view, name='login_2fa'),
     path('logout/', views.logout_view, name='logout'),
     path('api/check-session/', views.check_session_status, name='check_session_status'),
     

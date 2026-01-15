@@ -4,6 +4,8 @@
 {% include '../../layout/menu.html' %}
 {% csrf_token %}
 
+{% include 'vistas/modulo_requerimientos/_crear_requerimiento_assets.html' %}
+
 <style>
     .cursor-pointer {
         cursor: pointer;
@@ -156,9 +158,9 @@
                     <div class="card-header">
                         <div class="d-flex align-items-center flex-wrap gap-2">
                             <div class="flex-grow-1">
-                                <a href="{% url 'crear_requerimiento_vista' %}" class="btn btn-success add-btn">
+                                <button type="button" class="btn btn-success add-btn" data-bs-toggle="offcanvas" data-bs-target="#offcanvasCrearRequerimiento" aria-controls="offcanvasCrearRequerimiento">
                                     <i class="ri-add-fill me-1 align-bottom"></i> Nuevo Requerimiento
-                                </a>
+                                </button>
                             </div>
                             <div class="flex-shrink-0">
                                 <div class="hstack text-nowrap gap-2">
@@ -286,6 +288,13 @@ let filtrosActuales = {};
 document.addEventListener('DOMContentLoaded', function() {
     cargarEstadisticas();
     cargarRequerimientos();
+    const panel = new URLSearchParams(window.location.search).get('panel');
+    if (panel === 'crear') {
+        const offcanvasEl = document.getElementById('offcanvasCrearRequerimiento');
+        if (offcanvasEl) {
+            new bootstrap.Offcanvas(offcanvasEl).show();
+        }
+    }
 });
 
 // Cargar estadísticas
@@ -311,18 +320,6 @@ function cargarEstadisticas() {
             }
         })
         .catch(error => console.error('Error al cargar estadísticas:', error));
-}
-
-// Filtrar por requerimientos sin respuesta
-function filtrarSinRespuesta() {
-    document.getElementById('filtro-sin-respuesta').value = 'true';
-    document.getElementById('filtro-estado').value = 'ESPERANDO_RESPUESTA';
-    filtrosActuales = {
-        estado: 'ESPERANDO_RESPUESTA',
-        sin_respuesta: 'true'
-    };
-    cargarRequerimientos(1);
-    document.getElementById('filtros-section').style.display = 'block';
 }
 
 // Cargar requerimientos
@@ -548,6 +545,21 @@ function filtrarSinRespuesta() {
     cargarRequerimientos(1);
 }
 </script>
+
+<!-- Panel lateral para crear requerimiento -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasCrearRequerimiento" aria-labelledby="offcanvasCrearRequerimientoLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="offcanvasCrearRequerimientoLabel">
+            <i class="ri-add-circle-line me-2"></i>Crear Requerimiento
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        {% include 'vistas/modulo_requerimientos/_crear_requerimiento_form.html' with modo_embebido=True %}
+    </div>
+</div>
+
+{% include 'vistas/modulo_requerimientos/_crear_requerimiento_scripts.html' %}
 
     </div>
     <!-- container-fluid -->

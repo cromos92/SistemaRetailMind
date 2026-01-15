@@ -1,0 +1,455 @@
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+let contadorFotos = 0;
+const maxFotos = 5;
+let documentoEncontrado = null;
+let productosDocumento = [];
+
+// ========== BÚSQUEDA DE DOCUMENTO ==========
+function buscarDocumento() {
+    const folio = document.getElementById('buscar_folio').value.trim();
+    if (!folio) {
+        Swal.fire('Atención', 'Ingrese un folio o correlativo', 'warning');
+        return;
+    }
+
+    // Mostrar loading
+    Swal.fire({
+        title: 'Buscando...',
+        text: 'Buscando documento en el sistema',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    fetch(`/app/api/requerimientos/buscar-ticket/?folio=${encodeURIComponent(folio)}`)
+        .then(response => response.json())
+        .then(data => {
+            Swal.close();
+            if (data.success) {
+                documentoEncontrado = data.documento;
+                productosDocumento = data.documento.productos;
+                mostrarInformacionDocumento(data.documento);
+                autocompletarDatosDocumento(data.documento);
+                Swal.fire('Éxito', 'Documento encontrado', 'success');
+            } else {
+                Swal.fire('No encontrado', data.error, 'warning');
+            }
+        })
+        .catch(error => {
+            Swal.close();
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error al buscar documento', 'error');
+        });
+}
+
+function mostrarInformacionDocumento(doc) {
+    // Mostrar información del documento
+    document.getElementById('doc-info-text').innerHTML = 
+        `<strong>${doc.tipo_dte}</strong> N° ${doc.folio_dte || doc.correlativo} - Fecha: ${doc.fecha} - Total: $${parseInt(doc.total).toLocaleString()}<br>` +
+        `<span class="badge bg-info mt-1"><i class="ri-store-2-line me-1"></i>${doc.sucursal}</span>`;
+    
+    document.getElementById('doc-productos-info').textContent = 
+        `${doc.productos.length} producto(s) en el documento`;
+    
+    document.getElementById('info-documento').style.display = 'block';
+    
+    // Mostrar opción de usar productos del documento
+    if (doc.productos.length > 0) {
+        document.getElementById('opcion-producto-documento').style.display = 'block';
+        
+        // Llenar select de productos
+        const select = document.getElementById('producto_documento_select');
+        select.innerHTML = '<option value="">-- Seleccione un producto --</option>';
+        doc.productos.forEach((prod, index) => {
+            select.innerHTML += `<option value="${index}">${prod.sku} - ${prod.nombre} (Cant: ${prod.cantidad} - $${parseInt(prod.precio).toLocaleString()})</option>`;
+        });
+    }
+}
+
+function autocompletarDatosDocumento(doc) {
+    // Auto-completar datos del documento
+    document.getElementById('tipo_documento').value = doc.tipo_dte;
+    document.getElementById('numero_boleta').value = doc.folio_dte || doc.correlativo;
+    document.getElementById('fecha_compra').value = doc.fecha;
+    
+    // Auto-completar datos del cliente
+    if (doc.cliente_nombre) {
+        document.getElementById('cliente_nombre').value = doc.cliente_nombre;
+        document.getElementById('cliente_rut').value = doc.cliente_rut || '';
+        document.getElementById('cliente_email').value = doc.cliente_email || '';
+        document.getElementById('cliente_telefono').value = doc.cliente_telefono || '';
+    }
+}
+
+function toggleProductoManual() {
+    const checked = document.getElementById('usar_producto_documento').checked;
+    
+    if (checked) {
+        // Mostrar selector de productos del documento
+        document.getElementById('selector-producto-documento').style.display = 'block';
+        document.getElementById('entrada-manual-producto').style.display = 'none';
+        
+        // Deshabilitar required en campos manuales
+        document.getElementById('sku').removeAttribute('required');
+        document.getElementById('nombre_producto').removeAttribute('required');
+    } else {
+        // Mostrar entrada manual
+        document.getElementById('selector-producto-documento').style.display = 'none';
+        document.getElementById('entrada-manual-producto').style.display = 'block';
+        
+        // Activar required en campos manuales
+        document.getElementById('sku').setAttribute('required', 'required');
+        document.getElementById('nombre_producto').setAttribute('required', 'required');
+        
+        // Limpiar selección
+        document.getElementById('producto_documento_select').value = '';
+        document.getElementById('sku').value = '';
+        document.getElementById('nombre_producto').value = '';
+    }
+}
+
+function seleccionarProductoDocumento() {
+    const index = document.getElementById('producto_documento_select').value;
+    
+    if (index !== '' && productosDocumento[index]) {
+        const producto = productosDocumento[index];
+        document.getElementById('sku').value = producto.sku;
+        document.getElementById('nombre_producto').value = producto.nombre;
+    }
+}
+
+function limpiarDocumento() {
+    // Limpiar búsqueda de documento
+    document.getElementById('buscar_folio').value = '';
+    document.getElementById('info-documento').style.display = 'none';
+    document.getElementById('opcion-producto-documento').style.display = 'none';
+    document.getElementById('selector-producto-documento').style.display = 'none';
+    document.getElementById('entrada-manual-producto').style.display = 'block';
+    document.getElementById('usar_producto_documento').checked = false;
+    
+    // Limpiar campos del documento
+    document.getElementById('tipo_documento').value = '';
+    document.getElementById('numero_boleta').value = '';
+    document.getElementById('fecha_compra').value = '';
+    
+    documentoEncontrado = null;
+    productosDocumento = [];
+}
+
+// ========== BÚSQUEDA DE CLIENTE ==========
+function buscarClientePorRUT() {
+    const rut = document.getElementById('cliente_rut').value.trim();
+    if (!rut) {
+        Swal.fire('Atención', 'Ingrese un RUT para buscar', 'warning');
+        return;
+    }
+
+    fetch(`/app/api/requerimientos/buscar-cliente/?rut=${encodeURIComponent(rut)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('cliente_nombre').value = data.cliente.nombre;
+                document.getElementById('cliente_email').value = data.cliente.email || '';
+                document.getElementById('cliente_telefono').value = data.cliente.telefono || '';
+                Swal.fire('Éxito', 'Cliente encontrado', 'success');
+            } else {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Cliente no encontrado',
+                    text: 'No existe un cliente con ese RUT. Puede continuar ingresando los datos manualmente.',
+                    confirmButtonText: 'Entendido'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error al buscar cliente', 'error');
+        });
+}
+
+// ========== BÚSQUEDA DE PRODUCTO ==========
+function buscarProducto() {
+    const sku = document.getElementById('sku').value.trim();
+    if (!sku) {
+        Swal.fire('Atención', 'Ingrese un SKU para buscar', 'warning');
+        return;
+    }
+
+    fetch(`/app/api/requerimientos/buscar-producto/?sku=${encodeURIComponent(sku)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('nombre_producto').value = data.producto.nombre;
+                Swal.fire('Éxito', 'Producto encontrado', 'success');
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Producto no encontrado',
+                    text: 'El SKU no existe en el sistema. Puede continuar ingresando el nombre manualmente.',
+                    confirmButtonText: 'Entendido'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error al buscar producto', 'error');
+        });
+}
+
+// Agregar campo de foto
+function agregarFoto() {
+    if (contadorFotos >= maxFotos) {
+        Swal.fire('Límite alcanzado', `Solo puede agregar hasta ${maxFotos} fotos`, 'warning');
+        return;
+    }
+
+    contadorFotos++;
+    const container = document.getElementById('fotos-container');
+    
+    const fotoDiv = document.createElement('div');
+    fotoDiv.className = 'col-md-6';
+    fotoDiv.id = `foto-container-${contadorFotos}`;
+    fotoDiv.innerHTML = `
+        <div class="card border">
+            <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label mb-0 small">Foto ${contadorFotos}</label>
+                    <button type="button" class="btn btn-sm btn-soft-danger" onclick="eliminarFoto(${contadorFotos})">
+                        <i class="ri-delete-bin-line"></i>
+                    </button>
+                </div>
+                <input type="file" class="form-control form-control-sm mb-2" name="foto_${contadorFotos}" 
+                       accept="image/*" onchange="previsualizarFoto(this, ${contadorFotos})">
+                <input type="text" class="form-control form-control-sm" name="descripcion_foto_${contadorFotos}" 
+                       placeholder="Descripción (opcional)">
+                <div id="preview-${contadorFotos}" class="mt-2" style="display:none;">
+                    <img class="img-fluid rounded" style="max-height: 120px;" id="img-preview-${contadorFotos}">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(fotoDiv);
+    
+    if (contadorFotos >= maxFotos) {
+        document.getElementById('btn-agregar-foto').style.display = 'none';
+    }
+}
+
+// Eliminar foto
+function eliminarFoto(numero) {
+    const container = document.getElementById(`foto-container-${numero}`);
+    if (container) {
+        container.remove();
+        contadorFotos--;
+        document.getElementById('btn-agregar-foto').style.display = 'block';
+    }
+}
+
+// Previsualizar foto
+function previsualizarFoto(input, numero) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById(`preview-${numero}`).style.display = 'block';
+            document.getElementById(`img-preview-${numero}`).src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+// Enviar formulario
+document.getElementById('form-requerimiento').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const btnGuardar = document.getElementById('btn-guardar');
+    
+    // Deshabilitar botón
+    btnGuardar.disabled = true;
+    btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creando...';
+    
+    fetch('/app/api/requerimientos/crear/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Requerimiento creado!',
+                text: `Número de requerimiento: ${data.numero_requerimiento}`,
+                confirmButtonText: 'Aceptar'
+            }).then(() => {
+                // Redirigir siempre a la lista de requerimientos
+                window.location.href = '/app/requerimientos/';
+            });
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo crear el requerimiento', 'error');
+            btnGuardar.disabled = false;
+            btnGuardar.innerHTML = '<i class="ri-save-line me-1"></i> Crear Requerimiento';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al crear el requerimiento', 'error');
+        btnGuardar.disabled = false;
+        btnGuardar.innerHTML = '<i class="ri-save-line me-1"></i> Crear Requerimiento';
+    });
+});
+
+// ========== VALIDACIÓN DE RUT ==========
+function validarRUTAutomatico() {
+    const rut = document.getElementById('cliente_rut').value.trim();
+    if (!rut) return;
+    
+    fetch(`/app/api/requerimientos/validar-rut/?rut=${encodeURIComponent(rut)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.valido) {
+                document.getElementById('rut-validacion-msg').innerHTML = 
+                    '<span class="text-success"><i class="ri-checkbox-circle-line me-1"></i>RUT válido</span>';
+                document.getElementById('cliente_rut').value = data.rut_formateado;
+                document.getElementById('cliente_rut').classList.remove('is-invalid');
+                document.getElementById('cliente_rut').classList.add('is-valid');
+            } else {
+                document.getElementById('rut-validacion-msg').innerHTML = 
+                    '<span class="text-danger"><i class="ri-close-circle-line me-1"></i>' + (data.message || 'RUT inválido') + '</span>';
+                document.getElementById('cliente_rut').classList.remove('is-valid');
+                document.getElementById('cliente_rut').classList.add('is-invalid');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function validarRUTModal() {
+    const rut = document.getElementById('modal-cliente-rut').value.trim();
+    if (!rut) {
+        document.getElementById('modal-rut-validacion').textContent = '';
+        return;
+    }
+    
+    fetch(`/app/api/requerimientos/validar-rut/?rut=${encodeURIComponent(rut)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.valido) {
+                document.getElementById('modal-rut-validacion').innerHTML = 
+                    '<span class="text-success"><i class="ri-checkbox-circle-line me-1"></i>RUT válido</span>';
+                document.getElementById('modal-cliente-rut').value = data.rut_formateado;
+                document.getElementById('modal-cliente-rut').classList.remove('is-invalid');
+                document.getElementById('modal-cliente-rut').classList.add('is-valid');
+            } else {
+                document.getElementById('modal-rut-validacion').innerHTML = 
+                    '<span class="text-danger"><i class="ri-close-circle-line me-1"></i>' + (data.message || 'RUT inválido') + '</span>';
+                document.getElementById('modal-cliente-rut').classList.remove('is-valid');
+                document.getElementById('modal-cliente-rut').classList.add('is-invalid');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+// ========== GESTIÓN DE CLIENTES ==========
+function abrirModalCrearCliente() {
+    // Prellenar con datos si ya están en el formulario
+    const rut = document.getElementById('cliente_rut').value.trim();
+    const nombre = document.getElementById('cliente_nombre').value.trim();
+    
+    if (rut) {
+        document.getElementById('modal-cliente-rut').value = rut;
+    }
+    if (nombre) {
+        // Intentar separar nombre y apellido
+        const partes = nombre.split(' ');
+        if (partes.length > 1) {
+            document.getElementById('modal-cliente-nombre').value = partes[0];
+            document.getElementById('modal-cliente-apellido').value = partes.slice(1).join(' ');
+        } else {
+            document.getElementById('modal-cliente-nombre').value = nombre;
+        }
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalCrearCliente'));
+    modal.show();
+}
+
+function guardarNuevoCliente() {
+    const form = document.getElementById('form-crear-cliente');
+    
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    const clienteData = {
+        rut: document.getElementById('modal-cliente-rut').value.trim(),
+        nombre: document.getElementById('modal-cliente-nombre').value.trim(),
+        apellido: document.getElementById('modal-cliente-apellido').value.trim(),
+        telefono: document.getElementById('modal-cliente-telefono').value.trim(),
+        email: document.getElementById('modal-cliente-email').value.trim(),
+        direccion: document.getElementById('modal-cliente-direccion').value.trim(),
+        comuna: document.getElementById('modal-cliente-comuna').value.trim(),
+        ciudad: document.getElementById('modal-cliente-ciudad').value.trim(),
+    };
+    
+    fetch('/app/api/requerimientos/crear-cliente/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify(clienteData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Llenar formulario principal con datos del nuevo cliente
+            document.getElementById('cliente_nombre').value = data.cliente.nombre;
+            document.getElementById('cliente_rut').value = data.cliente.rut;
+            document.getElementById('cliente_email').value = data.cliente.email;
+            document.getElementById('cliente_telefono').value = data.cliente.telefono;
+            
+            // Cerrar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalCrearCliente'));
+            modal.hide();
+            
+            // Limpiar formulario modal
+            document.getElementById('form-crear-cliente').reset();
+            
+            Swal.fire('Éxito', 'Cliente creado y datos completados', 'success');
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo crear el cliente', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al crear cliente', 'error');
+    });
+}
+
+// ========== INICIALIZACIÓN ==========
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar Select2 para proveedores
+    $('#proveedor_id').select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Buscar proveedor...',
+        allowClear: true,
+        language: {
+            noResults: function() {
+                return 'No se encontraron proveedores';
+            },
+            searching: function() {
+                return 'Buscando...';
+            }
+        }
+    });
+    
+    // Agregar primera foto
+    agregarFoto();
+});
+</script>

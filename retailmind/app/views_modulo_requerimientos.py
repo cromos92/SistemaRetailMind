@@ -4,6 +4,7 @@ Gestión completa de requerimientos de garantías, devoluciones y reclamos
 """
 
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.http import JsonResponse, Http404, HttpResponseBadRequest, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
@@ -128,9 +129,13 @@ def modulo_requerimientos(request):
     """Vista principal del módulo de requerimientos"""
     # Obtener rol del usuario
     rol_usuario = obtener_rol_usuario(request.user)
+    sucursales = Sucursal.objects.filter(empresa__empresauser__user=request.user)
+    proveedores = Empresa.objects.filter(esProveedor=True)
     
     context = {
         'rol_usuario': rol_usuario,
+        'sucursales': sucursales,
+        'proveedores': proveedores,
     }
     
     return render(request, 'vistas/modulo_requerimientos/gestion_requerimientos.html', context)
@@ -139,14 +144,8 @@ def modulo_requerimientos(request):
 @login_required
 def crear_requerimiento_vista(request):
     """Vista para crear nuevo requerimiento"""
-    sucursales = Sucursal.objects.filter(empresa__empresauser__user=request.user)
-    proveedores = Empresa.objects.filter(esProveedor=True)
-    
-    context = {
-        'sucursales': sucursales,
-        'proveedores': proveedores,
-    }
-    return render(request, 'vistas/modulo_requerimientos/crear_requerimiento.html', context)
+    url_base = reverse('modulo_requerimientos')
+    return redirect(f"{url_base}?panel=crear")
 
 
 @login_required
@@ -163,7 +162,7 @@ def detalle_requerimiento_vista(request, requerimiento_id):
 @login_required
 def gestionar_requerimientos_vista(request):
     """Vista para gestionar requerimientos (administrador)"""
-    return render(request, 'vistas/modulo_requerimientos/gestionar_requerimientos.html')
+    return redirect('modulo_requerimientos')
 
 
 # ========== APIs DE CREACIÓN Y GESTIÓN ==========
@@ -335,7 +334,7 @@ def listar_requerimientos(request):
             # Requerimientos esperando proveedor sin respuesta > 7 días
             fecha_limite = timezone.now() - timedelta(days=7)
             requerimientos = requerimientos.filter(
-                estado='ESPERANDO_PROVEEDOR',
+                estado='ESPERANDO_RESPUESTA',
                 fecha_envio_proveedor__lt=fecha_limite,
                 fecha_respuesta_proveedor__isnull=True
             )
@@ -580,7 +579,7 @@ def actualizar_estado_requerimiento(request, requerimiento_id):
         
         elif rol_usuario in ['cajero', 'vendedor']:
             # Vendedores solo pueden cancelar sus propios req pendientes
-            if not (requerimiento.usuario_creador == user and nuevo_estado == 'CANCELADO'):
+            if not (requerimiento.usuario_creador == request.user and nuevo_estado == 'CANCELADO'):
                 return JsonResponse({
                     'success': False,
                     'error': 'No tiene permisos para cambiar el estado'
@@ -1329,7 +1328,7 @@ def obtener_estadisticas_requerimientos(request):
         # Contadores especiales de seguimiento
         fecha_limite_7dias = timezone.now() - timedelta(days=7)
         sin_respuesta_7dias = requerimientos.filter(
-            estado='ESPERANDO_PROVEEDOR',
+            estado='ESPERANDO_RESPUESTA',
             fecha_envio_proveedor__lt=fecha_limite_7dias,
             fecha_respuesta_proveedor__isnull=True
         ).count()

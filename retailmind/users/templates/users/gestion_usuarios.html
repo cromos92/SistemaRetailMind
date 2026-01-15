@@ -789,6 +789,13 @@
                             </div>
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label><i class="ri-shield-check-line me-1"></i>Seguridad</label>
+                        <div class="form-check mt-2">
+                            <input type="checkbox" class="form-check-input" name="requiere_2fa" id="crearRequiere2fa">
+                            <label class="form-check-label" for="crearRequiere2fa">Requiere PIN por correo</label>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -970,6 +977,13 @@
                                     <label class="form-check-label" for="editIsStaff">Acceso Admin</label>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="ri-shield-check-line me-1"></i>Seguridad</label>
+                        <div class="form-check mt-2">
+                            <input type="checkbox" class="form-check-input" name="requiere_2fa" id="editRequiere2fa">
+                            <label class="form-check-label" for="editRequiere2fa">Requiere PIN por correo</label>
                         </div>
                     </div>
                 </form>
@@ -1186,6 +1200,12 @@ function inicializarDataTable(usuarios) {
         const statusIcon = usuario.es_activo ? 'ri-checkbox-circle-fill' : 'ri-close-circle-fill';
         const statusBadge = `<span class="user-status ${statusClass}"><i class="${statusIcon} me-1"></i>${statusText}</span>`;
         const rolBadge = `<span class="badge-rol rol-${usuario.rol}">${usuario.rol_display}</span>`;
+        const empresaSession = usuario.empresa_actual
+            ? `${usuario.empresa_actual}${usuario.sucursal_actual ? ' · ' + usuario.sucursal_actual : ''}`
+            : null;
+        const pinBadge = usuario.requiere_2fa
+            ? '<span class="ms-2 text-success" title="PIN activo"><i class="ri-shield-check-line"></i></span>'
+            : '';
         
         const acciones = `
             <div class="d-flex justify-content-start">
@@ -1202,11 +1222,13 @@ function inicializarDataTable(usuarios) {
         `;
         
         return [
-            `<strong>${usuario.username}</strong>`,
+            `<strong>${usuario.username}</strong>${pinBadge}`,
             `${usuario.first_name} ${usuario.last_name}`,
             `<a href="mailto:${usuario.email}" class="text-decoration-none">${usuario.email}</a>`,
             rolBadge,
-            usuario.empresa || '<span class="text-muted">Sin asignar</span>',
+            empresaSession
+                ? `<strong>${empresaSession}</strong>`
+                : (usuario.empresa || '<span class="text-muted">Sin asignar</span>'),
             statusBadge,
             usuario.fecha_ultimo_acceso || '<span class="text-muted">Nunca</span>',
             acciones
@@ -1271,6 +1293,7 @@ function crearUsuario() {
     data.puede_crear_usuarios = $('#crearPuedeCrear').is(':checked');
     data.puede_editar_usuarios = $('#crearPuedeEditar').is(':checked');
     data.is_staff = $('#crearIsStaff').is(':checked');
+    data.requiere_2fa = $('#crearRequiere2fa').is(':checked');
     data.rol = $('#formCrearUsuario select[name="rol"]').val();
     
     // Validación básica del lado cliente
@@ -1345,6 +1368,7 @@ function editarUsuario(usuarioId) {
                 $('#editPuedeCrear').prop('checked', usuario.puede_crear_usuarios || false);
                 $('#editPuedeEditar').prop('checked', usuario.puede_editar_usuarios || false);
                 $('#editIsStaff').prop('checked', usuario.is_staff || false);
+        $('#editRequiere2fa').prop('checked', usuario.requiere_2fa || false);
                 
                 $('#permisosSection').toggle(!usuario.is_superuser);
                 
@@ -1706,6 +1730,7 @@ function guardarEdicionUsuario() {
     data.puede_crear_usuarios = $('#editPuedeCrear').is(':checked');
     data.puede_editar_usuarios = $('#editPuedeEditar').is(':checked');
     data.is_staff = $('#editIsStaff').is(':checked');
+    data.requiere_2fa = $('#editRequiere2fa').is(':checked');
     data.rol = $('#editRol').val();
     
     Swal.fire({

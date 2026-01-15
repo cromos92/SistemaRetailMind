@@ -1,0 +1,150 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>NEXO - Verificación de PIN</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="{% static 'images/favicon.ico' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet" type="text/css" />
+    <link href="{% static 'css/icons.min.css' %}" rel="stylesheet" type="text/css" />
+    <style>
+        :root {
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --gray-100: #F5F5F7;
+            --gray-500: #8A8A9A;
+            --gray-700: #4A4A5A;
+            --dark: #1A1A2E;
+            --white: #FFFFFF;
+        }
+
+        body, html {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            height: 100%;
+            background: var(--gray-100);
+        }
+
+        .page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .card-2fa {
+            width: 100%;
+            max-width: 420px;
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 20px 45px rgba(26, 26, 46, 0.12);
+            padding: 2rem;
+        }
+
+        .card-2fa h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .card-2fa p {
+            color: var(--gray-700);
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.85rem 1rem;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            background: var(--gray-100);
+            outline: none;
+            transition: border-color 0.2s ease;
+            font-size: 1rem;
+            letter-spacing: 0.15rem;
+            text-align: center;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+            background: var(--white);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 0.9rem;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: var(--white);
+            font-weight: 600;
+        }
+
+        .links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .links a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .alert-custom {
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+            color: #9f1239;
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .alert-info {
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            color: #3730a3;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <div class="card-2fa">
+            <h1>Verificación de PIN</h1>
+            <p>Enviamos un PIN a tu correo <strong>{{ email }}</strong>. Ingresa el código para continuar.</p>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert-custom{% if message.tags == 'info' %} alert-info{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label" for="pin">PIN</label>
+                    <input type="text" id="pin" name="pin" class="form-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" required>
+                </div>
+                <button type="submit" class="btn-submit">Verificar PIN</button>
+            </form>
+
+            <div class="links">
+                <a href="?resend=true">Reenviar PIN</a>
+                <a href="{% url 'login' %}">Volver al inicio</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
