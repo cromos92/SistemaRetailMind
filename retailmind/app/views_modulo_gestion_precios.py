@@ -708,6 +708,7 @@ def actualizar_precio(request):
         nuevo_precio = data.get('nuevo_precio')
         motivo = data.get('motivo', 'Cambio manual de precio')
         tipo_cambio = data.get('tipo_cambio', 'MANUAL')
+        sincronizar_sucursales = data.get('sincronizar_sucursales', True)  # Por defecto sincroniza
         
         if not producto_id or not nuevo_precio:
             return JsonResponse({
@@ -718,8 +719,9 @@ def actualizar_precio(request):
         # Convertir a entero
         nuevo_precio = int(nuevo_precio)
         
-        producto = Producto.objects.get(id=producto_id)
+        producto = Producto.objects.select_related('sucursal').get(id=producto_id)
         precio_anterior = producto.precioventa
+        sucursal_origen = producto.sucursal
         
         # Solo registrar si el precio realmente cambió
         if precio_anterior == nuevo_precio:
@@ -764,12 +766,85 @@ def actualizar_precio(request):
             lotes_afectados=lotes_actualizados
         )
         
+        # === NOTIFICAR A OTRAS SUCURSALES ===
+        sucursales_notificadas = 0
+        productos_sincronizados = 0
+        
+        if sincronizar_sucursales:
+            # Buscar productos similares en OTRAS sucursales (mismo artículo, marca, color)
+            productos_otras_sucursales = Producto.objects.filter(
+                articulo=producto.articulo,
+                atributo1=producto.atributo1,
+                atributo2=producto.atributo2
+            ).exclude(
+                sucursal=sucursal_origen
+            ).select_related('sucursal')
+            
+            from .models import EmpresaUser
+            
+            for prod_similar in productos_otras_sucursales:
+                # Crear cambio pendiente para la otra sucursal
+                primera_talla = prod_similar.producto_talla.first()
+                if not primera_talla:
+                    continue
+                
+                cambio = CambioPrecioPendiente.objects.create(
+                    producto_talla=primera_talla,
+                    sucursal=prod_similar.sucursal,
+                    precio_anterior=prod_similar.precioventa,
+                    precio_nuevo=nuevo_precio,
+                    diferencia=nuevo_precio - prod_similar.precioventa,
+                    porcentaje_cambio=((nuevo_precio - prod_similar.precioventa) / prod_similar.precioventa * 100) if prod_similar.precioventa > 0 else 0,
+                    tipo_cambio='SINCRONIZACION',
+                    estado='PENDIENTE',
+                    motivo=f'Sincronización desde {sucursal_origen.alias}: {motivo}',
+                    creado_por=request.user,
+                    prioridad='MEDIA',
+                    fecha_vencimiento=timezone.now() + timedelta(days=7)
+                )
+                
+                # Crear notificaciones para usuarios de esa sucursal
+                usuarios_sucursal = EmpresaUser.objects.filter(
+                    sucursal=prod_similar.sucursal,
+                    status=True
+                ).select_related('user')
+                
+                mensaje_notif = (
+                    f"💰 Cambio de precio desde {sucursal_origen.alias}: "
+                    f"{producto.articulo} | "
+                    f"${precio_anterior:,} → ${nuevo_precio:,} "
+                    f"({'+' if diferencia > 0 else ''}{porcentaje:.1f}%)"
+                )
+                
+                for empresa_user in usuarios_sucursal:
+                    # Evitar duplicados: verificar si ya existe notificación
+                    existe = NotificacionCambioPrecio.objects.filter(
+                        cambio_precio=cambio,
+                        usuario=empresa_user.user,
+                        tipo='NUEVA'
+                    ).exists()
+                    
+                    if not existe:
+                        NotificacionCambioPrecio.objects.create(
+                            cambio_precio=cambio,
+                            usuario=empresa_user.user,
+                            tipo='NUEVA',
+                            mensaje=mensaje_notif
+                        )
+                        sucursales_notificadas += 1
+                
+                cambio.notificado = True
+                cambio.save()
+                productos_sincronizados += 1
+        
         return JsonResponse({
             'success': True,
             'message': f'Precio actualizado para {tallas_actualizadas} tallas',
             'lotes_actualizados': lotes_actualizados,
             'tallas_actualizadas': tallas_actualizadas,
-            'historial_registrado': True
+            'historial_registrado': True,
+            'sucursales_notificadas': sucursales_notificadas,
+            'productos_sincronizados': productos_sincronizados
         })
         
     except Producto.DoesNotExist:
@@ -1196,6 +1271,57 @@ def obtener_historial_precio(request, producto_id):
 
 @require_GET
 @login_required
+def obtener_historial_ediciones_recientes(request):
+    """Obtener historial general de las últimas ediciones de precios"""
+    try:
+        # Obtener sucursal activa del usuario
+        sucursal_id = request.session.get('sucursal_id')
+        
+        # Obtener los últimos 20 cambios de precio
+        query = HistorialCambioPrecio.objects.select_related(
+            'producto', 'producto__sucursal', 'usuario'
+        ).order_by('-fecha_cambio')
+        
+        # Si hay sucursal activa, filtrar por ella
+        if sucursal_id:
+            query = query.filter(producto__sucursal_id=sucursal_id)
+        
+        historial = query[:20]
+        
+        historial_data = []
+        for cambio in historial:
+            historial_data.append({
+                'id': cambio.id,
+                'producto_id': cambio.producto.id,
+                'producto_nombre': cambio.producto.articulo,
+                'producto_talla': cambio.producto.atributo1.alias if cambio.producto.atributo1 else '',
+                'sucursal': cambio.producto.sucursal.alias if cambio.producto.sucursal else 'N/A',
+                'precio_anterior': cambio.precio_anterior,
+                'precio_nuevo': cambio.precio_nuevo,
+                'diferencia': cambio.diferencia,
+                'porcentaje_cambio': float(cambio.porcentaje_cambio),
+                'tipo_cambio': cambio.get_tipo_cambio_display(),
+                'motivo': cambio.motivo or '',
+                'usuario': cambio.usuario.username if cambio.usuario else 'Sistema',
+                'fecha_cambio': cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M'),
+                'hace_cuanto': cambio.hace_cuanto,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'historial': historial_data,
+            'total': len(historial_data)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener historial: {str(e)}'
+        })
+
+
+@require_GET
+@login_required
 def buscar_productos_similares_sucursales(request, producto_id):
     """Buscar productos similares en otras sucursales"""
     try:
@@ -1325,14 +1451,24 @@ def proponer_cambio_precio(request):
         mensaje = f"Nuevo cambio de precio propuesto para {producto.articulo} ({tallas_count} tallas). " \
                   f"Precio actual: ${precio_actual:,} → Nuevo: ${nuevo_precio:,} ({porcentaje_cambio:+.1f}%)"
         
+        notificaciones_creadas = 0
         for empresa_user in usuarios_sucursal:
             if empresa_user.user != request.user:  # No notificar al creador
-                NotificacionCambioPrecio.objects.create(
+                # Evitar duplicados
+                existe = NotificacionCambioPrecio.objects.filter(
                     cambio_precio=cambio,
                     usuario=empresa_user.user,
-                    tipo='NUEVA',
-                    mensaje=mensaje
-                )
+                    tipo='NUEVA'
+                ).exists()
+                
+                if not existe:
+                    NotificacionCambioPrecio.objects.create(
+                        cambio_precio=cambio,
+                        usuario=empresa_user.user,
+                        tipo='NUEVA',
+                        mensaje=mensaje
+                    )
+                    notificaciones_creadas += 1
         
         cambio.notificado = True
         cambio.save()
@@ -1341,7 +1477,7 @@ def proponer_cambio_precio(request):
             'success': True,
             'message': 'Cambio de precio propuesto correctamente',
             'cambio_id': cambio.id,
-            'notificaciones_enviadas': usuarios_sucursal.count() - 1
+            'notificaciones_enviadas': notificaciones_creadas
         })
         
     except Producto.DoesNotExist:
@@ -1551,14 +1687,21 @@ def revisar_cambio_precio(request):
         cambio.observaciones_revision = observaciones
         cambio.save()
         
-        # Notificar al creador
+        # Notificar al creador (evitando duplicados)
         if cambio.creado_por and cambio.creado_por != request.user:
-            NotificacionCambioPrecio.objects.create(
+            existe = NotificacionCambioPrecio.objects.filter(
                 cambio_precio=cambio,
                 usuario=cambio.creado_por,
-                tipo='REVISION',
-                mensaje=f"Tu cambio de precio para {cambio.producto_talla.producto.articulo} ha sido revisado por {request.user.username}"
-            )
+                tipo='REVISION'
+            ).exists()
+            
+            if not existe:
+                NotificacionCambioPrecio.objects.create(
+                    cambio_precio=cambio,
+                    usuario=cambio.creado_por,
+                    tipo='REVISION',
+                    mensaje=f"Tu cambio de precio para {cambio.producto_talla.producto.articulo} ha sido revisado por {request.user.username}"
+                )
         
         return JsonResponse({
             'success': True,
@@ -1622,14 +1765,21 @@ def aprobar_cambio_precio(request):
         cambio.fecha_aplicacion = timezone.now()
         cambio.save()
         
-        # Notificar al creador
+        # Notificar al creador (evitando duplicados)
         if cambio.creado_por and cambio.creado_por != request.user:
-            NotificacionCambioPrecio.objects.create(
+            existe = NotificacionCambioPrecio.objects.filter(
                 cambio_precio=cambio,
                 usuario=cambio.creado_por,
-                tipo='APROBACION',
-                mensaje=f"Tu cambio de precio para {producto.articulo} ha sido aprobado y aplicado a {tallas_afectadas} tallas"
-            )
+                tipo='APROBACION'
+            ).exists()
+            
+            if not existe:
+                NotificacionCambioPrecio.objects.create(
+                    cambio_precio=cambio,
+                    usuario=cambio.creado_por,
+                    tipo='APROBACION',
+                    mensaje=f"Tu cambio de precio para {producto.articulo} ha sido aprobado y aplicado a {tallas_afectadas} tallas"
+                )
         
         return JsonResponse({
             'success': True,
@@ -1676,14 +1826,21 @@ def rechazar_cambio_precio(request):
         cambio.observaciones_aprobacion = observaciones
         cambio.save()
         
-        # Notificar al creador
+        # Notificar al creador (evitando duplicados)
         if cambio.creado_por and cambio.creado_por != request.user:
-            NotificacionCambioPrecio.objects.create(
+            existe = NotificacionCambioPrecio.objects.filter(
                 cambio_precio=cambio,
                 usuario=cambio.creado_por,
-                tipo='RECHAZO',
-                mensaje=f"Tu cambio de precio para {cambio.producto_talla.producto.articulo} ha sido rechazado. Motivo: {observaciones}"
-            )
+                tipo='RECHAZO'
+            ).exists()
+            
+            if not existe:
+                NotificacionCambioPrecio.objects.create(
+                    cambio_precio=cambio,
+                    usuario=cambio.creado_por,
+                    tipo='RECHAZO',
+                    mensaje=f"Tu cambio de precio para {cambio.producto_talla.producto.articulo} ha sido rechazado. Motivo: {observaciones}"
+                )
         
         return JsonResponse({
             'success': True,
@@ -1755,23 +1912,45 @@ def obtener_notificaciones_precio(request):
 @login_required
 def marcar_notificacion_leida(request):
     """
-    Marcar una notificación como leída
+    Marcar una o todas las notificaciones como leídas
     """
     try:
         data = json.loads(request.body)
         notificacion_id = data.get('notificacion_id')
+        marcar_todas = data.get('marcar_todas', False)
         
-        notificacion = NotificacionCambioPrecio.objects.get(
-            id=notificacion_id,
-            usuario=request.user
-        )
-        
-        notificacion.marcar_leida()
-        
-        return JsonResponse({
-            'success': True,
-            'message': 'Notificación marcada como leída'
-        })
+        if marcar_todas:
+            # Marcar TODAS las notificaciones del usuario como leídas
+            actualizadas = NotificacionCambioPrecio.objects.filter(
+                usuario=request.user,
+                leida=False
+            ).update(leida=True, fecha_lectura=timezone.now())
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'{actualizadas} notificaciones marcadas como leídas',
+                'actualizadas': actualizadas
+            })
+        else:
+            # Marcar una sola notificación
+            notificacion = NotificacionCambioPrecio.objects.get(
+                id=notificacion_id,
+                usuario=request.user
+            )
+            
+            notificacion.marcar_leida()
+            
+            # Contar cuántas quedan sin leer
+            restantes = NotificacionCambioPrecio.objects.filter(
+                usuario=request.user,
+                leida=False
+            ).count()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Notificación marcada como leída',
+                'restantes': restantes
+            })
         
     except NotificacionCambioPrecio.DoesNotExist:
         return JsonResponse({
@@ -1784,3 +1963,327 @@ def marcar_notificacion_leida(request):
             'error': f'Error al marcar notificación: {str(e)}'
         })
 
+
+@require_POST
+@login_required
+def eliminar_notificaciones_precio(request):
+    """
+    Eliminar notificaciones de precios del usuario
+    """
+    try:
+        data = json.loads(request.body)
+        notificacion_id = data.get('notificacion_id')
+        eliminar_todas = data.get('eliminar_todas', False)
+        eliminar_leidas = data.get('eliminar_leidas', False)
+        
+        if eliminar_todas:
+            # Eliminar TODAS las notificaciones del usuario
+            eliminadas, _ = NotificacionCambioPrecio.objects.filter(
+                usuario=request.user
+            ).delete()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'{eliminadas} notificaciones eliminadas',
+                'eliminadas': eliminadas
+            })
+        elif eliminar_leidas:
+            # Eliminar solo las notificaciones leídas
+            eliminadas, _ = NotificacionCambioPrecio.objects.filter(
+                usuario=request.user,
+                leida=True
+            ).delete()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'{eliminadas} notificaciones leídas eliminadas',
+                'eliminadas': eliminadas
+            })
+        elif notificacion_id:
+            # Eliminar una sola notificación
+            notificacion = NotificacionCambioPrecio.objects.get(
+                id=notificacion_id,
+                usuario=request.user
+            )
+            notificacion.delete()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Notificación eliminada'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe especificar qué eliminar'
+            })
+        
+    except NotificacionCambioPrecio.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Notificación no encontrada'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al eliminar notificación: {str(e)}'
+        })
+
+
+# ========== REGULARIZACIÓN DE PRECIOS ENTRE SUCURSALES ==========
+
+@require_GET
+@login_required
+def detectar_discrepancias_precios(request):
+    """
+    Detecta productos con precios inconsistentes entre sucursales.
+    Retorna un resumen y listado de productos que necesitan regularización.
+    """
+    try:
+        # Obtener todas las sucursales activas
+        sucursales = Sucursal.objects.filter(estado=True)
+        
+        if sucursales.count() < 2:
+            return JsonResponse({
+                'success': True,
+                'tiene_discrepancias': False,
+                'mensaje': 'Solo hay una sucursal activa',
+                'total_discrepancias': 0,
+                'productos': []
+            })
+        
+        # Buscar productos que existen en múltiples sucursales
+        # Agrupamos por artículo + atributo1 + atributo2 (nombre + marca + color)
+        productos_agrupados = Producto.objects.values(
+            'articulo', 'atributo1', 'atributo2'
+        ).annotate(
+            count_sucursales=Count('sucursal', distinct=True),
+            precio_min=Min('precioventa'),
+            precio_max=Max('precioventa'),
+            costo_min=Min('costo'),
+            costo_max=Max('costo')
+        ).filter(
+            count_sucursales__gt=1
+        )
+        
+        discrepancias = []
+        
+        for grupo in productos_agrupados:
+            # Calcular diferencia de precio
+            diferencia_precio = grupo['precio_max'] - grupo['precio_min']
+            diferencia_costo = grupo['costo_max'] - grupo['costo_min']
+            
+            # Si hay diferencia de precio o costo, es una discrepancia
+            if diferencia_precio > 0 or diferencia_costo > 0:
+                # Obtener los productos de este grupo
+                productos_grupo = Producto.objects.filter(
+                    articulo=grupo['articulo'],
+                    atributo1_id=grupo['atributo1'],
+                    atributo2_id=grupo['atributo2']
+                ).select_related('sucursal', 'atributo1', 'atributo2', 'atributo3')
+                
+                # Obtener detalles por sucursal
+                sucursales_detalle = []
+                for prod in productos_grupo:
+                    stock_total = sum(pt.stock for pt in prod.producto_talla.all())
+                    sucursales_detalle.append({
+                        'sucursal_id': prod.sucursal.id,
+                        'sucursal': prod.sucursal.alias,
+                        'producto_id': prod.id,
+                        'precio_venta': float(prod.precioventa),
+                        'costo': float(prod.costo),
+                        'stock': stock_total
+                    })
+                
+                # Calcular porcentaje de variación
+                if grupo['precio_min'] > 0:
+                    variacion_porcentual = (diferencia_precio / grupo['precio_min']) * 100
+                else:
+                    variacion_porcentual = 0
+                
+                # Obtener marca y color
+                primer_prod = productos_grupo.first()
+                
+                discrepancias.append({
+                    'articulo': grupo['articulo'],
+                    'marca': primer_prod.atributo1.valor if primer_prod.atributo1 else None,
+                    'color': primer_prod.atributo2.valor if primer_prod.atributo2 else None,
+                    'genero': primer_prod.atributo3.valor if primer_prod.atributo3 else None,
+                    'precio_min': float(grupo['precio_min']),
+                    'precio_max': float(grupo['precio_max']),
+                    'diferencia_precio': float(diferencia_precio),
+                    'costo_min': float(grupo['costo_min']),
+                    'costo_max': float(grupo['costo_max']),
+                    'diferencia_costo': float(diferencia_costo),
+                    'variacion_porcentual': round(variacion_porcentual, 2),
+                    'cantidad_sucursales': grupo['count_sucursales'],
+                    'sucursales': sucursales_detalle,
+                    'es_critico': variacion_porcentual > 10  # Más de 10% de diferencia es crítico
+                })
+        
+        # Ordenar por variación porcentual descendente
+        discrepancias.sort(key=lambda x: x['variacion_porcentual'], reverse=True)
+        
+        # Calcular resumen
+        total_discrepancias = len(discrepancias)
+        criticos = sum(1 for d in discrepancias if d['es_critico'])
+        variacion_maxima = max(d['variacion_porcentual'] for d in discrepancias) if discrepancias else 0
+        
+        return JsonResponse({
+            'success': True,
+            'tiene_discrepancias': total_discrepancias > 0,
+            'total_discrepancias': total_discrepancias,
+            'criticos': criticos,
+            'variacion_maxima': variacion_maxima,
+            'productos': discrepancias[:50]  # Limitar a 50 para el dashboard
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error en detectar_discrepancias_precios: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al detectar discrepancias: {str(e)}'
+        })
+
+
+@require_POST
+@login_required
+def regularizar_precio_sucursales(request):
+    """
+    Regulariza el precio de un producto igualándolo en todas las sucursales.
+    """
+    try:
+        data = json.loads(request.body)
+        articulo = data.get('articulo')
+        atributo1_id = data.get('atributo1_id')
+        atributo2_id = data.get('atributo2_id')
+        precio_nuevo = data.get('precio_nuevo')
+        costo_nuevo = data.get('costo_nuevo')
+        motivo = data.get('motivo', 'Regularización de precio entre sucursales')
+        
+        if not all([articulo, atributo1_id, atributo2_id, precio_nuevo]):
+            return JsonResponse({
+                'success': False,
+                'error': 'Parámetros incompletos'
+            })
+        
+        # Obtener todos los productos que coinciden
+        productos = Producto.objects.filter(
+            articulo=articulo,
+            atributo1_id=atributo1_id,
+            atributo2_id=atributo2_id
+        ).select_related('sucursal')
+        
+        if not productos.exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'No se encontraron productos para regularizar'
+            })
+        
+        productos_actualizados = 0
+        sucursales_afectadas = set()
+        
+        with transaction.atomic():
+            for producto in productos:
+                precio_anterior = producto.precioventa
+                costo_anterior = producto.costo
+                
+                # Actualizar precios
+                producto.precioventa = int(precio_nuevo)
+                if costo_nuevo:
+                    producto.costo = int(costo_nuevo)
+                producto.save()
+                
+                # Actualizar lotes activos
+                LoteProducto.objects.filter(
+                    producto_talla__producto=producto,
+                    cantidad_disponible__gt=0,
+                    activo=True
+                ).update(precio_venta_unitario=int(precio_nuevo))
+                
+                # Registrar en historial
+                if precio_anterior != int(precio_nuevo):
+                    HistorialCambioPrecio.objects.create(
+                        producto=producto,
+                        precio_anterior=precio_anterior,
+                        precio_nuevo=int(precio_nuevo),
+                        tipo_cambio='REGULARIZACION',
+                        motivo=motivo,
+                        usuario=request.user,
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                
+                productos_actualizados += 1
+                sucursales_afectadas.add(producto.sucursal.alias)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Precio regularizado en {productos_actualizados} productos',
+            'productos_actualizados': productos_actualizados,
+            'sucursales_afectadas': list(sucursales_afectadas)
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error en regularizar_precio_sucursales: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al regularizar: {str(e)}'
+        })
+
+
+@require_GET
+@login_required
+def resumen_discrepancias_precios(request):
+    """
+    Retorna un resumen rápido de discrepancias para el dashboard.
+    Optimizado para carga rápida.
+    """
+    try:
+        # Contar productos con discrepancias de precio
+        productos_con_discrepancia = Producto.objects.values(
+            'articulo', 'atributo1', 'atributo2'
+        ).annotate(
+            count_sucursales=Count('sucursal', distinct=True),
+            precio_min=Min('precioventa'),
+            precio_max=Max('precioventa')
+        ).filter(
+            count_sucursales__gt=1
+        )
+        
+        # Filtrar los que tienen diferencia real
+        total_discrepancias = 0
+        criticos = 0
+        variacion_maxima = 0
+        
+        for grupo in productos_con_discrepancia:
+            diferencia = grupo['precio_max'] - grupo['precio_min']
+            if diferencia > 0:
+                total_discrepancias += 1
+                
+                if grupo['precio_min'] > 0:
+                    variacion = (diferencia / grupo['precio_min']) * 100
+                    if variacion > variacion_maxima:
+                        variacion_maxima = variacion
+                    if variacion > 10:
+                        criticos += 1
+        
+        return JsonResponse({
+            'success': True,
+            'total_discrepancias': total_discrepancias,
+            'criticos': criticos,
+            'variacion_maxima': round(variacion_maxima, 2),
+            'requiere_atencion': total_discrepancias > 0
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'total_discrepancias': 0,
+            'criticos': 0,
+            'variacion_maxima': 0,
+            'requiere_atencion': False
+        })

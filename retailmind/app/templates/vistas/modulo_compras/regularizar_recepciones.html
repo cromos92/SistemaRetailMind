@@ -7,100 +7,77 @@
 <div class="page-content">
     <div class="container-fluid">
         
-        <!-- Header -->
+        <!-- Header NEXO -->
         <div class="row mb-4">
             <div class="col">
-                <h1 class="h3 mb-0">
-                    <i class="ri-file-damage-line text-warning"></i> Regularización de Recepciones
+                <h1 class="page-header-title">
+                    <i class="ri-file-damage-line" style="color: var(--nexo-warning);"></i> Regularización de Recepciones
                 </h1>
-                <p class="text-muted mb-0">Gestiona productos recepcionados con problemas</p>
-                <small class="text-info">
-                    <i class="ri-information-line"></i> Aquí puedes regularizar productos faltantes, dañados o con diferencias
-                </small>
+                <p class="page-header-subtitle mb-1">Gestiona productos recepcionados con problemas</p>
+                <div class="nexo-alert info" style="display: inline-flex; padding: 8px 14px;">
+                    <i class="ri-information-line me-2"></i>
+                    Regulariza productos faltantes, dañados o con diferencias
+                </div>
             </div>
         </div>
 
-        <!-- Estadísticas -->
+        <!-- Estadísticas NEXO -->
         <div class="row g-3 mb-4">
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="avatar-sm rounded-circle bg-warning bg-soft">
-                                    <span class="avatar-title rounded-circle bg-warning">
-                                        <i class="ri-alert-line text-white"></i>
-                                    </span>
-                                </div>
+                            <div class="stat-icon warning">
+                                <i class="ri-alert-line"></i>
                             </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Productos Pendientes</p>
-                                <h4 class="fs-4 fw-medium mb-0" id="totalPendientes">
-                                    <span class="counter-value">0</span>
-                                </h4>
+                            <div class="ms-3">
+                                <p class="stat-label mb-0">Productos Pendientes</p>
+                                <h4 class="stat-value mb-0" id="totalPendientes">0</h4>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="avatar-sm rounded-circle bg-danger bg-soft">
-                                    <span class="avatar-title rounded-circle bg-danger">
-                                        <i class="ri-close-circle-line text-white"></i>
-                                    </span>
-                                </div>
+                            <div class="stat-icon error">
+                                <i class="ri-close-circle-line"></i>
                             </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Faltantes</p>
-                                <h4 class="fs-4 fw-medium mb-0" id="totalFaltantes">
-                                    <span class="counter-value">0</span>
-                                </h4>
+                            <div class="ms-3">
+                                <p class="stat-label mb-0">Faltantes</p>
+                                <h4 class="stat-value mb-0" id="totalFaltantes">0</h4>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="avatar-sm rounded-circle bg-info bg-soft">
-                                    <span class="avatar-title rounded-circle bg-info">
-                                        <i class="ri-checkbox-circle-line text-white"></i>
-                                    </span>
-                                </div>
+                            <div class="stat-icon success">
+                                <i class="ri-checkbox-circle-line"></i>
                             </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">Regularizados</p>
-                                <h4 class="fs-4 fw-medium mb-0" id="totalRegularizados">
-                                    <span class="counter-value">0</span>
-                                </h4>
+                            <div class="ms-3">
+                                <p class="stat-label mb-0">Regularizados</p>
+                                <h4 class="stat-value mb-0" id="totalRegularizados">0</h4>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card border-0 shadow-sm">
+                <div class="stat-card card">
                     <div class="card-body">
                         <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="avatar-sm rounded-circle bg-primary bg-soft">
-                                    <span class="avatar-title rounded-circle bg-primary">
-                                        <i class="ri-file-list-line text-white"></i>
-                                    </span>
-                                </div>
+                            <div class="stat-icon primary">
+                                <i class="ri-file-list-line"></i>
                             </div>
-                            <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-13">DTEs con Problemas</p>
-                                <h4 class="fs-4 fw-medium mb-0" id="totalDTEs">
-                                    <span class="counter-value">0</span>
-                                </h4>
+                            <div class="ms-3">
+                                <p class="stat-label mb-0">DTEs con Problemas</p>
+                                <h4 class="stat-value mb-0" id="totalDTEs">0</h4>
                             </div>
                         </div>
                     </div>
@@ -108,84 +85,84 @@
             </div>
         </div>
 
-        <!-- Filtros -->
-        <div class="card shadow-sm mb-4">
+        <!-- Filtros NEXO -->
+        <div class="filter-card card">
             <div class="card-body">
-                <div class="row g-3">
+                <div class="row g-3 align-items-end">
                     <div class="col-md-3">
                         <label class="form-label">Estado</label>
                         <select class="form-select" id="filtroEstado">
-                            <option value="">Pendientes (sin regularizar)</option>
-                            <option value="TODOS">Todos (pendientes + regularizados)</option>
-                            <option value="FALTANTE">Faltantes</option>
-                            <option value="RECEPCIONADO_PARCIAL">Parciales</option>
-                            <option value="RECEPCIONADO_DANADO">Dañados</option>
-                            <option value="EN_REGULARIZACION">En Regularización</option>
-                            <option value="EN_SOLICITUD_REGULARIZACION">En Solicitud</option>
+                            <option value="">📋 Pendientes (sin regularizar)</option>
+                            <option value="TODOS">📊 Todos (pendientes + regularizados)</option>
+                            <option value="FALTANTE">❌ Faltantes</option>
+                            <option value="RECEPCIONADO_PARCIAL">⚠️ Parciales</option>
+                            <option value="RECEPCIONADO_DANADO">💔 Dañados</option>
+                            <option value="EN_REGULARIZACION">🔄 En Regularización</option>
+                            <option value="EN_SOLICITUD_REGULARIZACION">📝 En Solicitud</option>
                             <option value="REGULARIZADO">✅ Regularizados</option>
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Proveedor</label>
+                        <label class="form-label">Proveedor / Origen</label>
                         <select class="form-select" id="filtroProveedor">
-                            <option value="">Todos</option>
+                            <option value="">Todos los orígenes</option>
                         </select>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Búsqueda</label>
-                        <input type="text" class="form-control" id="buscarProducto" 
-                               placeholder="SKU, producto, DTE...">
+                        <div class="input-group">
+                            <span class="input-group-text" style="background: var(--nexo-gray-100); border-color: var(--nexo-gray-300);">
+                                <i class="ri-search-line" style="color: var(--nexo-gray-500);"></i>
+                            </span>
+                            <input type="text" class="form-control" id="buscarProducto" 
+                                   placeholder="SKU, producto, N° DTE...">
+                        </div>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">&nbsp;</label>
-                        <button class="btn btn-primary w-100" onclick="cargarProductosProblemas()">
-                            <i class="ri-search-line"></i> Buscar
+                        <button class="btn btn-nexo-primary w-100" onclick="cargarProductosProblemas()">
+                            <i class="ri-search-line me-1"></i> Buscar
                         </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Tabla de Productos con Problemas -->
-        <div class="card shadow-sm">
-            <div class="card-header border-0 bg-light">
-                <div class="row align-items-center">
-                    <div class="col">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-alert-line text-warning"></i> Productos con Problemas
-                        </h5>
-                    </div>
-                    <div class="col-auto">
-                        <button class="btn btn-sm btn-success" onclick="actualizarListado()">
-                            <i class="ri-refresh-line"></i> Actualizar
-                        </button>
-                    </div>
+        <!-- Tabla NEXO -->
+        <div class="data-card card">
+            <div class="card-header">
+                <div class="d-flex align-items-center justify-content-between">
+                    <h5 class="card-title">
+                        <i class="ri-alert-line me-2" style="color: var(--nexo-warning);"></i> DTEs con Productos Problemáticos
+                    </h5>
+                    <button class="btn btn-sm btn-nexo-primary" onclick="actualizarListado()">
+                        <i class="ri-refresh-line me-1"></i> Actualizar
+                    </button>
                 </div>
             </div>
-            <div class="card-body pt-0">
+            <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-hover align-middle table-nowrap mb-0">
-                        <thead class="table-light">
+                    <table class="table nexo-table mb-0">
+                        <thead>
                             <tr>
                                 <th>DTE</th>
-                                <th>Fecha Emisión</th>
+                                <th>Fecha</th>
                                 <th>Origen</th>
-                                <th>Productos con Problemas</th>
-                                <th>Total Esperado</th>
-                                <th>Total Recibido</th>
-                                <th>Total Faltante</th>
-                                <th>Total Dañado</th>
-                                <th>Requiere</th>
-                                <th>Acciones</th>
+                                <th>Productos</th>
+                                <th class="text-center">Esperado</th>
+                                <th class="text-center">Recibido</th>
+                                <th class="text-center">Faltante</th>
+                                <th class="text-center">Dañado</th>
+                                <th class="text-center">Tipo</th>
+                                <th class="text-end">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyProductosProblemas">
                             <tr>
-                                <td colspan="10" class="text-center py-4">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Cargando...</span>
+                                <td colspan="10">
+                                    <div class="loading-state">
+                                        <div class="spinner-border" role="status"></div>
+                                        <p class="mt-2 mb-0" style="color: var(--nexo-gray-500);">Cargando datos...</p>
                                     </div>
-                                    <p class="text-muted mt-2">Cargando productos...</p>
                                 </td>
                             </tr>
                         </tbody>
@@ -196,43 +173,56 @@
     </div>
 </div>
 
-<!-- Modal Regularizar DTE Completo -->
+<!-- Modal Regularizar DTE Completo - NEXO -->
 <div class="modal fade" id="modalRegularizarDTE" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">
-                    <i class="bi bi-tools me-2"></i> Regularizar DTE #<span id="dteTitulo">-</span>
-                </h5>
+            <div class="modal-header nexo-success">
+                <div>
+                    <h5 class="modal-title">
+                        <i class="ri-tools-line me-2"></i> Regularizar DTE #<span id="dteTitulo">-</span>
+                    </h5>
+                    <small style="opacity: 0.85;">Generar Nota de Crédito por productos con problemas</small>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info mb-3">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <strong>Regularización de DTE:</strong> Se generará una Nota de Crédito por todos los productos con problemas.
+                <div class="nexo-alert info mb-4">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Regularización:</strong> Se generará una Nota de Crédito automáticamente por los productos faltantes o dañados.
                 </div>
                 
                 <!-- Resumen de Productos -->
-                <div class="card bg-light mb-3">
-                    <div class="card-body">
-                        <h6 class="card-title">📦 Productos a Regularizar</h6>
+                <div class="card mb-4" style="border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg);">
+                    <div class="card-header" style="background: var(--nexo-gray-100); border-bottom: 1px solid var(--nexo-gray-300); padding: 14px 20px;">
+                        <h6 class="mb-0" style="font-weight: 600; color: var(--nexo-secondary);">
+                            <i class="ri-box-3-line me-2" style="color: var(--nexo-primary);"></i>Productos a Regularizar
+                        </h6>
+                    </div>
+                    <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover table-sm mb-0">
+                            <table class="table nexo-table mb-0">
                                 <thead>
                                     <tr>
                                         <th>Producto</th>
                                         <th>SKU</th>
-                                        <th>Talla</th>
-                                        <th>Esperado</th>
-                                        <th>Recibido</th>
-                                        <th>Faltante</th>
-                                        <th>Dañado</th>
-                                        <th>A Acreditar</th>
+                                        <th class="text-center">Talla</th>
+                                        <th class="text-center">Esperado</th>
+                                        <th class="text-center">Recibido</th>
+                                        <th class="text-center">Faltante</th>
+                                        <th class="text-center">Dañado</th>
+                                        <th class="text-center">A Acreditar</th>
+                                        <th class="text-end">Precio Unit.</th>
+                                        <th class="text-end">Subtotal</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tbodyProductosDTE">
                                     <tr>
-                                        <td colspan="8" class="text-center">Cargando...</td>
+                                        <td colspan="10">
+                                            <div class="loading-state">
+                                                <div class="spinner-border spinner-border-sm"></div>
+                                            </div>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -241,55 +231,58 @@
                 </div>
                 
                 <!-- Resumen de NC -->
-                <div class="card border-success">
-                    <div class="card-body">
-                        <h6 class="card-title text-success">
-                            <i class="bi bi-file-earmark-text me-2"></i>Nota de Crédito a Generar
+                <div class="card" style="border: 2px solid var(--nexo-success); border-radius: var(--nexo-radius-lg); overflow: hidden;">
+                    <div class="card-header" style="background: rgba(0, 212, 170, 0.1); border-bottom: 1px solid rgba(0, 212, 170, 0.2); padding: 14px 20px;">
+                        <h6 class="mb-0" style="font-weight: 600; color: var(--nexo-success);">
+                            <i class="ri-file-text-line me-2"></i>Nota de Crédito a Generar
                         </h6>
+                    </div>
+                    <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
-                                <table class="table table-sm table-borderless mb-0">
-                                    <tr>
-                                        <td class="text-muted">Total productos:</td>
-                                        <td><strong id="ncTotalProductos">0</strong></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted">Total unidades:</td>
-                                        <td><strong id="ncTotalUnidades">0</strong></td>
-                                    </tr>
-                                </table>
+                                <div class="d-flex justify-content-between py-2" style="border-bottom: 1px dashed var(--nexo-gray-300);">
+                                    <span style="color: var(--nexo-gray-500);">Total productos:</span>
+                                    <strong id="ncTotalProductos" style="color: var(--nexo-secondary);">0</strong>
+                                </div>
+                                <div class="d-flex justify-content-between py-2">
+                                    <span style="color: var(--nexo-gray-500);">Total unidades:</span>
+                                    <strong id="ncTotalUnidades" style="color: var(--nexo-secondary);">0</strong>
+                                </div>
                             </div>
                             <div class="col-md-6">
-                                <table class="table table-sm table-borderless mb-0">
-                                    <tr>
-                                        <td class="text-muted">Monto Neto:</td>
-                                        <td><strong>$<span id="ncMontoNeto">0</span></strong></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="text-muted">IVA (19%):</td>
-                                        <td><strong>$<span id="ncIVA">0</span></strong></td>
-                                    </tr>
-                                    <tr class="border-top">
-                                        <td class="text-muted"><strong>Total NC:</strong></td>
-                                        <td><strong class="text-success fs-5">$<span id="ncTotal">0</span></strong></td>
-                                    </tr>
-                                </table>
+                                <div class="d-flex justify-content-between py-2" style="border-bottom: 1px dashed var(--nexo-gray-300);">
+                                    <span style="color: var(--nexo-gray-500);">Monto Neto:</span>
+                                    <strong style="color: var(--nexo-secondary);">$<span id="ncMontoNeto">0</span></strong>
+                                </div>
+                                <div class="d-flex justify-content-between py-2" style="border-bottom: 1px dashed var(--nexo-gray-300);">
+                                    <span style="color: var(--nexo-gray-500);">IVA (19%):</span>
+                                    <strong style="color: var(--nexo-secondary);">$<span id="ncIVA">0</span></strong>
+                                </div>
+                                <div class="d-flex justify-content-between py-2" style="background: rgba(0, 212, 170, 0.1); margin: 8px -16px -16px; padding: 12px 16px; border-radius: 0 0 var(--nexo-radius-md) var(--nexo-radius-md);">
+                                    <span style="font-weight: 600; color: var(--nexo-secondary);">Total NC:</span>
+                                    <strong style="font-size: 20px; color: var(--nexo-success);">$<span id="ncTotal">0</span></strong>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Motivo -->
-                <div class="mt-3">
-                    <label class="form-label fw-bold">Motivo de la NC <span class="text-danger">*</span></label>
+                <div class="mt-4">
+                    <label class="form-label" style="font-weight: 600; color: var(--nexo-secondary);">
+                        Motivo de la NC <span style="color: var(--nexo-error);">*</span>
+                    </label>
                     <textarea id="motivoNCMasiva" class="form-control" rows="2" 
-                              placeholder="Ej: Productos no llegaron completos al destino"></textarea>
+                              placeholder="Ej: Productos no llegaron completos al destino"
+                              style="border-color: var(--nexo-gray-300); border-radius: var(--nexo-radius-md);"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" id="btnProcesarDTE">
-                    <i class="bi bi-check-circle"></i> Generar NC y Regularizar
+                <button type="button" class="btn btn-nexo-outline" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-nexo-success" id="btnProcesarDTE">
+                    <i class="ri-check-line me-1"></i> Generar NC y Regularizar
                 </button>
             </div>
         </div>
@@ -837,22 +830,548 @@
 </div>
 
 <style>
-.counter-value {
+/* ========== NEXO DESIGN SYSTEM ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
+
+/* ========== PAGE HEADER ========== */
+.page-content {
+    background-color: var(--nexo-gray-100);
+    min-height: calc(100vh - 60px);
+    padding: 24px;
+}
+
+.page-header-title {
+    color: var(--nexo-secondary);
     font-weight: 700;
+    font-size: 1.75rem;
+    margin-bottom: 4px;
 }
 
-.bg-soft {
-    opacity: 0.1;
+.page-header-subtitle {
+    color: var(--nexo-gray-500);
+    font-size: 14px;
 }
 
-.table th {
+/* ========== STAT CARDS ========== */
+.stat-card {
+    background: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-fast);
+    overflow: hidden;
+}
+
+.stat-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+    transform: translateY(-2px);
+}
+
+.stat-card .card-body {
+    padding: 20px;
+}
+
+.stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.stat-icon.warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: var(--nexo-warning);
+}
+
+.stat-icon.error {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.stat-icon.success {
+    background: rgba(0, 212, 170, 0.15);
+    color: var(--nexo-success);
+}
+
+.stat-icon.primary {
+    background: rgba(0, 102, 255, 0.15);
+    color: var(--nexo-primary);
+}
+
+.stat-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    line-height: 1.2;
+}
+
+/* ========== FILTER CARD ========== */
+.filter-card {
+    background: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    margin-bottom: 24px;
+}
+
+.filter-card .card-body {
+    padding: 20px;
+}
+
+.filter-card .form-label {
     font-weight: 600;
     font-size: 13px;
+    color: var(--nexo-gray-700);
+    margin-bottom: 6px;
 }
 
-.badge-estado {
+.filter-card .form-control,
+.filter-card .form-select {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.filter-card .form-control:focus,
+.filter-card .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+}
+
+/* ========== DATA TABLE ========== */
+.data-card {
+    background: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    overflow: hidden;
+}
+
+.data-card .card-header {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-secondary);
+    padding: 16px 20px;
+    border: none;
+    border-bottom: 2px solid var(--nexo-gray-300);
+}
+
+.data-card .card-header .card-title {
+    font-weight: 600;
+    font-size: 16px;
+    margin: 0;
+    color: var(--nexo-secondary);
+}
+
+.data-card .card-body {
+    padding: 0;
+}
+
+.nexo-table {
+    margin: 0;
+}
+
+.nexo-table thead th {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 14px 16px;
+    border: none;
+    border-bottom: 2px solid var(--nexo-gray-300);
+}
+
+.nexo-table tbody td {
+    padding: 14px 16px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--nexo-gray-100);
+    color: var(--nexo-gray-700) !important;
+    font-size: 14px;
+    background: var(--nexo-white);
+}
+
+.nexo-table tbody tr:hover {
+    background-color: var(--nexo-primary-light);
+}
+
+.nexo-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ========== BADGES ========== */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.nexo-badge.success {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00a882;
+}
+
+.nexo-badge.warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: #cc8c00;
+}
+
+.nexo-badge.error {
+    background: rgba(255, 77, 77, 0.15);
+    color: #cc3d3d;
+}
+
+.nexo-badge.info {
+    background: rgba(0, 102, 255, 0.15);
+    color: var(--nexo-primary);
+}
+
+.nexo-badge.secondary {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+}
+
+/* ========== BUTTONS ========== */
+.btn-nexo-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-primary:hover {
+    background: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.btn-nexo-success {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-success:hover {
+    background: #00b892;
+    color: var(--nexo-white);
+    transform: translateY(-1px);
+}
+
+.btn-nexo-outline {
+    background: transparent;
+    color: var(--nexo-primary);
+    border: 2px solid var(--nexo-primary);
+    border-radius: var(--nexo-radius-md);
+    padding: 8px 18px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-outline:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* ========== MODALS ========== */
+.modal-content {
+    border: none;
+    border-radius: var(--nexo-radius-xl);
+    box-shadow: var(--nexo-shadow-xl);
+    overflow: hidden;
+}
+
+.modal-header.nexo-success {
+    background: linear-gradient(135deg, var(--nexo-success) 0%, #00b892 100%) !important;
+    color: #ffffff !important;
+    padding: 20px 24px;
+    border: none;
+}
+
+.modal-header.nexo-success .modal-title,
+.modal-header.nexo-success h5,
+.modal-header.nexo-success small {
+    color: #ffffff !important;
+}
+
+.modal-header.nexo-primary {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%) !important;
+    color: #ffffff !important;
+    padding: 20px 24px;
+    border: none;
+}
+
+.modal-header.nexo-primary .modal-title,
+.modal-header.nexo-primary h5,
+.modal-header.nexo-primary small {
+    color: #ffffff !important;
+}
+
+.modal-header.nexo-warning {
+    background: linear-gradient(135deg, var(--nexo-warning) 0%, #e6a020 100%) !important;
+    color: var(--nexo-secondary) !important;
+    padding: 20px 24px;
+    border: none;
+}
+
+.modal-title {
+    font-weight: 700;
+    font-size: 18px;
+    color: inherit;
+}
+
+.modal-body {
+    padding: 24px;
+    background: var(--nexo-white);
+    color: var(--nexo-secondary);
+}
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-gray-100);
+}
+
+/* Modal content general */
+.modal-content {
+    background: var(--nexo-white) !important;
+    color: var(--nexo-secondary) !important;
+}
+
+.modal-content .card {
+    background: var(--nexo-white);
+}
+
+.modal-content .form-label {
+    color: var(--nexo-secondary) !important;
+}
+
+.modal-content .form-control {
+    color: var(--nexo-secondary) !important;
+    background: var(--nexo-white) !important;
+}
+
+/* ========== ALERTS ========== */
+.nexo-alert {
+    padding: 14px 18px;
+    border-radius: var(--nexo-radius-md);
+    border-left: 4px solid;
+    font-size: 14px;
+}
+
+.nexo-alert.info {
+    background: rgba(0, 102, 255, 0.08);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.nexo-alert.success {
+    background: rgba(0, 212, 170, 0.08);
+    border-color: var(--nexo-success);
+    color: #00a882;
+}
+
+.nexo-alert.warning {
+    background: rgba(255, 176, 32, 0.08);
+    border-color: var(--nexo-warning);
+    color: #996B00;
+}
+
+.nexo-alert.error {
+    background: rgba(255, 77, 77, 0.08);
+    border-color: var(--nexo-error);
+    color: #cc3d3d;
+}
+
+/* ========== EMPTY STATE ========== */
+.empty-state {
+    padding: 60px 20px;
+    text-align: center;
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: var(--nexo-gray-300);
+    margin-bottom: 16px;
+}
+
+.empty-state p {
+    color: var(--nexo-gray-500);
+    font-size: 16px;
+}
+
+/* ========== LOADING ========== */
+.loading-state {
+    padding: 40px 20px;
+    text-align: center;
+}
+
+.loading-state .spinner-border {
+    color: var(--nexo-primary);
+    width: 48px;
+    height: 48px;
+}
+
+/* ========== ACTION BUTTONS ========== */
+.action-btn {
+    padding: 6px 12px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.action-btn.success {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+    border: none;
+}
+
+.action-btn.success:hover {
+    background: #00b892;
+}
+
+.action-btn.info {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+}
+
+.action-btn.info:hover {
+    background: var(--nexo-primary-dark);
+}
+
+.action-btn.danger {
+    background: var(--nexo-error);
+    color: var(--nexo-white);
+    border: none;
+}
+
+.action-btn.danger:hover {
+    background: #e64545;
+}
+
+/* ========== DTE NUMBER ========== */
+.dte-number {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    padding: 4px 10px;
+    border-radius: var(--nexo-radius-sm);
+    font-weight: 600;
+    font-size: 13px;
+    font-family: 'Monaco', 'Consolas', monospace;
+}
+
+/* ========== PRODUCT INFO ========== */
+.product-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.product-info .name {
+    font-weight: 600;
+    color: var(--nexo-secondary);
+}
+
+.product-info .detail {
+    font-size: 12px;
+    color: var(--nexo-gray-500);
+}
+
+/* ========== QUANTITY INDICATORS ========== */
+.qty-expected { color: var(--nexo-gray-700); font-weight: 600; }
+.qty-received { color: var(--nexo-success); font-weight: 700; }
+.qty-missing { color: var(--nexo-error); font-weight: 700; }
+.qty-damaged { color: var(--nexo-warning); font-weight: 700; }
+
+/* ========== STATUS TAG ========== */
+.status-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
     font-size: 11px;
-    padding: 4px 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.status-tag.pending {
+    background: rgba(255, 176, 32, 0.15);
+    color: #b38600;
+}
+
+.status-tag.waiting {
+    background: rgba(0, 102, 255, 0.15);
+    color: var(--nexo-primary);
+}
+
+.status-tag.requires-nc {
+    background: rgba(255, 77, 77, 0.15);
+    color: #cc3d3d;
+}
+
+.status-tag.adjustment {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00a882;
 }
 </style>
 
@@ -903,9 +1422,11 @@ function actualizarTabla() {
     if (productosProblemas.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="text-center py-4">
-                    <i class="ri-inbox-line display-4 text-muted"></i>
-                    <p class="text-muted mt-2">No hay productos con problemas pendientes</p>
+                <td colspan="10">
+                    <div class="empty-state">
+                        <i class="ri-inbox-line"></i>
+                        <p>No hay productos con problemas pendientes</p>
+                    </div>
                 </td>
             </tr>
         `;
@@ -944,53 +1465,58 @@ function actualizarTabla() {
     const dtesOrdenados = Object.values(dteGroups).sort((a, b) => {
         const fechaA = new Date(a.dte_fecha);
         const fechaB = new Date(b.dte_fecha);
-        return fechaB - fechaA; // Descendente: más reciente primero
+        return fechaB - fechaA;
     });
     
     tbody.innerHTML = dtesOrdenados.map(dte => {
+        const productosResumen = dte.productos.slice(0, 2).map(p => `${p.producto_nombre} (${p.talla})`).join(', ');
+        const masProductos = dte.productos.length > 2 ? ` +${dte.productos.length - 2} más` : '';
+        
         return `
         <tr>
             <td>
-                <strong class="badge bg-secondary">#${dte.dte_numero}</strong>
-            </td>
-            <td><small>${formatearFecha(dte.dte_fecha)}</small></td>
-            <td>
-                <strong>${dte.sucursal_origen}</strong>
-                <br><small class="text-muted">${dte.emisor}</small>
+                <span class="dte-number">#${dte.dte_numero}</span>
             </td>
             <td>
-                <span class="badge bg-danger">${dte.productos.length}</span> producto(s)
-                <br><small class="text-muted">${dte.productos.map(p => `${p.producto_nombre} (${p.talla})`).join(', ')}</small>
+                <span style="color: var(--nexo-gray-700); font-size: 13px;">${formatearFecha(dte.dte_fecha)}</span>
             </td>
-            <td><strong>${dte.total_esperado}</strong></td>
-            <td><strong class="text-success">${dte.total_recibido}</strong></td>
-            <td><strong class="text-danger">${dte.total_faltante}</strong></td>
-            <td><strong class="text-warning">${dte.total_danado}</strong></td>
             <td>
+                <div class="product-info">
+                    <span class="name">${dte.sucursal_origen}</span>
+                    <span class="detail">${dte.emisor}</span>
+                </div>
+            </td>
+            <td>
+                <span class="nexo-badge error">${dte.productos.length} producto(s)</span>
+                <div class="detail mt-1" style="font-size: 12px; color: var(--nexo-gray-500); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${productosResumen}${masProductos}
+                </div>
+            </td>
+            <td class="text-center"><span class="qty-expected">${dte.total_esperado}</span></td>
+            <td class="text-center"><span class="qty-received">${dte.total_recibido}</span></td>
+            <td class="text-center"><span class="qty-missing">${dte.total_faltante || '-'}</span></td>
+            <td class="text-center"><span class="qty-damaged">${dte.total_danado || '-'}</span></td>
+            <td class="text-center">
                 ${dte.requiere_nc ? 
-                    '<span class="badge bg-danger"><i class="bi bi-file-earmark-text"></i> NC</span>' : 
-                    '<span class="badge bg-success"><i class="bi bi-pencil"></i> Ajuste</span>'}
+                    '<span class="status-tag requires-nc"><i class="ri-file-text-line"></i> NC</span>' : 
+                    '<span class="status-tag adjustment"><i class="ri-edit-line"></i> Ajuste</span>'}
             </td>
-            <td class="text-nowrap">
+            <td class="text-end">
                 ${dte.soy_receptor && !dte.soy_emisor ?
-                    // SOY RECEPTOR: Ver detalle + opción de cancelar
-                    `<button class="btn btn-sm btn-info" onclick="verDetalleDTE('${dte.dte_numero}')" title="Ver detalle de productos">
-                        <i class="bi bi-eye"></i> Ver Detalle
-                    </button>
-                    <button class="btn btn-sm btn-danger ms-1" onclick="anularRegularizacionDTE('${dte.dte_numero}')" title="Anular solicitud (si fue por error)">
-                        <i class="bi bi-x-circle"></i> Anular
-                    </button>
-                    <br><span class="badge bg-warning mt-1"><i class="bi bi-clock-history"></i> En espera del emisor</span>` :
-                    (dte.soy_emisor && !dte.soy_receptor ?
-                        // SOY EMISOR: Puedo regularizar todo el DTE
-                        `<button class="btn btn-sm btn-success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')" title="Regularizar todos los productos">
-                            <i class="bi bi-tools"></i> Regularizar DTE
-                        </button>` :
-                        // Traspaso interno
-                        `<button class="btn btn-sm btn-success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')" title="Regularizar">
-                            <i class="ri-settings-3-line"></i> Regularizar
-                        </button>`
-                    )
+                    `<div class="d-flex flex-column align-items-end gap-1">
+                        <div class="d-flex gap-1">
+                            <button class="action-btn info" onclick="verDetalleDTE('${dte.dte_numero}')" title="Ver detalle">
+                                <i class="ri-eye-line"></i>
+                            </button>
+                            <button class="action-btn danger" onclick="anularRegularizacionDTE('${dte.dte_numero}')" title="Anular">
+                                <i class="ri-close-line"></i>
+                            </button>
+                        </div>
+                        <span class="status-tag waiting"><i class="ri-time-line"></i> Esperando</span>
+                    </div>` :
+                    `<button class="action-btn success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')">
+                        <i class="ri-tools-line me-1"></i> Regularizar
+                    </button>`
                 }
             </td>
         </tr>
@@ -1015,19 +1541,23 @@ function abrirModalRegularizarDTE(dteNumero) {
     
     tbody.html(productosDTE.map((prod) => {
         const cantidadAcreditar = prod.cantidad_faltante + prod.cantidad_danada;
+        const precioUnit = prod.precio_unitario || 0;
+        const subtotal = cantidadAcreditar * precioUnit;
         totalUnidades += cantidadAcreditar;
-        montoNeto += cantidadAcreditar * (prod.precio_unitario || 0);
+        montoNeto += subtotal;
         
         return `
         <tr data-producto-id="${prod.id}">
             <td><strong>${prod.producto_nombre}</strong></td>
             <td><code>${prod.sku}</code></td>
-            <td><span class="badge bg-info">${prod.talla}</span></td>
-            <td>${prod.cantidad_esperada}</td>
-            <td class="text-success">${prod.cantidad_recibida}</td>
-            <td class="text-danger">${prod.cantidad_faltante}</td>
-            <td class="text-warning">${prod.cantidad_danada}</td>
-            <td><strong class="text-primary">${cantidadAcreditar}</strong></td>
+            <td class="text-center"><span class="badge bg-info">${prod.talla}</span></td>
+            <td class="text-center">${prod.cantidad_esperada}</td>
+            <td class="text-center text-success">${prod.cantidad_recibida}</td>
+            <td class="text-center text-danger">${prod.cantidad_faltante}</td>
+            <td class="text-center text-warning">${prod.cantidad_danada}</td>
+            <td class="text-center"><strong class="text-primary">${cantidadAcreditar}</strong></td>
+            <td class="text-end"><small class="text-muted">$${precioUnit.toLocaleString('es-CL')}</small></td>
+            <td class="text-end"><strong style="color: var(--nexo-success);">$${subtotal.toLocaleString('es-CL')}</strong></td>
         </tr>
         `;
     }).join(''));
@@ -1480,10 +2010,10 @@ function verEstadoSolicitud(productoId) {
 }
 
 function actualizarEstadisticas(stats) {
-    document.getElementById('totalPendientes').querySelector('.counter-value').textContent = stats.pendientes || 0;
-    document.getElementById('totalFaltantes').querySelector('.counter-value').textContent = stats.faltantes || 0;
-    document.getElementById('totalRegularizados').querySelector('.counter-value').textContent = stats.regularizados || 0;
-    document.getElementById('totalDTEs').querySelector('.counter-value').textContent = stats.dtes_con_problemas || 0;
+    document.getElementById('totalPendientes').textContent = stats.pendientes || 0;
+    document.getElementById('totalFaltantes').textContent = stats.faltantes || 0;
+    document.getElementById('totalRegularizados').textContent = stats.regularizados || 0;
+    document.getElementById('totalDTEs').textContent = stats.dtes_con_problemas || 0;
 }
 
 function abrirModalRegularizar(productoId) {

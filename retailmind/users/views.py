@@ -20,7 +20,7 @@ import csv
 from datetime import datetime, timedelta
 
 from .models import Usuario, LogAcceso
-from app.models import Sucursal, EmpresaUser
+from app.models import Sucursal, EmpresaUser, Empresa
 
 # ========== FUNCIONES DE VALIDACIÓN ==========
 
@@ -130,10 +130,13 @@ def registrar_log_acceso(request, usuario, exito=True):
 def gestion_usuarios(request):
     """
     Vista principal para gestión de usuarios
+    RESTRINGIDO: Solo usuarios con rol 'administrador' o superusuarios pueden acceder
     """
-    # Verificar permisos
-    if not request.user.tiene_permiso_usuarios('crear') and not request.user.is_superuser:
-        messages.error(request, "No tienes permisos para acceder a la gestión de usuarios")
+    # Verificar si es administrador o superusuario
+    es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+    
+    if not es_admin:
+        messages.error(request, "Acceso restringido. Solo los administradores pueden gestionar usuarios.")
         return redirect('verHome')
     
     return render(request, 'users/gestion_usuarios.html')
@@ -143,7 +146,13 @@ def gestion_usuarios(request):
 def listar_usuarios(request):
     """
     Obtener lista de usuarios con filtros y paginación
+    RESTRINGIDO: Solo administradores
     """
+    # Verificar si es administrador
+    es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+    if not es_admin:
+        return JsonResponse({'error': 'No tienes permisos para acceder a esta información'}, status=403)
+    
     try:
         # Parámetros de búsqueda y paginación
         page = int(request.GET.get('page', 1))
@@ -237,13 +246,15 @@ def listar_usuarios(request):
 def crear_usuario(request):
     """
     Crear nuevo usuario
+    RESTRINGIDO: Solo administradores
     """
     try:
-        # Verificar permisos
-        if not request.user.tiene_permiso_usuarios('crear') and not request.user.is_superuser:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
             return JsonResponse({
                 'success': False,
-                'error': 'No tienes permisos para crear usuarios'
+                'error': 'Acceso restringido. Solo los administradores pueden crear usuarios.'
             }, status=403)
         
         data = json.loads(request.body)
@@ -312,13 +323,15 @@ def crear_usuario(request):
 def editar_usuario(request, usuario_id):
     """
     Editar información de un usuario existente
+    RESTRINGIDO: Solo administradores
     """
     try:
-        # Verificar permisos
-        if not request.user.tiene_permiso_usuarios('editar') and not request.user.is_superuser:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
             return JsonResponse({
                 'success': False,
-                'error': 'No tienes permisos para editar usuarios'
+                'error': 'Acceso restringido. Solo los administradores pueden editar usuarios.'
             }, status=403)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
@@ -402,13 +415,15 @@ def editar_usuario(request, usuario_id):
 def toggle_estado_usuario(request, usuario_id):
     """
     Cambiar el estado activo/inactivo de un usuario
+    RESTRINGIDO: Solo administradores
     """
     try:
-        # Verificar permisos
-        if not request.user.tiene_permiso_usuarios('editar') and not request.user.is_superuser:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
             return JsonResponse({
                 'success': False,
-                'error': 'No tienes permisos para cambiar el estado de usuarios'
+                'error': 'Acceso restringido. Solo los administradores pueden cambiar el estado de usuarios.'
             }, status=403)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
@@ -448,13 +463,15 @@ def toggle_estado_usuario(request, usuario_id):
 def obtener_usuario(request, usuario_id):
     """
     Obtener información de un usuario para edición
+    RESTRINGIDO: Solo administradores
     """
     try:
-        # Verificar permisos
-        if not request.user.tiene_permiso_usuarios('editar') and not request.user.is_superuser:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
             return JsonResponse({
                 'success': False,
-                'error': 'No tienes permisos para ver información de usuarios'
+                'error': 'Acceso restringido. Solo los administradores pueden ver información de usuarios.'
             }, status=403)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
@@ -547,13 +564,15 @@ def obtener_usuario(request, usuario_id):
 def resetear_password(request, usuario_id):
     """
     Resetear contraseña de un usuario y enviar por correo
+    RESTRINGIDO: Solo administradores
     """
     try:
-        # Verificar permisos
-        if not request.user.tiene_permiso_usuarios('editar') and not request.user.is_superuser:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
             return JsonResponse({
                 'success': False,
-                'error': 'No tienes permisos para resetear contraseñas'
+                'error': 'Acceso restringido. Solo los administradores pueden resetear contraseñas.'
             }, status=403)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
@@ -603,13 +622,15 @@ def resetear_password(request, usuario_id):
 def exportar_usuarios(request):
     """
     Exportar lista de usuarios a CSV
+    RESTRINGIDO: Solo administradores
     """
     try:
-        # Verificar permisos
-        if not request.user.tiene_permiso_usuarios('editar') and not request.user.is_superuser:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
             return JsonResponse({
                 'success': False,
-                'error': 'No tienes permisos para exportar usuarios'
+                'error': 'Acceso restringido. Solo los administradores pueden exportar usuarios.'
             }, status=403)
         
         response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -757,74 +778,204 @@ def asignar_sucursal_sesion(request, usuario_id):
 
 def enviar_credenciales_usuario(usuario, password):
     """
-    Envía las credenciales de un nuevo usuario por correo
+    Envía las credenciales de un nuevo usuario por correo con template HTML
     """
-    subject = 'Bienvenido a RetailMind - Tus Credenciales de Acceso'
+    from django.core.mail import EmailMultiAlternatives
     
-    context = {
-        'usuario': usuario,
-        'password': password,
-        'fecha': timezone.now().strftime('%d/%m/%Y %H:%M'),
-        'sistema': 'RetailMind'
-    }
+    subject = '🎉 Bienvenido a NEXO - Tus Credenciales de Acceso'
     
-    # Template básico en texto plano por ahora
-    message = f"""
-    Hola {usuario.get_full_name()},
+    # Mensaje en texto plano (fallback)
+    text_message = f"""
+Hola {usuario.get_full_name()},
 
-    Te damos la bienvenida a RetailMind.
+¡Bienvenido/a a NEXO!
 
-    Tus credenciales de acceso son:
-    Usuario: {usuario.username}
-    Contraseña: {password}
+Tus credenciales de acceso son:
+━━━━━━━━━━━━━━━━━━━━━━━━
+Usuario: {usuario.username}
+Contraseña: {password}
+━━━━━━━━━━━━━━━━━━━━━━━━
 
-    Por favor, cambia tu contraseña en el primer acceso.
+⚠️ IMPORTANTE: Por seguridad, cambia tu contraseña en tu primer acceso.
 
-    Saludos,
-    Equipo RetailMind
+Para ingresar al sistema, visita: {settings.SITE_URL if hasattr(settings, 'SITE_URL') else 'http://localhost:8000'}
+
+Si tienes alguna duda, contacta al administrador del sistema.
+
+Saludos cordiales,
+Equipo NEXO
+    """
+    
+    # Mensaje HTML
+    html_message = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F5F5F7; margin: 0; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(26, 26, 46, 0.1); }}
+            .header {{ background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); padding: 30px; text-align: center; }}
+            .header h1 {{ color: #FFFFFF; margin: 0; font-size: 28px; }}
+            .header p {{ color: rgba(255,255,255,0.85); margin: 10px 0 0 0; }}
+            .content {{ padding: 30px; }}
+            .credentials-box {{ background: #E6F0FF; border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #0066FF; }}
+            .credentials-box h3 {{ color: #0052CC; margin: 0 0 15px 0; }}
+            .credential {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D1D9; }}
+            .credential:last-child {{ border-bottom: none; }}
+            .credential-label {{ color: #8A8A9A; }}
+            .credential-value {{ color: #1A1A2E; font-weight: bold; font-family: monospace; font-size: 16px; }}
+            .warning {{ background: rgba(255, 176, 32, 0.1); border-left: 4px solid #FFB020; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+            .warning strong {{ color: #996B00; }}
+            .btn {{ display: inline-block; background: #0066FF; color: #FFFFFF; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 20px 0; }}
+            .btn:hover {{ background: #0052CC; }}
+            .footer {{ background: #F5F5F7; padding: 20px; text-align: center; color: #8A8A9A; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🎉 ¡Bienvenido/a a NEXO!</h1>
+                <p>Tu cuenta ha sido creada exitosamente</p>
+            </div>
+            <div class="content">
+                <p style="color: #4A4A5A; font-size: 16px;">Hola <strong>{usuario.get_full_name()}</strong>,</p>
+                <p style="color: #4A4A5A;">Te damos la bienvenida al sistema NEXO. A continuación encontrarás tus credenciales de acceso:</p>
+                
+                <div class="credentials-box">
+                    <h3>🔐 Tus Credenciales</h3>
+                    <div class="credential">
+                        <span class="credential-label">Usuario:</span>
+                        <span class="credential-value">{usuario.username}</span>
+                    </div>
+                    <div class="credential">
+                        <span class="credential-label">Contraseña:</span>
+                        <span class="credential-value">{password}</span>
+                    </div>
+                </div>
+                
+                <div class="warning">
+                    <strong>⚠️ Importante:</strong> Por seguridad, te recomendamos cambiar tu contraseña en tu primer acceso al sistema.
+                </div>
+                
+                <p style="color: #4A4A5A;">Si tienes alguna pregunta, no dudes en contactar al administrador del sistema.</p>
+            </div>
+            <div class="footer">
+                <p>Este correo fue enviado automáticamente por el sistema NEXO.</p>
+                <p>© {timezone.now().year} NEXO - Sistema de Gestión Retail</p>
+            </div>
+        </div>
+    </body>
+    </html>
     """
     
     try:
-        send_mail(
+        email = EmailMultiAlternatives(
             subject=subject,
-            message=message,
+            body=text_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[usuario.email],
-            fail_silently=False
+            to=[usuario.email]
         )
+        email.attach_alternative(html_message, "text/html")
+        email.send(fail_silently=False)
+        print(f"✅ Email de credenciales enviado a {usuario.email}")
     except Exception as e:
-        print(f"Error enviando correo: {e}")
+        print(f"❌ Error enviando correo: {e}")
         raise e
 
 def enviar_nueva_password(usuario, nueva_password):
     """
-    Envía la nueva contraseña por correo
+    Envía la nueva contraseña por correo con template HTML
     """
-    subject = 'RetailMind - Nueva Contraseña Generada'
+    from django.core.mail import EmailMultiAlternatives
     
-    message = f"""
-    Hola {usuario.get_full_name()},
+    subject = '🔑 NEXO - Nueva Contraseña Generada'
+    
+    # Mensaje en texto plano (fallback)
+    text_message = f"""
+Hola {usuario.get_full_name()},
 
-    Se ha generado una nueva contraseña para tu cuenta en RetailMind.
+Se ha generado una nueva contraseña para tu cuenta en NEXO.
 
-    Tu nueva contraseña es: {nueva_password}
+━━━━━━━━━━━━━━━━━━━━━━━━
+Tu nueva contraseña es: {nueva_password}
+━━━━━━━━━━━━━━━━━━━━━━━━
 
-    Por favor, cambia tu contraseña después de iniciar sesión.
+⚠️ Por seguridad, cambia tu contraseña después de iniciar sesión.
 
-    Saludos,
-    Equipo RetailMind
+Si no solicitaste este cambio, contacta inmediatamente al administrador del sistema.
+
+Saludos cordiales,
+Equipo NEXO
+    """
+    
+    # Mensaje HTML
+    html_message = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F5F5F7; margin: 0; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(26, 26, 46, 0.1); }}
+            .header {{ background: linear-gradient(135deg, #FFB020 0%, #E69A00 100%); padding: 30px; text-align: center; }}
+            .header h1 {{ color: #1A1A2E; margin: 0; font-size: 28px; }}
+            .header p {{ color: rgba(26,26,46,0.75); margin: 10px 0 0 0; }}
+            .content {{ padding: 30px; }}
+            .password-box {{ background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 12px; padding: 25px; margin: 20px 0; text-align: center; }}
+            .password-box p {{ color: rgba(255,255,255,0.85); margin: 0 0 10px 0; font-size: 14px; }}
+            .password {{ color: #FFFFFF; font-size: 28px; font-weight: bold; font-family: monospace; letter-spacing: 2px; margin: 0; }}
+            .warning {{ background: rgba(255, 77, 77, 0.1); border-left: 4px solid #FF4D4D; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+            .warning strong {{ color: #FF4D4D; }}
+            .info {{ background: rgba(0, 102, 255, 0.1); border-left: 4px solid #0066FF; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+            .footer {{ background: #F5F5F7; padding: 20px; text-align: center; color: #8A8A9A; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔑 Nueva Contraseña</h1>
+                <p>Se ha reseteado tu contraseña de acceso</p>
+            </div>
+            <div class="content">
+                <p style="color: #4A4A5A; font-size: 16px;">Hola <strong>{usuario.get_full_name()}</strong>,</p>
+                <p style="color: #4A4A5A;">Se ha generado una nueva contraseña temporal para tu cuenta en NEXO.</p>
+                
+                <div class="password-box">
+                    <p>Tu nueva contraseña es:</p>
+                    <p class="password">{nueva_password}</p>
+                </div>
+                
+                <div class="info">
+                    <strong>💡 Recomendación:</strong> Te sugerimos cambiar esta contraseña temporal por una de tu elección una vez que inicies sesión.
+                </div>
+                
+                <div class="warning">
+                    <strong>⚠️ ¿No solicitaste este cambio?</strong><br>
+                    Si no fuiste tú quien solicitó el reseteo de contraseña, contacta inmediatamente al administrador del sistema.
+                </div>
+            </div>
+            <div class="footer">
+                <p>Este correo fue enviado automáticamente por el sistema NEXO.</p>
+                <p>© {timezone.now().year} NEXO - Sistema de Gestión Retail</p>
+            </div>
+        </div>
+    </body>
+    </html>
     """
     
     try:
-        send_mail(
+        email = EmailMultiAlternatives(
             subject=subject,
-            message=message,
+            body=text_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[usuario.email],
-            fail_silently=False
+            to=[usuario.email]
         )
+        email.attach_alternative(html_message, "text/html")
+        email.send(fail_silently=False)
+        print(f"✅ Email de nueva contraseña enviado a {usuario.email}")
     except Exception as e:
-        print(f"Error enviando correo: {e}")
+        print(f"❌ Error enviando correo: {e}")
         raise e
 
 
@@ -936,3 +1087,425 @@ def subir_foto_perfil(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# ========== APIS PARA GESTIÓN DE PERMISOS ==========
+
+@require_GET
+@login_required
+def usuarios_por_rol(request):
+    """
+    API para obtener usuarios filtrados por rol
+    RESTRINGIDO: Solo administradores
+    """
+    try:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({
+                'success': False,
+                'error': 'Acceso restringido'
+            }, status=403)
+        
+        rol = request.GET.get('rol', '')
+        
+        if not rol:
+            return JsonResponse({
+                'success': False,
+                'error': 'Rol no especificado'
+            }, status=400)
+        
+        # Obtener usuarios con ese rol
+        usuarios = Usuario.objects.filter(rol=rol, es_activo=True).order_by('first_name', 'last_name')
+        
+        usuarios_data = []
+        for usuario in usuarios:
+            usuarios_data.append({
+                'id': usuario.id,
+                'nombre': usuario.first_name,
+                'apellido': usuario.last_name,
+                'email': usuario.email,
+                'username': usuario.username,
+                'rol': usuario.rol,
+                'rol_display': usuario.get_rol_display(),
+                'cargo': usuario.cargo or '',
+                'es_activo': usuario.es_activo
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'usuarios': usuarios_data,
+            'total': len(usuarios_data)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_POST
+@login_required
+@csrf_exempt
+def cambiar_rol_usuario(request):
+    """
+    API para cambiar el rol de un usuario
+    RESTRINGIDO: Solo administradores
+    """
+    try:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({
+                'success': False,
+                'error': 'Acceso restringido'
+            }, status=403)
+        
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        nuevo_rol = data.get('nuevo_rol')
+        
+        if not user_id or not nuevo_rol:
+            return JsonResponse({
+                'success': False,
+                'error': 'Parámetros incompletos'
+            }, status=400)
+        
+        # Obtener usuario
+        usuario = get_object_or_404(Usuario, id=user_id)
+        
+        # No permitir cambiar el rol del propio usuario
+        if usuario.id == request.user.id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No puedes cambiar tu propio rol'
+            }, status=400)
+        
+        # Validar que el rol sea válido
+        roles_validos = ['administrador', 'administracion', 'jefe_local', 'cajero', 'vendedor', 'bodeguero', 'contador']
+        if nuevo_rol not in roles_validos:
+            return JsonResponse({
+                'success': False,
+                'error': f'Rol inválido. Roles permitidos: {", ".join(roles_validos)}'
+            }, status=400)
+        
+        rol_anterior = usuario.get_rol_display()
+        
+        # Actualizar rol
+        usuario.rol = nuevo_rol
+        usuario.save()
+        
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'Rol de {usuario.get_full_name()} cambiado de "{rol_anterior}" a "{usuario.get_rol_display()}"',
+            'usuario': {
+                'id': usuario.id,
+                'nombre': usuario.get_full_name(),
+                'rol': usuario.rol,
+                'rol_display': usuario.get_rol_display()
+            }
+        })
+        
+    except Usuario.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Usuario no encontrado'
+        }, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+# ========== GESTIÓN DE ASIGNACIONES EMPRESA/SUCURSAL ==========
+
+@require_GET
+@login_required
+def obtener_empresas_sucursales(request):
+    """
+    Obtener todas las empresas con sus sucursales para el selector
+    """
+    try:
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
+        
+        empresas = Empresa.objects.all().order_by('nombre')
+        resultado = []
+        
+        for empresa in empresas:
+            sucursales = Sucursal.objects.filter(empresa=empresa).order_by('alias')
+            resultado.append({
+                'id': empresa.id,
+                'nombre': empresa.nombre,
+                'rut': empresa.rut,
+                'sucursales': [{
+                    'id': s.id,
+                    'alias': s.alias,
+                    'direccion': s.direccion or ''
+                } for s in sucursales]
+            })
+        
+        return JsonResponse({'success': True, 'empresas': resultado})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_GET
+@login_required
+def obtener_asignaciones_usuario(request, usuario_id):
+    """
+    Obtener todas las asignaciones (EmpresaUser) de un usuario específico
+    """
+    try:
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
+        
+        usuario = get_object_or_404(Usuario, id=usuario_id)
+        
+        # Obtener todas las asignaciones del usuario
+        asignaciones = EmpresaUser.objects.filter(
+            user=usuario
+        ).select_related('empresa', 'sucursal').order_by('empresa__nombre', 'sucursal__alias')
+        
+        # Agrupar por empresa
+        empresas_dict = {}
+        for asig in asignaciones:
+            emp_id = asig.empresa.id
+            if emp_id not in empresas_dict:
+                empresas_dict[emp_id] = {
+                    'id': emp_id,
+                    'nombre': asig.empresa.nombre,
+                    'rut': asig.empresa.rut,
+                    'sucursales': []
+                }
+            
+            if asig.sucursal:
+                empresas_dict[emp_id]['sucursales'].append({
+                    'id': asig.sucursal.id,
+                    'alias': asig.sucursal.alias,
+                    'direccion': asig.sucursal.direccion or '',
+                    'status': asig.status,
+                    'active': asig.active,
+                    'empresa_user_id': asig.id
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'usuario': {
+                'id': usuario.id,
+                'nombre': usuario.get_full_name(),
+                'username': usuario.username
+            },
+            'asignaciones': list(empresas_dict.values())
+        })
+    except Usuario.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Usuario no encontrado'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+@login_required
+@csrf_exempt
+def agregar_asignacion_usuario(request, usuario_id):
+    """
+    Agregar una o más asignaciones empresa/sucursal a un usuario
+    Soporta:
+    - sucursal_id: ID único (compatibilidad)
+    - sucursales_ids: Array de IDs (múltiple selección)
+    """
+    try:
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
+        
+        data = json.loads(request.body)
+        marcar_activa = data.get('marcar_activa', False)
+        
+        # Soportar tanto sucursal_id único como sucursales_ids array
+        sucursales_ids = data.get('sucursales_ids', [])
+        if not sucursales_ids:
+            sucursal_id = data.get('sucursal_id')
+            if sucursal_id:
+                sucursales_ids = [sucursal_id]
+        
+        if not sucursales_ids:
+            return JsonResponse({'success': False, 'error': 'Debe seleccionar al menos una sucursal'}, status=400)
+        
+        usuario = get_object_or_404(Usuario, id=usuario_id)
+        
+        asignaciones_creadas = []
+        asignaciones_reactivadas = []
+        asignaciones_existentes = []
+        primera_asignacion = None
+        
+        for sucursal_id in sucursales_ids:
+            sucursal = Sucursal.objects.select_related('empresa').filter(id=sucursal_id).first()
+            if not sucursal:
+                continue
+            
+            # Verificar si ya existe la asignación
+            asig_existente = EmpresaUser.objects.filter(
+                user=usuario,
+                empresa=sucursal.empresa,
+                sucursal=sucursal
+            ).first()
+            
+            if asig_existente:
+                # Si existe pero estaba desactivada, reactivarla
+                if not asig_existente.status:
+                    asig_existente.status = True
+                    asig_existente.save()
+                    asignaciones_reactivadas.append(sucursal.alias)
+                    if not primera_asignacion:
+                        primera_asignacion = asig_existente
+                else:
+                    asignaciones_existentes.append(sucursal.alias)
+            else:
+                # Crear nueva asignación
+                nueva_asig = EmpresaUser.objects.create(
+                    user=usuario,
+                    empresa=sucursal.empresa,
+                    sucursal=sucursal,
+                    status=True,
+                    active=False
+                )
+                asignaciones_creadas.append(sucursal.alias)
+                if not primera_asignacion:
+                    primera_asignacion = nueva_asig
+        
+        # Si se debe marcar la primera como activa
+        if marcar_activa and primera_asignacion:
+            EmpresaUser.objects.filter(user=usuario).update(active=False)
+            primera_asignacion.active = True
+            primera_asignacion.save()
+        
+        # Construir mensaje de respuesta
+        mensajes = []
+        if asignaciones_creadas:
+            mensajes.append(f'Creadas: {", ".join(asignaciones_creadas)}')
+        if asignaciones_reactivadas:
+            mensajes.append(f'Reactivadas: {", ".join(asignaciones_reactivadas)}')
+        if asignaciones_existentes:
+            mensajes.append(f'Ya existían: {", ".join(asignaciones_existentes)}')
+        
+        total_procesadas = len(asignaciones_creadas) + len(asignaciones_reactivadas)
+        
+        if total_procesadas == 0 and asignaciones_existentes:
+            return JsonResponse({
+                'success': False,
+                'error': f'Todas las sucursales ya estaban asignadas: {", ".join(asignaciones_existentes)}'
+            }, status=400)
+        
+        mensaje = f'{total_procesadas} sucursal(es) asignada(s). ' + '. '.join(mensajes)
+        if marcar_activa and primera_asignacion:
+            mensaje += ' (primera marcada como activa)'
+        
+        return JsonResponse({
+            'success': True,
+            'message': mensaje,
+            'creadas': len(asignaciones_creadas),
+            'reactivadas': len(asignaciones_reactivadas),
+            'existentes': len(asignaciones_existentes)
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+@login_required
+@csrf_exempt
+def eliminar_asignacion_usuario(request, usuario_id, empresa_user_id):
+    """
+    Eliminar (desactivar) una asignación empresa/sucursal de un usuario
+    """
+    try:
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
+        
+        usuario = get_object_or_404(Usuario, id=usuario_id)
+        asignacion = get_object_or_404(EmpresaUser.objects.select_related('empresa', 'sucursal'), 
+                                        id=empresa_user_id, user=usuario)
+        
+        sucursal_alias = asignacion.sucursal.alias if asignacion.sucursal else 'Sin sucursal'
+        empresa_nombre = asignacion.empresa.nombre
+        era_activa = asignacion.active
+        
+        # Desactivar la asignación (soft delete)
+        asignacion.status = False
+        asignacion.active = False
+        asignacion.save()
+        
+        # Si era la activa, buscar otra para activar
+        if era_activa:
+            otra_asignacion = EmpresaUser.objects.filter(
+                user=usuario, 
+                status=True,
+                sucursal__isnull=False
+            ).first()
+            if otra_asignacion:
+                otra_asignacion.active = True
+                otra_asignacion.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Asignación eliminada: {empresa_nombre} - {sucursal_alias}'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_POST
+@login_required
+@csrf_exempt
+def cambiar_sucursal_activa_usuario(request, usuario_id):
+    """
+    Cambiar la sucursal activa de un usuario (sin crear nueva asignación)
+    """
+    try:
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
+        
+        data = json.loads(request.body)
+        empresa_user_id = data.get('empresa_user_id')
+        
+        if not empresa_user_id:
+            return JsonResponse({'success': False, 'error': 'Debe seleccionar una asignación'}, status=400)
+        
+        usuario = get_object_or_404(Usuario, id=usuario_id)
+        asignacion = get_object_or_404(EmpresaUser.objects.select_related('empresa', 'sucursal'),
+                                        id=empresa_user_id, user=usuario, status=True)
+        
+        # Desactivar todas y activar la seleccionada
+        EmpresaUser.objects.filter(user=usuario).update(active=False)
+        asignacion.active = True
+        asignacion.save()
+        
+        sucursal_alias = asignacion.sucursal.alias if asignacion.sucursal else 'Sin sucursal'
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sucursal activa cambiada a: {asignacion.empresa.nombre} - {sucursal_alias}',
+            'sucursal_activa': {
+                'empresa_user_id': asignacion.id,
+                'empresa': asignacion.empresa.nombre,
+                'sucursal': sucursal_alias
+            }
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

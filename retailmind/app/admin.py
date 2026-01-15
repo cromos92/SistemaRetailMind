@@ -7,10 +7,132 @@ from .models import (
     HistorialCambioPrecio,
     Requerimiento,
     FotoRequerimiento,
-    HistorialRequerimiento
+    HistorialRequerimiento,
+    Vendedor,
+    Empresa,
+    Sucursal,
+    EmpresaUser,
 )
 
+# Importar admins de sincronización desktop
+from .admin_sync import *
+
 # Register your models here.
+
+# ========== ADMINISTRACIÓN DE EMPRESA Y SUCURSALES ==========
+
+@admin.register(Empresa)
+class EmpresaAdmin(admin.ModelAdmin):
+    list_display = ['razon_social', 'rut', 'giro', 'esProveedor']
+    list_filter = ['esProveedor', 'acteco']
+    search_fields = ['razon_social', 'rut', 'giro', 'nombre']
+    
+    fieldsets = (
+        ('Datos Principales', {
+            'fields': ('nombre', 'nombre_fantasia', 'razon_social', 'rut', 'giro', 'acteco', 'esProveedor')
+        }),
+        ('Ubicación', {
+            'fields': ('direccion', 'comuna', 'ciudad')
+        }),
+        ('Contactos', {
+            'fields': ('correoVendedor', 'correoIntercambio', 'correoAdministrador', 'contacto1', 'contacto2')
+        }),
+    )
+
+
+@admin.register(Sucursal)
+class SucursalAdmin(admin.ModelAdmin):
+    list_display = ['alias', 'empresa', 'direccion', 'tipo_sucursal', 'es_centro_distribucion']
+    list_filter = ['empresa', 'tipo_sucursal', 'es_centro_distribucion']
+    search_fields = ['alias', 'direccion']
+    
+    fieldsets = (
+        ('Identificación', {
+            'fields': ('alias', 'empresa')
+        }),
+        ('Ubicación', {
+            'fields': ('direccion',)
+        }),
+        ('Configuración', {
+            'fields': ('tipo_sucursal', 'es_centro_distribucion', 'margen_sobreprecio_default')
+        }),
+    )
+
+
+@admin.register(Vendedor)
+class VendedorAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'rut', 'codigo_vendedor', 'empresa', 'correo', 'comision', 'activo']
+    list_filter = ['empresa', 'activo', 'sucursales']
+    search_fields = ['nombre', 'rut', 'codigo_vendedor', 'correo']
+    filter_horizontal = ['sucursales']  # Widget para seleccionar múltiples sucursales
+    
+    fieldsets = (
+        ('Datos Personales', {
+            'fields': ('nombre', 'rut', 'codigo_vendedor', 'fecha_nacimiento', 'correo')
+        }),
+        ('Empresa y Sucursales', {
+            'fields': ('empresa', 'sucursales')
+        }),
+        ('Configuración', {
+            'fields': ('comision', 'activo')
+        }),
+    )
+
+
+@admin.register(EmpresaUser)
+class EmpresaUserAdmin(admin.ModelAdmin):
+    """
+    ⭐ AQUÍ ASIGNAS EMPRESA Y SUCURSAL A UN USUARIO
+    
+    💡 TIP: Es más fácil editar el USUARIO directamente en:
+       /admin/users/usuario/ → Editar usuario → Sección "Sucursales Asignadas"
+    """
+    list_display = ['user', 'empresa', 'sucursal', 'status', 'active', 'get_user_rol']
+    list_filter = ['empresa', 'sucursal', 'status', 'active']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'empresa__nombre', 'sucursal__alias']
+    list_editable = ['status', 'active']  # Editar directamente en la lista
+    actions = ['activar_seleccionados', 'desactivar_seleccionados', 'marcar_como_activo']
+    
+    fieldsets = (
+        ('Usuario', {
+            'fields': ('user',)
+        }),
+        ('Empresa y Sucursal', {
+            'fields': ('empresa', 'sucursal'),
+            'description': '⭐ Asigna la empresa y sucursal al usuario'
+        }),
+        ('Estado', {
+            'fields': ('status', 'active'),
+            'description': 'status=habilitado, active=sucursal actual del usuario'
+        }),
+        ('Márgenes', {
+            'fields': ('margenSobreprecio', 'margenPrecioVenta'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def get_user_rol(self, obj):
+        return getattr(obj.user, 'rol', 'N/A')
+    get_user_rol.short_description = 'Rol'
+    
+    @admin.action(description='✅ Activar acceso (status=True)')
+    def activar_seleccionados(self, request, queryset):
+        updated = queryset.update(status=True)
+        self.message_user(request, f'{updated} acceso(s) activado(s)')
+    
+    @admin.action(description='❌ Desactivar acceso (status=False)')
+    def desactivar_seleccionados(self, request, queryset):
+        updated = queryset.update(status=False)
+        self.message_user(request, f'{updated} acceso(s) desactivado(s)')
+    
+    @admin.action(description='⭐ Marcar como sucursal activa (active=True)')
+    def marcar_como_activo(self, request, queryset):
+        # Solo permitir uno activo por usuario
+        for eu in queryset:
+            EmpresaUser.objects.filter(user=eu.user).update(active=False)
+            eu.active = True
+            eu.save()
+        self.message_user(request, f'{queryset.count()} sucursal(es) marcada(s) como activa(s)')
 
 @admin.register(Solicitud_Regularizacion)
 class SolicitudRegularizacionAdmin(admin.ModelAdmin):

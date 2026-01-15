@@ -7,317 +7,650 @@
     <div class="container-fluid">
 
 <style>
-    .resumen-container {
-        max-width: 100%;
-        margin: 0 auto;
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        overflow: hidden;
-    }
+:root {
+    /* NEXO Design System */
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
 
-    .header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 30px;
-        text-align: center;
-    }
+/* ========== CONTENEDOR PRINCIPAL ========== */
+.nexo-resumen-container {
+    max-width: 100%;
+    margin: 0 auto;
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-lg);
+    overflow: hidden;
+}
 
-    .header h1 {
-        font-size: 2.5em;
-        margin-bottom: 10px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-    }
+/* ========== HEADER ========== */
+.nexo-header {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    padding: 28px 32px;
+    position: relative;
+    overflow: hidden;
+}
 
-    .controls {
-        padding: 25px 30px;
-        background: #f8f9fa;
-        border-bottom: 2px solid #e9ecef;
-        display: flex;
-        gap: 15px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
+.nexo-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, var(--nexo-primary) 0%, transparent 70%);
+    opacity: 0.15;
+}
 
-    .control-group {
-        display: flex;
+.nexo-header h1 {
+    font-size: 1.75em;
+    margin: 0 0 6px 0;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.nexo-header p {
+    margin: 0;
+    opacity: 0.85;
+    font-size: 0.95em;
+    position: relative;
+    z-index: 1;
+}
+
+.nexo-header-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7em;
+    font-weight: 500;
+}
+
+.nexo-header-badge.historico {
+    background: var(--nexo-warning);
+    color: var(--nexo-secondary);
+}
+
+/* ========== CONTROLES ========== */
+.nexo-controls {
+    padding: 24px 32px;
+    background: var(--nexo-gray-100);
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.nexo-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nexo-control-group label {
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.nexo-control-group select,
+.nexo-control-group input {
+    padding: 10px 14px;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.95em;
+    transition: var(--nexo-transition-fast);
+    min-width: 180px;
+    background: var(--nexo-white);
+    color: var(--nexo-gray-900);
+}
+
+.nexo-control-group select:focus,
+.nexo-control-group input:focus {
+    outline: none;
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+}
+
+/* ========== BOTONES ========== */
+.nexo-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-btn-success {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-success:hover {
+    background: #00b894;
+    transform: translateY(-1px);
+}
+
+.nexo-btn-outline {
+    background: transparent;
+    color: var(--nexo-primary);
+    border: 2px solid var(--nexo-primary);
+}
+
+.nexo-btn-outline:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-outline.active {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-group {
+    display: flex;
+    gap: 0;
+}
+
+.nexo-btn-group .nexo-btn {
+    border-radius: 0;
+}
+
+.nexo-btn-group .nexo-btn:first-child {
+    border-radius: var(--nexo-radius-md) 0 0 var(--nexo-radius-md);
+}
+
+.nexo-btn-group .nexo-btn:last-child {
+    border-radius: 0 var(--nexo-radius-md) var(--nexo-radius-md) 0;
+}
+
+/* ========== ALERTA HISTÓRICO ========== */
+.nexo-alert {
+    padding: 14px 20px;
+    border-radius: var(--nexo-radius-md);
+    margin: 20px 32px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.95em;
+}
+
+.nexo-alert-warning {
+    background: rgba(255, 176, 32, 0.12);
+    border-left: 4px solid var(--nexo-warning);
+    color: #8a6914;
+}
+
+.nexo-alert-info {
+    background: rgba(0, 102, 255, 0.08);
+    border-left: 4px solid var(--nexo-primary);
+    color: var(--nexo-primary-dark);
+}
+
+.nexo-alert-icon {
+    font-size: 1.3em;
+}
+
+/* ========== TARJETAS TOTALES ========== */
+.nexo-totales-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #f0f0f4 100%);
+}
+
+.nexo-tarjeta-total {
+    background: var(--nexo-white);
+    padding: 24px;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-tarjeta-total:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-tarjeta-total::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--nexo-primary);
+}
+
+.nexo-tarjeta-total.costo::before { background: var(--nexo-success); }
+.nexo-tarjeta-total.precio-interno::before { background: var(--nexo-warning); }
+.nexo-tarjeta-total.precio-venta::before { background: var(--nexo-error); }
+
+.nexo-tarjeta-total h3 {
+    font-size: 0.8em;
+    color: var(--nexo-gray-500);
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.nexo-tarjeta-total .valor {
+    font-size: 2.2em;
+    font-weight: 700;
+    color: var(--nexo-primary);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.nexo-tarjeta-total.costo .valor { color: var(--nexo-success); }
+.nexo-tarjeta-total.precio-interno .valor { color: #c99200; }
+.nexo-tarjeta-total.precio-venta .valor { color: var(--nexo-error); }
+
+/* ========== TABLA ========== */
+.nexo-tabla-wrapper {
+    padding: 0 32px 32px;
+    overflow-x: auto;
+}
+
+.nexo-tabla {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.9em;
+    border-radius: var(--nexo-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--nexo-shadow-sm);
+}
+
+.nexo-tabla thead {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+}
+
+.nexo-tabla th {
+    padding: 16px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.nexo-tabla th:last-child,
+.nexo-tabla td:last-child {
+    text-align: right;
+}
+
+.nexo-tabla td {
+    padding: 14px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-tabla tbody tr:hover {
+    background: var(--nexo-primary-light);
+}
+
+.nexo-tabla tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.nexo-tabla .td-entidad {
+    font-weight: 600;
+    color: var(--nexo-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nexo-tabla .td-entidad .icon {
+    width: 32px;
+    height: 32px;
+    background: var(--nexo-primary-light);
+    border-radius: var(--nexo-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1em;
+}
+
+.nexo-tabla .td-numero {
+    text-align: right;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+}
+
+.nexo-tabla tfoot {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+    font-weight: 700;
+}
+
+.nexo-tabla tfoot td {
+    padding: 16px 14px;
+    border: none;
+    font-size: 1em;
+}
+
+/* ========== ESTADOS ========== */
+.nexo-loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--nexo-primary);
+}
+
+.nexo-loading .spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid var(--nexo-gray-300);
+    border-top-color: var(--nexo-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.nexo-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--nexo-gray-500);
+}
+
+.nexo-empty-state .icon {
+    font-size: 4em;
+    color: var(--nexo-gray-300);
+    margin-bottom: 16px;
+}
+
+.nexo-empty-state p {
+    margin: 0;
+    font-size: 1.1em;
+}
+
+.nexo-empty-state .hint {
+    font-size: 0.9em;
+    color: var(--nexo-gray-500);
+    margin-top: 8px;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .nexo-controls {
         flex-direction: column;
-        gap: 5px;
+        align-items: stretch;
     }
-
-    .control-group label {
-        font-weight: 600;
-        color: #495057;
-        font-size: 0.9em;
-    }
-
-    .control-group select,
-    .control-group input {
-        padding: 10px 15px;
-        border: 2px solid #dee2e6;
-        border-radius: 8px;
-        font-size: 1em;
-        transition: all 0.3s ease;
-        min-width: 200px;
-    }
-
-    .control-group select:focus,
-    .control-group input:focus {
-        outline: none;
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .btn {
-        padding: 12px 25px;
-        border: none;
-        border-radius: 8px;
-        font-size: 1em;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        align-self: flex-end;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-success {
-        background: #28a745;
-        color: white;
-    }
-
-    .btn-success:hover {
-        background: #218838;
-        transform: translateY(-2px);
-    }
-
-    .loading {
-        text-align: center;
-        padding: 40px;
-        font-size: 1.2em;
-        color: #667eea;
-    }
-
-    .tabla-resumen {
+    
+    .nexo-control-group {
         width: 100%;
-        border-collapse: collapse;
-        font-size: 0.9em;
-        margin: 20px 0;
     }
+    
+    .nexo-control-group select,
+    .nexo-control-group input {
+        min-width: 100%;
+    }
+    
+    .nexo-btn-group {
+        width: 100%;
+    }
+    
+    .nexo-btn-group .nexo-btn {
+        flex: 1;
+        justify-content: center;
+    }
+    
+    .nexo-tarjeta-total .valor {
+        font-size: 1.6em;
+    }
+}
 
-    .tabla-resumen thead {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-    }
-
-    .tabla-resumen th {
-        padding: 15px 12px;
-        text-align: left;
-        font-weight: 700;
-        border: 1px solid rgba(255,255,255,0.3);
-    }
-
-    .tabla-resumen td {
-        padding: 12px;
-        border: 1px solid #dee2e6;
-    }
-
-    .tabla-resumen tbody tr:hover {
-        background: #f3f4ff;
-    }
-
-    .tabla-resumen tbody tr:nth-child(even) {
-        background: #f8f9fa;
-    }
-
-    .tabla-resumen tfoot {
-        background: #ffc107;
-        font-weight: 700;
-        font-size: 1.1em;
-    }
-
-    .tabla-resumen tfoot td {
-        padding: 15px 12px;
-        border: 2px solid #f39c12;
-    }
-
-    .td-numero {
-        text-align: right;
-        font-family: 'Courier New', monospace;
-        font-weight: 600;
-    }
-
-    .td-sucursal {
-        font-weight: 700;
-        color: #667eea;
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: #6c757d;
-    }
-
-    .empty-state i {
-        font-size: 4em;
-        color: #dee2e6;
-        margin-bottom: 20px;
-    }
-
-    .tarjetas-totales {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 20px;
-        padding: 30px;
-        background: #f8f9fa;
-    }
-
-    .tarjeta-total {
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        text-align: center;
-        border-top: 4px solid #667eea;
-    }
-
-    .tarjeta-total h3 {
-        font-size: 0.9em;
-        color: #6c757d;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-    }
-
-    .tarjeta-total .valor {
-        font-size: 2em;
-        font-weight: 700;
-        color: #667eea;
-    }
-
-    @media print {
-        .controls, .btn {
-            display: none;
-        }
-    }
+/* ========== IMPRESIÓN ========== */
+@media print {
+    .nexo-controls, .nexo-btn { display: none !important; }
+    .nexo-resumen-container { box-shadow: none; }
+    .nexo-header { background: #333 !important; -webkit-print-color-adjust: exact; }
+    .nexo-tabla thead { background: #333 !important; -webkit-print-color-adjust: exact; }
+}
 </style>
 
-<div class="resumen-container">
-    <div class="header">
-        <h1>📊 Resumen de Existencias por Sucursal</h1>
-        <p>Totales consolidados de inventario</p>
+<div class="nexo-resumen-container">
+    <div class="nexo-header">
+        <h1>
+            📊 Resumen de Existencias
+            <span id="modo-badge" class="nexo-header-badge" style="display: none;">
+                <span class="icon">📅</span>
+                <span id="modo-badge-text">Histórico</span>
+            </span>
+        </h1>
+        <p>Inventario consolidado por sucursal o categoría</p>
     </div>
 
-    <div class="controls">
-        <div class="control-group">
-            <label for="filtro-marca">Marca (Opcional):</label>
+    <div class="nexo-controls">
+        <div class="nexo-control-group">
+            <label>Agrupar por:</label>
+            <div class="nexo-btn-group">
+                <button id="btn-sucursal" class="nexo-btn nexo-btn-outline active" onclick="cambiarAgrupacion('sucursal')">
+                    🏪 Sucursal
+                </button>
+                <button id="btn-categoria" class="nexo-btn nexo-btn-outline" onclick="cambiarAgrupacion('categoria')">
+                    📁 Categoría
+                </button>
+            </div>
+        </div>
+        
+        <div class="nexo-control-group">
+            <label for="filtro-fecha">Fecha de Corte:</label>
+            <input type="date" id="filtro-fecha" max="">
+        </div>
+
+        <div class="nexo-control-group">
+            <label for="filtro-marca">Marca:</label>
             <select id="filtro-marca">
                 <option value="">Todas las marcas</option>
             </select>
         </div>
 
-        <div class="control-group">
-            <label for="filtro-categoria">Categoría (Opcional):</label>
+        <div class="nexo-control-group" id="grupo-categoria" style="display: block;">
+            <label for="filtro-categoria">Categoría:</label>
             <select id="filtro-categoria">
                 <option value="">Todas las categorías</option>
             </select>
         </div>
 
-        <button class="btn btn-primary" onclick="cargarResumen()">
+        <button class="nexo-btn nexo-btn-primary" onclick="cargarResumen()">
             🔄 Generar Resumen
         </button>
 
-        <button class="btn btn-success" onclick="exportarExcel()">
-            📥 Exportar a Excel
+        <button class="nexo-btn nexo-btn-success" onclick="exportarExcel()">
+            📥 Exportar Excel
         </button>
+    </div>
+
+    <div id="alerta-historico" class="nexo-alert nexo-alert-warning" style="display: none;">
+        <span class="nexo-alert-icon">⏰</span>
+        <span id="alerta-historico-texto">Mostrando inventario histórico al <strong id="fecha-historico"></strong></span>
+    </div>
+    
+    <div id="info-disponibilidad" class="nexo-alert nexo-alert-info" style="display: none;">
+        <span class="nexo-alert-icon">ℹ️</span>
+        <span id="info-disponibilidad-texto"></span>
     </div>
 
     <div id="totales-container"></div>
 
-    <div id="contenido-resumen" class="p-4">
-        <div class="empty-state">
-            <i>📊</i>
+    <div id="contenido-resumen" class="nexo-tabla-wrapper">
+        <div class="nexo-empty-state">
+            <div class="icon">📊</div>
             <p><strong>Haz clic en "Generar Resumen" para ver los datos</strong></p>
-            <p style="color: #6c757d; font-size: 0.9em;">Opcionalmente puedes filtrar por marca o categoría</p>
+            <p class="hint">Opcionalmente filtra por marca, categoría o fecha histórica</p>
         </div>
     </div>
 </div>
 
 <script>
-// Cargar filtros al iniciar
+// ==================== ESTADO GLOBAL ====================
+let agruparPor = 'sucursal';
+let esHistorico = false;
+
+// ==================== INICIALIZACIÓN ====================
 document.addEventListener('DOMContentLoaded', function() {
+    // Configurar fecha máxima como hoy
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('filtro-fecha').max = hoy;
+    
     cargarMarcas();
     cargarCategorias();
-    // Cargar automáticamente el resumen
+    verificarDisponibilidadHistorico();
     cargarResumen();
 });
 
-// Cargar marcas
+// ==================== VERIFICAR DISPONIBILIDAD ====================
+async function verificarDisponibilidadHistorico() {
+    try {
+        const response = await fetch('/app/api/verificar-disponibilidad-historico/');
+        const data = await response.json();
+        
+        if (data.success && data.disponible) {
+            const infoEl = document.getElementById('info-disponibilidad');
+            const textoEl = document.getElementById('info-disponibilidad-texto');
+            textoEl.innerHTML = `<strong>Histórico disponible:</strong> ${data.mensaje}`;
+            infoEl.style.display = 'flex';
+            
+            // Ocultar después de 5 segundos
+            setTimeout(() => {
+                infoEl.style.display = 'none';
+            }, 5000);
+        }
+    } catch (error) {
+        console.log('Info: No se pudo verificar disponibilidad de histórico');
+    }
+}
+
+// ==================== CAMBIAR AGRUPACIÓN ====================
+function cambiarAgrupacion(tipo) {
+    agruparPor = tipo;
+    
+    // Actualizar botones
+    document.getElementById('btn-sucursal').classList.toggle('active', tipo === 'sucursal');
+    document.getElementById('btn-categoria').classList.toggle('active', tipo === 'categoria');
+    
+    // Mostrar/ocultar filtro de categoría
+    document.getElementById('grupo-categoria').style.display = tipo === 'sucursal' ? 'block' : 'none';
+    
+    cargarResumen();
+}
+
+// ==================== CARGAR FILTROS ====================
 async function cargarMarcas() {
     try {
         const response = await fetch('/app/obtener_marcas/');
         const data = await response.json();
         
         const select = document.getElementById('filtro-marca');
-        
         data.forEach(marca => {
             const option = document.createElement('option');
             option.value = marca.id;
             option.textContent = marca.valor;
             select.appendChild(option);
         });
-        
-        console.log('✅ Marcas cargadas:', data.length);
     } catch (error) {
         console.error('Error al cargar marcas:', error);
     }
 }
 
-// Cargar categorías
 async function cargarCategorias() {
     try {
         const response = await fetch('/app/obtener_categorias/');
         const data = await response.json();
         
         const select = document.getElementById('filtro-categoria');
-        
         data.forEach(categoria => {
             const option = document.createElement('option');
             option.value = categoria.id;
             option.textContent = categoria.nombre;
             select.appendChild(option);
         });
-        
-        console.log('✅ Categorías cargadas:', data.length);
     } catch (error) {
         console.error('Error al cargar categorías:', error);
     }
 }
 
-// Cargar resumen
+// ==================== CARGAR RESUMEN ====================
 async function cargarResumen() {
     const marcaId = document.getElementById('filtro-marca').value;
     const categoriaId = document.getElementById('filtro-categoria').value;
+    const fechaCorte = document.getElementById('filtro-fecha').value;
     
     const contenido = document.getElementById('contenido-resumen');
-    contenido.innerHTML = '<div class="loading">⏳ Generando resumen...</div>';
+    contenido.innerHTML = `
+        <div class="nexo-loading">
+            <div class="spinner"></div>
+            <p>Generando resumen...</p>
+        </div>
+    `;
     
     try {
         let url = '/app/api/resumen-existencias/';
         const params = new URLSearchParams();
         
+        params.append('agrupar_por', agruparPor);
         if (marcaId) params.append('marca_id', marcaId);
-        if (categoriaId) params.append('categoria_id', categoriaId);
+        if (categoriaId && agruparPor !== 'categoria') params.append('categoria_id', categoriaId);
+        if (fechaCorte) params.append('fecha_corte', fechaCorte);
         
         if (params.toString()) url += '?' + params.toString();
         
@@ -325,53 +658,89 @@ async function cargarResumen() {
         const data = await response.json();
         
         if (data.success) {
+            esHistorico = data.es_historico;
+            actualizarUIHistorico(data);
             renderizarTotales(data.total_general);
-            renderizarResumen(data.datos);
+            renderizarResumen(data.datos, data.agrupar_por);
         } else {
-            contenido.innerHTML = `<div class="empty-state"><i>⚠️</i><p>${data.error || 'Error al cargar datos'}</p></div>`;
+            contenido.innerHTML = `
+                <div class="nexo-empty-state">
+                    <div class="icon">⚠️</div>
+                    <p>${data.error || 'Error al cargar datos'}</p>
+                </div>
+            `;
         }
     } catch (error) {
         console.error('Error al cargar resumen:', error);
-        contenido.innerHTML = '<div class="empty-state"><i>⚠️</i><p>Error al cargar el resumen</p></div>';
+        contenido.innerHTML = `
+            <div class="nexo-empty-state">
+                <div class="icon">⚠️</div>
+                <p>Error de conexión al cargar el resumen</p>
+            </div>
+        `;
     }
 }
 
-// Renderizar totales generales
+// ==================== ACTUALIZAR UI HISTÓRICO ====================
+function actualizarUIHistorico(data) {
+    const badge = document.getElementById('modo-badge');
+    const alerta = document.getElementById('alerta-historico');
+    const fechaEl = document.getElementById('fecha-historico');
+    
+    if (data.es_historico && data.fecha_corte) {
+        badge.style.display = 'inline-flex';
+        badge.classList.add('historico');
+        document.getElementById('modo-badge-text').textContent = `Al ${formatearFecha(data.fecha_corte)}`;
+        
+        alerta.style.display = 'flex';
+        fechaEl.textContent = formatearFecha(data.fecha_corte);
+    } else {
+        badge.style.display = 'none';
+        badge.classList.remove('historico');
+        alerta.style.display = 'none';
+    }
+}
+
+function formatearFecha(fechaStr) {
+    if (!fechaStr) return '';
+    const [year, month, day] = fechaStr.split('-');
+    return `${day}/${month}/${year}`;
+}
+
+// ==================== RENDERIZAR TOTALES ====================
 function renderizarTotales(totales) {
     const container = document.getElementById('totales-container');
     
-    const html = `
-        <div class="tarjetas-totales">
-            <div class="tarjeta-total">
-                <h3>Total Pares</h3>
+    container.innerHTML = `
+        <div class="nexo-totales-grid">
+            <div class="nexo-tarjeta-total">
+                <h3>Total Unidades</h3>
                 <div class="valor">${formatearNumero(totales.pares)}</div>
             </div>
-            <div class="tarjeta-total" style="border-top-color: #28a745;">
-                <h3>Total Costo</h3>
-                <div class="valor" style="color: #28a745;">$${formatearNumero(totales.costo)}</div>
+            <div class="nexo-tarjeta-total costo">
+                <h3>Valor Costo</h3>
+                <div class="valor">$${formatearNumero(totales.costo)}</div>
             </div>
-            <div class="tarjeta-total" style="border-top-color: #ffc107;">
-                <h3>Total Precio Interno</h3>
-                <div class="valor" style="color: #ffc107;">$${formatearNumero(totales.precio_interno)}</div>
+            <div class="nexo-tarjeta-total precio-interno">
+                <h3>Valor Precio Interno</h3>
+                <div class="valor">$${formatearNumero(totales.precio_interno)}</div>
             </div>
-            <div class="tarjeta-total" style="border-top-color: #dc3545;">
-                <h3>Total Precio Venta</h3>
-                <div class="valor" style="color: #dc3545;">$${formatearNumero(totales.precio_venta)}</div>
+            <div class="nexo-tarjeta-total precio-venta">
+                <h3>Valor Precio Venta</h3>
+                <div class="valor">$${formatearNumero(totales.precio_venta)}</div>
             </div>
         </div>
     `;
-    
-    container.innerHTML = html;
 }
 
-// Renderizar tabla de resumen
-function renderizarResumen(datos) {
+// ==================== RENDERIZAR TABLA ====================
+function renderizarResumen(datos, tipoAgrupacion) {
     const contenido = document.getElementById('contenido-resumen');
     
     if (!datos || datos.length === 0) {
         contenido.innerHTML = `
-            <div class="empty-state">
-                <i>📦</i>
+            <div class="nexo-empty-state">
+                <div class="icon">📦</div>
                 <p>No se encontraron existencias para los filtros seleccionados</p>
             </div>
         `;
@@ -386,26 +755,37 @@ function renderizarResumen(datos) {
         precio_venta: datos.reduce((sum, item) => sum + item.total_precio_venta, 0)
     };
     
+    const esCategoria = tipoAgrupacion === 'categoria';
+    const iconoEntidad = esCategoria ? '📁' : '🏪';
+    const columna1 = esCategoria ? 'Categoría' : 'Sucursal';
+    const columna2 = esCategoria ? 'Sucursales' : 'Dirección';
+    
     let html = `
-        <table class="tabla-resumen">
+        <table class="nexo-tabla">
             <thead>
                 <tr>
-                    <th>Sucursal</th>
-                    <th>Dirección</th>
-                    <th class="td-numero">Total Pares</th>
-                    <th class="td-numero">Total Costo</th>
-                    <th class="td-numero">Total Precio Interno</th>
-                    <th class="td-numero">Total Precio Venta</th>
+                    <th>${columna1}</th>
+                    <th>${columna2}</th>
+                    <th>Total Unidades</th>
+                    <th>Total Costo</th>
+                    <th>Total P. Interno</th>
+                    <th>Total P. Venta</th>
                 </tr>
             </thead>
             <tbody>
     `;
     
     datos.forEach(item => {
+        const entidad = esCategoria ? item.categoria : item.sucursal;
+        const detalle = esCategoria ? `${item.num_sucursales} sucursales` : item.direccion;
+        
         html += `
             <tr>
-                <td class="td-sucursal">${item.sucursal}</td>
-                <td>${item.direccion}</td>
+                <td class="td-entidad">
+                    <span class="icon">${iconoEntidad}</span>
+                    ${entidad}
+                </td>
+                <td>${detalle}</td>
                 <td class="td-numero">${formatearNumero(item.total_pares)}</td>
                 <td class="td-numero">$${formatearNumero(item.total_costo)}</td>
                 <td class="td-numero">$${formatearNumero(item.total_precio_interno)}</td>
@@ -431,25 +811,28 @@ function renderizarResumen(datos) {
     contenido.innerHTML = html;
 }
 
-// Formatear números
+// ==================== UTILIDADES ====================
 function formatearNumero(num) {
-    if (!num) return '0';
+    if (!num && num !== 0) return '0';
     return parseFloat(num).toLocaleString('es-CL', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
     });
 }
 
-// Exportar a Excel
+// ==================== EXPORTAR EXCEL ====================
 function exportarExcel() {
     const marcaId = document.getElementById('filtro-marca').value;
     const categoriaId = document.getElementById('filtro-categoria').value;
+    const fechaCorte = document.getElementById('filtro-fecha').value;
     
     let url = '/app/api/exportar-resumen-existencias-excel/';
     const params = new URLSearchParams();
     
+    params.append('agrupar_por', agruparPor);
     if (marcaId) params.append('marca_id', marcaId);
-    if (categoriaId) params.append('categoria_id', categoriaId);
+    if (categoriaId && agruparPor !== 'categoria') params.append('categoria_id', categoriaId);
+    if (fechaCorte) params.append('fecha_corte', fechaCorte);
     
     if (params.toString()) url += '?' + params.toString();
     
@@ -461,4 +844,3 @@ function exportarExcel() {
 </div>
 
 {% include 'layout/footer.html' %}
-

@@ -18,6 +18,13 @@ urlpatterns = [
     path('toggle-estado/<int:usuario_id>/', views.toggle_estado_usuario, name='toggle_estado_usuario'),
     path('asignar-sucursal/<int:usuario_id>/', views.asignar_sucursal_sesion, name='asignar_sucursal_sesion'),
     
+    # Gestión de asignaciones empresa/sucursal
+    path('empresas-sucursales/', views.obtener_empresas_sucursales, name='obtener_empresas_sucursales'),
+    path('asignaciones/<int:usuario_id>/', views.obtener_asignaciones_usuario, name='obtener_asignaciones_usuario'),
+    path('agregar-asignacion/<int:usuario_id>/', views.agregar_asignacion_usuario, name='agregar_asignacion_usuario'),
+    path('eliminar-asignacion/<int:usuario_id>/<int:empresa_user_id>/', views.eliminar_asignacion_usuario, name='eliminar_asignacion_usuario'),
+    path('cambiar-activa/<int:usuario_id>/', views.cambiar_sucursal_activa_usuario, name='cambiar_sucursal_activa_usuario'),
+    
     # Exportación
     path('exportar/', views.exportar_usuarios, name='exportar_usuarios'),
     
@@ -26,4 +33,8 @@ urlpatterns = [
     path('actualizar-perfil/', views.actualizar_perfil, name='actualizar_perfil'),
     path('cambiar-password/', views.cambiar_password, name='cambiar_password'),
     path('subir-foto-perfil/', views.subir_foto_perfil, name='subir_foto_perfil'),
+    
+    # APIs para gestión de permisos
+    path('api/usuarios-por-rol/', views.usuarios_por_rol, name='usuarios_por_rol'),
+    path('api/cambiar-rol-usuario/', views.cambiar_rol_usuario, name='cambiar_rol_usuario'),
 ]

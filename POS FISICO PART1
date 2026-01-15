@@ -1,0 +1,393 @@
+# Prompt: API de Sincronización para App Desktop - Backend Django
+
+## Contexto del Proyecto
+
+Tengo una aplicación Django (retailmind) que necesita exponer endpoints REST para sincronización con una aplicación de escritorio Tauri. La app desktop funcionará offline y sincronizará datos cuando tenga conexión.
+
+## Objetivo
+
+Crear los endpoints REST y sistema de autenticación necesarios para:
+1. Autenticación de la app desktop via tokens
+2. Sincronización bidireccional de datos (productos, ventas, etc.)
+3. Cola de operaciones offline pendientes
+4. Seguridad robusta para consumo desde app nativa
+
+---
+
+## Endpoints Requeridos
+
+### 1. Autenticación Desktop
+
+```
+POST /api/v1/desktop/login/
+```
+- **Input**: `{ "username": str, "password": str, "device_id": str, "sucursal_id": int }`
+- **Output**: `{ "token": str, "refresh_token": str, "expires_at": datetime, "sucursal": {...}, "vendedor": {...} }`
+- **Notas**: 
+  - Token JWT con expiración de 7 días (configurable)
+  - Registrar device_id para control de dispositivos autorizados
+  - Incluir info de sucursal y vendedor en respuesta
+
+```
+POST /api/v1/desktop/refresh/
+```
+- **Input**: `{ "refresh_token": str }`
+- **Output**: `{ "token": str, "expires_at": datetime }`
+
+```
+POST /api/v1/desktop/logout/
+```
+- Invalidar token y refresh_token
+
+```
+GET /api/v1/desktop/sucursal/
+```
+- **Output**: Configuración completa de la sucursal (nombre, dirección, RUT, logo, config impresora, etc.)
+
+---
+
+### 2. Sincronización de Datos (Desktop → Server)
+
+```
+POST /api/v1/sync/tickets/
+```
+- **Input**: 
+```json
+{
+  "tickets": [
+    {
+      "local_id": "uuid-local",
+      "created_at": "2025-01-05T10:30:00Z",
+      "vendedor_id": 1,
+      "items": [
+        {"producto_id": 123, "cantidad": 2, "precio_unitario": 5990, "descuento": 0}
+      ],
+      "subtotal": 11980,
+      "descuento_total": 0,
+      "total": 11980,
+      "pagos": [
+        {"tipo": "efectivo", "monto": 11980},
+        {"tipo": "tarjeta", "monto": 0, "transbank_voucher": null}
+      ],
+      "synced_at": null
+    }
+  ]
+}
+```
+- **Output**: 
+```json
+{
+  "success": true,
+  "results": [
+    {"local_id": "uuid-local", "server_id": 456, "numero_boleta": "B-00001234"}
+  ],
+  "errors": []
+}
+```
+- **Notas**: 
+  - Manejar idempotencia (si local_id ya existe, retornar server_id existente)
+  - Validar stock disponible
+  - Generar número de boleta/factura secuencial
+
+```
+POST /api/v1/sync/movimientos-caja/
+```
+- Subir aperturas, cierres, retiros, ingresos de caja
+
+```
+POST /api/v1/sync/cuadraturas/
+```
+- Subir cierres de caja con detalle de arqueo
+
+---
+
+### 3. Sincronización de Datos (Server → Desktop)
+
+```
+GET /api/v1/sync/productos/
+```
+- **Query params**: `?since=2025-01-04T00:00:00Z&sucursal_id=1`
+- **Output**: 
+```json
+{
+  "productos": [
+    {
+      "id": 123,
+      "codigo": "SKU001",
+      "nombre": "Producto X",
+      "precio": 5990,
+      "precio_oferta": null,
+      "stock": 50,
+      "categoria_id": 1,
+      "activo": true,
+      "updated_at": "2025-01-05T08:00:00Z",
+      "variantes": [
+        {"id": 1, "talla": "M", "color": "Azul", "stock": 20, "codigo_barra": "123456789"}
+      ]
+    }
+  ],
+  "deleted_ids": [101, 102],
+  "sync_timestamp": "2025-01-05T10:35:00Z"
+}
+```
+
+```
+GET /api/v1/sync/categorias/
+```
+- **Query params**: `?since=datetime`
+- **Output**: Lista de categorías con deleted_ids
+
+```
+GET /api/v1/sync/vendedores/
+```
+- Lista de vendedores autorizados en la sucursal
+
+```
+GET /api/v1/sync/configuracion/
+```
+- Configuración de la sucursal (impresora, POS, etc.)
+
+```
+GET /api/v1/sync/status/
+```
+- **Output**: 
+```json
+{
+  "server_time": "2025-01-05T10:35:00Z",
+  "last_sync": "2025-01-05T09:00:00Z",
+  "pending_updates": {
+    "productos": 5,
+    "categorias": 0
+  },
+  "version_app_minima": "1.0.0"
+}
+```
+
+---
+
+## Modelo de Seguridad
+
+### Autenticación
+
+1. **JWT con firma RS256** (asimétrica)
+   - Clave privada solo en servidor
+   - Clave pública embebida en app desktop para validación offline
+   
+2. **Estructura del Token**:
+```json
+{
+  "sub": "user_id",
+  "device_id": "uuid-dispositivo",
+  "sucursal_id": 1,
+  "rol": "vendedor",
+  "exp": 1735689600,
+  "iat": 1735084800,
+  "jti": "unique-token-id"
+}
+```
+
+3. **Refresh Token**:
+   - Almacenar en BD con hash
+   - Rotación en cada uso
+   - Invalidar familia completa si se detecta reutilización
+
+### Headers Requeridos
+
+```
+Authorization: Bearer <jwt_token>
+X-Device-ID: <uuid-dispositivo>
+X-App-Version: 1.0.0
+X-Sucursal-ID: 1
+Content-Type: application/json
+```
+
+### Rate Limiting
+
+```python
+# Por endpoint
+SYNC_RATE_LIMITS = {
+    'sync_productos': '30/minute',
+    'sync_tickets': '60/minute', 
+    'login': '5/minute',
+}
+```
+
+### Validaciones de Seguridad
+
+1. **Device ID**: Verificar que el dispositivo esté registrado y autorizado
+2. **Sucursal**: Validar que el usuario tenga acceso a la sucursal
+3. **Timestamps**: Rechazar requests con timestamps muy desfasados (±5 minutos)
+4. **Idempotencia**: Usar `local_id` como clave de idempotencia para POST
+5. **Versión mínima**: Rechazar requests de versiones muy antiguas de la app
+
+---
+
+## Modificaciones a Modelos Existentes
+
+### Agregar a modelo Ticket (o equivalente)
+
+```python
+class Ticket(models.Model):
+    # ... campos existentes ...
+    
+    # Nuevos campos para sync
+    local_id = models.UUIDField(null=True, blank=True, unique=True, db_index=True)
+    device_id = models.UUIDField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    created_offline = models.BooleanField(default=False)
+```
+
+### Nuevo modelo: DispositivoAutorizado
+
+```python
+class DispositivoAutorizado(models.Model):
+    device_id = models.UUIDField(unique=True, primary_key=True)
+    sucursal = models.ForeignKey('Sucursal', on_delete=models.CASCADE)
+    usuario = models.ForeignKey('Usuario', on_delete=models.CASCADE)
+    nombre = models.CharField(max_length=100)  # "Caja 1", "Notebook Vendedor"
+    ultimo_acceso = models.DateTimeField(auto_now=True)
+    activo = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+```
+
+### Nuevo modelo: SyncLog
+
+```python
+class SyncLog(models.Model):
+    device_id = models.UUIDField()
+    tipo = models.CharField(max_length=50)  # 'productos_down', 'tickets_up', etc.
+    registros = models.IntegerField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    duracion_ms = models.IntegerField()
+    exitoso = models.BooleanField(default=True)
+    error = models.TextField(null=True, blank=True)
+```
+
+---
+
+## Estructura de Archivos Sugerida
+
+```
+retailmind/
+├── app/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── desktop/
+│   │   │   ├── __init__.py
+│   │   │   ├── views.py          # Endpoints de auth y config
+│   │   │   ├── serializers.py
+│   │   │   └── permissions.py    # Permisos custom
+│   │   └── sync/
+│   │       ├── __init__.py
+│   │       ├── views.py          # Endpoints de sincronización
+│   │       ├── serializers.py
+│   │       └── services.py       # Lógica de sync
+│   ├── middleware/
+│   │   └── device_auth.py        # Middleware para validar device_id
+│   └── models/
+│       └── sync.py               # Modelos de sync
+```
+
+---
+
+## Dependencias Python Requeridas
+
+```
+djangorestframework>=3.14
+djangorestframework-simplejwt>=5.3
+django-ratelimit>=4.1
+cryptography>=41.0
+```
+
+---
+
+## Ejemplo de Implementación Base
+
+### Serializer de Ticket
+
+```python
+from rest_framework import serializers
+
+class TicketItemSyncSerializer(serializers.Serializer):
+    producto_id = serializers.IntegerField()
+    cantidad = serializers.IntegerField(min_value=1)
+    precio_unitario = serializers.IntegerField()
+    descuento = serializers.IntegerField(default=0)
+
+class PagoSyncSerializer(serializers.Serializer):
+    tipo = serializers.ChoiceField(choices=['efectivo', 'tarjeta', 'transferencia'])
+    monto = serializers.IntegerField()
+    transbank_voucher = serializers.CharField(required=False, allow_null=True)
+
+class TicketSyncSerializer(serializers.Serializer):
+    local_id = serializers.UUIDField()
+    created_at = serializers.DateTimeField()
+    vendedor_id = serializers.IntegerField()
+    items = TicketItemSyncSerializer(many=True)
+    subtotal = serializers.IntegerField()
+    descuento_total = serializers.IntegerField(default=0)
+    total = serializers.IntegerField()
+    pagos = PagoSyncSerializer(many=True)
+    
+    def validate(self, data):
+        # Validar que suma de items == subtotal
+        # Validar que suma de pagos == total
+        # Validar stock disponible
+        return data
+```
+
+### Permission Custom
+
+```python
+from rest_framework.permissions import BasePermission
+
+class IsAuthorizedDevice(BasePermission):
+    def has_permission(self, request, view):
+        device_id = request.headers.get('X-Device-ID')
+        if not device_id:
+            return False
+        
+        from .models import DispositivoAutorizado
+        try:
+            dispositivo = DispositivoAutorizado.objects.get(
+                device_id=device_id,
+                activo=True,
+                usuario=request.user
+            )
+            request.dispositivo = dispositivo
+            return True
+        except DispositivoAutorizado.DoesNotExist:
+            return False
+```
+
+---
+
+## Notas Importantes
+
+1. **Conflictos de Stock**: Si el stock en servidor es menor al requerido por venta offline, marcar el ticket como "requiere_revision" pero procesarlo igual (venta ya ocurrió)
+
+2. **Orden de Sync**: 
+   - Siempre primero subir tickets pendientes
+   - Luego descargar actualizaciones de productos
+
+3. **Compresión**: Considerar usar gzip para responses grandes (productos)
+
+4. **Paginación**: Endpoints GET deben soportar paginación para catálogos grandes
+
+5. **Webhooks** (opcional futuro): Notificar a dispositivos conectados sobre cambios de precios urgentes
+
+---
+
+## Testing
+
+Crear fixtures de prueba:
+- Sucursal de prueba
+- Productos de prueba  
+- Usuario vendedor de prueba
+- Dispositivo autorizado de prueba
+
+Endpoints de health check:
+```
+GET /api/v1/health/
+GET /api/v1/sync/status/
+```

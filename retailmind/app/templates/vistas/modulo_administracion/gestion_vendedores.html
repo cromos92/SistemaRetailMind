@@ -8,104 +8,592 @@
 {% include 'layout/footer.html' %}
 
 <style>
-.vendedor-card {
-    border-radius: 15px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
+/* ========== NEXO DESIGN SYSTEM - Gestión Vendedores ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-transition-fast: 150ms ease;
 }
 
-.vendedor-card:hover {
+/* Cards de estadísticas */
+.nexo-stat-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    padding: 1.5rem;
+    transition: all var(--nexo-transition-fast);
+    border: 1px solid var(--nexo-gray-300);
+    height: 100%;
+}
+
+.nexo-stat-card:hover {
+    box-shadow: var(--nexo-shadow-md);
     transform: translateY(-2px);
 }
 
-.status-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-
-.status-activo { background-color: #d4edda; color: #155724; }
-.status-inactivo { background-color: #f8d7da; color: #721c24; }
-
-.comision-badge {
-    background: linear-gradient(45deg, #007bff, #0056b3);
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 500;
-}
-
-.table-responsive {
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.filter-section {
-    background: #f8f9fa;
-    border-radius: 10px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.modal-xl .modal-dialog {
-    max-width: 800px;
-}
-
-.form-floating > .form-control {
-    height: calc(3.5rem + 2px);
-    line-height: 1.25;
-}
-
-.form-floating > .form-control:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.btn-action {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    border-radius: 0.375rem;
-}
-
-.avatar-placeholder {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: linear-gradient(45deg, #007bff, #0056b3);
+.nexo-stat-card .stat-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--nexo-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: white;
-    font-weight: bold;
-    font-size: 1.2rem;
+    font-size: 1.5rem;
 }
 
-.form-control.is-invalid {
-    border-color: #dc3545;
-    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+.nexo-stat-card .stat-icon.primary {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
 }
 
-.form-check-label {
-    font-size: 0.9rem;
-    color: #6c757d;
+.nexo-stat-card .stat-icon.success {
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--nexo-success);
 }
 
-.alert-danger {
-    border-radius: 10px;
+.nexo-stat-card .stat-icon.warning {
+    background: rgba(255, 176, 32, 0.1);
+    color: var(--nexo-warning);
+}
+
+.nexo-stat-card .stat-icon.info {
+    background: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-info);
+}
+
+.nexo-stat-card .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--nexo-gray-900);
+    line-height: 1.2;
+}
+
+.nexo-stat-card .stat-label {
+    font-size: 0.875rem;
+    color: var(--nexo-gray-500);
+    margin-top: 0.25rem;
+}
+
+/* Cards principales */
+.nexo-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
+    overflow: hidden;
+}
+
+.nexo-card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--nexo-white);
+}
+
+.nexo-card-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+}
+
+.nexo-card-body {
+    padding: 1.5rem;
+}
+
+/* Filtros */
+.nexo-filter-section {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-filter-section .form-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--nexo-gray-700);
+    margin-bottom: 0.5rem;
+}
+
+.nexo-filter-section .form-control,
+.nexo-filter-section .form-select {
+    border-radius: var(--nexo-radius-md);
+    border: 1px solid var(--nexo-gray-300);
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    transition: all var(--nexo-transition-fast);
+}
+
+.nexo-filter-section .form-control:focus,
+.nexo-filter-section .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+
+/* Tabla */
+.nexo-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.nexo-table thead th {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1rem 1.25rem;
+    border-bottom: 2px solid var(--nexo-gray-300);
+}
+
+.nexo-table tbody td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    vertical-align: middle;
+}
+
+.nexo-table tbody tr:hover {
+    background: var(--nexo-gray-100);
+}
+
+.nexo-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Avatar */
+.nexo-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--nexo-radius-md);
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nexo-white);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* Badges */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.nexo-badge.primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-badge.success {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00A67D;
+}
+
+.nexo-badge.warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+}
+
+.nexo-badge.error {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.nexo-badge.info {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.nexo-badge.secondary {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+}
+
+/* Comisión badge */
+.comision-badge {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark));
+    color: var(--nexo-white);
+    padding: 0.375rem 0.875rem;
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+/* Status badges */
+.status-activo {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00A67D;
+}
+
+.status-inactivo {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+/* Botones */
+.nexo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all var(--nexo-transition-fast);
     border: none;
-    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-    color: #721c24;
+    cursor: pointer;
 }
 
-.alert-danger ul {
-    padding-left: 1.2rem;
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
 }
 
-.alert-danger li {
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-success {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-success:hover {
+    background: #00B894;
+    color: var(--nexo-white);
+}
+
+.nexo-btn-outline {
+    background: transparent;
+    color: var(--nexo-primary);
+    border: 2px solid var(--nexo-primary);
+}
+
+.nexo-btn-outline:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-outline-secondary {
+    background: transparent;
+    color: var(--nexo-gray-700);
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-btn-outline-secondary:hover {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-900);
+    border-color: var(--nexo-gray-500);
+}
+
+/* Action buttons */
+.nexo-btn-action {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--nexo-radius-md);
+    border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    color: var(--nexo-gray-700);
+    transition: all var(--nexo-transition-fast);
+}
+
+.nexo-btn-action:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+    background: var(--nexo-primary-light);
+}
+
+.nexo-btn-action.danger:hover {
+    border-color: var(--nexo-error);
+    color: var(--nexo-error);
+    background: rgba(255, 77, 77, 0.1);
+}
+
+/* Título de página */
+.nexo-page-header {
+    margin-bottom: 1.5rem;
+}
+
+.nexo-page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--nexo-gray-900);
     margin-bottom: 0.25rem;
+}
+
+.nexo-page-subtitle {
+    color: var(--nexo-gray-500);
+    font-size: 0.9375rem;
+}
+
+/* Modal */
+.nexo-modal .modal-content {
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.nexo-modal .modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-modal .modal-title {
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+}
+
+.nexo-modal .modal-body {
+    padding: 1.5rem;
+}
+
+.nexo-modal .modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--nexo-gray-300);
+}
+
+/* Form elements */
+.nexo-form-floating {
+    position: relative;
+}
+
+.nexo-form-floating .form-control {
+    border-radius: var(--nexo-radius-md);
+    border: 1px solid var(--nexo-gray-300);
+    padding: 1rem 1rem 0.5rem;
+    height: calc(3.5rem + 2px);
+}
+
+.nexo-form-floating .form-control:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+
+.nexo-form-floating .form-control.is-invalid {
+    border-color: var(--nexo-error);
+    box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.1);
+}
+
+/* Select2 NEXO Style */
+.select2-container--nexo .select2-selection--single {
+    height: 48px;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1rem;
+    background-color: var(--nexo-white);
+    transition: all var(--nexo-transition-fast);
+}
+
+.select2-container--nexo .select2-selection--single:focus,
+.select2-container--nexo.select2-container--focus .select2-selection--single,
+.select2-container--nexo.select2-container--open .select2-selection--single {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    outline: none;
+}
+
+.select2-container--nexo .select2-selection--single .select2-selection__rendered {
+    color: var(--nexo-gray-900);
+    line-height: 28px;
+    padding-left: 0;
+}
+
+.select2-container--nexo .select2-selection--single .select2-selection__placeholder {
+    color: var(--nexo-gray-500);
+}
+
+.select2-container--nexo .select2-selection--single .select2-selection__arrow {
+    height: 46px;
+    right: 10px;
+}
+
+.select2-container--nexo .select2-selection--single .select2-selection__arrow b {
+    border-color: var(--nexo-gray-500) transparent transparent transparent;
+}
+
+.select2-container--nexo .select2-dropdown {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    box-shadow: var(--nexo-shadow-lg);
+    margin-top: 4px;
+}
+
+.select2-container--nexo .select2-search--dropdown {
+    padding: 0.75rem;
+}
+
+.select2-container--nexo .select2-search--dropdown .select2-search__field {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.select2-container--nexo .select2-search--dropdown .select2-search__field:focus {
+    border-color: var(--nexo-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+
+.select2-container--nexo .select2-results__option {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: var(--nexo-gray-700);
+}
+
+.select2-container--nexo .select2-results__option--highlighted[aria-selected] {
+    background-color: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.select2-container--nexo .select2-results__option[aria-selected=true] {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.select2-container--nexo .select2-results__option .sucursal-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.select2-container--nexo .select2-results__option .sucursal-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--nexo-radius-md);
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+}
+
+.select2-container--nexo .select2-results__option[aria-selected=true] .sucursal-icon {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--nexo-white);
+}
+
+/* Validation for select2 */
+.select2-container--nexo.is-invalid .select2-selection--single {
+    border-color: var(--nexo-error);
+    box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.1);
+}
+
+/* Code validation indicator */
+.codigo-status {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+}
+
+.codigo-status.valid {
+    color: var(--nexo-success);
+}
+
+.codigo-status.invalid {
+    color: var(--nexo-error);
+}
+
+.codigo-status.checking {
+    color: var(--nexo-warning);
+}
+
+.codigo-wrapper {
+    position: relative;
+}
+
+.codigo-wrapper .form-control {
+    padding-right: 40px;
+}
+
+/* Alert errors */
+.nexo-alert-error {
+    background: rgba(255, 77, 77, 0.1);
+    border-left: 4px solid var(--nexo-error);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem 1.25rem;
+    color: var(--nexo-error);
+}
+
+.nexo-alert-error ul {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+.nexo-alert-error li {
+    margin-bottom: 0.25rem;
+}
+
+/* Empty state */
+.nexo-empty-state {
+    padding: 3rem 1rem;
+    text-align: center;
+}
+
+.nexo-empty-state i {
+    font-size: 3rem;
+    color: var(--nexo-gray-300);
+    margin-bottom: 1rem;
+}
+
+.nexo-empty-state h6 {
+    color: var(--nexo-gray-700);
+    margin-bottom: 0.5rem;
+}
+
+.nexo-empty-state p {
+    color: var(--nexo-gray-500);
+    margin: 0;
+}
+
+/* Loading state */
+.nexo-loading {
+    padding: 3rem 1rem;
+    text-align: center;
+}
+
+.nexo-loading .spinner-border {
+    width: 3rem;
+    height: 3rem;
+    color: var(--nexo-primary);
 }
 </style>
 
@@ -113,67 +601,94 @@
     <div class="page-content">
         <div class="container-fluid">
             
-            <!-- ========== HEADER Y TÍTULO ========== -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h2 class="mb-1">
-                                <i class="bi bi-people-fill text-primary me-2"></i>
-                                Gestión de Vendedores
-                            </h2>
-                            <p class="text-muted mb-0">Administra el equipo de ventas y sus comisiones</p>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-success" onclick="exportarVendedores()">
-                                <i class="bi bi-download me-1"></i>Exportar
-                            </button>
-                            <button class="btn btn-primary" onclick="abrirModalCrear()">
-                                <i class="bi bi-plus-circle me-1"></i>Nuevo Vendedor
-                            </button>
-                        </div>
+            <!-- ========== HEADER ========== -->
+            <div class="nexo-page-header">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1 class="nexo-page-title">
+                            <i class="bi bi-people-fill me-2" style="color: var(--nexo-primary);"></i>
+                            Gestión de Vendedores
+                        </h1>
+                        <p class="nexo-page-subtitle">Administra tu equipo de ventas y sus comisiones</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="nexo-btn nexo-btn-outline" onclick="exportarVendedores()">
+                            <i class="bi bi-download"></i>
+                            Exportar
+                        </button>
+                        <button class="nexo-btn nexo-btn-primary" onclick="abrirModalCrear()">
+                            <i class="bi bi-plus-circle"></i>
+                            Nuevo Vendedor
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- ========== MÉTRICAS RÁPIDAS ========== -->
+            <!-- ========== ESTADÍSTICAS PRINCIPALES ========== -->
             <div class="row mb-4">
+                <!-- Total Vendedores -->
                 <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card vendedor-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-primary mb-1" id="totalVendedores">0</div>
-                            <div class="text-muted">Total Vendedores</div>
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" id="totalVendedores">0</div>
+                                <div class="stat-label">Total Vendedores</div>
+                            </div>
+                            <div class="stat-icon primary">
+                                <i class="bi bi-people-fill"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Vendedores Activos -->
                 <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card vendedor-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-success mb-1" id="vendedoresActivos">0</div>
-                            <div class="text-muted">Vendedores Activos</div>
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" id="vendedoresActivos" style="color: var(--nexo-success);">0</div>
+                                <div class="stat-label">Vendedores Activos</div>
+                            </div>
+                            <div class="stat-icon success">
+                                <i class="bi bi-person-check-fill"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Comisión Promedio -->
                 <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card vendedor-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-info mb-1" id="comisionPromedio">0%</div>
-                            <div class="text-muted">Comisión Promedio</div>
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" id="comisionPromedio" style="color: var(--nexo-info);">0%</div>
+                                <div class="stat-label">Comisión Promedio</div>
+                            </div>
+                            <div class="stat-icon info">
+                                <i class="bi bi-percent"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Ventas del Mes -->
                 <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card vendedor-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-warning mb-1" id="ventasMes">0</div>
-                            <div class="text-muted">Ventas del Mes</div>
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" id="ventasMes" style="color: var(--nexo-warning);">0</div>
+                                <div class="stat-label">Ventas del Mes</div>
+                            </div>
+                            <div class="stat-icon warning">
+                                <i class="bi bi-cart-check-fill"></i>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- ========== FILTROS ========== -->
-            <div class="filter-section">
+            <div class="nexo-filter-section">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Buscar</label>
@@ -191,9 +706,9 @@
                         <label class="form-label">Comisión</label>
                         <select class="form-select" id="filtroComision">
                             <option value="">Todas</option>
-                            <option value="baja">Baja (<5%)</option>
+                            <option value="baja">Baja (&lt;5%)</option>
                             <option value="media">Media (5-10%)</option>
-                            <option value="alta">Alta (>10%)</option>
+                            <option value="alta">Alta (&gt;10%)</option>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -208,11 +723,13 @@
                     <div class="col-md-3">
                         <label class="form-label">&nbsp;</label>
                         <div class="d-flex gap-2">
-                            <button class="btn btn-primary" onclick="aplicarFiltros()">
-                                <i class="bi bi-search me-1"></i>Filtrar
+                            <button class="nexo-btn nexo-btn-primary" onclick="aplicarFiltros()">
+                                <i class="bi bi-search"></i>
+                                Filtrar
                             </button>
-                            <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
-                                <i class="bi bi-x-circle me-1"></i>Limpiar
+                            <button class="nexo-btn nexo-btn-outline-secondary" onclick="limpiarFiltros()">
+                                <i class="bi bi-x-circle"></i>
+                                Limpiar
                             </button>
                         </div>
                     </div>
@@ -220,36 +737,40 @@
             </div>
 
             <!-- ========== TABLA PRINCIPAL ========== -->
-            <div class="card shadow">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="bi bi-table me-2"></i>Lista de Vendedores
-                    </h6>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary" id="contadorVendedores">0 vendedores</span>
-                    </div>
+            <div class="nexo-card">
+                <div class="nexo-card-header">
+                    <h5>
+                        <i class="bi bi-table me-2" style="color: var(--nexo-primary);"></i>
+                        Lista de Vendedores
+                    </h5>
+                    <span class="nexo-badge primary" id="contadorVendedores">0 vendedores</span>
                 </div>
-                <div class="card-body">
+                <div class="nexo-card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover table-striped" id="tablaVendedores">
-                            <thead class="table-dark">
+                        <table class="nexo-table" id="tablaVendedores">
+                            <thead>
                                 <tr>
                                     <th>Vendedor</th>
                                     <th>Código</th>
                                     <th>RUT</th>
                                     <th>Comisión</th>
-                                    <th>Sucursales</th>
+                                    <th>Empresa</th>
+                                    <th>Sucursal</th>
                                     <th>Correo</th>
                                     <th>Estado</th>
-                                    <th>Acciones</th>
+                                    <th style="width: 100px;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td colspan="8" class="text-center py-5">
-                                        <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
-                                        <h6 class="text-muted mt-3">Cargando vendedores...</h6>
-                                        <p class="text-muted small">Los datos se cargarán automáticamente</p>
+                                    <td colspan="9">
+                                        <div class="nexo-loading">
+                                            <div class="spinner-border" role="status">
+                                                <span class="visually-hidden">Cargando...</span>
+                                            </div>
+                                            <h6 class="mt-3" style="color: var(--nexo-gray-700);">Cargando vendedores...</h6>
+                                            <p style="color: var(--nexo-gray-500);">Los datos se cargarán automáticamente</p>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
@@ -266,12 +787,12 @@
 <!-- main-content -->
 
 <!-- ========== MODAL CREAR/EDITAR VENDEDOR ========== -->
-<div class="modal fade" id="modalVendedor" tabindex="-1" aria-labelledby="modalVendedorLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+<div class="modal fade nexo-modal" id="modalVendedor" tabindex="-1" aria-labelledby="modalVendedorLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalVendedorLabel">
-                    <i class="bi bi-person-plus me-2"></i>Nuevo Vendedor
+                    <i class="bi bi-person-plus me-2" style="color: var(--nexo-primary);"></i>Nuevo Vendedor
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -282,87 +803,105 @@
                     <div class="row g-3">
                         <!-- Información Básica -->
                         <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="codigoVendedor" name="codigo_vendedor" placeholder="Código" required>
-                                <label for="codigoVendedor">Código del Vendedor *</label>
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">
+                                Código del Vendedor * <small style="color: var(--nexo-gray-500); font-weight: normal;">(único)</small>
+                            </label>
+                            <div class="codigo-wrapper">
+                                <input type="text" class="form-control" id="codigoVendedor" name="codigo_vendedor" 
+                                       placeholder="Ej: V001, VEND-01..." required 
+                                       style="border-radius: var(--nexo-radius-md); padding: 0.75rem 1rem; border: 1px solid var(--nexo-gray-300);">
+                                <span class="codigo-status" id="codigoStatus"></span>
                             </div>
+                            <small id="codigoFeedback" style="color: var(--nexo-gray-500); font-size: 0.75rem;"></small>
                         </div>
                         <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="rutVendedor" name="rut" placeholder="RUT">
-                                <label for="rutVendedor">RUT</label>
-                            </div>
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">RUT</label>
+                            <input type="text" class="form-control" id="rutVendedor" name="rut" placeholder="12345678-9"
+                                   style="border-radius: var(--nexo-radius-md); padding: 0.75rem 1rem; border: 1px solid var(--nexo-gray-300);">
                             <div class="form-check mt-2">
                                 <input class="form-check-input" type="checkbox" id="sinRut" name="sin_rut">
-                                <label class="form-check-label" for="sinRut">
+                                <label class="form-check-label" for="sinRut" style="color: var(--nexo-gray-500); font-size: 0.8125rem;">
                                     Vendedor sin RUT
                                 </label>
                             </div>
                         </div>
                         <div class="col-md-12">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="nombreVendedor" name="nombre" placeholder="Nombre Completo" required>
-                                <label for="nombreVendedor">Nombre Completo *</label>
-                            </div>
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">Nombre Completo *</label>
+                            <input type="text" class="form-control" id="nombreVendedor" name="nombre" placeholder="Nombre y apellido del vendedor" required
+                                   style="border-radius: var(--nexo-radius-md); padding: 0.75rem 1rem; border: 1px solid var(--nexo-gray-300);">
                         </div>
                         
                         <!-- Comisión y Fecha -->
                         <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="number" class="form-control" id="comisionVendedor" name="comision" placeholder="Comisión" min="0" max="100" step="0.01" required>
-                                <label for="comisionVendedor">Comisión (%) *</label>
-                            </div>
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">Comisión (%) *</label>
+                            <input type="number" class="form-control" id="comisionVendedor" name="comision" 
+                                   placeholder="Ej: 5.00" min="0" max="100" step="0.01" required
+                                   style="border-radius: var(--nexo-radius-md); padding: 0.75rem 1rem; border: 1px solid var(--nexo-gray-300);">
                         </div>
                         <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="date" class="form-control" id="fechaNacimiento" name="fecha_nacimiento" placeholder="Fecha de Nacimiento">
-                                <label for="fechaNacimiento">Fecha de Nacimiento</label>
-                            </div>
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">Fecha de Nacimiento</label>
+                            <input type="date" class="form-control" id="fechaNacimiento" name="fecha_nacimiento"
+                                   style="border-radius: var(--nexo-radius-md); padding: 0.75rem 1rem; border: 1px solid var(--nexo-gray-300);">
                         </div>
                         
                         <!-- Contacto -->
                         <div class="col-md-12">
-                            <div class="form-floating">
-                                <input type="email" class="form-control" id="correoVendedor" name="correo" placeholder="Correo Electrónico">
-                                <label for="correoVendedor">Correo Electrónico</label>
-                            </div>
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">Correo Electrónico</label>
+                            <input type="email" class="form-control" id="correoVendedor" name="correo" placeholder="vendedor@empresa.com"
+                                   style="border-radius: var(--nexo-radius-md); padding: 0.75rem 1rem; border: 1px solid var(--nexo-gray-300);">
                         </div>
                         
-                        <!-- Sucursales -->
-                        <div class="col-md-12">
-                            <label class="form-label fw-bold">
-                                <i class="bi bi-building me-1"></i>Sucursales Asignadas
+                        <!-- Empresa (Select2 con búsqueda) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">
+                                <i class="bi bi-building me-1" style="color: var(--nexo-primary);"></i>Empresa
                             </label>
-                            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
-                                {% for sucursal in sucursales %}
-                                <div class="form-check">
-                                    <input class="form-check-input sucursal-checkbox" type="checkbox" 
-                                           name="sucursales[]" value="{{ sucursal.id }}" 
-                                           id="sucursal{{ sucursal.id }}">
-                                    <label class="form-check-label" for="sucursal{{ sucursal.id }}">
-                                        {{ sucursal.alias }}
-                                    </label>
-                                </div>
-                                {% empty %}
-                                <p class="text-muted mb-0">No hay sucursales disponibles</p>
+                            <select class="form-select" id="empresaVendedor" name="empresa_id" style="width: 100%;">
+                                <option value="">-- Usar empresa actual --</option>
+                                {% for empresa in empresas %}
+                                <option value="{{ empresa.id }}" data-rut="{{ empresa.rut|default:'' }}">{{ empresa.nombre }}</option>
                                 {% endfor %}
-                            </div>
-                            <small class="text-muted">Seleccione las sucursales donde trabajará este vendedor</small>
+                            </select>
+                            <small style="color: var(--nexo-gray-500); font-size: 0.75rem;">
+                                <i class="bi bi-info-circle me-1"></i>Si no selecciona, se usará la empresa de la sesión
+                            </small>
+                        </div>
+                        
+                        <!-- Sucursal (Select2 único - OPCIONAL) -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold" style="color: var(--nexo-gray-900); font-size: 0.8125rem;">
+                                <i class="bi bi-shop me-1" style="color: var(--nexo-primary);"></i>Sucursal Asignada <small style="color: var(--nexo-gray-500); font-weight: normal;">(Opcional)</small>
+                            </label>
+                            <select class="form-select" id="sucursalVendedor" name="sucursal_id"
+                                    style="width: 100%;">
+                                <option value="">Sin asignar</option>
+                                {% for sucursal in sucursales %}
+                                <option value="{{ sucursal.id }}" data-alias="{{ sucursal.alias }}">
+                                    {{ sucursal.alias }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small style="color: var(--nexo-gray-500); font-size: 0.75rem;">
+                                <i class="bi bi-info-circle me-1"></i>Dejar vacío para personal administrativo o externo
+                            </small>
                         </div>
                     </div>
                     
                     <!-- Validaciones -->
-                    <div id="erroresFormulario" class="alert alert-danger mt-3" style="display: none;">
-                        <ul id="listaErrores" class="mb-0"></ul>
+                    <div id="erroresFormulario" class="nexo-alert-error mt-3" style="display: none;">
+                        <strong><i class="bi bi-exclamation-triangle me-2"></i>Por favor corrige los siguientes errores:</strong>
+                        <ul id="listaErrores" class="mb-0 mt-2"></ul>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                <button type="button" class="nexo-btn nexo-btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i>
+                    Cancelar
                 </button>
-                <button type="button" class="btn btn-primary" onclick="guardarVendedor()">
-                    <i class="bi bi-check-circle me-1"></i>Guardar
+                <button type="button" class="nexo-btn nexo-btn-primary" onclick="guardarVendedor()">
+                    <i class="bi bi-check-circle"></i>
+                    Guardar
                 </button>
             </div>
         </div>
@@ -370,28 +909,33 @@
 </div>
 
 <!-- ========== MODAL CONFIRMAR ELIMINACIÓN ========== -->
-<div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-hidden="true">
+<div class="modal fade nexo-modal" id="modalConfirmarEliminar" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirmar Eliminación
+                    <i class="bi bi-exclamation-triangle me-2" style="color: var(--nexo-error);"></i>Confirmar Eliminación
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>¿Estás seguro de que deseas eliminar al vendedor <strong id="nombreVendedorEliminar"></strong>?</p>
-                <p class="text-muted small">Esta acción no se puede deshacer.</p>
+                <p style="color: var(--nexo-gray-700);">¿Estás seguro de que deseas eliminar al vendedor <strong id="nombreVendedorEliminar"></strong>?</p>
+                <p style="color: var(--nexo-gray-500); font-size: 0.875rem;">Esta acción no se puede deshacer.</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" onclick="confirmarEliminar()">
-                    <i class="bi bi-trash me-1"></i>Eliminar
+                <button type="button" class="nexo-btn nexo-btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="nexo-btn" style="background: var(--nexo-error); color: white;" onclick="confirmarEliminar()">
+                    <i class="bi bi-trash"></i>
+                    Eliminar
                 </button>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Select2 CSS & JS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <!-- ========== SCRIPTS ========== -->
 <script>
@@ -399,19 +943,24 @@
 let vendedores = [];
 let vendedorSeleccionado = null;
 let modoEdicion = false;
+let codigoValido = false;
+let validandoCodigo = false;
 
 // Inicializar cuando jQuery esté disponible
 $(document).ready(function() {
-    console.log('🚀 Inicializando Gestión de Vendedores...');
+    console.log('🚀 Inicializando Gestión de Vendedores NEXO...');
     
     // Cargar datos iniciales
     cargarVendedores();
-    cargarMetricas();
     
-    // Eventos de filtros
-    $('#filtroBusqueda').on('keyup', function() {
+    // Inicializar Select2 para empresa y sucursales
+    inicializarSelect2Empresa();
+    inicializarSelect2Sucursal();
+    
+    // Eventos de filtros en tiempo real
+    $('#filtroBusqueda').on('keyup', debounce(function() {
         aplicarFiltros();
-    });
+    }, 300));
     
     $('#filtroEstado, #filtroComision, #ordenarPor').on('change', function() {
         aplicarFiltros();
@@ -429,10 +978,10 @@ $(document).ready(function() {
         }
     });
     
-    // Evento para limpiar filtros
-    $('#btnLimpiarFiltros').on('click', function() {
-        limpiarFiltros();
-    });
+    // Validación de código único en tiempo real
+    $('#codigoVendedor').on('input', debounce(function() {
+        validarCodigoUnico($(this).val());
+    }, 500));
     
     // Hacer funciones disponibles globalmente
     window.abrirModalCrear = abrirModalCrear;
@@ -442,9 +991,168 @@ $(document).ready(function() {
     window.exportarVendedores = exportarVendedores;
     window.aplicarFiltros = aplicarFiltros;
     window.limpiarFiltros = limpiarFiltros;
+    window.confirmarEliminar = confirmarEliminar;
     
-    console.log('✅ Gestión de Vendedores inicializada');
+    console.log('✅ Gestión de Vendedores NEXO inicializada');
 });
+
+// Inicializar Select2 para empresa
+function inicializarSelect2Empresa() {
+    $('#empresaVendedor').select2({
+        placeholder: 'Buscar empresa...',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#modalVendedor'),
+        language: {
+            noResults: function() {
+                return "No se encontraron empresas";
+            },
+            searching: function() {
+                return "Buscando...";
+            }
+        },
+        templateResult: formatEmpresaOption,
+        templateSelection: formatEmpresaSelection
+    });
+}
+
+// Formato para las opciones del Select2 de Empresa
+function formatEmpresaOption(empresa) {
+    if (!empresa.id) {
+        return empresa.text;
+    }
+    
+    const rut = $(empresa.element).data('rut') || '';
+    const $option = $(
+        `<div class="sucursal-option">
+            <div class="sucursal-icon" style="background: rgba(0, 102, 255, 0.1); color: var(--nexo-primary);">
+                <i class="bi bi-building"></i>
+            </div>
+            <div>
+                <div style="font-weight: 500;">${empresa.text}</div>
+                ${rut ? `<small style="color: var(--nexo-gray-500);">RUT: ${rut}</small>` : ''}
+            </div>
+        </div>`
+    );
+    
+    return $option;
+}
+
+// Formato para la selección del Select2 de Empresa
+function formatEmpresaSelection(empresa) {
+    if (!empresa.id) {
+        return empresa.text;
+    }
+    return $(`<span><i class="bi bi-building me-2" style="color: var(--nexo-primary);"></i>${empresa.text}</span>`);
+}
+
+// Inicializar Select2 para sucursal
+function inicializarSelect2Sucursal() {
+    $('#sucursalVendedor').select2({
+        placeholder: 'Buscar y seleccionar sucursal...',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#modalVendedor'),
+        language: {
+            noResults: function() {
+                return "No se encontraron sucursales";
+            },
+            searching: function() {
+                return "Buscando...";
+            }
+        },
+        templateResult: formatSucursalOption,
+        templateSelection: formatSucursalSelection
+    });
+}
+
+// Formato para las opciones del Select2
+function formatSucursalOption(sucursal) {
+    if (!sucursal.id) {
+        return sucursal.text;
+    }
+    
+    const $option = $(
+        `<div class="sucursal-option">
+            <div class="sucursal-icon">
+                <i class="bi bi-building"></i>
+            </div>
+            <div>
+                <div style="font-weight: 500;">${sucursal.text}</div>
+            </div>
+        </div>`
+    );
+    
+    return $option;
+}
+
+// Formato para la selección del Select2
+function formatSucursalSelection(sucursal) {
+    if (!sucursal.id) {
+        return sucursal.text;
+    }
+    return $(`<span><i class="bi bi-building me-2" style="color: var(--nexo-primary);"></i>${sucursal.text}</span>`);
+}
+
+// Validar código único
+function validarCodigoUnico(codigo) {
+    const statusIcon = $('#codigoStatus');
+    const feedback = $('#codigoFeedback');
+    const codigoInput = $('#codigoVendedor');
+    
+    if (!codigo || codigo.trim() === '') {
+        statusIcon.html('').removeClass('valid invalid checking');
+        feedback.text('').css('color', 'var(--nexo-gray-500)');
+        codigoValido = false;
+        return;
+    }
+    
+    // Mostrar estado de validación
+    statusIcon.html('<i class="bi bi-hourglass-split"></i>').removeClass('valid invalid').addClass('checking');
+    feedback.text('Verificando disponibilidad...').css('color', 'var(--nexo-warning)');
+    validandoCodigo = true;
+    
+    // Verificar si el código ya existe en el array local (excluyendo el vendedor actual en modo edición)
+    const vendedorIdActual = modoEdicion ? parseInt($('#vendedorId').val()) : null;
+    const codigoExiste = vendedores.some(v => {
+        if (!v || !v.codigo_vendedor) return false;
+        return v.codigo_vendedor.toLowerCase() === codigo.trim().toLowerCase() && 
+               v.id !== vendedorIdActual;
+    });
+    
+    // Si el array local está vacío o muy pequeño, asumir que el código es válido
+    // (la validación real se hará en el servidor)
+    const validacionConfiable = vendedores && vendedores.length > 0;
+    
+    setTimeout(() => {
+        validandoCodigo = false;
+        
+        if (codigoExiste && validacionConfiable) {
+            statusIcon.html('<i class="bi bi-x-circle-fill"></i>').removeClass('valid checking').addClass('invalid');
+            feedback.text('Este código ya está en uso').css('color', 'var(--nexo-error)');
+            codigoInput.addClass('is-invalid');
+            codigoValido = false;
+        } else {
+            statusIcon.html('<i class="bi bi-check-circle-fill"></i>').removeClass('invalid checking').addClass('valid');
+            feedback.text('Código disponible').css('color', 'var(--nexo-success)');
+            codigoInput.removeClass('is-invalid');
+            codigoValido = true;
+        }
+    }, 300);
+}
+
+// Debounce para búsqueda
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 
 // Función para cargar vendedores
 function cargarVendedores() {
@@ -454,87 +1162,137 @@ function cargarVendedores() {
         success: function(response) {
             if (response.success) {
                 vendedores = response.vendedores;
+                console.log('📊 Vendedores cargados:', vendedores.length);
+                console.log('📋 Lista de vendedores:', vendedores.map(v => ({id: v.id, nombre: v.nombre, activo: v.activo})));
                 actualizarTabla(vendedores);
                 actualizarMetricas(response.metricas);
             } else {
-                showErrorAlert('Error', response.error || 'Error al cargar vendedores');
+                mostrarError('Error al cargar vendedores', response.error || 'Error desconocido');
+                mostrarTablaVacia();
             }
         },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al cargar vendedores');
+        error: function(xhr, status, error) {
+            mostrarError('Error de conexión', 'No se pudo conectar con el servidor');
+            mostrarTablaVacia();
         }
     });
 }
 
-// Función para cargar métricas
-function cargarMetricas() {
-    $.ajax({
-        url: '/app/obtener_metricas_vendedores/',
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                actualizarMetricas(response.metricas);
-            }
-        }
-    });
+// Función para escapar HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Función para actualizar tabla
-function actualizarTabla(vendedores) {
+function actualizarTabla(listaVendedores) {
     const tbody = $('#tablaVendedores tbody');
     tbody.empty();
     
-    if (vendedores.length === 0) {
-        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron vendedores</td></tr>');
-        return;
-    }
+    console.log('🔄 Actualizando tabla con', listaVendedores.length, 'vendedores');
     
-    vendedores.forEach(function(vendedor) {
-        const fila = `
+    if (!listaVendedores || listaVendedores.length === 0) {
+        tbody.html(`
             <tr>
-                <td>
-                    <div class="d-flex align-items-center">
-                        <div class="avatar-placeholder me-3">
-                            ${vendedor.nombre ? vendedor.nombre.charAt(0).toUpperCase() : 'V'}
-                        </div>
-                        <div>
-                            <strong>${vendedor.nombre || 'Sin nombre'}</strong>
-                            <br><small class="text-muted">ID: ${vendedor.id}</small>
-                        </div>
-                    </div>
-                </td>
-                <td>
-                    <span class="badge bg-secondary">${vendedor.codigo_vendedor}</span>
-                </td>
-                <td>${vendedor.rut || 'Sin RUT'}</td>
-                <td>
-                    <span class="comision-badge">${vendedor.comision}%</span>
-                </td>
-                <td>
-                    <small class="text-muted">${vendedor.sucursales_nombres || 'Sin asignar'}</small>
-                </td>
-                <td>${vendedor.correo || 'Sin correo'}</td>
-                <td>
-                    <span class="status-badge ${vendedor.activo ? 'status-activo' : 'status-inactivo'}">
-                        ${vendedor.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                </td>
-                <td>
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-primary btn-action" onclick="editarVendedor(${vendedor.id})" title="Editar">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-action" onclick="eliminarVendedor(${vendedor.id}, '${vendedor.nombre}')" title="Eliminar">
-                            <i class="bi bi-trash"></i>
-                        </button>
+                <td colspan="9">
+                    <div class="nexo-empty-state">
+                        <i class="bi bi-person-x"></i>
+                        <h6>No se encontraron vendedores</h6>
+                        <p>Intenta ajustar los filtros o crea un nuevo vendedor</p>
                     </div>
                 </td>
             </tr>
-        `;
-        tbody.append(fila);
+        `);
+        $('#contadorVendedores').text('0 vendedores');
+        return;
+    }
+    
+    listaVendedores.forEach(function(vendedor) {
+        try {
+            const nombre = vendedor.nombre || 'Sin nombre';
+            const iniciales = nombre.split(' ').map(n => n.charAt(0).toUpperCase()).slice(0, 2).join('') || 'V';
+            const nombreEscapado = escapeHtml(nombre);
+            const codigoEscapado = escapeHtml(vendedor.codigo_vendedor || '');
+            const rutEscapado = escapeHtml(vendedor.rut || '');
+            const empresaEscapado = escapeHtml(vendedor.empresa || '');
+            const sucursalesEscapado = escapeHtml(vendedor.sucursales_nombres || '');
+            const correoEscapado = escapeHtml(vendedor.correo || '');
+            
+            const fila = `
+                <tr data-vendedor-id="${vendedor.id}">
+                    <td>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="nexo-avatar">
+                                ${escapeHtml(iniciales)}
+                            </div>
+                            <div>
+                                <strong style="color: var(--nexo-gray-900);">${nombreEscapado}</strong>
+                                <br><small style="color: var(--nexo-gray-500);">ID: ${vendedor.id}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="nexo-badge secondary">${codigoEscapado}</span>
+                    </td>
+                    <td style="color: var(--nexo-gray-700);">${rutEscapado || '<span style="color: var(--nexo-gray-500);">Sin RUT</span>'}</td>
+                    <td>
+                        <span class="comision-badge">${vendedor.comision || 0}%</span>
+                    </td>
+                    <td>
+                        ${empresaEscapado ? 
+                            `<span class="nexo-badge primary"><i class="bi bi-building me-1"></i>${empresaEscapado}</span>` : 
+                            '<span style="color: var(--nexo-gray-500);">Sin empresa</span>'}
+                    </td>
+                    <td>
+                        ${sucursalesEscapado && sucursalesEscapado !== 'Sin asignar' ? 
+                            `<span class="nexo-badge info"><i class="bi bi-shop me-1"></i>${sucursalesEscapado}</span>` : 
+                            '<span style="color: var(--nexo-gray-500);">Sin asignar</span>'}
+                    </td>
+                    <td style="color: var(--nexo-gray-700);">${correoEscapado || '<span style="color: var(--nexo-gray-500);">Sin correo</span>'}</td>
+                    <td>
+                        <span class="nexo-badge ${vendedor.activo ? 'success' : 'error'}">
+                            <i class="bi ${vendedor.activo ? 'bi-check-circle' : 'bi-x-circle'} me-1"></i>
+                            ${vendedor.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="d-flex gap-2">
+                            <button class="nexo-btn-action" onclick="editarVendedor(${vendedor.id})" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="nexo-btn-action danger" onclick="eliminarVendedor(${vendedor.id}, '${nombreEscapado.replace(/'/g, "\\'")}')" title="Eliminar">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            tbody.append(fila);
+        } catch (err) {
+            console.error('❌ Error al renderizar vendedor:', vendedor.id, err);
+        }
     });
     
-    $('#contadorVendedores').text(vendedores.length + ' vendedores');
+    $('#contadorVendedores').text(listaVendedores.length + ' vendedores');
+    console.log('✅ Tabla actualizada con', $('#tablaVendedores tbody tr').length, 'filas');
+}
+
+// Función para mostrar tabla vacía
+function mostrarTablaVacia() {
+    const tbody = $('#tablaVendedores tbody');
+    tbody.html(`
+        <tr>
+            <td colspan="9">
+                <div class="nexo-empty-state">
+                    <i class="bi bi-person-x"></i>
+                    <h6>No hay vendedores registrados</h6>
+                    <p>Comienza creando tu primer vendedor</p>
+                </div>
+            </td>
+        </tr>
+    `);
 }
 
 // Función para actualizar métricas
@@ -548,12 +1306,24 @@ function actualizarMetricas(metricas) {
 // Función para abrir modal de creación
 function abrirModalCrear() {
     modoEdicion = false;
-    $('#modalVendedorLabel').html('<i class="bi bi-person-plus me-2"></i>Nuevo Vendedor');
+    codigoValido = false;
+    
+    $('#modalVendedorLabel').html('<i class="bi bi-person-plus me-2" style="color: var(--nexo-primary);"></i>Nuevo Vendedor');
     $('#formVendedor')[0].reset();
     $('#vendedorId').val('');
     $('#sinRut').prop('checked', false);
     $('#rutVendedor').prop('disabled', false);
-    $('.sucursal-checkbox').prop('checked', false);
+    
+    // Limpiar Select2 de empresa
+    $('#empresaVendedor').val(null).trigger('change');
+    
+    // Limpiar Select2 de sucursal
+    $('#sucursalVendedor').val(null).trigger('change');
+    
+    // Limpiar indicadores de código
+    $('#codigoStatus').html('').removeClass('valid invalid checking');
+    $('#codigoFeedback').text('');
+    
     $('#erroresFormulario').hide();
     limpiarErroresVisuales();
     $('#modalVendedor').modal('show');
@@ -563,14 +1333,15 @@ function abrirModalCrear() {
 function editarVendedor(vendedorId) {
     const vendedor = vendedores.find(v => v.id === vendedorId);
     if (!vendedor) {
-        showErrorAlert('Error', 'Vendedor no encontrado');
+        mostrarError('Error', 'Vendedor no encontrado');
         return;
     }
     
     modoEdicion = true;
     vendedorSeleccionado = vendedor;
+    codigoValido = true; // El código actual es válido
     
-    $('#modalVendedorLabel').html('<i class="bi bi-pencil me-2"></i>Editar Vendedor');
+    $('#modalVendedorLabel').html('<i class="bi bi-pencil me-2" style="color: var(--nexo-primary);"></i>Editar Vendedor');
     $('#vendedorId').val(vendedor.id);
     $('#codigoVendedor').val(vendedor.codigo_vendedor);
     $('#rutVendedor').val(vendedor.rut || '');
@@ -584,13 +1355,24 @@ function editarVendedor(vendedorId) {
     $('#sinRut').prop('checked', sinRut);
     $('#rutVendedor').prop('disabled', sinRut);
     
-    // Marcar sucursales asignadas
-    $('.sucursal-checkbox').prop('checked', false);
-    if (vendedor.sucursales && vendedor.sucursales.length > 0) {
-        vendedor.sucursales.forEach(function(sucursal) {
-            $(`#sucursal${sucursal.id}`).prop('checked', true);
-        });
+    // Seleccionar empresa si está asignada (Select2)
+    if (vendedor.empresa_id) {
+        $('#empresaVendedor').val(vendedor.empresa_id).trigger('change');
+    } else {
+        $('#empresaVendedor').val(null).trigger('change');
     }
+    
+    // Seleccionar sucursal asignada (solo una) - OPCIONAL
+    if (vendedor.sucursales && vendedor.sucursales.length > 0) {
+        const sucursalId = vendedor.sucursales[0].id;
+        $('#sucursalVendedor').val(sucursalId).trigger('change');
+    } else {
+        $('#sucursalVendedor').val(null).trigger('change');
+    }
+    
+    // Mostrar que el código actual es válido
+    $('#codigoStatus').html('<i class="bi bi-check-circle-fill"></i>').removeClass('invalid checking').addClass('valid');
+    $('#codigoFeedback').text('Código actual').css('color', 'var(--nexo-success)');
     
     $('#erroresFormulario').hide();
     limpiarErroresVisuales();
@@ -632,19 +1414,33 @@ function guardarVendedor() {
         data.rut = '';
     }
     
-    // Obtener sucursales seleccionadas
-    const sucursalesSeleccionadas = [];
-    $('.sucursal-checkbox:checked').each(function() {
-        sucursalesSeleccionadas.push(parseInt($(this).val()));
-    });
-    data.sucursales = sucursalesSeleccionadas;
+    // Obtener empresa seleccionada
+    const empresaSeleccionada = $('#empresaVendedor').val();
+    if (empresaSeleccionada) {
+        data.empresa_id = parseInt(empresaSeleccionada);
+    }
+    
+    // Obtener la sucursal seleccionada (solo una) - OPCIONAL
+    const sucursalSeleccionada = $('#sucursalVendedor').val();
+    if (sucursalSeleccionada) {
+        data.sucursales = [parseInt(sucursalSeleccionada)];
+    } else {
+        data.sucursales = [];
+    }
     
     // Validaciones básicas
     const errores = [];
+    
+    // Validar código - solo verificar que no esté vacío
+    // La validación de duplicados se hace en el servidor
     if (!data.codigo_vendedor || data.codigo_vendedor.trim() === '') {
         errores.push('El código del vendedor es obligatorio');
         marcarCampoConError('#codigoVendedor');
+    } else if (validandoCodigo) {
+        errores.push('Espere a que se valide el código del vendedor');
     }
+    // Nota: codigoValido solo es una validación visual, el servidor hace la validación real
+    
     if (!data.nombre || data.nombre.trim() === '') {
         errores.push('El nombre es obligatorio');
         marcarCampoConError('#nombreVendedor');
@@ -657,6 +1453,8 @@ function guardarVendedor() {
         marcarCampoConError('#comisionVendedor');
     }
     
+    // Sucursal es OPCIONAL - No validar
+    
     // Validar RUT solo si no está marcado "sin RUT" y se proporciona un valor
     if (!$('#sinRut').is(':checked') && data.rut && data.rut.trim() !== '') {
         if (!validarFormatoRUT(data.rut)) {
@@ -666,7 +1464,7 @@ function guardarVendedor() {
     }
     
     if (errores.length > 0) {
-        mostrarErrores(errores);
+        mostrarErroresFormulario(errores);
         return;
     }
     
@@ -683,7 +1481,7 @@ function guardarVendedor() {
         },
         success: function(response) {
             if (response.success) {
-                showSuccessAlert(
+                mostrarExito(
                     modoEdicion ? 'Vendedor Actualizado' : 'Vendedor Creado',
                     response.message
                 );
@@ -692,28 +1490,25 @@ function guardarVendedor() {
                 // Si el servidor devuelve el vendedor actualizado, actualizar la lista local
                 if (response.vendedor) {
                     if (modoEdicion) {
-                        // Actualizar vendedor existente en la lista
                         const index = vendedores.findIndex(v => v.id === response.vendedor.id);
                         if (index !== -1) {
                             vendedores[index] = response.vendedor;
                         }
                     } else {
-                        // Agregar nuevo vendedor a la lista
                         vendedores.push(response.vendedor);
                     }
                     actualizarTabla(vendedores);
+                    actualizarMetricasLocales();
                 } else {
-                    // Si no devuelve el vendedor, recargar todo
                     cargarVendedores();
                 }
             } else {
-                // Manejar errores del servidor
                 if (response.errors && Array.isArray(response.errors)) {
-                    mostrarErrores(response.errors);
+                    mostrarErroresFormulario(response.errors);
                 } else if (response.error) {
-                    mostrarErrores([response.error]);
+                    mostrarErroresFormulario([response.error]);
                 } else {
-                    mostrarErrores(['Error desconocido al procesar la solicitud']);
+                    mostrarErroresFormulario(['Error desconocido al procesar la solicitud']);
                 }
             }
         },
@@ -722,16 +1517,29 @@ function guardarVendedor() {
             
             if (xhr.responseJSON) {
                 if (xhr.responseJSON.errors && Array.isArray(xhr.responseJSON.errors)) {
-                    mostrarErrores(xhr.responseJSON.errors);
+                    mostrarErroresFormulario(xhr.responseJSON.errors);
                     return;
                 } else if (xhr.responseJSON.error) {
                     mensaje = xhr.responseJSON.error;
                 }
             }
             
-            showErrorAlert('Error', mensaje);
+            mostrarError('Error', mensaje);
         }
     });
+}
+
+// Función para actualizar métricas locales
+function actualizarMetricasLocales() {
+    const totalVendedores = vendedores.length;
+    const vendedoresActivos = vendedores.filter(v => v.activo).length;
+    const comisionPromedio = vendedores.length > 0 
+        ? (vendedores.reduce((sum, v) => sum + parseFloat(v.comision || 0), 0) / vendedores.length).toFixed(1)
+        : 0;
+    
+    $('#totalVendedores').text(totalVendedores);
+    $('#vendedoresActivos').text(vendedoresActivos);
+    $('#comisionPromedio').text(comisionPromedio + '%');
 }
 
 // Función para eliminar vendedor
@@ -751,43 +1559,52 @@ function confirmarEliminar() {
         },
         success: function(response) {
             if (response.success) {
-                showSuccessAlert('Vendedor Eliminado', response.message);
+                mostrarExito('Vendedor Eliminado', response.message);
                 $('#modalConfirmarEliminar').modal('hide');
-                cargarVendedores();
+                
+                // Eliminar de la lista local
+                vendedores = vendedores.filter(v => v.id !== vendedorSeleccionado);
+                actualizarTabla(vendedores);
+                actualizarMetricasLocales();
             } else {
-                showErrorAlert('Error', response.error);
+                mostrarError('Error', response.error);
             }
         },
         error: function() {
-            showErrorAlert('Error', 'Error de conexión al eliminar vendedor');
+            mostrarError('Error', 'Error de conexión al eliminar vendedor');
         }
     });
 }
 
 // Función para aplicar filtros
 function aplicarFiltros() {
-    const busqueda = $('#filtroBusqueda').val().toLowerCase();
+    const busqueda = ($('#filtroBusqueda').val() || '').toLowerCase().trim();
     const estado = $('#filtroEstado').val();
     const comision = $('#filtroComision').val();
     const ordenar = $('#ordenarPor').val();
     
+    console.log('🔍 Aplicando filtros - Búsqueda:', busqueda, 'Estado:', estado, 'Total vendedores:', vendedores.length);
+    
     let vendedoresFiltrados = vendedores.filter(function(vendedor) {
         // Filtro de búsqueda
         if (busqueda) {
-            const texto = `${vendedor.nombre} ${vendedor.rut} ${vendedor.codigo_vendedor}`.toLowerCase();
+            const nombre = (vendedor.nombre || '').toLowerCase();
+            const rut = (vendedor.rut || '').toLowerCase();
+            const codigo = (vendedor.codigo_vendedor || '').toLowerCase();
+            const texto = `${nombre} ${rut} ${codigo}`;
             if (!texto.includes(busqueda)) return false;
         }
         
         // Filtro de estado
         if (estado) {
-            const esActivo = vendedor.activo;
+            const esActivo = vendedor.activo === true || vendedor.activo === 'true';
             if (estado === 'activo' && !esActivo) return false;
             if (estado === 'inactivo' && esActivo) return false;
         }
         
         // Filtro de comisión
         if (comision) {
-            const comisionNum = parseFloat(vendedor.comision);
+            const comisionNum = parseFloat(vendedor.comision) || 0;
             if (comision === 'baja' && comisionNum >= 5) return false;
             if (comision === 'media' && (comisionNum < 5 || comisionNum > 10)) return false;
             if (comision === 'alta' && comisionNum <= 10) return false;
@@ -796,15 +1613,17 @@ function aplicarFiltros() {
         return true;
     });
     
+    console.log('📊 Vendedores después de filtrar:', vendedoresFiltrados.length);
+    
     // Ordenar
     vendedoresFiltrados.sort(function(a, b) {
         switch(ordenar) {
             case 'nombre':
                 return (a.nombre || '').localeCompare(b.nombre || '');
-                    case 'comision':
-            return parseFloat(a.comision) - parseFloat(b.comision);
+            case 'comision':
+                return (parseFloat(b.comision) || 0) - (parseFloat(a.comision) || 0);
             case 'fecha':
-                return new Date(b.fecha_creacion) - new Date(a.fecha_creacion);
+                return (b.id || 0) - (a.id || 0);
             case 'ventas':
                 return (b.ventas_mes || 0) - (a.ventas_mes || 0);
             default:
@@ -821,7 +1640,7 @@ function limpiarFiltros() {
     $('#filtroEstado').val('');
     $('#filtroComision').val('');
     $('#ordenarPor').val('nombre');
-    aplicarFiltros();
+    actualizarTabla(vendedores);
 }
 
 // Función para exportar vendedores
@@ -829,8 +1648,8 @@ function exportarVendedores() {
     window.open('/app/exportar_vendedores/', '_blank');
 }
 
-// Función para mostrar errores
-function mostrarErrores(errores) {
+// Función para mostrar errores del formulario
+function mostrarErroresFormulario(errores) {
     const lista = $('#listaErrores');
     lista.empty();
     
@@ -847,6 +1666,7 @@ function mostrarErrores(errores) {
 // Función para limpiar errores visuales
 function limpiarErroresVisuales() {
     $('.form-control').removeClass('is-invalid');
+    $('.select2-container').removeClass('is-invalid');
     $('#erroresFormulario').hide();
 }
 
@@ -857,17 +1677,13 @@ function marcarCampoConError(selector) {
 
 // Función para validar formato RUT básico
 function validarFormatoRUT(rut) {
-    // Remover puntos y espacios
     const rutLimpio = rut.replace(/\./g, '').replace(/\s/g, '');
-    
-    // Verificar formato básico: números-dígito verificador
     const formatoRUT = /^[0-9]+-[0-9kK]$/;
     
     if (!formatoRUT.test(rutLimpio)) {
         return false;
     }
     
-    // Verificar que tenga al menos 7 dígitos antes del guión
     const partes = rutLimpio.split('-');
     if (partes[0].length < 7) {
         return false;
@@ -877,27 +1693,29 @@ function validarFormatoRUT(rut) {
 }
 
 // Funciones de utilidad para alertas
-function showSuccessAlert(title, message) {
+function mostrarExito(title, message) {
     if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: 'success',
             title: title,
-            text: message
+            text: message,
+            confirmButtonColor: '#0066FF'
         });
     } else {
         alert(`${title}: ${message}`);
     }
 }
 
-function showErrorAlert(title, message) {
+function mostrarError(title, message) {
     if (typeof Swal !== 'undefined') {
         Swal.fire({
             icon: 'error',
             title: title,
-            text: message
+            text: message,
+            confirmButtonColor: '#0066FF'
         });
     } else {
         alert(`${title}: ${message}`);
     }
 }
-</script> 
+</script>

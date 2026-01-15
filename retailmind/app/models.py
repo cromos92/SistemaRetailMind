@@ -28,10 +28,38 @@ class Empresa(models.Model):
 class Sucursal(models.Model):
     """Modelo para sucursales de la empresa"""
     
+    # Tipos de sucursal
+    TIPO_SUCURSAL_CHOICES = [
+        ('CENTRO_DISTRIBUCION', 'Centro de Distribución (Compradora)'),
+        ('VENDEDORA', 'Sucursal Vendedora'),
+        ('MIXTA', 'Mixta (Compra y Vende)'),
+    ]
+    
     # Campos que existen actualmente en la BD
     alias = models.CharField(max_length=100)
     direccion = models.CharField(max_length=100)  # Ajusta la longitud si es diferente
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='sucursales_app')
+    
+    # === CAMPOS PARA IDENTIFICAR TIPO DE SUCURSAL ===
+    tipo_sucursal = models.CharField(
+        max_length=20, 
+        choices=TIPO_SUCURSAL_CHOICES, 
+        default='VENDEDORA',
+        verbose_name='Tipo de Sucursal',
+        help_text='CENTRO_DISTRIBUCION = Sucursal que compra a proveedores (ej: EDEL, GILD). VENDEDORA = Solo vende, recibe mercadería del CD.'
+    )
+    es_centro_distribucion = models.BooleanField(
+        default=False, 
+        verbose_name='¿Es Centro de Distribución?',
+        help_text='Marcar si esta sucursal compra directamente a proveedores externos y despacha a otras sucursales'
+    )
+    margen_sobreprecio_default = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0,
+        verbose_name='Margen Sobreprecio %',
+        help_text='Porcentaje de sobreprecio que aplica al despachar a otras sucursales'
+    )
     
     # CAMPOS ADICIONALES - Descomenta después de ejecutar: python manage.py migrate app
     # nombre = models.CharField(max_length=200, verbose_name="Nombre Completo", blank=True, null=True)
@@ -50,6 +78,16 @@ class Sucursal(models.Model):
     
     def __str__(self):
         return self.alias
+    
+    @property
+    def es_compradora(self):
+        """Retorna True si la sucursal compra directamente a proveedores"""
+        return self.es_centro_distribucion or self.tipo_sucursal == 'CENTRO_DISTRIBUCION'
+    
+    @property
+    def es_solo_vendedora(self):
+        """Retorna True si la sucursal solo vende (no compra a proveedores)"""
+        return not self.es_centro_distribucion and self.tipo_sucursal == 'VENDEDORA'
 class EmpresaUser(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     sucursal = models.ForeignKey(Sucursal, on_delete=models.CASCADE, null=True, blank=True)
@@ -71,9 +109,30 @@ class Vendedor(models.Model):
     fecha_nacimiento = models.DateField(null=True)
     correo = models.CharField(max_length=100,null=True)
     sucursales = models.ManyToManyField(Sucursal, related_name='vendedores', blank=True, verbose_name='Sucursales asignadas')
+    empresa = models.ForeignKey(
+        Empresa, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='vendedores',
+        verbose_name='Empresa',
+        help_text='Empresa a la que pertenece el vendedor'
+    )
+    activo = models.BooleanField(default=True, verbose_name='Activo')
     
     def __str__(self):
-        return self.nombre
+        return self.nombre or self.codigo_vendedor
+    
+    @property
+    def empresa_display(self):
+        """Retorna el nombre de la empresa asociada"""
+        if self.empresa:
+            return self.empresa.nombre
+        # Intentar obtener la empresa desde la primera sucursal asignada
+        primera_sucursal = self.sucursales.first()
+        if primera_sucursal:
+            return primera_sucursal.empresa.nombre
+        return None
     
     class Meta:
         verbose_name = 'Vendedor'
@@ -673,10 +732,11 @@ class Ticket(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     # === CLASIFICACIÓN ===
-    modulo_origen = models.CharField(max_length=20, default='VENTA_PUBLICO', choices=[
+    modulo_origen = models.CharField(max_length=30, default='VENTA_PUBLICO', choices=[
         ('VENTA_PUBLICO', 'Venta al Público'),
         ('VENTA_MAYORISTA', 'Venta Mayorista'),
         ('POS', 'Punto de Venta'),
+        ('CAMBIO_DEVOLUCION', 'Cambio/Devolución'),
     ])
     
     # ✅ CAMPOS PARA FACTURACIÓN ELECTRÓNICA (Acepta)
@@ -703,6 +763,40 @@ class Ticket(models.Model):
     dte_fecha_generacion = models.DateTimeField(blank=True, null=True, verbose_name='Fecha Generación DTE')
     dte_xml_path = models.CharField(max_length=500, blank=True, null=True, verbose_name='Ruta XML')
     dte_pdf_url = models.CharField(max_length=500, blank=True, null=True, verbose_name='URL PDF')
+    
+    # === CAMPOS PARA SINCRONIZACIÓN DESKTOP (POS FÍSICO) ===
+    local_id = models.UUIDField(
+        null=True, blank=True, 
+        unique=True, 
+        db_index=True,
+        verbose_name='ID Local Desktop',
+        help_text='UUID generado en app desktop para sincronización offline'
+    )
+    device_id = models.UUIDField(
+        null=True, blank=True,
+        verbose_name='ID Dispositivo',
+        help_text='UUID del dispositivo que creó el ticket'
+    )
+    synced_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='Sincronizado el',
+        help_text='Fecha/hora de sincronización con servidor'
+    )
+    created_offline = models.BooleanField(
+        default=False,
+        verbose_name='Creado Offline',
+        help_text='True si fue creado sin conexión en app desktop'
+    )
+    requiere_revision = models.BooleanField(
+        default=False,
+        verbose_name='Requiere Revisión',
+        help_text='True si hubo conflictos de stock durante sync'
+    )
+    notas_sync = models.TextField(
+        blank=True, null=True,
+        verbose_name='Notas de Sincronización',
+        help_text='Notas sobre problemas durante sincronización'
+    )
     
     class Meta:
         ordering = ['-fecha', '-hora']
@@ -839,7 +933,9 @@ class Traspaso_Detalle(models.Model):
     cantidad_recibida = models.IntegerField(null=True, blank=True)
     
     # === PRECIOS ===
-    costo = models.IntegerField()
+    costo = models.IntegerField()  # Costo original del proveedor (EDEL/GILD)
+    sobreprecio = models.IntegerField(default=0, verbose_name='Sobreprecio CD')  # Margen del Centro de Distribución
+    costo_destino = models.IntegerField(default=0, verbose_name='Costo para Destino')  # costo + sobreprecio = costo real para sucursal destino
     precio_venta = models.IntegerField()
     
     # === OBSERVACIONES ===
@@ -850,6 +946,19 @@ class Traspaso_Detalle(models.Model):
     
     def __str__(self):
         return f"Detalle {self.producto_talla} - {self.cantidad_solicitada} unidades"
+    
+    def save(self, *args, **kwargs):
+        # Auto-calcular costo_destino si no está definido
+        if self.costo_destino == 0 and self.costo > 0:
+            self.costo_destino = self.costo + self.sobreprecio
+        super().save(*args, **kwargs)
+    
+    @property
+    def margen_cd_porcentaje(self):
+        """Retorna el porcentaje de margen del Centro de Distribución"""
+        if self.costo > 0:
+            return round((self.sobreprecio / self.costo) * 100, 2)
+        return 0
 
 # ========== MODELO PARA AJUSTES DE INVENTARIO ==========
 
@@ -1530,9 +1639,13 @@ class ArqueoCaja(models.Model):
     diferencia_efectivo = models.IntegerField(default=0)  # físico - teórico
     
     # === CIERRE POS (TRANSBANK) ===
-    cierre_pos_fisico = models.IntegerField(default=0, help_text="Monto real del cierre de máquina POS")
+    cierre_pos_fisico = models.IntegerField(default=0, help_text="Monto real del cierre de máquina POS (total)")
+    cierre_debito_fisico = models.IntegerField(default=0, help_text="Monto real cierre débito Transbank")
+    cierre_credito_fisico = models.IntegerField(default=0, help_text="Monto real cierre crédito Transbank")
     numero_lote_pos = models.CharField(max_length=50, blank=True, help_text="Número de lote del cierre POS")
     diferencia_transbank = models.IntegerField(default=0, help_text="Diferencia entre cierre POS físico y teórico")
+    diferencia_debito = models.IntegerField(default=0, help_text="Diferencia débito: físico - teórico")
+    diferencia_credito = models.IntegerField(default=0, help_text="Diferencia crédito: físico - teórico")
     
     # === CONTROL Y ESTADO ===
     estado = models.CharField(max_length=20, choices=ESTADO_ARQUEO_CHOICES, default='ABIERTO')
@@ -1696,10 +1809,27 @@ class DepositoBancario(models.Model):
         blank=True,
         help_text="Número del comprobante bancario (opcional)"
     )
+    imagen_comprobante = models.ImageField(
+        upload_to='comprobantes_bancarios/',
+        blank=True,
+        null=True,
+        help_text="Foto o imagen del comprobante bancario"
+    )
     observaciones = models.TextField(
         blank=True,
         help_text="Observaciones adicionales sobre el depósito"
     )
+    
+    # === VERIFICACIÓN POR SUPERVISOR ===
+    verificado = models.BooleanField(default=False, help_text="Si el depósito fue verificado por un supervisor")
+    verificado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='depositos_verificados',
+        help_text="Supervisor que verificó el depósito"
+    )
+    fecha_verificacion = models.DateTimeField(null=True, blank=True)
     
     # === METADATOS ===
     registrado_por = models.ForeignKey(
@@ -2000,11 +2130,20 @@ class PagoCreditoTrabajador(models.Model):
     
     # === RESPONSABLES ===
     registrado_por = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='pagos_credito_registrados'
     )
     
+    # === SUCURSAL DE COBRO ===
+    sucursal_cobro = models.ForeignKey(
+        'Sucursal',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='pagos_credito_cobrados',
+        help_text="Sucursal donde se registró el cobro"
+    )
+
     # === OBSERVACIONES ===
     observaciones = models.TextField(blank=True, null=True)
     
@@ -3156,11 +3295,12 @@ class Cotizacion_Empresa(models.Model):
     
     def calcular_totales(self):
         """Calcula los totales de la cotización basándose en sus items"""
+        from decimal import Decimal
         items = self.items.all()
-        self.subtotal = sum(item.subtotal for item in items)
+        self.subtotal = sum((item.subtotal for item in items), Decimal('0'))
         # Calcular IVA (19% en Chile)
-        self.impuesto = self.subtotal * 0.19
-        self.total = self.subtotal + self.impuesto - self.descuento
+        self.impuesto = self.subtotal * Decimal('0.19')
+        self.total = self.subtotal + self.impuesto - (self.descuento or Decimal('0'))
         self.save()
     
     def anular(self, usuario, motivo=""):
@@ -3296,12 +3436,15 @@ class Cotizacion_Empresa_Detalle(models.Model):
         return f"{self.cotizacion.numero_cotizacion} - {self.descripcion[:50]}"
     
     def save(self, *args, **kwargs):
+        from decimal import Decimal
         # Calcular subtotal
-        subtotal_antes_descuento = self.cantidad * self.precio_unitario
+        subtotal_antes_descuento = Decimal(str(self.cantidad)) * self.precio_unitario
         
         # Aplicar descuento
-        if self.descuento_porcentaje > 0:
-            self.descuento_monto = subtotal_antes_descuento * (self.descuento_porcentaje / 100)
+        if self.descuento_porcentaje and self.descuento_porcentaje > 0:
+            self.descuento_monto = subtotal_antes_descuento * (self.descuento_porcentaje / Decimal('100'))
+        else:
+            self.descuento_monto = Decimal('0')
         
         self.subtotal = subtotal_antes_descuento - self.descuento_monto
         
@@ -3340,9 +3483,77 @@ class Cotizacion_Empresa_Detalle(models.Model):
     @property
     def sku_producto(self):
         """Retorna el SKU del producto (existente o pendiente)"""
-        if self.producto_existente and self.producto_existente.producto:
-            return str(self.producto_existente.producto.sku)
+        if self.producto_existente:
+            # El SKU está en Producto_Talla, no en Producto
+            return str(self.producto_existente.sku)
         return self.sku_producto_pendiente or "N/A"
+
+
+class Cotizacion_Empresa_Detalle_SKU(models.Model):
+    """
+    SKUs asociados a cada item de cotización.
+    Permite asociar múltiples productos (SKUs) a un solo item de cotización.
+    Ejemplo: Item "Balón" cantidad 5 -> SKU1 (cant 4) + SKU2 (cant 1)
+    """
+    # === RELACIONES ===
+    detalle = models.ForeignKey(
+        Cotizacion_Empresa_Detalle,
+        on_delete=models.CASCADE,
+        related_name='skus_asociados'
+    )
+    producto_talla = models.ForeignKey(
+        'Producto_Talla',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='cotizaciones_detalle_skus'
+    )
+    
+    # === DATOS DEL SKU ===
+    cantidad = models.IntegerField(
+        default=1,
+        help_text="Cantidad de este SKU asignada al item"
+    )
+    costo_unitario = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Costo unitario al momento de la cotización"
+    )
+    precio_unitario = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Precio de venta unitario"
+    )
+    
+    # === METADATA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = 'SKU de Detalle de Cotización'
+        verbose_name_plural = 'SKUs de Detalles de Cotización'
+        ordering = ['detalle', 'id']
+    
+    def __str__(self):
+        sku = self.producto_talla.sku if self.producto_talla else 'N/A'
+        return f"Item #{self.detalle.numero_linea} - SKU {sku} x{self.cantidad}"
+    
+    @property
+    def subtotal_costo(self):
+        """Subtotal de costo para este SKU"""
+        return self.cantidad * self.costo_unitario
+    
+    @property
+    def subtotal_precio(self):
+        """Subtotal de precio para este SKU"""
+        return self.cantidad * self.precio_unitario
+    
+    @property
+    def margen_porcentaje(self):
+        """Porcentaje de margen para este SKU"""
+        if self.precio_unitario > 0:
+            return round(((self.precio_unitario - self.costo_unitario) / self.precio_unitario) * 100, 1)
+        return 0
 
 
 class Historial_Cotizacion(models.Model):
@@ -4251,6 +4462,7 @@ class PermisoRol(models.Model):
     """
     ROLES_CHOICES = [
         ('administrador', 'Administrador'),
+        ('administracion', 'Administración'),
         ('jefe_local', 'Jefe Local'),
         ('cajero', 'Cajero'),
         ('vendedor', 'Vendedor'),
@@ -4628,4 +4840,760 @@ class RegistroAutorizacion(models.Model):
     def __str__(self):
         return f"{self.get_tipo_operacion_display()} - {self.fecha_hora.strftime('%d/%m/%Y %H:%M')} - {self.usuario_solicitante}"
 
+
+class NotificacionDTE(models.Model):
+    """
+    Modelo para notificaciones de DTEs recibidos pendientes de procesar.
+    Se crea cuando una empresa emite un DTE hacia otra empresa,
+    permitiendo al receptor saber que tiene documentos pendientes.
+    """
+    
+    # === RELACIONES ===
+    dte = models.ForeignKey(
+        Dte,
+        on_delete=models.CASCADE,
+        related_name='notificaciones'
+    )
+    empresa_receptora = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name='notificaciones_dte_recibidas',
+        help_text="Empresa que recibe la notificación (receptor del DTE)"
+    )
+    
+    # === TIPO DE NOTIFICACIÓN ===
+    TIPO_NOTIFICACION_CHOICES = [
+        ('DTE_RECIBIDO', 'Nuevo DTE Recibido'),
+        ('ACTUALIZACION_PENDIENTE', 'Actualización de Stock Pendiente'),
+        ('RECEPCION_COMPLETADA', 'Recepción Completada'),
+        ('REGULARIZACION_REQUERIDA', 'Regularización Requerida'),
+        ('VENCIMIENTO_PROXIMO', 'Vencimiento Próximo'),
+    ]
+    
+    tipo = models.CharField(
+        max_length=30,
+        choices=TIPO_NOTIFICACION_CHOICES,
+        default='DTE_RECIBIDO'
+    )
+    
+    # === DATOS DE LA NOTIFICACIÓN ===
+    titulo = models.CharField(max_length=200)
+    mensaje = models.TextField()
+    
+    # === ESTADO ===
+    leida = models.BooleanField(default=False)
+    procesada = models.BooleanField(
+        default=False,
+        help_text="Indica si el DTE ya fue procesado/recepcionado"
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_lectura = models.DateTimeField(null=True, blank=True)
+    fecha_procesamiento = models.DateTimeField(null=True, blank=True)
+    
+    # === METADATA ===
+    usuario_que_proceso = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dtes_procesados'
+    )
+    
+    # === SUCURSAL ESPECÍFICA (para filtrar por sucursal) ===
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='notificaciones_dte',
+        help_text="Sucursal específica que debe ver esta notificación"
+    )
+    
+    # === DATOS ADICIONALES PARA REGULARIZACIÓN ===
+    productos_problemas = models.IntegerField(
+        default=0,
+        help_text="Número de productos con problemas"
+    )
+    detalle_problemas = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Detalle de los problemas reportados"
+    )
+    sucursal_reportante = models.ForeignKey(
+        Sucursal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notificaciones_enviadas',
+        help_text="Sucursal que reporta el problema"
+    )
+    
+    class Meta:
+        ordering = ['-fecha_creacion']
+        verbose_name = 'Notificación de DTE'
+        verbose_name_plural = 'Notificaciones de DTEs'
+        indexes = [
+            models.Index(fields=['empresa_receptora', 'leida']),
+            models.Index(fields=['empresa_receptora', 'procesada']),
+            models.Index(fields=['sucursal', 'leida']),
+            models.Index(fields=['-fecha_creacion']),
+        ]
+    
+    def __str__(self):
+        return f"DTE #{self.dte.numero_documento} - {self.empresa_receptora.nombre}"
+    
+    def marcar_leida(self):
+        """Marca la notificación como leída"""
+        if not self.leida:
+            self.leida = True
+            self.fecha_lectura = timezone.now()
+            self.save()
+    
+    def marcar_procesada(self, usuario=None):
+        """Marca la notificación como procesada"""
+        if not self.procesada:
+            self.procesada = True
+            self.fecha_procesamiento = timezone.now()
+            self.usuario_que_proceso = usuario
+            self.save()
+    
+    @classmethod
+    def crear_notificacion_dte_emitido(cls, dte):
+        """
+        Crea una notificación cuando se emite un DTE a otra empresa.
+        """
+        if not dte.receptor:
+            return None
         
+        # Solo crear si emisor != receptor
+        if dte.emisor_id == dte.receptor_id:
+            return None
+        
+        # Verificar si ya existe una notificación para este DTE
+        if cls.objects.filter(dte=dte, empresa_receptora=dte.receptor).exists():
+            return None
+        
+        return cls.objects.create(
+            dte=dte,
+            empresa_receptora=dte.receptor,
+            tipo='DTE_RECIBIDO',
+            titulo=f"Nuevo {dte.tipo_documento} #{dte.numero_documento}",
+            mensaje=f"Has recibido un {dte.tipo_documento} #{dte.numero_documento} de {dte.emisor.nombre} por ${dte.monto_con_iva:,.0f}. Pendiente de actualizar stock."
+        )
+    
+    @classmethod
+    def crear_notificacion_regularizacion(cls, dte, productos_problemas, detalle_problemas, sucursal_reportante, usuario_reportante=None):
+        """
+        Crea una notificación a la bodega EMISORA cuando hay problemas en la recepción.
+        Se usa para alertar que deben regularizar la mercadería enviada.
+        
+        Args:
+            dte: El DTE que presenta problemas
+            productos_problemas: Lista de productos con problemas (dictionaries)
+            detalle_problemas: String con el detalle de los problemas
+            sucursal_reportante: Sucursal que reporta el problema (la que recibió)
+            usuario_reportante: Usuario que reportó el problema
+        """
+        if not dte.sucursal:
+            return None
+        
+        # La notificación va a la sucursal EMISORA del DTE (quien envió la mercadería)
+        sucursal_emisora = dte.sucursal
+        empresa_emisora = dte.emisor
+        
+        # Contar productos con problemas
+        total_problemas = len(productos_problemas) if isinstance(productos_problemas, list) else productos_problemas
+        
+        # Crear resumen de problemas para el mensaje
+        resumen = []
+        if isinstance(productos_problemas, list):
+            for p in productos_problemas[:5]:  # Máximo 5 en el resumen
+                estado = p.get('estado', 'PROBLEMA')
+                sku = p.get('sku', '')
+                descripcion = p.get('descripcion', '')[:30]
+                resumen.append(f"• {sku}: {descripcion} ({estado})")
+            if len(productos_problemas) > 5:
+                resumen.append(f"• ... y {len(productos_problemas) - 5} más")
+        
+        detalle_str = "\n".join(resumen) if resumen else detalle_problemas
+        
+        titulo = f"⚠️ Regularización Requerida - DTE #{dte.numero_documento}"
+        mensaje = (
+            f"La sucursal {sucursal_reportante.alias if sucursal_reportante else 'Destino'} "
+            f"ha reportado {total_problemas} producto(s) con problemas en el DTE #{dte.numero_documento}.\n\n"
+            f"Problemas reportados:\n{detalle_str}\n\n"
+            f"Por favor, revise y regularice la situación."
+        )
+        
+        return cls.objects.create(
+            dte=dte,
+            empresa_receptora=empresa_emisora,  # La empresa emisora recibe la notificación
+            sucursal=sucursal_emisora,  # La sucursal emisora específica
+            sucursal_reportante=sucursal_reportante,
+            tipo='REGULARIZACION_REQUERIDA',
+            titulo=titulo,
+            mensaje=mensaje,
+            productos_problemas=total_problemas,
+            detalle_problemas=detalle_problemas,
+            usuario_que_proceso=usuario_reportante
+        )
+
+
+# ==============================================================================
+# GESTIÓN DE INVENTARIOS - TOMA DE INVENTARIO FÍSICO
+# ==============================================================================
+
+class TomaInventario(models.Model):
+    """
+    Modelo principal para gestionar tomas de inventario físico.
+    Implementa mejores prácticas de logística:
+    - Inventario por segmentos (marca, categoría, atributo)
+    - Fecha de corte para congelamiento de datos
+    - Análisis previo antes de aplicar ajustes
+    - Procesamiento en lotes para grandes volúmenes
+    """
+    
+    # === TIPOS DE INVENTARIO ===
+    TIPO_INVENTARIO_CHOICES = [
+        ('COMPLETO', 'Inventario Completo'),
+        ('POR_MARCA', 'Por Marca'),
+        ('POR_CATEGORIA', 'Por Categoría/Departamento'),
+        ('POR_ATRIBUTO', 'Por Atributo'),
+        ('SELECTIVO', 'Selectivo (Productos específicos)'),
+        ('CICLICO', 'Cíclico (ABC)'),
+        ('ALEATORIO', 'Aleatorio (Muestreo)'),
+    ]
+    
+    # === ESTADOS DEL INVENTARIO ===
+    ESTADO_CHOICES = [
+        ('BORRADOR', 'Borrador'),
+        ('EN_CONTEO', 'En Conteo'),
+        ('CONTEO_FINALIZADO', 'Conteo Finalizado'),
+        ('EN_REVISION', 'En Revisión'),
+        ('PENDIENTE_APROBACION', 'Pendiente de Aprobación'),
+        ('APROBADO', 'Aprobado'),
+        ('APLICANDO', 'Aplicando Ajustes'),
+        ('COMPLETADO', 'Completado'),
+        ('CANCELADO', 'Cancelado'),
+    ]
+    
+    # === IDENTIFICACIÓN ===
+    numero_inventario = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name='Número de Inventario',
+        help_text='Identificador único del inventario'
+    )
+    nombre = models.CharField(
+        max_length=200,
+        verbose_name='Nombre/Descripción',
+        help_text='Nombre descriptivo del inventario'
+    )
+    
+    # === RELACIONES ===
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='tomas_inventario',
+        verbose_name='Sucursal'
+    )
+    empresa = models.ForeignKey(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name='tomas_inventario',
+        verbose_name='Empresa'
+    )
+    
+    # === CONFIGURACIÓN DEL INVENTARIO ===
+    tipo_inventario = models.CharField(
+        max_length=20,
+        choices=TIPO_INVENTARIO_CHOICES,
+        default='COMPLETO',
+        verbose_name='Tipo de Inventario'
+    )
+    
+    # Filtros de segmentación (JSON para flexibilidad)
+    filtros_aplicados = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Filtros Aplicados',
+        help_text='Filtros JSON: {"marcas": [1,2,3], "categorias": [4,5], "atributos": {"color": "rojo"}}'
+    )
+    
+    # === FECHA DE CORTE (Crítico para inventarios) ===
+    fecha_corte = models.DateTimeField(
+        verbose_name='Fecha de Corte',
+        help_text='Momento exacto en que se congela el stock del sistema para comparación'
+    )
+    fecha_inicio_conteo = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha Inicio Conteo'
+    )
+    fecha_fin_conteo = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha Fin Conteo'
+    )
+    
+    # === ESTADO Y PROGRESO ===
+    estado = models.CharField(
+        max_length=25,
+        choices=ESTADO_CHOICES,
+        default='BORRADOR',
+        verbose_name='Estado'
+    )
+    progreso_conteo = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name='Progreso del Conteo (%)'
+    )
+    
+    # === MÉTRICAS CALCULADAS (Snapshot para reportes) ===
+    total_productos_esperados = models.IntegerField(
+        default=0,
+        verbose_name='Total Productos a Contar'
+    )
+    total_productos_contados = models.IntegerField(
+        default=0,
+        verbose_name='Total Productos Contados'
+    )
+    total_diferencias_positivas = models.IntegerField(
+        default=0,
+        verbose_name='Diferencias Positivas (Sobrantes)'
+    )
+    total_diferencias_negativas = models.IntegerField(
+        default=0,
+        verbose_name='Diferencias Negativas (Faltantes)'
+    )
+    valor_diferencias_positivas = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        verbose_name='Valor Sobrantes'
+    )
+    valor_diferencias_negativas = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        verbose_name='Valor Faltantes'
+    )
+    valor_inventario_sistema = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        verbose_name='Valor Inventario Sistema'
+    )
+    valor_inventario_fisico = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        verbose_name='Valor Inventario Físico'
+    )
+    
+    # === RESPONSABLES ===
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='inventarios_creados',
+        verbose_name='Creado Por'
+    )
+    aprobado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='inventarios_aprobados',
+        verbose_name='Aprobado Por'
+    )
+    fecha_aprobacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de Aprobación'
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='Observaciones'
+    )
+    motivo_cancelacion = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='Motivo de Cancelación'
+    )
+    
+    # === AUDITORÍA ===
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Toma de Inventario'
+        verbose_name_plural = 'Tomas de Inventario'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['sucursal', 'estado']),
+            models.Index(fields=['fecha_corte']),
+            models.Index(fields=['numero_inventario']),
+            models.Index(fields=['-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.numero_inventario} - {self.sucursal.alias} ({self.get_estado_display()})"
+    
+    @classmethod
+    def generar_numero_inventario(cls, sucursal):
+        """Genera un número único de inventario"""
+        from datetime import datetime
+        fecha = datetime.now().strftime('%Y%m%d')
+        count = cls.objects.filter(
+            numero_inventario__startswith=f"INV-{sucursal.id}-{fecha}"
+        ).count() + 1
+        return f"INV-{sucursal.id}-{fecha}-{count:03d}"
+    
+    def calcular_metricas(self):
+        """Recalcula las métricas del inventario"""
+        from django.db.models import Sum, Count, Case, When, F
+        from decimal import Decimal
+        
+        detalles = self.detalles.all()
+        
+        self.total_productos_contados = detalles.filter(contado=True).count()
+        
+        # Diferencias
+        diferencias = detalles.filter(contado=True).aggregate(
+            positivas=Sum(Case(
+                When(diferencia__gt=0, then=F('diferencia')),
+                default=0
+            )),
+            negativas=Sum(Case(
+                When(diferencia__lt=0, then=F('diferencia')),
+                default=0
+            )),
+            valor_positivas=Sum(Case(
+                When(diferencia__gt=0, then=F('diferencia') * F('costo_unitario_sistema')),
+                default=Decimal('0')
+            )),
+            valor_negativas=Sum(Case(
+                When(diferencia__lt=0, then=F('diferencia') * F('costo_unitario_sistema')),
+                default=Decimal('0')
+            )),
+            valor_sistema=Sum(F('stock_sistema') * F('costo_unitario_sistema')),
+            valor_fisico=Sum(F('stock_fisico') * F('costo_unitario_sistema'))
+        )
+        
+        self.total_diferencias_positivas = diferencias['positivas'] or 0
+        self.total_diferencias_negativas = abs(diferencias['negativas'] or 0)
+        self.valor_diferencias_positivas = diferencias['valor_positivas'] or Decimal('0')
+        self.valor_diferencias_negativas = abs(diferencias['valor_negativas'] or Decimal('0'))
+        self.valor_inventario_sistema = diferencias['valor_sistema'] or Decimal('0')
+        self.valor_inventario_fisico = diferencias['valor_fisico'] or Decimal('0')
+        
+        # Progreso
+        if self.total_productos_esperados > 0:
+            self.progreso_conteo = (self.total_productos_contados / self.total_productos_esperados) * 100
+        
+        self.save()
+    
+    def puede_aprobar(self):
+        """Verifica si el inventario puede ser aprobado"""
+        return (
+            self.estado == 'PENDIENTE_APROBACION' and
+            self.progreso_conteo == 100 and
+            self.total_productos_contados == self.total_productos_esperados
+        )
+
+
+class TomaInventarioDetalle(models.Model):
+    """
+    Detalle de cada producto en la toma de inventario.
+    Guarda el snapshot del sistema en fecha de corte y el conteo físico.
+    """
+    
+    # === RELACIONES ===
+    toma_inventario = models.ForeignKey(
+        TomaInventario,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+        verbose_name='Toma de Inventario'
+    )
+    producto_talla = models.ForeignKey(
+        'Producto_Talla',
+        on_delete=models.CASCADE,
+        related_name='inventarios_detalle',
+        verbose_name='Producto/Talla'
+    )
+    
+    # === DATOS DEL PRODUCTO (Snapshot en fecha de corte) ===
+    sku = models.CharField(max_length=100, verbose_name='SKU')
+    producto_nombre = models.CharField(max_length=255, verbose_name='Nombre Producto')
+    talla_nombre = models.CharField(max_length=50, blank=True, null=True, verbose_name='Talla')
+    marca_nombre = models.CharField(max_length=100, blank=True, null=True, verbose_name='Marca')
+    categoria_nombre = models.CharField(max_length=100, blank=True, null=True, verbose_name='Categoría')
+    
+    # === STOCK DEL SISTEMA (Fecha de corte) ===
+    stock_sistema = models.IntegerField(
+        default=0,
+        verbose_name='Stock Sistema',
+        help_text='Stock según el sistema en la fecha de corte'
+    )
+    costo_unitario_sistema = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name='Costo Unitario',
+        help_text='Costo promedio FIFO en fecha de corte'
+    )
+    precio_venta_sistema = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name='Precio Venta'
+    )
+    
+    # === CONTEO FÍSICO ===
+    stock_fisico = models.IntegerField(
+        default=0,
+        verbose_name='Stock Físico',
+        help_text='Cantidad contada físicamente'
+    )
+    contado = models.BooleanField(
+        default=False,
+        verbose_name='¿Contado?'
+    )
+    fecha_conteo = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de Conteo'
+    )
+    usuario_conteo = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='conteos_realizados',
+        verbose_name='Usuario que Contó'
+    )
+    
+    # === DIFERENCIA CALCULADA ===
+    diferencia = models.IntegerField(
+        default=0,
+        verbose_name='Diferencia',
+        help_text='stock_fisico - stock_sistema (positivo=sobrante, negativo=faltante)'
+    )
+    
+    # === RECONTEO (Para diferencias significativas) ===
+    reconteo_requerido = models.BooleanField(
+        default=False,
+        verbose_name='Requiere Reconteo'
+    )
+    stock_reconteo = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Stock Reconteo'
+    )
+    fecha_reconteo = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha Reconteo'
+    )
+    usuario_reconteo = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reconteos_realizados',
+        verbose_name='Usuario que Recontó'
+    )
+    
+    # === UBICACIÓN (Para inventarios físicos organizados) ===
+    ubicacion = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='Ubicación',
+        help_text='Estante, pasillo, zona, etc.'
+    )
+    
+    # === OBSERVACIONES ===
+    observaciones = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='Observaciones'
+    )
+    
+    # === ESTADO DEL AJUSTE ===
+    ajuste_aplicado = models.BooleanField(
+        default=False,
+        verbose_name='Ajuste Aplicado'
+    )
+    fecha_ajuste = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de Ajuste'
+    )
+    
+    class Meta:
+        verbose_name = 'Detalle de Inventario'
+        verbose_name_plural = 'Detalles de Inventario'
+        unique_together = ['toma_inventario', 'producto_talla']
+        ordering = ['producto_nombre', 'talla_nombre']
+        indexes = [
+            models.Index(fields=['toma_inventario', 'contado']),
+            models.Index(fields=['toma_inventario', 'diferencia']),
+            models.Index(fields=['sku']),
+        ]
+    
+    def __str__(self):
+        return f"{self.sku} - {self.producto_nombre} ({self.diferencia:+d})"
+    
+    def save(self, *args, **kwargs):
+        # Calcular diferencia automáticamente
+        if self.contado:
+            self.diferencia = self.stock_fisico - self.stock_sistema
+            
+            # Marcar para reconteo si diferencia > 10% o > 5 unidades
+            if abs(self.diferencia) > 5 or (self.stock_sistema > 0 and abs(self.diferencia) / self.stock_sistema > 0.1):
+                if not self.reconteo_requerido and self.stock_reconteo is None:
+                    self.reconteo_requerido = True
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def porcentaje_diferencia(self):
+        """Calcula el porcentaje de diferencia"""
+        if self.stock_sistema > 0:
+            return (self.diferencia / self.stock_sistema) * 100
+        return 0 if self.diferencia == 0 else 100
+    
+    @property
+    def valor_diferencia(self):
+        """Calcula el valor monetario de la diferencia"""
+        return self.diferencia * self.costo_unitario_sistema
+
+
+class TomaInventarioLog(models.Model):
+    """
+    Log de auditoría para cambios en la toma de inventario.
+    Registra cada acción para trazabilidad completa.
+    """
+    
+    TIPO_ACCION_CHOICES = [
+        ('CREACION', 'Creación'),
+        ('INICIO_CONTEO', 'Inicio de Conteo'),
+        ('REGISTRO_CONTEO', 'Registro de Conteo'),
+        ('RECONTEO', 'Reconteo'),
+        ('CAMBIO_ESTADO', 'Cambio de Estado'),
+        ('ENVIO_APROBACION', 'Envío a Aprobación'),
+        ('APROBACION', 'Aprobación'),
+        ('RECHAZO', 'Rechazo'),
+        ('APLICACION_AJUSTES', 'Aplicación de Ajustes'),
+        ('CANCELACION', 'Cancelación'),
+        ('MODIFICACION', 'Modificación'),
+    ]
+    
+    toma_inventario = models.ForeignKey(
+        TomaInventario,
+        on_delete=models.CASCADE,
+        related_name='logs'
+    )
+    tipo_accion = models.CharField(max_length=25, choices=TIPO_ACCION_CHOICES)
+    descripcion = models.TextField()
+    datos_adicionales = models.JSONField(default=dict, blank=True)
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Log de Inventario'
+        verbose_name_plural = 'Logs de Inventario'
+    
+    def __str__(self):
+        return f"{self.toma_inventario.numero_inventario} - {self.get_tipo_accion_display()}"
+
+
+# ========== HISTORIAL DE IMPRESIÓN DE ETIQUETAS ZEBRA ==========
+
+class HistorialImpresionEtiqueta(models.Model):
+    """
+    Registra cada impresión de etiquetas para trazabilidad.
+    Permite saber qué productos ya fueron impresos desde qué documento.
+    """
+    
+    TIPO_ORIGEN_CHOICES = [
+        ('DTE_COMPRA', 'DTE Compra'),
+        ('DTE_TRASPASO', 'DTE Traspaso'),
+        ('TRASPASO_INTERNO', 'Traspaso Interno'),
+        ('MANUAL', 'Impresión Manual'),
+    ]
+    
+    # === ORIGEN ===
+    tipo_origen = models.CharField(max_length=20, choices=TIPO_ORIGEN_CHOICES)
+    documento_id = models.IntegerField(null=True, blank=True, help_text='ID del documento origen')
+    numero_documento = models.CharField(max_length=50, blank=True, help_text='Número visible del documento')
+    
+    # === DATOS DE IMPRESIÓN ===
+    sucursal = models.ForeignKey(Sucursal, on_delete=models.SET_NULL, null=True, blank=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    fecha_impresion = models.DateTimeField(auto_now_add=True)
+    
+    # === ESTADÍSTICAS ===
+    total_productos = models.IntegerField(default=0)
+    total_etiquetas = models.IntegerField(default=0)
+    
+    # === ESTADO ===
+    completado = models.BooleanField(default=True)
+    observaciones = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-fecha_impresion']
+        verbose_name = 'Historial de Impresión'
+        verbose_name_plural = 'Historial de Impresiones'
+    
+    def __str__(self):
+        return f"{self.tipo_origen} #{self.numero_documento} - {self.total_etiquetas} etiquetas"
+
+
+class DetalleImpresionEtiqueta(models.Model):
+    """
+    Detalle de productos impresos en cada sesión de impresión.
+    """
+    historial = models.ForeignKey(
+        HistorialImpresionEtiqueta, 
+        on_delete=models.CASCADE, 
+        related_name='detalles'
+    )
+    producto_talla = models.ForeignKey(
+        Producto_Talla, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
+    
+    # === SNAPSHOT DE DATOS (para mantener registro aunque cambie el producto) ===
+    sku = models.CharField(max_length=50)
+    articulo = models.CharField(max_length=100)
+    descripcion = models.CharField(max_length=200, blank=True)
+    marca = models.CharField(max_length=50, blank=True)
+    talla = models.CharField(max_length=20, blank=True)
+    color = models.CharField(max_length=50, blank=True)
+    precio_impreso = models.IntegerField(default=0, help_text='Precio que se imprimió en la etiqueta')
+    
+    # === CANTIDAD ===
+    cantidad_etiquetas = models.IntegerField(default=1)
+    
+    class Meta:
+        verbose_name = 'Detalle de Impresión'
+        verbose_name_plural = 'Detalles de Impresión'
+    
+    def __str__(self):
+        return f"{self.sku} - {self.cantidad_etiquetas} etiquetas"
+

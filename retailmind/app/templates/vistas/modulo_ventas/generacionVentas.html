@@ -753,6 +753,55 @@
                                             </div>
                                         </div>
 
+                                        <!-- ✅ OPCIÓN DE TICKET DE CAMBIO ANTES DE FINALIZAR -->
+                                        <div class="card border-warning mb-4" id="seccionTicketCambio">
+                                            <div class="card-header bg-warning bg-opacity-10 border-warning">
+                                                <div class="form-check form-switch">
+                                                    <input class="form-check-input" type="checkbox" id="checkGenerarTicketCambio" style="width: 50px; height: 24px; cursor: pointer;">
+                                                    <label class="form-check-label fw-bold ms-2" for="checkGenerarTicketCambio" style="cursor: pointer; font-size: 1.1rem;">
+                                                        <i class="ri-exchange-line text-warning"></i> Generar Ticket de Cambio
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="card-body" id="opcionesTicketCambio" style="display: none;">
+                                                <div class="alert alert-info mb-3">
+                                                    <i class="ri-information-line"></i>
+                                                    <strong>Ticket de Cambio:</strong> Se imprimirá automáticamente junto con la boleta para que el cliente pueda realizar cambios en los próximos 15 días.
+                                                </div>
+                                                <div class="row g-3">
+                                                    <div class="col-md-4">
+                                                        <label class="form-label fw-bold">
+                                                            <i class="ri-printer-line"></i> Cantidad de Tickets
+                                                        </label>
+                                                        <select class="form-select form-select-lg" id="cantidadTicketsCambioFinal">
+                                                            <option value="1">1 ticket</option>
+                                                            <option value="2">2 tickets</option>
+                                                            <option value="3">3 tickets</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-8">
+                                                        <label class="form-label fw-bold">
+                                                            <i class="ri-settings-3-line"></i> Opciones de Impresión
+                                                        </label>
+                                                        <div class="d-flex gap-3">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="modoImpresionCambio" id="imprimirTermica" value="termica" checked>
+                                                                <label class="form-check-label" for="imprimirTermica">
+                                                                    <i class="ri-printer-fill text-primary"></i> Impresora Térmica (Automático)
+                                                                </label>
+                                                            </div>
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="modoImpresionCambio" id="imprimirVentana" value="ventana">
+                                                                <label class="form-check-label" for="imprimirVentana">
+                                                                    <i class="ri-window-line text-secondary"></i> Ventana de Impresión
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- Botón Finalizar Grande -->
                                         <div class="mb-4">
                                             <button class="btn btn-success btn-lg w-100 py-4" onclick="finalizarVenta()" style="font-size: 1.5rem; font-weight: bold;">
@@ -762,10 +811,10 @@
 
                                         <!-- Acciones Adicionales -->
                                         <div class="row g-3 justify-content-center">
-                                            <!-- ✅ Solo Ticket de Cambio -->
+                                            <!-- ✅ Solo Ticket de Cambio (manual) -->
                                             <div class="col-md-6">
-                                                <button class="btn btn-warning btn-lg w-100" onclick="imprimirTicketCambio()">
-                                                    <i class="ri-printer-fill"></i> Ticket de Cambio
+                                                <button class="btn btn-outline-warning btn-lg w-100" onclick="imprimirTicketCambio()">
+                                                    <i class="ri-printer-fill"></i> Imprimir Ticket Cambio (Manual)
                                                 </button>
                                             </div>
                                         </div>
@@ -773,7 +822,10 @@
                                         <div class="mt-3">
                                             <small class="text-muted">
                                                 <i class="ri-information-line"></i> 
-                                                El DTE se genera automáticamente al finalizar la venta (Boleta o Factura Electrónica)
+                                                El DTE se genera automáticamente al finalizar la venta (Boleta o Factura Electrónica).
+                                                <br>
+                                                <i class="ri-exchange-line text-warning"></i> 
+                                                Si activas el ticket de cambio, se imprimirá automáticamente para el cliente.
                                             </small>
                                         </div>
                                     </div>
@@ -814,11 +866,11 @@
 <div class="modal fade" id="modalPago" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title text-white fw-bold">
                     <i class="ri-wallet-line"></i> Agregar Pago
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="formPago">
@@ -866,10 +918,12 @@
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="confirmarPago()">
-                    <i class="ri-check-line"></i> Confirmar Pago
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary btn-lg" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-success btn-lg px-5 py-3" onclick="confirmarPago()" style="font-size: 1.1rem;">
+                    <i class="ri-check-double-line"></i> <strong>CONFIRMAR PAGO</strong>
                 </button>
             </div>
         </div>
@@ -1252,36 +1306,274 @@
     </div>
 </div>
 
-<!-- CSS Personalizado -->
+<!-- CSS Personalizado - NEXO Design System -->
 <style>
-/* Action Cards */
-.action-card {
-    transition: all 0.3s ease;
-    border: none;
+/* ==================== NEXO DESIGN SYSTEM - POS Dashboard ==================== */
+
+:root {
+    /* ========== COLORES PRIMARIOS NEXO ========== */
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    
+    /* ========== COLORES SECUNDARIOS NEXO ========== */
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    
+    /* ========== COLORES SEMÁNTICOS NEXO ========== */
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    
+    /* ========== NEUTRALES / GRISES NEXO ========== */
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    
+    /* ========== FONDOS NEXO ========== */
+    --nexo-bg-primary: #FFFFFF;
+    --nexo-bg-secondary: #F5F5F7;
+    --nexo-bg-dark: #1A1A2E;
+    
+    /* ========== SOMBRAS NEXO ========== */
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+    
+    /* ========== BORDES NEXO ========== */
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-radius-full: 9999px;
+    
+    /* ========== TRANSICIONES NEXO ========== */
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+    --nexo-transition-slow: 350ms ease;
+}
+
+/* ========== PAGE CONTENT ========== */
+.page-content {
+    background: linear-gradient(135deg, var(--nexo-bg-secondary) 0%, var(--nexo-white) 100%) !important;
+    min-height: calc(100vh - 70px);
+}
+
+/* ========== DASHBOARD HEADER ========== */
+.dashboard-header-nexo {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-secondary) 100%);
+    border-radius: var(--nexo-radius-xl);
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: var(--nexo-shadow-xl);
     position: relative;
     overflow: hidden;
 }
 
-.action-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+.dashboard-header-nexo::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 60%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1));
+    transform: rotate(25deg);
 }
 
-.action-card .action-overlay {
+.dashboard-header-nexo h1 {
+    color: var(--nexo-white);
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+}
+
+.dashboard-header-nexo p {
+    color: rgba(255,255,255,0.85);
+    margin: 8px 0 0;
+    font-size: 0.95rem;
+    position: relative;
+    z-index: 1;
+}
+
+/* ========== KPI CARDS NEXO ========== */
+.card.nexo-card {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-normal);
+}
+
+.card.nexo-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+    transform: translateY(-2px);
+}
+
+.kpi-card-nexo {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 20px;
+    box-shadow: var(--nexo-shadow-sm);
+    border: none;
+    position: relative;
+    overflow: hidden;
+    transition: var(--nexo-transition-normal);
+}
+
+.kpi-card-nexo:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.kpi-card-nexo::before {
+    content: '';
     position: absolute;
-    bottom: -50px;
+    top: 0;
     left: 0;
     right: 0;
-    background: rgba(255,255,255,0.95);
-    padding: 10px;
-    transition: all 0.3s ease;
+    height: 4px;
+    border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
 }
 
-.action-card:hover .action-overlay {
-    bottom: 0;
+.kpi-card-nexo.kpi-primary::before { background: linear-gradient(90deg, var(--nexo-primary), var(--nexo-primary-dark)); }
+.kpi-card-nexo.kpi-warning::before { background: linear-gradient(90deg, var(--nexo-warning), #E6A100); }
+.kpi-card-nexo.kpi-success::before { background: linear-gradient(90deg, var(--nexo-success), #00B38A); }
+.kpi-card-nexo.kpi-info::before { background: linear-gradient(90deg, var(--nexo-info), var(--nexo-primary-dark)); }
+.kpi-card-nexo.kpi-accent::before { background: linear-gradient(90deg, var(--nexo-accent), #00B38A); }
+
+/* Avatar NEXO */
+.avatar-nexo {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: var(--nexo-white);
 }
 
-/* Stepper */
+.avatar-nexo.avatar-primary { background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)); }
+.avatar-nexo.avatar-warning { background: linear-gradient(135deg, var(--nexo-warning), #E6A100); }
+.avatar-nexo.avatar-success { background: linear-gradient(135deg, var(--nexo-success), #00B38A); }
+.avatar-nexo.avatar-info { background: linear-gradient(135deg, var(--nexo-info), var(--nexo-primary-dark)); }
+.avatar-nexo.avatar-accent { background: linear-gradient(135deg, var(--nexo-accent), #00B38A); }
+.avatar-nexo.avatar-error { background: linear-gradient(135deg, var(--nexo-error), #E63939); }
+
+/* ========== CARDS NEXO ========== */
+.card.shadow-sm {
+    box-shadow: var(--nexo-shadow-sm) !important;
+    border-radius: var(--nexo-radius-lg) !important;
+    border: 1px solid var(--nexo-gray-300) !important;
+}
+
+.card-header {
+    background: var(--nexo-white) !important;
+    border-bottom: 1px solid var(--nexo-gray-300) !important;
+    padding: 16px 20px !important;
+}
+
+.card-header.bg-primary,
+.card-header.bg-info {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)) !important;
+    border-bottom: none !important;
+}
+
+.card-header.bg-success {
+    background: linear-gradient(135deg, var(--nexo-success), #00B38A) !important;
+    border-bottom: none !important;
+}
+
+.card-header.bg-warning,
+.card-header.bg-gradient-warning {
+    background: linear-gradient(135deg, var(--nexo-warning), #E6A100) !important;
+    border-bottom: none !important;
+}
+
+/* ========== BOTONES NEXO ========== */
+.btn-primary {
+    background: var(--nexo-primary) !important;
+    border-color: var(--nexo-primary) !important;
+    border-radius: var(--nexo-radius-md) !important;
+    transition: var(--nexo-transition-fast) !important;
+}
+
+.btn-primary:hover {
+    background: var(--nexo-primary-dark) !important;
+    border-color: var(--nexo-primary-dark) !important;
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.btn-success {
+    background: var(--nexo-success) !important;
+    border-color: var(--nexo-success) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-success:hover {
+    background: #00B38A !important;
+    border-color: #00B38A !important;
+}
+
+.btn-warning {
+    background: var(--nexo-warning) !important;
+    border-color: var(--nexo-warning) !important;
+    color: var(--nexo-secondary) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-warning:hover {
+    background: #E6A100 !important;
+    border-color: #E6A100 !important;
+}
+
+.btn-danger {
+    background: var(--nexo-error) !important;
+    border-color: var(--nexo-error) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-danger:hover {
+    background: #E63939 !important;
+    border-color: #E63939 !important;
+}
+
+.btn-outline-primary {
+    color: var(--nexo-primary) !important;
+    border-color: var(--nexo-primary) !important;
+    border-radius: var(--nexo-radius-md) !important;
+    background: transparent !important;
+}
+
+.btn-outline-primary:hover {
+    background: var(--nexo-primary) !important;
+    color: var(--nexo-white) !important;
+}
+
+.btn-outline-danger {
+    color: var(--nexo-error) !important;
+    border-color: var(--nexo-error) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-outline-danger:hover {
+    background: var(--nexo-error) !important;
+    color: var(--nexo-white) !important;
+}
+
+/* ========== STEPPER NEXO ========== */
 .stepper-wrapper {
     display: flex;
     justify-content: space-between;
@@ -1300,16 +1592,17 @@
     content: '';
     position: absolute;
     width: 100%;
-    height: 2px;
-    background-color: #dee2e6;
+    height: 3px;
+    background-color: var(--nexo-gray-300);
     top: 20px;
     left: 50%;
     z-index: 1;
+    border-radius: var(--nexo-radius-full);
 }
 
 .stepper-item.active:not(:last-child):after,
 .stepper-item.completed:not(:last-child):after {
-    background-color: #0d6efd;
+    background: linear-gradient(90deg, var(--nexo-primary), var(--nexo-accent));
 }
 
 .step-counter {
@@ -1318,72 +1611,247 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #dee2e6;
-    color: #6c757d;
-    margin-bottom: 6px;
-    font-size: 14px;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--nexo-radius-full);
+    background: var(--nexo-gray-300);
+    color: var(--nexo-gray-700);
+    margin-bottom: 8px;
+    font-size: 16px;
+    transition: var(--nexo-transition-fast);
 }
 
-.stepper-item.active .step-counter,
+.stepper-item.active .step-counter {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark));
+    color: var(--nexo-white);
+    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+}
+
 .stepper-item.completed .step-counter {
-    background-color: #0d6efd;
-    color: white;
+    background: linear-gradient(135deg, var(--nexo-success), #00B38A);
+    color: var(--nexo-white);
 }
 
 .step-name {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
-    color: #6c757d;
+    color: var(--nexo-gray-500);
 }
 
-.stepper-item.active .step-name,
-.stepper-item.completed .step-name {
-    color: #0d6efd;
+.stepper-item.active .step-name {
+    color: var(--nexo-primary);
     font-weight: 600;
 }
 
-/* Utilidades */
+.stepper-item.completed .step-name {
+    color: var(--nexo-success);
+    font-weight: 600;
+}
+
+/* ========== PROGRESS BAR NEXO ========== */
+.progress {
+    background-color: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-full);
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--nexo-primary), var(--nexo-accent)) !important;
+}
+
+/* ========== UTILIDADES NEXO ========== */
 .border-left-primary {
-    border-left: 4px solid #0d6efd !important;
+    border-left: 4px solid var(--nexo-primary) !important;
 }
 
 .border-left-warning {
-    border-left: 4px solid #ffc107 !important;
+    border-left: 4px solid var(--nexo-warning) !important;
 }
 
 .border-left-success {
-    border-left: 4px solid #198754 !important;
+    border-left: 4px solid var(--nexo-success) !important;
 }
 
 .border-left-info {
-    border-left: 4px solid #0dcaf0 !important;
+    border-left: 4px solid var(--nexo-info) !important;
 }
 
-/* Botones de acción de tickets */
-.btn-group .btn {
-    margin-right: 2px;
+/* ========== TEXT COLORS NEXO ========== */
+.text-primary {
+    color: var(--nexo-primary) !important;
 }
 
-.btn-group .btn:last-child {
-    margin-right: 0;
+.text-success {
+    color: var(--nexo-success) !important;
 }
 
-.btn-group .btn i {
-    font-size: 14px;
+.text-warning {
+    color: var(--nexo-warning) !important;
 }
 
-.bg-soft {
-    background-color: rgba(13, 110, 253, 0.1) !important;
+.text-danger {
+    color: var(--nexo-error) !important;
 }
 
+.text-info {
+    color: var(--nexo-info) !important;
+}
+
+.text-muted {
+    color: var(--nexo-gray-500) !important;
+}
+
+/* ========== BADGES NEXO ========== */
+.badge {
+    border-radius: var(--nexo-radius-full);
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.badge.bg-primary,
+.badge-primary {
+    background-color: var(--nexo-primary) !important;
+}
+
+.badge.bg-success,
+.badge-success {
+    background-color: var(--nexo-success) !important;
+}
+
+.badge.bg-warning,
+.badge-warning {
+    background-color: var(--nexo-warning) !important;
+    color: var(--nexo-secondary) !important;
+}
+
+.badge.bg-danger,
+.badge-danger {
+    background-color: var(--nexo-error) !important;
+}
+
+.badge.bg-info,
+.badge-info {
+    background-color: var(--nexo-info) !important;
+}
+
+.badge.bg-secondary,
+.badge-secondary {
+    background-color: var(--nexo-gray-500) !important;
+}
+
+/* ========== ALERTS NEXO ========== */
+.alert {
+    border-radius: var(--nexo-radius-md);
+    border-left: 4px solid;
+}
+
+.alert-success {
+    background-color: rgba(0, 212, 170, 0.1);
+    border-color: var(--nexo-success);
+    color: #006B55;
+}
+
+.alert-warning {
+    background-color: rgba(255, 176, 32, 0.1);
+    border-color: var(--nexo-warning);
+    color: #996B00;
+}
+
+.alert-danger {
+    background-color: rgba(255, 77, 77, 0.1);
+    border-color: var(--nexo-error);
+    color: var(--nexo-error);
+}
+
+.alert-info {
+    background-color: rgba(0, 102, 255, 0.1);
+    border-color: var(--nexo-info);
+    color: var(--nexo-primary-dark);
+}
+
+/* ========== TABLES NEXO ========== */
+.table thead th {
+    background: linear-gradient(135deg, var(--nexo-gray-100), var(--nexo-white));
+    color: var(--nexo-secondary);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid var(--nexo-gray-300);
+    padding: 14px 16px;
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--nexo-primary-light);
+}
+
+.table-light {
+    background-color: var(--nexo-gray-100) !important;
+}
+
+/* ========== FORMS NEXO ========== */
+.form-control,
+.form-select {
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.1);
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    font-size: 0.9rem;
+}
+
+.input-group-text {
+    background: var(--nexo-gray-100);
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    color: var(--nexo-gray-700);
+}
+
+/* ========== ACTION CARDS NEXO ========== */
+.action-card {
+    transition: var(--nexo-transition-normal);
+    border: none;
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--nexo-radius-lg);
+}
+
+.action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--nexo-shadow-lg) !important;
+}
+
+.action-card .action-overlay {
+    position: absolute;
+    bottom: -50px;
+    left: 0;
+    right: 0;
+    background: rgba(255,255,255,0.95);
+    padding: 10px;
+    transition: var(--nexo-transition-normal);
+}
+
+.action-card:hover .action-overlay {
+    bottom: 0;
+}
+
+/* ========== DIVIDER NEXO ========== */
 .divider-text {
     position: relative;
     text-align: center;
     margin: 20px 0;
-    color: #6c757d;
+    color: var(--nexo-gray-500);
 }
 
 .divider-text:before {
@@ -1393,15 +1861,15 @@
     left: 0;
     right: 0;
     height: 1px;
-    background: #dee2e6;
+    background: var(--nexo-gray-300);
 }
 
 .divider-text span {
-    background: white;
+    background: var(--nexo-white);
     padding: 0 15px;
 }
 
-/* Estilos para selector de tipo de documento */
+/* ========== DOCUMENT TYPE SELECTOR NEXO ========== */
 .form-check-card {
     position: relative;
 }
@@ -1415,43 +1883,172 @@
 
 .form-check-card .card {
     cursor: pointer;
-    transition: all 0.3s ease;
-    border: 2px solid #dee2e6;
+    transition: var(--nexo-transition-normal);
+    border: 2px solid var(--nexo-gray-300);
     height: 100%;
+    border-radius: var(--nexo-radius-lg);
 }
 
 .form-check-card .card:hover {
-    border-color: #0d6efd;
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+    border-color: var(--nexo-primary);
+    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.15);
     transform: translateY(-2px);
 }
 
 .form-check-card .form-check-input:checked + .card {
-    border-color: #0d6efd;
-    background-color: rgba(13, 110, 253, 0.05);
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25);
+    border-color: var(--nexo-primary);
+    background-color: var(--nexo-primary-light);
+    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.25);
 }
 
 .form-check-card .form-check-input:disabled + .card {
     opacity: 0.5;
     cursor: not-allowed;
-    background-color: #f8f9fa;
+    background-color: var(--nexo-gray-100);
 }
 
 .form-check-card .form-check-input:disabled + .card:hover {
     transform: none;
     box-shadow: none;
-    border-color: #dee2e6;
+    border-color: var(--nexo-gray-300);
 }
 
-/* Campos requeridos */
-.text-danger {
-    color: #dc3545 !important;
+/* ========== BOTONES DE ACCIÓN ========== */
+.btn-group .btn {
+    margin-right: 2px;
 }
 
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+
+.btn-group .btn i {
+    font-size: 14px;
+}
+
+/* ========== BG SOFT NEXO ========== */
+.bg-soft,
+.bg-primary.bg-soft {
+    background-color: var(--nexo-primary-light) !important;
+}
+
+.bg-warning.bg-soft {
+    background-color: rgba(255, 176, 32, 0.15) !important;
+}
+
+.bg-success.bg-soft {
+    background-color: rgba(0, 212, 170, 0.15) !important;
+}
+
+.bg-info.bg-soft {
+    background-color: rgba(0, 102, 255, 0.15) !important;
+}
+
+.bg-danger.bg-soft {
+    background-color: rgba(255, 77, 77, 0.15) !important;
+}
+
+/* ========== AVATAR NEXO ========== */
+.avatar-sm {
+    width: 40px;
+    height: 40px;
+}
+
+.avatar-title {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-title.bg-primary {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)) !important;
+}
+
+.avatar-title.bg-warning {
+    background: linear-gradient(135deg, var(--nexo-warning), #E6A100) !important;
+}
+
+.avatar-title.bg-success {
+    background: linear-gradient(135deg, var(--nexo-success), #00B38A) !important;
+}
+
+.avatar-title.bg-info {
+    background: linear-gradient(135deg, var(--nexo-info), var(--nexo-primary-dark)) !important;
+}
+
+/* ========== SPINNER NEXO ========== */
+.spinner-border.text-primary {
+    color: var(--nexo-primary) !important;
+}
+
+/* ========== LIST GROUP NEXO ========== */
+.list-group-item {
+    border-color: var(--nexo-gray-300);
+    transition: var(--nexo-transition-fast);
+}
+
+.list-group-item:hover {
+    background-color: var(--nexo-primary-light);
+}
+
+.list-group-item-action:hover {
+    background-color: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+/* ========== MODAL NEXO ========== */
+.modal-content {
+    border-radius: var(--nexo-radius-lg);
+    border: none;
+    box-shadow: var(--nexo-shadow-xl);
+}
+
+.modal-header {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-secondary));
+    color: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
+    border-bottom: none;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+/* ========== CAMPO REQUERIDO ========== */
 .form-label.text-danger::after {
     content: ' *';
-    color: #dc3545;
+    color: var(--nexo-error);
+}
+
+/* ========== DISPLAY TITLE ========== */
+.display-5 {
+    color: var(--nexo-secondary);
+    font-weight: 700;
+}
+
+.display-5 i {
+    color: var(--nexo-primary);
+}
+
+/* ========== COUNTER VALUE ========== */
+.counter-value {
+    color: var(--nexo-secondary);
+}
+
+/* ========== CARD TITLE NEXO ========== */
+.card-title {
+    color: var(--nexo-secondary);
+    font-weight: 600;
+}
+
+.card-title i {
+    color: var(--nexo-primary);
+}
+
+.card-title i.text-warning {
+    color: var(--nexo-warning) !important;
 }
 </style>
 
@@ -1481,6 +2078,32 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicialización
     inicializarDashboard();
     establecerFechaActual();
+    inicializarTicketCambioToggle();
+
+    // === INICIALIZAR TOGGLE TICKET DE CAMBIO ===
+    function inicializarTicketCambioToggle() {
+        const checkTicketCambio = document.getElementById('checkGenerarTicketCambio');
+        const opcionesTicketCambio = document.getElementById('opcionesTicketCambio');
+        
+        if (checkTicketCambio && opcionesTicketCambio) {
+            checkTicketCambio.addEventListener('change', function() {
+                if (this.checked) {
+                    opcionesTicketCambio.style.display = 'block';
+                    // Animación suave
+                    opcionesTicketCambio.style.opacity = '0';
+                    setTimeout(() => {
+                        opcionesTicketCambio.style.transition = 'opacity 0.3s ease';
+                        opcionesTicketCambio.style.opacity = '1';
+                    }, 10);
+                } else {
+                    opcionesTicketCambio.style.opacity = '0';
+                    setTimeout(() => {
+                        opcionesTicketCambio.style.display = 'none';
+                    }, 300);
+                }
+            });
+        }
+    }
 
     // === FUNCIONES DEL DASHBOARD ===
     
@@ -1660,6 +2283,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Variable para verificar si el usuario es admin
+        const esAdmin = {{ es_admin|yesno:"true,false" }};
+        
         tbody.innerHTML = tickets.map(ticket => {
             let badgeClass = 'bg-info';
             let textoTipo = 'Cambio';
@@ -1672,6 +2298,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 textoTipo = 'Cobrar';
             }
             
+            // Botón de eliminar solo para administradores
+            const botonEliminar = esAdmin ? `
+                <button class="btn btn-danger ms-2" onclick='eliminarTicketCambio(${ticket.correlativo})' title="Eliminar diferencia (Solo Admin)">
+                    <i class="ri-delete-bin-line"></i>
+                </button>
+            ` : '';
+            
             return `
                 <tr>
                     <td><span class="fw-bold fs-5">#${ticket.correlativo}</span></td>
@@ -1681,9 +2314,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td><span class="badge ${badgeClass}">${ticket.icono} ${textoTipo}</span></td>
                     <td class="fw-bold">${formatearMoneda(ticket.total)}</td>
                     <td>
-                        <button class="btn btn-primary" onclick='procesarTicketCambio(${ticket.correlativo}, "${ticket.tipo_operacion}")'>
-                            <i class="ri-wallet-line"></i> Procesar
-                        </button>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" onclick='procesarTicketCambio(${ticket.correlativo}, "${ticket.tipo_operacion}")'>
+                                <i class="ri-wallet-line"></i> Procesar
+                            </button>
+                            ${botonEliminar}
+                        </div>
                     </td>
                 </tr>
             `;
@@ -1724,6 +2360,98 @@ document.addEventListener('DOMContentLoaded', function() {
             timer: 2000
         });
     }
+    
+    // Función para eliminar ticket de cambio (Solo Administradores)
+    function eliminarTicketCambio(correlativo) {
+        Swal.fire({
+            title: '🔐 Eliminar Diferencia de Cambio',
+            html: `
+                <div class="alert alert-danger">
+                    <i class="ri-alert-line"></i>
+                    <strong>Acción Administrativa</strong>
+                </div>
+                <p>¿Está seguro de eliminar la diferencia del ticket <strong>#${correlativo}</strong>?</p>
+                <p class="text-muted small">Esta acción eliminará el registro de cobro/devolución pendiente.</p>
+                <hr>
+                <label class="form-label fw-bold">Motivo de eliminación:</label>
+                <textarea id="motivoEliminacionCambio" class="form-control" 
+                          placeholder="Ingrese el motivo (obligatorio)" rows="3" required></textarea>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="ri-delete-bin-line"></i> Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const motivo = document.getElementById('motivoEliminacionCambio').value.trim();
+                if (!motivo) {
+                    Swal.showValidationMessage('Debe ingresar un motivo para eliminar');
+                    return false;
+                }
+                return motivo;
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                ejecutarEliminacionTicketCambio(correlativo, result.value);
+            }
+        });
+    }
+    
+    function ejecutarEliminacionTicketCambio(correlativo, motivo) {
+        Swal.fire({
+            title: 'Eliminando...',
+            text: 'Por favor espere',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        fetch(apiUrls.anularTicket, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            },
+            body: JSON.stringify({ 
+                correlativo: correlativo,
+                motivo: `[ADMIN] Eliminación de diferencia de cambio: ${motivo}`,
+                eliminar_diferencia: true
+            }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ Diferencia Eliminada',
+                    text: 'El registro de cobro/devolución ha sido eliminado',
+                    timer: 2000
+                });
+                // Recargar tickets de cambio
+                actualizarDashboard();
+                cargarTicketsCambio();
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: data.error || 'No se pudo eliminar la diferencia'
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'Ocurrió un error al procesar la solicitud'
+            });
+        });
+    }
+    
+    // Exponer función globalmente
+    window.eliminarTicketCambio = eliminarTicketCambio;
 
     function actualizarKPIs(stats) {
         document.getElementById('ventasHoy').querySelector('.counter-value').textContent = formatearMoneda(stats.ventas_hoy || 0);
@@ -2087,57 +2815,126 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        tbody.innerHTML = productos.map((producto, index) => {
+        // ✅ Detectar si es un ticket de CAMBIO/DEVOLUCIÓN
+        const esCambioDevolucion = ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION';
+        
+        // Si es cambio/devolución, mostrar encabezado explicativo
+        let htmlHeader = '';
+        if (esCambioDevolucion) {
+            // Separar productos devueltos (precio negativo) de nuevos (precio positivo)
+            const productosDevueltos = productos.filter(p => (p.precio_unitario || p.precio) < 0);
+            const productosNuevos = productos.filter(p => (p.precio_unitario || p.precio) >= 0);
+            const totalDevuelto = productosDevueltos.reduce((sum, p) => sum + Math.abs((p.precio_unitario || p.precio) * p.cantidad), 0);
+            const totalNuevo = productosNuevos.reduce((sum, p) => sum + ((p.precio_unitario || p.precio) * p.cantidad), 0);
+            const diferencia = totalNuevo - totalDevuelto;
+            
+            htmlHeader = `
+                <tr class="table-warning">
+                    <td colspan="8" class="py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="ri-exchange-line me-2"></i>
+                                <strong>TICKET DE CAMBIO/DEVOLUCIÓN</strong>
+                                <small class="text-muted ms-2">El stock ya fue ajustado al aprobar</small>
+                            </div>
+                            <div class="d-flex gap-3">
+                                <span class="badge bg-danger">↓ Devuelve: ${formatearMoneda(totalDevuelto)}</span>
+                                <span class="badge bg-success">↑ Recibe: ${formatearMoneda(totalNuevo)}</span>
+                                <span class="badge ${diferencia > 0 ? 'bg-primary' : diferencia < 0 ? 'bg-info' : 'bg-secondary'}">
+                                    ${diferencia > 0 ? '💰 Cobrar: ' : diferencia < 0 ? '💵 Devolver: ' : '✓ Sin diferencia: '}${formatearMoneda(Math.abs(diferencia))}
+                                </span>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        tbody.innerHTML = htmlHeader + productos.map((producto, index) => {
             const descuento = producto.descuento_unitario || 0;
             const precioOriginal = producto.precio_unitario || producto.precio;
             const precioConDescuento = precioOriginal - descuento;
             const subtotalConDescuento = precioConDescuento * producto.cantidad;
             
+            // ✅ Para tickets de cambio: detectar si es producto devuelto o nuevo
+            const esProductoDevuelto = esCambioDevolucion && precioOriginal < 0;
+            const esProductoNuevo = esCambioDevolucion && precioOriginal >= 0;
+            
+            // Clase de fila según el tipo
+            let rowClass = '';
+            let tipoProductoBadge = '';
+            if (esProductoDevuelto) {
+                rowClass = 'table-danger bg-opacity-25';
+                tipoProductoBadge = '<span class="badge bg-danger me-2">↓ DEVUELVE</span>';
+            } else if (esProductoNuevo && esCambioDevolucion) {
+                rowClass = 'table-success bg-opacity-25';
+                tipoProductoBadge = '<span class="badge bg-success me-2">↑ RECIBE</span>';
+            }
+            
+            // Precio a mostrar (valor absoluto si es negativo)
+            const precioMostrar = Math.abs(precioOriginal);
+            const subtotalMostrar = Math.abs(subtotalConDescuento);
+            
             return `
-            <tr data-producto-index="${index}">
+            <tr data-producto-index="${index}" class="${rowClass}">
                 <td><code>${producto.sku}</code></td>
                 <td>
                     <div>
-                        <h6 class="mb-0 fs-14">${producto.articulo}</h6>
-                        <small class="text-muted">${producto.descripcion || ''}</small>
+                        ${tipoProductoBadge}
+                        <h6 class="mb-0 fs-14 d-inline">${producto.articulo}</h6>
+                        ${producto.descripcion ? `<br><small class="text-muted">${producto.descripcion}</small>` : ''}
                     </div>
                 </td>
                 <td>
                     <span class="badge bg-info">${producto.talla || '-'}</span>
-                    ${producto.stock ? `<br><small class="text-muted">Stock: ${producto.stock}</small>` : ''}
+                    ${producto.stock && !esCambioDevolucion ? `<br><small class="text-muted">Stock: ${producto.stock}</small>` : ''}
                 </td>
                 <td class="text-center">
-                    <input type="number" class="form-control form-control-sm text-center" 
-                           value="${producto.cantidad}" 
-                           min="1" 
-                           max="${producto.stock || 999}" 
-                           onchange="cambiarCantidadProducto(${index}, this.value)"
-                           title="Stock disponible: ${producto.stock || 0}"
-                           style="width: 70px;">
-                    <small class="text-muted d-block">Máx: ${producto.stock || 0}</small>
+                    ${esCambioDevolucion ? `
+                        <span class="fw-bold">${producto.cantidad}</span>
+                        <small class="text-muted d-block">Fijo</small>
+                    ` : `
+                        <input type="number" class="form-control form-control-sm text-center" 
+                               value="${producto.cantidad}" 
+                               min="1" 
+                               max="${producto.stock || 999}" 
+                               onchange="cambiarCantidadProducto(${index}, this.value)"
+                               title="Stock disponible: ${producto.stock || 0}"
+                               style="width: 70px;">
+                        <small class="text-muted d-block">Máx: ${producto.stock || 0}</small>
+                    `}
                 </td>
                 <td class="text-end">
-                    ${descuento > 0 ? `
+                    ${esProductoDevuelto ? `
+                        <span class="text-danger fw-bold">-${formatearMoneda(precioMostrar)}</span>
+                    ` : (descuento > 0 ? `
                         <span class="text-decoration-line-through text-muted small">${formatearMoneda(precioOriginal)}</span><br>
                         <span class="text-success fw-bold">${formatearMoneda(precioConDescuento)}</span>
-                    ` : formatearMoneda(precioOriginal)}
+                    ` : formatearMoneda(precioMostrar))}
                 </td>
                 <td class="text-end">
-                    ${descuento > 0 ? `
+                    ${esProductoDevuelto ? `
+                        <span class="badge bg-danger">Devolución</span>
+                    ` : (descuento > 0 ? `
                         <span class="badge bg-warning text-dark">-${formatearMoneda(descuento * producto.cantidad)}</span>
-                    ` : '-'}
+                    ` : '-')}
                 </td>
-                <td class="text-end fw-medium">${formatearMoneda(subtotalConDescuento)}</td>
+                <td class="text-end fw-medium ${esProductoDevuelto ? 'text-danger' : ''}">
+                    ${esProductoDevuelto ? '-' : ''}${formatearMoneda(subtotalMostrar)}
+                </td>
                 <td class="text-center">
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-warning" onclick="mostrarModalDescuento(${index})" title="Aplicar Descuento">
-                            <i class="ri-price-tag-3-line"></i>
-                        </button>
-                        <!-- Botón de eliminar deshabilitado -->
-                        <button class="btn btn-outline-secondary" disabled title="Eliminar producto no permitido">
-                            <i class="ri-delete-bin-line"></i>
-                        </button>
-                    </div>
+                    ${esCambioDevolucion ? `
+                        <span class="badge bg-secondary">Cambio</span>
+                    ` : `
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-warning" onclick="mostrarModalDescuento(${index})" title="Aplicar Descuento">
+                                <i class="ri-price-tag-3-line"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" disabled title="Eliminar producto no permitido">
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </div>
+                    `}
                 </td>
             </tr>
         `;
@@ -2690,8 +3487,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Calcular monto sugerido (saldo pendiente)
         const saldoPendiente = calcularSaldoPendiente();
+        const inputMonto = document.getElementById('pagoMonto');
         if (saldoPendiente > 0) {
-            document.getElementById('pagoMonto').value = saldoPendiente;
+            inputMonto.value = saldoPendiente;
             document.getElementById('montoSugerido').textContent = `Saldo pendiente: ${formatearMoneda(saldoPendiente)}`;
         }
 
@@ -2704,7 +3502,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Mostrar modal
-        new bootstrap.Modal(document.getElementById('modalPago')).show();
+        const modalPago = new bootstrap.Modal(document.getElementById('modalPago'));
+        modalPago.show();
+        
+        // Seleccionar automáticamente el monto para facilitar edición
+        document.getElementById('modalPago').addEventListener('shown.bs.modal', function onModalShown() {
+            inputMonto.focus();
+            inputMonto.select();
+            // Remover el listener para evitar duplicados
+            document.getElementById('modalPago').removeEventListener('shown.bs.modal', onModalShown);
+        });
     }
 
     function calcularVuelto() {
@@ -3800,18 +4607,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 const pagoCreditoTrabajador = pagosActuales.find(p => p.metodo_pago === 'CREDITO_TRABAJADOR');
                 
                 if (pagoCreditoTrabajador && pagoCreditoTrabajador.credito_id) {
-                    // Registrar uso del crédito
+                    // Registrar uso del crédito - incluir número de boleta si hay DTE generado
+                    const creditoPayload = {
+                        credito_id: pagoCreditoTrabajador.credito_id,
+                        monto_usado: pagoCreditoTrabajador.monto,
+                        ticket_id: ticketActual.ticket_id
+                    };
+                    
+                    // Si se generó DTE, incluir el número de boleta/factura
+                    if (data.dte_generado) {
+                        creditoPayload.numero_boleta = `${data.dte_generado.tipo}-${data.dte_generado.numero}`;
+                        creditoPayload.folio_documento = data.dte_generado.numero;
+                    }
+                    
                     fetch('/app/api/creditos/usar-en-venta/', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                         },
-                        body: JSON.stringify({
-                            credito_id: pagoCreditoTrabajador.credito_id,
-                            monto_usado: pagoCreditoTrabajador.monto,
-                            ticket_id: ticketActual.ticket_id
-                        })
+                        body: JSON.stringify(creditoPayload)
                     })
                     .then(resp => resp.json())
                     .then(creditoData => {
@@ -4134,23 +4949,66 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // ✅ Función para preguntar si quiere ticket de cambio
     function preguntarTicketCambio(ticketId) {
+        // ✅ PRIMERO: Verificar si ya se marcó el checkbox antes de finalizar
+        const checkTicketCambio = document.getElementById('checkGenerarTicketCambio');
+        
+        if (checkTicketCambio && checkTicketCambio.checked) {
+            // El usuario ya indicó que quiere ticket de cambio - Imprimir automáticamente
+            const cantidadSelect = document.getElementById('cantidadTicketsCambioFinal');
+            const cantidad = cantidadSelect ? parseInt(cantidadSelect.value) || 1 : 1;
+            const modoImpresion = document.querySelector('input[name="modoImpresionCambio"]:checked')?.value || 'termica';
+            
+            console.log(`🎫 Ticket de cambio PRE-SELECCIONADO: ${cantidad} tickets, modo: ${modoImpresion}`);
+            
+            // Mostrar mensaje de proceso - esperar a que el usuario confirme
+            Swal.fire({
+                icon: 'success',
+                title: '✅ Venta Completada',
+                html: `
+                    <div class="alert alert-success mb-3">
+                        <i class="ri-check-circle-line"></i> DTE generado exitosamente
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="ri-printer-fill"></i> Se imprimirán <strong>${cantidad}</strong> ticket(s) de cambio
+                    </div>
+                `,
+                confirmButtonText: '<i class="ri-printer-line me-2"></i> IMPRIMIR TICKET DE CAMBIO',
+                showConfirmButton: true,
+                allowOutsideClick: false,
+                customClass: {
+                    confirmButton: 'btn btn-warning btn-lg px-5 py-3 fw-bold fs-5'
+                },
+                buttonsStyling: false
+            }).then(() => {
+                // Imprimir tickets de cambio automáticamente
+                cargarTicketParaCambio(ticketId, cantidad, modoImpresion);
+            });
+            
+            return;
+        }
+        
+        // Si no marcó el checkbox, preguntar como antes
         Swal.fire({
             title: '🎫 Ticket de Cambio',
             html: `
-                <p class="mb-3">¿Desea imprimir un <strong>Ticket de Cambio</strong> para el cliente?</p>
+                <p class="fs-5 mb-3">¿Desea imprimir un <strong>Ticket de Cambio</strong> para el cliente?</p>
                 <div class="alert alert-info">
-                    <small>Este ticket permitirá al cliente realizar cambios de productos en el módulo de cambios/devoluciones.</small>
+                    <i class="ri-information-line"></i> Este ticket permitirá al cliente realizar cambios de productos en los próximos 15 días.
                 </div>
                 <div class="mt-3">
-                    <label class="form-label">Cantidad de tickets:</label>
-                    <input type="number" id="cantidadTicketsCambio" class="form-control text-center" value="1" min="1" max="5" style="font-size: 1.2rem;">
+                    <label class="form-label fw-bold">Cantidad de tickets:</label>
+                    <input type="number" id="cantidadTicketsCambio" class="form-control text-center fs-4" value="1" min="1" max="5">
                 </div>
             `,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonText: '<i class="ri-printer-line"></i> Sí, Imprimir',
-            cancelButtonText: 'No, gracias',
-            confirmButtonColor: '#f59e0b',
+            confirmButtonText: '<i class="ri-printer-line me-2"></i> SÍ, IMPRIMIR',
+            cancelButtonText: '<i class="ri-close-line me-2"></i> NO IMPRIMIR',
+            customClass: {
+                confirmButton: 'btn btn-warning btn-lg px-4 py-3 fw-bold fs-5 me-3',
+                cancelButton: 'btn btn-secondary btn-lg px-4 py-3 fw-bold fs-5'
+            },
+            buttonsStyling: false,
             preConfirm: () => {
                 const cantidad = document.getElementById('cantidadTicketsCambio').value;
                 if (!cantidad || cantidad < 1 || cantidad > 5) {
@@ -4163,15 +5021,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.isConfirmed) {
                 const cantidad = result.value;
                 // Cargar datos del ticket antes de imprimir
-                cargarTicketParaCambio(ticketId, cantidad);
+                cargarTicketParaCambio(ticketId, cantidad, 'ventana');
             } else {
                 // No quiere ticket de cambio, volver al dashboard
                 Swal.fire({
                     icon: 'success',
-                    title: 'Proceso Completado',
-                    text: 'Venta y DTE generados exitosamente',
-                    timer: 2000,
-                    showConfirmButton: false
+                    title: '✅ Proceso Completado',
+                    html: '<p class="fs-5">Venta y DTE generados exitosamente</p>',
+                    confirmButtonText: '<i class="ri-check-double-line me-2"></i> CONTINUAR',
+                    customClass: {
+                        confirmButton: 'btn btn-success btn-lg px-5 py-3 fw-bold fs-4'
+                    },
+                    buttonsStyling: false
                 }).then(() => {
                     volverAlDashboard();
                     actualizarDashboard();
@@ -4181,10 +5042,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ✅ Función para cargar datos del ticket antes de imprimir
-    async function cargarTicketParaCambio(ticketId, cantidad) {
+    async function cargarTicketParaCambio(ticketId, cantidad, modoImpresion = 'ventana') {
         try {
             Swal.fire({
-                title: 'Cargando datos del ticket...',
+                title: 'Preparando ticket de cambio...',
+                html: '<p>Cargando datos del ticket...</p>',
                 allowOutsideClick: false,
                 didOpen: () => {
                     Swal.showLoading();
@@ -4200,8 +5062,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Actualizar ticketActual con los datos completos
                 ticketActual = ticketData;
                 
-                // Imprimir tickets de cambio
-                imprimirTicketsCambio(ticketId, cantidad);
+                // Imprimir tickets de cambio según el modo seleccionado
+                imprimirTicketsCambio(ticketId, cantidad, modoImpresion);
             } else {
                 throw new Error('No se pudo cargar el ticket');
             }
@@ -4225,45 +5087,288 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // ✅ Función para imprimir tickets de cambio
-    function imprimirTicketsCambio(ticketId, cantidad) {
+    // ✅ Función para imprimir tickets de cambio (con soporte térmica)
+    function imprimirTicketsCambio(ticketId, cantidad, modoImpresion = 'ventana') {
+        cantidad = parseInt(cantidad) || 1;
+        
         Swal.fire({
-            title: 'Imprimiendo...',
-            html: `Generando ${cantidad} ticket(s) de cambio`,
+            title: '🖨️ Imprimiendo...',
+            html: `
+                <p>Generando ${cantidad} ticket(s) de cambio</p>
+                <small class="text-muted">Modo: ${modoImpresion === 'termica' ? 'Impresora Térmica' : 'Ventana de Impresión'}</small>
+            `,
             allowOutsideClick: false,
             didOpen: () => {
                 Swal.showLoading();
             }
         });
         
-        // Llamar a la función existente de impresión
-        if (typeof imprimirTicketCambio === 'function') {
-            for (let i = 0; i < cantidad; i++) {
-                setTimeout(() => {
-                    imprimirTicketCambio();
-                    if (i === cantidad - 1) {
-                        // Último ticket
-                        Swal.close();
-                        Swal.fire({
-                            icon: 'success',
-                            title: '✅ Tickets Impresos',
-                            text: `Se imprimieron ${cantidad} ticket(s) de cambio`,
-                            timer: 2000,
-                            timerProgressBar: true
-                        }).then(() => {
-                            volverAlDashboard();
-                            actualizarDashboard();
-                        });
-                    }
-                }, i * 500);  // Esperar 500ms entre cada impresión
+        // Si es impresión térmica, intentar usar la API de impresión silenciosa
+        if (modoImpresion === 'termica') {
+            imprimirTermicaTicketsCambio(cantidad);
+            return;
+        }
+        
+        // ✅ MEJORADO: Modo ventana - Generar múltiples copias en UNA sola ventana
+        try {
+            if (!ticketActual) {
+                Swal.close();
+                mostrarNotificacion('No hay ticket para imprimir', 'warning');
+                volverAlDashboard();
+                return;
             }
-        } else {
+            
+            // Generar HTML del ticket de cambio
+            const htmlTicketBase = generarHtmlTicketCambio(ticketActual);
+            
+            // Abrir una ventana de impresión
+            const ventanaImpresion = window.open('', '_blank', 'width=400,height=700');
+            
+            if (!ventanaImpresion) {
+                Swal.close();
+                Swal.fire({
+                    icon: 'error',
+                    title: '🚫 Popup Bloqueado',
+                    html: `
+                        <p class="fs-5">El navegador bloqueó la ventana de impresión.</p>
+                        <div class="alert alert-info mt-3">
+                            <i class="ri-settings-line"></i> <strong>Solución:</strong> Permita los popups para este sitio en la configuración del navegador.
+                        </div>
+                    `,
+                    confirmButtonText: '<i class="ri-arrow-left-line me-2"></i> ENTENDIDO',
+                    customClass: {
+                        confirmButton: 'btn btn-primary btn-lg px-4 py-3 fw-bold fs-5'
+                    },
+                    buttonsStyling: false
+                });
+                return;
+            }
+            
+            // Extraer solo el contenido del body del HTML base
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlTicketBase, 'text/html');
+            const bodyContent = doc.body.innerHTML;
+            const styleContent = doc.head.innerHTML;
+            
+            // Crear HTML con múltiples copias (separadas por salto de página)
+            let contenidoMultiple = '';
+            for (let i = 0; i < cantidad; i++) {
+                contenidoMultiple += `
+                    <div class="ticket-copy" style="${i > 0 ? 'page-break-before: always;' : ''}">
+                        ${bodyContent}
+                        ${cantidad > 1 ? `<p style="text-align: center; font-size: 10px; margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 5px;">📄 Copia ${i + 1} de ${cantidad}</p>` : ''}
+                    </div>
+                `;
+            }
+            
+            // Escribir el HTML completo con todas las copias
+            ventanaImpresion.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    ${styleContent}
+                    <style>
+                        @media print {
+                            .ticket-copy { page-break-after: always; }
+                            .ticket-copy:last-child { page-break-after: auto; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${contenidoMultiple}
+                    <script>
+                        // Auto-imprimir después de cargar
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                            }, 300);
+                        };
+                    <\/script>
+                </body>
+                </html>
+            `);
+            ventanaImpresion.document.close();
+            
             Swal.close();
-            mostrarNotificacion(`Se solicitó imprimir ${cantidad} ticket(s) de cambio`, 'info');
-            setTimeout(() => {
+            Swal.fire({
+                icon: 'success',
+                title: '✅ Tickets Preparados',
+                html: `
+                    <p class="fs-5">Se generaron <strong>${cantidad}</strong> ticket(s) de cambio</p>
+                    <p class="text-success"><i class="ri-check-line"></i> La ventana de impresión se ha abierto</p>
+                    <hr>
+                    <div class="alert alert-warning">
+                        <i class="ri-time-line"></i> <strong>Espere a que se complete la impresión</strong>
+                    </div>
+                `,
+                confirmButtonText: '<i class="ri-check-double-line me-2"></i> CONTINUAR',
+                showConfirmButton: true,
+                allowOutsideClick: false,
+                customClass: {
+                    confirmButton: 'btn btn-success btn-lg px-5 py-3 fw-bold fs-4'
+                },
+                buttonsStyling: false
+            }).then(() => {
                 volverAlDashboard();
                 actualizarDashboard();
-            }, 2000);
+            });
+            
+        } catch (error) {
+            console.error('Error al imprimir tickets de cambio:', error);
+            Swal.close();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de Impresión',
+                html: `<p class="fs-5">Ocurrió un error: ${error.message}</p>`,
+                confirmButtonText: '<i class="ri-arrow-left-line me-2"></i> VOLVER AL DASHBOARD',
+                customClass: {
+                    confirmButton: 'btn btn-primary btn-lg px-4 py-3 fw-bold fs-5'
+                },
+                buttonsStyling: false
+            }).then(() => {
+                volverAlDashboard();
+                actualizarDashboard();
+            });
+        }
+    }
+    
+    // ✅ Función para impresión térmica automática (silenciosa)
+    async function imprimirTermicaTicketsCambio(cantidad) {
+        cantidad = parseInt(cantidad) || 1;
+        
+        try {
+            if (!ticketActual) {
+                Swal.close();
+                mostrarNotificacion('No hay ticket para imprimir', 'warning');
+                volverAlDashboard();
+                return;
+            }
+            
+            // Generar el HTML del ticket de cambio
+            const htmlTicketBase = generarHtmlTicketCambio(ticketActual);
+            
+            // Extraer contenido del body y estilos
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlTicketBase, 'text/html');
+            const bodyContent = doc.body.innerHTML;
+            const styleContent = doc.head.innerHTML;
+            
+            // ✅ MEJORADO: Generar múltiples copias en UN solo documento
+            let contenidoMultiple = '';
+            for (let i = 0; i < cantidad; i++) {
+                contenidoMultiple += `
+                    <div class="ticket-copy" style="${i > 0 ? 'page-break-before: always;' : ''}">
+                        ${bodyContent}
+                        ${cantidad > 1 ? `<p style="text-align: center; font-size: 10px; margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 5px;">📄 Copia ${i + 1} de ${cantidad}</p>` : ''}
+                    </div>
+                `;
+            }
+            
+            // Crear un iframe oculto para impresión
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'absolute';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = '0';
+            document.body.appendChild(iframe);
+            
+            const iframeDoc = iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    ${styleContent}
+                    <style>
+                        @media print {
+                            .ticket-copy { page-break-after: always; }
+                            .ticket-copy:last-child { page-break-after: auto; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${contenidoMultiple}
+                </body>
+                </html>
+            `);
+            iframeDoc.close();
+            
+            // Esperar a que se cargue el contenido
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // ✅ Imprimir UNA sola vez (el documento contiene todas las copias)
+            try {
+                iframe.contentWindow.print();
+            } catch (printError) {
+                console.warn('Impresión silenciosa no disponible:', printError);
+                // Fallback: usar modo ventana
+                document.body.removeChild(iframe);
+                imprimirTicketsCambio(ticketActual.ticket_id, cantidad, 'ventana');
+                return;
+            }
+            
+            // Limpiar iframe después de imprimir
+            setTimeout(() => {
+                if (iframe.parentNode) {
+                    document.body.removeChild(iframe);
+                }
+            }, 3000);
+            
+            Swal.close();
+            Swal.fire({
+                icon: 'success',
+                title: '✅ Impresión Térmica Enviada',
+                html: `
+                    <p class="fs-5">Se enviaron <strong>${cantidad}</strong> ticket(s) de cambio a la impresora térmica</p>
+                    <p class="text-success"><i class="ri-printer-fill"></i> Imprimiendo automáticamente...</p>
+                    <hr>
+                    <div class="alert alert-warning">
+                        <i class="ri-time-line"></i> <strong>Espere a que se complete la impresión</strong>
+                    </div>
+                `,
+                confirmButtonText: '<i class="ri-check-double-line me-2"></i> CONTINUAR',
+                showConfirmButton: true,
+                allowOutsideClick: false,
+                customClass: {
+                    confirmButton: 'btn btn-success btn-lg px-5 py-3 fw-bold fs-4'
+                },
+                buttonsStyling: false
+            }).then(() => {
+                volverAlDashboard();
+                actualizarDashboard();
+            });
+            
+        } catch (error) {
+            console.error('Error en impresión térmica:', error);
+            Swal.close();
+            
+            // Fallback: preguntar si quiere usar modo ventana
+            Swal.fire({
+                icon: 'warning',
+                title: '⚠️ Impresión Térmica No Disponible',
+                html: `
+                    <p class="fs-5">No se pudo conectar con la impresora térmica.</p>
+                    <p class="small text-muted">Error: ${error.message}</p>
+                    <hr>
+                    <p>¿Desea usar el modo de ventana de impresión?</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="ri-window-line me-2"></i> USAR MODO VENTANA',
+                cancelButtonText: '<i class="ri-close-line me-2"></i> CANCELAR',
+                customClass: {
+                    confirmButton: 'btn btn-warning btn-lg px-4 py-3 fw-bold fs-5 me-3',
+                    cancelButton: 'btn btn-secondary btn-lg px-4 py-3 fw-bold fs-5'
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Usar modo ventana como fallback
+                    imprimirTicketsCambio(ticketActual.ticket_id, cantidad, 'ventana');
+                } else {
+                    volverAlDashboard();
+                    actualizarDashboard();
+                }
+            });
         }
     }
     

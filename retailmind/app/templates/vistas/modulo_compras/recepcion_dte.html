@@ -3,106 +3,239 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-    .recepcion-header {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 20px;
+    /* ==================== NEXO DESIGN SYSTEM - RECEPCIÓN DTE ==================== */
+    
+    /* Variables CSS Nexo */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+        --nexo-transition-fast: 150ms ease;
+        --nexo-transition-normal: 250ms ease;
+    }
+    
+    /* Contenedor principal */
+    .page-content {
+        background: var(--nexo-white) !important;
+        min-height: calc(100vh - 70px);
     }
 
+    /* Header principal con gradiente Nexo */
+    .recepcion-header {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        box-shadow: var(--nexo-shadow-lg);
+        animation: fadeInHeader 0.4s ease;
+    }
+    
+    @keyframes fadeInHeader {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .recepcion-header h4 {
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        color: var(--nexo-white) !important;
+    }
+    
+    .recepcion-header p,
+    .recepcion-header small {
+        color: var(--nexo-white) !important;
+    }
+    
+    .recepcion-header .opacity-75 {
+        opacity: 0.85 !important;
+    }
+
+    /* Card principal estilizada */
     .recepcion-card {
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
-        border: none;
-        border-radius: 10px;
+        box-shadow: var(--nexo-shadow-lg);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-xl);
+        overflow: hidden;
+        animation: fadeInCard 0.4s ease;
+    }
+    
+    @keyframes fadeInCard {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
     .recepcion-card .card-header {
-        background: #f8f9fa;
-        border-bottom: none;
-        border-radius: 10px 10px 0 0;
+        background: var(--nexo-gray-100);
+        border-bottom: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-xl) var(--nexo-radius-xl) 0 0;
+        padding: 16px 20px;
+    }
+    
+    .recepcion-card .card-header h5 {
+        color: var(--nexo-gray-900);
+        font-weight: 600;
     }
 
+    /* Badges con colores Nexo */
     .badge-pendiente {
-        background-color: #ffc107;
-        color: #212529;
+        background-color: var(--nexo-warning);
+        color: var(--nexo-secondary);
+        font-weight: 600;
     }
 
     .badge-en-proceso {
-        background-color: #0dcaf0;
+        background-color: var(--nexo-info);
+        color: var(--nexo-white);
     }
 
     .badge-completado {
-        background-color: #28a745;
+        background-color: var(--nexo-success);
+        color: var(--nexo-white);
     }
 
     .badge-recepcionado {
-        background-color: #28a745;
+        background-color: var(--nexo-success);
+        color: var(--nexo-white);
     }
 
     .badge-anulado {
-        background-color: #dc3545;
+        background-color: var(--nexo-error);
+        color: var(--nexo-white);
     }
     
+    /* Fila de DTE recepcionado */
     .dte-recepcionado {
-        background-color: #f0f9ff;
-        opacity: 0.9;
+        background-color: var(--nexo-primary-light) !important;
+        opacity: 0.95;
+    }
+
+    /* Tabla con estilos Nexo */
+    .table {
+        border-radius: var(--nexo-radius-lg);
+        overflow: hidden;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    
+    .table thead,
+    .table thead tr {
+        background: var(--nexo-secondary) !important;
     }
 
     .table th {
-        background: #f1f3f5;
-        font-size: 13px;
+        background: var(--nexo-secondary) !important;
+        color: var(--nexo-white) !important;
+        font-size: 12px;
+        font-weight: 600;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 14px 12px;
+        border: none !important;
     }
 
     .table td {
         vertical-align: middle;
         font-size: 14px;
+        color: var(--nexo-gray-700);
+        padding: 12px;
+        border-bottom: 1px solid var(--nexo-gray-300);
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: var(--nexo-primary-light) !important;
     }
 
     .detalle-tallas {
         font-size: 13px;
-        color: #6c757d;
+        color: var(--nexo-gray-500);
     }
 
+    /* Card de resumen lateral */
     .resumen-card {
-        border-left: 4px solid #20c997;
-        background: #f8fdfb;
+        border-left: 4px solid var(--nexo-primary);
+        background: var(--nexo-primary-light);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+    }
+    
+    .resumen-card .card-body {
+        padding: 20px;
     }
 
     .section-title {
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 600;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
+        color: var(--nexo-gray-900);
     }
 
+    /* Sección de filtros */
     .filter-section label {
         font-weight: 600;
         font-size: 13px;
-        color: #495057;
+        color: var(--nexo-gray-700);
     }
 
     .filter-section .form-control,
     .filter-section .form-select {
-        border-radius: 6px;
+        border-radius: var(--nexo-radius-md);
         font-size: 14px;
+        border: 1px solid var(--nexo-gray-300);
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .filter-section .form-control:focus,
+    .filter-section .form-select:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
     }
 
+    /* Referencia de fecha */
     .date-reference {
-        background: #e3fcef;
-        border: 1px solid #a6f0c6;
-        border-radius: 8px;
-        padding: 12px 16px;
+        background: var(--nexo-primary-light);
+        border: 1px solid rgba(0, 102, 255, 0.2);
+        border-radius: var(--nexo-radius-lg);
+        padding: 14px 18px;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
         font-size: 13px;
-        color: #198754;
+        color: var(--nexo-primary-dark);
+        box-shadow: var(--nexo-shadow-sm);
     }
 
     .date-reference .btn-link {
         font-size: 12px;
         padding: 0;
+        color: var(--nexo-primary);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    
+    .date-reference .btn-link:hover {
+        color: var(--nexo-primary-dark);
+        text-decoration: underline;
     }
 
     @media (max-width: 576px) {
@@ -120,56 +253,100 @@
     
     /* Estilos para verificación de productos */
     .table-success {
-        background-color: #d1f4e0 !important;
+        background-color: rgba(0, 212, 170, 0.15) !important;
     }
     
     .table-warning {
-        background-color: #fff3cd !important;
+        background-color: rgba(255, 176, 32, 0.15) !important;
     }
     
     #productosVerificacionBody tr {
-        transition: all 0.2s ease;
+        transition: var(--nexo-transition-fast);
     }
     
     #productosVerificacionBody tr:hover {
-        background-color: #f8f9fa !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        background-color: var(--nexo-gray-100) !important;
+        box-shadow: var(--nexo-shadow-sm);
     }
     
+    /* Input de cantidad */
     .cantidad-recepcionada {
-        border: 2px solid #dee2e6;
-        transition: border-color 0.2s ease;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-sm);
+        transition: var(--nexo-transition-fast);
     }
     
     .cantidad-recepcionada:focus {
-        border-color: #20c997;
-        box-shadow: 0 0 0 0.2rem rgba(32, 201, 151, 0.25);
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
     }
     
+    /* Checkbox de producto */
     .producto-checkbox {
         width: 20px;
         height: 20px;
         cursor: pointer;
+        accent-color: var(--nexo-primary);
     }
     
+    /* Botón detallar */
     .btn-detallar {
-        transition: all 0.2s ease;
+        transition: var(--nexo-transition-fast);
+        border-color: var(--nexo-warning);
+        color: var(--nexo-warning);
     }
     
     .btn-detallar:hover {
         transform: scale(1.1);
+        background-color: var(--nexo-warning);
+        color: var(--nexo-white);
     }
     
     /* Sticky header para la tabla de productos */
     .sticky-top {
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: var(--nexo-shadow-sm);
     }
 
+    /* Modal headers con estilo Nexo */
     .modal-header {
-        background: #20c997;
-        color: white;
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: var(--nexo-white) !important;
+        border-bottom: none;
+    }
+    
+    .modal-header .modal-title {
+        font-weight: 600;
+        color: var(--nexo-white) !important;
+    }
+    
+    .modal-header h5,
+    .modal-header h6,
+    .modal-header small {
+        color: var(--nexo-white) !important;
+    }
+    
+    .modal-header.bg-warning {
+        background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;
+    }
+    
+    .modal-header.bg-warning .modal-title,
+    .modal-header.bg-warning h5,
+    .modal-header.bg-warning h6 {
+        color: var(--nexo-secondary) !important;
+    }
+    
+    .modal-header.bg-success {
+        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B090 100%) !important;
+    }
+    
+    .modal-header.bg-success .modal-title,
+    .modal-header.bg-success h5,
+    .modal-header.bg-success h6,
+    .modal-header.bg-success small {
+        color: var(--nexo-white) !important;
     }
 
+    /* Timeline con colores Nexo */
     .timeline {
         position: relative;
         padding-left: 30px;
@@ -183,7 +360,7 @@
         top: 0;
         bottom: 0;
         width: 2px;
-        background: #e9ecef;
+        background: var(--nexo-gray-300);
     }
 
     .timeline-item {
@@ -199,47 +376,451 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #20c997;
-        border: 2px solid white;
-        box-shadow: 0 0 0 2px #e9ecef;
+        background: var(--nexo-primary);
+        border: 2px solid var(--nexo-white);
+        box-shadow: 0 0 0 2px var(--nexo-gray-300);
     }
 
     .timeline-content {
-        padding: 8px 10px;
-        border-radius: 6px;
-        background: #f8f9fa;
-        border-left: 2px solid #20c997;
-        transition: all 0.2s ease;
+        padding: 10px 12px;
+        border-radius: var(--nexo-radius-md);
+        background: var(--nexo-gray-100);
+        border-left: 3px solid var(--nexo-primary);
+        transition: var(--nexo-transition-fast);
     }
     
     .timeline-content:hover {
-        background: #e9ecef;
-        border-left-color: #198754;
-        transform: translateX(2px);
+        background: var(--nexo-primary-light);
+        border-left-color: var(--nexo-primary-dark);
+        transform: translateX(3px);
     }
     
-    /* Nuevo estilo para historial sin timeline */
+    /* Historial item */
     .historial-item {
-        transition: all 0.2s ease;
+        transition: var(--nexo-transition-fast);
         cursor: default;
+        border-radius: var(--nexo-radius-sm);
     }
     
     .historial-item:hover {
-        background-color: #f8f9fa;
+        background-color: var(--nexo-gray-100);
     }
 
+    /* Estado vacío */
     .empty-state {
-        padding: 40px;
+        padding: 48px;
         text-align: center;
-        background: white;
-        border-radius: 12px;
-        border: 1px dashed #ced4da;
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        border: 2px dashed var(--nexo-gray-300);
     }
 
     .empty-state i {
-        font-size: 48px;
-        color: #adb5bd;
-        margin-bottom: 15px;
+        font-size: 56px;
+        color: var(--nexo-gray-500);
+        margin-bottom: 16px;
+    }
+    
+    .empty-state h5 {
+        color: var(--nexo-gray-700);
+        font-weight: 600;
+    }
+    
+    /* Botones estilo Nexo */
+    .btn-primary {
+        background-color: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--nexo-primary-dark);
+        border-color: var(--nexo-primary-dark);
+    }
+    
+    .btn-success {
+        background-color: var(--nexo-success);
+        border-color: var(--nexo-success);
+    }
+    
+    .btn-success:hover {
+        background-color: #00B090;
+        border-color: #00B090;
+    }
+    
+    .btn-warning {
+        background-color: var(--nexo-warning);
+        border-color: var(--nexo-warning);
+        color: var(--nexo-secondary);
+    }
+    
+    .btn-warning:hover {
+        background-color: #E69A00;
+        border-color: #E69A00;
+    }
+    
+    .btn-danger {
+        background-color: var(--nexo-error);
+        border-color: var(--nexo-error);
+    }
+    
+    .btn-danger:hover {
+        background-color: #E63939;
+        border-color: #E63939;
+    }
+    
+    .btn-outline-success {
+        color: var(--nexo-success);
+        border-color: var(--nexo-success);
+    }
+    
+    .btn-outline-success:hover {
+        background-color: var(--nexo-success);
+        border-color: var(--nexo-success);
+        color: var(--nexo-white);
+    }
+    
+    .btn-outline-primary {
+        color: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+    }
+    
+    .btn-outline-primary:hover {
+        background-color: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+    
+    .btn-outline-info {
+        color: var(--nexo-info);
+        border-color: var(--nexo-info);
+    }
+    
+    .btn-outline-info:hover {
+        background-color: var(--nexo-info);
+        border-color: var(--nexo-info);
+        color: var(--nexo-white);
+    }
+    
+    .btn-outline-secondary {
+        color: var(--nexo-gray-700);
+        border-color: var(--nexo-gray-300);
+    }
+    
+    .btn-outline-secondary:hover {
+        background-color: var(--nexo-gray-700);
+        border-color: var(--nexo-gray-700);
+        color: var(--nexo-white);
+    }
+    
+    .btn-outline-warning {
+        color: var(--nexo-warning);
+        border-color: var(--nexo-warning);
+    }
+    
+    .btn-outline-warning:hover {
+        background-color: var(--nexo-warning);
+        border-color: var(--nexo-warning);
+        color: var(--nexo-secondary);
+    }
+    
+    /* Cards laterales */
+    .card {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .card:hover {
+        box-shadow: var(--nexo-shadow-md);
+    }
+    
+    .card-header {
+        background: var(--nexo-gray-100);
+        border-bottom: 1px solid var(--nexo-gray-300);
+        padding: 14px 16px;
+    }
+    
+    .card-header h6 {
+        color: var(--nexo-gray-900);
+        font-weight: 600;
+        margin: 0;
+    }
+    
+    /* Alertas Nexo */
+    .alert-warning {
+        background-color: rgba(255, 176, 32, 0.1);
+        border-color: var(--nexo-warning);
+        color: #996B00;
+    }
+    
+    .alert-success {
+        background-color: rgba(0, 212, 170, 0.1);
+        border-color: var(--nexo-success);
+        color: #00805F;
+    }
+    
+    .alert-info {
+        background-color: rgba(0, 102, 255, 0.1);
+        border-color: var(--nexo-info);
+        color: var(--nexo-primary-dark);
+    }
+    
+    .alert-danger {
+        background-color: rgba(255, 77, 77, 0.1);
+        border-color: var(--nexo-error);
+        color: var(--nexo-error);
+    }
+    
+    /* Resumen verificación en modal */
+    .card.border-success {
+        border-color: var(--nexo-success) !important;
+    }
+    
+    /* Badges en tabla */
+    .badge.bg-primary {
+        background-color: var(--nexo-primary) !important;
+    }
+    
+    .badge.bg-info {
+        background-color: var(--nexo-info) !important;
+        color: var(--nexo-white) !important;
+    }
+    
+    .badge.bg-success {
+        background-color: var(--nexo-success) !important;
+    }
+    
+    .badge.bg-warning {
+        background-color: var(--nexo-warning) !important;
+        color: var(--nexo-secondary) !important;
+    }
+    
+    .badge.bg-danger {
+        background-color: var(--nexo-error) !important;
+    }
+    
+    .badge.bg-secondary {
+        background-color: var(--nexo-gray-500) !important;
+    }
+    
+    .badge.bg-dark {
+        background-color: var(--nexo-secondary) !important;
+    }
+    
+    /* Texto con colores Nexo */
+    .text-success {
+        color: var(--nexo-success) !important;
+    }
+    
+    .text-warning {
+        color: var(--nexo-warning) !important;
+    }
+    
+    .text-danger {
+        color: var(--nexo-error) !important;
+    }
+    
+    .text-primary {
+        color: var(--nexo-primary) !important;
+    }
+    
+    .text-muted {
+        color: var(--nexo-gray-500) !important;
+    }
+    
+    /* Paginación */
+    #paginationContainer .btn-outline-secondary {
+        color: var(--nexo-gray-700);
+        border-color: var(--nexo-gray-300);
+    }
+    
+    #paginationContainer .btn-outline-secondary:hover {
+        background-color: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .recepcion-header {
+            padding: 16px;
+        }
+        
+        .recepcion-header h4 {
+            font-size: 18px;
+        }
+    }
+    
+    /* Progress bar Nexo */
+    .progress {
+        background-color: var(--nexo-gray-100);
+        border-radius: var(--nexo-radius-full);
+    }
+    
+    .progress-bar.bg-success {
+        background-color: var(--nexo-success) !important;
+    }
+    
+    /* Spinner colors */
+    .spinner-border.text-success {
+        color: var(--nexo-success) !important;
+    }
+    
+    .spinner-border.text-warning {
+        color: var(--nexo-warning) !important;
+    }
+    
+    .spinner-border.text-primary {
+        color: var(--nexo-primary) !important;
+    }
+    
+    /* Table success header override */
+    .table thead.table-success th,
+    .table thead[style*="nexo-success"] th {
+        color: var(--nexo-white) !important;
+    }
+    
+    /* Form validation */
+    .is-invalid {
+        border-color: var(--nexo-error) !important;
+    }
+    
+    .invalid-feedback, .text-danger {
+        color: var(--nexo-error) !important;
+    }
+    
+    /* Card border-success override */
+    .border-success {
+        border-color: var(--nexo-success) !important;
+    }
+    
+    /* Modal footer */
+    .modal-footer {
+        border-top: 1px solid var(--nexo-gray-300);
+        background: var(--nexo-gray-100);
+    }
+    
+    /* Modal content */
+    .modal-content {
+        border: none;
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-xl);
+    }
+    
+    /* Alert in modal */
+    .modal-body .alert {
+        border-radius: var(--nexo-radius-md);
+    }
+    
+    /* Fix for table header in modals */
+    #listaProductosRecepcion .table thead th,
+    #verDteProductosBody .table thead th {
+        color: var(--nexo-white) !important;
+    }
+    
+    /* ===== ESTILOS MEJORADOS PARA VERIFICACIÓN ===== */
+    
+    /* Guía rápida de verificación */
+    #guiaVerificacion {
+        background: linear-gradient(135deg, var(--nexo-primary-light) 0%, rgba(0, 102, 255, 0.05) 100%);
+        border: 1px solid rgba(0, 102, 255, 0.2);
+        border-radius: var(--nexo-radius-lg);
+    }
+    
+    #guiaVerificacion .badge {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+    
+    /* Botones de acción rápida */
+    #accionesRapidas .btn {
+        border-radius: var(--nexo-radius-md);
+        font-weight: 500;
+        transition: var(--nexo-transition-fast);
+    }
+    
+    #accionesRapidas .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--nexo-shadow-md);
+    }
+    
+    #accionesRapidas .btn-success {
+        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B090 100%);
+        border: none;
+    }
+    
+    #accionesRapidas .btn-outline-warning:hover {
+        background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%);
+    }
+    
+    /* Badge de productos sin observaciones */
+    #badgeProductosSinObs {
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+    }
+    
+    /* Alerta de productos sin observaciones */
+    #alertaSinObservaciones {
+        border-left: 4px solid var(--nexo-warning);
+        animation: slideDown 0.3s ease;
+    }
+    
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Barra de progreso de verificación */
+    #barraProgreso {
+        transition: width 0.3s ease;
+        background: linear-gradient(90deg, var(--nexo-success), var(--nexo-accent));
+        border-radius: var(--nexo-radius-full);
+    }
+    
+    /* Vertical divider */
+    .vr {
+        width: 1px;
+        background: var(--nexo-gray-300);
+        opacity: 0.5;
+    }
+    
+    /* Sugerencias en observación masiva */
+    .sugerencia-obs {
+        font-size: 11px;
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .sugerencia-obs:hover {
+        background-color: var(--nexo-primary) !important;
+        color: white !important;
+        border-color: var(--nexo-primary) !important;
+    }
+    
+    /* Modal de problema - mejoras */
+    #modalDetalleProblema .alert-info {
+        background: var(--nexo-primary-light);
+        border: 1px solid rgba(0, 102, 255, 0.2);
+    }
+    
+    /* Responsive improvements */
+    @media (max-width: 768px) {
+        #accionesRapidas .btn {
+            font-size: 13px;
+            padding: 8px 12px;
+        }
+        
+        #guiaVerificacion {
+            font-size: 12px;
+        }
+        
+        #guiaVerificacion .badge {
+            display: none;
+        }
     }
 </style>
 
@@ -248,8 +829,8 @@
         <div class="recepcion-header">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h4 class="mb-1"><i class="bi bi-box-arrow-in-down me-2"></i>Recepción de Documentos Internos</h4>
-                    <p class="mb-0 opacity-75">Confirma la recepción de traspasos internos dirigidos a tu bodega</p>
+                    <h4 class="mb-1 text-white"><i class="bi bi-box-arrow-in-down me-2"></i>Recepción de Documentos Internos</h4>
+                    <p class="mb-0 text-white opacity-75">Confirma la recepción de traspasos internos dirigidos a tu bodega</p>
                 </div>
                 <div class="text-end">
                     <small class="opacity-75">
@@ -272,7 +853,7 @@
                             <small class="text-muted">Muestra documentos internos pendientes y recepcionados dirigidos a tu sucursal</small>
                         </div>
                         <div>
-                            <button id="btnRefresh" class="btn btn-outline-success btn-sm">
+                            <button id="btnRefresh" class="btn btn-outline-primary btn-sm">
                                 <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
                             </button>
                         </div>
@@ -288,9 +869,9 @@
                                             <small class="text-muted">Usa los accesos rápidos para ajustar el rango de búsqueda.</small>
                                         </div>
                                         <div class="acciones-rapidas ms-auto d-flex align-items-center gap-2 flex-wrap">
-                                            <button type="button" class="btn btn-link text-success" id="btnRangoMesActual">Mes actual</button>
+                                            <button type="button" class="btn btn-link text-primary fw-semibold" id="btnRangoMesActual">Mes actual</button>
                                             <span class="text-muted">|</span>
-                                            <button type="button" class="btn btn-link text-success" id="btnSoloHoy">Solo hoy</button>
+                                            <button type="button" class="btn btn-link text-primary fw-semibold" id="btnSoloHoy">Solo hoy</button>
                                         </div>
                                     </div>
                                 </div>
@@ -353,7 +934,7 @@
                 <div class="card resumen-card mb-3">
                     <div class="card-body">
                         <div class="section-title">
-                            <i class="bi bi-clipboard-check me-2"></i>Resumen de recepción
+                            <i class="bi bi-clipboard-check me-2 text-primary"></i>Resumen de recepción
                         </div>
                         <ul class="list-unstyled mb-0">
                             <li class="mb-2"><span class="text-muted">Recibidos hoy:</span> <strong id="resumenRecibidos">0</strong></li>
@@ -380,22 +961,40 @@
                     </div>
                 </div>
 
+                <!-- Card de DTEs rechazados (que YO envié) -->
+                <div class="card mb-3 border-danger d-none" id="cardDTEsRechazados">
+                    <div class="card-header bg-danger bg-opacity-10">
+                        <h6 class="mb-0 text-danger">
+                            <i class="bi bi-x-octagon me-2"></i>DTEs Rechazados
+                            <span class="badge bg-danger ms-1" id="badgeRechazados">0</span>
+                        </h6>
+                    </div>
+                    <div class="card-body py-2">
+                        <p class="small text-muted mb-2">
+                            Tienes DTEs que enviaste pero fueron rechazados. Puedes rehabilitarlos.
+                        </p>
+                        <button type="button" class="btn btn-outline-danger btn-sm w-100" id="btnVerDTEsRechazados">
+                            <i class="bi bi-eye me-1"></i>Ver y Rehabilitar
+                        </button>
+                    </div>
+                </div>
+
                 <div class="card mb-3">
                     <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Cómo funciona</h6>
+                        <h6 class="mb-0"><i class="bi bi-info-circle me-2 text-primary"></i>Cómo funciona</h6>
                     </div>
                     <div class="card-body">
                         <ul class="list-unstyled mb-0">
-                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Solo ves documentos internos con destino a tu sucursal.</li>
-                            <li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>Revisa el detalle antes de confirmar la recepción.</li>
-                            <li><i class="bi bi-check-circle text-success me-2"></i>Al confirmar, el stock se incrementa automáticamente y el movimiento queda completado.</li>
+                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Solo ves documentos internos con destino a tu sucursal.</li>
+                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Revisa el detalle antes de confirmar la recepción.</li>
+                            <li><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Al confirmar, el stock se incrementa automáticamente y el movimiento queda completado.</li>
                         </ul>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-header bg-white">
-                        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Historial reciente</h6>
+                        <h6 class="mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Historial reciente</h6>
                     </div>
                     <div class="card-body p-2">
                         <div id="historialTimeline">
@@ -416,10 +1015,10 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div>
-                    <h5 class="modal-title mb-1" id="modalDetalleLabel">
+                    <h5 class="modal-title mb-1 text-white" id="modalDetalleLabel">
                         <i class="bi bi-file-text me-2"></i>Verificar Recepción - DTE #<span id="detalleNumero">-</span>
                     </h5>
-                    <small class="text-white-50">Marca los productos según su estado al recibirlos</small>
+                    <small class="text-white opacity-75">Marca los productos según su estado al recibirlos</small>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
@@ -449,22 +1048,71 @@
                     </div>
                 </div>
 
-                <!-- Acciones Rápidas -->
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div>
-                        <button type="button" class="btn btn-sm btn-outline-success" id="btnMarcarTodosOK">
-                            <i class="bi bi-check-all me-1"></i>Marcar todos OK
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-warning" id="btnDesmarcarTodos">
-                            <i class="bi bi-x-lg me-1"></i>Desmarcar todos
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-info" id="btnObservacionMasiva">
-                            <i class="bi bi-chat-left-text me-1"></i>Observación masiva
+                <!-- Panel de Guía Rápida -->
+                <div class="alert alert-info mb-3 py-2" id="guiaVerificacion">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-lightbulb-fill me-2 fs-5"></i>
+                        <div class="flex-grow-1">
+                            <strong>¿Cómo verificar?</strong>
+                            <span class="text-muted ms-2">
+                                <span class="badge bg-success me-1">1</span>Si todo llegó bien → <strong>Marcar todos OK</strong> |
+                                <span class="badge bg-warning text-dark me-1">2</span>Si hay problemas → Desmarca productos y usa <strong>⚠️</strong> para detallar |
+                                <span class="badge bg-primary me-1">3</span>Agrega observación a todos los problemas con <strong>Obs. Masiva</strong>
+                            </span>
+                        </div>
+                        <button type="button" class="btn-close btn-close-sm" onclick="$('#guiaVerificacion').slideUp(200)"></button>
+                    </div>
+                </div>
+
+                <!-- Acciones Rápidas MEJORADAS -->
+                <div class="row mb-3 g-2" id="accionesRapidas">
+                    <div class="col-md-8">
+                        <div class="btn-group-vertical btn-group-sm w-100 d-md-none mb-2">
+                            <button type="button" class="btn btn-success" id="btnMarcarTodosOKMobile">
+                                <i class="bi bi-check-all me-1"></i>✅ Todo llegó bien - Marcar todos OK
+                            </button>
+                        </div>
+                        <div class="d-none d-md-flex gap-2 align-items-center">
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-success" id="btnMarcarTodosOK" title="Todos los productos llegaron en perfecto estado">
+                                    <i class="bi bi-check-all me-1"></i>✅ Marcar todos OK
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="btnDesmarcarTodos" title="Quitar verificación de todos">
+                                    <i class="bi bi-x-lg me-1"></i>Limpiar
+                                </button>
+                            </div>
+                            <div class="vr mx-2"></div>
+                            <button type="button" class="btn btn-outline-warning" id="btnObservacionMasiva" title="Agregar la misma observación a todos los productos con problemas">
+                                <i class="bi bi-chat-left-text me-1"></i>📝 Observación Masiva
+                                <span class="badge bg-danger ms-1 d-none" id="badgeProductosSinObs">0</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="d-flex align-items-center justify-content-end gap-2">
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-box-seam me-1"></i>
+                                <span id="contadorProductos">0 de 0</span> verificados
+                            </span>
+                            <div class="progress flex-grow-1" style="width: 100px; height: 8px;" title="Progreso de verificación">
+                                <div class="progress-bar bg-success" id="barraProgreso" role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alerta de productos sin observaciones -->
+                <div class="alert alert-warning py-2 mb-2 d-none" id="alertaSinObservaciones">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong><span id="cantSinObs">0</span> producto(s)</strong> con problemas no tienen observación.
+                            <span class="text-muted">Usa "Observación Masiva" para agregarlas rápidamente.</span>
+                        </div>
+                        <button type="button" class="btn btn-warning btn-sm" onclick="$('#btnObservacionMasiva').click()">
+                            <i class="bi bi-pencil-square me-1"></i>Agregar ahora
                         </button>
                     </div>
-                    <small class="text-muted">
-                        <span id="contadorProductos">0 de 0</span> productos verificados
-                    </small>
                 </div>
 
                 <!-- Lista de Productos con Scroll -->
@@ -637,7 +1285,7 @@
 <div class="modal fade" id="modalDTEsProblemas" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header bg-warning">
+            <div class="modal-header bg-warning" style="background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;">
                 <h5 class="modal-title text-dark">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>DTEs con Productos Problemáticos
                 </h5>
@@ -678,6 +1326,51 @@
                 <a href="/app/regularizar-recepciones/" class="btn btn-warning">
                     <i class="bi bi-tools me-1"></i>Ir a Regularización
                 </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal DTEs Rechazados (para que el emisor pueda rehabilitar) -->
+<div class="modal fade" id="modalDTEsRechazados" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-error) 0%, #CC3D3D 100%);">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-x-octagon me-2"></i>DTEs Rechazados por Destino
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Estos son los DTEs que <strong>TÚ enviaste</strong> pero fueron <strong>rechazados</strong> por la sucursal destino.
+                    Puedes <strong>rehabilitarlos</strong> para que puedan volver a intentar recibirlos.
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th>DTE</th>
+                                <th>Fecha</th>
+                                <th>Destino</th>
+                                <th>Motivo Rechazo</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaDTEsRechazadosBody">
+                            <tr>
+                                <td colspan="5" class="text-center py-3">
+                                    <div class="spinner-border text-danger"></div>
+                                    <p class="text-muted mt-2">Cargando...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -743,8 +1436,8 @@
                 <!-- Tabla de Productos -->
                 <div class="table-responsive">
                     <table class="table table-hover table-sm">
-                        <thead class="table-success">
-                            <tr>
+                        <thead style="background: var(--nexo-success) !important;">
+                            <tr style="background: var(--nexo-success) !important;">
                                 <th>SKU</th>
                                 <th>Producto</th>
                                 <th>Artículo</th>
@@ -833,7 +1526,7 @@ $(document).ready(function() {
     $('#btnSoloHoy').on('click', aplicarRangoHoy);
     
     // Nuevos eventos para verificación
-    $('#btnMarcarTodosOK').on('click', marcarTodosOK);
+    $('#btnMarcarTodosOK, #btnMarcarTodosOKMobile').on('click', marcarTodosOK);
     $('#btnDesmarcarTodos').on('click', desmarcarTodos);
     $('#btnObservacionMasiva').on('click', abrirObservacionMasiva);
     $('#buscarProductoModal').on('input', filtrarProductosModal);
@@ -843,11 +1536,15 @@ $(document).ready(function() {
     
     // Auto-cálculo en modal de problemas
     $('#problemaCantidadRecepcionada, #problemaCantidadDanada').on('input', calcularFaltanteAutomatico);
+    
+    // Eventos para DTEs rechazados (que yo envié)
+    $('#btnVerDTEsRechazados').on('click', verDTEsRechazados);
 
     inicializarReferenciaFechas();
     cargarInfoSucursal();
     cargarRecepciones();
     cargarHistorial();
+    cargarDTEsRechazados(); // Cargar DTEs que yo envié y fueron rechazados
 });
 
 function inicializarReferenciaFechas() {
@@ -1158,17 +1855,17 @@ function renderizarProductosVerificacion() {
     const tbody = $('#productosVerificacionBody');
     tbody.empty();
     
-    const busqueda = $('#buscarProductoModal').val().toLowerCase();
+    const busqueda = $('#buscarProductoModal').val().toLowerCase().trim();
     
     productosVerificacion.forEach((prod, index) => {
         // Filtrar por búsqueda (incluye SKU, descripción, artículo, color, marca y talla)
         const coincide = !busqueda || 
-            prod.sku.toLowerCase().includes(busqueda) ||
-            prod.descripcion.toLowerCase().includes(busqueda) ||
+            (prod.sku && prod.sku.toLowerCase().includes(busqueda)) ||
+            (prod.descripcion && prod.descripcion.toLowerCase().includes(busqueda)) ||
             (prod.articulo && prod.articulo.toLowerCase().includes(busqueda)) ||
             (prod.color && prod.color.toLowerCase().includes(busqueda)) ||
             (prod.marca && prod.marca.toLowerCase().includes(busqueda)) ||
-            prod.talla.toLowerCase().includes(busqueda);
+            (prod.talla && prod.talla.toLowerCase().includes(busqueda));
         
         if (!coincide) return;
         
@@ -1310,6 +2007,10 @@ function actualizarCantidadRecepcionada(index, cantidad) {
 }
 
 function marcarTodosOK() {
+    // Contar cuántos productos se marcarán
+    const totalProductos = productosVerificacion.length;
+    const totalUnidades = productosVerificacion.reduce((sum, p) => sum + p.cantidad_esperada, 0);
+    
     productosVerificacion.forEach(prod => {
         prod.marcado_ok = true;
         prod.cantidad_recepcionada = prod.cantidad_esperada;
@@ -1320,61 +2021,150 @@ function marcarTodosOK() {
     });
     renderizarProductosVerificacion();
     actualizarResumenVerificacion();
+    
+    // Feedback visual
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+    });
+    Toast.fire({
+        icon: 'success',
+        title: `✅ ${totalProductos} productos (${totalUnidades} unidades) marcados como OK`
+    });
+    
+    // Ocultar alerta de sin observaciones
+    $('#alertaSinObservaciones').addClass('d-none');
+    $('#badgeProductosSinObs').addClass('d-none');
 }
 
 function desmarcarTodos() {
     productosVerificacion.forEach(prod => {
         prod.marcado_ok = false;
+        prod.cantidad_recepcionada = prod.cantidad_esperada; // Mantener cantidades pero desmarcar
+        prod.cantidad_danada = 0;
+        prod.cantidad_faltante = 0;
+        prod.estado = 'RECEPCIONADO_OK'; // Estado inicial
+        prod.observaciones = '';
     });
     renderizarProductosVerificacion();
     actualizarResumenVerificacion();
+    
+    // Feedback visual
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 1500,
+        timerProgressBar: true
+    });
+    Toast.fire({
+        icon: 'info',
+        title: 'Verificación limpiada'
+    });
 }
 
 function abrirObservacionMasiva() {
     // Obtener productos con problemas
     const productosConProblemas = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK');
+    const productosSinObs = productosConProblemas.filter(p => !p.observaciones || p.observaciones.trim() === '');
     
     if (productosConProblemas.length === 0) {
         Swal.fire({
             icon: 'info',
-            title: 'Sin productos con problemas',
-            text: 'Todos los productos están marcados como OK. No hay productos a los que aplicar observaciones.',
+            title: '✅ Sin productos con problemas',
+            html: `
+                <div class="text-center">
+                    <i class="bi bi-box-seam text-success display-4 mb-3"></i>
+                    <p class="mb-0">Todos los productos están marcados como <strong>OK</strong>.</p>
+                    <p class="text-muted">No hay productos a los que aplicar observaciones.</p>
+                </div>
+            `,
             confirmButtonText: 'Entendido'
         });
         return;
     }
     
+    // Clasificar productos por tipo de problema
+    const parciales = productosConProblemas.filter(p => p.estado === 'RECEPCIONADO_PARCIAL');
+    const danados = productosConProblemas.filter(p => p.estado === 'RECEPCIONADO_DANADO');
+    const faltantes = productosConProblemas.filter(p => p.estado === 'FALTANTE');
+    
+    // Crear lista resumen por tipo
+    let resumenHtml = '<div class="row text-center mb-3">';
+    if (parciales.length > 0) resumenHtml += `<div class="col"><span class="badge bg-warning text-dark fs-6">${parciales.length} parciales</span></div>`;
+    if (danados.length > 0) resumenHtml += `<div class="col"><span class="badge bg-danger fs-6">${danados.length} dañados</span></div>`;
+    if (faltantes.length > 0) resumenHtml += `<div class="col"><span class="badge bg-secondary fs-6">${faltantes.length} faltantes</span></div>`;
+    resumenHtml += '</div>';
+    
+    // Observaciones sugeridas comunes
+    const sugerencias = [
+        'Pedido incompleto - productos no llegaron',
+        'Caja dañada durante el transporte',
+        'Producto con defecto de fábrica',
+        'Diferencia entre lo enviado y facturado',
+        'Mercadería en mal estado'
+    ];
+    
+    const sugerenciasHtml = sugerencias.map((s, i) => 
+        `<button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 sugerencia-obs" data-texto="${s}">${s}</button>`
+    ).join('');
+    
     Swal.fire({
         title: '📝 Observación Masiva',
         html: `
             <div class="text-start">
-                <p>Se aplicará la misma observación a <strong>${productosConProblemas.length}</strong> producto(s) con problemas:</p>
-                <div class="alert alert-info mb-3" style="max-height: 150px; overflow-y: auto;">
+                ${resumenHtml}
+                
+                <div class="alert alert-warning py-2 mb-3">
+                    <i class="bi bi-lightbulb me-2"></i>
+                    <strong>${productosSinObs.length}</strong> de ${productosConProblemas.length} productos ${productosSinObs.length === productosConProblemas.length ? 'NO tienen' : 'aún no tienen'} observación.
+                    <br><small class="text-muted">Esta observación se aplicará a <strong>TODOS</strong> los productos con problemas.</small>
+                </div>
+                
+                <label class="form-label fw-bold">Escribe o selecciona una observación:</label>
+                <textarea id="observacionMasivaTexto" class="form-control mb-2" rows="3" 
+                          placeholder="Describe el problema común de estos productos..."></textarea>
+                
+                <div class="mb-2">
+                    <small class="text-muted">💡 Sugerencias rápidas:</small>
+                    <div class="mt-1">
+                        ${sugerenciasHtml}
+                    </div>
+                </div>
+                
+                <div class="border rounded p-2 bg-light" style="max-height: 120px; overflow-y: auto;">
+                    <small class="text-muted d-block mb-1"><strong>Productos afectados:</strong></small>
                     <small>
-                        ${productosConProblemas.map(p => 
-                            `• ${p.descripcion} (${p.sku}) - Talla ${p.talla}`
-                        ).join('<br>')}
+                        ${productosConProblemas.map(p => {
+                            const tieneObs = p.observaciones && p.observaciones.trim() !== '';
+                            const icon = tieneObs ? '✅' : '⚠️';
+                            return `${icon} ${p.descripcion} (${p.sku}) - Talla ${p.talla}`;
+                        }).join('<br>')}
                     </small>
                 </div>
-                <label class="form-label fw-bold">Observación para todos:</label>
-                <textarea id="observacionMasivaTexto" class="form-control" rows="3" 
-                          placeholder="Ej: Pedido incompleto, Caja dañada en tránsito, etc."></textarea>
-                <small class="text-muted mt-1 d-block">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Esta observación se agregará a todos los productos con problemas
-                </small>
             </div>
         `,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: '<i class="bi bi-save me-1"></i>Aplicar a todos',
+        confirmButtonText: '<i class="bi bi-check-all me-1"></i>Aplicar a los ' + productosConProblemas.length + ' productos',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#0dcaf0',
-        width: '600px',
+        confirmButtonColor: '#ffc107',
+        width: '700px',
+        didOpen: () => {
+            // Agregar eventos a las sugerencias
+            document.querySelectorAll('.sugerencia-obs').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.getElementById('observacionMasivaTexto').value = btn.dataset.texto;
+                });
+            });
+        },
         preConfirm: () => {
             const observacion = document.getElementById('observacionMasivaTexto').value.trim();
             if (!observacion) {
-                Swal.showValidationMessage('Debes ingresar una observación');
+                Swal.showValidationMessage('⚠️ Debes ingresar una observación');
                 return false;
             }
             return observacion;
@@ -1396,19 +2186,29 @@ function abrirObservacionMasiva() {
             renderizarProductosVerificacion();
             actualizarResumenVerificacion();
             
+            // Ocultar alerta de productos sin observaciones
+            $('#alertaSinObservaciones').addClass('d-none');
+            
             // Mensaje de confirmación
             Swal.fire({
                 icon: 'success',
                 title: '✅ Observación Aplicada',
                 html: `
-                    <p>Se aplicó la observación a <strong>${contador}</strong> producto(s):</p>
-                    <div class="alert alert-success mb-0">
-                        <i class="bi bi-chat-left-text me-2"></i>
-                        "${observacion}"
+                    <div class="text-center">
+                        <p>Se aplicó la observación a <strong>${contador}</strong> producto(s):</p>
+                        <div class="alert alert-success mb-3">
+                            <i class="bi bi-chat-left-text me-2"></i>
+                            <em>"${observacion}"</em>
+                        </div>
+                        <p class="text-muted mb-0">
+                            <i class="bi bi-bell me-1"></i>
+                            Esta información será enviada a la bodega emisora para su conocimiento y regularización.
+                        </p>
                     </div>
                 `,
-                timer: 2500,
-                showConfirmButton: false
+                timer: 3000,
+                showConfirmButton: true,
+                confirmButtonText: 'Continuar'
             });
         }
     });
@@ -1426,23 +2226,42 @@ function limpiarBusqueda() {
 function actualizarResumenVerificacion() {
     let ok = 0, parcial = 0, danado = 0, faltante = 0;
     let verificados = 0;
+    let productosSinObservaciones = 0;
     
     productosVerificacion.forEach(prod => {
         if (prod.marcado_ok) verificados++;
         
-        // Sumar UNIDADES en lugar de contar productos
+        // Contar productos con problemas sin observaciones
+        if (prod.estado !== 'RECEPCIONADO_OK' && (!prod.observaciones || prod.observaciones.trim() === '')) {
+            productosSinObservaciones++;
+        }
+        
+        // Calcular cantidades para este producto
+        const cantidadBuena = Math.max(0, prod.cantidad_recepcionada - prod.cantidad_danada);
+        const cantidadFaltante = Math.max(0, prod.cantidad_esperada - prod.cantidad_recepcionada);
+        const cantidadDanada = prod.cantidad_danada || 0;
+        
+        // Sumar UNIDADES correctamente según el estado
         switch(prod.estado) {
             case 'RECEPCIONADO_OK': 
+                // Todo OK - solo suma a OK
                 ok += prod.cantidad_recepcionada;
                 break;
             case 'RECEPCIONADO_PARCIAL': 
-                parcial += (prod.cantidad_recepcionada - prod.cantidad_danada); // Solo las buenas
+                // Parcial: las buenas van a parcial, las faltantes a faltante
+                parcial += cantidadBuena;
+                faltante += cantidadFaltante;
+                danado += cantidadDanada;
                 break;
             case 'RECEPCIONADO_DANADO': 
-                danado += prod.cantidad_danada;
+                // Dañado: las dañadas van a dañado, las buenas a parcial, las faltantes a faltante
+                danado += cantidadDanada;
+                if (cantidadBuena > 0) parcial += cantidadBuena;
+                if (cantidadFaltante > 0) faltante += cantidadFaltante;
                 break;
             case 'FALTANTE': 
-                faltante += prod.cantidad_faltante;
+                // Faltante completo - todo a faltante
+                faltante += prod.cantidad_esperada;
                 break;
         }
     });
@@ -1453,16 +2272,50 @@ function actualizarResumenVerificacion() {
     $('#resumenFaltante').text(faltante);
     $('#contadorProductos').text(`${verificados} de ${productosVerificacion.length}`);
     
-    // Cambiar el texto del botón según el estado
-    const hayProblemas = parcial > 0 || danado > 0 || faltante > 0;
+    // Actualizar barra de progreso
+    const porcentaje = productosVerificacion.length > 0 ? (verificados / productosVerificacion.length) * 100 : 0;
+    $('#barraProgreso').css('width', `${porcentaje}%`);
     
-    if (hayProblemas) {
-        // Ocultar botón de recepción parcial (ya no es necesario)
-        $('#btnRecepcionarParcial').hide();
-        $('#btnConfirmarRecepcion').html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción');
+    // Mostrar/ocultar alerta de productos sin observaciones
+    const hayProblemas = parcial > 0 || danado > 0 || faltante > 0;
+    const hayProductosConProblemasSinObs = productosSinObservaciones > 0;
+    
+    if (hayProductosConProblemasSinObs) {
+        $('#alertaSinObservaciones').removeClass('d-none');
+        $('#cantSinObs').text(productosSinObservaciones);
+        $('#badgeProductosSinObs').removeClass('d-none').text(productosSinObservaciones);
     } else {
+        $('#alertaSinObservaciones').addClass('d-none');
+        $('#badgeProductosSinObs').addClass('d-none');
+    }
+    
+    // Cambiar el texto y estado del botón según la situación
+    if (hayProblemas) {
         $('#btnRecepcionarParcial').hide();
-        $('#btnConfirmarRecepcion').html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa');
+        
+        if (hayProductosConProblemasSinObs) {
+            // HAY problemas PERO faltan observaciones - DESHABILITAR botón
+            $('#btnConfirmarRecepcion')
+                .removeClass('btn-success btn-warning')
+                .addClass('btn-secondary')
+                .prop('disabled', true)
+                .html('<i class="bi bi-lock me-1"></i>Agregar observaciones primero');
+        } else {
+            // HAY problemas Y todas tienen observaciones - HABILITAR botón
+            $('#btnConfirmarRecepcion')
+                .removeClass('btn-success btn-secondary')
+                .addClass('btn-warning')
+                .prop('disabled', false)
+                .html('<i class="bi bi-exclamation-triangle me-1"></i>Confirmar con Problemas');
+        }
+    } else {
+        // NO hay problemas - todo OK
+        $('#btnRecepcionarParcial').hide();
+        $('#btnConfirmarRecepcion')
+            .removeClass('btn-warning btn-secondary')
+            .addClass('btn-success')
+            .prop('disabled', false)
+            .html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa');
     }
 }
 
@@ -1852,10 +2705,11 @@ function procesarRecepcion(incluirProblemas) {
         data: JSON.stringify(payload)
     }).done(response => {
         const esCompleto = response.estado_dte === 'RECEPCIONADO_COMPLETO';
+        const sucursalOrigen = documentoSeleccionado ? documentoSeleccionado.sucursal_origen : 'la bodega emisora';
         
         Swal.fire({
             icon: esCompleto ? 'success' : 'warning',
-            title: esCompleto ? '✅ Recepción Completa' : '⚠️ Recepción Parcial',
+            title: esCompleto ? '✅ Recepción Completa' : '⚠️ Recepción con Observaciones',
             html: `
                 <div class="text-start">
                     <p>${response.message}</p>
@@ -1867,19 +2721,24 @@ function procesarRecepcion(incluirProblemas) {
                         <li class="text-muted">📥 Total recepcionado: ${response.total_recepcionado}</li>
                     </ul>
                     ${response.productos_problemas > 0 ? `
-                        <div class="alert alert-warning mt-3">
+                        <div class="alert alert-info mt-3 mb-2">
+                            <i class="bi bi-bell-fill me-2"></i>
+                            <strong>Notificación enviada</strong>
+                            <p class="mb-0 small">Se ha notificado a <strong>${sucursalOrigen}</strong> sobre los ${response.productos_problemas} producto(s) con problemas para que puedan regularizar la situación.</p>
+                        </div>
+                        <div class="alert alert-warning mb-0">
                             <i class="bi bi-exclamation-triangle me-2"></i>
-                            <strong>Atención:</strong> ${response.productos_problemas} producto(s) requieren regularización.
+                            <strong>Próximos pasos:</strong> Los productos con problemas quedan pendientes de regularización.
                             <br>
                             <a href="/app/regularizar-recepciones/" class="btn btn-warning btn-sm mt-2">
-                                <i class="ri-settings-3-line me-1"></i> Ir a Regularización
+                                <i class="bi bi-tools me-1"></i> Ir a Regularización
                             </a>
                         </div>
                     ` : ''}
                 </div>
             `,
             confirmButtonText: 'Entendido',
-            width: '600px'
+            width: '650px'
         });
         
         modalDetalle.hide();
@@ -1957,6 +2816,159 @@ function verDTEsConProblemas() {
         .fail(() => {
             Swal.fire('Error', 'No se pudieron cargar los DTEs con problemas', 'error');
         });
+}
+
+// ========== FUNCIONES PARA DTEs RECHAZADOS (que yo envié) ==========
+
+function cargarDTEsRechazados() {
+    $.getJSON('/app/dte/obtener_rechazados/')
+        .done(response => {
+            if (response.success && response.items && response.items.length > 0) {
+                // Mostrar la card si hay rechazados
+                $('#cardDTEsRechazados').removeClass('d-none');
+                $('#badgeRechazados').text(response.items.length);
+            } else {
+                $('#cardDTEsRechazados').addClass('d-none');
+            }
+        })
+        .fail(() => {
+            console.warn('No fue posible cargar los DTEs rechazados.');
+        });
+}
+
+function verDTEsRechazados() {
+    const tbody = $('#tablaDTEsRechazadosBody');
+    tbody.html(`
+        <tr>
+            <td colspan="5" class="text-center py-3">
+                <div class="spinner-border text-danger"></div>
+                <p class="text-muted mt-2">Cargando...</p>
+            </td>
+        </tr>
+    `);
+    
+    new bootstrap.Modal(document.getElementById('modalDTEsRechazados')).show();
+    
+    $.getJSON('/app/dte/obtener_rechazados/')
+        .done(response => {
+            if (!response.success) {
+                tbody.html(`<tr><td colspan="5" class="text-center text-danger">${response.error || 'Error al cargar'}</td></tr>`);
+                return;
+            }
+            
+            const items = response.items || [];
+            tbody.empty();
+            
+            if (items.length === 0) {
+                tbody.html(`
+                    <tr>
+                        <td colspan="5" class="text-center py-4">
+                            <i class="bi bi-check-circle-fill text-success display-4"></i>
+                            <p class="text-muted mt-2">¡Excelente! No tienes DTEs rechazados</p>
+                        </td>
+                    </tr>
+                `);
+            } else {
+                items.forEach(dte => {
+                    tbody.append(`
+                        <tr>
+                            <td>
+                                <strong>#${dte.numero_documento}</strong>
+                                <br><small class="text-muted">${dte.tipo_documento}</small>
+                            </td>
+                            <td><small>${dte.fecha_emision}</small></td>
+                            <td><small>${dte.receptor}</small></td>
+                            <td>
+                                <small class="text-danger">${dte.motivo_rechazo}</small>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-success" onclick="rehabilitarDTE(${dte.id}, '${dte.numero_documento}')" title="Rehabilitar para que puedan volver a recibirlo">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Rehabilitar
+                                </button>
+                            </td>
+                        </tr>
+                    `);
+                });
+            }
+        })
+        .fail(() => {
+            tbody.html(`<tr><td colspan="5" class="text-center text-danger">Error al cargar DTEs rechazados</td></tr>`);
+        });
+}
+
+function rehabilitarDTE(dteId, numeroDocumento) {
+    Swal.fire({
+        title: '🔄 Rehabilitar DTE',
+        html: `
+            <div class="text-start">
+                <p>¿Deseas rehabilitar el DTE <strong>#${numeroDocumento}</strong>?</p>
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Al rehabilitar:
+                    <ul class="mb-0 mt-2">
+                        <li>El DTE volverá a aparecer como <strong>pendiente</strong> para el destino</li>
+                        <li>Podrán intentar recibirlo nuevamente</li>
+                        <li>Se notificará a la sucursal destino</li>
+                    </ul>
+                </div>
+                <label class="form-label mt-3">Observación (opcional):</label>
+                <textarea id="observacionRehabilitacion" class="form-control" rows="2" placeholder="Ej: Se corrigió el problema, intentar recibir nuevamente..."></textarea>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, rehabilitar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#28a745',
+        width: '550px'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        
+        const observaciones = document.getElementById('observacionRehabilitacion').value.trim();
+        
+        // Mostrar loading
+        Swal.fire({
+            title: 'Procesando...',
+            html: 'Rehabilitando DTE...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+        
+        $.ajax({
+            url: '/app/dte/rehabilitar_rechazado/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                dte_id: dteId,
+                observaciones: observaciones
+            })
+        }).done(response => {
+            if (response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '✅ DTE Rehabilitado',
+                    html: `
+                        <p>${response.message}</p>
+                        <div class="alert alert-success mt-3">
+                            <i class="bi bi-bell me-2"></i>
+                            Se notificó a la sucursal destino que el DTE está disponible nuevamente.
+                        </div>
+                    `,
+                    confirmButtonText: 'Entendido'
+                });
+                
+                // Cerrar modal y recargar
+                bootstrap.Modal.getInstance(document.getElementById('modalDTEsRechazados')).hide();
+                cargarDTEsRechazados();
+                cargarRecepciones();
+            } else {
+                Swal.fire('Error', response.error || 'No se pudo rehabilitar el DTE', 'error');
+            }
+        }).fail(xhr => {
+            Swal.fire('Error', xhr.responseJSON?.error || 'Error de conexión', 'error');
+        });
+    });
 }
 
 function cargarHistorial(refrescar = false) {

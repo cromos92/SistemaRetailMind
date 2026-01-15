@@ -1,0 +1,2462 @@
+{% load static %}
+{% load humanize %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+/* ==================== DASHBOARD COMPRAS MEJORADO - RetailMind ==================== */
+/* Siguiendo guía de estilos: templates/vistas/ESTILOS_MODULOS.md */
+
+:root {
+    --rm-primary: #405189;
+    --rm-accent: #0ab39c;
+    --rm-success: #0ab39c;
+    --rm-warning: #ffbe0b;
+    --rm-danger: #f06548;
+    --rm-info: #299cdb;
+    --rm-purple: #6f42c1;
+    --rm-indigo: #6610f2;
+}
+
+.page-content {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%) !important;
+    min-height: calc(100vh - 70px);
+}
+
+/* Header principal del dashboard */
+.dashboard-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    border-radius: 20px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 10px 40px rgba(64, 81, 137, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 60%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1));
+    transform: rotate(25deg);
+}
+
+.dashboard-header h1 {
+    color: white;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dashboard-header p {
+    color: rgba(255,255,255,0.85);
+    margin: 8px 0 0;
+    font-size: 0.95rem;
+}
+
+/* Sección de filtros */
+.filter-section {
+    background: white;
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(64, 81, 137, 0.08);
+}
+
+.filter-section .form-label {
+    font-weight: 600;
+    color: #405189;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.filter-section .form-control,
+.filter-section .form-select {
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+    padding: 10px 14px;
+    transition: all 0.3s ease;
+}
+
+.filter-section .form-control:focus,
+.filter-section .form-select:focus {
+    border-color: #405189;
+    box-shadow: 0 0 0 4px rgba(64, 81, 137, 0.1);
+}
+
+/* KPI Cards Mejoradas */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.kpi-card {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: none;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+}
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 16px 16px 0 0;
+}
+
+.kpi-card.kpi-primary::before { background: linear-gradient(90deg, #405189, #6366f1); }
+.kpi-card.kpi-success::before { background: linear-gradient(90deg, #0ab39c, #10b981); }
+.kpi-card.kpi-warning::before { background: linear-gradient(90deg, #ffbe0b, #fbbf24); }
+.kpi-card.kpi-danger::before { background: linear-gradient(90deg, #f06548, #ef4444); }
+.kpi-card.kpi-info::before { background: linear-gradient(90deg, #299cdb, #3b82f6); }
+.kpi-card.kpi-purple::before { background: linear-gradient(90deg, #6f42c1, #8b5cf6); }
+
+.kpi-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    margin-bottom: 12px;
+}
+
+.kpi-primary .kpi-icon { background: linear-gradient(135deg, #405189, #6366f1); }
+.kpi-success .kpi-icon { background: linear-gradient(135deg, #0ab39c, #10b981); }
+.kpi-warning .kpi-icon { background: linear-gradient(135deg, #ffbe0b, #fbbf24); }
+.kpi-danger .kpi-icon { background: linear-gradient(135deg, #f06548, #ef4444); }
+.kpi-info .kpi-icon { background: linear-gradient(135deg, #299cdb, #3b82f6); }
+.kpi-purple .kpi-icon { background: linear-gradient(135deg, #6f42c1, #8b5cf6); }
+
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+
+.kpi-label {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kpi-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-top: 8px;
+}
+
+.kpi-trend.up { background: #dcfce7; color: #166534; }
+.kpi-trend.down { background: #fee2e2; color: #991b1b; }
+.kpi-trend.neutral { background: #f1f5f9; color: #475569; }
+
+/* Chart Cards */
+.chart-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    margin-bottom: 24px;
+    transition: all 0.3s ease;
+}
+
+.chart-card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.chart-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chart-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.chart-title i {
+    color: #405189;
+    font-size: 1.3rem;
+}
+
+.chart-body {
+    padding: 20px 24px;
+}
+
+.chart-container {
+    position: relative;
+    height: 320px;
+}
+
+.chart-container-sm {
+    position: relative;
+    height: 250px;
+}
+
+.chart-container-lg {
+    position: relative;
+    height: 400px;
+}
+
+/* Tabla de datos */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table thead th {
+    background: linear-gradient(135deg, #405189 0%, #4f5d9c 100%);
+    color: white;
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 14px 16px;
+    white-space: nowrap;
+}
+
+.data-table tbody tr {
+    transition: all 0.2s ease;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.data-table tbody tr:hover {
+    background: rgba(64, 81, 137, 0.04);
+}
+
+.data-table tbody td {
+    padding: 14px 16px;
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+/* Badges mejorados */
+.badge-status {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.badge-success { background: #dcfce7; color: #166534; }
+.badge-warning { background: #fef3c7; color: #92400e; }
+.badge-danger { background: #fee2e2; color: #991b1b; }
+.badge-info { background: #dbeafe; color: #1e40af; }
+.badge-purple { background: #f3e8ff; color: #6b21a8; }
+
+/* Progress Bar Mejorado */
+.progress-enhanced {
+    height: 10px;
+    background: #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar-enhanced {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.6s ease;
+}
+
+.progress-bar-success { background: linear-gradient(90deg, #0ab39c, #10b981); }
+.progress-bar-warning { background: linear-gradient(90deg, #ffbe0b, #fbbf24); }
+.progress-bar-danger { background: linear-gradient(90deg, #f06548, #ef4444); }
+.progress-bar-info { background: linear-gradient(90deg, #299cdb, #3b82f6); }
+
+/* Alertas Inteligentes */
+.alert-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    border-left: 4px solid;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    transition: all 0.2s ease;
+}
+
+.alert-card:hover {
+    transform: translateX(4px);
+}
+
+.alert-card.alert-danger { border-left-color: #f06548; background: linear-gradient(90deg, #fef2f2, white); }
+.alert-card.alert-warning { border-left-color: #ffbe0b; background: linear-gradient(90deg, #fffbeb, white); }
+.alert-card.alert-success { border-left-color: #0ab39c; background: linear-gradient(90deg, #f0fdf4, white); }
+.alert-card.alert-info { border-left-color: #299cdb; background: linear-gradient(90deg, #eff6ff, white); }
+
+.alert-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 18px;
+}
+
+.alert-danger .alert-icon { background: #fee2e2; color: #dc2626; }
+.alert-warning .alert-icon { background: #fef3c7; color: #d97706; }
+.alert-success .alert-icon { background: #dcfce7; color: #16a34a; }
+.alert-info .alert-icon { background: #dbeafe; color: #2563eb; }
+
+.alert-content h6 {
+    margin: 0 0 4px;
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 0.95rem;
+}
+
+.alert-content p {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+/* Métricas comparativas */
+.metric-compare {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.metric-compare-label {
+    color: #64748b;
+    font-size: 0.85rem;
+}
+
+.metric-compare-value {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 1rem;
+}
+
+/* Animaciones */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fadein {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.animate-fadein-delay-1 { animation-delay: 0.1s; }
+.animate-fadein-delay-2 { animation-delay: 0.2s; }
+.animate-fadein-delay-3 { animation-delay: 0.3s; }
+
+/* Skeleton loading */
+.skeleton {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 8px;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .dashboard-header {
+        padding: 20px;
+    }
+    
+    .dashboard-header h1 {
+        font-size: 1.4rem;
+    }
+    
+    .chart-container {
+        height: 280px;
+    }
+}
+
+/* Ranking badges */
+.ranking-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: white;
+}
+
+.ranking-1 { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+.ranking-2 { background: linear-gradient(135deg, #9ca3af, #6b7280); }
+.ranking-3 { background: linear-gradient(135deg, #d97706, #b45309); }
+.ranking-default { background: linear-gradient(135deg, #94a3b8, #64748b); }
+
+/* Insights cards */
+.insight-card {
+    background: linear-gradient(135deg, #405189 0%, #6366f1 100%);
+    border-radius: 16px;
+    padding: 20px;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.insight-card::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    right: -20%;
+    width: 50%;
+    height: 150%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1));
+    transform: rotate(30deg);
+}
+
+.insight-card h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.insight-card p {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.insight-value {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 12px 0 4px;
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+            
+            <!-- Header del Dashboard -->
+            <div class="dashboard-header animate-fadein">
+                <div class="d-flex justify-content-between align-items-start flex-wrap">
+                    <div>
+                        <h1>
+                            <i class="bi bi-bar-chart-line-fill"></i>
+                            Dashboard Estratégico de Compras
+                        </h1>
+                        <p>Análisis integral para la toma de decisiones en gestión de compras</p>
+                    </div>
+                    <div class="d-flex gap-2 mt-3 mt-md-0">
+                        <button class="btn btn-light" onclick="exportarDashboard()">
+                            <i class="bi bi-download me-1"></i>Exportar
+                        </button>
+                        <button class="btn btn-warning text-dark" onclick="actualizarDashboard()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección de Filtros -->
+            <div class="filter-section animate-fadein">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label"><i class="bi bi-calendar3 me-1"></i>Año</label>
+                        <select class="form-select" id="filtroAnio">
+                            <option value="2025" selected>2025</option>
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><i class="bi bi-calendar-range me-1"></i>Período</label>
+                        <select class="form-select" id="filtroPeriodo">
+                            <option value="anual" selected>Año Completo</option>
+                            <option value="trimestre">Último Trimestre</option>
+                            <option value="mes">Último Mes</option>
+                            <option value="semana">Última Semana</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label"><i class="bi bi-snow me-1"></i>Temporada</label>
+                        <select class="form-select" id="filtroTemporada">
+                            <option value="">Todas</option>
+                            <option value="Invierno">Invierno</option>
+                            <option value="Verano">Verano</option>
+                            <option value="Otoño">Otoño</option>
+                            <option value="Primavera">Primavera</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><i class="bi bi-building me-1"></i>Proveedor</label>
+                        <select class="form-select" id="filtroProveedor">
+                            <option value="">Todos los proveedores</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-primary w-100" onclick="aplicarFiltros()">
+                            <i class="bi bi-funnel me-1"></i>Aplicar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs Principales -->
+            <div class="kpi-grid animate-fadein animate-fadein-delay-1">
+                <!-- Total Compras -->
+                <div class="kpi-card kpi-primary">
+                    <div class="kpi-icon"><i class="bi bi-cart-check"></i></div>
+                    <div class="kpi-value" id="kpiTotalCompras">0</div>
+                    <div class="kpi-label">Total Compras</div>
+                    <div class="kpi-trend neutral" id="trendCompras">
+                        <i class="bi bi-dash"></i> 0% vs año anterior
+                    </div>
+                </div>
+
+                <!-- Inversión Total -->
+                <div class="kpi-card kpi-success">
+                    <div class="kpi-icon"><i class="bi bi-currency-dollar"></i></div>
+                    <div class="kpi-value" id="kpiInversion">$0</div>
+                    <div class="kpi-label">Inversión Total</div>
+                    <div class="kpi-trend neutral" id="trendInversion">
+                        <i class="bi bi-dash"></i> 0% vs año anterior
+                    </div>
+                </div>
+
+                <!-- Cumplimiento General -->
+                <div class="kpi-card kpi-info">
+                    <div class="kpi-icon"><i class="bi bi-clipboard-check"></i></div>
+                    <div class="kpi-value" id="kpiCumplimiento">0%</div>
+                    <div class="kpi-label">Cumplimiento Recepciones</div>
+                    <div class="progress-enhanced mt-2">
+                        <div class="progress-bar-enhanced progress-bar-info" id="progressCumplimiento" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- ROI Promedio -->
+                <div class="kpi-card kpi-warning">
+                    <div class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                    <div class="kpi-value" id="kpiROI">0%</div>
+                    <div class="kpi-label">ROI Promedio</div>
+                    <div class="kpi-trend neutral" id="trendROI">
+                        <i class="bi bi-dash"></i> 0 pts vs año anterior
+                    </div>
+                </div>
+
+                <!-- Unidades Esperadas -->
+                <div class="kpi-card kpi-purple">
+                    <div class="kpi-icon"><i class="bi bi-box-seam"></i></div>
+                    <div class="kpi-value" id="kpiUnidadesEsperadas">0</div>
+                    <div class="kpi-label">Unidades Esperadas</div>
+                    <small class="text-muted" id="subtextUnidades">0 recepcionadas</small>
+                </div>
+
+                <!-- Margen Esperado -->
+                <div class="kpi-card kpi-danger">
+                    <div class="kpi-icon"><i class="bi bi-piggy-bank"></i></div>
+                    <div class="kpi-value" id="kpiMargen">$0</div>
+                    <div class="kpi-label">Margen Esperado</div>
+                    <small class="text-muted" id="subtextMargen">0% sobre inversión</small>
+                </div>
+            </div>
+
+            <!-- Fila de Gráficos Principal -->
+            <div class="row">
+                <!-- Gráfico: Evolución Mensual -->
+                <div class="col-lg-8">
+                    <div class="chart-card animate-fadein animate-fadein-delay-2">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-graph-up"></i>
+                                Evolución de Compras vs Ventas
+                            </h5>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary active" onclick="cambiarVistaEvolucion('mensual')">Mensual</button>
+                                <button class="btn btn-outline-primary" onclick="cambiarVistaEvolucion('semanal')">Semanal</button>
+                            </div>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container">
+                                <canvas id="chartEvolucion"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Análisis Pareto - Proveedores -->
+                <div class="col-lg-4">
+                    <div class="chart-card animate-fadein animate-fadein-delay-2">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-pie-chart"></i>
+                                Pareto Proveedores (80/20)
+                            </h5>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container-sm">
+                                <canvas id="chartParetoProveedores"></canvas>
+                            </div>
+                            <div class="text-center mt-2">
+                                <span class="badge badge-info" id="badgePareto80">
+                                    0 proveedores representan el 80% de inversión
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fila de Insights y Rankings -->
+            <div class="row">
+                <!-- Top Proveedores -->
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein animate-fadein-delay-2">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-trophy"></i>
+                                Top Proveedores por Inversión
+                            </h5>
+                            <span class="badge badge-purple">Top 10</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px">#</th>
+                                        <th>Proveedor</th>
+                                        <th class="text-end">Inversión</th>
+                                        <th class="text-end">Compras</th>
+                                        <th class="text-center" style="width: 120px">Cumplimiento</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyTopProveedores">
+                                    <!-- Datos dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Productos -->
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein animate-fadein-delay-2">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-box-seam"></i>
+                                Top Productos por Inversión
+                            </h5>
+                            <span class="badge badge-success">Top 10</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px">#</th>
+                                        <th>Producto</th>
+                                        <th>Marca</th>
+                                        <th class="text-end">Unidades</th>
+                                        <th class="text-end">Inversión</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyTopProductos">
+                                    <!-- Datos dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fila de Análisis Comparativo y ROI -->
+            <div class="row">
+                <!-- Comparativa Año Actual vs Anterior -->
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein animate-fadein-delay-3">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-arrow-left-right"></i>
+                                Comparativa Anual
+                            </h5>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container-sm">
+                                <canvas id="chartComparativaAnual"></canvas>
+                            </div>
+                            <div class="row mt-3" id="resumenComparativa">
+                                <!-- Resumen dinámico -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ROI por Temporada -->
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein animate-fadein-delay-3">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-percent"></i>
+                                ROI por Temporada
+                            </h5>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container-sm">
+                                <canvas id="chartROITemporada"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== SECCIÓN: ANÁLISIS DE DISTRIBUCIÓN (CENTRO DE DISTRIBUCIÓN) ========== -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="dashboard-header" style="background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%); padding: 20px 28px;">
+                        <div>
+                            <h4 class="m-0 text-white">
+                                <i class="bi bi-diagram-3 me-2"></i>
+                                Análisis de Distribución (Centro de Compras)
+                            </h4>
+                            <p class="text-white-50 m-0 mt-1">Flujo de mercadería desde compras hacia sucursales vendedoras</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs de Distribución -->
+            <div class="kpi-grid animate-fadein">
+                <!-- Unidades Compradas -->
+                <div class="kpi-card kpi-purple">
+                    <div class="kpi-icon"><i class="bi bi-box-arrow-in-down"></i></div>
+                    <div class="kpi-value" id="kpiUnidadesCompradas">0</div>
+                    <div class="kpi-label">Unidades Compradas</div>
+                    <small class="text-muted">Total recepcionado de proveedores</small>
+                </div>
+
+                <!-- Unidades Despachadas -->
+                <div class="kpi-card kpi-info">
+                    <div class="kpi-icon"><i class="bi bi-truck"></i></div>
+                    <div class="kpi-value" id="kpiUnidadesDespachadas">0</div>
+                    <div class="kpi-label">Unidades Despachadas</div>
+                    <small class="text-muted">Enviadas a sucursales</small>
+                </div>
+
+                <!-- Stock en CD -->
+                <div class="kpi-card kpi-warning">
+                    <div class="kpi-icon"><i class="bi bi-house-door"></i></div>
+                    <div class="kpi-value" id="kpiStockCD">0</div>
+                    <div class="kpi-label">Stock en Centro Dist.</div>
+                    <small class="text-muted">Pendiente de despachar</small>
+                </div>
+
+                <!-- Eficiencia de Distribución -->
+                <div class="kpi-card kpi-success">
+                    <div class="kpi-icon"><i class="bi bi-speedometer2"></i></div>
+                    <div class="kpi-value" id="kpiEficienciaDistribucion">0%</div>
+                    <div class="kpi-label">Eficiencia Distribución</div>
+                    <div class="progress-enhanced mt-2">
+                        <div class="progress-bar-enhanced progress-bar-success" id="progressDistribucion" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráficos de Distribución -->
+            <div class="row">
+                <!-- Flujo Compras → Despachos → Ventas -->
+                <div class="col-lg-8">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-arrow-right-circle"></i>
+                                Flujo: Compras → Despachos → Ventas (Mensual)
+                            </h5>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container">
+                                <canvas id="chartFlujoDistribucion"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Despachos por Sucursal Destino -->
+                <div class="col-lg-4">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-geo-alt"></i>
+                                Despachos por Sucursal
+                            </h5>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container-sm">
+                                <canvas id="chartDespachosSucursal"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Sucursales Destino -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-building"></i>
+                                Rendimiento por Sucursal Destino
+                            </h5>
+                            <span class="badge badge-purple">Análisis de ventas vs despachos</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sucursal</th>
+                                        <th>Empresa</th>
+                                        <th class="text-end">Despachado</th>
+                                        <th class="text-end">Vendido</th>
+                                        <th class="text-center" style="width: 140px">Rotación</th>
+                                        <th class="text-end">Ventas $</th>
+                                        <th class="text-end">Margen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodySucursalesDestino">
+                                    <!-- Datos dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== SECCIÓN DE MÁRGENES CENTRO DE DISTRIBUCIÓN ========== -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="dashboard-header" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 20px 28px; border-radius: 12px;">
+                        <div>
+                            <h4 class="m-0 text-white">
+                                <i class="bi bi-currency-exchange me-2"></i>
+                                Análisis de Márgenes (Centro de Distribución)
+                            </h4>
+                            <p class="text-white-50 m-0 mt-1">Sobreprecio aplicado por EDEL/GILD a sucursales vendedoras</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs de Márgenes CD -->
+            <div class="kpi-grid animate-fadein mt-3">
+                <!-- Margen Total CD -->
+                <div class="kpi-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                    <div class="kpi-icon"><i class="bi bi-cash-stack text-white"></i></div>
+                    <div class="kpi-value text-white" id="kpiMargenTotalCD">$0</div>
+                    <div class="kpi-label text-white-50">Margen Total CD</div>
+                    <small class="text-white-50">Sobreprecio generado</small>
+                </div>
+
+                <!-- Margen Promedio % -->
+                <div class="kpi-card" style="background: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%);">
+                    <div class="kpi-icon"><i class="bi bi-percent text-white"></i></div>
+                    <div class="kpi-value text-white" id="kpiMargenPromedioPct">0%</div>
+                    <div class="kpi-label text-white-50">Margen Promedio %</div>
+                    <small class="text-white-50">Sobre costo proveedor</small>
+                </div>
+
+                <!-- Costo Proveedor Total -->
+                <div class="kpi-card" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                    <div class="kpi-icon"><i class="bi bi-bag text-white"></i></div>
+                    <div class="kpi-value text-white" id="kpiCostoProveedorTotal">$0</div>
+                    <div class="kpi-label text-white-50">Costo Proveedor</div>
+                    <small class="text-white-50">Lo que paga el CD</small>
+                </div>
+
+                <!-- Costo Destino Total -->
+                <div class="kpi-card" style="background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%);">
+                    <div class="kpi-icon"><i class="bi bi-receipt text-white"></i></div>
+                    <div class="kpi-value text-white" id="kpiCostoDestinoTotal">$0</div>
+                    <div class="kpi-label text-white-50">Costo Sucursales</div>
+                    <small class="text-white-50">Lo que pagan las vendedoras</small>
+                </div>
+            </div>
+
+            <!-- Tabla de Márgenes por Sucursal Destino -->
+            <div class="row mt-3">
+                <div class="col-lg-7">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-building"></i>
+                                Sobreprecio por Sucursal Destino
+                            </h5>
+                            <span class="badge badge-success">Detalle de márgenes aplicados</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sucursal</th>
+                                        <th>Empresa</th>
+                                        <th class="text-end">Unidades</th>
+                                        <th class="text-end">Costo Prov.</th>
+                                        <th class="text-end">Sobreprecio</th>
+                                        <th class="text-end">Costo Final</th>
+                                        <th class="text-center">Margen %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyMargenesSucursal">
+                                    <!-- Datos dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comparativa de Costos -->
+                <div class="col-lg-5">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-arrow-left-right"></i>
+                                Comparativa de Costos
+                            </h5>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container-sm">
+                                <canvas id="chartComparativaCostos"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rentabilidad por Tipo de Sucursal -->
+            <div class="row mt-3">
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-building-check"></i>
+                                Rentabilidad - Centros de Distribución
+                            </h5>
+                            <span class="badge" style="background: #28a745;">Compran a proveedores</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Centro Dist.</th>
+                                        <th class="text-end">Inversión</th>
+                                        <th class="text-end">Costo Desp.</th>
+                                        <th class="text-end">Sobreprecio</th>
+                                        <th class="text-center">Rent. %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyRentabilidadCD">
+                                    <!-- Datos dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="chart-card animate-fadein">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-shop"></i>
+                                Rentabilidad - Sucursales Vendedoras
+                            </h5>
+                            <span class="badge" style="background: #6f42c1;">Reciben del CD y venden</span>
+                        </div>
+                        <div class="chart-body p-0">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sucursal</th>
+                                        <th class="text-end">Ventas</th>
+                                        <th class="text-end">Costo Vtas.</th>
+                                        <th class="text-end">Margen</th>
+                                        <th class="text-center">Rent. %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyRentabilidadVendedoras">
+                                    <!-- Datos dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ========== FIN SECCIÓN MÁRGENES CD ========== -->
+
+            <!-- Fila de Cumplimiento y Alertas -->
+            <div class="row mt-4">
+                <!-- Cumplimiento por Proveedor -->
+                <div class="col-lg-8">
+                    <div class="chart-card animate-fadein animate-fadein-delay-3">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-bar-chart"></i>
+                                Cumplimiento de Proveedores
+                            </h5>
+                            <div class="d-flex gap-2">
+                                <span class="badge badge-success">≥90% Excelente</span>
+                                <span class="badge badge-warning">70-89% Regular</span>
+                                <span class="badge badge-danger">&lt;70% Crítico</span>
+                            </div>
+                        </div>
+                        <div class="chart-body">
+                            <div class="chart-container">
+                                <canvas id="chartCumplimientoProveedores"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alertas y Recomendaciones -->
+                <div class="col-lg-4">
+                    <div class="chart-card animate-fadein animate-fadein-delay-3">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-bell"></i>
+                                Alertas Inteligentes
+                            </h5>
+                            <span class="badge badge-danger" id="contadorAlertas">0</span>
+                        </div>
+                        <div class="chart-body" style="max-height: 400px; overflow-y: auto;">
+                            <div id="contenedorAlertas">
+                                <div class="text-center py-4 text-muted">
+                                    <i class="bi bi-check-circle fs-1"></i>
+                                    <p class="mt-2">No hay alertas en este momento</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fila de Insights Estratégicos -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="chart-card animate-fadein animate-fadein-delay-3">
+                        <div class="chart-header">
+                            <h5 class="chart-title">
+                                <i class="bi bi-lightbulb"></i>
+                                Insights y Recomendaciones Estratégicas
+                            </h5>
+                        </div>
+                        <div class="chart-body">
+                            <div class="row" id="contenedorInsights">
+                                <!-- Insights dinámicos -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Rendimiento Detallado -->
+            <div class="chart-card animate-fadein animate-fadein-delay-3">
+                <div class="chart-header">
+                    <h5 class="chart-title">
+                        <i class="bi bi-table"></i>
+                        Rendimiento Detallado por Compra
+                    </h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportarTabla()">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Exportar
+                    </button>
+                </div>
+                <div class="chart-body p-0">
+                    <div class="table-responsive">
+                        <table class="data-table" id="tablaRendimiento">
+                            <thead>
+                                <tr>
+                                    <th>Compra</th>
+                                    <th>Proveedor</th>
+                                    <th>Temporada</th>
+                                    <th>Inversión</th>
+                                    <th style="width: 150px">Cumplimiento</th>
+                                    <th>ROI</th>
+                                    <th>Unidades</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyRendimiento">
+                                <!-- Datos dinámicos -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- container-fluid -->
+    </div><!-- page-content -->
+
+{% include 'layout/footer.html' %}
+
+<!-- Scripts -->
+<script src="{% static 'js/jquery-3.5.1.min.js' %}"></script>
+<script src="{% static 'libs/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
+<script>
+// Variables globales
+let dashboardData = {};
+let charts = {};
+
+// Colores consistentes
+const COLORS = {
+    primary: '#405189',
+    success: '#0ab39c',
+    warning: '#ffbe0b',
+    danger: '#f06548',
+    info: '#299cdb',
+    purple: '#6f42c1',
+    gradient: ['#405189', '#0ab39c', '#6366f1', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981']
+};
+
+// Inicialización
+$(document).ready(function() {
+    console.log('🚀 Inicializando Dashboard Compras Mejorado...');
+    cargarProveedores();
+    cargarDatosDashboard();
+    
+    // Eventos
+    $('#filtroAnio, #filtroPeriodo, #filtroTemporada, #filtroProveedor').on('change', function() {
+        cargarDatosDashboard();
+    });
+});
+
+// Cargar lista de proveedores
+function cargarProveedores() {
+    $.get('/app/empresas_proveedoras/', function(data) {
+        const select = $('#filtroProveedor');
+        select.find('option:not(:first)').remove();
+        if (data && data.length > 0) {
+            data.forEach(function(empresa) {
+                select.append(`<option value="${empresa.id}">${empresa.nombre}</option>`);
+            });
+        }
+    }).fail(function() {
+        console.log('No se pudieron cargar los proveedores');
+    });
+}
+
+// Aplicar filtros
+function aplicarFiltros() {
+    cargarDatosDashboard();
+}
+
+// Actualizar dashboard
+function actualizarDashboard() {
+    cargarDatosDashboard();
+}
+
+// Cargar datos del dashboard
+function cargarDatosDashboard() {
+    showLoader();
+    
+    const params = {
+        anio: $('#filtroAnio').val(),
+        periodo: $('#filtroPeriodo').val(),
+        temporada: $('#filtroTemporada').val(),
+        proveedor: $('#filtroProveedor').val()
+    };
+    
+    $.ajax({
+        url: '/app/dashboard_compras_mejorado_api/',
+        method: 'GET',
+        data: params,
+        success: function(data) {
+            console.log('📊 Datos recibidos:', data);
+            dashboardData = data;
+            actualizarKPIs(data);
+            actualizarGraficos(data);
+            actualizarTablas(data);
+            actualizarAlertas(data);
+            actualizarInsights(data);
+            hideLoader();
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error:', error);
+            hideLoader();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al cargar datos',
+                text: 'No se pudieron cargar los datos del dashboard. Por favor, intente nuevamente.'
+            });
+        }
+    });
+}
+
+// Actualizar KPIs
+function actualizarKPIs(data) {
+    const metricas = data.metricas || {};
+    
+    // Total Compras
+    $('#kpiTotalCompras').text(formatNumber(metricas.total_compras || 0));
+    actualizarTrend('#trendCompras', metricas.trend_compras || 0, 'vs año anterior');
+    
+    // Inversión
+    $('#kpiInversion').text(formatMoney(metricas.inversion_total || 0));
+    actualizarTrend('#trendInversion', metricas.trend_inversion || 0, 'vs año anterior');
+    
+    // Cumplimiento
+    const cumplimiento = metricas.cumplimiento_general || 0;
+    $('#kpiCumplimiento').text(cumplimiento + '%');
+    $('#progressCumplimiento').css('width', cumplimiento + '%');
+    $('#progressCumplimiento')
+        .removeClass('progress-bar-success progress-bar-warning progress-bar-danger')
+        .addClass(cumplimiento >= 90 ? 'progress-bar-success' : 
+                  cumplimiento >= 70 ? 'progress-bar-warning' : 'progress-bar-danger');
+    
+    // ROI
+    $('#kpiROI').text(formatNumber(metricas.roi_promedio || 0) + '%');
+    actualizarTrend('#trendROI', metricas.trend_roi || 0, 'pts vs año anterior');
+    
+    // Unidades
+    $('#kpiUnidadesEsperadas').text(formatNumber(metricas.unidades_esperadas || 0));
+    $('#subtextUnidades').text(formatNumber(metricas.unidades_recepcionadas || 0) + ' recepcionadas');
+    
+    // Margen
+    const margen = (metricas.valor_venta || 0) - (metricas.inversion_total || 0);
+    const margenPorcentaje = metricas.inversion_total > 0 ? 
+        ((margen / metricas.inversion_total) * 100).toFixed(1) : 0;
+    $('#kpiMargen').text(formatMoney(margen));
+    $('#subtextMargen').text(margenPorcentaje + '% sobre inversión');
+    
+    // ===== KPIs DE DISTRIBUCIÓN =====
+    const distribucion = data.distribucion || {};
+    
+    // Unidades compradas (recepcionadas de proveedores)
+    $('#kpiUnidadesCompradas').text(formatNumber(distribucion.unidades_compradas || metricas.unidades_recepcionadas || 0));
+    
+    // Unidades despachadas a sucursales
+    $('#kpiUnidadesDespachadas').text(formatNumber(distribucion.unidades_despachadas || 0));
+    
+    // Stock en Centro de Distribución
+    $('#kpiStockCD').text(formatNumber(distribucion.stock_centro_distribucion || 0));
+    
+    // Eficiencia de distribución (despachado / comprado * 100)
+    const eficiencia = distribucion.eficiencia_distribucion || 0;
+    $('#kpiEficienciaDistribucion').text(eficiencia + '%');
+    $('#progressDistribucion').css('width', eficiencia + '%');
+    
+    // ===== MÁRGENES CENTRO DE DISTRIBUCIÓN =====
+    const margenes = data.margenes_cd || {};
+    const rentabilidad = data.rentabilidad_tipo_sucursal || {};
+    
+    // KPIs de Márgenes
+    $('#kpiMargenTotalCD').text(formatMoney(margenes.margen_total_cd || 0));
+    $('#kpiMargenPromedioPct').text((margenes.margen_promedio_pct || 0) + '%');
+    $('#kpiCostoProveedorTotal').text(formatMoney(margenes.costo_proveedor_total || 0));
+    $('#kpiCostoDestinoTotal').text(formatMoney(margenes.costo_destino_total || 0));
+    
+    // Tabla de márgenes por sucursal destino
+    actualizarTablaMargenesSucursal(margenes.detalle_por_sucursal || []);
+    
+    // Tablas de rentabilidad
+    actualizarTablaRentabilidadCD(rentabilidad.centros_distribucion || []);
+    actualizarTablaRentabilidadVendedoras(rentabilidad.sucursales_vendedoras || []);
+    
+    // Gráfico comparativa de costos
+    crearGraficoComparativaCostos(data.comparativa_costos || []);
+}
+
+// Actualizar indicadores de tendencia
+function actualizarTrend(selector, valor, sufijo) {
+    const $trend = $(selector);
+    $trend.removeClass('up down neutral');
+    
+    if (valor > 0) {
+        $trend.addClass('up').html(`<i class="bi bi-arrow-up"></i> +${valor}% ${sufijo}`);
+    } else if (valor < 0) {
+        $trend.addClass('down').html(`<i class="bi bi-arrow-down"></i> ${valor}% ${sufijo}`);
+    } else {
+        $trend.addClass('neutral').html(`<i class="bi bi-dash"></i> 0% ${sufijo}`);
+    }
+}
+
+// Actualizar gráficos
+function actualizarGraficos(data) {
+    crearGraficoEvolucion(data.evolucion_mensual || []);
+    crearGraficoParetoProveedores(data.pareto_proveedores || []);
+    crearGraficoComparativaAnual(data.comparativa_anual || {});
+    crearGraficoROITemporada(data.roi_temporadas || []);
+    crearGraficoCumplimientoProveedores(data.cumplimiento_proveedores || []);
+    
+    // Gráficos de distribución
+    crearGraficoFlujoDistribucion(data.flujo_distribucion || data.evolucion_mensual || []);
+    crearGraficoDespachosSucursal(data.despachos_sucursal || []);
+}
+
+// Gráfico de Evolución Mensual
+function crearGraficoEvolucion(datos) {
+    const ctx = document.getElementById('chartEvolucion').getContext('2d');
+    
+    if (charts.evolucion) charts.evolucion.destroy();
+    
+    charts.evolucion = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: datos.map(d => d.mes_nombre || d.mes),
+            datasets: [
+                {
+                    label: 'Inversión en Compras',
+                    data: datos.map(d => d.inversion || 0),
+                    borderColor: COLORS.primary,
+                    backgroundColor: hexToRgba(COLORS.primary, 0.1),
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 5,
+                    pointHoverRadius: 8
+                },
+                {
+                    label: 'Ventas Relacionadas',
+                    data: datos.map(d => d.ventas || 0),
+                    borderColor: COLORS.success,
+                    backgroundColor: hexToRgba(COLORS.success, 0.1),
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3,
+                    pointRadius: 5,
+                    pointHoverRadius: 8
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20,
+                        font: { weight: 'bold' }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    titleColor: '#1e293b',
+                    bodyColor: '#475569',
+                    borderColor: '#e2e8f0',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + formatMoney(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return formatMoneyShort(value);
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico Pareto de Proveedores
+function crearGraficoParetoProveedores(datos) {
+    const ctx = document.getElementById('chartParetoProveedores').getContext('2d');
+    
+    if (charts.paretoProveedores) charts.paretoProveedores.destroy();
+    
+    // Calcular acumulado
+    const total = datos.reduce((sum, d) => sum + (d.inversion || 0), 0);
+    let acumulado = 0;
+    const dataPareto = datos.map(d => {
+        acumulado += d.inversion || 0;
+        return {
+            ...d,
+            porcentaje: total > 0 ? ((d.inversion / total) * 100).toFixed(1) : 0,
+            acumulado: total > 0 ? ((acumulado / total) * 100).toFixed(1) : 0
+        };
+    });
+    
+    // Encontrar cuántos proveedores representan el 80%
+    const proveedores80 = dataPareto.filter(d => parseFloat(d.acumulado) <= 80).length || 
+                          Math.min(1, dataPareto.length);
+    $('#badgePareto80').text(`${proveedores80} proveedor(es) representan ~80% de inversión`);
+    
+    charts.paretoProveedores = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dataPareto.slice(0, 8).map(d => truncateText(d.proveedor, 12)),
+            datasets: [
+                {
+                    label: 'Inversión',
+                    data: dataPareto.slice(0, 8).map(d => d.inversion || 0),
+                    backgroundColor: dataPareto.slice(0, 8).map((d, i) => 
+                        parseFloat(d.acumulado) <= 80 ? COLORS.primary : '#94a3b8'
+                    ),
+                    borderRadius: 6,
+                    yAxisID: 'y'
+                },
+                {
+                    label: '% Acumulado',
+                    data: dataPareto.slice(0, 8).map(d => d.acumulado),
+                    type: 'line',
+                    borderColor: COLORS.warning,
+                    backgroundColor: 'transparent',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            if (context.datasetIndex === 0) {
+                                return 'Inversión: ' + formatMoney(context.parsed.y);
+                            }
+                            return 'Acumulado: ' + context.parsed.y + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    position: 'left',
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return formatMoneyShort(value);
+                        }
+                    }
+                },
+                y1: {
+                    position: 'right',
+                    beginAtZero: true,
+                    max: 100,
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico Comparativa Anual
+function crearGraficoComparativaAnual(datos) {
+    const ctx = document.getElementById('chartComparativaAnual').getContext('2d');
+    
+    if (charts.comparativaAnual) charts.comparativaAnual.destroy();
+    
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    
+    charts.comparativaAnual = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: meses,
+            datasets: [
+                {
+                    label: 'Año Actual',
+                    data: datos.actual || Array(12).fill(0),
+                    backgroundColor: COLORS.primary,
+                    borderRadius: 4
+                },
+                {
+                    label: 'Año Anterior',
+                    data: datos.anterior || Array(12).fill(0),
+                    backgroundColor: '#94a3b8',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + formatMoney(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return formatMoneyShort(value);
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+    
+    // Actualizar resumen comparativa
+    const totalActual = (datos.actual || []).reduce((a, b) => a + b, 0);
+    const totalAnterior = (datos.anterior || []).reduce((a, b) => a + b, 0);
+    const variacion = totalAnterior > 0 ? (((totalActual - totalAnterior) / totalAnterior) * 100).toFixed(1) : 0;
+    
+    $('#resumenComparativa').html(`
+        <div class="col-6">
+            <div class="metric-compare">
+                <span class="metric-compare-label">Año Actual</span>
+                <span class="metric-compare-value">${formatMoney(totalActual)}</span>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="metric-compare">
+                <span class="metric-compare-label">Variación</span>
+                <span class="metric-compare-value ${variacion >= 0 ? 'text-success' : 'text-danger'}">
+                    ${variacion >= 0 ? '+' : ''}${variacion}%
+                </span>
+            </div>
+        </div>
+    `);
+}
+
+// Gráfico ROI por Temporada
+function crearGraficoROITemporada(datos) {
+    const ctx = document.getElementById('chartROITemporada').getContext('2d');
+    
+    if (charts.roiTemporada) charts.roiTemporada.destroy();
+    
+    const coloresTemporada = {
+        'Invierno': '#3b82f6',
+        'Verano': '#f59e0b',
+        'Otoño': '#ef4444',
+        'Primavera': '#10b981'
+    };
+    
+    charts.roiTemporada = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: datos.map(d => d.temporada),
+            datasets: [{
+                data: datos.map(d => Math.max(0, d.roi || 0)),
+                backgroundColor: datos.map(d => coloresTemporada[d.temporada] || COLORS.primary),
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 15,
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            return data.labels.map((label, i) => ({
+                                text: `${label}: ${data.datasets[0].data[i]}%`,
+                                fillStyle: data.datasets[0].backgroundColor[i],
+                                hidden: false,
+                                index: i
+                            }));
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ROI ' + context.parsed + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico Cumplimiento de Proveedores
+function crearGraficoCumplimientoProveedores(datos) {
+    const ctx = document.getElementById('chartCumplimientoProveedores').getContext('2d');
+    
+    if (charts.cumplimientoProveedores) charts.cumplimientoProveedores.destroy();
+    
+    charts.cumplimientoProveedores = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: datos.map(d => truncateText(d.proveedor, 15)),
+            datasets: [{
+                label: 'Cumplimiento %',
+                data: datos.map(d => d.cumplimiento || 0),
+                backgroundColor: datos.map(d => {
+                    const c = d.cumplimiento || 0;
+                    return c >= 90 ? COLORS.success : c >= 70 ? COLORS.warning : COLORS.danger;
+                }),
+                borderRadius: 6,
+                maxBarThickness: 50
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Cumplimiento: ' + context.parsed.x + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                    }
+                },
+                y: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ========== GRÁFICOS DE DISTRIBUCIÓN ==========
+
+// Gráfico Flujo: Compras → Despachos → Ventas
+function crearGraficoFlujoDistribucion(datos) {
+    const ctx = document.getElementById('chartFlujoDistribucion');
+    if (!ctx) return;
+    
+    if (charts.flujoDistribucion) charts.flujoDistribucion.destroy();
+    
+    // Usar datos de evolución mensual más datos de despachos
+    const meses = datos.map(d => d.mes_nombre || d.mes);
+    const compras = datos.map(d => d.inversion || 0);
+    const despachos = datos.map(d => d.despachos || d.inversion * 0.85 || 0); // Estimado si no hay datos
+    const ventas = datos.map(d => d.ventas || 0);
+    
+    charts.flujoDistribucion = new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: meses,
+            datasets: [
+                {
+                    label: 'Compras (Inversión)',
+                    data: compras,
+                    borderColor: COLORS.primary,
+                    backgroundColor: hexToRgba(COLORS.primary, 0.1),
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3
+                },
+                {
+                    label: 'Despachos a Sucursales',
+                    data: despachos,
+                    borderColor: COLORS.purple,
+                    backgroundColor: hexToRgba(COLORS.purple, 0.1),
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3,
+                    borderDash: [5, 5]
+                },
+                {
+                    label: 'Ventas Sucursales',
+                    data: ventas,
+                    borderColor: COLORS.success,
+                    backgroundColor: hexToRgba(COLORS.success, 0.1),
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + formatMoney(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return formatMoneyShort(value);
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de Despachos por Sucursal
+function crearGraficoDespachosSucursal(datos) {
+    const ctx = document.getElementById('chartDespachosSucursal');
+    if (!ctx) return;
+    
+    if (charts.despachosSucursal) charts.despachosSucursal.destroy();
+    
+    // Si no hay datos, mostrar mensaje
+    if (!datos || datos.length === 0) {
+        // Crear gráfico vacío con mensaje
+        charts.despachosSucursal = new Chart(ctx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Sin datos de despachos'],
+                datasets: [{
+                    data: [100],
+                    backgroundColor: ['#e2e8f0']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+        return;
+    }
+    
+    const colores = [
+        '#6f42c1', '#e83e8c', '#fd7e14', '#20c997', '#17a2b8',
+        '#6610f2', '#d63384', '#ffc107', '#198754', '#0dcaf0'
+    ];
+    
+    charts.despachosSucursal = new Chart(ctx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: datos.map(d => d.sucursal || d.nombre),
+            datasets: [{
+                data: datos.map(d => d.unidades || d.total),
+                backgroundColor: datos.map((_, i) => colores[i % colores.length]),
+                borderWidth: 2,
+                borderColor: '#fff',
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '55%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 10,
+                        font: { size: 11 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const porcentaje = ((context.parsed / total) * 100).toFixed(1);
+                            return `${context.label}: ${formatNumber(context.parsed)} uds (${porcentaje}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Actualizar tablas
+function actualizarTablas(data) {
+    actualizarTablaTopProveedores(data.top_proveedores || []);
+    actualizarTablaTopProductos(data.top_productos || []);
+    actualizarTablaRendimiento(data.rendimiento_detallado || []);
+    actualizarTablaSucursalesDestino(data.sucursales_destino || []);
+}
+
+// ========== TABLAS Y GRÁFICOS DE MÁRGENES CD ==========
+
+// Tabla de Márgenes por Sucursal Destino
+function actualizarTablaMargenesSucursal(datos) {
+    const tbody = $('#tbodyMargenesSucursal');
+    tbody.empty();
+    
+    if (!datos || datos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">
+                    <i class="bi bi-currency-exchange fs-3 d-block mb-2"></i>
+                    No hay datos de márgenes disponibles
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    datos.forEach(item => {
+        const margenClass = item.margen_pct >= 20 ? 'text-success' : 
+                           item.margen_pct >= 10 ? 'text-warning' : 'text-danger';
+        const margenBg = item.margen_pct >= 20 ? 'badge-success' : 
+                        item.margen_pct >= 10 ? 'badge-warning' : 'badge-danger';
+        
+        tbody.append(`
+            <tr>
+                <td class="fw-semibold">${item.sucursal || 'Sin nombre'}</td>
+                <td><span class="badge badge-purple">${item.empresa || '-'}</span></td>
+                <td class="text-end">${formatNumber(item.unidades || 0)}</td>
+                <td class="text-end">${formatMoney(item.costo_proveedor_total || 0)}</td>
+                <td class="text-end text-success fw-bold">${formatMoney(item.sobreprecio_total || 0)}</td>
+                <td class="text-end fw-bold">${formatMoney(item.costo_destino_total || 0)}</td>
+                <td class="text-center">
+                    <span class="badge-status ${margenBg}">${item.margen_pct || 0}%</span>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+// Tabla de Rentabilidad - Centros de Distribución
+function actualizarTablaRentabilidadCD(datos) {
+    const tbody = $('#tbodyRentabilidadCD');
+    tbody.empty();
+    
+    if (!datos || datos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="5" class="text-center py-4 text-muted">
+                    <i class="bi bi-building-check fs-3 d-block mb-2"></i>
+                    No hay centros de distribución registrados
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    datos.forEach(cd => {
+        const rentClass = cd.rentabilidad_pct >= 15 ? 'text-success' : 
+                         cd.rentabilidad_pct >= 8 ? 'text-warning' : 'text-danger';
+        
+        tbody.append(`
+            <tr>
+                <td class="fw-semibold">${cd.sucursal || 'Sin nombre'}</td>
+                <td class="text-end">${formatMoney(cd.inversion_proveedores || 0)}</td>
+                <td class="text-end">${formatMoney(cd.costo_despachado || 0)}</td>
+                <td class="text-end text-success fw-bold">${formatMoney(cd.sobreprecio_generado || 0)}</td>
+                <td class="text-center fw-bold ${rentClass}">${cd.rentabilidad_pct || 0}%</td>
+            </tr>
+        `);
+    });
+}
+
+// Tabla de Rentabilidad - Sucursales Vendedoras
+function actualizarTablaRentabilidadVendedoras(datos) {
+    const tbody = $('#tbodyRentabilidadVendedoras');
+    tbody.empty();
+    
+    if (!datos || datos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="5" class="text-center py-4 text-muted">
+                    <i class="bi bi-shop fs-3 d-block mb-2"></i>
+                    No hay sucursales vendedoras con datos
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    datos.forEach(suc => {
+        const rentClass = suc.rentabilidad_pct >= 25 ? 'text-success' : 
+                         suc.rentabilidad_pct >= 15 ? 'text-warning' : 'text-danger';
+        
+        tbody.append(`
+            <tr>
+                <td class="fw-semibold">${suc.sucursal || 'Sin nombre'}</td>
+                <td class="text-end fw-bold">${formatMoney(suc.ventas_total || 0)}</td>
+                <td class="text-end">${formatMoney(suc.costo_ventas || 0)}</td>
+                <td class="text-end text-success">${formatMoney(suc.margen_bruto || 0)}</td>
+                <td class="text-center fw-bold ${rentClass}">${suc.rentabilidad_pct || 0}%</td>
+            </tr>
+        `);
+    });
+}
+
+// Gráfico de Comparativa de Costos (Proveedor vs Sucursal)
+function crearGraficoComparativaCostos(datos) {
+    const ctx = document.getElementById('chartComparativaCostos');
+    if (!ctx) return;
+    
+    if (charts.comparativaCostos) charts.comparativaCostos.destroy();
+    
+    if (!datos || datos.length === 0) {
+        charts.comparativaCostos = new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Sin datos'],
+                datasets: [{
+                    data: [0],
+                    backgroundColor: ['#e2e8f0']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+        return;
+    }
+    
+    charts.comparativaCostos = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: datos.map(d => truncateText(d.sucursal, 10)),
+            datasets: [
+                {
+                    label: 'Costo Proveedor',
+                    data: datos.map(d => d.costo_promedio || 0),
+                    backgroundColor: '#6c757d',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Sobreprecio CD',
+                    data: datos.map(d => d.sobreprecio_promedio || 0),
+                    backgroundColor: '#28a745',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 15,
+                        font: { size: 11 }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(tooltipItems) {
+                            const idx = tooltipItems[0].dataIndex;
+                            const item = datos[idx];
+                            return `Incremento: ${item.incremento_pct || 0}%`;
+                        },
+                        label: function(context) {
+                            return context.dataset.label + ': ' + formatMoney(context.parsed.x);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    ticks: {
+                        callback: function(value) {
+                            return formatMoneyShort(value);
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+// Tabla de Sucursales Destino (Centro de Distribución)
+function actualizarTablaSucursalesDestino(datos) {
+    const tbody = $('#tbodySucursalesDestino');
+    tbody.empty();
+    
+    if (!datos || datos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">
+                    <i class="bi bi-truck fs-3 d-block mb-2"></i>
+                    No hay datos de distribución disponibles
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    datos.forEach(suc => {
+        // Calcular rotación (vendido / despachado)
+        const rotacion = suc.despachado > 0 ? ((suc.vendido / suc.despachado) * 100).toFixed(1) : 0;
+        const rotacionClass = rotacion >= 80 ? 'progress-bar-success' : 
+                              rotacion >= 50 ? 'progress-bar-warning' : 'progress-bar-danger';
+        
+        // Calcular margen
+        const margen = suc.ventas_monto > 0 && suc.costo > 0 ? 
+            (((suc.ventas_monto - suc.costo) / suc.ventas_monto) * 100).toFixed(1) : 0;
+        const margenClass = margen >= 30 ? 'text-success' : margen >= 15 ? 'text-warning' : 'text-danger';
+        
+        tbody.append(`
+            <tr>
+                <td class="fw-semibold">${suc.sucursal || 'Sin nombre'}</td>
+                <td><span class="badge badge-purple">${suc.empresa || '-'}</span></td>
+                <td class="text-end">${formatNumber(suc.despachado || 0)}</td>
+                <td class="text-end">${formatNumber(suc.vendido || 0)}</td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="progress-enhanced flex-grow-1" style="height: 8px;">
+                            <div class="progress-bar-enhanced ${rotacionClass}" style="width: ${Math.min(rotacion, 100)}%"></div>
+                        </div>
+                        <span class="small fw-bold" style="min-width: 40px">${rotacion}%</span>
+                    </div>
+                </td>
+                <td class="text-end fw-bold">${formatMoney(suc.ventas_monto || 0)}</td>
+                <td class="text-end fw-bold ${margenClass}">${margen}%</td>
+            </tr>
+        `);
+    });
+}
+
+// Tabla Top Proveedores
+function actualizarTablaTopProveedores(datos) {
+    const tbody = $('#tbodyTopProveedores');
+    tbody.empty();
+    
+    if (datos.length === 0) {
+        tbody.append('<tr><td colspan="5" class="text-center py-4 text-muted">Sin datos disponibles</td></tr>');
+        return;
+    }
+    
+    datos.forEach((prov, i) => {
+        const rankingClass = i < 3 ? `ranking-${i + 1}` : 'ranking-default';
+        const cumplimientoBadge = prov.cumplimiento >= 90 ? 'badge-success' : 
+                                   prov.cumplimiento >= 70 ? 'badge-warning' : 'badge-danger';
+        
+        tbody.append(`
+            <tr>
+                <td><div class="ranking-badge ${rankingClass}">${i + 1}</div></td>
+                <td class="fw-semibold">${prov.proveedor}</td>
+                <td class="text-end fw-bold">${formatMoney(prov.inversion)}</td>
+                <td class="text-end">${prov.total_compras || 0}</td>
+                <td class="text-center">
+                    <span class="badge-status ${cumplimientoBadge}">${prov.cumplimiento || 0}%</span>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+// Tabla Top Productos
+function actualizarTablaTopProductos(datos) {
+    const tbody = $('#tbodyTopProductos');
+    tbody.empty();
+    
+    if (datos.length === 0) {
+        tbody.append('<tr><td colspan="5" class="text-center py-4 text-muted">Sin datos disponibles</td></tr>');
+        return;
+    }
+    
+    datos.forEach((prod, i) => {
+        const rankingClass = i < 3 ? `ranking-${i + 1}` : 'ranking-default';
+        
+        tbody.append(`
+            <tr>
+                <td><div class="ranking-badge ${rankingClass}">${i + 1}</div></td>
+                <td class="fw-semibold">${truncateText(prod.nombre, 25)}</td>
+                <td><span class="badge badge-info">${prod.marca || '-'}</span></td>
+                <td class="text-end">${formatNumber(prod.unidades)}</td>
+                <td class="text-end fw-bold">${formatMoney(prod.inversion)}</td>
+            </tr>
+        `);
+    });
+}
+
+// Tabla Rendimiento Detallado
+function actualizarTablaRendimiento(datos) {
+    const tbody = $('#tbodyRendimiento');
+    tbody.empty();
+    
+    if (datos.length === 0) {
+        tbody.append(`
+            <tr>
+                <td colspan="8" class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    No hay datos de rendimiento para el período seleccionado
+                </td>
+            </tr>
+        `);
+        return;
+    }
+    
+    datos.forEach(item => {
+        const estadoBadge = item.estado === 'Completado' ? 'badge-success' :
+                           item.estado === 'Pendiente' ? 'badge-warning' : 'badge-danger';
+        const cumplimientoClass = item.cumplimiento >= 90 ? 'progress-bar-success' :
+                                  item.cumplimiento >= 70 ? 'progress-bar-warning' : 'progress-bar-danger';
+        
+        tbody.append(`
+            <tr>
+                <td class="fw-semibold">${item.nombre}</td>
+                <td>${item.proveedor}</td>
+                <td><span class="badge badge-info">${item.temporada || 'N/A'}</span></td>
+                <td class="fw-bold">${formatMoney(item.inversion || 0)}</td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="progress-enhanced flex-grow-1" style="height: 8px;">
+                            <div class="progress-bar-enhanced ${cumplimientoClass}" style="width: ${item.cumplimiento}%"></div>
+                        </div>
+                        <span class="small fw-bold" style="min-width: 40px">${item.cumplimiento}%</span>
+                    </div>
+                </td>
+                <td class="fw-bold ${item.roi >= 20 ? 'text-success' : item.roi >= 10 ? 'text-warning' : 'text-danger'}">
+                    ${item.roi}%
+                </td>
+                <td>${formatNumber(item.unidades_esperadas || 0)} / ${formatNumber(item.unidades_recibidas || 0)}</td>
+                <td><span class="badge-status ${estadoBadge}">${item.estado}</span></td>
+            </tr>
+        `);
+    });
+}
+
+// Actualizar alertas
+function actualizarAlertas(data) {
+    const alertas = data.alertas || [];
+    const contenedor = $('#contenedorAlertas');
+    contenedor.empty();
+    
+    $('#contadorAlertas').text(alertas.length);
+    
+    if (alertas.length === 0) {
+        contenedor.html(`
+            <div class="text-center py-4">
+                <i class="bi bi-check-circle fs-1 text-success"></i>
+                <p class="mt-2 text-muted mb-0">No hay alertas en este momento</p>
+            </div>
+        `);
+        return;
+    }
+    
+    alertas.forEach(alerta => {
+        const iconos = {
+            danger: 'exclamation-triangle',
+            warning: 'exclamation-circle',
+            success: 'check-circle',
+            info: 'info-circle'
+        };
+        
+        contenedor.append(`
+            <div class="alert-card alert-${alerta.tipo || 'info'}">
+                <div class="alert-icon">
+                    <i class="bi bi-${iconos[alerta.tipo] || 'info-circle'}"></i>
+                </div>
+                <div class="alert-content">
+                    <h6>${alerta.titulo || 'Alerta'}</h6>
+                    <p>${alerta.mensaje}</p>
+                </div>
+            </div>
+        `);
+    });
+}
+
+// Actualizar Insights
+function actualizarInsights(data) {
+    const insights = data.insights || [];
+    const contenedor = $('#contenedorInsights');
+    contenedor.empty();
+    
+    if (insights.length === 0) {
+        // Generar insights por defecto basados en los datos
+        const metricas = data.metricas || {};
+        
+        const insightsDefault = [];
+        
+        if (metricas.cumplimiento_general < 80) {
+            insightsDefault.push({
+                titulo: 'Mejorar Cumplimiento',
+                descripcion: `El cumplimiento actual (${metricas.cumplimiento_general}%) está por debajo del objetivo. Revisar procesos de recepción.`,
+                valor: metricas.cumplimiento_general + '%',
+                icono: 'bi-clipboard-check',
+                color: 'warning'
+            });
+        }
+        
+        if (metricas.roi_promedio > 20) {
+            insightsDefault.push({
+                titulo: 'Excelente ROI',
+                descripcion: 'El retorno sobre la inversión es muy positivo. Mantener estrategia de precios.',
+                valor: metricas.roi_promedio + '%',
+                icono: 'bi-graph-up-arrow',
+                color: 'success'
+            });
+        }
+        
+        if (metricas.total_compras > 0) {
+            const ticketPromedio = metricas.inversion_total / metricas.total_compras;
+            insightsDefault.push({
+                titulo: 'Ticket Promedio',
+                descripcion: 'Inversión promedio por orden de compra en el período seleccionado.',
+                valor: formatMoney(ticketPromedio),
+                icono: 'bi-receipt',
+                color: 'info'
+            });
+        }
+        
+        insightsDefault.forEach(insight => {
+            agregarInsightCard(contenedor, insight);
+        });
+    } else {
+        insights.forEach(insight => {
+            agregarInsightCard(contenedor, insight);
+        });
+    }
+}
+
+function agregarInsightCard(contenedor, insight) {
+    const bgColors = {
+        success: 'linear-gradient(135deg, #0ab39c 0%, #10b981 100%)',
+        warning: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)',
+        danger: 'linear-gradient(135deg, #f06548 0%, #ef4444 100%)',
+        info: 'linear-gradient(135deg, #405189 0%, #6366f1 100%)'
+    };
+    
+    contenedor.append(`
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="insight-card" style="background: ${bgColors[insight.color] || bgColors.info}">
+                <h4><i class="bi ${insight.icono}"></i> ${insight.titulo}</h4>
+                <div class="insight-value">${insight.valor}</div>
+                <p>${insight.descripcion}</p>
+            </div>
+        </div>
+    `);
+}
+
+// Funciones de formato
+function formatMoney(value) {
+    return '$' + Math.round(value || 0).toLocaleString('es-CL');
+}
+
+function formatMoneyShort(value) {
+    if (value >= 1000000) {
+        return '$' + (value / 1000000).toFixed(1) + 'M';
+    } else if (value >= 1000) {
+        return '$' + (value / 1000).toFixed(0) + 'K';
+    }
+    return '$' + Math.round(value);
+}
+
+function formatNumber(value) {
+    return Math.round(value || 0).toLocaleString('es-CL');
+}
+
+function truncateText(text, maxLength) {
+    if (!text) return '';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+}
+
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Loader
+function showLoader() {
+    if ($('#dashboardLoader').length === 0) {
+        $('body').append(`
+            <div id="dashboardLoader" style="
+                position: fixed; z-index: 9999; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(255,255,255,0.9); display: flex; align-items: center;
+                justify-content: center; flex-direction: column;">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+                <p class="mt-3 fw-bold text-primary">Cargando dashboard...</p>
+            </div>
+        `);
+    }
+    $('#dashboardLoader').fadeIn(100);
+}
+
+function hideLoader() {
+    $('#dashboardLoader').fadeOut(300);
+}
+
+// Exportar dashboard
+function exportarDashboard() {
+    const params = new URLSearchParams({
+        anio: $('#filtroAnio').val(),
+        temporada: $('#filtroTemporada').val(),
+        proveedor: $('#filtroProveedor').val()
+    });
+    window.open('/app/exportar_dashboard_compras/?' + params, '_blank');
+}
+
+function exportarTabla() {
+    Swal.fire({
+        icon: 'info',
+        title: 'Exportar Datos',
+        text: 'Utilice el botón "Exportar" del dashboard para descargar todos los datos en Excel.'
+    });
+}
+
+function cambiarVistaEvolucion(vista) {
+    // TODO: Implementar cambio de vista semanal/mensual
+    console.log('Cambiar a vista:', vista);
+}
+</script>
+

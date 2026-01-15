@@ -4,101 +4,286 @@
 {% include 'layout/menu.html' %}
 
 <style>
-.review-container {
-    padding: 20px;
+/* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
 }
 
+/* ========== PÁGINA PRINCIPAL ========== */
+.revisar-precios-page {
+    background: var(--nexo-gray-100);
+    min-height: 100vh;
+}
+
+.page-header-nexo {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    padding: 24px 0;
+    margin-bottom: 24px;
+    border-bottom: 3px solid var(--nexo-warning);
+}
+
+.page-header-nexo h1 {
+    color: var(--nexo-white);
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-header-nexo h1 i {
+    color: var(--nexo-warning);
+}
+
+.page-header-nexo .subtitle {
+    color: var(--nexo-gray-300);
+    font-size: 14px;
+    margin: 0;
+}
+
+/* ========== INDICADORES DE RESUMEN ========== */
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.summary-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 20px;
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+}
+
+.summary-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+    transform: translateY(-2px);
+}
+
+.summary-card.active {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+
+.summary-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.summary-icon.pendiente {
+    background: rgba(255, 176, 32, 0.15);
+    color: var(--nexo-warning);
+}
+
+.summary-icon.revisado {
+    background: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-primary);
+}
+
+.summary-icon.aprobado {
+    background: rgba(0, 212, 170, 0.15);
+    color: var(--nexo-accent);
+}
+
+.summary-icon.rechazado {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+.summary-info h3 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin: 0;
+    line-height: 1;
+}
+
+.summary-info p {
+    font-size: 13px;
+    color: var(--nexo-gray-500);
+    margin: 4px 0 0;
+}
+
+/* ========== FILTROS ========== */
 .filters-section {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
+    background: var(--nexo-white);
+    padding: 20px 24px;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    margin-bottom: 24px;
+    border: 1px solid var(--nexo-gray-300);
 }
 
+.filters-section .form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.filters-section .form-select {
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    padding: 10px 12px;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.filters-section .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+
+.btn-refresh {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--nexo-radius-sm);
+    font-weight: 600;
+    transition: var(--nexo-transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.btn-refresh:hover {
+    background: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+}
+
+/* ========== LISTA DE CAMBIOS ========== */
 .changes-card {
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    padding: 20px;
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    padding: 24px;
+    border: 1px solid var(--nexo-gray-300);
 }
 
 .change-item {
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
     padding: 20px;
-    margin-bottom: 15px;
-    transition: all 0.3s;
-    background: white;
+    margin-bottom: 16px;
+    transition: var(--nexo-transition-fast);
+    background: var(--nexo-white);
 }
 
 .change-item:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: var(--nexo-shadow-md);
     transform: translateY(-2px);
 }
 
 .change-item.urgente {
-    border-left: 5px solid #e74c3c;
+    border-left: 5px solid var(--nexo-error);
 }
 
 .change-item.alta {
-    border-left: 5px solid #f39c12;
+    border-left: 5px solid var(--nexo-warning);
 }
 
 .change-item.media {
-    border-left: 5px solid #3498db;
+    border-left: 5px solid var(--nexo-primary);
 }
 
 .change-item.baja {
-    border-left: 5px solid #95a5a6;
+    border-left: 5px solid var(--nexo-gray-500);
 }
 
 .change-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid #f0f0f0;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--nexo-gray-100);
 }
 
 .product-info h4 {
-    margin: 0 0 5px 0;
-    color: #2c3e50;
+    margin: 0 0 8px 0;
+    color: var(--nexo-secondary);
     font-size: 18px;
+    font-weight: 600;
 }
 
 .product-info small {
-    color: #7f8c8d;
-}
-
-.status-badge {
-    padding: 8px 15px;
-    border-radius: 20px;
-    font-weight: 600;
+    color: var(--nexo-gray-500);
     font-size: 13px;
 }
 
+.status-badge {
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .status-pendiente {
-    background: #fff3cd;
-    color: #856404;
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+    border: 1px solid rgba(255, 176, 32, 0.3);
 }
 
 .status-revisado {
-    background: #d1ecf1;
-    color: #0c5460;
+    background: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-primary-dark);
+    border: 1px solid rgba(0, 102, 255, 0.2);
 }
 
-.status-aprobado {
-    background: #d4edda;
-    color: #155724;
+.status-aprobado, .status-aplicado {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00997A;
+    border: 1px solid rgba(0, 212, 170, 0.3);
 }
 
 .status-rechazado {
-    background: #f8d7da;
-    color: #721c24;
+    background: rgba(255, 77, 77, 0.1);
+    color: #CC3333;
+    border: 1px solid rgba(255, 77, 77, 0.3);
 }
 
+/* ========== COMPARACIÓN DE PRECIOS ========== */
 .price-comparison {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -109,48 +294,53 @@
 
 .price-box {
     text-align: center;
-    padding: 15px;
-    border-radius: 8px;
+    padding: 20px;
+    border-radius: var(--nexo-radius-md);
 }
 
 .price-old {
-    background: #f8d7da;
+    background: rgba(255, 77, 77, 0.08);
+    border: 1px solid rgba(255, 77, 77, 0.2);
 }
 
 .price-new {
-    background: #d4edda;
+    background: rgba(0, 212, 170, 0.08);
+    border: 1px solid rgba(0, 212, 170, 0.2);
 }
 
 .price-value {
     font-size: 28px;
     font-weight: 700;
-    margin: 5px 0;
+    margin: 8px 0;
+    color: var(--nexo-secondary);
 }
 
 .price-label {
-    font-size: 12px;
-    color: #666;
+    font-size: 11px;
+    color: var(--nexo-gray-500);
     text-transform: uppercase;
     font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
 .arrow-change {
     font-size: 32px;
-    color: #7f8c8d;
+    color: var(--nexo-gray-300);
 }
 
+/* ========== DETALLES DEL CAMBIO ========== */
 .change-details {
-    background: #f8f9fa;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 15px 0;
+    background: var(--nexo-gray-100);
+    padding: 16px;
+    border-radius: var(--nexo-radius-md);
+    margin: 16px 0;
 }
 
 .detail-row {
     display: flex;
     justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #e0e0e0;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--nexo-gray-300);
 }
 
 .detail-row:last-child {
@@ -159,76 +349,175 @@
 
 .detail-label {
     font-weight: 600;
-    color: #555;
+    color: var(--nexo-gray-500);
+    font-size: 13px;
 }
 
 .detail-value {
-    color: #2c3e50;
+    color: var(--nexo-secondary);
+    font-size: 13px;
 }
 
+/* ========== BOTONES DE ACCIÓN ========== */
 .actions-section {
     display: flex;
     gap: 10px;
     margin-top: 20px;
     justify-content: flex-end;
+    flex-wrap: wrap;
 }
 
 .btn-action {
     padding: 10px 20px;
     border: none;
-    border-radius: 5px;
+    border-radius: var(--nexo-radius-sm);
     cursor: pointer;
     font-weight: 600;
-    transition: all 0.3s;
-}
-
-.btn-review {
-    background: #3498db;
-    color: white;
-}
-
-.btn-approve {
-    background: #2ecc71;
-    color: white;
-}
-
-.btn-reject {
-    background: #e74c3c;
-    color: white;
+    font-size: 13px;
+    transition: var(--nexo-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .btn-action:hover {
-    transform: scale(1.05);
+    transform: scale(1.03);
 }
 
+.btn-review {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.btn-approve {
+    background: var(--nexo-accent);
+    color: var(--nexo-white);
+}
+
+.btn-reject {
+    background: var(--nexo-error);
+    color: var(--nexo-white);
+}
+
+.btn-approve-all {
+    background: linear-gradient(135deg, var(--nexo-accent) 0%, #00B894 100%);
+    color: var(--nexo-white);
+    padding: 12px 24px;
+    font-size: 14px;
+}
+
+/* ========== BADGES ========== */
 .priority-badge {
-    padding: 4px 10px;
+    padding: 4px 12px;
     border-radius: 12px;
     font-size: 11px;
     font-weight: 600;
 }
 
 .priority-urgente {
-    background: #e74c3c;
-    color: white;
+    background: var(--nexo-error);
+    color: var(--nexo-white);
 }
 
 .priority-alta {
-    background: #f39c12;
-    color: white;
+    background: var(--nexo-warning);
+    color: #5C4600;
 }
 
 .priority-media {
-    background: #3498db;
-    color: white;
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
 }
 
 .priority-baja {
-    background: #95a5a6;
-    color: white;
+    background: var(--nexo-gray-500);
+    color: var(--nexo-white);
 }
 
-.modal {
+.badge-sync {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00997A;
+    border: 1px solid rgba(0, 212, 170, 0.3);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.badge-warning-urgent {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    animation: pulse-urgent 2s infinite;
+}
+
+@keyframes pulse-urgent {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* ========== ESTADOS VACÍOS ========== */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--nexo-gray-500);
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: var(--nexo-gray-300);
+    margin-bottom: 20px;
+}
+
+.empty-state h3 {
+    color: var(--nexo-gray-700);
+    margin-bottom: 8px;
+}
+
+/* ========== PAGINACIÓN ========== */
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--nexo-gray-300);
+}
+
+.pagination-controls .btn {
+    padding: 8px 16px;
+    border: 2px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    color: var(--nexo-gray-700);
+    border-radius: var(--nexo-radius-sm);
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.pagination-controls .btn:hover:not(:disabled) {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.pagination-controls .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.page-info {
+    color: var(--nexo-gray-500);
+    font-size: 14px;
+}
+
+/* ========== MODALES ========== */
+.modal-nexo {
     display: none;
     position: fixed;
     z-index: 9999;
@@ -236,169 +525,398 @@
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
+    background-color: rgba(26, 26, 46, 0.8);
+    backdrop-filter: blur(4px);
 }
 
-.modal-content {
-    background-color: white;
-    margin: 10% auto;
-    padding: 30px;
-    border-radius: 10px;
+.modal-content-nexo {
+    background-color: var(--nexo-white);
+    margin: 8% auto;
+    padding: 0;
+    border-radius: var(--nexo-radius-lg);
     width: 90%;
     max-width: 500px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    box-shadow: var(--nexo-shadow-lg);
+    overflow: hidden;
+    animation: modalSlideIn 0.3s ease;
 }
 
-.modal-header {
-    margin-bottom: 20px;
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.modal-header h3 {
+.modal-header-nexo {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.modal-header-nexo h3 {
     margin: 0;
-    color: #2c3e50;
+    color: var(--nexo-secondary);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.modal-header-nexo i {
+    font-size: 24px;
+}
+
+.modal-header-nexo.review i { color: var(--nexo-primary); }
+.modal-header-nexo.approve i { color: var(--nexo-accent); }
+.modal-header-nexo.reject i { color: var(--nexo-error); }
+
+.modal-body-nexo {
+    padding: 24px;
+}
+
+.modal-body-nexo .form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    margin-bottom: 8px;
+}
+
+.modal-body-nexo .form-control {
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    padding: 12px;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.modal-body-nexo .form-control:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+
+.modal-alert {
+    padding: 14px 16px;
+    border-radius: var(--nexo-radius-sm);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.modal-alert i {
+    font-size: 20px;
+    margin-top: 2px;
+}
+
+.modal-alert.info {
+    background: rgba(0, 102, 255, 0.1);
+    border: 1px solid rgba(0, 102, 255, 0.2);
+    color: var(--nexo-primary-dark);
+}
+
+.modal-alert.warning {
+    background: rgba(255, 77, 77, 0.1);
+    border: 1px solid rgba(255, 77, 77, 0.2);
+    color: #CC3333;
+}
+
+.modal-footer-nexo {
+    padding: 16px 24px;
+    background: var(--nexo-gray-100);
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.modal-footer-nexo .btn {
+    padding: 10px 20px;
+    border-radius: var(--nexo-radius-sm);
+    font-weight: 600;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.modal-footer-nexo .btn-secondary {
+    background: var(--nexo-gray-100);
+    border: 2px solid var(--nexo-gray-300);
+    color: var(--nexo-gray-700);
+}
+
+.modal-footer-nexo .btn-secondary:hover {
+    background: var(--nexo-gray-300);
+}
+
+/* ========== LOADING ========== */
+.loading-indicator {
+    text-align: center;
+    padding: 60px;
+}
+
+.loading-indicator .spinner {
+    border: 4px solid var(--nexo-gray-100);
+    border-top: 4px solid var(--nexo-primary);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 992px) {
+    .summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .price-comparison {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .arrow-change {
+        transform: rotate(90deg);
+    }
+}
+
+@media (max-width: 576px) {
+    .summary-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .actions-section {
+        flex-direction: column;
+    }
+    
+    .btn-action {
+        width: 100%;
+        justify-content: center;
+    }
 }
 </style>
 
-<div class="page-content">
+<div class="page-content revisar-precios-page">
+    <!-- Header de la página -->
+    <div class="page-header-nexo">
+        <div class="container-fluid">
+            <h1>
+                <i class="ri-file-list-3-line"></i> Revisión de Cambios de Precios
+            </h1>
+            <p class="subtitle">Gestiona y aprueba las alertas de cambios de precios de todas las sucursales</p>
+        </div>
+    </div>
+
     <div class="container-fluid">
-        <div class="review-container">
-            <!-- Header -->
-            <div style="margin-bottom: 20px;">
-                <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
-                    <i class="bi bi-clipboard-check"></i> Revisión de Cambios de Precios
-                </h1>
-                <p style="color: #7f8c8d; margin: 0;">Revisa, aprueba o rechaza cambios de precios propuestos</p>
-            </div>
-
-            <!-- Filtros -->
-            <div class="filters-section">
-                <div class="row">
-                    <div class="col-md-3">
-                        <label class="form-label">Estado</label>
-                        <select id="filterEstado" class="form-select" onchange="cargarCambios()">
-                            <option value="">Todos</option>
-                            <option value="PENDIENTE" selected>Pendientes</option>
-                            <option value="REVISADO">Revisados</option>
-                            <option value="APROBADO">Aprobados</option>
-                            <option value="RECHAZADO">Rechazados</option>
-                            <option value="APLICADO">Aplicados</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Prioridad</label>
-                        <select id="filterPrioridad" class="form-select" onchange="cargarCambios()">
-                            <option value="">Todas</option>
-                            <option value="URGENTE">Urgente</option>
-                            <option value="ALTA">Alta</option>
-                            <option value="MEDIA">Media</option>
-                            <option value="BAJA">Baja</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Sucursal</label>
-                        <select id="filterSucursal" class="form-select" onchange="cargarCambios()">
-                            <option value="">Todas</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <button class="btn btn-primary w-100" onclick="cargarCambios()">
-                            <i class="bi bi-arrow-clockwise"></i> Actualizar
-                        </button>
-                    </div>
+        <!-- Resumen de Indicadores -->
+        <div class="summary-cards" id="summaryCards">
+            <div class="summary-card" onclick="filtrarPorEstado('PENDIENTE')" id="cardPendiente">
+                <div class="summary-icon pendiente">
+                    <i class="ri-time-line"></i>
+                </div>
+                <div class="summary-info">
+                    <h3 id="countPendiente">0</h3>
+                    <p>Pendientes</p>
                 </div>
             </div>
-
-            <!-- Lista de Cambios -->
-            <div class="changes-card">
-                <div id="loadingIndicator" style="text-align: center; padding: 40px; display: none;">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p style="margin-top: 15px; color: #7f8c8d;">Cargando cambios...</p>
+            <div class="summary-card" onclick="filtrarPorEstado('REVISADO')" id="cardRevisado">
+                <div class="summary-icon revisado">
+                    <i class="ri-eye-line"></i>
                 </div>
-
-                <div id="emptyState" style="text-align: center; padding: 60px; color: #95a5a6; display: none;">
-                    <i class="bi bi-inbox" style="font-size: 64px;"></i>
-                    <h3>No hay cambios pendientes</h3>
-                    <p>Todos los cambios han sido procesados</p>
+                <div class="summary-info">
+                    <h3 id="countRevisado">0</h3>
+                    <p>Revisados</p>
                 </div>
-
-                <div id="changesContainer">
-                    <!-- Los cambios se cargarán aquí dinámicamente -->
+            </div>
+            <div class="summary-card" onclick="filtrarPorEstado('APROBADO')" id="cardAprobado">
+                <div class="summary-icon aprobado">
+                    <i class="ri-check-double-line"></i>
                 </div>
+                <div class="summary-info">
+                    <h3 id="countAprobado">0</h3>
+                    <p>Aprobados</p>
+                </div>
+            </div>
+            <div class="summary-card" onclick="filtrarPorEstado('RECHAZADO')" id="cardRechazado">
+                <div class="summary-icon rechazado">
+                    <i class="ri-close-circle-line"></i>
+                </div>
+                <div class="summary-info">
+                    <h3 id="countRechazado">0</h3>
+                    <p>Rechazados</p>
+                </div>
+            </div>
+        </div>
 
-                <div id="paginationControls" class="text-center" style="margin-top: 20px; display: none;">
-                    <button class="btn btn-outline-primary" id="btnPrev" onclick="cambiarPagina(-1)">
-                        <i class="bi bi-chevron-left"></i> Anterior
+        <!-- Filtros -->
+        <div class="filters-section">
+            <div class="row align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Estado</label>
+                    <select id="filterEstado" class="form-select" onchange="cargarCambios()">
+                        <option value="">Todos los estados</option>
+                        <option value="PENDIENTE" selected>Pendientes</option>
+                        <option value="REVISADO">Revisados</option>
+                        <option value="APROBADO">Aprobados</option>
+                        <option value="RECHAZADO">Rechazados</option>
+                        <option value="APLICADO">Aplicados</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Prioridad</label>
+                    <select id="filterPrioridad" class="form-select" onchange="cargarCambios()">
+                        <option value="">Todas</option>
+                        <option value="URGENTE">🔴 Urgente</option>
+                        <option value="ALTA">🟠 Alta</option>
+                        <option value="MEDIA">🔵 Media</option>
+                        <option value="BAJA">⚪ Baja</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Sucursal</label>
+                    <select id="filterSucursal" class="form-select" onchange="cargarCambios()">
+                        <option value="">Todas las sucursales</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn-refresh w-100" onclick="cargarCambios()">
+                        <i class="ri-refresh-line"></i> Actualizar
                     </button>
-                    <span id="pageInfo" style="margin: 0 15px;">Página 1 de 1</span>
-                    <button class="btn btn-outline-primary" id="btnNext" onclick="cambiarPagina(1)">
-                        Siguiente <i class="bi bi-chevron-right"></i>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn-action btn-approve-all w-100" onclick="aprobarTodosPendientes()" id="btnAprobarTodos" style="display: none;">
+                        <i class="ri-check-double-line"></i> Aprobar Todos
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Lista de Cambios -->
+        <div class="changes-card">
+            <div class="loading-indicator" id="loadingIndicator" style="display: none;">
+                <div class="spinner"></div>
+                <p style="color: var(--nexo-gray-500);">Cargando cambios de precios...</p>
+            </div>
+
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <i class="ri-inbox-2-line"></i>
+                <h3>No hay cambios pendientes</h3>
+                <p>Todos los cambios han sido procesados. ¡Buen trabajo! 🎉</p>
+            </div>
+
+            <div id="changesContainer">
+                <!-- Los cambios se cargarán aquí dinámicamente -->
+            </div>
+
+            <div class="pagination-controls" id="paginationControls" style="display: none;">
+                <button class="btn" id="btnPrev" onclick="cambiarPagina(-1)">
+                    <i class="ri-arrow-left-s-line"></i> Anterior
+                </button>
+                <span class="page-info" id="pageInfo">Página 1 de 1</span>
+                <button class="btn" id="btnNext" onclick="cambiarPagina(1)">
+                    Siguiente <i class="ri-arrow-right-s-line"></i>
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Modal de Revisión -->
-<div id="modalReview" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3><i class="bi bi-eye"></i> Revisar Cambio</h3>
+<div id="modalReview" class="modal-nexo">
+    <div class="modal-content-nexo">
+        <div class="modal-header-nexo review">
+            <i class="ri-eye-line"></i>
+            <h3>Revisar Cambio de Precio</h3>
         </div>
-        <div>
-            <label class="form-label">Observaciones</label>
-            <textarea id="observacionesRevision" class="form-control" rows="3" placeholder="Agrega tus observaciones..."></textarea>
+        <div class="modal-body-nexo">
+            <div class="modal-alert info">
+                <i class="ri-information-line"></i>
+                <div>
+                    <strong>Marcar como revisado</strong><br>
+                    <small>El cambio quedará en estado "revisado" y podrá ser aprobado o rechazado posteriormente.</small>
+                </div>
+            </div>
+            <div>
+                <label class="form-label">Observaciones (opcional)</label>
+                <textarea id="observacionesRevision" class="form-control" rows="3" placeholder="Agrega tus observaciones sobre este cambio..."></textarea>
+            </div>
         </div>
-        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+        <div class="modal-footer-nexo">
             <button class="btn btn-secondary" onclick="cerrarModal('modalReview')">Cancelar</button>
-            <button class="btn btn-primary" onclick="confirmarRevision()">Marcar como Revisado</button>
+            <button class="btn btn-primary" onclick="confirmarRevision()" style="background: var(--nexo-primary); color: white; border: none;">
+                <i class="ri-eye-line"></i> Marcar como Revisado
+            </button>
         </div>
     </div>
 </div>
 
 <!-- Modal de Aprobación -->
-<div id="modalApprove" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3><i class="bi bi-check-circle"></i> Aprobar Cambio</h3>
+<div id="modalApprove" class="modal-nexo">
+    <div class="modal-content-nexo">
+        <div class="modal-header-nexo approve">
+            <i class="ri-check-double-line"></i>
+            <h3>Aprobar Cambio de Precio</h3>
         </div>
-        <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
-            <p style="margin: 0; color: #0c5460;">
-                <i class="bi bi-info-circle"></i> 
-                <strong>Confirmar:</strong> Este cambio se aplicará inmediatamente al aprobarlo.
-            </p>
+        <div class="modal-body-nexo">
+            <div class="modal-alert info">
+                <i class="ri-information-line"></i>
+                <div>
+                    <strong>Confirmar aprobación</strong><br>
+                    <small>El nuevo precio se aplicará inmediatamente a todas las tallas del producto.</small>
+                </div>
+            </div>
+            <div id="infoProductoAprobacion" style="background: var(--nexo-gray-100); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                <!-- Se llenará dinámicamente -->
+            </div>
+            <div>
+                <label class="form-label">Observaciones (opcional)</label>
+                <textarea id="observacionesAprobacion" class="form-control" rows="2" placeholder="Agrega comentarios..."></textarea>
+            </div>
         </div>
-        <div>
-            <label class="form-label">Observaciones (opcional)</label>
-            <textarea id="observacionesAprobacion" class="form-control" rows="3" placeholder="Agrega comentarios..."></textarea>
-        </div>
-        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+        <div class="modal-footer-nexo">
             <button class="btn btn-secondary" onclick="cerrarModal('modalApprove')">Cancelar</button>
-            <button class="btn btn-success" onclick="confirmarAprobacion()">Aprobar y Aplicar</button>
+            <button class="btn" onclick="confirmarAprobacion()" style="background: var(--nexo-accent); color: white; border: none;">
+                <i class="ri-check-line"></i> Aprobar y Aplicar
+            </button>
         </div>
     </div>
 </div>
 
 <!-- Modal de Rechazo -->
-<div id="modalReject" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3><i class="bi bi-x-circle"></i> Rechazar Cambio</h3>
+<div id="modalReject" class="modal-nexo">
+    <div class="modal-content-nexo">
+        <div class="modal-header-nexo reject">
+            <i class="ri-close-circle-line"></i>
+            <h3>Rechazar Cambio de Precio</h3>
         </div>
-        <div style="background: #f8d7da; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
-            <p style="margin: 0; color: #721c24;">
-                <i class="bi bi-exclamation-triangle"></i> 
-                <strong>Atención:</strong> El cambio será rechazado y NO se aplicará.
-            </p>
+        <div class="modal-body-nexo">
+            <div class="modal-alert warning">
+                <i class="ri-error-warning-line"></i>
+                <div>
+                    <strong>Atención</strong><br>
+                    <small>El cambio será rechazado y NO se aplicará al producto.</small>
+                </div>
+            </div>
+            <div>
+                <label class="form-label">Motivo del Rechazo <span style="color: var(--nexo-error);">*</span></label>
+                <textarea id="motivoRechazo" class="form-control" rows="3" placeholder="Explica por qué se rechaza este cambio..." required></textarea>
+            </div>
         </div>
-        <div>
-            <label class="form-label">Motivo del Rechazo <span class="text-danger">*</span></label>
-            <textarea id="motivoRechazo" class="form-control" rows="3" placeholder="Explica por qué se rechaza este cambio..." required></textarea>
-        </div>
-        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+        <div class="modal-footer-nexo">
             <button class="btn btn-secondary" onclick="cerrarModal('modalReject')">Cancelar</button>
-            <button class="btn btn-danger" onclick="confirmarRechazo()">Rechazar Cambio</button>
+            <button class="btn" onclick="confirmarRechazo()" style="background: var(--nexo-error); color: white; border: none;">
+                <i class="ri-close-line"></i> Rechazar Cambio
+            </button>
         </div>
     </div>
 </div>
@@ -409,15 +927,57 @@
 let paginaActual = 1;
 let totalPaginas = 1;
 let cambioSeleccionado = null;
+let cambiosActuales = [];
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', function() {
     cargarSucursales();
+    cargarIndicadores();
     cargarCambios();
     
     // Auto-refresh cada 30 segundos
-    setInterval(cargarCambios, 30000);
+    setInterval(() => {
+        cargarIndicadores();
+        cargarCambios();
+    }, 30000);
 });
+
+// Cargar indicadores de resumen
+async function cargarIndicadores() {
+    try {
+        const response = await fetch('/app/gestion-precios/indicadores-pendientes/');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('countPendiente').textContent = data.indicadores.total_pendientes;
+            document.getElementById('countRevisado').textContent = data.indicadores.total_revisados;
+            document.getElementById('countAprobado').textContent = data.indicadores.total_aprobados;
+            document.getElementById('countRechazado').textContent = data.indicadores.total_rechazados;
+            
+            // Mostrar botón "Aprobar Todos" si hay pendientes
+            const btnAprobarTodos = document.getElementById('btnAprobarTodos');
+            if (data.indicadores.total_pendientes > 0) {
+                btnAprobarTodos.style.display = 'flex';
+                btnAprobarTodos.innerHTML = `<i class="ri-check-double-line"></i> Aprobar (${data.indicadores.total_pendientes})`;
+            } else {
+                btnAprobarTodos.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando indicadores:', error);
+    }
+}
+
+// Filtrar por estado desde las tarjetas
+function filtrarPorEstado(estado) {
+    document.getElementById('filterEstado').value = estado;
+    
+    // Actualizar estado visual de las tarjetas
+    document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
+    document.getElementById(`card${estado.charAt(0) + estado.slice(1).toLowerCase()}`).classList.add('active');
+    
+    cargarCambios();
+}
 
 // Cargar sucursales para filtro
 async function cargarSucursales() {
@@ -425,13 +985,15 @@ async function cargarSucursales() {
         const response = await fetch('/app/api/sucursales/listar/');
         const data = await response.json();
         
-        const select = document.getElementById('filterSucursal');
-        data.sucursales.forEach(suc => {
-            const option = document.createElement('option');
-            option.value = suc.id;
-            option.textContent = suc.alias;
-            select.appendChild(option);
-        });
+        if (data.success) {
+            const select = document.getElementById('filterSucursal');
+            data.sucursales.forEach(suc => {
+                const option = document.createElement('option');
+                option.value = suc.id;
+                option.textContent = suc.alias;
+                select.appendChild(option);
+            });
+        }
     } catch (error) {
         console.error('Error cargando sucursales:', error);
     }
@@ -455,6 +1017,7 @@ async function cargarCambios() {
         const data = await response.json();
         
         if (data.success) {
+            cambiosActuales = data.cambios;
             renderizarCambios(data.cambios);
             actualizarPaginacion(data.pagination);
         } else {
@@ -480,7 +1043,7 @@ function renderizarCambios(cambios) {
     
     container.style.display = 'block';
     document.getElementById('emptyState').style.display = 'none';
-    document.getElementById('paginationControls').style.display = 'block';
+    document.getElementById('paginationControls').style.display = 'flex';
     
     container.innerHTML = '';
     
@@ -491,23 +1054,35 @@ function renderizarCambios(cambios) {
         const estadoClass = `status-${cambio.estado.toLowerCase()}`;
         const prioridadClass = `priority-${cambio.prioridad.toLowerCase()}`;
         
-        const porcentajeColor = cambio.porcentaje_cambio > 0 ? '#27ae60' : '#e74c3c';
-        const porcentajeIcon = cambio.porcentaje_cambio > 0 ? 'arrow-up' : 'arrow-down';
+        const porcentajeColor = cambio.porcentaje_cambio > 0 ? 'var(--nexo-accent)' : 'var(--nexo-error)';
+        const porcentajeIcon = cambio.porcentaje_cambio > 0 ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
+        
+        // Badges adicionales
+        let badgesExtra = '';
+        if (cambio.tipo_cambio === 'Sincronización') {
+            badgesExtra += `<span class="badge-sync"><i class="ri-refresh-line"></i> Sincronizado</span>`;
+        }
+        if (cambio.requiere_atencion) {
+            badgesExtra += `<span class="badge-warning-urgent"><i class="ri-alarm-warning-line"></i> Requiere atención</span>`;
+        }
         
         div.innerHTML = `
             <div class="change-header">
                 <div class="product-info">
                     <h4>${cambio.producto}</h4>
                     <small>
-                        <strong>Tallas:</strong> ${cambio.tallas_preview || cambio.tallas_count + ' tallas'} | 
-                        <strong>Sucursal:</strong> ${cambio.sucursal} | 
-                        <strong>Tipo:</strong> ${cambio.tipo_cambio}
+                        <i class="ri-t-shirt-line"></i> ${cambio.tallas_preview || cambio.tallas_count + ' tallas'} &nbsp;|&nbsp;
+                        <i class="ri-store-2-line"></i> ${cambio.sucursal} &nbsp;|&nbsp;
+                        <i class="ri-price-tag-3-line"></i> ${cambio.tipo_cambio}
                     </small>
+                    <div style="margin-top: 8px;">${badgesExtra}</div>
                 </div>
                 <div style="text-align: right;">
-                    <span class="status-badge ${estadoClass}">${cambio.estado_display}</span>
+                    <span class="status-badge ${estadoClass}">
+                        <i class="ri-${getStatusIcon(cambio.estado)}"></i> ${cambio.estado_display}
+                    </span>
                     <br>
-                    <span class="priority-badge ${prioridadClass}" style="margin-top: 5px; display: inline-block;">
+                    <span class="priority-badge ${prioridadClass}" style="margin-top: 8px; display: inline-block;">
                         ${cambio.prioridad}
                     </span>
                 </div>
@@ -520,13 +1095,13 @@ function renderizarCambios(cambios) {
                 </div>
                 
                 <div class="arrow-change">
-                    <i class="bi bi-${porcentajeIcon}" style="color: ${porcentajeColor};"></i>
+                    <i class="${porcentajeIcon}" style="color: ${porcentajeColor};"></i>
                 </div>
                 
                 <div class="price-box price-new">
                     <div class="price-label">Precio Nuevo</div>
                     <div class="price-value">${formatearMoneda(cambio.precio_nuevo)}</div>
-                    <div style="font-size: 14px; color: ${porcentajeColor}; font-weight: 600;">
+                    <div style="font-size: 14px; color: ${porcentajeColor}; font-weight: 600; margin-top: 4px;">
                         ${cambio.porcentaje_cambio > 0 ? '+' : ''}${cambio.porcentaje_cambio.toFixed(1)}%
                     </div>
                 </div>
@@ -534,36 +1109,36 @@ function renderizarCambios(cambios) {
 
             <div class="change-details">
                 <div class="detail-row">
-                    <span class="detail-label">Diferencia:</span>
+                    <span class="detail-label"><i class="ri-money-dollar-circle-line"></i> Diferencia:</span>
                     <span class="detail-value" style="color: ${porcentajeColor}; font-weight: 600;">
                         ${cambio.diferencia > 0 ? '+' : ''}${formatearMoneda(cambio.diferencia)}
                     </span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Motivo:</span>
+                    <span class="detail-label"><i class="ri-chat-3-line"></i> Motivo:</span>
                     <span class="detail-value">${cambio.motivo || 'Sin motivo especificado'}</span>
                 </div>
                 <div class="detail-row">
-                    <span class="detail-label">Propuesto por:</span>
+                    <span class="detail-label"><i class="ri-user-line"></i> Propuesto por:</span>
                     <span class="detail-value">${cambio.creado_por} - ${cambio.fecha_creacion}</span>
                 </div>
                 ${cambio.revisado_por ? `
                 <div class="detail-row">
-                    <span class="detail-label">Revisado por:</span>
+                    <span class="detail-label"><i class="ri-eye-line"></i> Revisado por:</span>
                     <span class="detail-value">${cambio.revisado_por} - ${cambio.fecha_revision}</span>
                 </div>
                 ` : ''}
                 ${cambio.aprobado_por ? `
                 <div class="detail-row">
-                    <span class="detail-label">Aprobado/Rechazado por:</span>
+                    <span class="detail-label"><i class="ri-check-line"></i> ${cambio.estado === 'RECHAZADO' ? 'Rechazado' : 'Aprobado'} por:</span>
                     <span class="detail-value">${cambio.aprobado_por} - ${cambio.fecha_aprobacion}</span>
                 </div>
                 ` : ''}
                 <div class="detail-row">
-                    <span class="detail-label">Días pendiente:</span>
+                    <span class="detail-label"><i class="ri-calendar-line"></i> Días en espera:</span>
                     <span class="detail-value">
-                        ${cambio.dias_pendiente} días
-                        ${cambio.requiere_atencion ? '<span class="badge bg-warning">⚠️ Requiere atención</span>' : ''}
+                        ${cambio.dias_pendiente} día${cambio.dias_pendiente !== 1 ? 's' : ''}
+                        ${cambio.esta_vencido ? '<span class="badge-warning-urgent" style="margin-left: 8px;">Vencido</span>' : ''}
                     </span>
                 </div>
             </div>
@@ -572,14 +1147,14 @@ function renderizarCambios(cambios) {
             <div class="actions-section">
                 ${cambio.estado === 'PENDIENTE' ? `
                 <button class="btn-action btn-review" onclick="abrirModalRevision(${cambio.id})">
-                    <i class="bi bi-eye"></i> Revisar
+                    <i class="ri-eye-line"></i> Revisar
                 </button>
                 ` : ''}
-                <button class="btn-action btn-approve" onclick="abrirModalAprobacion(${cambio.id})">
-                    <i class="bi bi-check-circle"></i> Aprobar
+                <button class="btn-action btn-approve" onclick="abrirModalAprobacion(${cambio.id}, '${cambio.producto}', ${cambio.precio_anterior}, ${cambio.precio_nuevo})">
+                    <i class="ri-check-line"></i> Aprobar
                 </button>
                 <button class="btn-action btn-reject" onclick="abrirModalRechazo(${cambio.id})">
-                    <i class="bi bi-x-circle"></i> Rechazar
+                    <i class="ri-close-line"></i> Rechazar
                 </button>
             </div>
             ` : ''}
@@ -587,6 +1162,18 @@ function renderizarCambios(cambios) {
         
         container.appendChild(div);
     });
+}
+
+// Obtener icono de estado
+function getStatusIcon(estado) {
+    const iconos = {
+        'PENDIENTE': 'time-line',
+        'REVISADO': 'eye-line',
+        'APROBADO': 'check-double-line',
+        'APLICADO': 'check-double-line',
+        'RECHAZADO': 'close-circle-line'
+    };
+    return iconos[estado] || 'information-line';
 }
 
 // Abrir modal de revisión
@@ -616,31 +1203,58 @@ async function confirmarRevision() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✓ Cambio marcado como revisado');
+            Swal.fire({
+                icon: 'success',
+                title: '¡Revisado!',
+                text: 'El cambio ha sido marcado como revisado',
+                confirmButtonColor: '#0066FF'
+            });
             cerrarModal('modalReview');
+            cargarIndicadores();
             cargarCambios();
         } else {
-            alert('✗ Error: ' + data.error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: data.error,
+                confirmButtonColor: '#0066FF'
+            });
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('✗ Error al revisar cambio');
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al revisar el cambio',
+            confirmButtonColor: '#0066FF'
+        });
     }
 }
 
 // Abrir modal de aprobación
-function abrirModalAprobacion(cambioId) {
+function abrirModalAprobacion(cambioId, producto, precioAnterior, precioNuevo) {
     cambioSeleccionado = cambioId;
     document.getElementById('observacionesAprobacion').value = '';
+    
+    // Mostrar info del producto
+    const diferencia = precioNuevo - precioAnterior;
+    const porcentaje = ((diferencia / precioAnterior) * 100).toFixed(1);
+    
+    document.getElementById('infoProductoAprobacion').innerHTML = `
+        <strong>${producto}</strong><br>
+        <small style="color: var(--nexo-gray-500);">
+            ${formatearMoneda(precioAnterior)} → ${formatearMoneda(precioNuevo)} 
+            (<span style="color: ${diferencia >= 0 ? 'var(--nexo-accent)' : 'var(--nexo-error)'}">
+                ${diferencia >= 0 ? '+' : ''}${porcentaje}%
+            </span>)
+        </small>
+    `;
+    
     document.getElementById('modalApprove').style.display = 'block';
 }
 
 // Confirmar aprobación
 async function confirmarAprobacion() {
-    if (!confirm('¿Confirmas que deseas aprobar este cambio? El precio se aplicará inmediatamente.')) {
-        return;
-    }
-    
     const observaciones = document.getElementById('observacionesAprobacion').value;
     
     try {
@@ -659,15 +1273,31 @@ async function confirmarAprobacion() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✓ Cambio aprobado y aplicado correctamente');
+            Swal.fire({
+                icon: 'success',
+                title: '¡Aprobado!',
+                html: `El precio ha sido actualizado<br><small>${data.tallas_afectadas} talla(s) afectadas</small>`,
+                confirmButtonColor: '#00D4AA'
+            });
             cerrarModal('modalApprove');
+            cargarIndicadores();
             cargarCambios();
         } else {
-            alert('✗ Error: ' + data.error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: data.error,
+                confirmButtonColor: '#0066FF'
+            });
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('✗ Error al aprobar cambio');
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al aprobar el cambio',
+            confirmButtonColor: '#0066FF'
+        });
     }
 }
 
@@ -683,7 +1313,12 @@ async function confirmarRechazo() {
     const motivo = document.getElementById('motivoRechazo').value.trim();
     
     if (!motivo) {
-        alert('Debes especificar un motivo para rechazar');
+        Swal.fire({
+            icon: 'warning',
+            title: 'Motivo requerido',
+            text: 'Debes especificar un motivo para rechazar',
+            confirmButtonColor: '#0066FF'
+        });
         return;
     }
     
@@ -703,16 +1338,104 @@ async function confirmarRechazo() {
         const data = await response.json();
         
         if (data.success) {
-            alert('✓ Cambio rechazado');
+            Swal.fire({
+                icon: 'info',
+                title: 'Rechazado',
+                text: 'El cambio ha sido rechazado',
+                confirmButtonColor: '#0066FF'
+            });
             cerrarModal('modalReject');
+            cargarIndicadores();
             cargarCambios();
         } else {
-            alert('✗ Error: ' + data.error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: data.error,
+                confirmButtonColor: '#0066FF'
+            });
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('✗ Error al rechazar cambio');
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Error al rechazar el cambio',
+            confirmButtonColor: '#0066FF'
+        });
     }
+}
+
+// Aprobar todos los pendientes
+async function aprobarTodosPendientes() {
+    const pendientes = cambiosActuales.filter(c => c.estado === 'PENDIENTE' || c.estado === 'REVISADO');
+    
+    if (pendientes.length === 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin pendientes',
+            text: 'No hay cambios pendientes para aprobar',
+            confirmButtonColor: '#0066FF'
+        });
+        return;
+    }
+    
+    const result = await Swal.fire({
+        title: `¿Aprobar ${pendientes.length} cambio(s)?`,
+        html: `Se aplicarán todos los cambios de precio pendientes de esta página.<br><br>
+               <small style="color: var(--nexo-gray-500);">Esta acción no se puede deshacer.</small>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#00D4AA',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: 'Sí, aprobar todos',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    if (!result.isConfirmed) return;
+    
+    let exitosos = 0;
+    let errores = 0;
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Aprobando cambios...',
+        html: '<div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #00D4AA; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>',
+        showConfirmButton: false,
+        allowOutsideClick: false
+    });
+    
+    for (const cambio of pendientes) {
+        try {
+            const response = await fetch('/app/gestion-precios/aprobar-cambio/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    cambio_id: cambio.id,
+                    observaciones: 'Aprobación masiva'
+                })
+            });
+            
+            const data = await response.json();
+            if (data.success) exitosos++;
+            else errores++;
+        } catch (error) {
+            errores++;
+        }
+    }
+    
+    Swal.fire({
+        icon: exitosos > 0 ? 'success' : 'error',
+        title: exitosos > 0 ? '¡Completado!' : 'Error',
+        html: `${exitosos} cambio(s) aprobados${errores > 0 ? `<br><small style="color: var(--nexo-error);">${errores} error(es)</small>` : ''}`,
+        confirmButtonColor: '#00D4AA'
+    });
+    
+    cargarIndicadores();
+    cargarCambios();
 }
 
 // Utilidades
@@ -758,9 +1481,17 @@ function getCookie(name) {
 
 // Cerrar modal al hacer click fuera
 window.onclick = function(event) {
-    if (event.target.classList.contains('modal')) {
+    if (event.target.classList.contains('modal-nexo')) {
         event.target.style.display = 'none';
     }
 }
-</script>
 
+// Atajos de teclado
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-nexo').forEach(modal => {
+            modal.style.display = 'none';
+        });
+    }
+});
+</script>

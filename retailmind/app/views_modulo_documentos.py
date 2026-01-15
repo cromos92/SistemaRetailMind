@@ -2102,6 +2102,14 @@ def generar_txt_desde_dte_existente(request):
         # Calcular IVA desde monto_con_iva y monto_neto
         iva_calculado = int(dte.monto_con_iva - dte.monto_neto)
         
+        # ✅ CORREGIDO: Buscar sucursal_destino para usar su dirección en lugar de la empresa receptora
+        sucursal_destino = None
+        movimiento_con_destino = dte.dte_movimientos.filter(
+            sucursal_destino__isnull=False
+        ).select_related('sucursal_destino').first()
+        if movimiento_con_destino:
+            sucursal_destino = movimiento_con_destino.sucursal_destino
+        
         # Construir diccionario de datos desde el DTE
         datos = {
             'documento': {
@@ -2117,7 +2125,8 @@ def generar_txt_desde_dte_existente(request):
                 'razon_social': dte.emisor.razon_social,  # ✅ Campo correcto
                 'giro': dte.emisor.giro or '',
                 'acteco': dte.emisor.acteco or '',  # ✅ Nuevo campo
-                'direccion': dte.emisor.direccion or '',
+                # ✅ CORREGIDO: Usar dirección de la SUCURSAL, no de la empresa
+                'direccion': dte.sucursal.direccion if dte.sucursal else dte.emisor.direccion or '',
                 'comuna': dte.emisor.comuna or '',
                 'ciudad': dte.emisor.ciudad or '',
                 'codigo_vendedor': dte.responsable or 'USUARIO',
@@ -2128,9 +2137,11 @@ def generar_txt_desde_dte_existente(request):
                 'rut': dte.receptor.rut if dte.receptor else '66666666-6',
                 'razon_social': dte.receptor.razon_social if dte.receptor else 'CONSUMIDOR FINAL',
                 'giro': dte.receptor.giro if dte.receptor else '',
-                'direccion': dte.receptor.direccion if dte.receptor else '',
-                'comuna': dte.receptor.comuna if dte.receptor else '',
-                'ciudad': dte.receptor.ciudad if dte.receptor else ''
+                # ✅ CORREGIDO: Usar dirección de SUCURSAL_DESTINO si existe, sino de la empresa receptora
+                'direccion': sucursal_destino.direccion if sucursal_destino and sucursal_destino.direccion else (dte.receptor.direccion if dte.receptor else ''),
+                'comuna': dte.receptor.comuna if dte.receptor else '',  # Sucursal no tiene comuna, usar empresa
+                'ciudad': dte.receptor.ciudad if dte.receptor else '',  # Sucursal no tiene ciudad, usar empresa
+                'sucursal': sucursal_destino.alias if sucursal_destino else ''  # ✅ Alias de sucursal destino
             },
             'totales': {
                 'monto_neto': int(dte.monto_neto),  # ✅ Campo correcto

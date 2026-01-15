@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fondo -->
+  <rect width="400" height="400" fill="#1A1A2E"/>
+  
+  <!-- Hexágono principal con gradiente -->
+  <defs>
+    <linearGradient id="hexGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0066FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00D4AA;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="hexGradient2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D4AA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0066FF;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Hexágono exterior -->
+  <polygon 
+    points="200,60 290,110 290,190 200,240 110,190 110,110" 
+    fill="none" 
+    stroke="url(#hexGradient)" 
+    stroke-width="8"
+  />
+  
+  <!-- N estilizada dentro del hexágono -->
+  <g transform="translate(140, 90)">
+    <!-- Barra izquierda de la N -->
+    <rect x="0" y="0" width="16" height="100" rx="8" fill="#0066FF"/>
+    
+    <!-- Diagonal de la N -->
+    <rect x="0" y="0" width="16" height="115" rx="8" fill="#00D4AA" transform="rotate(30 8 0)"/>
+    
+    <!-- Barra derecha de la N -->
+    <rect x="104" y="0" width="16" height="100" rx="8" fill="#0066FF"/>
+  </g>
+  
+  <!-- Puntos de conexión decorativos -->
+  <circle cx="200" cy="60" r="8" fill="#00D4AA"/>
+  <circle cx="290" cy="110" r="8" fill="#0066FF"/>
+  <circle cx="290" cy="190" r="8" fill="#00D4AA"/>
+  <circle cx="200" cy="240" r="8" fill="#0066FF"/>
+  <circle cx="110" cy="190" r="8" fill="#00D4AA"/>
+  <circle cx="110" cy="110" r="8" fill="#0066FF"/>
+  
+  <!-- Texto NEXO -->
+  <text x="200" y="310" font-family="Arial Black, Arial, sans-serif" font-size="72" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="8">
+    NEXO
+  </text>
+  
+  <!-- Subtítulo -->
+  <text x="200" y="350" font-family="Arial, sans-serif" font-size="18" fill="#8A8A9A" text-anchor="middle" letter-spacing="4">
+    RETAIL MANAGEMENT
+  </text>
+</svg>

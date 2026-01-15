@@ -29,6 +29,10 @@ urlpatterns = [
     path('assistant/', include('assistant.urls')),  # Asistente Conversacional
     path('', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('api/check-session/', views.check_session_status, name='check_session_status'),
+    
+    # === API v1 para App Desktop (POS Físico) ===
+    path('api/v1/', include('app.api.urls', namespace='api_v1')),
 ]
 
 # Servir archivos media SIEMPRE (desarrollo y producción local)

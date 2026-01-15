@@ -156,9 +156,14 @@ def actualizar_producto(request, producto_id):
     """
     Actualizar datos del producto base
     No afecta a las variaciones/tallas
+    Ahora también registra historial y notifica a otras sucursales si hay cambio de precio
     """
     try:
-        producto = get_object_or_404(Producto, id=producto_id)
+        producto = get_object_or_404(Producto.objects.select_related('sucursal'), id=producto_id)
+        
+        # Guardar precio anterior para comparar
+        precio_anterior = producto.precioventa
+        sucursal_origen = producto.sucursal
         
         # Parsear datos según el método
         if request.method == 'PUT':
@@ -232,6 +237,97 @@ def actualizar_producto(request, producto_id):
         # Guardar cambios
         producto.save()
         
+        # === SI CAMBIÓ EL PRECIO: REGISTRAR HISTORIAL Y NOTIFICAR ===
+        sucursales_notificadas = 0
+        historial_registrado = False
+        
+        if precio_anterior != precioventa:
+            from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser, LoteProducto
+            from django.utils import timezone
+            from datetime import timedelta
+            
+            # Calcular diferencia y porcentaje
+            diferencia = precioventa - precio_anterior
+            porcentaje = (diferencia / precio_anterior * 100) if precio_anterior > 0 else 0
+            
+            # Actualizar lotes activos
+            lotes_actualizados = LoteProducto.objects.filter(
+                producto_talla__producto=producto,
+                cantidad_disponible__gt=0,
+                activo=True
+            ).update(precio_venta_unitario=precioventa)
+            
+            # Registrar en historial
+            HistorialCambioPrecio.objects.create(
+                producto=producto,
+                precio_anterior=precio_anterior,
+                precio_nuevo=precioventa,
+                diferencia=diferencia,
+                porcentaje_cambio=porcentaje,
+                motivo='Actualización desde Gestión de Productos',
+                tipo_cambio='MANUAL',
+                usuario=request.user,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                tallas_afectadas=producto.producto_talla.count(),
+                lotes_afectados=lotes_actualizados
+            )
+            historial_registrado = True
+            
+            # Buscar productos similares en OTRAS sucursales
+            productos_otras_sucursales = Producto.objects.filter(
+                articulo=producto.articulo,
+                atributo1=producto.atributo1,
+                atributo2=producto.atributo2
+            ).exclude(
+                sucursal=sucursal_origen
+            ).select_related('sucursal')
+            
+            for prod_similar in productos_otras_sucursales:
+                primera_talla = prod_similar.producto_talla.first()
+                if not primera_talla:
+                    continue
+                
+                # Crear cambio pendiente para la otra sucursal
+                cambio = CambioPrecioPendiente.objects.create(
+                    producto_talla=primera_talla,
+                    sucursal=prod_similar.sucursal,
+                    precio_anterior=prod_similar.precioventa,
+                    precio_nuevo=precioventa,
+                    diferencia=precioventa - prod_similar.precioventa,
+                    porcentaje_cambio=((precioventa - prod_similar.precioventa) / prod_similar.precioventa * 100) if prod_similar.precioventa > 0 else 0,
+                    tipo_cambio='SINCRONIZACION',
+                    estado='PENDIENTE',
+                    motivo=f'Sincronización desde {sucursal_origen.alias}: Actualización de producto',
+                    creado_por=request.user,
+                    prioridad='MEDIA',
+                    fecha_vencimiento=timezone.now() + timedelta(days=7)
+                )
+                
+                # Crear notificaciones para usuarios de esa sucursal
+                usuarios_sucursal = EmpresaUser.objects.filter(
+                    sucursal=prod_similar.sucursal,
+                    status=True
+                ).select_related('user')
+                
+                mensaje_notif = (
+                    f"💰 Cambio de precio desde {sucursal_origen.alias}: "
+                    f"{producto.articulo} | "
+                    f"${precio_anterior:,} → ${precioventa:,} "
+                    f"({'+' if diferencia > 0 else ''}{porcentaje:.1f}%)"
+                )
+                
+                for empresa_user in usuarios_sucursal:
+                    NotificacionCambioPrecio.objects.create(
+                        cambio_precio=cambio,
+                        usuario=empresa_user.user,
+                        tipo='NUEVA',
+                        mensaje=mensaje_notif
+                    )
+                    sucursales_notificadas += 1
+                
+                cambio.notificado = True
+                cambio.save()
+        
         return JsonResponse({
             'success': True,
             'message': 'Producto actualizado exitosamente',
@@ -239,7 +335,10 @@ def actualizar_producto(request, producto_id):
                 'id': producto.id,
                 'articulo': producto.articulo,
                 'precioventa': producto.precioventa
-            }
+            },
+            'precio_cambio': precio_anterior != precioventa,
+            'historial_registrado': historial_registrado,
+            'sucursales_notificadas': sucursales_notificadas
         })
         
     except json.JSONDecodeError:

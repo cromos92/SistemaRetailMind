@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fondo -->
+  <rect width="400" height="400" fill="#FFFFFF"/>
+  
+  <!-- Cuadrado contenedor con borde -->
+  <rect x="100" y="60" width="200" height="200" rx="20" fill="#1A1A2E"/>
+  
+  <!-- Letra N estilizada como símbolo de conexión -->
+  <g transform="translate(130, 90)">
+    <!-- Columna izquierda -->
+    <rect x="0" y="0" width="24" height="140" rx="12" fill="#0066FF"/>
+    
+    <!-- Columna derecha -->
+    <rect x="116" y="0" width="24" height="140" rx="12" fill="#0066FF"/>
+    
+    <!-- Diagonal conectora -->
+    <rect x="12" y="0" width="24" height="160" rx="12" fill="#00D4AA" transform="rotate(32 12 0)"/>
+    
+    <!-- Círculos de conexión -->
+    <circle cx="12" cy="12" r="8" fill="#00D4AA"/>
+    <circle cx="128" cy="12" r="8" fill="#00D4AA"/>
+    <circle cx="12" cy="128" r="8" fill="#0066FF"/>
+    <circle cx="128" cy="128" r="8" fill="#0066FF"/>
+  </g>
+  
+  <!-- Texto NEXO -->
+  <text x="200" y="320" font-family="Arial Black, Arial, sans-serif" font-size="64" font-weight="900" fill="#1A1A2E" text-anchor="middle" letter-spacing="6">
+    NEXO
+  </text>
+  
+  <!-- Línea decorativa -->
+  <line x1="120" y1="340" x2="280" y2="340" stroke="#00D4AA" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Subtítulo -->
+  <text x="200" y="370" font-family="Arial, sans-serif" font-size="14" fill="#8A8A9A" text-anchor="middle" letter-spacing="6">
+    RETAIL MANAGEMENT SYSTEM
+  </text>
+</svg>

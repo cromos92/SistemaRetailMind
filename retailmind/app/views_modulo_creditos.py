@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg
+from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -141,6 +142,10 @@ def cargar_creditos_trabajadores(request):
         trabajador_id = data.get('trabajador_id')
         tipo_credito = data.get('tipo_credito')
         numero_credito = data.get('numero_credito')
+        trabajador_texto = data.get('trabajador_texto')
+        sucursal_texto = data.get('sucursal_texto')
+        saldo_min = data.get('saldo_min')
+        saldo_max = data.get('saldo_max')
         
         # Parámetros de paginación
         page = int(data.get('page', 1))
@@ -159,12 +164,26 @@ def cargar_creditos_trabajadores(request):
             empresa_origen_id=empresa_actual_id
         ).select_related('trabajador', 'empresa_origen', 'sucursal', 'autorizado_por', 'solicitado_por')
         
-        # Aplicar filtros
+        # Aplicar filtros - convertir formato de fecha DD-MM-YYYY a YYYY-MM-DD
         if fecha_inicio:
-            queryset = queryset.filter(fecha_solicitud__date__gte=fecha_inicio)
+            try:
+                # Intentar convertir de DD-MM-YYYY a YYYY-MM-DD
+                if '-' in fecha_inicio and len(fecha_inicio.split('-')[0]) == 2:
+                    partes = fecha_inicio.split('-')
+                    fecha_inicio = f"{partes[2]}-{partes[1]}-{partes[0]}"
+                queryset = queryset.filter(fecha_solicitud__date__gte=fecha_inicio)
+            except:
+                pass
         
         if fecha_fin:
-            queryset = queryset.filter(fecha_solicitud__date__lte=fecha_fin)
+            try:
+                # Intentar convertir de DD-MM-YYYY a YYYY-MM-DD
+                if '-' in fecha_fin and len(fecha_fin.split('-')[0]) == 2:
+                    partes = fecha_fin.split('-')
+                    fecha_fin = f"{partes[2]}-{partes[1]}-{partes[0]}"
+                queryset = queryset.filter(fecha_solicitud__date__lte=fecha_fin)
+            except:
+                pass
         
         if estado:
             queryset = queryset.filter(estado=estado)
@@ -177,6 +196,38 @@ def cargar_creditos_trabajadores(request):
         
         if numero_credito:
             queryset = queryset.filter(numero_credito__icontains=numero_credito)
+
+        if trabajador_texto:
+            texto = trabajador_texto.strip()
+            queryset = queryset.filter(
+                Q(trabajador__nombre__icontains=texto) |
+                Q(trabajador__rut__icontains=texto) |
+                Q(trabajador__codigo_vendedor__icontains=texto)
+            )
+
+        if sucursal_texto:
+            texto = sucursal_texto.strip()
+            queryset = queryset.filter(
+                Q(sucursal__alias__icontains=texto) |
+                Q(sucursal__direccion__icontains=texto)
+            )
+
+        if saldo_min or saldo_max:
+            saldo_expr = ExpressionWrapper(
+                Coalesce('monto_aprobado', 'monto_solicitado') - F('monto_pagado'),
+                output_field=DecimalField(max_digits=12, decimal_places=2)
+            )
+            queryset = queryset.annotate(saldo_calc=saldo_expr)
+            try:
+                if saldo_min is not None and saldo_min != '':
+                    queryset = queryset.filter(saldo_calc__gte=float(saldo_min))
+            except (ValueError, TypeError):
+                pass
+            try:
+                if saldo_max is not None and saldo_max != '':
+                    queryset = queryset.filter(saldo_calc__lte=float(saldo_max))
+            except (ValueError, TypeError):
+                pass
         
         # Ordenar por fecha descendente
         queryset = queryset.order_by('-fecha_solicitud')
@@ -188,6 +239,32 @@ def cargar_creditos_trabajadores(request):
         # Serializar datos
         creditos_data = []
         for credito in creditos_page:
+            # Obtener información del último pago si existe
+            ultimo_pago = credito.pagos.select_related('sucursal_cobro', 'registrado_por').order_by('-fecha_pago').first()
+            
+            # Datos del pago
+            pago_info = None
+            if ultimo_pago:
+                # Intentar extraer número de boleta de observaciones o referencia
+                numero_boleta = ''
+                if ultimo_pago.referencia_pago:
+                    numero_boleta = ultimo_pago.referencia_pago
+                elif ultimo_pago.observaciones:
+                    # Buscar patrón de ticket en observaciones
+                    import re
+                    match = re.search(r'Ticket\s*#?(\d+)', ultimo_pago.observaciones)
+                    if match:
+                        numero_boleta = match.group(1)
+                
+                pago_info = {
+                    'sucursal_cobro': ultimo_pago.sucursal_cobro.alias if ultimo_pago.sucursal_cobro else '',
+                    'numero_boleta': numero_boleta,
+                    'fecha_pago': ultimo_pago.fecha_pago.strftime('%d/%m/%Y'),
+                    'monto_pago': float(ultimo_pago.monto_pago),
+                    'metodo_pago': ultimo_pago.get_metodo_pago_display(),
+                    'registrado_por': ultimo_pago.registrado_por.username if ultimo_pago.registrado_por else ''
+                }
+            
             creditos_data.append({
                 'id': credito.id,
                 'numero_credito': credito.numero_credito,
@@ -195,7 +272,13 @@ def cargar_creditos_trabajadores(request):
                     'id': credito.trabajador.id,
                     'nombre': credito.trabajador.nombre,
                     'rut': credito.trabajador.rut,
-                    'codigo_vendedor': credito.trabajador.codigo_vendedor
+                    'codigo_vendedor': credito.trabajador.codigo_vendedor,
+                    'empresa': credito.trabajador.empresa.nombre if credito.trabajador.empresa else credito.trabajador.empresa_display
+                },
+                'empresa': {
+                    'id': credito.empresa_origen.id,
+                    'nombre': credito.empresa_origen.nombre,
+                    'rut': credito.empresa_origen.rut
                 },
                 'tipo_credito': credito.tipo_credito,
                 'tipo_credito_display': credito.get_tipo_credito_display(),
@@ -212,12 +295,14 @@ def cargar_creditos_trabajadores(request):
                 'autorizado_por': credito.autorizado_por.username if credito.autorizado_por else None,
                 'solicitado_por': credito.solicitado_por.username,
                 'sucursal': credito.sucursal.alias,
+                'sucursal_direccion': credito.sucursal.direccion if credito.sucursal.direccion else '',
                 'esta_vencido': credito.esta_vencido,
                 'dias_para_vencimiento': credito.dias_para_vencimiento,
                 'numero_cuotas': credito.numero_cuotas,
                 'valor_cuota': float(credito.valor_cuota) if credito.valor_cuota else None,
                 'tasa_interes': float(credito.tasa_interes),
-                'requiere_aval': credito.requiere_aval
+                'requiere_aval': credito.requiere_aval,
+                'ultimo_pago': pago_info
             })
         
         return JsonResponse({
@@ -261,7 +346,7 @@ def detalle_credito_trabajador(request, credito_id):
         
         # Obtener pagos del crédito
         pagos = []
-        for pago in credito.pagos.all():
+        for pago in credito.pagos.select_related('sucursal_cobro', 'registrado_por').all():
             pagos.append({
                 'id': pago.id,
                 'numero_pago': pago.numero_pago,
@@ -273,6 +358,8 @@ def detalle_credito_trabajador(request, credito_id):
                 'es_pago_total': pago.es_pago_total,
                 'referencia_pago': pago.referencia_pago or '',
                 'registrado_por': pago.registrado_por.username,
+                'sucursal_cobro': pago.sucursal_cobro.alias if pago.sucursal_cobro else None,
+                'sucursal_cobro_direccion': pago.sucursal_cobro.direccion if pago.sucursal_cobro else None,
                 'observaciones': pago.observaciones or '',
                 'fecha_registro': pago.created_at.strftime('%d/%m/%Y %H:%M')
             })
@@ -535,6 +622,96 @@ def activar_credito_trabajador(request):
 
 @login_required
 @require_POST
+def ajustar_monto_credito(request):
+    """Ajustar el monto de un crédito (solo si no tiene pagos)"""
+    try:
+        data = json.loads(request.body)
+        
+        credito_id = data.get('credito_id')
+        nuevo_monto = data.get('nuevo_monto')
+        motivo = data.get('motivo')
+        
+        if not all([credito_id, nuevo_monto, motivo]):
+            return JsonResponse({
+                'success': False,
+                'error': 'Crédito, nuevo monto y motivo son requeridos'
+            }, status=400)
+        
+        credito = get_object_or_404(CreditoTrabajador, id=credito_id)
+        
+        # Verificar permisos
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        if credito.empresa_origen_id != empresa_actual_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para modificar este crédito'
+            }, status=403)
+        
+        # Verificar que no tenga pagos
+        if credito.monto_pagado > 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se puede ajustar el monto de un crédito que ya tiene pagos registrados'
+            }, status=400)
+        
+        # Verificar estado del crédito
+        if credito.estado not in ['PENDIENTE', 'APROBADO', 'ACTIVO']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo se puede ajustar el monto de créditos pendientes, aprobados o activos'
+            }, status=400)
+        
+        # Validar nuevo monto
+        try:
+            nuevo_monto = Decimal(str(nuevo_monto))
+            if nuevo_monto <= 0:
+                raise ValueError("El monto debe ser mayor a 0")
+        except (ValueError, TypeError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Monto inválido'
+            }, status=400)
+        
+        # Guardar monto anterior para el historial
+        monto_anterior = credito.monto_aprobado or credito.monto_solicitado
+        
+        # Actualizar montos
+        credito.monto_solicitado = nuevo_monto
+        credito.monto_aprobado = nuevo_monto
+        
+        # Agregar al historial de observaciones
+        observacion_ajuste = f"\n[AJUSTE DE MONTO - {timezone.now().strftime('%d/%m/%Y %H:%M')}] "
+        observacion_ajuste += f"De ${monto_anterior:,.0f} a ${nuevo_monto:,.0f}. "
+        observacion_ajuste += f"Motivo: {motivo}. Usuario: {request.user.username}"
+        
+        if credito.observaciones_solicitud:
+            credito.observaciones_solicitud += observacion_ajuste
+        else:
+            credito.observaciones_solicitud = observacion_ajuste.strip()
+        
+        credito.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Monto ajustado exitosamente',
+            'monto_anterior': float(monto_anterior),
+            'nuevo_monto': float(nuevo_monto)
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al ajustar monto: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
 def registrar_pago_credito(request):
     """Registrar un pago/abono a un crédito"""
     try:
@@ -587,6 +764,16 @@ def registrar_pago_credito(request):
                 'error': 'Monto inválido'
             }, status=400)
         
+        # Obtener sucursal actual para el cobro
+        sucursal_cobro_id = request.session.get('idSucursalActual')
+        sucursal_cobro = None
+        if sucursal_cobro_id:
+            from .models import Sucursal
+            try:
+                sucursal_cobro = Sucursal.objects.get(id=sucursal_cobro_id)
+            except Sucursal.DoesNotExist:
+                pass
+        
         # Crear pago
         pago = PagoCreditoTrabajador.objects.create(
             credito=credito,
@@ -597,7 +784,8 @@ def registrar_pago_credito(request):
             es_pago_total=data.get('es_pago_total', False),
             referencia_pago=data.get('referencia_pago', ''),
             observaciones=data.get('observaciones', ''),
-            registrado_por=request.user
+            registrado_por=request.user,
+            sucursal_cobro=sucursal_cobro
         )
         
         return JsonResponse({
@@ -718,7 +906,9 @@ def obtener_trabajadores_credito(request):
                 'rut': vendedor.rut or '',
                 'codigo_vendedor': vendedor.codigo_vendedor,
                 'correo': vendedor.correo or '',
-                'creditos_activos': creditos_activos
+                'creditos_activos': creditos_activos,
+                'empresa': vendedor.empresa.nombre if vendedor.empresa else vendedor.empresa_display,
+                'empresa_id': vendedor.empresa.id if vendedor.empresa else None
             })
         
         return JsonResponse({
@@ -734,6 +924,193 @@ def obtener_trabajadores_credito(request):
 
 
 @login_required
+@require_POST
+def crear_trabajador_credito(request):
+    """Crear un nuevo trabajador/vendedor para créditos"""
+    try:
+        data = json.loads(request.body)
+        
+        nombre = data.get('nombre', '').strip()
+        rut = data.get('rut', '').strip()
+        codigo_vendedor = data.get('codigo_vendedor', '').strip()
+        correo = data.get('correo', '').strip()
+        fecha_nacimiento = data.get('fecha_nacimiento')
+        sucursales_ids = data.get('sucursales', [])  # Lista de IDs de sucursales (puede estar vacía)
+        empresa_id = data.get('empresa_id')  # ID de empresa (opcional)
+        
+        if not nombre:
+            return JsonResponse({
+                'success': False,
+                'error': 'El nombre es requerido'
+            }, status=400)
+        
+        if not codigo_vendedor:
+            return JsonResponse({
+                'success': False,
+                'error': 'El código de trabajador es requerido'
+            }, status=400)
+        
+        # Verificar si ya existe el código de vendedor (case insensitive)
+        if Vendedor.objects.filter(codigo_vendedor__iexact=codigo_vendedor).exists():
+            existente = Vendedor.objects.filter(codigo_vendedor__iexact=codigo_vendedor).first()
+            return JsonResponse({
+                'success': False,
+                'error': f'Ya existe un trabajador con el código "{codigo_vendedor}": {existente.nombre}'
+            }, status=400)
+        
+        # Convertir fecha si viene en formato DD-MM-YYYY
+        fecha_nacimiento_parsed = None
+        if fecha_nacimiento:
+            try:
+                if '-' in fecha_nacimiento and len(fecha_nacimiento.split('-')[0]) == 2:
+                    partes = fecha_nacimiento.split('-')
+                    fecha_nacimiento_parsed = f"{partes[2]}-{partes[1]}-{partes[0]}"
+                else:
+                    fecha_nacimiento_parsed = fecha_nacimiento
+            except:
+                pass
+        
+        # Obtener empresa - si viene empresa_id usarlo, sino usar la empresa de la sesión
+        empresa = None
+        if empresa_id:
+            try:
+                empresa = Empresa.objects.get(id=empresa_id)
+            except Empresa.DoesNotExist:
+                pass
+        
+        if not empresa:
+            # Usar empresa de la sesión como fallback
+            empresa_actual_id = request.session.get('idEmpresaActual')
+            if empresa_actual_id:
+                try:
+                    empresa = Empresa.objects.get(id=empresa_actual_id)
+                except Empresa.DoesNotExist:
+                    pass
+        
+        # Crear el nuevo vendedor/trabajador
+        vendedor = Vendedor.objects.create(
+            nombre=nombre,
+            rut=rut or None,
+            codigo_vendedor=codigo_vendedor,
+            correo=correo or None,
+            fecha_nacimiento=fecha_nacimiento_parsed,
+            empresa=empresa
+        )
+        
+        # Asociar a las sucursales seleccionadas (si hay)
+        if sucursales_ids:
+            sucursales = Sucursal.objects.filter(id__in=sucursales_ids)
+            vendedor.sucursales.set(sucursales)
+        # Si no se seleccionó ninguna sucursal, no se asocia a ninguna (queda vacío)
+        
+        # Obtener nombres de sucursales asignadas para mostrar
+        sucursales_asignadas = list(vendedor.sucursales.values_list('alias', flat=True))
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Trabajador creado exitosamente',
+            'trabajador': {
+                'id': vendedor.id,
+                'nombre': vendedor.nombre,
+                'rut': vendedor.rut or '',
+                'codigo_vendedor': vendedor.codigo_vendedor,
+                'correo': vendedor.correo or '',
+                'sucursales': sucursales_asignadas,
+                'empresa': vendedor.empresa.nombre if vendedor.empresa else None,
+                'empresa_id': vendedor.empresa.id if vendedor.empresa else None
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al crear trabajador: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_GET
+def validar_codigo_trabajador(request):
+    """Verificar si un código de trabajador ya existe"""
+    codigo = request.GET.get('codigo', '').strip()
+    
+    if not codigo:
+        return JsonResponse({'exists': False})
+    
+    exists = Vendedor.objects.filter(codigo_vendedor__iexact=codigo).exists()
+    existente = None
+    if exists:
+        v = Vendedor.objects.filter(codigo_vendedor__iexact=codigo).first()
+        existente = {'nombre': v.nombre, 'codigo': v.codigo_vendedor}
+    
+    return JsonResponse({
+        'exists': exists,
+        'existente': existente
+    })
+
+
+@login_required
+@require_GET
+def obtener_empresas_disponibles(request):
+    """Obtener las empresas disponibles para el usuario"""
+    try:
+        empresas = Empresa.objects.all().order_by('nombre')
+        
+        empresas_data = [{
+            'id': e.id,
+            'nombre': e.nombre,
+            'rut': getattr(e, 'rut', '') or ''
+        } for e in empresas]
+        
+        return JsonResponse({
+            'success': True,
+            'empresas': empresas_data
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al obtener empresas: {str(e)}'
+        })
+
+
+@login_required
+@require_GET
+def obtener_sucursales_empresa(request):
+    """Obtener las sucursales de la empresa actual"""
+    try:
+        empresa_actual_id = request.session.get('idEmpresaActual')
+        if not empresa_actual_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay empresa activa en la sesión'
+            }, status=400)
+
+        sucursales = Sucursal.objects.filter(empresa_id=empresa_actual_id).order_by('alias')
+        
+        sucursales_data = [{
+            'id': s.id,
+            'alias': s.alias,
+            'direccion': s.direccion or ''
+        } for s in sucursales]
+        
+        return JsonResponse({
+            'success': True,
+            'sucursales': sucursales_data
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
 @require_GET
 def reporte_creditos_trabajadores(request):
     """Generar reporte de créditos de trabajadores"""
@@ -746,8 +1123,30 @@ def reporte_creditos_trabajadores(request):
                 'error': 'No hay empresa activa en la sesión'
             }, status=400)
         
+        fecha_inicio = request.GET.get('fecha_inicio')
+        fecha_fin = request.GET.get('fecha_fin')
+
         # Estadísticas generales
         creditos = CreditoTrabajador.objects.filter(empresa_origen_id=empresa_actual_id)
+
+        # Aplicar filtros de fecha si vienen
+        if fecha_inicio:
+            try:
+                if '-' in fecha_inicio and len(fecha_inicio.split('-')[0]) == 2:
+                    partes = fecha_inicio.split('-')
+                    fecha_inicio = f"{partes[2]}-{partes[1]}-{partes[0]}"
+                creditos = creditos.filter(fecha_solicitud__date__gte=fecha_inicio)
+            except Exception:
+                pass
+        
+        if fecha_fin:
+            try:
+                if '-' in fecha_fin and len(fecha_fin.split('-')[0]) == 2:
+                    partes = fecha_fin.split('-')
+                    fecha_fin = f"{partes[2]}-{partes[1]}-{partes[0]}"
+                creditos = creditos.filter(fecha_solicitud__date__lte=fecha_fin)
+            except Exception:
+                pass
         
         total_creditos = creditos.count()
         total_monto_solicitado = creditos.aggregate(
@@ -1246,6 +1645,8 @@ def usar_credito_en_venta(request):
         credito_id = data.get('credito_id')
         monto_usado = data.get('monto_usado')
         ticket_id = data.get('ticket_id')  # Opcional al crear
+        numero_boleta = data.get('numero_boleta', '')  # Número de boleta/documento
+        folio_documento = data.get('folio_documento', '')  # Folio del documento
         
         if not all([credito_id, monto_usado]):
             return JsonResponse({
@@ -1282,6 +1683,18 @@ def usar_credito_en_venta(request):
                 'saldo_disponible': float(credito.saldo_pendiente)
             }, status=400)
         
+        # Obtener sucursal actual para el cobro
+        sucursal_cobro_id = request.session.get('idSucursalActual')
+        sucursal_cobro = None
+        if sucursal_cobro_id:
+            try:
+                sucursal_cobro = Sucursal.objects.get(id=sucursal_cobro_id)
+            except Sucursal.DoesNotExist:
+                pass
+        
+        # Construir referencia de pago (número de boleta o ticket)
+        referencia = numero_boleta or folio_documento or (f'TKT-{ticket_id}' if ticket_id else '')
+        
         # Registrar el uso del crédito
         with transaction.atomic():
             # Actualizar monto pagado (usado)
@@ -1294,13 +1707,14 @@ def usar_credito_en_venta(request):
             credito.save()
             
             # Registrar como pago
-            from .models import PagoCreditoTrabajador
             pago = PagoCreditoTrabajador.objects.create(
                 credito=credito,
                 monto_pago=monto_usado,
                 fecha_pago=timezone.now().date(),
                 metodo_pago='CREDITO_TRABAJADOR',
-                observaciones=f'Compra en POS{f" - Ticket #{ticket_id}" if ticket_id else ""}',
+                referencia_pago=referencia,
+                sucursal_cobro=sucursal_cobro,
+                observaciones=f'Compra en POS{f" - Ticket #{ticket_id}" if ticket_id else ""}{f" - Boleta: {numero_boleta}" if numero_boleta else ""}',
                 registrado_por=request.user
             )
         

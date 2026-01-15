@@ -56,7 +56,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+    'corsheaders',  # CORS para App Desktop Tauri
     'rest_framework',  # Django REST Framework
+    'rest_framework_simplejwt',  # JWT para API Desktop
+    'rest_framework_simplejwt.token_blacklist',  # Blacklist de tokens
     'users',  # Nueva aplicación de usuarios
     'app',
     'empresa_management',
@@ -64,6 +67,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # CORS - DEBE IR PRIMERO
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -110,39 +114,20 @@ if 'DATABASE_URL' in os.environ:
         )
     }
 else:
-    # Local development - usar SQLite por defecto
+    # Local development - PostgreSQL local
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('PG_DATABASE', 'retailmind'),
+            'USER': os.environ.get('PG_USER', 'postgres'),
+            'PASSWORD': os.environ.get('PG_PASSWORD', 'admin'),
+            'HOST': os.environ.get('PG_HOST', 'localhost'),
+            'PORT': os.environ.get('PG_PORT', '5432'),
         }
     }
-    
-    # Si tienes PostgreSQL local configurado, descomenta esto:
-    # DATABASES = {
-    #     'default': {
-    #         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-    #         'NAME': os.environ.get("PGDATABASE", "retailmind"),
-    #         'USER': os.environ.get("PGUSER", "postgres"),
-    #         'PASSWORD': os.environ.get("PGPASSWORD", "admin"),
-    #         'HOST': os.environ.get("PGHOST", "localhost"),
-    #         'PORT': os.environ.get("PGPORT", "5432"),
-    #     }
-    # }
 
-# Configuración MySQL (Vicent) - Para migración
-DATABASES['vicent_mysql'] = {
-    'ENGINE': 'django.db.backends.mysql',
-    'NAME': os.environ.get('MYSQL_DATABASE', 'vicent_software'),
-    'USER': os.environ.get('MYSQL_USER', 'root'),
-    'PASSWORD': os.environ.get('MYSQL_PASSWORD', ''),
-    'HOST': os.environ.get('MYSQL_HOST', 'localhost'),
-    'PORT': os.environ.get('MYSQL_PORT', '3306'),
-    'OPTIONS': {
-        'charset': 'utf8mb4',
-        'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-    },
-}
+# Nota: Las variables MYSQL_* se usan en migrate_from_laravel.py para conectar
+# al servidor MySQL remoto (holdingtebes.cl) desde donde se migran los datos
 
  
 
@@ -276,6 +261,50 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
+
+# ========== CONFIGURACIÓN JWT PARA APP DESKTOP ==========
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  # 7 días para app desktop
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # 30 días
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': 'retailmind',
+    'JWK_URL': None,
+    'LEEWAY': 0,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+
+    'JTI_CLAIM': 'jti',
+}
+
+# ========== CONFIGURACIÓN API DESKTOP ==========
+DESKTOP_API_CONFIG = {
+    'VERSION_MINIMA_APP': '1.0.0',
+    'MAX_TICKETS_OFFLINE': 1000,
+    'DIAS_EXPIRACION_TOKEN': 7,
+    'DIAS_EXPIRACION_REFRESH': 30,
+    'TIMESTAMP_TOLERANCE_MINUTES': 5,
 }
 
 # ========== CONFIGURACIÓN DEL ASISTENTE CONVERSACIONAL ==========
@@ -292,3 +321,41 @@ LANGFUSE_HOST = os.environ.get('LANGFUSE_HOST', 'https://cloud.langfuse.com')
 # Configuración del Asistente
 ASSISTANT_MAX_MESSAGES_PER_SESSION = 50  # Máximo de mensajes por sesión
 ASSISTANT_SESSION_TIMEOUT_HOURS = 24  # Tiempo de vida de una sesión
+
+# ========== CONFIGURACIÓN CORS PARA APP DESKTOP (NEXO POS) ==========
+# Permitir conexiones desde la app Tauri desktop
+CORS_ALLOW_ALL_ORIGINS = True  # Para desarrollo
+
+# Para producción, especificar orígenes permitidos:
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:1420",  # Tauri dev server
+#     "tauri://localhost",      # Tauri production
+#     "https://tauri.localhost",
+# ]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-device-id",
+    "x-app-version",
+    "x-sucursal-id",
+    "x-request-timestamp",
+]

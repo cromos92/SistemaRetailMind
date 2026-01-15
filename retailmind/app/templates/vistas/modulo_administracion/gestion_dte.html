@@ -1,138 +1,512 @@
 {% load static %}
-<!-- /.modal -->
 {% include '../../layout/header.html' %}
-<!-- ========== App Menu ========== -->
 {% include '../../layout/menu.html' %}
 
 <style>
-/* Estilos para controles de paginación y búsqueda */
-.pagination-controls {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-    border: 1px solid #dee2e6;
+/* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
 }
 
-.search-highlight {
-    background-color: #fff3cd;
-    font-weight: bold;
+/* ========== PAGE CONTAINER ========== */
+/* No agregar padding extra - el layout ya lo maneja */
+
+/* ========== MAIN CARD ========== */
+.nexo-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-md);
+    border: none;
+    overflow: hidden;
 }
 
-.page-info {
-    min-width: 120px;
-    text-align: center;
+.nexo-card-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
+    color: var(--nexo-white);
+    padding: 20px 24px;
+    border: none;
+}
+
+.nexo-card-header h1,
+.nexo-card-header h2,
+.nexo-card-header h3,
+.nexo-card-header h4,
+.nexo-card-header h5,
+.nexo-card-header h6 {
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--nexo-white) !important;
+}
+
+.nexo-card-header .header-badge,
+.nexo-modal .modal-header .header-badge {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 4px 12px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 0.85rem;
     font-weight: 500;
+    color: var(--nexo-white) !important;
 }
 
-.pagination-btn:disabled {
+.nexo-card-body {
+    padding: 24px;
+}
+
+/* ========== FILTER SECTION ========== */
+.nexo-filters {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 20px;
+    margin-bottom: 24px;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-filters .form-label {
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    font-size: 0.875rem;
+    margin-bottom: 6px;
+}
+
+.nexo-filters .form-control {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-filters .form-control:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+}
+
+/* ========== SEARCH & PAGINATION ========== */
+.nexo-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.nexo-search {
+    flex: 1;
+    max-width: 400px;
+}
+
+.nexo-search .input-group {
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+    box-shadow: var(--nexo-shadow-sm);
+}
+
+.nexo-search .form-control {
+    border: 1px solid var(--nexo-gray-300);
+    border-right: none;
+    padding: 10px 16px;
+}
+
+.nexo-search .form-control:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: none;
+}
+
+.nexo-search .btn {
+    background: var(--nexo-primary);
+    border: none;
+    color: white;
+    padding: 10px 16px;
+}
+
+.nexo-search .btn:hover {
+    background: var(--nexo-primary-dark);
+}
+
+.nexo-pagination .btn-group {
+    box-shadow: var(--nexo-shadow-sm);
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+}
+
+.nexo-pagination .btn {
+    border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    color: var(--nexo-gray-700);
+    padding: 8px 16px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-pagination .btn:hover:not(:disabled) {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+}
+
+.nexo-pagination .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
-/* Responsive para controles */
-@media (max-width: 768px) {
-    .pagination-controls .row > div {
-        margin-bottom: 10px;
-    }
-    
-    .pagination-controls .btn-group {
-        width: 100%;
-    }
-    
-    .pagination-controls .btn-group .btn {
-        flex: 1;
-    }
+.nexo-pagination .page-info {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    font-weight: 600;
+    min-width: 140px;
+    text-align: center;
 }
 
-th.sorting::after,
-th.sorting_asc::after,
-th.sorting_desc::after {
-    display: none !important;
-}
-.dataTables_filter input {
-    margin-left: auto;
-    display: inline-block;
+/* ========== TABLE STYLES ========== */
+.nexo-table-wrapper {
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
 }
 
-/* Estilos para la gestión de DTEs */
-.sticky-top {
-    position: sticky;
-    top: 0;
-    z-index: 1020;
-    background-color: #f8f9fa;
-}
-
-.modal-xl {
-    max-width: 1200px;
-}
-
-.btn-group-sm .btn {
-    padding: 0.25rem 0.5rem;
+.nexo-table {
+    margin: 0;
     font-size: 0.875rem;
 }
 
-/* Mejorar la apariencia de las tablas */
-.table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.1);
+.nexo-table thead {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #eaeaef 100%);
 }
 
-.table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.02);
+.nexo-table thead th {
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    padding: 14px 12px;
+    border-bottom: 2px solid var(--nexo-gray-300);
+    white-space: nowrap;
 }
 
-/* Estilos para badges */
-.badge {
-    font-size: 0.75em;
-    padding: 0.35em 0.65em;
+.nexo-table tbody tr {
+    transition: var(--nexo-transition-fast);
 }
 
-/* Animaciones suaves */
-.modal.fade .modal-dialog {
-    transition: transform 0.3s ease-out;
+.nexo-table tbody tr:hover {
+    background: var(--nexo-primary-light);
 }
 
-.btn {
-    transition: all 0.2s ease-in-out;
+.nexo-table tbody td {
+    padding: 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    color: var(--nexo-gray-700);
 }
 
-.btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-/* Estilos para formularios */
-.form-control:focus {
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.form-label {
+/* ========== BUTTONS ========== */
+.nexo-btn {
+    border-radius: var(--nexo-radius-md);
     font-weight: 500;
-    color: #495057;
+    padding: 10px 20px;
+    transition: var(--nexo-transition-fast);
+    border: none;
 }
 
-/* Responsive para móviles */
-@media (max-width: 768px) {
-    .modal-xl {
-        max-width: 95%;
-        margin: 1rem auto;
-    }
-    
-    .btn-group-sm .btn {
-        padding: 0.375rem 0.75rem;
-        font-size: 1rem;
-    }
-    
-    .table-responsive {
-        font-size: 0.875rem;
-    }
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: white;
 }
 
-</style>
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
 
-<!-- Loader global -->
-<div id="fullscreenLoader" style="
+.nexo-btn-success {
+    background: var(--nexo-success);
+    color: white;
+}
+
+.nexo-btn-success:hover {
+    background: #00b894;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-btn-outline {
+    background: transparent;
+    border: 2px solid var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.nexo-btn-outline:hover {
+    background: var(--nexo-primary);
+    color: white;
+}
+
+/* Action buttons in table */
+.nexo-action-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--nexo-radius-sm);
+    transition: var(--nexo-transition-fast);
+    border: 1px solid transparent;
+}
+
+.nexo-action-btn.info {
+    color: var(--nexo-info);
+    background: rgba(0, 102, 255, 0.1);
+}
+
+.nexo-action-btn.info:hover {
+    background: var(--nexo-info);
+    color: white;
+}
+
+.nexo-action-btn.success {
+    color: var(--nexo-success);
+    background: rgba(0, 212, 170, 0.1);
+}
+
+.nexo-action-btn.success:hover {
+    background: var(--nexo-success);
+    color: white;
+}
+
+.nexo-action-btn.primary {
+    color: var(--nexo-primary);
+    background: rgba(0, 102, 255, 0.1);
+}
+
+.nexo-action-btn.primary:hover {
+    background: var(--nexo-primary);
+    color: white;
+}
+
+.nexo-action-btn.warning {
+    color: var(--nexo-warning);
+    background: rgba(255, 176, 32, 0.1);
+}
+
+.nexo-action-btn.warning:hover {
+    background: var(--nexo-warning);
+    color: white;
+}
+
+/* ========== NC ASSOCIATION STYLES ========== */
+.fila-nc {
+    background: rgba(255, 77, 77, 0.05) !important;
+    border-left: 3px solid var(--nexo-error);
+}
+
+.nc-link {
+    font-size: 0.75rem;
+    color: var(--nexo-primary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    background: rgba(0, 102, 255, 0.1);
+    border-radius: var(--nexo-radius-sm);
+    transition: var(--nexo-transition-fast);
+}
+
+.nc-link:hover {
+    background: var(--nexo-primary);
+    color: white;
+}
+
+.nc-indicator {
+    font-size: 0.75rem;
+    color: var(--nexo-error);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 6px;
+    background: rgba(255, 77, 77, 0.1);
+    border-radius: var(--nexo-radius-sm);
+    cursor: help;
+}
+
+.nc-indicator i {
+    font-size: 0.85rem;
+}
+
+/* Animación para resaltar fila buscada */
+@keyframes highlight-row {
+    0% { background-color: rgba(0, 102, 255, 0.3); }
+    100% { background-color: transparent; }
+}
+
+/* ========== BADGES ========== */
+.nexo-badge {
+    padding: 5px 10px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.nexo-badge-success {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00a884;
+}
+
+.nexo-badge-warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: #cc8c00;
+}
+
+.nexo-badge-danger {
+    background: rgba(255, 77, 77, 0.15);
+    color: #e63939;
+}
+
+.nexo-badge-secondary {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+}
+
+.nexo-badge-info {
+    background: rgba(0, 102, 255, 0.15);
+    color: var(--nexo-primary);
+}
+
+/* ========== MODAL STYLES ========== */
+.nexo-modal .modal-content {
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.nexo-modal .modal-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
+    color: var(--nexo-white);
+    padding: 20px 24px;
+    border: none;
+}
+
+.nexo-modal .modal-header .modal-title,
+.nexo-modal .modal-header h1,
+.nexo-modal .modal-header h2,
+.nexo-modal .modal-header h3,
+.nexo-modal .modal-header h4,
+.nexo-modal .modal-header h5,
+.nexo-modal .modal-header h6 {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--nexo-white) !important;
+    margin: 0;
+}
+
+.nexo-modal .modal-header .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+}
+
+.nexo-modal .modal-header .btn-close:hover {
+    opacity: 1;
+}
+
+.nexo-modal .modal-body {
+    padding: 24px;
+}
+
+.nexo-modal .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-gray-100);
+}
+
+/* Info boxes in modal */
+.nexo-info-box {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 20px;
+    height: 100%;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-info-box:hover {
+    box-shadow: var(--nexo-shadow-md);
+    border-color: var(--nexo-primary-light);
+}
+
+.nexo-info-box-title {
+    font-weight: 700;
+    color: var(--nexo-primary);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--nexo-primary-light);
+    font-size: 0.9rem;
+}
+
+.nexo-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--nexo-gray-300);
+}
+
+.nexo-info-row:last-child {
+    border-bottom: none;
+}
+
+.nexo-info-label {
+    color: var(--nexo-gray-500);
+    font-size: 0.85rem;
+}
+
+.nexo-info-value {
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+    font-size: 0.85rem;
+}
+
+/* ========== SEARCH HIGHLIGHT ========== */
+.search-highlight {
+    background: linear-gradient(135deg, rgba(255, 176, 32, 0.3) 0%, rgba(255, 176, 32, 0.2) 100%);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+/* ========== LOADER ========== */
+.nexo-loader {
     display: none;
     position: fixed;
     z-index: 1060;
@@ -140,107 +514,178 @@ th.sorting_desc::after {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(255, 255, 255, 0.8);
-    text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-            <span class="visually-hidden">Cargando...</span>
-        </div>
-        <p class="mt-3 fw-bold">Cargando información, por favor espera...</p>
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+}
+
+.nexo-loader-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.nexo-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--nexo-gray-300);
+    border-top-color: var(--nexo-primary);
+    border-radius: 50%;
+    animation: nexo-spin 0.8s linear infinite;
+}
+
+@keyframes nexo-spin {
+    to { transform: rotate(360deg); }
+}
+
+.nexo-loader-text {
+    margin-top: 16px;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .nexo-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .nexo-search {
+        max-width: 100%;
+    }
+    
+    .nexo-pagination {
+        justify-content: center;
+    }
+    
+    .nexo-card-header {
+        padding: 16px;
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .nexo-card-body {
+        padding: 16px;
+    }
+    
+    .nexo-table-wrapper {
+        font-size: 0.8rem;
+    }
+}
+</style>
+
+<!-- Loader global -->
+<div class="nexo-loader" id="fullscreenLoader">
+    <div class="nexo-loader-content">
+        <div class="nexo-spinner"></div>
+        <p class="nexo-loader-text">Cargando información...</p>
     </div>
 </div>
 
 <div class="page-content">
     <div class="container-fluid">
 
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 text-white">
-                    <i class="bi bi-file-earmark-text me-2"></i>Gestión de DTEs (Ventas) - <span id="sucursalActual">Cargando...</span>
+        <div class="nexo-card">
+            <div class="nexo-card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <h5>
+                    <i class="bi bi-file-earmark-text"></i>
+                    Gestión de DTEs (Ventas)
+                    <span class="header-badge" id="sucursalActual">Cargando...</span>
                 </h5>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-success btn-sm" onclick="window.location.href='/app/emisionDTE/'">
-                        <i class="bi bi-plus-circle me-1"></i>Emitir Nuevo DTE
-                    </button>
-                </div>
+                <button class="nexo-btn nexo-btn-success" onclick="window.location.href='/app/emisionDTE/'">
+                    <i class="bi bi-plus-circle me-2"></i>Emitir Nuevo DTE
+                </button>
             </div>
 
-            <div class="card-body">
+            <div class="nexo-card-body">
                 <!-- Filtros -->
-                <form id="formBuscarDTE" class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <label for="fechaInicio" class="form-label">Fecha de Inicio</label>
-                        <input type="date" class="form-control" id="fechaInicio" name="fecha_inicio">
-                    </div>
-                    <div class="col-md-4">
-                        <label for="fechaFin" class="form-label">Fecha de Término</label>
-                        <input type="date" class="form-control" id="fechaFin" name="fecha_fin">
-                    </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                        <button type="submit" class="btn btn-success w-100">
-                            <i class="bi bi-search me-1"></i>Buscar
-                        </button>
+                <form id="formBuscarDTE" class="nexo-filters">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label for="fechaInicio" class="form-label">
+                                <i class="bi bi-calendar-event me-1"></i>Fecha Inicio
+                            </label>
+                            <input type="date" class="form-control" id="fechaInicio" name="fecha_inicio">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="fechaFin" class="form-label">
+                                <i class="bi bi-calendar-check me-1"></i>Fecha Término
+                            </label>
+                            <input type="date" class="form-control" id="fechaFin" name="fecha_fin">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="nexo-btn nexo-btn-primary w-100">
+                                <i class="bi bi-search me-2"></i>Buscar DTEs
+                            </button>
+                        </div>
                     </div>
                 </form>
 
                 <!-- Controles de búsqueda y paginación -->
-                <div class="row mb-3 pagination-controls">
-                    <div class="col-md-6">
+                <div class="nexo-controls">
+                    <div class="nexo-search">
                         <div class="input-group">
-                            <input type="text" class="form-control" id="searchDTE" placeholder="Buscar por cliente, RUT, número documento, tipo, estado...">
-                            <button class="btn btn-outline-secondary" type="button" id="btnSearchDTE">
+                            <input type="text" class="form-control" id="searchDTE" 
+                                   placeholder="Buscar por cliente, RUT, N° doc, SKU, artículo...">
+                            <button class="btn" type="button" id="btnSearchDTE">
                                 <i class="bi bi-search"></i>
                             </button>
                         </div>
                     </div>
-                    <div class="col-md-6 text-end">
+                    <div class="nexo-pagination">
                         <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-outline-primary pagination-btn" id="btnPrevPageDTE">
-                                <i class="bi bi-chevron-left"></i> Anterior
+                            <button type="button" class="btn" id="btnPrevPageDTE">
+                                <i class="bi bi-chevron-left me-1"></i>Anterior
                             </button>
-                            <span class="btn btn-outline-secondary page-info" id="pageInfoDTE">Página 1</span>
-                            <button type="button" class="btn btn-outline-primary pagination-btn" id="btnNextPageDTE">
-                                Siguiente <i class="bi bi-chevron-right"></i>
+                            <span class="btn page-info" id="pageInfoDTE">Página 1</span>
+                            <button type="button" class="btn" id="btnNextPageDTE">
+                                Siguiente<i class="bi bi-chevron-right ms-1"></i>
                             </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Tabla de DTEs -->
-                <div class="table-responsive mb-4">
-                    <table class="table table-sm table-hover text-center align-middle w-100" id="tablaDTE"
-                        style="table-layout: fixed; font-size: 0.875rem;">
-                        <thead class="table-light">
+                <div class="nexo-table-wrapper">
+                    <table class="table nexo-table text-center align-middle mb-0" id="tablaDTE">
+                        <thead>
                             <tr>
                                 <th style="display: none;">ID</th>
-                                <th style="width: 15%;">Cliente</th>
+                                <th class="text-start" style="width: 15%;">Cliente</th>
                                 <th style="width: 10%;">RUT</th>
                                 <th style="width: 8%;">N° Doc</th>
                                 <th style="width: 10%;">Tipo</th>
-                                <th style="width: 8%;">F. Emisión</th>
-                                <th style="width: 8%;">F. Vencimiento</th>
-                                <th style="width: 10%;">Monto c/IVA</th>
-                                <th style="width: 8%;">Descuento</th>
-                                <th style="width: 8%;">Estado DTE</th>
-                                <th style="width: 8%;">Estado Pago</th>
+                                <th style="width: 8%;">Emisión</th>
+                                <th style="width: 8%;">Vencimiento</th>
+                                <th class="text-end" style="width: 10%;">Monto</th>
+                                <th class="text-end" style="width: 8%;">Descuento</th>
+                                <th style="width: 8%;">Estado</th>
+                                <th style="width: 8%;">Pago</th>
                                 <th style="width: 7%;">Vendedor</th>
                                 <th style="width: 10%;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tablaDTEBody">
-                            <!-- Los datos se cargarán aquí via AJAX -->
+                            <tr>
+                                <td colspan="13" class="text-center py-4">
+                                    <div class="nexo-spinner mx-auto mb-3"></div>
+                                    <p class="text-muted mb-0">Cargando documentos...</p>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
 
                 <!-- Información de resultados -->
-                <div class="row">
-                    <div class="col-md-6">
-                        <small class="text-muted" id="infoResultados">Mostrando 0 resultados</small>
-                    </div>
-                    <div class="col-md-6 text-end">
-                        <small class="text-muted">Solo se muestran DTEs de venta de tu sucursal</small>
-                    </div>
+                <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                    <small class="text-muted" id="infoResultados">
+                        <i class="bi bi-info-circle me-1"></i>Mostrando 0 resultados
+                    </small>
+                    <small class="text-muted">
+                        <i class="bi bi-building me-1"></i>Solo DTEs de venta de tu sucursal
+                    </small>
                 </div>
 
             </div>
@@ -250,133 +695,136 @@ th.sorting_desc::after {
 </div>
 
 <!-- Modal Detalle DTE -->
-<div class="modal fade" id="modalDetalleDTE" tabindex="-1" aria-hidden="true">
+<div class="modal fade nexo-modal" id="modalDetalleDTE" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="bi bi-eye me-2"></i>Detalle DTE <span id="detalleNumeroDTE">-</span>
+                    <i class="bi bi-file-text"></i>
+                    Detalle DTE <span id="detalleNumeroDTE" class="header-badge">-</span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="row g-4 mb-3">
+                <div class="row g-4 mb-4">
                     <div class="col-lg-4">
-                        <div class="border rounded p-3 h-100">
-                            <h6 class="text-primary fw-bold mb-3">Información General</h6>
-                            <div class="small">
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Tipo</span>
-                                    <span id="detalleTipoDTE" class="fw-semibold">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Estado DTE</span>
-                                    <span id="detalleEstadoDTE" class="badge bg-secondary">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Estado Pago</span>
-                                    <span id="detalleEstadoPago" class="badge bg-secondary">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Fecha Emisión</span>
-                                    <span id="detalleFechaEmision">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Fecha Vencimiento</span>
-                                    <span id="detalleFechaVencimiento">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Sucursal</span>
-                                    <span id="detalleSucursal">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Vendedor</span>
-                                    <span id="detalleVendedor">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Responsable</span>
-                                    <span id="detalleResponsable">-</span>
-                                </div>
-                                <div class="d-flex justify-content-between">
-                                    <span class="text-muted">Días Crédito</span>
-                                    <span id="detalleDiasCredito">-</span>
-                                </div>
+                        <div class="nexo-info-box">
+                            <h6 class="nexo-info-box-title">
+                                <i class="bi bi-info-circle me-2"></i>Información General
+                            </h6>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Tipo</span>
+                                <span id="detalleTipoDTE" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Estado DTE</span>
+                                <span id="detalleEstadoDTE" class="nexo-badge nexo-badge-secondary">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Estado Pago</span>
+                                <span id="detalleEstadoPago" class="nexo-badge nexo-badge-secondary">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Fecha Emisión</span>
+                                <span id="detalleFechaEmision" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Fecha Vencimiento</span>
+                                <span id="detalleFechaVencimiento" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Sucursal</span>
+                                <span id="detalleSucursal" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Vendedor</span>
+                                <span id="detalleVendedor" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Responsable</span>
+                                <span id="detalleResponsable" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Días Crédito</span>
+                                <span id="detalleDiasCredito" class="nexo-info-value">-</span>
                             </div>
                         </div>
                     </div>
                     <div class="col-lg-4">
-                        <div class="border rounded p-3 h-100">
-                            <h6 class="text-primary fw-bold mb-3">Emisor</h6>
-                            <div class="small">
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">Nombre</span>
-                                    <span id="detalleEmisorNombre" class="fw-semibold">-</span>
-                                </div>
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">RUT</span>
-                                    <span id="detalleEmisorRut">-</span>
-                                </div>
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">Dirección</span>
-                                    <span id="detalleEmisorDireccion">-</span>
-                                </div>
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">Comuna</span>
-                                    <span id="detalleEmisorComuna">-</span>
-                                </div>
-                                <div>
-                                    <span class="text-muted d-block">Ciudad</span>
-                                    <span id="detalleEmisorCiudad">-</span>
-                                </div>
+                        <div class="nexo-info-box">
+                            <h6 class="nexo-info-box-title">
+                                <i class="bi bi-building me-2"></i>Emisor
+                            </h6>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Nombre</span>
+                                <span id="detalleEmisorNombre" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">RUT</span>
+                                <span id="detalleEmisorRut" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Dirección</span>
+                                <span id="detalleEmisorDireccion" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Comuna</span>
+                                <span id="detalleEmisorComuna" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Ciudad</span>
+                                <span id="detalleEmisorCiudad" class="nexo-info-value">-</span>
                             </div>
                         </div>
                     </div>
                     <div class="col-lg-4">
-                        <div class="border rounded p-3 h-100">
-                            <h6 class="text-primary fw-bold mb-3">Receptor</h6>
-                            <div class="small">
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">Nombre</span>
-                                    <span id="detalleReceptorNombre" class="fw-semibold">-</span>
-                                </div>
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">RUT</span>
-                                    <span id="detalleReceptorRut">-</span>
-                                </div>
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">Dirección</span>
-                                    <span id="detalleReceptorDireccion">-</span>
-                                </div>
-                                <div class="mb-2">
-                                    <span class="text-muted d-block">Comuna</span>
-                                    <span id="detalleReceptorComuna">-</span>
-                                </div>
-                                <div>
-                                    <span class="text-muted d-block">Ciudad</span>
-                                    <span id="detalleReceptorCiudad">-</span>
-                                </div>
+                        <div class="nexo-info-box">
+                            <h6 class="nexo-info-box-title">
+                                <i class="bi bi-person me-2"></i>Receptor
+                            </h6>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Nombre</span>
+                                <span id="detalleReceptorNombre" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">RUT</span>
+                                <span id="detalleReceptorRut" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Dirección</span>
+                                <span id="detalleReceptorDireccion" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Comuna</span>
+                                <span id="detalleReceptorComuna" class="nexo-info-value">-</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Ciudad</span>
+                                <span id="detalleReceptorCiudad" class="nexo-info-value">-</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="mb-4">
-                    <h6 class="text-primary fw-bold">Productos Asociados</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-striped align-middle">
-                            <thead class="table-light">
+                    <h6 class="nexo-info-box-title mb-3">
+                        <i class="bi bi-box-seam me-2"></i>Productos Asociados
+                    </h6>
+                    <div class="nexo-table-wrapper">
+                        <table class="table nexo-table align-middle mb-0">
+                            <thead>
                                 <tr>
-                                    <th class="text-start" style="min-width: 160px;">Producto</th>
+                                    <th class="text-start">Producto</th>
                                     <th>SKU</th>
                                     <th>Talla</th>
                                     <th class="text-end">Cantidad</th>
-                                    <th class="text-end">Precio Unitario</th>
+                                    <th class="text-end">Precio Unit.</th>
                                     <th class="text-end">Subtotal</th>
                                 </tr>
                             </thead>
                             <tbody id="detalleProductosBody">
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted">Sin productos asociados</td>
+                                    <td colspan="6" class="text-center text-muted py-3">Sin productos asociados</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -384,10 +832,12 @@ th.sorting_desc::after {
                 </div>
 
                 <div class="mb-4">
-                    <h6 class="text-primary fw-bold">Pagos Registrados</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover align-middle">
-                            <thead class="table-light">
+                    <h6 class="nexo-info-box-title mb-3">
+                        <i class="bi bi-credit-card me-2"></i>Pagos Registrados
+                    </h6>
+                    <div class="nexo-table-wrapper">
+                        <table class="table nexo-table align-middle mb-0">
+                            <thead>
                                 <tr>
                                     <th>Método</th>
                                     <th>Voucher</th>
@@ -397,60 +847,62 @@ th.sorting_desc::after {
                             </thead>
                             <tbody id="detallePagosBody">
                                 <tr>
-                                    <td colspan="4" class="text-center text-muted">Sin pagos registrados</td>
+                                    <td colspan="4" class="text-center text-muted py-3">Sin pagos registrados</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <div class="row g-3">
+                <div class="row g-4">
                     <div class="col-md-6">
-                        <div class="border rounded p-3">
-                            <h6 class="text-primary fw-bold mb-3">Montos</h6>
-                            <div class="small">
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Monto Neto</span>
-                                    <span id="detalleMontoNeto" class="fw-semibold">$0</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Monto con IVA</span>
-                                    <span id="detalleMontoIVA" class="fw-semibold">$0</span>
-                                </div>
-                                <div class="d-flex justify-content-between">
-                                    <span class="text-muted">Descuento</span>
-                                    <span id="detalleDescuento" class="fw-semibold">$0</span>
-                                </div>
+                        <div class="nexo-info-box">
+                            <h6 class="nexo-info-box-title">
+                                <i class="bi bi-calculator me-2"></i>Montos
+                            </h6>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Monto Neto</span>
+                                <span id="detalleMontoNeto" class="nexo-info-value">$0</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Monto con IVA</span>
+                                <span id="detalleMontoIVA" class="nexo-info-value" style="color: var(--nexo-primary); font-size: 1rem;">$0</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Descuento</span>
+                                <span id="detalleDescuento" class="nexo-info-value" style="color: var(--nexo-error);">$0</span>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="border rounded p-3">
-                            <h6 class="text-primary fw-bold mb-3">Estado de Pagos</h6>
-                            <div class="small">
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Total Detalle</span>
-                                    <span id="detalleTotalDetalle" class="fw-semibold">$0</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Notas de Crédito</span>
-                                    <span id="detalleNotasCredito" class="fw-semibold">$0</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Total Pagado</span>
-                                    <span id="detalleTotalPagado" class="fw-semibold">$0</span>
-                                </div>
-                                <div class="d-flex justify-content-between">
-                                    <span class="text-muted">Saldo Pendiente</span>
-                                    <span id="detalleSaldoPendiente" class="fw-semibold">$0</span>
-                                </div>
+                        <div class="nexo-info-box">
+                            <h6 class="nexo-info-box-title">
+                                <i class="bi bi-wallet2 me-2"></i>Estado de Pagos
+                            </h6>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Total Detalle</span>
+                                <span id="detalleTotalDetalle" class="nexo-info-value">$0</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Notas de Crédito</span>
+                                <span id="detalleNotasCredito" class="nexo-info-value" style="color: var(--nexo-error);">$0</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Total Pagado</span>
+                                <span id="detalleTotalPagado" class="nexo-info-value" style="color: var(--nexo-success);">$0</span>
+                            </div>
+                            <div class="nexo-info-row">
+                                <span class="nexo-info-label">Saldo Pendiente</span>
+                                <span id="detalleSaldoPendiente" class="nexo-info-value" style="color: var(--nexo-warning); font-size: 1rem;">$0</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cerrar
+                </button>
             </div>
         </div>
     </div>
@@ -459,7 +911,6 @@ th.sorting_desc::after {
 {% include '../../layout/footer.html' %}
 
 <script>
-    // Función para obtener cookies (necesaria para CSRF token)
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -475,7 +926,6 @@ th.sorting_desc::after {
         return cookieValue;
     }
 
-    // Funciones globales de loading
     function showGlobalLoader() {
         $('#fullscreenLoader').fadeIn(100);
     }
@@ -484,13 +934,11 @@ th.sorting_desc::after {
         $('#fullscreenLoader').fadeOut(100);
     }
 
-    // Variables para paginación y búsqueda de DTE
     let currentPageDTE = 1;
     let currentSearchDTE = '';
     let paginationInfoDTE = null;
     let modalDetalleDTEInstance = null;
 
-    // Al cargar la página
     $(document).ready(function () {
         const hoy = new Date();
         const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -507,13 +955,11 @@ th.sorting_desc::after {
             });
         }
 
-        // Cargar DTEs del mes actual al iniciar
         setTimeout(function() {
             cargarDTEs(1, '');
-        }, 500);
+        }, 300);
     });
 
-    // Al buscar con el formulario
     $('#formBuscarDTE').on('submit', function (e) {
         e.preventDefault();
         currentPageDTE = 1;
@@ -522,7 +968,6 @@ th.sorting_desc::after {
         cargarDTEs(1, '');
     });
 
-    // Eventos para paginación de DTE
     $('#btnPrevPageDTE').on('click', function() {
         if (paginationInfoDTE && paginationInfoDTE.has_previous) {
             cargarDTEs(currentPageDTE - 1, currentSearchDTE);
@@ -535,7 +980,6 @@ th.sorting_desc::after {
         }
     });
 
-    // Evento para búsqueda en DTE
     $('#btnSearchDTE').on('click', function() {
         const search = $('#searchDTE').val().trim();
         currentSearchDTE = search;
@@ -543,47 +987,37 @@ th.sorting_desc::after {
         cargarDTEs(1, search);
     });
 
-    // Búsqueda al presionar Enter en DTE
     $('#searchDTE').on('keypress', function(e) {
         if (e.which === 13) {
             $('#btnSearchDTE').click();
         }
     });
 
-    // Variable para evitar múltiples llamadas simultáneas
     let cargandoDTEs = false;
 
     function formatearMoneda(valor) {
         const numero = Number(valor);
-        if (isNaN(numero)) {
-            return '$0';
-        }
+        if (isNaN(numero)) return '$0';
         return '$' + numero.toLocaleString('es-CL');
+    }
+
+    function getBadgeClass(valor, tipo) {
+        if (tipo === 'dte') {
+            if (valor === 'ACEPTADO' || valor === 'EMITIDO') return 'nexo-badge-success';
+            if (valor === 'RECHAZADO' || valor === 'ANULADO') return 'nexo-badge-danger';
+            return 'nexo-badge-secondary';
+        } else if (tipo === 'pago') {
+            if (valor === 'PAGADO') return 'nexo-badge-success';
+            if (valor === 'VENCIDO') return 'nexo-badge-danger';
+            if (valor === 'PENDIENTE') return 'nexo-badge-warning';
+            return 'nexo-badge-secondary';
+        }
+        return 'nexo-badge-secondary';
     }
 
     function actualizarBadgeEstado(elemento, valor, tipo) {
         if (!elemento) return;
-
-        const claseBase = 'badge bg-';
-        let color = 'secondary';
-
-        if (tipo === 'dte') {
-            if (valor === 'ACEPTADO' || valor === 'EMITIDO') {
-                color = 'success';
-            } else if (valor === 'RECHAZADO' || valor === 'ANULADO') {
-                color = 'danger';
-            }
-        } else if (tipo === 'pago') {
-            if (valor === 'PAGADO') {
-                color = 'success';
-            } else if (valor === 'VENCIDO') {
-                color = 'danger';
-            } else if (valor === 'PENDIENTE') {
-                color = 'warning text-dark';
-            }
-        }
-
-        elemento.className = claseBase + color;
+        elemento.className = 'nexo-badge ' + getBadgeClass(valor, tipo);
         elemento.textContent = valor || '-';
     }
 
@@ -592,43 +1026,16 @@ th.sorting_desc::after {
         $('#detalleTipoDTE').text('-');
         actualizarBadgeEstado(document.getElementById('detalleEstadoDTE'), '-', 'dte');
         actualizarBadgeEstado(document.getElementById('detalleEstadoPago'), '-', 'pago');
-        $('#detalleFechaEmision').text('-');
-        $('#detalleFechaVencimiento').text('-');
-        $('#detalleSucursal').text('-');
-        $('#detalleVendedor').text('-');
-        $('#detalleResponsable').text('-');
-        $('#detalleDiasCredito').text('-');
-
-        $('#detalleEmisorNombre').text('-');
-        $('#detalleEmisorRut').text('-');
-        $('#detalleEmisorDireccion').text('-');
-        $('#detalleEmisorComuna').text('-');
-        $('#detalleEmisorCiudad').text('-');
-
-        $('#detalleReceptorNombre').text('-');
-        $('#detalleReceptorRut').text('-');
-        $('#detalleReceptorDireccion').text('-');
-        $('#detalleReceptorComuna').text('-');
-        $('#detalleReceptorCiudad').text('-');
-
-        $('#detalleMontoNeto').text('$0');
-        $('#detalleMontoIVA').text('$0');
-        $('#detalleDescuento').text('$0');
-        $('#detalleTotalDetalle').text('$0');
-        $('#detalleNotasCredito').text('$0');
-        $('#detalleTotalPagado').text('$0');
-        $('#detalleSaldoPendiente').text('$0');
-
-        $('#detalleProductosBody').html('<tr><td colspan="6" class="text-center text-muted">Sin productos asociados</td></tr>');
-        $('#detallePagosBody').html('<tr><td colspan="4" class="text-center text-muted">Sin pagos registrados</td></tr>');
+        $('#detalleFechaEmision, #detalleFechaVencimiento, #detalleSucursal, #detalleVendedor, #detalleResponsable, #detalleDiasCredito').text('-');
+        $('#detalleEmisorNombre, #detalleEmisorRut, #detalleEmisorDireccion, #detalleEmisorComuna, #detalleEmisorCiudad').text('-');
+        $('#detalleReceptorNombre, #detalleReceptorRut, #detalleReceptorDireccion, #detalleReceptorComuna, #detalleReceptorCiudad').text('-');
+        $('#detalleMontoNeto, #detalleMontoIVA, #detalleDescuento, #detalleTotalDetalle, #detalleNotasCredito, #detalleTotalPagado, #detalleSaldoPendiente').text('$0');
+        $('#detalleProductosBody').html('<tr><td colspan="6" class="text-center text-muted py-3">Sin productos asociados</td></tr>');
+        $('#detallePagosBody').html('<tr><td colspan="4" class="text-center text-muted py-3">Sin pagos registrados</td></tr>');
     }
     
     function cargarDTEs(page, search) {
-        // Evitar múltiples llamadas simultáneas
-        if (cargandoDTEs) {
-            console.log('Ya se está cargando, ignorando llamada adicional');
-            return;
-        }
+        if (cargandoDTEs) return;
         
         cargandoDTEs = true;
         showGlobalLoader();
@@ -640,94 +1047,96 @@ th.sorting_desc::after {
             url: '/app/documentos/api/cargar-dte-ventas/',
             method: 'POST',
             contentType: 'application/json',
-            timeout: 30000, // 30 segundos de timeout
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            data: JSON.stringify({ 
-                fecha_inicio, 
-                fecha_fin, 
-                page: page,
-                page_size: 20,
-                search: search
-            }),
+            timeout: 30000,
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ fecha_inicio, fecha_fin, page: page, page_size: 20, search: search }),
             success: function (data) {
                 try {
-                    if (!data.success) {
-                        throw new Error(data.error || 'Error desconocido');
-                    }
+                    if (!data.success) throw new Error(data.error || 'Error desconocido');
 
-                    // Limpiar la tabla
                     const tbody = $('#tablaDTEBody');
                     tbody.empty();
                     
-                    // Actualizar información de paginación
                     paginationInfoDTE = data.pagination;
                     currentPageDTE = data.pagination.page;
                     currentSearchDTE = data.search || '';
                     
-                    // Actualizar controles de paginación
                     $('#pageInfoDTE').text(`Página ${data.pagination.page} de ${data.pagination.total_pages}`);
                     $('#btnPrevPageDTE').prop('disabled', !data.pagination.has_previous);
                     $('#btnNextPageDTE').prop('disabled', !data.pagination.has_next);
-                    
-                    // Actualizar información de resultados
-                    $('#infoResultados').text(`Mostrando ${data.items.length} de ${data.pagination.total_count} resultados`);
-                    
-                    // Actualizar sucursal actual
+                    $('#infoResultados').html(`<i class="bi bi-info-circle me-1"></i>Mostrando ${data.items.length} de ${data.pagination.total_count} resultados`);
                     $('#sucursalActual').text(data.sucursal || 'Sin sucursal');
 
                     if (!data.items || data.items.length === 0) {
-                        tbody.append('<tr><td colspan="13" class="text-center text-muted">No se encontraron DTEs' + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
+                        tbody.append(`<tr><td colspan="13" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                            No se encontraron DTEs${search ? ' con la búsqueda "' + search + '"' : ''}
+                        </td></tr>`);
                     } else {
                         data.items.forEach(dte => {
+                            const estadoDTEClass = getBadgeClass(dte.estado_dte, 'dte');
+                            const estadoPagoClass = getBadgeClass(dte.estado_pago || 'PENDIENTE', 'pago');
+                            
+                            // ✅ NUEVO: Generar información de asociación NC ↔ Factura
+                            let asociacionNC = '';
+                            if (dte.es_nota_credito && dte.documento_afectado_numero) {
+                                // Es una NC: mostrar enlace a factura original
+                                asociacionNC = `<br><a href="#" class="nc-link" onclick="buscarDTE('${dte.documento_afectado_numero}'); return false;" title="Ver factura original">
+                                    <i class="bi bi-link-45deg"></i> Ref: #${dte.documento_afectado_numero}
+                                </a>`;
+                            } else if (dte.nc_asociadas && dte.nc_asociadas.length > 0) {
+                                // Tiene NC asociadas: mostrar indicador
+                                const totalNC = dte.nc_asociadas.reduce((sum, nc) => sum + parseFloat(nc.monto_con_iva || 0), 0);
+                                const ncNumeros = dte.nc_asociadas.map(nc => '#' + nc.numero_documento).join(', ');
+                                asociacionNC = `<br><span class="nc-indicator" title="NC asociadas: ${ncNumeros}">
+                                    <i class="bi bi-receipt-cutoff"></i> ${dte.nc_asociadas.length} NC
+                                </span>`;
+                            }
+                            
                             const fila = `
-<tr>
+<tr class="${dte.es_nota_credito ? 'fila-nc' : ''}">
     <td style="display: none;">${dte.id || ''}</td>
-    <td class="text-start">${resaltarBusqueda(dte.receptor_nombre || '', search)}</td>
-    <td>${resaltarBusqueda(dte.receptor_rut || '', search)}</td>
-    <td>${resaltarBusqueda(dte.numero_documento || '', search)}</td>
-    <td>${resaltarBusqueda(dte.tipo_documento || '', search)}</td>
+    <td class="text-start fw-medium">${resaltarBusqueda(dte.receptor_nombre || '', search)}</td>
+    <td><code>${resaltarBusqueda(dte.receptor_rut || '', search)}</code></td>
+    <td>
+        <strong>${resaltarBusqueda(dte.numero_documento || '', search)}</strong>
+        ${asociacionNC}
+    </td>
+    <td><span class="nexo-badge nexo-badge-info">${resaltarBusqueda(dte.tipo_documento || '', search)}</span></td>
     <td>${dte.fecha_emision || ''}</td>
     <td>${dte.fecha_vencimiento || '-'}</td>
     <td class="text-end">
-        $${parseFloat(dte.monto_con_iva || 0).toLocaleString()}
-        ${dte.notas_credito > 0
-            ? `<br><small class="text-danger">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC)</small>`
-            : ''}
+        <strong>$${parseFloat(dte.monto_con_iva || 0).toLocaleString()}</strong>
+        ${dte.notas_credito > 0 ? `<br><small style="color: var(--nexo-error);">(-$${parseFloat(dte.notas_credito).toLocaleString()} NC)</small>` : ''}
     </td>
     <td class="text-end">
-        $${parseFloat(dte.descuento || 0).toLocaleString()} 
-        ${dte.descuento > 0
-            ? `<br><small class="text-muted">(${calcularPorcentajeDescuento(dte.descuento, dte.monto_con_iva)}%)</small>`
-            : ''}
+        $${parseFloat(dte.descuento || 0).toLocaleString()}
+        ${dte.descuento > 0 ? `<br><small class="text-muted">(${calcularPorcentajeDescuento(dte.descuento, dte.monto_con_iva)}%)</small>` : ''}
     </td>
-    <td><span class="badge bg-${estadoColor(dte.estado_dte || '')}">${resaltarBusqueda(dte.estado_dte || '', search)}</span></td>
+    <td><span class="nexo-badge ${estadoDTEClass}">${dte.estado_dte || ''}</span></td>
     <td>
-        <span class="badge bg-${dte.estado_pago === 'PAGADO' ? 'success' : 'warning'}">
-            ${dte.estado_pago || 'PENDIENTE'}
-        </span>
-        ${dte.saldo_pendiente > 0 ? 
-            `<br><small class="text-muted">Saldo: $${parseFloat(dte.saldo_pendiente).toLocaleString()}</small>` : 
-            ''}
-        ${dte.dias_credito_restantes !== undefined ? 
-            `<br><span class="badge bg-${creditoColor(dte.dias_credito_restantes)}">${dte.dias_credito_restantes} días</span>` : 
-            ''}
+        <span class="nexo-badge ${estadoPagoClass}">${dte.estado_pago || 'PENDIENTE'}</span>
+        ${dte.saldo_pendiente > 0 ? `<br><small class="text-muted">Saldo: $${parseFloat(dte.saldo_pendiente).toLocaleString()}</small>` : ''}
     </td>
     <td class="text-start">${dte.vendedor || '-'}</td>
     <td>
-        <div class="d-flex flex-wrap justify-content-center gap-1">
-            <button class="btn btn-sm btn-outline-info" title="Ver detalles" onclick="verDetalleDTE(${dte.id || 0})">
+        <div class="d-flex justify-content-center gap-1">
+            <button class="nexo-action-btn info" title="Ver detalles" onclick="verDetalleDTE(${dte.id || 0})">
                 <i class="bi bi-eye"></i>
             </button>
-            <button class="btn btn-sm btn-outline-primary" title="Imprimir" onclick="imprimirDTE(${dte.id || 0})">
+            <button class="nexo-action-btn primary" title="Imprimir" onclick="imprimirDTE(${dte.id || 0})">
                 <i class="bi bi-printer"></i>
             </button>
-            ${dte.estado_pago !== 'PAGADO' ? 
-                `<button class="btn btn-sm btn-outline-success" title="Registrar pago" onclick="registrarPago(${dte.id || 0})">
-                    <i class="bi bi-cash-coin"></i>
-                </button>` : 
-                ''}
+            ${dte.estado_pago !== 'PAGADO' ? `
+            <button class="nexo-action-btn success" title="Registrar pago" onclick="registrarPago(${dte.id || 0})">
+                <i class="bi bi-cash-coin"></i>
+            </button>` : ''}
+            {% if es_admin %}
+            ${['FACTURA_ELECTRONICA', 'FACTURA_EXENTA', 'BOLETA_ELECTRONICA', 'GUIA_DESPACHO', 'NOTA_CREDITO', 'NOTA DE CREDITO'].includes(dte.tipo_documento) ? `
+            <button class="nexo-action-btn warning" title="Descargar TXT Acepta" onclick="descargarTXTAcepta(${dte.id || 0}, '${dte.tipo_documento}', '${dte.numero_documento}')">
+                <i class="bi bi-file-earmark-text"></i>
+            </button>` : ''}
+            {% endif %}
         </div>
     </td>
 </tr>`;
@@ -736,29 +1145,23 @@ th.sorting_desc::after {
                     }
 
                     hideGlobalLoader();
-                    cargandoDTEs = false; // Liberar el flag
+                    cargandoDTEs = false;
                 } catch (error) {
                     console.error('Error al procesar datos:', error);
                     hideGlobalLoader();
-                    cargandoDTEs = false; // Liberar el flag
+                    cargandoDTEs = false;
                     Swal.fire('Error', 'Error al procesar los datos de la tabla.', 'error');
                 }
             },
             error: function (xhr, status, error) {
                 hideGlobalLoader();
-                cargandoDTEs = false; // Liberar el flag
+                cargandoDTEs = false;
                 console.error('Error al cargar DTEs:', xhr.responseText);
                 
                 let mensaje = 'Error al obtener los DTEs.';
-                if (status === 'timeout') {
-                    mensaje = 'La solicitud tardó demasiado. Intenta nuevamente.';
-                } else if (xhr.status === 500) {
-                    mensaje = 'Error interno del servidor. Revisa la consola para más detalles.';
-                } else if (xhr.status === 404) {
-                    mensaje = 'No se encontró el endpoint. Verifica la URL.';
-                } else if (xhr.responseJSON && xhr.responseJSON.error) {
-                    mensaje = xhr.responseJSON.error;
-                }
+                if (status === 'timeout') mensaje = 'La solicitud tardó demasiado. Intenta nuevamente.';
+                else if (xhr.status === 500) mensaje = 'Error interno del servidor.';
+                else if (xhr.responseJSON && xhr.responseJSON.error) mensaje = xhr.responseJSON.error;
                 
                 Swal.fire('Error', mensaje, 'error');
             }
@@ -770,34 +1173,14 @@ th.sorting_desc::after {
         return ((descuento / montoConIVA) * 100).toFixed(1);
     }
 
-    function creditoColor(dias) {
-        if (dias > 15) {
-            return 'success'; // verde
-        } else if (dias > 0) {
-            return 'warning'; // amarillo
-        } else {
-            return 'danger'; // rojo
-        }
-    }
-
-    // Estilos dinámicos para badges
-    function estadoColor(estado) {
-        return estado === 'ACEPTADO' ? 'success' : estado === 'RECHAZADO' ? 'danger' : 'secondary';
-    }
-
-    // Función para resaltar términos de búsqueda
     function resaltarBusqueda(texto, busqueda) {
         if (!busqueda || !texto) return texto;
-        
-        // Convertir a string si no lo es
         const textoStr = String(texto);
         const busquedaStr = String(busqueda);
-        
         const regex = new RegExp(`(${busquedaStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
         return textoStr.replace(regex, '<span class="search-highlight">$1</span>');
     }
 
-    // Funciones de acciones (placeholder - implementar según necesidades)
     function verDetalleDTE(dteId) {
         if (!dteId) {
             Swal.fire('Advertencia', 'No se pudo identificar el DTE seleccionado.', 'warning');
@@ -820,7 +1203,7 @@ th.sorting_desc::after {
 
                 const { dte, productos, pagos, totales } = response;
 
-                $('#detalleNumeroDTE').text(`${dte.numero_documento || ''}`);
+                $('#detalleNumeroDTE').text(`#${dte.numero_documento || ''}`);
                 $('#detalleTipoDTE').text(dte.tipo_documento || '-');
                 actualizarBadgeEstado(document.getElementById('detalleEstadoDTE'), dte.estado_dte, 'dte');
                 actualizarBadgeEstado(document.getElementById('detalleEstadoPago'), dte.estado_pago, 'pago');
@@ -850,7 +1233,6 @@ th.sorting_desc::after {
                 $('#detalleMontoNeto').text(formatearMoneda(dte.monto_neto));
                 $('#detalleMontoIVA').text(formatearMoneda(dte.monto_con_iva));
                 $('#detalleDescuento').text(formatearMoneda(dte.descuento));
-
                 $('#detalleTotalDetalle').text(formatearMoneda(totales.total_detalle));
                 $('#detalleNotasCredito').text(formatearMoneda(totales.notas_credito));
                 $('#detalleTotalPagado').text(formatearMoneda(totales.total_pagado));
@@ -862,17 +1244,17 @@ th.sorting_desc::after {
                     productos.forEach(item => {
                         productosBody.append(`
                             <tr>
-                                <td class="text-start">${resaltarBusqueda(item.producto || item.descripcion || '-', currentSearchDTE)}</td>
-                                <td>${item.sku ?? '-'}</td>
-                                <td>${item.talla ?? '-'}</td>
+                                <td class="text-start">${item.producto || item.descripcion || '-'}</td>
+                                <td><code>${item.sku ?? '-'}</code></td>
+                                <td><span class="nexo-badge nexo-badge-info">${item.talla ?? '-'}</span></td>
                                 <td class="text-end">${item.cantidad ?? 0}</td>
                                 <td class="text-end">${formatearMoneda(item.precio_unitario)}</td>
-                                <td class="text-end">${formatearMoneda(item.subtotal)}</td>
+                                <td class="text-end"><strong>${formatearMoneda(item.subtotal)}</strong></td>
                             </tr>
                         `);
                     });
                 } else {
-                    productosBody.html('<tr><td colspan="6" class="text-center text-muted">Sin productos asociados</td></tr>');
+                    productosBody.html('<tr><td colspan="6" class="text-center text-muted py-3">Sin productos asociados</td></tr>');
                 }
 
                 const pagosBody = $('#detallePagosBody');
@@ -881,15 +1263,15 @@ th.sorting_desc::after {
                     pagos.forEach(pago => {
                         pagosBody.append(`
                             <tr>
-                                <td>${pago.metodo_pago || '-'}</td>
+                                <td><span class="nexo-badge nexo-badge-secondary">${pago.metodo_pago || '-'}</span></td>
                                 <td>${pago.voucher || '-'}</td>
                                 <td>${pago.tipo_tarjeta || '-'}</td>
-                                <td class="text-end">${formatearMoneda(pago.monto)}</td>
+                                <td class="text-end"><strong>${formatearMoneda(pago.monto)}</strong></td>
                             </tr>
                         `);
                     });
                 } else {
-                    pagosBody.html('<tr><td colspan="4" class="text-center text-muted">Sin pagos registrados</td></tr>');
+                    pagosBody.html('<tr><td colspan="4" class="text-center text-muted py-3">Sin pagos registrados</td></tr>');
                 }
 
                 if (modalDetalleDTEInstance) {
@@ -901,23 +1283,112 @@ th.sorting_desc::after {
             error: function (xhr) {
                 hideGlobalLoader();
                 console.error('Error al obtener detalle del DTE:', xhr.responseText);
-                let mensaje = 'No se pudo obtener el detalle del DTE.';
-                if (xhr.responseJSON && xhr.responseJSON.error) {
-                    mensaje = xhr.responseJSON.error;
-                }
-                Swal.fire('Error', mensaje, 'error');
+                Swal.fire('Error', xhr.responseJSON?.error || 'No se pudo obtener el detalle del DTE.', 'error');
             }
         });
     }
 
     function imprimirDTE(dteId) {
         Swal.fire('Info', `Imprimir DTE ${dteId}`, 'info');
-        // Implementar función de impresión
     }
 
     function registrarPago(dteId) {
         Swal.fire('Info', `Registrar pago para DTE ${dteId}`, 'info');
-        // Implementar modal de registro de pago
     }
 
+    // ✅ Función para buscar un DTE específico (usado en enlaces NC → Factura)
+    function buscarDTE(numeroDocumento) {
+        // Poner el número en el campo de búsqueda y ejecutar
+        document.getElementById('searchDTE').value = numeroDocumento;
+        cargarDTEs();
+        
+        // Resaltar visualmente después de cargar
+        setTimeout(() => {
+            const filas = document.querySelectorAll('#tablaDTEBody tr');
+            filas.forEach(fila => {
+                if (fila.textContent.includes(numeroDocumento)) {
+                    fila.style.animation = 'highlight-row 2s ease';
+                    fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }, 500);
+    }
+
+    // ✅ Función para descargar TXT de Acepta (solo Admin)
+    async function descargarTXTAcepta(dteId, tipoDocumento, numeroDocumento) {
+        try {
+            Swal.fire({
+                title: '<i class="bi bi-file-earmark-text text-warning"></i> Generando TXT',
+                html: `Descargando archivo TXT para Acepta...<br><small class="text-muted">${tipoDocumento} #${numeroDocumento}</small>`,
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            const response = await fetch('/app/documentos/generar-txt-desde-dte/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ dte_id: dteId })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error al generar archivo TXT');
+            }
+
+            // Descargar el archivo
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // Obtener nombre del archivo del header o generar uno
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `DTE_${tipoDocumento}_${numeroDocumento}.txt`;
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (filenameMatch) filename = filenameMatch[1];
+            }
+            
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            Swal.fire({
+                icon: 'success',
+                title: '✅ TXT Descargado',
+                html: `<p>Archivo generado correctamente:</p><code>${filename}</code>`,
+                timer: 3000,
+                showConfirmButton: false
+            });
+
+        } catch (error) {
+            console.error('Error al descargar TXT:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: error.message || 'No se pudo generar el archivo TXT'
+            });
+        }
+    }
+
+    // Función auxiliar para obtener cookie CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
 </script>

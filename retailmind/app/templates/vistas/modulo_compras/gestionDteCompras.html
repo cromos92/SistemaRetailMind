@@ -5,29 +5,187 @@
 {% include '../../layout/menu.html' %}
 
 <style>
+    /* ==================== ESTILOS GESTIÓN DTE COMPRAS ==================== */
+    
+    /* Contenedor principal - FONDO BLANCO */
+    .page-content {
+        background: #ffffff !important;
+        min-height: calc(100vh - 70px);
+    }
+    
+    /* Card principal estilizada */
+    .card.shadow {
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+        animation: fadeInCard 0.4s ease;
+    }
+    
+    @keyframes fadeInCard {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Header con gradiente estilo chat */
+    .dte-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .dte-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    
+    .dte-header-icon {
+        width: 48px;
+        height: 48px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+    
+    .dte-header-info h5 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    
+    .dte-header-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        opacity: 0.9;
+        margin-top: 4px;
+    }
+    
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        background: #4ade80;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    .dte-header-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .dte-header-actions .btn {
+        border-radius: 10px;
+        font-weight: 500;
+        padding: 8px 14px;
+        font-size: 13px;
+        border: none;
+        transition: all 0.2s ease;
+    }
+    
+    .dte-header-actions .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .dte-header-actions .dropdown-toggle::after {
+        margin-left: 6px;
+    }
+    
+    /* Card body estilizado */
+    .card-body {
+        padding: 24px;
+        background: white;
+    }
+    
     /* Estilos para controles de paginación y búsqueda */
     .pagination-controls {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
-        border: 1px solid #dee2e6;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(64, 81, 137, 0.1);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
 
     .search-highlight {
-        background-color: #fff3cd;
-        font-weight: bold;
+        background: linear-gradient(135deg, #ffeeba 0%, #fff3cd 100%);
+        font-weight: 600;
+        padding: 2px 4px;
+        border-radius: 4px;
     }
 
     .page-info {
-        min-width: 120px;
+        min-width: 140px;
         text-align: center;
-        font-weight: 500;
+        font-weight: 600;
+        background: white;
+        border-radius: 8px;
     }
 
     .pagination-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+    }
+
+    /* KPI Cards estilizadas */
+    .kpi-card {
+        border-radius: 12px;
+        border: none;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+    
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .kpi-card .card-body {
+        padding: 12px 16px;
+    }
+    
+    .kpi-card i.fs-1 {
+        transition: transform 0.3s ease;
+    }
+    
+    .kpi-card:hover i.fs-1 {
+        transform: scale(1.1);
+    }
+
+    /* Shortcuts de formulario */
+    .empresa-receptora-shortcut,
+    .dias-credito-shortcut {
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 20px;
+        transition: all 0.2s ease;
+    }
+    
+    .empresa-receptora-shortcut:hover,
+    .dias-credito-shortcut:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    
+    .dias-credito-shortcut.btn-primary {
+        box-shadow: 0 2px 8px rgba(64, 81, 137, 0.3);
     }
 
     /* Responsive para controles */
@@ -42,6 +200,16 @@
 
         .pagination-controls .btn-group .btn {
             flex: 1;
+        }
+        
+        .dte-header {
+            padding: 12px 16px;
+        }
+        
+        .dte-header-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
         }
     }
 
@@ -74,43 +242,204 @@
     }
 
     /* Mejorar la apariencia de las tablas */
+    .table {
+        border-radius: 12px;
+        overflow: hidden;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    
+    /* Header de tabla con color sólido visible */
+    .table thead,
+    .table thead tr {
+        background: #405189 !important;
+    }
+    
+    .table thead th {
+        color: #ffffff !important;
+        font-weight: 600;
+        border: none !important;
+        padding: 14px 12px;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: #405189 !important;
+        vertical-align: middle;
+    }
+    
+    /* Alternar para thead con clase específica */
+    .table-light thead th,
+    thead.table-light th {
+        background: #405189 !important;
+        color: #ffffff !important;
+    }
+    
+    /* Sobrescribir clases de Bootstrap que podrían interferir */
+    .table > thead {
+        background-color: #405189 !important;
+    }
+    
+    .table > :not(caption) > * > th {
+        background-color: #405189 !important;
+        color: #ffffff !important;
+    }
+    
+    .table-hover tbody tr {
+        transition: all 0.2s ease;
+    }
+    
     .table-hover tbody tr:hover {
-        background-color: rgba(0, 123, 255, 0.1);
+        background-color: rgba(64, 81, 137, 0.08) !important;
     }
 
     .table-striped tbody tr:nth-of-type(odd) {
-        background-color: rgba(0, 0, 0, 0.02);
+        background-color: rgba(64, 81, 137, 0.03);
+    }
+    
+    /* Asegurar que el body de la tabla tenga fondo blanco */
+    .table tbody {
+        background: #ffffff;
+    }
+    
+    .table tbody td {
+        background: transparent;
+        vertical-align: middle;
+        border-bottom: 1px solid #e9ecef;
     }
 
-    /* Estilos para badges */
+    /* Estilos para badges mejorados */
     .badge {
         font-size: 0.75em;
-        padding: 0.35em 0.65em;
+        padding: 0.4em 0.7em;
+        border-radius: 8px;
+        font-weight: 500;
+    }
+    
+    .badge.bg-success {
+        background: linear-gradient(135deg, #0ab39c 0%, #099885 100%) !important;
+    }
+    
+    .badge.bg-danger {
+        background: linear-gradient(135deg, #f06548 0%, #d9534f 100%) !important;
+    }
+    
+    .badge.bg-warning {
+        background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%) !important;
+    }
+    
+    .badge.bg-info {
+        background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%) !important;
+    }
+    
+    .badge.bg-primary {
+        background: linear-gradient(135deg, #405189 0%, #364574 100%) !important;
     }
 
     /* Animaciones suaves */
     .modal.fade .modal-dialog {
         transition: transform 0.3s ease-out;
     }
+    
+    .modal-content {
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    
+    .modal-header {
+        border-bottom: none;
+        padding: 20px 24px;
+    }
+    
+    .modal-header.bg-success {
+        background: linear-gradient(135deg, #0ab39c 0%, #099885 100%) !important;
+    }
+    
+    .modal-header.bg-primary {
+        background: linear-gradient(135deg, #405189 0%, #364574 100%) !important;
+    }
+    
+    .modal-header.bg-warning {
+        background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%) !important;
+    }
+    
+    .modal-header.bg-info {
+        background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%) !important;
+    }
 
     .btn {
         transition: all 0.2s ease-in-out;
+        border-radius: 8px;
     }
 
     .btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    
+    .btn-success {
+        background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
+        border: none;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #405189 0%, #364574 100%);
+        border: none;
+    }
+    
+    .btn-warning {
+        background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);
+        border: none;
+    }
+    
+    .btn-info {
+        background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);
+        border: none;
     }
 
     /* Estilos para formularios */
+    .form-control {
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        padding: 10px 14px;
+        transition: all 0.2s ease;
+    }
+    
     .form-control:focus {
-        border-color: #80bdff;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        border-color: #405189;
+        box-shadow: 0 0 0 0.2rem rgba(64, 81, 137, 0.15);
+    }
+    
+    .form-select {
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        padding: 10px 14px;
+    }
+    
+    .form-select:focus {
+        border-color: #405189;
+        box-shadow: 0 0 0 0.2rem rgba(64, 81, 137, 0.15);
     }
 
     .form-label {
-        font-weight: 500;
-        color: #495057;
+        font-weight: 600;
+        color: #405189;
+        margin-bottom: 6px;
+    }
+    
+    /* Input group estilizado */
+    .input-group {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .input-group .form-control {
+        border-radius: 10px 0 0 10px;
+    }
+    
+    .input-group .btn {
+        border-radius: 0 10px 10px 0;
     }
 
     /* Responsive para móviles */
@@ -143,9 +472,65 @@
         transform: none;
         box-shadow: none;
     }
+    
+    /* Botones de acción en tabla */
+    .btn-outline-success:hover {
+        background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
+        border-color: transparent;
+    }
+    
+    .btn-outline-info:hover {
+        background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);
+        border-color: transparent;
+    }
+    
+    .btn-outline-warning:hover {
+        background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);
+        border-color: transparent;
+    }
+    
+    .btn-outline-danger:hover {
+        background: linear-gradient(135deg, #f06548 0%, #d9534f 100%);
+        border-color: transparent;
+    }
+    
+    .btn-outline-primary:hover {
+        background: linear-gradient(135deg, #405189 0%, #364574 100%);
+        border-color: transparent;
+    }
+    
+    /* Quick filters estilo chat */
+    .quick-filter-btn {
+        padding: 8px 16px;
+        font-size: 13px;
+        white-space: nowrap;
+        border-radius: 20px;
+        border: 2px solid #e5e7eb;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+    }
+    
+    .quick-filter-btn:hover {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        border-color: transparent;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(64, 81, 137, 0.3);
+    }
+    
+    /* Loader mejorado */
+    #fullscreenLoader {
+        backdrop-filter: blur(4px);
+    }
+    
+    #fullscreenLoader .spinner-border {
+        color: #405189 !important;
+    }
 </style>
 
-<!-- Eliminado overlay custom y CSS -->
+<!-- Loader con estilo del proyecto -->
 <div id="fullscreenLoader" style="
     display: none;
     position: fixed;
@@ -154,13 +539,18 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(255, 255, 255, 0.8);
+    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
+    backdrop-filter: blur(8px);
     text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
+        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
+            <i class="bi bi-file-earmark-text fs-3 text-white"></i>
+        </div>
+        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
             <span class="visually-hidden">Cargando...</span>
         </div>
-        <p class="mt-3 fw-bold">Cargando información, por favor espera...</p>
+        <p class="mb-0 fw-bold" style="color: #405189;">Cargando información...</p>
+        <small class="text-muted">Por favor espera un momento</small>
     </div>
 </div>
 
@@ -180,14 +570,24 @@
             }
         </style>
         <div class="card shadow">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 text-white">
-                    <i class="bi bi-file-earmark-text me-2"></i>Gestión de DTE (Compras)
-                </h5>
-                <div class="d-flex gap-2">
+            <!-- Header estilo Chat del Proyecto -->
+            <div class="dte-header">
+                <div class="dte-header-left">
+                    <div class="dte-header-icon">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <div class="dte-header-info">
+                        <h5 style="color: white;">Gestión de DTE (Compras)</h5>
+                        <div class="dte-header-status">
+                            <span class="status-dot"></span>
+                            Sistema Activo
+                        </div>
+                    </div>
+                </div>
+                <div class="dte-header-actions">
                     <!-- Dropdown de Importación -->
                     <div class="btn-group">
-                        <button type="button" class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-cloud-upload me-1"></i>Importar
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end">
@@ -215,106 +615,114 @@
                         </ul>
                     </div>
                     
-                    <button class="btn btn-warning btn-sm" data-bs-toggle="modal"
+                    <button class="btn btn-light" data-bs-toggle="modal"
                         data-bs-target="#modalGestionProveedores">
-                        <i class="bi bi-building me-1"></i>Gestionar Proveedores
+                        <i class="bi bi-building me-1"></i>Proveedores
                     </button>
-                    <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalNuevoDTE">
+                    <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#modalNuevoDTE">
                         <i class="bi bi-plus-circle me-1"></i>Nuevo DTE
                     </button>
                 </div>
             </div>
 
             <div class="card-body">
-                <!-- Filtros -->
-                <form id="formBuscarDTE" class="row g-3 mb-4">
-                    <div class="col-md-3">
-                        <label for="fechaInicio" class="form-label">
-                            <i class="bi bi-calendar-event me-1"></i>Fecha de Inicio
-                        </label>
-                        <input type="date" class="form-control" id="fechaInicio" name="fecha_inicio">
-                        <small class="text-muted">Por defecto: Primer día del mes actual</small>
+                <!-- Filtros - Estilo Chat -->
+                <div class="card mb-4" style="border: none; border-radius: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                    <div class="card-body p-3">
+                        <form id="formBuscarDTE" class="row g-3 align-items-end">
+                            <div class="col-md-4 col-lg-3">
+                                <label for="fechaInicio" class="form-label small">
+                                    <i class="bi bi-calendar-event me-1"></i>Fecha de Inicio
+                                </label>
+                                <input type="date" class="form-control" id="fechaInicio" name="fecha_inicio">
+                            </div>
+                            <div class="col-md-4 col-lg-3">
+                                <label for="fechaFin" class="form-label small">
+                                    <i class="bi bi-calendar-check me-1"></i>Fecha de Término
+                                </label>
+                                <input type="date" class="form-control" id="fechaFin" name="fecha_fin">
+                            </div>
+                            <div class="col-md-4 col-lg-3">
+                                <button type="submit" class="btn btn-success w-100" style="height: 46px;">
+                                    <i class="bi bi-search me-1"></i>Buscar DTEs
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="col-md-3">
-                        <label for="fechaFin" class="form-label">
-                            <i class="bi bi-calendar-check me-1"></i>Fecha de Término
-                        </label>
-                        <input type="date" class="form-control" id="fechaFin" name="fecha_fin">
-                        <small class="text-muted">Por defecto: Hoy</small>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-success w-100">
-                            <i class="bi bi-search me-1"></i>Buscar
-                        </button>
-                    </div>
-                </form>
+                </div>
 
-                <!-- Panel de KPIs de Pendientes y Vencimiento -->
+                <!-- Panel de KPIs de Pendientes y Vencimiento - Estilo Chat -->
                 <div class="row mb-3">
                     <div class="col-12">
-                        <div class="card border-primary">
-                            <div class="card-body">
+                        <div class="card border-0" style="border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);">
+                            <div class="card-body p-3">
                                 <!-- Fila 1: Resumen General -->
-                                <div class="row mb-3">
-                                    <div class="col-md-3">
-                                        <div class="card bg-warning-subtle border-warning">
-                                            <div class="card-body text-center py-3">
-                                                <i class="bi bi-file-earmark-text fs-1 text-warning"></i>
-                                                <h3 class="mb-1 mt-2" id="cantidadPendientes">0</h3>
-                                                <p class="text-muted mb-0 small">Documentos Pendientes</p>
-                                                <h5 class="text-danger mb-0 mt-2" id="montoPendiente">$0</h5>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-3 col-6">
+                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;">
+                                            <div class="card-body text-center py-2">
+                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
+                                                    <i class="bi bi-file-earmark-text fs-5 text-white"></i>
+                                                </div>
+                                                <h4 class="mb-0 fw-bold" id="cantidadPendientes" style="color: #405189;">0</h4>
+                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Documentos Pendientes</p>
+                                                <h6 class="mb-0 mt-1 fw-bold" id="montoPendiente" style="color: #f06548; font-size: 0.85rem;">$0</h6>
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="col-md-3">
-                                        <div class="card bg-danger-subtle border-danger">
-                                            <div class="card-body text-center py-3">
-                                                <i class="bi bi-exclamation-circle-fill fs-1 text-danger"></i>
-                                                <h3 class="mb-1 mt-2 text-danger" id="cantidadVencidos">0</h3>
-                                                <p class="text-muted mb-0 small">Documentos Vencidos</p>
-                                                <h6 class="text-danger mb-0 mt-2 small" id="montoVencidos">$0</h6>
+                                    <div class="col-md-3 col-6">
+                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #f06548;">
+                                            <div class="card-body text-center py-2">
+                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
+                                                    <i class="bi bi-exclamation-circle-fill fs-5 text-white"></i>
+                                                </div>
+                                                <h4 class="mb-0 fw-bold" id="cantidadVencidos" style="color: #f06548;">0</h4>
+                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Documentos Vencidos</p>
+                                                <h6 class="mb-0 mt-1 fw-bold" id="montoVencidos" style="color: #f06548; font-size: 0.85rem;">$0</h6>
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="col-md-3">
-                                        <div class="card bg-warning-subtle border-warning">
-                                            <div class="card-body text-center py-3">
-                                                <i class="bi bi-clock-history fs-1 text-warning"></i>
-                                                <h3 class="mb-1 mt-2 text-warning" id="cantidadPorVencer">0</h3>
-                                                <p class="text-muted mb-0 small">Por Vencer (7 días)</p>
-                                                <h6 class="text-warning mb-0 mt-2 small" id="montoPorVencer">$0</h6>
+                                    <div class="col-md-3 col-6">
+                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid #fb8c00;">
+                                            <div class="card-body text-center py-2">
+                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #fb8c00 0%, #f57c00 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
+                                                    <i class="bi bi-clock-history fs-5 text-white"></i>
+                                                </div>
+                                                <h4 class="mb-0 fw-bold" id="cantidadPorVencer" style="color: #fb8c00;">0</h4>
+                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Por Vencer (7 días)</p>
+                                                <h6 class="mb-0 mt-1 fw-bold" id="montoPorVencer" style="color: #fb8c00; font-size: 0.85rem;">$0</h6>
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    <div class="col-md-3">
-                                        <div class="card bg-success-subtle border-success">
-                                            <div class="card-body text-center py-3">
-                                                <i class="bi bi-check-circle-fill fs-1 text-success"></i>
-                                                <h3 class="mb-1 mt-2 text-success" id="cantidadAlDia">0</h3>
-                                                <p class="text-muted mb-0 small">Al Día (+7 días)</p>
-                                                <h6 class="text-success mb-0 mt-2 small" id="montoAlDia">$0</h6>
+                                    <div class="col-md-3 col-6">
+                                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c;">
+                                            <div class="card-body text-center py-2">
+                                                <div style="width: 36px; height: 36px; background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-radius: 10px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;">
+                                                    <i class="bi bi-check-circle-fill fs-5 text-white"></i>
+                                                </div>
+                                                <h4 class="mb-0 fw-bold" id="cantidadAlDia" style="color: #0ab39c;">0</h4>
+                                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Al Día (+7 días)</p>
+                                                <h6 class="mb-0 mt-1 fw-bold" id="montoAlDia" style="color: #0ab39c; font-size: 0.85rem;">$0</h6>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <!-- Fila 2: Acciones -->
-                                <div class="row">
-                                    <div class="col-md-12 text-center">
-                                        <span class="badge bg-info me-2" id="periodoActualBadge">Año 2025</span>
-                                        <button class="btn btn-sm btn-danger me-2" onclick="filtrarVencidos()">
-                                            <i class="bi bi-exclamation-triangle me-1"></i>Ver Vencidos
-                                        </button>
-                                        <button class="btn btn-sm btn-warning me-2" onclick="filtrarPorVencer()">
-                                            <i class="bi bi-clock me-1"></i>Ver Por Vencer
-                                        </button>
-                                        <button class="btn btn-sm btn-primary" onclick="filtrarPendientes()">
-                                            <i class="bi bi-filter me-1"></i>Ver Todos Pendientes
-                                        </button>
-                                    </div>
+                                <!-- Fila 2: Acciones Rápidas Estilo Chat -->
+                                <div class="d-flex flex-wrap justify-content-center gap-2">
+                                    <span class="badge me-2" id="periodoActualBadge" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); font-size: 0.9rem; padding: 8px 16px; border-radius: 20px;">Año 2025</span>
+                                    <button class="quick-filter-btn" onclick="filtrarVencidos()">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Ver Vencidos
+                                    </button>
+                                    <button class="quick-filter-btn" onclick="filtrarPorVencer()">
+                                        <i class="bi bi-clock me-1"></i>Ver Por Vencer
+                                    </button>
+                                    <button class="quick-filter-btn" onclick="filtrarPendientes()">
+                                        <i class="bi bi-filter me-1"></i>Ver Todos Pendientes
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -355,8 +763,8 @@
                     </div>
                 </div>
 
-                <div class="table-responsive mb-4">
-                    <div class="d-flex justify-content-between mb-2">
+                <div class="table-responsive mb-4" style="border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-2" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px;">
                         <div>
                             <button class="btn btn-primary" id="btnPagoMasivo" style="display: none;"
                                 onclick="abrirModalPagoMasivo()">
@@ -371,10 +779,10 @@
                             </button>
                         </div>
                     </div>
-                    <table class="table table-sm table-hover text-center align-middle w-100" id="tablaDTE"
+                    <table class="table table-sm table-hover text-center align-middle w-100 mb-0" id="tablaDTE"
                         style="table-layout: fixed; font-size: 0.875rem;">
 
-                        <thead class="table-light">
+                        <thead>
                             <tr>
                                 <th style="display: none;">ID</th>
                                 <th style="width: 40px;">
@@ -388,7 +796,7 @@
                                 <th>Fecha Emisión</th>
                                 <th>Fecha Recepción</th>
                                 <th>Monto c/IVA</th>
-                                <th>Descuento</th> <!-- 👈 nuevo -->
+                                <th>Descuento</th>
                                 <th>Días Crédito</th>
                                 <th>Estado</th>
                                 <th>Pago</th>
@@ -433,11 +841,17 @@
 </div>
 <div class="modal fade" id="modalNuevoDTE" tabindex="-1" aria-labelledby="modalNuevoDTELabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="modalNuevoDTELabel">
-                    <i class="bi bi-file-earmark-plus me-1"></i>Nuevo DTE Compra
-                </h5>
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-white" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-file-earmark-plus fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalNuevoDTELabel">Nuevo DTE Compra</h5>
+                        <small style="opacity: 0.9;">Complete los campos requeridos</small>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                     aria-label="Cerrar"></button>
             </div>
@@ -456,12 +870,15 @@
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <label for="empresaReceptora" class="form-label">Empresa Recepciona (Empresa - Sucursal)</label>
+                            <label for="empresaReceptora" class="form-label">Empresa Recepciona</label>
                             <select id="empresaReceptora" class="form-select select2" required>
                                 <option value="">Selecciona la empresa que recibirá el DTE</option>
                             </select>
                             <div class="form-text">
-                                Por defecto se utiliza la empresa y sucursal con la que iniciaste sesión.
+                                Por defecto se utiliza la empresa con la que iniciaste sesión.
+                            </div>
+                            <!-- Shortcuts de empresas receptoras -->
+                            <div id="shortcutsEmpresasReceptoras" class="mt-2 d-flex flex-wrap gap-1" style="display: none;">
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -593,8 +1010,8 @@
                         <div class="col-md-6">
                             <label for="estadoDTE" class="form-label">Estado DTE</label>
                             <select id="estadoDTE" class="form-select select2" required>
-                                <option value="Aceptado">Aceptado</option>
-                                <option value="Rechazado">Rechazado</option>
+                                <option value="ACEPTADO">Aceptado</option>
+                                <option value="RECHAZADO">Rechazado</option>
                             </select>
                         </div>
                         <input type="hidden" id="estadoPago" value="Pendiente">
@@ -615,7 +1032,12 @@
                         <!-- Días crédito, Bultos y Unidades -->
                         <div class="col-md-4">
                             <label for="diasCredito" class="form-label">Días de Crédito</label>
-                            <input type="number" class="form-control" id="diasCredito" min="0">
+                            <input type="number" class="form-control" id="diasCredito" min="0" value="30" placeholder="30">
+                            <div class="mt-2 d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="30">30d</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="60">60d</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="90">90d</button>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label for="bultos" class="form-label">Bultos</label>
@@ -629,11 +1051,11 @@
                     </div>
                 </div>
 
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-outline-danger" data-bs-dismiss="modal">
+                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">
                         <i class="bi bi-x-circle me-1"></i>Cancelar
                     </button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" style="border-radius: 10px;">
                         <i class="bi bi-save me-1"></i>Guardar DTE
                     </button>
                 </div>
@@ -644,12 +1066,20 @@
 </div>
 <!-- Modal Pago -->
 <div class="modal fade" id="modalPago" tabindex="-1" aria-labelledby="modalPagoLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
             <form id="formPago">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalPagoLabel">Registrar Pago</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-bottom: none; padding: 20px 24px;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-cash-coin fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title mb-0" id="modalPagoLabel">Registrar Pago</h5>
+                            <small style="opacity: 0.9;">Ingresa los datos del pago</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body">
@@ -702,9 +1132,9 @@
                     </div>
                 </div>
 
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Registrar Pago</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">Cancelar</button>
+                    <button type="submit" class="btn btn-success" style="border-radius: 10px;"><i class="bi bi-check-circle me-1"></i>Registrar Pago</button>
                 </div>
             </form>
         </div>
@@ -713,20 +1143,28 @@
 
 <div class="modal fade" id="modalDetallePagos" tabindex="-1" aria-labelledby="modalDetallePagosLabel"
     aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalDetallePagosLabel">Pagos del DTE</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-white" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-receipt fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalDetallePagosLabel">Pagos del DTE</h5>
+                        <small style="opacity: 0.9;">Historial de pagos registrados</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <table class="table table-bordered table-sm text-center">
-                    <thead class="table-light">
+            <div class="modal-body p-4">
+                <table class="table table-sm text-center mb-0" style="border-radius: 12px; overflow: hidden;">
+                    <thead style="background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
                         <tr>
-                            <th>Método</th>
-                            <th>Voucher</th>
-                            <th>Monto</th>
-                            <th>Acciones</th>
+                            <th class="text-white py-3">Método</th>
+                            <th class="text-white py-3">Voucher</th>
+                            <th class="text-white py-3">Monto</th>
+                            <th class="text-white py-3">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="tablaPagosDTEBody">
@@ -739,12 +1177,20 @@
 </div>
 <div class="modal fade" id="modalNotasCredito" tabindex="-1" aria-labelledby="modalNotasCreditoLabel"
     aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
             <form id="formNC">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalNotasCreditoLabel">Notas de Crédito asignadas</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); border-bottom: none; padding: 20px 24px;">
+                    <div class="d-flex align-items-center gap-3">
+                        <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-file-earmark-minus fs-5"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title mb-0" id="modalNotasCreditoLabel">Notas de Crédito</h5>
+                            <small style="opacity: 0.9;">Gestiona las NC asignadas</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
 
                 <div class="modal-body">
@@ -775,13 +1221,13 @@
                     </div>
 
                     <!-- Tabla de NCs asignadas -->
-                    <table class="table table-bordered table-sm">
-                        <thead class="table-light">
+                    <table class="table table-sm mb-0" style="border-radius: 12px; overflow: hidden;">
+                        <thead style="background: linear-gradient(135deg, #f06548 0%, #d9534f 100%);">
                             <tr>
-                                <th class="text-center">N° NC</th>
-                                <th class="text-center">Monto</th>
-                                <th>Motivo</th>
-                                <th class="text-center">Acciones</th>
+                                <th class="text-center text-white py-3">N° NC</th>
+                                <th class="text-center text-white py-3">Monto</th>
+                                <th class="text-white py-3">Motivo</th>
+                                <th class="text-center text-white py-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tablaNCBody">
@@ -797,11 +1243,17 @@
 <!-- Modal Pago Masivo -->
 <div class="modal fade" id="modalPagoMasivo" tabindex="-1" aria-labelledby="modalPagoMasivoLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="modalPagoMasivoLabel">
-                    <i class="bi bi-cash-stack me-2"></i>Pago Masivo de Facturas
-                </h5>
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-white" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-cash-stack fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalPagoMasivoLabel">Pago Masivo de Facturas</h5>
+                        <small style="opacity: 0.9;">Procesa múltiples pagos</small>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                     aria-label="Cerrar"></button>
             </div>
@@ -845,15 +1297,15 @@
 
                     <!-- Tabla de facturas seleccionadas -->
                     <div class="mt-3">
-                        <h6>Facturas a Pagar:</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead class="table-light">
+                        <h6 class="fw-bold" style="color: #405189;"><i class="bi bi-list-check me-2"></i>Facturas a Pagar:</h6>
+                        <div class="table-responsive" style="border-radius: 12px; overflow: hidden;">
+                            <table class="table table-sm mb-0">
+                                <thead style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
                                     <tr>
-                                        <th>Factura</th>
-                                        <th>Proveedor</th>
-                                        <th>Saldo Pendiente</th>
-                                        <th>Acción</th>
+                                        <th class="text-white py-3">Factura</th>
+                                        <th class="text-white py-3">Proveedor</th>
+                                        <th class="text-white py-3">Saldo Pendiente</th>
+                                        <th class="text-white py-3">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaFacturasSeleccionadas">
@@ -872,9 +1324,9 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
+                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" style="border-radius: 10px;">
                         <i class="bi bi-cash-stack me-1"></i>Procesar Pago Masivo
                     </button>
                 </div>
@@ -886,11 +1338,17 @@
 <!-- Modal Asociar NC Existente -->
 <div class="modal fade" id="modalAsociarNC" tabindex="-1" aria-labelledby="modalAsociarNCLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title" id="modalAsociarNCLabel">
-                    <i class="bi bi-link-45deg me-2"></i>Asociar Nota de Crédito Existente
-                </h5>
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-white" style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-link-45deg fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalAsociarNCLabel">Asociar Nota de Crédito</h5>
+                        <small style="opacity: 0.9;">Vincular NC existente a factura</small>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                     aria-label="Cerrar"></button>
             </div>
@@ -917,16 +1375,16 @@
                 </div>
 
                 <!-- Tabla de NCs disponibles -->
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="table-light">
+                <div class="table-responsive" style="border-radius: 12px; overflow: hidden;">
+                    <table class="table table-hover mb-0">
+                        <thead style="background: linear-gradient(135deg, #299cdb 0%, #1e7ab8 100%);">
                             <tr>
-                                <th>Seleccionar</th>
-                                <th>Número</th>
-                                <th>Proveedor</th>
-                                <th>Fecha</th>
-                                <th>Monto</th>
-                                <th>Estado</th>
+                                <th class="text-white py-3">Seleccionar</th>
+                                <th class="text-white py-3">Número</th>
+                                <th class="text-white py-3">Proveedor</th>
+                                <th class="text-white py-3">Fecha</th>
+                                <th class="text-white py-3">Monto</th>
+                                <th class="text-white py-3">Estado</th>
                             </tr>
                         </thead>
                         <tbody id="tablaNCsDisponiblesBody">
@@ -940,9 +1398,9 @@
                     </table>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-info" id="btnAsociarNC" disabled>
+            <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">Cancelar</button>
+                <button type="button" class="btn btn-info" id="btnAsociarNC" disabled style="border-radius: 10px;">
                     <i class="bi bi-link-45deg me-2"></i>Asociar NC Seleccionada
                 </button>
             </div>
@@ -953,11 +1411,17 @@
 <!-- Modal Incidencias DTE -->
 <div class="modal fade" id="modalIncidencias" tabindex="-1" aria-labelledby="modalIncidenciasLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="modalIncidenciasLabel">
-                    <i class="bi bi-exclamation-triangle me-2"></i>Gestión de Incidencias
-                </h5>
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-dark" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-exclamation-triangle fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalIncidenciasLabel">Gestión de Incidencias</h5>
+                        <small style="opacity: 0.8;">Registra y gestiona problemas</small>
+                    </div>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="formIncidencia">
@@ -1001,19 +1465,19 @@
 
                     <!-- Tabla de incidencias -->
                     <div class="card">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0">Incidencias Registradas</h6>
+                        <div class="card-header" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
+                            <h6 class="mb-0 fw-bold"><i class="bi bi-list-check me-2"></i>Incidencias Registradas</h6>
                         </div>
                         <div class="card-body p-0">
                             <div class="table-responsive">
                                 <table class="table table-sm table-hover mb-0">
-                                    <thead class="table-light">
+                                    <thead style="background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
                                         <tr>
-                                            <th style="width: 15%;">Tipo</th>
-                                            <th style="width: 35%;">Descripción</th>
-                                            <th style="width: 12%;">Estado</th>
-                                            <th style="width: 15%;">Fecha</th>
-                                            <th style="width: 23%;">Acciones</th>
+                                            <th class="text-white py-3" style="width: 15%;">Tipo</th>
+                                            <th class="text-white py-3" style="width: 35%;">Descripción</th>
+                                            <th class="text-white py-3" style="width: 12%;">Estado</th>
+                                            <th class="text-white py-3" style="width: 15%;">Fecha</th>
+                                            <th class="text-white py-3" style="width: 23%;">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tablaIncidenciasBody">
@@ -1035,11 +1499,17 @@
 <div class="modal fade" id="modalGestionProveedores" tabindex="-1" aria-labelledby="modalGestionProveedoresLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="modalGestionProveedoresLabel">
-                    <i class="bi bi-building me-2"></i>Gestión de Proveedores
-                </h5>
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-dark" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.3); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-building fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalGestionProveedoresLabel">Gestión de Proveedores</h5>
+                        <small style="opacity: 0.8;">Administra tus proveedores</small>
+                    </div>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
@@ -1058,17 +1528,17 @@
                 </div>
 
                 <!-- Tabla de proveedores -->
-                <div class="table-responsive" style="max-height: 400px;">
-                    <table class="table table-hover table-striped">
-                        <thead class="table-light sticky-top">
+                <div class="table-responsive" style="max-height: 400px; border-radius: 12px; overflow: hidden;">
+                    <table class="table table-hover mb-0">
+                        <thead class="sticky-top" style="background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
                             <tr>
-                                <th>Nombre</th>
-                                <th>RUT</th>
-                                <th>Giro</th>
-                                <th>Ciudad</th>
-                                <th>DTEs</th>
-                                <th>Compras</th>
-                                <th>Acciones</th>
+                                <th class="text-white py-3">Nombre</th>
+                                <th class="text-white py-3">RUT</th>
+                                <th class="text-white py-3">Giro</th>
+                                <th class="text-white py-3">Ciudad</th>
+                                <th class="text-white py-3">DTEs</th>
+                                <th class="text-white py-3">Compras</th>
+                                <th class="text-white py-3">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tablaProveedores">
@@ -1101,11 +1571,17 @@
 <div class="modal fade" id="modalCrearProveedor" tabindex="-1" aria-labelledby="modalCrearProveedorLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="modalCrearProveedorLabel">
-                    <i class="bi bi-building-add me-2"></i>Crear Nuevo Proveedor
-                </h5>
+        <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+            <div class="modal-header text-white" style="background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); border-bottom: none; padding: 20px 24px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-building-add fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title mb-0" id="modalCrearProveedorLabel">Crear Nuevo Proveedor</h5>
+                        <small style="opacity: 0.9;">Complete los datos del proveedor</small>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                     aria-label="Cerrar"></button>
             </div>
@@ -1167,11 +1643,11 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer bg-light">
-                    <button type="button" class="btn btn-outline-danger" data-bs-dismiss="modal">
+                <div class="modal-footer" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-top: none; padding: 16px 24px;">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" style="border-radius: 10px;">
                         <i class="bi bi-x-circle me-1"></i>Cancelar
                     </button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" style="border-radius: 10px;">
                         <i class="bi bi-save me-1"></i>Guardar Proveedor
                     </button>
                 </div>
@@ -1405,14 +1881,25 @@
 
     // Botón Ingresar DTE (redirección o abrir modal)
     $('#modalNuevoDTE').on('show.bs.modal', function () {
-        const hoy = new Date().toISOString().split('T')[0];
-        $('#fechaEmision').val(hoy);
-        $('#fechaRecepcion').val(hoy);
-        $('#estadoPago').val('Pendiente');
         const modal = $(this);
+        const isEditing = modal.data('dte-id') !== undefined && modal.data('dte-id') !== null;
+        
+        // Solo establecer valores por defecto si NO estamos editando
+        if (!isEditing) {
+            const hoy = new Date().toISOString().split('T')[0];
+            $('#fechaEmision').val(hoy);
+            $('#fechaRecepcion').val(hoy);
+            $('#estadoPago').val('Pendiente');
+            $('#diasCredito').val(30); // Por defecto 30 días
+            // Resaltar botón de 30 días por defecto
+            $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
+            $('.dias-credito-shortcut[data-dias="30"]').removeClass('btn-outline-primary').addClass('btn-primary');
+        }
+        
         const valorEmpresaRecepcion = modal.data('empresa-recepcion-value') || null;
         cargarEmpresasReceptoras();
         cargarEmpresasRecepcion(valorEmpresaRecepcion);
+        cargarShortcutsEmpresasReceptoras(); // Cargar shortcuts de empresas receptoras
         modal.removeData('empresa-recepcion-value');
 
         // Inicializar visibilidad del campo de motivo de rechazo
@@ -1449,7 +1936,7 @@
 
     function toggleMotivoRechazo() {
         const estadoDTE = $('#estadoDTE').val();
-        if (estadoDTE === 'Rechazado') {
+        if (estadoDTE === 'RECHAZADO') {
             $('#divMotivoRechazo').slideDown(300);
             $('#motivoRechazo').attr('required', true);
         } else {
@@ -1763,8 +2250,8 @@
             `
                                     : `
                 <!-- Acciones normales para otros tipos de documento -->
-                ${dte.estado === 'Rechazado' || (dte.incidencias_pendientes && dte.incidencias_pendientes > 0) || (dte.requiere_factura && !dte.tiene_factura_anexada)
-                                        ? `<button class="btn btn-sm btn-outline-success" title="${dte.estado === 'Rechazado' ? 'No disponible para DTEs rechazados' :
+                ${dte.estado === 'RECHAZADO' || (dte.incidencias_pendientes && dte.incidencias_pendientes > 0) || (dte.requiere_factura && !dte.tiene_factura_anexada)
+                                        ? `<button class="btn btn-sm btn-outline-success" title="${dte.estado === 'RECHAZADO' ? 'No disponible para DTEs rechazados' :
                                             (dte.requiere_factura && !dte.tiene_factura_anexada) ? 'Este documento requiere tener una factura anexada antes de poder pagar' :
                                                 'Resuelve las incidencias pendientes antes de registrar pagos'
                                         }" disabled>
@@ -1774,7 +2261,7 @@
                         <i class="bi bi-cash-coin" style="font-size: 1.1rem;"></i>
                     </button>`
                                     }
-                ${dte.estado === 'Rechazado'
+                ${dte.estado === 'RECHAZADO'
                                         ? `<button class="btn btn-sm btn-outline-info" title="No disponible para DTEs rechazados" disabled>
                         <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
                     </button>`
@@ -1782,7 +2269,7 @@
                         <i class="bi bi-chat-left-text" style="font-size: 1.1rem;"></i>
                     </button>`
                                     }
-                ${dte.estado === 'Rechazado'
+                ${dte.estado === 'RECHAZADO'
                                         ? `<button class="btn btn-sm btn-outline-warning" title="No disponible para DTEs rechazados" disabled>
                         <i class="bi bi-pencil-square" style="font-size: 1.1rem;"></i>
                     </button>`
@@ -1964,78 +2451,109 @@
             success: function (dte) {
                 $('#modalNuevoDTELabel').text('Editar DTE Compra');
                 $('#formNuevoDTE button[type="submit"]').text('Actualizar DTE');
+                
+                // Guardar datos para aplicar después de que el modal se abra
                 const empresaRecepcionId = dte.empresa_receptora_id ? dte.empresa_receptora_id : '';
-                const sucursalRecepcionId = dte.sucursal_receptora_id ? dte.sucursal_receptora_id : '';
-                $('#modalNuevoDTE').data('empresa-recepcion-value', `${empresaRecepcionId}||${sucursalRecepcionId}`);
+                $('#modalNuevoDTE').data('empresa-recepcion-value', empresaRecepcionId);
+                $('#modalNuevoDTE').data('dte-id', dte.id);
+                $('#modalNuevoDTE').data('dte-data', dte); // Guardar todos los datos del DTE
 
-                // Llenar todos los campos del formulario
-                $('#receptor').val(dte.receptor_id);
-                $('#tipoDocumento').val(dte.tipo_documento);
-                $('#numeroDocumento').val(dte.numero_documento);
-                $('#montoConIVA').val(dte.monto_con_iva);
-                $('#descuento').val(dte.descuento);
-                $('#descuentoConIVA').prop('checked', dte.descuento_con_iva || false);
-                $('#fechaEmision').val(dte.fecha_emision);
-                $('#fechaRecepcion').val(dte.fecha_recepcion || '');
-                $('#estadoDTE').val(dte.estado_dte);
-                $('#estadoPago').val(dte.estado_pago);
-                $('#diasCredito').val(dte.diasCredito || 0);
-                $('#bultos').val(dte.bultos || 0);
-                $('#unidadesProductos').val(dte.unidades_productos || 0);
+                // Abrir el modal primero (esto dispara show.bs.modal que carga los selects)
+                const modal = new bootstrap.Modal(document.getElementById('modalNuevoDTE'));
+                modal.show();
 
-                // Asegurar que el proveedor se cargue correctamente
-                if (dte.receptor_id) {
-                    // Si no está cargado el select de proveedores, cargarlo primero
-                    if ($('#receptor option').length <= 1) {
-                        cargarEmpresasReceptoras();
-                        // Esperar a que se carguen y luego seleccionar
-                        setTimeout(() => {
-                            $('#receptor').val(dte.receptor_id);
-                        }, 500);
+                // Esperar a que los selects se carguen y luego aplicar los valores
+                setTimeout(function() {
+                    // Campos de texto/número simples
+                    $('#numeroDocumento').val(dte.numero_documento);
+                    $('#montoConIVA').val(dte.monto_con_iva);
+                    $('#descuento').val(dte.descuento || 0);
+                    $('#descuentoConIVA').prop('checked', dte.descuento_con_iva || false);
+                    $('#fechaEmision').val(dte.fecha_emision);
+                    $('#fechaRecepcion').val(dte.fecha_recepcion || '');
+                    $('#estadoPago').val(dte.estado_pago);
+                    $('#diasCredito').val(dte.diasCredito || 0);
+                    $('#bultos').val(dte.bultos || 0);
+                    $('#unidadesProductos').val(dte.unidades_productos || 0);
+
+                    // Actualizar highlight del botón de días
+                    $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
+                    const diasVal = dte.diasCredito || 0;
+                    if ([30, 60, 90].includes(diasVal)) {
+                        $(`.dias-credito-shortcut[data-dias="${diasVal}"]`).removeClass('btn-outline-primary').addClass('btn-primary');
                     }
-                }
 
-                // Cargar motivo de rechazo si existe
-                if (dte.motivo_rechazo) {
-                    $('#motivoRechazo').val(dte.motivo_rechazo);
-                    $('#contadorCaracteres').text(dte.motivo_rechazo.length);
-                }
+                    // Cargar motivo de rechazo si existe
+                    if (dte.motivo_rechazo) {
+                        $('#motivoRechazo').val(dte.motivo_rechazo);
+                        $('#contadorCaracteres').text(dte.motivo_rechazo.length);
+                    }
 
-                // Mostrar campo de motivo si el estado es Rechazado
-                toggleMotivoRechazo();
+                    // Mostrar campo de motivo si el estado es Rechazado
+                    toggleMotivoRechazo();
 
-                // Manejar documento padre si es factura
-                if (dte.tipo_documento === 'FACTURA ELECTRONICA' && dte.documento_padre_id) {
-                    // Primero cargar los documentos base y luego seleccionar el correcto
-                    cargarDocumentosBase();
-                    $('#divDocumentoBase').show();
-                    // Esperar un poco para que se carguen las opciones
-                    setTimeout(() => {
-                        $('#documentoBase').val(dte.documento_padre_id);
-                    }, 500);
-                } else if (dte.tipo_documento === 'FACTURA ELECTRONICA') {
-                    // Si es factura pero no tiene documento padre, mostrar el campo
-                    cargarDocumentosBase();
-                    $('#divDocumentoBase').show();
-                } else {
-                    $('#divDocumentoBase').hide();
-                    $('#documentoBase').val('');
-                }
+                    // Manejar documento padre si es factura
+                    if (dte.tipo_documento === 'FACTURA ELECTRONICA' && dte.documento_padre_id) {
+                        cargarDocumentosBase();
+                        $('#divDocumentoBase').show();
+                        setTimeout(() => {
+                            $('#documentoBase').val(dte.documento_padre_id);
+                        }, 300);
+                    } else if (dte.tipo_documento === 'FACTURA ELECTRONICA') {
+                        cargarDocumentosBase();
+                        $('#divDocumentoBase').show();
+                    } else {
+                        $('#divDocumentoBase').hide();
+                        $('#documentoBase').val('');
+                    }
 
-                // Manejar asociación de NC si es una Nota de Crédito
-                if (dte.tipo_documento === 'NOTA DE CREDITO') {
-                    cargarInfoAsociacionNC(dte.id);
-                    $('#divAsociacionNC').show();
-                } else {
-                    $('#divAsociacionNC').hide();
-                }
+                    // Manejar asociación de NC si es una Nota de Crédito
+                    if (dte.tipo_documento === 'NOTA DE CREDITO') {
+                        cargarInfoAsociacionNC(dte.id);
+                        $('#divAsociacionNC').show();
+                    } else {
+                        $('#divAsociacionNC').hide();
+                    }
 
-                // Cargar información completa para consulta
-                cargarInfoCompletaDTE(dte.id, dte.tipo_documento);
+                    // Cargar información completa (pagos, incidencias)
+                    cargarInfoCompletaDTE(dte.id, dte.tipo_documento);
+                }, 300);
 
-                $('#modalNuevoDTE').data('dte-id', dte.id); // guardamos el ID en el modal
+                // Esperar más tiempo para los selects con Select2
+                setTimeout(function() {
+                    // Empresa Emisora (Proveedor)
+                    if (dte.receptor_id) {
+                        if ($('#receptor').hasClass('select2-hidden-accessible')) {
+                            $('#receptor').val(dte.receptor_id).trigger('change');
+                        } else {
+                            $('#receptor').val(dte.receptor_id);
+                        }
+                    }
 
-                new bootstrap.Modal(document.getElementById('modalNuevoDTE')).show();
+                    // Tipo de Documento
+                    if (dte.tipo_documento) {
+                        const tipoDoc = dte.tipo_documento.toUpperCase();
+                        if ($('#tipoDocumento').hasClass('select2-hidden-accessible')) {
+                            $('#tipoDocumento').val(tipoDoc).trigger('change');
+                        } else {
+                            $('#tipoDocumento').val(tipoDoc);
+                        }
+                    }
+
+                    // Estado DTE - normalizar a mayúsculas
+                    if (dte.estado_dte) {
+                        const estadoNormalizado = dte.estado_dte.toUpperCase();
+                        if ($('#estadoDTE').hasClass('select2-hidden-accessible')) {
+                            $('#estadoDTE').val(estadoNormalizado).trigger('change');
+                        } else {
+                            $('#estadoDTE').val(estadoNormalizado);
+                        }
+                        // Actualizar visibilidad del motivo de rechazo
+                        toggleMotivoRechazo();
+                    }
+
+                    // Empresa Receptora (ya se maneja con data('empresa-recepcion-value') en show.bs.modal)
+                }, 600);
             },
             error: function () {
                 Swal.fire('Error', 'No se pudo cargar el DTE para edición', 'error');
@@ -2102,7 +2620,7 @@
 
     // Estilos dinámicos para badges
     function estadoColor(estado) {
-        return estado === 'Aceptado' ? 'success' : estado === 'Rechazado' ? 'danger' : 'secondary';
+        return estado === 'Aceptado' ? 'success' : estado === 'RECHAZADO' ? 'danger' : 'secondary';
     }
 
     function pagoColor(pago) {
@@ -2151,7 +2669,7 @@
         }
 
         // Validar motivo de rechazo si el estado es Rechazado
-        if (estadoDTE === 'Rechazado') {
+        if (estadoDTE === 'RECHAZADO') {
             if (!motivoRechazo || motivoRechazo.length === 0) {
                 Swal.fire({
                     icon: 'warning',
@@ -2188,7 +2706,7 @@
             unidades_productos: unidades_productos || 0,
             descuento: descuento || 0,
             descuento_con_iva: descuento_con_iva,
-            motivo_rechazo: estadoDTE === 'Rechazado' ? motivoRechazo : null,
+            motivo_rechazo: estadoDTE === 'RECHAZADO' ? motivoRechazo : null,
             documento_padre_id: documento_padre_id || null,
             nota_credito_base_id: nota_credito_base_id || null
         };
@@ -2308,7 +2826,16 @@
         $('#modalNuevoDTELabel').text('Nuevo DTE Compra');
         $('#formNuevoDTE button[type="submit"]').text('Guardar DTE');
         $(this).removeData('dte-id');
+        $(this).removeData('dte-data');
         $(this).removeData('empresa-recepcion-value');
+        
+        // Limpiar paneles de información adicional
+        $('#divHistorialPagos').hide();
+        $('#divResumenIncidencias').hide();
+        $('#divRelacionesDoc').hide();
+        $('#listaPagos').empty();
+        $('#resumenIncidencias').empty();
+        $('#infoRelaciones').empty();
 
         // Limpiar campo de motivo de rechazo
         $('#motivoRechazo').val('');
@@ -2402,6 +2929,157 @@
         });
     }
 
+    // Cargar shortcuts de empresas receptoras (agrupadas por empresa, sin repetir sucursales)
+    function cargarShortcutsEmpresasReceptoras() {
+        $.ajax({
+            url: '/app/empresas_receptoras/',
+            method: 'GET',
+            success: function (data) {
+                const container = $('#shortcutsEmpresasReceptoras');
+                container.empty();
+                
+                if (!data || data.length === 0) {
+                    container.hide();
+                    return;
+                }
+                
+                // Agrupar empresas únicas (evitar repeticiones por múltiples sucursales)
+                // Guardar el primer value encontrado para cada empresa (normalmente la sucursal default)
+                const empresasUnicas = new Map();
+                data.forEach(item => {
+                    if (item.empresa_id && item.empresa_nombre && !empresasUnicas.has(item.empresa_id)) {
+                        empresasUnicas.set(item.empresa_id, {
+                            id: item.empresa_id,
+                            nombre: item.empresa_nombre,
+                            value: item.value, // Guardar el value para seleccionar directamente
+                            isDefault: item.is_default
+                        });
+                    }
+                    // Si encontramos la opción default, actualizarla
+                    if (item.is_default && empresasUnicas.has(item.empresa_id)) {
+                        empresasUnicas.get(item.empresa_id).value = item.value;
+                        empresasUnicas.get(item.empresa_id).isDefault = true;
+                    }
+                });
+                
+                // No mostrar si hay 0 o solo 1 empresa (no tiene sentido el shortcut)
+                if (empresasUnicas.size <= 1) {
+                    container.hide();
+                    return;
+                }
+                
+                // Crear botones shortcuts
+                empresasUnicas.forEach((empresa, id) => {
+                    const btnText = empresa.nombre.length > 18 ? empresa.nombre.substring(0, 18) + '...' : empresa.nombre;
+                    const btn = $(`<button type="button" class="btn btn-sm btn-outline-info empresa-receptora-shortcut" 
+                        data-value="${empresa.value}"
+                        title="${empresa.nombre}">
+                        <i class="bi bi-shop me-1"></i>${btnText}
+                    </button>`);
+                    container.append(btn);
+                });
+                
+                container.show();
+            },
+            error: function () {
+                console.error('Error al cargar shortcuts de empresas receptoras');
+                $('#shortcutsEmpresasReceptoras').hide();
+            }
+        });
+    }
+
+    // Click en shortcuts de empresas receptoras - seleccionar directamente
+    $(document).on('click', '.empresa-receptora-shortcut', function() {
+        const value = $(this).data('value');
+        const select = $('#empresaReceptora');
+        
+        // Seleccionar directamente el value
+        if (select.find(`option[value="${value}"]`).length > 0) {
+            select.val(value).trigger('change');
+        } else {
+            // Si no existe exactamente, buscar por empresa_id
+            const empresaId = value.split('||')[0];
+            select.find('option').each(function() {
+                const optValue = $(this).val();
+                if (optValue && optValue.startsWith(empresaId + '||')) {
+                    select.val(optValue).trigger('change');
+                    return false;
+                }
+            });
+        }
+    });
+
+    // Click en shortcuts de días de crédito
+    $(document).on('click', '.dias-credito-shortcut', function() {
+        const dias = $(this).data('dias');
+        $('#diasCredito').val(dias);
+        // Resaltar el botón seleccionado
+        $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
+        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+    });
+
+    // Cargar información completa del DTE (pagos, incidencias, relaciones)
+    function cargarInfoCompletaDTE(dteId, tipoDocumento) {
+        // Ocultar todos los paneles inicialmente
+        $('#divHistorialPagos').hide();
+        $('#divResumenIncidencias').hide();
+        $('#divRelacionesDoc').hide();
+        $('#listaPagos').empty();
+        $('#resumenIncidencias').empty();
+        $('#infoRelaciones').empty();
+
+        // Cargar historial de pagos
+        $.ajax({
+            url: `/app/pagosDTE/${dteId}/`,
+            method: 'GET',
+            success: function(pagos) {
+                if (pagos && pagos.length > 0) {
+                    let html = '<ul class="list-group list-group-flush">';
+                    pagos.forEach(pago => {
+                        const fecha = pago.fecha_pago ? new Date(pago.fecha_pago).toLocaleDateString('es-CL') : 'Sin fecha';
+                        const monto = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(pago.monto || 0);
+                        html += `<li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                            <span><i class="bi bi-cash me-2 text-success"></i>${pago.metodo_pago || 'N/A'}</span>
+                            <span class="badge bg-success">${monto}</span>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                    $('#listaPagos').html(html);
+                    $('#divHistorialPagos').show();
+                }
+            },
+            error: function() {
+                console.log('No se pudieron cargar los pagos');
+            }
+        });
+
+        // Cargar incidencias
+        $.ajax({
+            url: `/app/incidencias/${dteId}/`,
+            method: 'GET',
+            success: function(incidencias) {
+                if (incidencias && incidencias.length > 0) {
+                    let html = '<ul class="list-group list-group-flush">';
+                    incidencias.forEach(inc => {
+                        const estadoClass = inc.estado === 'Resuelta' ? 'success' : (inc.estado === 'Pendiente' ? 'warning' : 'secondary');
+                        html += `<li class="list-group-item py-2">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-truncate" style="max-width: 200px;">${inc.descripcion || 'Sin descripción'}</span>
+                                <span class="badge bg-${estadoClass}">${inc.estado || 'N/A'}</span>
+                            </div>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                    $('#resumenIncidencias').html(html);
+                    $('#divResumenIncidencias').show();
+                }
+            },
+            error: function() {
+                console.log('No se pudieron cargar las incidencias');
+            }
+        });
+    }
+
     function cargarEmpresasRecepcion(valorSeleccionado = null) {
         return $.ajax({
             url: '/app/empresas_receptoras/',
@@ -2422,21 +3100,46 @@
 
                 select.prop('disabled', false);
 
-                let defaultValue = null;
+                // Agrupar empresas únicas (sin repetir por sucursal)
+                const empresasUnicas = new Map();
+                let defaultEmpresaId = null;
+                
                 data.forEach(item => {
-                    const value = item.value || `${item.empresa_id}||${item.sucursal_id ?? ''}`;
-                    const option = $('<option>')
-                        .val(value)
-                        .text(item.display)
-                        .attr('data-empresa-id', item.empresa_id)
-                        .attr('data-sucursal-id', item.sucursal_id ?? '');
-                    if (item.is_default && !defaultValue) {
-                        defaultValue = value;
+                    if (item.empresa_id && !empresasUnicas.has(item.empresa_id)) {
+                        empresasUnicas.set(item.empresa_id, {
+                            id: item.empresa_id,
+                            nombre: item.empresa_nombre,
+                            rut: item.empresa_rut || ''
+                        });
                     }
+                    // Si este item es default, guardar su empresa_id
+                    if (item.is_default && !defaultEmpresaId) {
+                        defaultEmpresaId = item.empresa_id;
+                    }
+                });
+
+                // Crear opciones solo con empresas (sin sucursales) - mostrar RUT
+                empresasUnicas.forEach((empresa, id) => {
+                    const displayText = empresa.rut ? `${empresa.nombre} (${empresa.rut})` : empresa.nombre;
+                    const option = $('<option>')
+                        .val(id)
+                        .text(displayText);
                     select.append(option);
                 });
 
-                const valueToSet = valorSeleccionado || defaultValue || select.find('option:first').val();
+                // Determinar valor a seleccionar
+                let valueToSet = null;
+                if (valorSeleccionado) {
+                    // Si viene valor seleccionado, puede ser solo empresa_id o empresa_id||sucursal_id
+                    if (valorSeleccionado.includes('||')) {
+                        const partes = valorSeleccionado.split('||');
+                        valueToSet = partes[0] || null;
+                    } else {
+                        valueToSet = valorSeleccionado;
+                    }
+                }
+                valueToSet = valueToSet || defaultEmpresaId || select.find('option:first').val();
+                
                 if (valueToSet) {
                     select.val(valueToSet);
                 }
@@ -2465,10 +3168,10 @@
         if (!value || value === '') {
             return { empresa_id: null, sucursal_id: null };
         }
-        const partes = value.split('||');
+        // Ahora solo devolvemos empresa_id, sucursal_id será null (usará la de sesión)
         return {
-            empresa_id: partes[0] || null,
-            sucursal_id: partes[1] || null
+            empresa_id: value,
+            sucursal_id: null
         };
     }
 

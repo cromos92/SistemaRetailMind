@@ -4,147 +4,851 @@
 <!-- ========== App Menu ========== -->
 {% include '../../layout/menu.html' %} {% include '../../layout/footer.html' %}
 
+<!-- NEXO Styles para Cambiar Empresa/Sucursal -->
+<style>
+    /* ===== Page Container ===== */
+    .nexo-cambiar-empresa {
+        min-height: calc(100vh - 200px);
+        background: var(--nexo-bg-secondary, #F5F5F7);
+    }
+
+    /* ===== Current Selection Banner ===== */
+    .nexo-current-selection {
+        background: linear-gradient(135deg, var(--nexo-secondary, #1A1A2E) 0%, #2D2D44 100%);
+        border-radius: var(--nexo-radius-xl, 16px);
+        padding: 2rem;
+        color: var(--nexo-white, #FFFFFF);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .nexo-current-selection::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(0, 212, 170, 0.1) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .nexo-current-icon {
+        width: 64px;
+        height: 64px;
+        background: rgba(0, 212, 170, 0.2);
+        border-radius: var(--nexo-radius-lg, 12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.75rem;
+        color: var(--nexo-accent, #00D4AA);
+    }
+
+    .nexo-current-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 0.25rem;
+    }
+
+    .nexo-current-empresa {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .nexo-current-sucursal {
+        font-size: 1rem;
+        color: var(--nexo-accent, #00D4AA);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* ===== Section Title ===== */
+    .nexo-section-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--nexo-text-primary, #1A1A2E);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .nexo-section-title i {
+        color: var(--nexo-primary, #0066FF);
+    }
+
+    /* ===== Sucursal Cards Grid ===== */
+    .nexo-sucursal-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.25rem;
+    }
+
+    .nexo-sucursal-card {
+        background: var(--nexo-white, #FFFFFF);
+        border-radius: var(--nexo-radius-lg, 12px);
+        border: 2px solid transparent;
+        box-shadow: var(--nexo-shadow-sm, 0 1px 2px rgba(26, 26, 46, 0.05));
+        transition: all var(--nexo-transition-normal, 250ms ease);
+        cursor: pointer;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .nexo-sucursal-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--nexo-shadow-lg, 0 10px 15px rgba(26, 26, 46, 0.1));
+        border-color: var(--nexo-primary-light, #E6F0FF);
+    }
+
+    .nexo-sucursal-card.is-current {
+        border-color: var(--nexo-accent, #00D4AA);
+        background: linear-gradient(to bottom, rgba(0, 212, 170, 0.05) 0%, var(--nexo-white, #FFFFFF) 100%);
+    }
+
+    .nexo-sucursal-card.is-current:hover {
+        transform: none;
+        cursor: default;
+    }
+
+    .nexo-card-header {
+        background: var(--nexo-bg-secondary, #F5F5F7);
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--nexo-gray-300, #D1D1D9);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .nexo-empresa-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--nexo-text-secondary, #4A4A5A);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .nexo-empresa-badge i {
+        color: var(--nexo-primary, #0066FF);
+    }
+
+    .nexo-current-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        background: var(--nexo-accent, #00D4AA);
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 0.25rem 0.625rem;
+        border-radius: var(--nexo-radius-full, 9999px);
+        text-transform: uppercase;
+    }
+
+    .nexo-card-body {
+        padding: 1.25rem;
+    }
+
+    .nexo-sucursal-name {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: var(--nexo-text-primary, #1A1A2E);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .nexo-sucursal-name i {
+        color: var(--nexo-accent, #00D4AA);
+    }
+
+    .nexo-sucursal-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .nexo-info-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: var(--nexo-text-secondary, #4A4A5A);
+    }
+
+    .nexo-info-item i {
+        color: var(--nexo-gray-500, #8A8A9A);
+        width: 18px;
+        text-align: center;
+    }
+
+    .nexo-card-action {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .nexo-btn-select {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        border-radius: var(--nexo-radius-md, 8px);
+        border: none;
+        cursor: pointer;
+        transition: all var(--nexo-transition-fast, 150ms ease);
+    }
+
+    .nexo-btn-select.btn-primary {
+        background: var(--nexo-primary, #0066FF);
+        color: white;
+    }
+
+    .nexo-btn-select.btn-primary:hover {
+        background: var(--nexo-primary-dark, #0052CC);
+        box-shadow: 0 4px 15px rgba(0, 102, 255, 0.35);
+    }
+
+    .nexo-btn-select.btn-selected {
+        background: var(--nexo-success-light, rgba(0, 212, 170, 0.1));
+        color: var(--nexo-accent, #00D4AA);
+        cursor: default;
+    }
+
+    /* ===== Permission Alert ===== */
+    .nexo-permission-alert {
+        background: linear-gradient(135deg, rgba(255, 176, 32, 0.1) 0%, rgba(255, 176, 32, 0.05) 100%);
+        border: 1px solid rgba(255, 176, 32, 0.3);
+        border-left: 4px solid var(--nexo-warning, #FFB020);
+        border-radius: var(--nexo-radius-lg, 12px);
+        padding: 1rem 1.25rem;
+        color: var(--nexo-text-primary, #1A1A2E);
+    }
+
+    .nexo-permission-alert .nexo-alert-icon {
+        width: 40px;
+        height: 40px;
+        background: rgba(255, 176, 32, 0.2);
+        border-radius: var(--nexo-radius-md, 8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        color: var(--nexo-warning, #FFB020);
+        flex-shrink: 0;
+    }
+
+    .nexo-permission-alert p {
+        font-size: 0.875rem;
+        color: var(--nexo-text-secondary, #4A4A5A);
+        margin-top: 0.25rem;
+    }
+
+    /* ===== Readonly Card State ===== */
+    .nexo-sucursal-card.readonly {
+        cursor: default;
+        opacity: 0.85;
+    }
+
+    .nexo-sucursal-card.readonly:hover {
+        transform: none;
+        box-shadow: var(--nexo-shadow-sm, 0 1px 2px rgba(26, 26, 46, 0.05));
+        border-color: transparent;
+    }
+
+    .nexo-sucursal-card.readonly.is-current {
+        opacity: 1;
+    }
+
+    .nexo-btn-select.btn-disabled {
+        background: var(--nexo-gray-100, #F5F5F7);
+        color: var(--nexo-gray-500, #8A8A9A);
+        cursor: not-allowed;
+    }
+
+    /* ===== Empty State ===== */
+    .nexo-empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: var(--nexo-white, #FFFFFF);
+        border-radius: var(--nexo-radius-xl, 16px);
+        box-shadow: var(--nexo-shadow-sm);
+    }
+
+    .nexo-empty-icon {
+        width: 96px;
+        height: 96px;
+        background: var(--nexo-warning-light, rgba(255, 176, 32, 0.1));
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 2.5rem;
+        color: var(--nexo-warning, #FFB020);
+    }
+
+    .nexo-empty-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--nexo-text-primary, #1A1A2E);
+        margin-bottom: 0.5rem;
+    }
+
+    .nexo-empty-text {
+        color: var(--nexo-text-muted, #8A8A9A);
+    }
+
+    /* ===== Quick Stats ===== */
+    .nexo-quick-stats {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .nexo-stat-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: var(--nexo-radius-full, 9999px);
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .nexo-stat-badge.empresas {
+        background: var(--nexo-primary-light, #E6F0FF);
+        color: var(--nexo-primary, #0066FF);
+    }
+
+    .nexo-stat-badge.sucursales {
+        background: var(--nexo-success-light, rgba(0, 212, 170, 0.1));
+        color: var(--nexo-accent, #00D4AA);
+    }
+
+    /* ===== Loading Modal ===== */
+    .nexo-loading-modal .modal-content {
+        border: none;
+        border-radius: var(--nexo-radius-lg, 12px);
+        box-shadow: var(--nexo-shadow-xl);
+    }
+
+    .nexo-loading-spinner {
+        width: 48px;
+        height: 48px;
+        border: 3px solid var(--nexo-gray-300, #D1D1D9);
+        border-top-color: var(--nexo-primary, #0066FF);
+        border-radius: 50%;
+        animation: nexo-spin 0.8s linear infinite;
+    }
+
+    @keyframes nexo-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ===== Responsive - Tablet ===== */
+    @media (max-width: 992px) {
+        .nexo-sucursal-grid {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+    }
+
+    /* ===== Responsive - Mobile ===== */
+    @media (max-width: 768px) {
+        .nexo-cambiar-empresa {
+            padding: 0 !important;
+            min-height: calc(100vh - 120px);
+        }
+
+        .nexo-current-selection {
+            padding: 1.25rem;
+            border-radius: var(--nexo-radius-lg, 12px);
+            margin: 0 -0.5rem;
+        }
+
+        .nexo-current-icon {
+            width: 48px;
+            height: 48px;
+            font-size: 1.25rem;
+        }
+
+        .nexo-current-label {
+            font-size: 0.7rem;
+        }
+        
+        .nexo-current-empresa {
+            font-size: 1.125rem;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .nexo-current-sucursal {
+            font-size: 0.9rem;
+        }
+
+        .nexo-section-title {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .nexo-sucursal-grid {
+            grid-template-columns: 1fr;
+            gap: 0.875rem;
+        }
+
+        .nexo-sucursal-card {
+            border-radius: var(--nexo-radius-md, 8px);
+        }
+
+        .nexo-card-header {
+            padding: 0.75rem 1rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .nexo-empresa-badge {
+            font-size: 0.7rem;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .nexo-card-body {
+            padding: 1rem;
+        }
+
+        .nexo-sucursal-name {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .nexo-sucursal-info {
+            gap: 0.375rem;
+            margin-bottom: 0.875rem;
+        }
+
+        .nexo-info-item {
+            font-size: 0.8rem;
+        }
+
+        .nexo-info-item span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Botones más grandes para touch */
+        .nexo-btn-select {
+            padding: 0.875rem 1rem;
+            font-size: 0.9rem;
+            min-height: 48px; /* Mínimo para touch targets */
+        }
+
+        .nexo-quick-stats {
+            justify-content: flex-start;
+            width: 100%;
+            gap: 0.5rem;
+        }
+
+        .nexo-stat-badge {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        .nexo-empty-state {
+            padding: 2.5rem 1.5rem;
+            margin: 0 -0.5rem;
+            border-radius: var(--nexo-radius-lg, 12px);
+        }
+
+        .nexo-empty-icon {
+            width: 72px;
+            height: 72px;
+            font-size: 2rem;
+        }
+
+        .nexo-empty-title {
+            font-size: 1.1rem;
+        }
+
+        .nexo-empty-text {
+            font-size: 0.9rem;
+        }
+
+        /* Header page */
+        .nexo-cambiar-empresa > .row:first-child h4 {
+            font-size: 1.125rem !important;
+        }
+
+        .nexo-cambiar-empresa > .row:first-child p {
+            font-size: 0.85rem !important;
+        }
+    }
+
+    /* ===== Responsive - Small Mobile ===== */
+    @media (max-width: 480px) {
+        .nexo-current-selection {
+            padding: 1rem;
+        }
+
+        .nexo-current-selection .d-flex {
+            gap: 0.75rem !important;
+        }
+
+        .nexo-current-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 1.125rem;
+            border-radius: 8px;
+        }
+
+        .nexo-current-empresa {
+            font-size: 1rem;
+        }
+
+        .nexo-current-sucursal {
+            font-size: 0.85rem;
+        }
+
+        .nexo-sucursal-card {
+            margin: 0 -0.25rem;
+        }
+
+        .nexo-empresa-badge {
+            font-size: 0.65rem;
+        }
+
+        .nexo-sucursal-name {
+            font-size: 0.95rem;
+        }
+
+        .nexo-stat-badge {
+            flex: 1;
+            justify-content: center;
+            padding: 0.5rem;
+        }
+    }
+
+    /* ===== Touch Device Optimizations ===== */
+    @media (hover: none) and (pointer: coarse) {
+        /* Desactivar hover effects en dispositivos táctiles */
+        .nexo-sucursal-card:hover {
+            transform: none;
+            box-shadow: var(--nexo-shadow-sm, 0 1px 2px rgba(26, 26, 46, 0.05));
+            border-color: transparent;
+        }
+
+        .nexo-sucursal-card.is-current:hover {
+            border-color: var(--nexo-accent, #00D4AA);
+        }
+
+        .nexo-sucursal-card:not(.is-current):active {
+            transform: scale(0.98);
+            background: var(--nexo-bg-secondary, #F5F5F7);
+        }
+
+        .nexo-btn-select.btn-primary:hover {
+            box-shadow: none;
+        }
+
+        .nexo-btn-select.btn-primary:active {
+            transform: scale(0.96);
+        }
+    }
+
+    /* ===== Ripple Effect (Solo desktop) ===== */
+    @media (hover: hover) and (pointer: fine) {
+        .nexo-sucursal-card:not(.is-current)::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(0, 102, 255, 0.1) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .nexo-sucursal-card:not(.is-current):hover::after {
+            opacity: 1;
+        }
+    }
+
+    /* ===== Safe Area (notch/home indicator) ===== */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+        .nexo-cambiar-empresa {
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+        }
+    }
+
+    /* ===== Pull-to-refresh space ===== */
+    .nexo-cambiar-empresa {
+        overscroll-behavior-y: contain;
+    }
+
+    /* ===== SweetAlert Mobile Optimization ===== */
+    @media (max-width: 768px) {
+        .swal2-popup.swal-mobile-popup {
+            width: calc(100% - 2rem) !important;
+            max-width: 320px !important;
+            padding: 1.25rem !important;
+            border-radius: 16px !important;
+            font-size: 0.9rem !important;
+        }
+
+        .swal2-popup.swal-mobile-popup .swal2-title {
+            font-size: 1.1rem !important;
+            padding: 0 !important;
+            margin-bottom: 0.75rem !important;
+        }
+
+        .swal2-popup.swal-mobile-popup .swal2-html-container {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .swal2-popup.swal-mobile-popup .swal2-icon {
+            width: 50px !important;
+            height: 50px !important;
+            margin: 0 auto 0.75rem !important;
+        }
+
+        .swal2-popup.swal-mobile-popup .swal2-actions {
+            margin-top: 1rem !important;
+            gap: 0.5rem !important;
+        }
+
+        .swal-mobile-btn {
+            min-height: 44px !important;
+            padding: 0.625rem 1.25rem !important;
+            font-size: 0.9rem !important;
+            border-radius: 10px !important;
+        }
+
+        /* Loading state móvil */
+        .swal2-popup .swal2-loader {
+            border-width: 3px !important;
+        }
+    }
+
+    /* ===== Loading Overlay for Mobile ===== */
+    .nexo-mobile-loading {
+        position: fixed;
+        inset: 0;
+        background: rgba(26, 26, 46, 0.8);
+        backdrop-filter: blur(4px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        gap: 1rem;
+    }
+
+    .nexo-mobile-loading-text {
+        color: white;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+</style>
+
 <div class="main-content">
     <div class="page-content">
-        <div class="container-fluid">
+        <div class="container-fluid nexo-cambiar-empresa">
 
-            <!-- start page title -->
-            <div class="row">
+            <!-- Page Header -->
+            <div class="row mb-4">
                 <div class="col-12">
-                    <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
                         <div>
-                            <h4 class="mb-sm-0">Centros de Trabajo</h4>
-                            <p class="text-muted mb-0">Selecciona la empresa y sucursal con la que quieres trabajar.</p>
+                            <h4 class="mb-1" style="color: var(--nexo-text-primary); font-weight: 700;">
+                                <i class="ri-building-4-line me-2" style="color: var(--nexo-primary);"></i>
+                                Centro de Trabajo
+                            </h4>
+                            <p class="mb-0" style="color: var(--nexo-text-muted);">
+                                {% if puede_cambiar_sucursal %}
+                                Selecciona la empresa y sucursal donde quieres trabajar
+                                {% else %}
+                                Visualiza tu centro de trabajo asignado
+                                {% endif %}
+                            </p>
                         </div>
-                        <div class="page-title-right text-end">
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="badge bg-primary-subtle text-primary">Empresas: {{ total_empresas }}</span>
-                                <span class="badge bg-success-subtle text-success">Sucursales: {{ total_sucursales }}</span>
-                                <button class="btn btn-soft-primary" data-bs-toggle="modal" data-bs-target="#modalCambioEmpresa">
-                                    <i class="ri-exchange-line me-1"></i>Cambiar
-                                </button>
+                        <div class="nexo-quick-stats">
+                            {% if not puede_cambiar_sucursal %}
+                            <span class="nexo-stat-badge" style="background: rgba(255, 176, 32, 0.15); color: #996B00;">
+                                <i class="ri-lock-line"></i>
+                                Solo lectura
+                            </span>
+                            {% endif %}
+                            <span class="nexo-stat-badge empresas">
+                                <i class="ri-building-2-line"></i>
+                                {{ total_empresas }} Empresa{% if total_empresas != 1 %}s{% endif %}
+                            </span>
+                            <span class="nexo-stat-badge sucursales">
+                                <i class="ri-store-2-line"></i>
+                                {{ total_sucursales }} Sucursal{% if total_sucursales != 1 %}es{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            {% if not puede_cambiar_sucursal %}
+            <!-- Alerta de permisos -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="nexo-permission-alert">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="nexo-alert-icon">
+                                <i class="ri-information-line"></i>
+                            </div>
+                            <div>
+                                <strong>Acceso restringido</strong>
+                                <p class="mb-0">Solo los usuarios con rol <strong>Administrador</strong> pueden cambiar de sucursal. Tu rol actual es: <strong>{{ rol_usuario|default:"vendedor"|title }}</strong></p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- end page title -->
+            {% endif %}
 
-            <div class="row g-4">
+            <!-- Current Selection Banner -->
+            <div class="row mb-4">
                 <div class="col-12">
-                    <div class="card shadow-sm border-0">
-                        <div class="card-body">
-                            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="avatar-sm flex-shrink-0">
-                                        <span class="avatar-title bg-primary-subtle text-primary rounded">
-                                            <i class="ri-building-4-line fs-4"></i>
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <small class="text-uppercase text-muted">Configuración actual</small>
-                                        <h5 class="mb-1">{{ request.session.nombreEmpresaActual|default:"Sin empresa" }}</h5>
-                                        <p class="text-muted mb-0">
-                                            <i class="ri-map-pin-2-line me-1 text-primary"></i>
-                                            {{ request.session.alias|default:"Sin sucursal" }}
-                                        </p>
-                                    </div>
+                    <div class="nexo-current-selection">
+                        <div class="d-flex align-items-center gap-4 flex-wrap">
+                            <div class="nexo-current-icon">
+                                <i class="ri-map-pin-user-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="nexo-current-label">Trabajando actualmente en</div>
+                                <div class="nexo-current-empresa">
+                                    {{ request.session.nombreEmpresaActual|default:"Sin empresa seleccionada" }}
                                 </div>
-                                <div class="text-md-end">
-                                    <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#modalCambioEmpresa">
-                                        <i class="ri-refresh-line me-1"></i>Seleccionar otro centro
-                                    </button>
+                                <div class="nexo-current-sucursal">
+                                    <i class="ri-store-3-line"></i>
+                                    {{ request.session.alias|default:"Sin sucursal" }}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {% if empresas_data %}
+            {% if empresas_data %}
+            <!-- Available Locations -->
+            <div class="row">
                 <div class="col-12">
-                    <div class="row g-4">
+                    <div class="nexo-section-title">
+                        <i class="ri-grid-fill"></i>
+                        Sucursales Disponibles
+                    </div>
+                    
+                    <div class="nexo-sucursal-grid">
                         {% for empresa_id, data in empresas_data.items %}
-                        <div class="col-xl-4 col-lg-6">
-                            <div class="card card-hover border-0 shadow-sm h-100 {% if data.is_current %}border-success border-2{% endif %}">
-                                <div class="card-header border-0 bg-primary-subtle text-primary">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <span class="badge bg-primary text-white mb-2">Empresa</span>
-                                            <h5 class="mb-0">
-                                                <i class="ri-building-2-line me-1"></i>{{ data.empresa.nombre }}
-                                            </h5>
-                                            <small class="text-muted">RUT: {{ data.empresa.rut }}</small>
+                            {% for sucursal_data in data.sucursales %}
+                            <div class="nexo-sucursal-card {% if sucursal_data.is_current %}is-current{% endif %}{% if not puede_cambiar_sucursal %} readonly{% endif %}"
+                                 {% if not sucursal_data.is_current and puede_cambiar_sucursal %}
+                                 data-empresa-user-id="{{ sucursal_data.empresa_user.id }}"
+                                 data-empresa-nombre="{{ data.empresa.nombre }}"
+                                 data-sucursal-alias="{{ sucursal_data.sucursal.alias }}"
+                                 onclick="cambiarSucursal(this)"
+                                 {% endif %}>
+                                
+                                <div class="nexo-card-header">
+                                    <span class="nexo-empresa-badge">
+                                        <i class="ri-building-2-fill"></i>
+                                        {{ data.empresa.nombre }}
+                                    </span>
+                                    {% if sucursal_data.is_current %}
+                                    <span class="nexo-current-badge">
+                                        <i class="ri-check-line"></i> Actual
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="nexo-card-body">
+                                    <div class="nexo-sucursal-name">
+                                        <i class="ri-store-3-fill"></i>
+                                        {{ sucursal_data.sucursal.alias }}
+                                    </div>
+                                    
+                                    <div class="nexo-sucursal-info">
+                                        {% if sucursal_data.sucursal.direccion %}
+                                        <div class="nexo-info-item">
+                                            <i class="ri-map-pin-line"></i>
+                                            <span>{{ sucursal_data.sucursal.direccion }}</span>
                                         </div>
-                                        {% if data.is_current %}
-                                            <span class="badge bg-success"><i class="ri-check-fill me-1"></i>Actual</span>
+                                        {% endif %}
+                                        {% if sucursal_data.sucursal.telefono %}
+                                        <div class="nexo-info-item">
+                                            <i class="ri-phone-line"></i>
+                                            <span>{{ sucursal_data.sucursal.telefono }}</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if not sucursal_data.sucursal.direccion and not sucursal_data.sucursal.telefono %}
+                                        <div class="nexo-info-item">
+                                            <i class="ri-information-line"></i>
+                                            <span style="color: var(--nexo-text-muted);">Sin información adicional</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <div class="nexo-card-action">
+                                        {% if sucursal_data.is_current %}
+                                        <button class="nexo-btn-select btn-selected" disabled>
+                                            <i class="ri-checkbox-circle-fill"></i>
+                                            Seleccionado
+                                        </button>
+                                        {% elif puede_cambiar_sucursal %}
+                                        <button class="nexo-btn-select btn-primary">
+                                            <i class="ri-exchange-line"></i>
+                                            Cambiar aquí
+                                        </button>
+                                        {% else %}
+                                        <button class="nexo-btn-select btn-disabled" disabled>
+                                            <i class="ri-lock-2-line"></i>
+                                            Sin acceso
+                                        </button>
                                         {% endif %}
                                     </div>
                                 </div>
-                                <div class="card-body">
-                                    <h6 class="text-muted text-uppercase mb-3">Sucursales asignadas</h6>
-                                    <div class="list-group list-group-flush">
-                                        {% for sucursal_data in data.sucursales %}
-                                        <div class="list-group-item px-0 pb-3">
-                                            <div class="d-flex justify-content-between align-items-start gap-2">
-                                                <div>
-                                                    <h6 class="mb-1 d-flex align-items-center gap-2">
-                                                        <i class="ri-store-2-line text-primary"></i>{{ sucursal_data.sucursal.alias }}
-                                                        {% if sucursal_data.is_current %}
-                                                            <span class="badge bg-success-subtle text-success">Actual</span>
-                                                        {% endif %}
-                                                    </h6>
-                                                    {% if sucursal_data.sucursal.direccion %}
-                                                        <p class="text-muted small mb-1">
-                                                            <i class="ri-map-pin-fill text-warning align-middle me-1"></i>{{ sucursal_data.sucursal.direccion }}
-                                                        </p>
-                                                    {% endif %}
-                                                    {% if sucursal_data.sucursal.telefono %}
-                                                        <p class="text-muted small mb-0">
-                                                            <i class="ri-phone-line text-info align-middle me-1"></i>{{ sucursal_data.sucursal.telefono }}
-                                                        </p>
-                                                    {% endif %}
-                                                </div>
-                                                <div class="text-nowrap">
-                                                    {% if sucursal_data.is_current %}
-                                                        <button class="btn btn-sm btn-soft-success" disabled>
-                                                            <i class="ri-check-line me-1"></i>Seleccionado
-                                                        </button>
-                                                    {% else %}
-                                                        <button type="button"
-                                                                class="btn btn-sm btn-outline-primary btn-cambiar"
-                                                                data-empresa-user-id="{{ sucursal_data.empresa_user.id }}"
-                                                                data-empresa-nombre="{{ data.empresa.nombre }}"
-                                                                data-sucursal-alias="{{ sucursal_data.sucursal.alias }}">
-                                                            <i class="ri-exchange-fill me-1"></i>Usar
-                                                        </button>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                </div>
                             </div>
-                        </div>
+                            {% endfor %}
                         {% endfor %}
                     </div>
                 </div>
-                {% else %}
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="row">
                 <div class="col-12">
-                    <div class="card border-0 shadow-sm text-center py-5">
-                        <div class="card-body">
-                            <div class="avatar-lg mx-auto mb-4">
-                                <span class="avatar-title bg-warning-subtle text-warning rounded-circle fs-1">
-                                    <i class="ri-building-line"></i>
-                                </span>
-                            </div>
-                            <h5 class="text-muted">No tienes empresas con sucursales asignadas</h5>
-                            <p class="text-muted mb-0">Contacta al administrador para solicitar acceso.</p>
+                    <div class="nexo-empty-state">
+                        <div class="nexo-empty-icon">
+                            <i class="ri-building-line"></i>
                         </div>
+                        <h5 class="nexo-empty-title">No tienes sucursales asignadas</h5>
+                        <p class="nexo-empty-text">
+                            Contacta al administrador del sistema para solicitar acceso a una empresa y sucursal.
+                        </p>
                     </div>
                 </div>
-                {% endif %}
             </div>
+            {% endif %}
 
         </div>
         <!-- container-fluid -->
@@ -152,180 +856,204 @@
 </div>
 
 <!-- Loading Modal -->
-<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade nexo-loading-modal" id="loadingModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-body text-center py-4">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2 mb-0">Cambiando empresa/sucursal...</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de selección -->
-<div class="modal fade" id="modalCambioEmpresa" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="ri-building-3-line me-1 text-primary"></i>Elegir empresa y sucursal</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                {% if empresas_data %}
-                <div class="accordion" id="accordionEmpresas">
-                    {% for empresa_id, data in empresas_data.items %}
-                    <div class="accordion-item">
-                        <h2 class="accordion-header" id="heading{{ forloop.counter }}">
-                            <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ forloop.counter }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="collapse{{ forloop.counter }}">
-                                <div class="d-flex flex-column">
-                                    <span class="fw-semibold">{{ data.empresa.nombre }}</span>
-                                    <small class="text-muted">RUT: {{ data.empresa.rut }} · {{ data.sucursales|length }} sucursal(es)</small>
-                                </div>
-                            </button>
-                        </h2>
-                        <div id="collapse{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="heading{{ forloop.counter }}" data-bs-parent="#accordionEmpresas">
-                            <div class="accordion-body">
-                                <div class="row g-3">
-                                    {% for sucursal_data in data.sucursales %}
-                                    <div class="col-md-6">
-                                        <div class="border rounded p-3 h-100">
-                                            <div class="d-flex justify-content-between align-items-start">
-                                                <div>
-                                                    <h6 class="mb-1">{{ sucursal_data.sucursal.alias }}</h6>
-                                                    {% if sucursal_data.sucursal.direccion %}
-                                                    <p class="text-muted small mb-1">
-                                                        <i class="ri-map-pin-line text-warning me-1"></i>{{ sucursal_data.sucursal.direccion }}
-                                                    </p>
-                                                    {% endif %}
-                                                    {% if sucursal_data.sucursal.telefono %}
-                                                    <p class="text-muted small mb-0">
-                                                        <i class="ri-phone-line text-info me-1"></i>{{ sucursal_data.sucursal.telefono }}
-                                                    </p>
-                                                    {% endif %}
-                                                </div>
-                                                {% if sucursal_data.is_current %}
-                                                    <span class="badge bg-success-subtle text-success">
-                                                        <i class="ri-check-line me-1"></i>Actual
-                                                    </span>
-                                                {% endif %}
-                                            </div>
-                                            <div class="mt-3 d-grid">
-                                                {% if sucursal_data.is_current %}
-                                                <button class="btn btn-soft-success" disabled>
-                                                    <i class="ri-checkbox-circle-line me-1"></i>Seleccionado
-                                                </button>
-                                                {% else %}
-                                                <button type="button" class="btn btn-primary btn-cambiar"
-                                                        data-empresa-user-id="{{ sucursal_data.empresa_user.id }}"
-                                                        data-empresa-nombre="{{ data.empresa.nombre }}"
-                                                        data-sucursal-alias="{{ sucursal_data.sucursal.alias }}">
-                                                    <i class="ri-exchange-line me-1"></i> Cambiar a esta sucursal
-                                                </button>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="ri-building-line text-muted" style="font-size: 3rem;"></i>
-                    <h6 class="mt-3">No hay empresas disponibles</h6>
-                    <p class="text-muted mb-0">Solicita acceso al administrador.</p>
-                </div>
-                {% endif %}
-            </div>
-            <div class="modal-footer justify-content-between">
-                <div class="text-muted small">
-                    Seleccionar una sucursal actualizará tu sesión automáticamente.
-                </div>
-                <button type="button" class="btn btn-link text-muted" data-bs-dismiss="modal">Cerrar</button>
+                <div class="nexo-loading-spinner mx-auto mb-3"></div>
+                <p class="mb-0" style="color: var(--nexo-text-secondary); font-weight: 500;">
+                    Cambiando sucursal...
+                </p>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-$(document).ready(function() {
-    const modalCambioEl = document.getElementById('modalCambioEmpresa');
-    const modalCambio = (typeof bootstrap !== 'undefined' && modalCambioEl)
-        ? new bootstrap.Modal(modalCambioEl)
-        : null;
+// Detectar si es dispositivo móvil
+const isMobile = window.matchMedia('(max-width: 768px)').matches || 
+                 ('ontouchstart' in window) || 
+                 (navigator.maxTouchPoints > 0);
 
-    {% if abrir_modal %}
-        if (modalCambio) {
-            modalCambio.show();
-        }
-    {% endif %}
-
-    // Manejar click en botones de cambiar
-    $('.btn-cambiar').on('click', function() {
-        const empresaUserId = $(this).data('empresa-user-id');
-        const empresaNombre = $(this).data('empresa-nombre');
-        const sucursalAlias = $(this).data('sucursal-alias');
-        
-        // Mostrar modal de loading
-        $('#loadingModal').modal('show');
-        $('.btn-cambiar').prop('disabled', true);
-        
-        // Realizar petición AJAX
-        $.ajax({
-            url: '{% url "seleccionar_empresa_sucursal" %}',
-            type: 'POST',
-            data: {
-                'empresa_user_id': empresaUserId,
-                'csrfmiddlewaretoken': '{{ csrf_token }}'
-            },
-            success: function(response) {
-                $('#loadingModal').modal('hide');
-                
-                if (response.success) {
-                    // Mostrar mensaje de éxito
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Cambio exitoso!',
-                        text: response.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                    if (modalCambio) {
-                        modalCambio.hide();
-                    }
-                    setTimeout(function() {
-                        window.location.reload();
-                    }, 1200);
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: response.error || 'Error al cambiar empresa/sucursal'
-                    });
-                }
-            },
-            error: function(xhr, status, error) {
-                $('#loadingModal').modal('hide');
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error de conexión',
-                    text: 'No se pudo conectar con el servidor. Inténtalo de nuevo.'
-                });
-                $('.btn-cambiar').prop('disabled', false);
-            }
+// Track mouse position for ripple effect (solo desktop)
+if (!isMobile) {
+    document.querySelectorAll('.nexo-sucursal-card:not(.is-current)').forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            card.style.setProperty('--mouse-x', `${x}%`);
+            card.style.setProperty('--mouse-y', `${y}%`);
         });
     });
-    
-    if (modalCambioEl) {
-        modalCambioEl.addEventListener('hidden.bs.modal', function() {
-            $('.btn-cambiar').prop('disabled', false);
-        });
+}
+
+// Haptic feedback para móviles (si está disponible)
+function vibrate(duration = 10) {
+    if (navigator.vibrate) {
+        navigator.vibrate(duration);
     }
+}
+
+function cambiarSucursal(card) {
+    const empresaUserId = card.dataset.empresaUserId;
+    const empresaNombre = card.dataset.empresaNombre;
+    const sucursalAlias = card.dataset.sucursalAlias;
+    
+    vibrate(10);
+    
+    // Configuración responsiva para SweetAlert
+    const swalConfig = {
+        title: isMobile ? 'Cambiar sucursal' : '¿Cambiar de sucursal?',
+        html: isMobile 
+            ? `<div style="text-align: center; padding: 0.5rem 0;">
+                <div style="background: #F5F5F7; padding: 0.875rem; border-radius: 10px;">
+                    <div style="font-size: 0.8rem; color: #8A8A9A; margin-bottom: 0.25rem;">${empresaNombre}</div>
+                    <div style="font-weight: 700; color: #1A1A2E; font-size: 1.1rem;">
+                        <i class="ri-store-3-fill" style="color: #00D4AA;"></i> ${sucursalAlias}
+                    </div>
+                </div>
+               </div>`
+            : `<div style="text-align: left; padding: 1rem 0;">
+                <p style="margin-bottom: 0.5rem; color: #4A4A5A;">Vas a cambiar a:</p>
+                <div style="background: #F5F5F7; padding: 1rem; border-radius: 8px; margin-top: 0.5rem;">
+                    <div style="font-weight: 600; color: #1A1A2E; margin-bottom: 0.25rem;">
+                        <i class="ri-building-2-line" style="color: #0066FF;"></i> ${empresaNombre}
+                    </div>
+                    <div style="color: #00D4AA;">
+                        <i class="ri-store-3-line"></i> ${sucursalAlias}
+                    </div>
+                </div>
+               </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0066FF',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: isMobile ? 'Cambiar' : '<i class="ri-check-line me-1"></i> Sí, cambiar',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+        // Optimizaciones móviles
+        heightAuto: !isMobile,
+        scrollbarPadding: !isMobile,
+        customClass: {
+            popup: isMobile ? 'swal-mobile-popup' : '',
+            confirmButton: isMobile ? 'swal-mobile-btn' : '',
+            cancelButton: isMobile ? 'swal-mobile-btn' : ''
+        }
+    };
+    
+    Swal.fire(swalConfig).then((result) => {
+        if (result.isConfirmed) {
+            vibrate(15);
+            realizarCambio(empresaUserId, empresaNombre, sucursalAlias);
+        }
+    });
+}
+
+function realizarCambio(empresaUserId, empresaNombre, sucursalAlias) {
+    // Mostrar loading según dispositivo
+    if (isMobile) {
+        // Loading overlay para móvil (más visible)
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.id = 'mobileLoadingOverlay';
+        loadingOverlay.className = 'nexo-mobile-loading';
+        loadingOverlay.innerHTML = `
+            <div class="nexo-loading-spinner"></div>
+            <div class="nexo-mobile-loading-text">Cambiando a ${sucursalAlias}...</div>
+        `;
+        document.body.appendChild(loadingOverlay);
+    } else {
+        $('#loadingModal').modal('show');
+    }
+    
+    // Disable all cards
+    document.querySelectorAll('.nexo-sucursal-card:not(.is-current)').forEach(c => {
+        c.style.pointerEvents = 'none';
+        c.style.opacity = '0.6';
+    });
+    
+    // Make AJAX request
+    $.ajax({
+        url: '{% url "seleccionar_empresa_sucursal" %}',
+        type: 'POST',
+        data: {
+            'empresa_user_id': empresaUserId,
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        },
+        success: function(response) {
+            hideLoading();
+            
+            if (response.success) {
+                vibrate(20);
+                Swal.fire({
+                    icon: 'success',
+                    title: isMobile ? '¡Listo!' : '¡Cambio exitoso!',
+                    html: isMobile 
+                        ? `<div style="font-size: 0.95rem; color: #00D4AA; font-weight: 600;">${sucursalAlias}</div>`
+                        : `<div style="color: #4A4A5A;">
+                            Ahora estás trabajando en<br>
+                            <strong style="color: #00D4AA;">${sucursalAlias}</strong>
+                           </div>`,
+                    timer: isMobile ? 1500 : 2000,
+                    timerProgressBar: true,
+                    showConfirmButton: false,
+                    customClass: {
+                        popup: isMobile ? 'swal-mobile-popup' : ''
+                    }
+                }).then(() => {
+                    window.location.reload();
+                });
+            } else {
+                resetCards();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: response.error || 'No se pudo cambiar de sucursal',
+                    confirmButtonColor: '#0066FF',
+                    customClass: {
+                        popup: isMobile ? 'swal-mobile-popup' : '',
+                        confirmButton: isMobile ? 'swal-mobile-btn' : ''
+                    }
+                });
+            }
+        },
+        error: function() {
+            hideLoading();
+            resetCards();
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: isMobile ? 'Sin conexión. Intenta de nuevo.' : 'No se pudo conectar con el servidor. Inténtalo de nuevo.',
+                confirmButtonColor: '#0066FF',
+                customClass: {
+                    popup: isMobile ? 'swal-mobile-popup' : '',
+                    confirmButton: isMobile ? 'swal-mobile-btn' : ''
+                }
+            });
+        }
+    });
+}
+
+function hideLoading() {
+    const mobileOverlay = document.getElementById('mobileLoadingOverlay');
+    if (mobileOverlay) {
+        mobileOverlay.remove();
+    }
+    $('#loadingModal').modal('hide');
+}
+
+function resetCards() {
+    document.querySelectorAll('.nexo-sucursal-card:not(.is-current)').forEach(c => {
+        c.style.pointerEvents = '';
+        c.style.opacity = '';
+    });
+}
+
+// Open modal on page load if requested
+{% if abrir_modal %}
+$(document).ready(function() {
+    // Auto-focus on cards area
+    document.querySelector('.nexo-sucursal-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
+{% endif %}
 </script>

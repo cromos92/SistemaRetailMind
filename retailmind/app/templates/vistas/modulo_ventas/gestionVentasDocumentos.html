@@ -181,15 +181,15 @@
                     <table class="table table-hover align-middle table-nowrap mb-0" id="tablaDocumentos">
                         <thead class="table-light">
                             <tr>
-                                <th scope="col">Tipo</th>
-                                <th scope="col">Número</th>
-                                <th scope="col">Fecha</th>
-                                <th scope="col">Cliente</th>
-                                <th scope="col">Vendedor</th>
+                                <th scope="col" class="sortable" data-sort="tipo_documento">Tipo <i class="ri-arrow-up-down-line sort-icon"></i></th>
+                                <th scope="col" class="sortable" data-sort="numero_documento">Número <i class="ri-arrow-up-down-line sort-icon"></i></th>
+                                <th scope="col" class="sortable" data-sort="fecha">Fecha <i class="ri-arrow-up-down-line sort-icon"></i></th>
+                                <th scope="col" class="sortable" data-sort="cliente_nombre">Cliente <i class="ri-arrow-up-down-line sort-icon"></i></th>
+                                <th scope="col" class="sortable" data-sort="vendedor_nombre">Vendedor <i class="ri-arrow-up-down-line sort-icon"></i></th>
                                 <th scope="col">Productos</th>
                                 <th scope="col">Métodos Pago</th>
-                                <th scope="col">Total</th>
-                                <th scope="col">Estado</th>
+                                <th scope="col" class="sortable" data-sort="total">Total <i class="ri-arrow-up-down-line sort-icon"></i></th>
+                                <th scope="col" class="sortable" data-sort="estado">Estado <i class="ri-arrow-up-down-line sort-icon"></i></th>
                                 <th scope="col">Acciones</th>
                             </tr>
                         </thead>
@@ -263,36 +263,277 @@
     </div>
 </div>
 
+<!-- NEXO Design System Styles -->
 <style>
-/* Estilos personalizados */
+/* ==================== NEXO DESIGN SYSTEM - Gestión Documentos Ventas ==================== */
+
+:root {
+    /* ========== COLORES PRIMARIOS NEXO ========== */
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    
+    /* ========== COLORES SECUNDARIOS NEXO ========== */
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    
+    /* ========== COLORES SEMÁNTICOS NEXO ========== */
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    
+    /* ========== NEUTRALES / GRISES NEXO ========== */
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    
+    /* ========== SOMBRAS NEXO ========== */
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+    
+    /* ========== BORDES NEXO ========== */
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-radius-full: 9999px;
+    
+    /* ========== TRANSICIONES NEXO ========== */
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
+
+/* ========== PAGE CONTENT ========== */
+.page-content {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%) !important;
+    min-height: calc(100vh - 70px);
+}
+
+/* ========== CARDS NEXO ========== */
+.card {
+    border-radius: var(--nexo-radius-lg) !important;
+    border: 1px solid var(--nexo-gray-300) !important;
+    box-shadow: var(--nexo-shadow-sm) !important;
+    overflow: hidden;
+}
+
+.card.shadow-sm {
+    box-shadow: var(--nexo-shadow-md) !important;
+}
+
+.card-header {
+    background: var(--nexo-white) !important;
+    border-bottom: 1px solid var(--nexo-gray-300) !important;
+    padding: 16px 20px !important;
+}
+
+.card-title {
+    color: var(--nexo-secondary);
+    font-weight: 600;
+}
+
+.card-title i {
+    color: var(--nexo-primary);
+}
+
+/* ========== BOTONES NEXO ========== */
+.btn-primary {
+    background: var(--nexo-primary) !important;
+    border-color: var(--nexo-primary) !important;
+    border-radius: var(--nexo-radius-md) !important;
+    transition: var(--nexo-transition-fast) !important;
+}
+
+.btn-primary:hover {
+    background: var(--nexo-primary-dark) !important;
+    border-color: var(--nexo-primary-dark) !important;
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.btn-success {
+    background: var(--nexo-success) !important;
+    border-color: var(--nexo-success) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-success:hover {
+    background: #00B38A !important;
+    border-color: #00B38A !important;
+}
+
+.btn-info {
+    background: var(--nexo-info) !important;
+    border-color: var(--nexo-info) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-info:hover {
+    background: var(--nexo-primary-dark) !important;
+    border-color: var(--nexo-primary-dark) !important;
+}
+
+.btn-secondary {
+    background: var(--nexo-gray-500) !important;
+    border-color: var(--nexo-gray-500) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-outline-secondary {
+    color: var(--nexo-gray-700) !important;
+    border-color: var(--nexo-gray-300) !important;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+.btn-outline-secondary:hover {
+    background: var(--nexo-gray-100) !important;
+    border-color: var(--nexo-gray-500) !important;
+}
+
+.btn-action {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: var(--nexo-radius-md) !important;
+}
+
+/* ========== FORMULARIOS NEXO ========== */
+.form-control,
+.form-select {
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.1);
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    font-size: 0.9rem;
+}
+
+.input-group-text {
+    background: var(--nexo-gray-100);
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    color: var(--nexo-gray-700);
+}
+
+/* ========== TABLAS NEXO ========== */
+.table {
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+}
+
 .table th {
     font-weight: 600;
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    background: linear-gradient(135deg, var(--nexo-gray-100), var(--nexo-white)) !important;
+    color: var(--nexo-secondary) !important;
+    border-bottom: 2px solid var(--nexo-gray-300) !important;
+    padding: 14px 12px;
+}
+
+.table-light th {
+    background: linear-gradient(135deg, var(--nexo-gray-100), var(--nexo-white)) !important;
+}
+
+.table-hover tbody tr:hover {
+    background-color: var(--nexo-primary-light) !important;
+}
+
+.table-dark th {
+    background: linear-gradient(135deg, var(--nexo-secondary), var(--nexo-gray-700)) !important;
+    color: var(--nexo-white) !important;
+    border-color: var(--nexo-gray-700) !important;
+}
+
+.table-success th {
+    background: linear-gradient(135deg, var(--nexo-success), #00B38A) !important;
+    color: var(--nexo-white) !important;
+    border-color: #00B38A !important;
+}
+
+.table-responsive {
+    border-radius: var(--nexo-radius-md);
+}
+
+/* ========== BADGES NEXO ========== */
+.badge {
+    border-radius: var(--nexo-radius-full);
+    padding: 6px 12px;
+    font-weight: 600;
+    font-size: 11px;
 }
 
 .badge-tipo {
     font-size: 11px;
-    padding: 4px 8px;
+    padding: 5px 10px;
 }
 
-.btn-action {
-    padding: 4px 8px;
-    font-size: 12px;
+.badge.bg-primary {
+    background-color: var(--nexo-primary) !important;
+}
+
+.badge.bg-success {
+    background-color: var(--nexo-success) !important;
+}
+
+.badge.bg-warning {
+    background-color: var(--nexo-warning) !important;
+    color: var(--nexo-secondary) !important;
+}
+
+.badge.bg-danger {
+    background-color: var(--nexo-error) !important;
+}
+
+.badge.bg-info {
+    background-color: var(--nexo-info) !important;
+}
+
+.badge.bg-secondary {
+    background-color: var(--nexo-gray-500) !important;
+}
+
+.badge.bg-light {
+    background-color: var(--nexo-gray-100) !important;
+    color: var(--nexo-secondary) !important;
+}
+
+/* ========== KPI CARDS NEXO ========== */
+.card.border-0 {
+    border: none !important;
+    box-shadow: var(--nexo-shadow-md) !important;
 }
 
 .counter-value {
     font-weight: 700;
+    color: var(--nexo-secondary);
 }
 
-.bg-soft {
-    background-color: rgba(13, 110, 253, 0.1) !important;
-}
-
+/* ========== AVATARS NEXO ========== */
 .avatar-sm {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
+}
+
+.avatar-lg {
+    width: 64px;
+    height: 64px;
 }
 
 .avatar-title {
@@ -303,24 +544,76 @@
     height: 100%;
 }
 
-.table-responsive {
-    border-radius: 0.375rem;
+.avatar-title.bg-primary {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)) !important;
 }
 
+.avatar-title.bg-success {
+    background: linear-gradient(135deg, var(--nexo-success), #00B38A) !important;
+}
+
+.avatar-title.bg-info {
+    background: linear-gradient(135deg, var(--nexo-info), var(--nexo-primary-dark)) !important;
+}
+
+/* ========== BG SOFT NEXO ========== */
+.bg-soft,
+.bg-primary.bg-soft {
+    background-color: var(--nexo-primary-light) !important;
+}
+
+.bg-success.bg-soft {
+    background-color: rgba(0, 212, 170, 0.15) !important;
+}
+
+.bg-info.bg-soft {
+    background-color: rgba(0, 102, 255, 0.15) !important;
+}
+
+/* ========== PAGINATION NEXO ========== */
 .pagination-rounded .page-link {
-    border-radius: 50px;
-    margin: 0 2px;
+    border-radius: var(--nexo-radius-full);
+    margin: 0 3px;
+    border: 2px solid var(--nexo-gray-300);
+    color: var(--nexo-primary);
+    transition: var(--nexo-transition-fast);
 }
 
-.form-check-input:checked {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
+.pagination-rounded .page-item.active .page-link {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark));
+    border-color: var(--nexo-primary);
 }
 
-/* Estilos para el modal de detalle */
-.avatar-lg {
-    width: 60px;
-    height: 60px;
+.pagination-rounded .page-link:hover {
+    background-color: var(--nexo-primary-light);
+    border-color: var(--nexo-primary);
+}
+
+/* ========== MODAL NEXO ========== */
+.modal-content {
+    border-radius: var(--nexo-radius-lg);
+    border: none;
+    box-shadow: var(--nexo-shadow-xl);
+}
+
+.modal-header {
+    background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-secondary));
+    color: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
+    border-bottom: none;
+}
+
+.modal-header .modal-title {
+    color: var(--nexo-white) !important;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.modal-footer {
+    background: var(--nexo-gray-100);
+    border-top: 1px solid var(--nexo-gray-300);
 }
 
 .modal-xl .modal-body {
@@ -328,31 +621,103 @@
     overflow-y: auto;
 }
 
-.table-dark th {
-    background-color: #212529;
-    border-color: #32383e;
+/* ========== TEXT COLORS NEXO ========== */
+.text-primary {
+    color: var(--nexo-primary) !important;
 }
 
-.table-success th {
-    background-color: #198754;
-    border-color: #146c43;
+.text-success {
+    color: var(--nexo-success) !important;
 }
 
-.badge {
-    font-size: 0.75em;
+.text-warning {
+    color: var(--nexo-warning) !important;
+}
+
+.text-danger {
+    color: var(--nexo-error) !important;
+}
+
+.text-info {
+    color: var(--nexo-info) !important;
+}
+
+.text-muted {
+    color: var(--nexo-gray-500) !important;
+}
+
+/* ========== DETAIL MODAL NEXO ========== */
+.bg-light {
+    background-color: var(--nexo-gray-100) !important;
 }
 
 .card-body h6 {
-    color: #495057;
+    color: var(--nexo-gray-700);
     font-weight: 600;
 }
 
-.text-primary {
-    color: #0d6efd !important;
+.card.border-primary {
+    border-color: var(--nexo-primary) !important;
+    border-width: 2px !important;
 }
 
-.bg-soft {
-    background-color: rgba(13, 110, 253, 0.1) !important;
+/* ========== SPINNER NEXO ========== */
+.spinner-border.text-primary {
+    color: var(--nexo-primary) !important;
+}
+
+/* ========== FORM CHECK NEXO ========== */
+.form-check-input:checked {
+    background-color: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+}
+
+.form-check-input:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.1);
+}
+
+/* ========== DATATABLE INFO NEXO ========== */
+.dataTables_info {
+    color: var(--nexo-gray-500);
+    font-size: 0.9rem;
+}
+
+/* ========== COLUMNAS ORDENABLES ========== */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.sortable:hover {
+    background-color: rgba(0, 102, 255, 0.08);
+}
+
+.sortable .sort-icon {
+    font-size: 0.75rem;
+    margin-left: 4px;
+    opacity: 0.4;
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+.sortable:hover .sort-icon {
+    opacity: 0.7;
+}
+
+.sortable.asc .sort-icon,
+.sortable.desc .sort-icon {
+    opacity: 1;
+    color: var(--nexo-primary);
+}
+
+.sortable.asc .sort-icon::before {
+    content: "\eb78"; /* ri-arrow-up-line */
+}
+
+.sortable.desc .sort-icon::before {
+    content: "\ea4e"; /* ri-arrow-down-line */
 }
 </style>
 
@@ -367,6 +732,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let totalDocumentos = 0;
     let documentoSeleccionado = null;
     let timeoutBusqueda = null;
+    
+    // Variables de ordenamiento
+    let ordenCampo = 'fecha';      // Campo por defecto
+    let ordenDireccion = 'desc';   // Dirección por defecto (más recientes primero)
 
     // URLs de API
     const apiUrls = {
@@ -379,12 +748,49 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Inicialización
     try {
-    inicializarFechas();
-    cargarDocumentos();
+        inicializarFechas();
+        inicializarOrdenamiento();
+        cargarDocumentos();
         inicializarBusquedaEnTiempoReal();
         console.log('✅ Inicialización completada correctamente');
     } catch (error) {
         console.error('❌ Error durante la inicialización:', error);
+    }
+    
+    // Inicializar ordenamiento de columnas
+    function inicializarOrdenamiento() {
+        const columnasSortables = document.querySelectorAll('.sortable');
+        
+        columnasSortables.forEach(columna => {
+            columna.addEventListener('click', function() {
+                const campo = this.getAttribute('data-sort');
+                
+                // Si es la misma columna, cambiar dirección
+                if (ordenCampo === campo) {
+                    ordenDireccion = ordenDireccion === 'asc' ? 'desc' : 'asc';
+                } else {
+                    // Nueva columna, empezar con desc
+                    ordenCampo = campo;
+                    ordenDireccion = 'desc';
+                }
+                
+                // Actualizar clases visuales
+                columnasSortables.forEach(c => {
+                    c.classList.remove('asc', 'desc');
+                });
+                this.classList.add(ordenDireccion);
+                
+                // Recargar documentos
+                paginaActual = 1;
+                cargarDocumentos();
+            });
+        });
+        
+        // Marcar columna inicial
+        const columnaInicial = document.querySelector(`.sortable[data-sort="${ordenCampo}"]`);
+        if (columnaInicial) {
+            columnaInicial.classList.add(ordenDireccion);
+        }
     }
 
     // === FUNCIONES DE INICIALIZACIÓN ===
@@ -510,7 +916,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const element = document.getElementById(id);
             return element ? element.value : '';
         };
-        
+
         return {
             fecha_desde: getElementValue('fechaDesde'),
             fecha_hasta: getElementValue('fechaHasta'),
@@ -519,7 +925,9 @@ document.addEventListener('DOMContentLoaded', function() {
             metodo_pago: getElementValue('metodoPago'),
             buscar: getElementValue('buscarTexto'),
             page: paginaActual,
-            per_page: documentosPorPagina
+            per_page: documentosPorPagina,
+            orden_campo: ordenCampo,
+            orden_direccion: ordenDireccion
         };
     }
 
@@ -909,6 +1317,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Cargar contenido del DTE
         cargarDetalleCompleto(documento);
+
+        // Obtener detalle actualizado para asegurar montos por método
+        const tipoDetalle = (documento.tipo && (documento.tipo.includes('BOLETA') || documento.tipo.includes('FACTURA')))
+            ? 'DTE'
+            : 'TICKET';
+        fetch(apiUrls.detalleDocumento(documento.id) + `?tipo=${tipoDetalle}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.documento && data.documento.pagos) {
+                    documento.metodos_pago = data.documento.pagos;
+                    cargarDetalleCompleto(documento);
+                }
+            })
+            .catch(error => {
+                console.error('Error al cargar detalle actualizado:', error);
+            });
     };
     
     function cargarDetalleCompleto(documento) {
@@ -920,6 +1344,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function generarHTMLDetalleCompleto(doc) {
+        const resumenPagos = (doc.metodos_pago || [])
+            .map(p => `${p.metodo_display || p.metodo} ${formatearMoneda(p.monto || 0)}`)
+            .join(', ');
         return `
             <!-- Encabezado del Documento -->
             <div class="bg-light border-bottom p-4">
@@ -1000,7 +1427,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </p>
                                 <p class="mb-0">
                                     <i class="ri-money-dollar-circle-line me-1"></i> 
-                                    <strong>Métodos de Pago:</strong> ${doc.metodos_pago_str || 'Sin información'}
+                                    <strong>Métodos de Pago:</strong> ${resumenPagos || doc.metodos_pago_str || 'Sin información'}
                                 </p>
                             </div>
                         </div>

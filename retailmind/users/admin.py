@@ -3,20 +3,42 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.html import format_html
 from .models import Usuario, LogAcceso
 
+# Importar EmpresaUser para el inline
+from app.models import EmpresaUser, Sucursal
+
+
+class EmpresaUserInline(admin.TabularInline):
+    """
+    ⭐ INLINE PARA ASIGNAR SUCURSALES AL USUARIO
+    Aparece directamente en el formulario de edición del usuario
+    """
+    model = EmpresaUser
+    extra = 1  # Mostrar 1 fila vacía para agregar
+    verbose_name = "Acceso a Sucursal"
+    verbose_name_plural = "⭐ Sucursales Asignadas (Agregar aquí)"
+    fields = ['empresa', 'sucursal', 'status', 'active']
+    autocomplete_fields = ['empresa', 'sucursal']
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """Filtra sucursales por empresa seleccionada"""
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
 @admin.register(Usuario)
 class UsuarioAdmin(BaseUserAdmin):
     """
     Admin personalizado para el modelo Usuario
+    ⭐ Incluye inline para asignar sucursales directamente
     """
     # Campos que se muestran en la lista
     list_display = [
-        'username', 'get_full_name', 'email', 'empresa', 'cargo',
-        'es_activo', 'is_staff', 'is_superuser', 'fecha_creacion'
+        'username', 'get_full_name', 'email', 'rol', 'get_sucursales_count',
+        'es_activo', 'is_staff', 'fecha_creacion'
     ]
     
     # Campos por los que se puede filtrar
     list_filter = [
-        'es_activo', 'is_staff', 'is_superuser', 'fecha_creacion',
+        'rol', 'es_activo', 'is_staff', 'is_superuser', 'fecha_creacion',
         'puede_crear_usuarios', 'puede_editar_usuarios', 'puede_eliminar_usuarios'
     ]
     
@@ -25,6 +47,9 @@ class UsuarioAdmin(BaseUserAdmin):
     
     # Ordenamiento por defecto
     ordering = ['username']
+    
+    # ⭐ INLINE PARA SUCURSALES
+    inlines = [EmpresaUserInline]
     
     # Configuración de fieldsets para el formulario de edición
     fieldsets = (
@@ -35,19 +60,23 @@ class UsuarioAdmin(BaseUserAdmin):
             'fields': ('rut', 'telefono', 'direccion', 'fecha_nacimiento')
         }),
         ('Información Laboral', {
-            'fields': ('empresa', 'cargo', 'departamento')
+            'fields': ('empresa', 'cargo', 'departamento', 'rol'),
+            'description': '💡 El campo "empresa" es solo texto. Las sucursales reales se asignan abajo en "Sucursales Asignadas"'
         }),
         ('Permisos de Usuario', {
-            'fields': ('puede_crear_usuarios', 'puede_editar_usuarios', 'puede_eliminar_usuarios')
+            'fields': ('puede_crear_usuarios', 'puede_editar_usuarios', 'puede_eliminar_usuarios'),
+            'classes': ('collapse',)
         }),
         ('Permisos del Sistema', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
+            'classes': ('collapse',)
         }),
         ('Estado', {
             'fields': ('es_activo', 'fecha_ultimo_acceso')
         }),
         ('Fechas Importantes', {
-            'fields': ('last_login', 'date_joined', 'fecha_creacion')
+            'fields': ('last_login', 'date_joined', 'fecha_creacion'),
+            'classes': ('collapse',)
         }),
     )
     
@@ -61,7 +90,7 @@ class UsuarioAdmin(BaseUserAdmin):
             'fields': ('username', 'email', 'password1', 'password2', 'first_name', 'last_name')
         }),
         ('Información Personal', {
-            'fields': ('rut', 'telefono', 'empresa', 'cargo')
+            'fields': ('rut', 'telefono', 'empresa', 'cargo', 'rol')
         }),
         ('Permisos', {
             'fields': ('es_activo', 'is_staff', 'is_superuser')
@@ -72,6 +101,14 @@ class UsuarioAdmin(BaseUserAdmin):
         """Obtiene el nombre completo del usuario"""
         return obj.get_full_name()
     get_full_name.short_description = 'Nombre Completo'
+    
+    def get_sucursales_count(self, obj):
+        """Muestra cantidad de sucursales asignadas"""
+        count = EmpresaUser.objects.filter(user=obj, status=True).count()
+        if count == 0:
+            return format_html('<span style="color: red;">⚠️ Sin sucursales</span>')
+        return format_html('<span style="color: green;">✅ {} sucursal(es)</span>', count)
+    get_sucursales_count.short_description = 'Sucursales'
 
 @admin.register(LogAcceso)
 class LogAccesoAdmin(admin.ModelAdmin):

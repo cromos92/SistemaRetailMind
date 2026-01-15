@@ -79,7 +79,7 @@ def lista_empresas(request):
     elif orden == 'fecha':
         empresas = empresas.order_by('id')  # Usar ID como proxy de fecha de creación
     elif orden == 'sucursales':
-        empresas = empresas.annotate(num_sucursales=Count('sucursal_set')).order_by('-num_sucursales')
+        empresas = empresas.annotate(num_sucursales=Count('sucursales_app')).order_by('-num_sucursales')
     
     # Paginación
     paginator = Paginator(empresas, page_size)
@@ -92,7 +92,7 @@ def lista_empresas(request):
         for empresa in page_obj:
             # Contar sucursales relacionadas
             try:
-                num_sucursales = empresa.sucursal_set.count()
+                num_sucursales = empresa.sucursales_app.count()
             except:
                 num_sucursales = 0
             
@@ -464,13 +464,13 @@ def crear_empresa(request):
         if not data.get('rut'):
             return JsonResponse({
                 'success': False,
-                'message': 'El RUT es obligatorio'
+                'error': 'El RUT es obligatorio'
             }, status=400)
         
         if not data.get('razon_social'):
             return JsonResponse({
                 'success': False,
-                'message': 'La razón social es obligatoria'
+                'error': 'La razón social es obligatoria'
             }, status=400)
         
         # Determinar si es proveedor basado en el tipo
@@ -519,7 +519,7 @@ def crear_empresa(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': f'Error al crear empresa: {str(e)}'
+            'error': f'Error al crear empresa: {str(e)}'
         }, status=500)
 
 @login_required
@@ -535,7 +535,7 @@ def editar_empresa(request):
         if not empresa_id:
             return JsonResponse({
                 'success': False,
-                'message': 'ID de empresa requerido'
+                'error': 'ID de empresa requerido'
             }, status=400)
         
         empresa = get_object_or_404(Empresa, id=empresa_id)
@@ -544,13 +544,13 @@ def editar_empresa(request):
         if not data.get('rut'):
             return JsonResponse({
                 'success': False,
-                'message': 'El RUT es obligatorio'
+                'error': 'El RUT es obligatorio'
             }, status=400)
         
         if not data.get('razon_social'):
             return JsonResponse({
                 'success': False,
-                'message': 'La razón social es obligatoria'
+                'error': 'La razón social es obligatoria'
             }, status=400)
         
         # Determinar si es proveedor basado en el tipo
@@ -597,7 +597,7 @@ def editar_empresa(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': f'Error al actualizar empresa: {str(e)}'
+            'error': f'Error al actualizar empresa: {str(e)}'
         }, status=500)
 
 @login_required
@@ -609,12 +609,12 @@ def eliminar_empresa(request, empresa_id):
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
         
-            # Verificar si tiene registros relacionados
-        if empresa.sucursal_set.exists():
-                return JsonResponse({
-                    'success': False,
-                    'message': 'No se puede eliminar la empresa porque tiene sucursales asociadas'
-                }, status=400)
+        # Verificar si tiene registros relacionados
+        if empresa.sucursales_app.exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'No se puede eliminar la empresa porque tiene sucursales asociadas. Elimina las sucursales primero.'
+            }, status=400)
             
         nombre_empresa = empresa.razon_social or empresa.nombre
         
@@ -629,7 +629,7 @@ def eliminar_empresa(request, empresa_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': f'Error al eliminar empresa: {str(e)}'
+            'error': f'Error al eliminar empresa: {str(e)}'
         }, status=500)
 
 @login_required
@@ -702,8 +702,7 @@ def exportar_empresas(request):
     
     # Obtener parámetros de filtro
     search = request.GET.get('search', '')
-    tipo_empresa = request.GET.get('tipo_empresa', '')
-    activo = request.GET.get('activo', '')
+    tipo = request.GET.get('tipo', '')
     
     # Query base
     empresas = Empresa.objects.all()
@@ -713,14 +712,15 @@ def exportar_empresas(request):
         empresas = empresas.filter(
             Q(nombre__icontains=search) |
             Q(rut__icontains=search) |
-            Q(nombre_fantasia__icontains=search)
+            Q(nombre_fantasia__icontains=search) |
+            Q(razon_social__icontains=search)
         )
     
-    if tipo_empresa:
-        empresas = empresas.filter(tipo_empresa=tipo_empresa)
-    
-    if activo != '':
-        empresas = empresas.filter(activo=activo == 'true')
+    # Filtro por tipo (usando esProveedor)
+    if tipo == 'proveedor':
+        empresas = empresas.filter(esProveedor=True)
+    elif tipo == 'cliente':
+        empresas = empresas.filter(esProveedor=False)
     
     # Crear respuesta CSV
     response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
@@ -728,40 +728,34 @@ def exportar_empresas(request):
     
     writer = csv.writer(response)
     
-    # Encabezados
+    # Encabezados (solo campos que existen en app.models.Empresa)
     writer.writerow([
         'ID', 'Nombre', 'RUT', 'Nombre Fantasía', 'Razón Social', 'Giro',
-        'Dirección', 'Comuna', 'Ciudad', 'Región', 'Código Postal',
-        'Teléfono', 'Email', 'Sitio Web', 'Tipo Empresa', 'Es Proveedor',
-        'Correo Vendedor', 'Correo Intercambio', 'Correo Administrador',
-        'Fecha Creación', 'Activo', 'Observaciones'
+        'Dirección', 'Comuna', 'Ciudad', 'Tipo', 'Código Acteco',
+        'Contacto 1', 'Contacto 2',
+        'Correo Vendedor', 'Correo Intercambio', 'Correo Administrador'
     ])
     
     # Datos
     for empresa in empresas:
+        tipo_display = 'Proveedor' if empresa.esProveedor else 'Cliente'
         writer.writerow([
             empresa.id,
-            empresa.nombre,
-            empresa.rut,
-            empresa.nombre_fantasia,
-            empresa.razon_social,
-            empresa.giro,
-            empresa.direccion,
-            empresa.comuna,
-            empresa.ciudad,
-            empresa.region,
-            empresa.codigo_postal,
-            empresa.telefono,
-            empresa.email,
-            empresa.sitio_web,
-            empresa.get_tipo_empresa_display(),
-            'Sí' if empresa.esProveedor else 'No',
-            empresa.correoVendedor,
-            empresa.correoIntercambio,
-            empresa.correoAdministrador,
-            empresa.fecha_creacion.strftime('%d/%m/%Y'),
-            'Sí' if empresa.activo else 'No',
-            empresa.observaciones
+            empresa.nombre or '',
+            empresa.rut or '',
+            empresa.nombre_fantasia or '',
+            empresa.razon_social or '',
+            empresa.giro or '',
+            empresa.direccion or '',
+            empresa.comuna or '',
+            empresa.ciudad or '',
+            tipo_display,
+            empresa.acteco or '',
+            empresa.contacto1 or '',
+            empresa.contacto2 or '',
+            empresa.correoVendedor or '',
+            empresa.correoIntercambio or '',
+            empresa.correoAdministrador or ''
         ])
     
     return response
@@ -837,7 +831,7 @@ def dashboard_empresas(request):
 
 @login_required
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["POST", "DELETE"])
 def eliminar_sucursal(request, sucursal_id):
     """Eliminar sucursal via AJAX"""
     
@@ -856,7 +850,7 @@ def eliminar_sucursal(request, sucursal_id):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': f'Error al eliminar sucursal: {str(e)}'
+            'error': f'Error al eliminar sucursal: {str(e)}'
         }, status=500)
 
 # ========== VISTAS PARA CONTACTOS ==========
@@ -943,9 +937,9 @@ def obtener_empresa(request, empresa_id):
     try:
         empresa = get_object_or_404(Empresa, id=empresa_id)
         
-        # Contar sucursales (usando sucursal_set ya que es la relación correcta)
+        # Contar sucursales (usando sucursales_app ya que es el related_name del modelo)
         try:
-            num_sucursales = empresa.sucursal_set.count()
+            num_sucursales = empresa.sucursales_app.count()
         except:
             num_sucursales = 0
         

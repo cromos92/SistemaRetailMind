@@ -1,164 +1,674 @@
 {% load static %}
 
 {% include 'layout/header.html' %}
-<!-- ========== App Menu ========== -->
-{% include 'layout/menu.html' %} {% include 'layout/footer.html' %}
+{% include 'layout/menu.html' %}
 {% csrf_token %}
+
 <link href="{% static 'libs/datatables.net-bs5/css/dataTables.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/datatables.net-responsive-bs5/css/responsive.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/flatpickr/flatpickr.min.css' %}" rel="stylesheet" type="text/css" />
+
+<!-- NEXO Design System Variables -->
 <style>
-    .estado-badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.375rem;
-    }
-    .estado-pendiente { background-color: #fef3c7; color: #92400e; }
-    .estado-aprobado { background-color: #d1fae5; color: #065f46; }
-    .estado-activo { background-color: #dbeafe; color: #1e40af; }
-    .estado-pagado { background-color: #dcfce7; color: #166534; }
-    .estado-vencido { background-color: #fee2e2; color: #991b1b; }
-    .estado-rechazado { background-color: #fecaca; color: #991b1b; }
-    .estado-cancelado { background-color: #f3f4f6; color: #374151; }
-    
-    .progress-credito {
-        height: 8px;
-        border-radius: 4px;
-    }
-    
-    .firma-status {
+:root {
+  /* ========== COLORES PRIMARIOS ========== */
+  --nexo-primary: #0066FF;
+  --nexo-primary-dark: #0052CC;
+  --nexo-primary-light: #E6F0FF;
+  
+  /* ========== COLORES SECUNDARIOS ========== */
+  --nexo-secondary: #1A1A2E;
+  --nexo-accent: #00D4AA;
+  
+  /* ========== COLORES SEMÁNTICOS ========== */
+  --nexo-success: #00D4AA;
+  --nexo-warning: #FFB020;
+  --nexo-error: #FF4D4D;
+  --nexo-info: #0066FF;
+  
+  /* ========== NEUTRALES / GRISES ========== */
+  --nexo-gray-900: #1A1A2E;
+  --nexo-gray-700: #4A4A5A;
+  --nexo-gray-500: #8A8A9A;
+  --nexo-gray-300: #D1D1D9;
+  --nexo-gray-100: #F5F5F7;
+  --nexo-white: #FFFFFF;
+  
+  /* ========== FONDOS ========== */
+  --nexo-bg-primary: #FFFFFF;
+  --nexo-bg-secondary: #F5F5F7;
+  --nexo-bg-dark: #1A1A2E;
+  
+  /* ========== TEXTOS ========== */
+  --nexo-text-primary: #1A1A2E;
+  --nexo-text-secondary: #4A4A5A;
+  --nexo-text-muted: #8A8A9A;
+  --nexo-text-inverse: #FFFFFF;
+  
+  /* ========== BORDES ========== */
+  --nexo-border-light: #D1D1D9;
+  --nexo-border-dark: #4A4A5A;
+  
+  /* ========== SOMBRAS ========== */
+  --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+  --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+  --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+  --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+  
+  /* ========== BORDES REDONDEADOS ========== */
+  --nexo-radius-sm: 4px;
+  --nexo-radius-md: 8px;
+  --nexo-radius-lg: 12px;
+  --nexo-radius-xl: 16px;
+  --nexo-radius-full: 9999px;
+  
+  /* ========== TRANSICIONES ========== */
+  --nexo-transition-fast: 150ms ease;
+  --nexo-transition-normal: 250ms ease;
+  --nexo-transition-slow: 350ms ease;
+}
+
+/* ===== NEXO CARD ===== */
+.nexo-card {
+    background-color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-stat-card {
+    border-left: 4px solid transparent;
+}
+
+.nexo-stat-card:hover {
+    border-left-color: var(--nexo-primary);
+}
+
+.nexo-card-header {
+    background-color: transparent;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    padding: 1rem 1.25rem;
+}
+
+.nexo-card-title {
+    color: var(--nexo-text-primary);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* ===== AVATARS ===== */
+.nexo-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--nexo-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.nexo-avatar-primary {
+    background-color: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.nexo-avatar-success {
+    background-color: rgba(0, 212, 170, 0.15);
+    color: var(--nexo-success);
+}
+
+.nexo-avatar-warning {
+    background-color: rgba(255, 176, 32, 0.15);
+    color: var(--nexo-warning);
+}
+
+.nexo-avatar-info {
+    background-color: rgba(0, 102, 255, 0.15);
+    color: var(--nexo-info);
+}
+
+.nexo-avatar-error {
+    background-color: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+/* ===== STATS ===== */
+.nexo-stat-label {
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--nexo-text-muted);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.nexo-stat-value {
+    font-weight: 700;
+    color: var(--nexo-text-primary);
+    font-size: 1.5rem;
+    margin-bottom: 0;
+}
+
+.nexo-stat-subtext {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* ===== BUTTONS ===== */
+.nexo-btn-primary {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
         display: inline-flex;
         align-items: center;
-        gap: 0.25rem;
-        font-size: 0.75rem;
-    }
-    
-    .firma-completada { color: #059669; }
-    .firma-pendiente { color: #d97706; }
-    
-    .card-credito {
-        border-left: 4px solid #e5e7eb;
-        transition: all 0.2s;
-    }
-    
-    .card-credito:hover {
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    
-    .card-credito.vencido {
-        border-left-color: #ef4444;
-        background-color: #fef2f2;
-    }
-    
-    .card-credito.activo {
-        border-left-color: #3b82f6;
-    }
-    
-    .card-credito.pagado {
-        border-left-color: #10b981;
+    gap: 6px;
+}
+
+.nexo-btn-primary:hover {
+    background-color: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-btn-secondary {
+    background-color: var(--nexo-secondary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nexo-btn-secondary:hover {
+    background-color: #2a2a42;
+    color: var(--nexo-white);
+}
+
+.nexo-btn-success {
+    background-color: var(--nexo-success);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nexo-btn-success:hover {
+    background-color: #00b894;
+    color: var(--nexo-white);
+}
+
+.nexo-btn-info {
+    background-color: var(--nexo-info);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nexo-btn-info:hover {
+    background-color: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-warning {
+    background-color: var(--nexo-warning);
+    color: var(--nexo-secondary);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nexo-btn-warning:hover {
+    background-color: #e5a01d;
+}
+
+.nexo-btn-error {
+    background-color: var(--nexo-error);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nexo-btn-error:hover {
+    background-color: #e54545;
+    color: var(--nexo-white);
+}
+
+.nexo-btn-outline {
+    background-color: transparent;
+    color: var(--nexo-primary);
+    border: 2px solid var(--nexo-primary);
+    border-radius: var(--nexo-radius-md);
+    padding: 8px 18px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nexo-btn-outline:hover {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* ===== FORMS ===== */
+.nexo-form-label {
+    font-weight: 500;
+    color: var(--nexo-text-primary);
+    margin-bottom: 6px;
+    display: block;
+    font-size: 14px;
+}
+
+.nexo-input {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 10px 14px;
+    color: var(--nexo-text-primary);
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-input:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    outline: none;
+}
+
+.nexo-input::placeholder {
+    color: var(--nexo-text-muted);
+}
+
+.nexo-input-icon {
+    background-color: var(--nexo-bg-secondary);
+    border: 1px solid var(--nexo-gray-300);
+    border-right: none;
+    color: var(--nexo-text-muted);
+}
+
+/* ===== BADGES ===== */
+.nexo-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: var(--nexo-radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.nexo-badge-success {
+    background-color: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.nexo-badge-warning {
+    background-color: var(--nexo-warning);
+    color: var(--nexo-secondary);
+}
+
+.nexo-badge-error {
+    background-color: var(--nexo-error);
+    color: var(--nexo-white);
+}
+
+.nexo-badge-info {
+    background-color: var(--nexo-info);
+    color: var(--nexo-white);
+}
+
+.nexo-badge-secondary {
+    background-color: var(--nexo-gray-500);
+    color: var(--nexo-white);
+}
+
+.nexo-badge-pendiente {
+    background-color: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+}
+
+.nexo-badge-aprobado {
+    background-color: rgba(0, 212, 170, 0.15);
+    color: #00856B;
+}
+
+.nexo-badge-activo {
+    background-color: rgba(0, 102, 255, 0.15);
+    color: var(--nexo-primary);
+}
+
+.nexo-badge-pagado {
+    background-color: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.nexo-badge-vencido {
+    background-color: var(--nexo-error);
+    color: var(--nexo-white);
+}
+
+.nexo-badge-rechazado {
+    background-color: var(--nexo-gray-500);
+    color: var(--nexo-white);
+}
+
+.nexo-badge-cancelado {
+    background-color: var(--nexo-gray-300);
+    color: var(--nexo-gray-700);
+}
+
+/* ===== MODALS ===== */
+.nexo-modal {
+    border: none;
+    border-radius: var(--nexo-radius-xl);
+    overflow: hidden;
+    box-shadow: var(--nexo-shadow-xl);
+}
+
+.nexo-modal-header {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    padding: 1rem 1.5rem;
+}
+
+.nexo-modal-footer {
+    background-color: var(--nexo-bg-secondary);
+    border-top: 1px solid var(--nexo-gray-300);
+    padding: 1rem 1.5rem;
+}
+
+/* ===== PAGINATION ===== */
+.nexo-pagination .page-link {
+    border-radius: var(--nexo-radius-full);
+    margin: 0 3px;
+    border: 1px solid var(--nexo-gray-300);
+    color: var(--nexo-text-secondary);
+    padding: 8px 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-pagination .page-link:hover {
+    background-color: var(--nexo-primary-light);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.nexo-pagination .page-item.active .page-link {
+    background-color: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-pagination-info {
+    color: var(--nexo-text-muted);
+    font-size: 14px;
+}
+
+/* ===== CREDITO CARD ===== */
+.nexo-credito-card {
+    background-color: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    border-left: 4px solid var(--nexo-gray-300);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-fast);
+    margin-bottom: 1rem;
+}
+
+.nexo-credito-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+    transform: translateY(-2px);
+}
+
+.nexo-credito-card.vencido {
+    border-left-color: var(--nexo-error);
+    background-color: rgba(255, 77, 77, 0.03);
+}
+
+.nexo-credito-card.activo {
+    border-left-color: var(--nexo-primary);
+}
+
+.nexo-credito-card.pagado {
+    border-left-color: var(--nexo-success);
+}
+
+.nexo-credito-card.pendiente {
+    border-left-color: var(--nexo-warning);
+}
+
+/* ===== PROGRESS BAR ===== */
+.nexo-progress {
+    height: 8px;
+    border-radius: var(--nexo-radius-full);
+    background-color: var(--nexo-gray-100);
+    overflow: hidden;
+}
+
+.nexo-progress-bar {
+    border-radius: var(--nexo-radius-full);
+    transition: width 0.4s ease;
+}
+
+.nexo-progress-bar.success {
+    background-color: var(--nexo-success);
+}
+
+.nexo-progress-bar.warning {
+    background-color: var(--nexo-warning);
+}
+
+.nexo-progress-bar.error {
+    background-color: var(--nexo-error);
+}
+
+/* ===== DROPDOWN ===== */
+.nexo-dropdown-menu {
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    box-shadow: var(--nexo-shadow-lg);
+    padding: 8px;
+}
+
+.nexo-dropdown-menu .dropdown-item {
+    border-radius: var(--nexo-radius-sm);
+    padding: 8px 12px;
+    font-size: 14px;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-dropdown-menu .dropdown-item:hover {
+    background-color: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.nexo-dropdown-menu .dropdown-item.text-success:hover {
+    background-color: rgba(0, 212, 170, 0.1);
+    color: var(--nexo-success);
+}
+
+.nexo-dropdown-menu .dropdown-item.text-danger:hover {
+    background-color: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+.nexo-dropdown-menu .dropdown-item.text-warning:hover {
+    background-color: rgba(255, 176, 32, 0.1);
+    color: var(--nexo-warning);
+}
+
+/* ===== EMPTY STATE ===== */
+.nexo-empty-state {
+    padding: 3rem;
+    text-align: center;
+}
+
+.nexo-empty-state i {
+    font-size: 4rem;
+    color: var(--nexo-gray-300);
+    margin-bottom: 1rem;
+}
+
+.nexo-empty-state h5 {
+    color: var(--nexo-text-primary);
+    font-weight: 600;
+}
+
+.nexo-empty-state p {
+    color: var(--nexo-text-muted);
+}
+
+/* ===== SPINNER ===== */
+.nexo-spinner {
+    color: var(--nexo-primary);
+}
+
+/* ===== SECTION AVAL ===== */
+.nexo-section-aval {
+    background-color: var(--nexo-bg-secondary);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem;
+    margin-top: 1rem;
     }
 </style>
 
-<div class="main-content">
-    <div class="page-content">
+<div class="page-content" style="background-color: var(--nexo-bg-secondary);">
         <div class="container-fluid">
-    <!-- Header -->
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0 font-size-18">Gestión de Créditos a Trabajadores</h4>
-                <div class="page-title-right">
-                    <ol class="breadcrumb m-0">
-                        <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
-                        <li class="breadcrumb-item active">Créditos</li>
-                    </ol>
+        
+        <!-- Header NEXO Style -->
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="h3 mb-0" style="color: var(--nexo-text-primary);">
+                    <i class="ri-bank-card-line" style="color: var(--nexo-primary);"></i> Gestión de Créditos a Trabajadores
+                </h1>
+                <p class="mb-0" style="color: var(--nexo-text-secondary);">Administra préstamos, anticipos y créditos del personal</p>
+                <small style="color: var(--nexo-info);">
+                    <i class="ri-information-line"></i> Control completo de créditos, pagos y vencimientos
+                </small>
                 </div>
+            <div class="col-auto d-flex gap-2">
+                <button class="btn btn-lg nexo-btn-secondary" id="btn-nuevo-trabajador" title="Crear nuevo trabajador">
+                    <i class="ri-user-add-line me-1"></i> Nuevo Trabajador
+                </button>
+                <button class="btn btn-lg nexo-btn-primary" id="btn-nuevo-credito">
+                    <i class="ri-add-line me-1"></i> Nuevo Crédito
+                </button>
             </div>
         </div>
-    </div>
 
-    <!-- Estadísticas Resumen -->
-    <div class="row" id="estadisticas-resumen">
-        <div class="col-xl-3 col-md-6">
-            <div class="card">
+        <!-- Estadísticas Rápidas - NEXO Style -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="nexo-card nexo-stat-card">
                 <div class="card-body">
-                    <div class="d-flex">
-                        <div class="flex-1">
-                            <p class="text-truncate font-size-14 mb-2">Total Créditos</p>
-                            <h4 class="mb-2" id="total-creditos">0</h4>
-                            <p class="text-muted mb-0">
-                                <span class="text-success fw-bold font-size-12 me-2" id="creditos-activos">0 activos</span>
-                            </p>
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="nexo-avatar nexo-avatar-primary">
+                                    <i class="ri-bank-card-line"></i>
                         </div>
-                        <div class="avatar-sm">
-                            <span class="avatar-title bg-light text-primary rounded-3">
-                                <i class="ri-bank-card-line font-size-24"></i>
-                            </span>
                         </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="nexo-stat-label">Total Créditos</p>
+                                <h4 class="nexo-stat-value" id="total-creditos">0</h4>
+                                <span class="nexo-stat-subtext" style="color: var(--nexo-success);" id="creditos-activos">0 activos</span>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6">
-            <div class="card">
+            </div>
+            <div class="col-md-3">
+                <div class="nexo-card nexo-stat-card">
                 <div class="card-body">
-                    <div class="d-flex">
-                        <div class="flex-1">
-                            <p class="text-truncate font-size-14 mb-2">Monto Total Aprobado</p>
-                            <h4 class="mb-2" id="monto-aprobado">$0</h4>
-                            <p class="text-muted mb-0">
-                                <span class="text-info fw-bold font-size-12 me-2" id="total-monto-solicitado">$0 solicitado</span>
-                            </p>
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="nexo-avatar nexo-avatar-success">
+                                    <i class="ri-money-dollar-circle-line"></i>
                         </div>
-                        <div class="avatar-sm">
-                            <span class="avatar-title bg-light text-success rounded-3">
-                                <i class="ri-money-dollar-circle-line font-size-24"></i>
-                            </span>
                         </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="nexo-stat-label">Monto Total Aprobado</p>
+                                <h4 class="nexo-stat-value" id="monto-aprobado">$0</h4>
+                                <span class="nexo-stat-subtext" style="color: var(--nexo-info);" id="total-monto-solicitado">$0 solicitado</span>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6">
-            <div class="card">
+            </div>
+            <div class="col-md-3">
+                <div class="nexo-card nexo-stat-card">
                 <div class="card-body">
-                    <div class="d-flex">
-                        <div class="flex-1">
-                            <p class="text-truncate font-size-14 mb-2">Monto Pagado</p>
-                            <h4 class="mb-2" id="monto-pagado">$0</h4>
-                            <p class="text-muted mb-0">
-                                <span class="text-warning fw-bold font-size-12 me-2" id="saldo-pendiente">$0 pendiente</span>
-                            </p>
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="nexo-avatar nexo-avatar-warning">
+                                    <i class="ri-wallet-3-line"></i>
                         </div>
-                        <div class="avatar-sm">
-                            <span class="avatar-title bg-light text-warning rounded-3">
-                                <i class="ri-wallet-3-line font-size-24"></i>
-                            </span>
                         </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="nexo-stat-label">Monto Pagado</p>
+                                <h4 class="nexo-stat-value" id="monto-pagado">$0</h4>
+                                <span class="nexo-stat-subtext" style="color: var(--nexo-warning);" id="saldo-pendiente">$0 pendiente</span>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6">
-            <div class="card">
+            </div>
+            <div class="col-md-3">
+                <div class="nexo-card nexo-stat-card">
                 <div class="card-body">
-                    <div class="d-flex">
-                        <div class="flex-1">
-                            <p class="text-truncate font-size-14 mb-2">Créditos Vencidos</p>
-                            <h4 class="mb-2 text-danger" id="creditos-vencidos">0</h4>
-                            <p class="text-muted mb-0">
-                                <span class="text-danger fw-bold font-size-12 me-2" id="monto-vencido">$0</span>
-                            </p>
+                        <div class="d-flex align-items-center">
+                            <div class="flex-shrink-0">
+                                <div class="nexo-avatar nexo-avatar-error">
+                                    <i class="ri-alarm-warning-line"></i>
                         </div>
-                        <div class="avatar-sm">
-                            <span class="avatar-title bg-light text-danger rounded-3">
-                                <i class="ri-alarm-warning-line font-size-24"></i>
-                            </span>
+                            </div>
+                            <div class="flex-grow-1 ms-3">
+                                <p class="nexo-stat-label">Créditos Vencidos</p>
+                                <h4 class="nexo-stat-value" style="color: var(--nexo-error);" id="creditos-vencidos">0</h4>
+                                <span class="nexo-stat-subtext" style="color: var(--nexo-error);" id="monto-vencido">$0</span>
                         </div>
                     </div>
                 </div>
@@ -166,19 +676,14 @@
         </div>
     </div>
 
-    <!-- Filtros y Acciones -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
+        <!-- Filtros y Controles - NEXO Style -->
+        <div class="nexo-card mb-4">
+            <div class="card-header nexo-card-header">
                     <div class="row align-items-center">
                         <div class="col">
-                            <h4 class="card-title">Filtros de Búsqueda</h4>
-                        </div>
-                        <div class="col-auto">
-                            <button type="button" class="btn btn-primary" id="btn-nuevo-credito">
-                                <i class="ri-add-line align-bottom me-1"></i> Nuevo Crédito
-                            </button>
+                        <h5 class="nexo-card-title mb-0">
+                            <i class="ri-filter-line" style="color: var(--nexo-primary);"></i> Filtros de Búsqueda
+                        </h5>
                         </div>
                     </div>
                 </div>
@@ -186,16 +691,16 @@
                     <form id="form-filtros">
                         <div class="row g-3">
                             <div class="col-md-3">
-                                <label class="form-label">Fecha Desde</label>
-                                <input type="text" class="form-control" id="fecha-inicio" placeholder="dd/mm/yyyy">
+                            <label class="nexo-form-label">Fecha Desde</label>
+                            <input type="text" class="form-control nexo-input" id="fecha-inicio" placeholder="dd/mm/yyyy">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">Fecha Hasta</label>
-                                <input type="text" class="form-control" id="fecha-fin" placeholder="dd/mm/yyyy">
+                            <label class="nexo-form-label">Fecha Hasta</label>
+                            <input type="text" class="form-control nexo-input" id="fecha-fin" placeholder="dd/mm/yyyy">
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label">Estado</label>
-                                <select class="form-select" id="filtro-estado">
+                            <label class="nexo-form-label">Estado</label>
+                            <select class="form-select nexo-input" id="filtro-estado">
                                     <option value="">Todos</option>
                                     <option value="PENDIENTE">Pendiente</option>
                                     <option value="APROBADO">Aprobado</option>
@@ -206,14 +711,14 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label">Trabajador</label>
-                                <select class="form-select" id="filtro-trabajador">
+                            <label class="nexo-form-label">Trabajador</label>
+                            <select class="form-select nexo-input" id="filtro-trabajador">
                                     <option value="">Todos</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label">Tipo</label>
-                                <select class="form-select" id="filtro-tipo">
+                            <label class="nexo-form-label">Tipo</label>
+                            <select class="form-select nexo-input" id="filtro-tipo">
                                     <option value="">Todos</option>
                                     <option value="ANTICIPO_SUELDO">Anticipo Sueldo</option>
                                     <option value="PRESTAMO_EMPRESA">Préstamo Empresa</option>
@@ -225,19 +730,39 @@
                         </div>
                         <div class="row mt-3">
                             <div class="col-md-3">
-                                <input type="text" class="form-control" id="filtro-numero" placeholder="Número de crédito">
+                                <div class="input-group">
+                                    <span class="input-group-text nexo-input-icon">
+                                        <i class="ri-search-line"></i>
+                                    </span>
+                                    <input type="text" class="form-control nexo-input" id="filtro-numero" placeholder="N° crédito...">
+                                </div>
                             </div>
-                            <div class="col-md-9">
-                                <button type="button" class="btn btn-primary" id="btn-buscar">
+                            <div class="col-md-3">
+                                <input type="text" class="form-control nexo-input" id="filtro-trabajador-texto" placeholder="Nombre/RUT/Código">
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" class="form-control nexo-input" id="filtro-sucursal-texto" placeholder="Sucursal...">
+                            </div>
+                            <div class="col-md-3">
+                                <div class="input-group">
+                                    <span class="input-group-text">Saldo</span>
+                                    <input type="number" class="form-control nexo-input" id="filtro-saldo-min" placeholder="Min">
+                                    <input type="number" class="form-control nexo-input" id="filtro-saldo-max" placeholder="Max">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-md-12 text-end">
+                                <button type="button" class="nexo-btn-primary" id="btn-buscar">
                                     <i class="ri-search-line"></i> Buscar
                                 </button>
-                                <button type="button" class="btn btn-secondary" id="btn-limpiar">
+                                <button type="button" class="nexo-btn-outline ms-2" id="btn-limpiar">
                                     <i class="ri-refresh-line"></i> Limpiar
                                 </button>
-                                <button type="button" class="btn btn-success" id="btn-exportar">
+                                <button type="button" class="nexo-btn-success ms-2" id="btn-exportar">
                                     <i class="ri-file-excel-line"></i> Exportar
                                 </button>
-                                <button type="button" class="btn btn-info" id="btn-reporte">
+                                <button type="button" class="nexo-btn-info ms-2" id="btn-reporte">
                                     <i class="ri-bar-chart-line"></i> Reporte
                                 </button>
                             </div>
@@ -245,44 +770,45 @@
                     </form>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Lista de Créditos -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="card-title">Lista de Créditos</h4>
-                    <div class="card-title-desc">
-                        <span id="total-registros">0 registros encontrados</span>
+        <!-- Lista de Créditos - NEXO Style -->
+        <div class="nexo-card">
+            <div class="card-header nexo-card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="nexo-card-title mb-0">
+                            <i class="ri-file-list-line" style="color: var(--nexo-primary);"></i> Lista de Créditos
+                        </h5>
+        </div>
+                    <div class="col-auto">
+                        <span class="nexo-badge nexo-badge-info" id="total-registros">0 registros encontrados</span>
+    </div>
                     </div>
                 </div>
                 <div class="card-body">
-                    <div id="loading-creditos" class="text-center py-4" style="display: none;">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="sr-only">Cargando...</span>
+                <div id="loading-creditos" class="nexo-empty-state" style="display: none;">
+                    <div class="spinner-border nexo-spinner" role="status">
+                        <span class="visually-hidden">Cargando...</span>
                         </div>
-                        <p class="mt-2">Cargando créditos...</p>
+                    <p class="mt-2" style="color: var(--nexo-text-muted);">Cargando créditos...</p>
                     </div>
                     
                     <div id="contenedor-creditos">
                         <!-- Los créditos se cargarán aquí dinámicamente -->
                     </div>
                     
-                    <!-- Paginación -->
+                <!-- Paginación NEXO -->
                     <div class="row mt-4">
-                        <div class="col-sm-12 col-md-5">
-                            <div class="dataTables_info">
+                    <div class="col-sm-6">
+                        <div class="nexo-pagination-info">
                                 Mostrando <span id="info-desde">0</span> a <span id="info-hasta">0</span> de <span id="info-total">0</span> registros
                             </div>
                         </div>
-                        <div class="col-sm-12 col-md-7">
-                            <div class="dataTables_paginate">
-                                <ul class="pagination justify-content-end" id="paginacion">
+                    <div class="col-sm-6">
+                        <div class="float-end">
+                            <ul class="pagination nexo-pagination mb-0" id="paginacion">
                                     <!-- Paginación se genera dinámicamente -->
                                 </ul>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -291,26 +817,28 @@
     </div>
 </div>
 
-<!-- Modal Nuevo/Editar Crédito -->
-<div class="modal fade" id="modal-credito" tabindex="-1" aria-labelledby="modal-credito-label" aria-hidden="true">
+<!-- Modal Nuevo/Editar Crédito - NEXO Style -->
+<div class="modal fade" id="modal-credito" tabindex="-1" aria-labelledby="modal-credito-label" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modal-credito-label">Nuevo Crédito</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-content nexo-modal">
+            <div class="modal-header nexo-modal-header">
+                <h5 class="modal-title" id="modal-credito-label">
+                    <i class="ri-add-line me-1"></i> Nuevo Crédito
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="form-credito">
-                <div class="modal-body">
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Trabajador/Vendedor <span class="text-danger">*</span></label>
-                            <select class="form-select" id="trabajador-id" required>
+                            <label class="nexo-form-label">Trabajador/Vendedor <span style="color: var(--nexo-error);">*</span></label>
+                            <select class="form-select nexo-input" id="trabajador-id" required>
                                 <option value="">Seleccionar trabajador...</option>
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Tipo de Crédito <span class="text-danger">*</span></label>
-                            <select class="form-select" id="tipo-credito" required>
+                            <label class="nexo-form-label">Tipo de Crédito <span style="color: var(--nexo-error);">*</span></label>
+                            <select class="form-select nexo-input" id="tipo-credito" required>
                                 <option value="PRESTAMO_EMPRESA">Préstamo de Empresa</option>
                                 <option value="ANTICIPO_SUELDO">Anticipo de Sueldo</option>
                                 <option value="CREDITO_COMPRA">Crédito para Compra</option>
@@ -319,14 +847,14 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Monto Solicitado <span class="text-danger">*</span></label>
-                            <input type="number" class="form-control" id="monto-solicitado" min="1" step="1" required>
+                            <label class="nexo-form-label">Monto Solicitado <span style="color: var(--nexo-error);">*</span></label>
+                            <input type="number" class="form-control nexo-input" id="monto-solicitado" min="1" step="1" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Mes de Vencimiento <span class="text-danger">*</span></label>
+                            <label class="nexo-form-label">Mes de Vencimiento <span style="color: var(--nexo-error);">*</span></label>
                             <div class="row">
                                 <div class="col-6">
-                                    <select class="form-select" id="mes-vencimiento" required>
+                                    <select class="form-select nexo-input" id="mes-vencimiento" required>
                                         <option value="">Mes</option>
                                         <option value="01">Enero</option>
                                         <option value="02">Febrero</option>
@@ -343,27 +871,27 @@
                                     </select>
                                 </div>
                                 <div class="col-6">
-                                    <select class="form-select" id="año-vencimiento" required>
+                                    <select class="form-select nexo-input" id="año-vencimiento" required>
                                         <option value="">Año</option>
                                     </select>
                                 </div>
                             </div>
-                            <div class="form-text">Se calcula automáticamente: Primer pago + Cuotas</div>
+                            <small style="color: var(--nexo-text-muted);">Se calcula automáticamente: Primer pago + Cuotas</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Tasa de Interés (%)</label>
-                            <input type="number" class="form-control" id="tasa-interes" min="0" max="999.99" step="0.01" value="0">
-                            <div class="form-text">Máximo 999.99%</div>
+                            <label class="nexo-form-label">Tasa de Interés (%)</label>
+                            <input type="number" class="form-control nexo-input" id="tasa-interes" min="0" max="999.99" step="0.01" value="0">
+                            <small style="color: var(--nexo-text-muted);">Máximo 999.99%</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Número de Cuotas</label>
-                            <input type="number" class="form-control" id="numero-cuotas" min="1" value="1">
+                            <label class="nexo-form-label">Número de Cuotas</label>
+                            <input type="number" class="form-control nexo-input" id="numero-cuotas" min="1" value="1">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Mes Primer Pago</label>
+                            <label class="nexo-form-label">Mes Primer Pago</label>
                             <div class="row">
                                 <div class="col-6">
-                                    <select class="form-select" id="mes-primer-pago">
+                                    <select class="form-select nexo-input" id="mes-primer-pago">
                                         <option value="">Mes</option>
                                         <option value="01">Enero</option>
                                         <option value="02">Febrero</option>
@@ -380,53 +908,62 @@
                                     </select>
                                 </div>
                                 <div class="col-6">
-                                    <select class="form-select" id="año-primer-pago">
+                                    <select class="form-select nexo-input" id="año-primer-pago">
                                         <option value="">Año</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Motivo/Justificación <span class="text-danger">*</span></label>
-                            <textarea class="form-control" id="motivo-solicitud" rows="3" required></textarea>
+                            <label class="nexo-form-label">Motivo/Justificación <span style="color: var(--nexo-error);">*</span></label>
+                            <textarea class="form-control nexo-input" id="motivo-solicitud" rows="3" required 
+                                      placeholder="Describa el motivo o justificación del crédito..."></textarea>
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Observaciones</label>
-                            <textarea class="form-control" id="observaciones-solicitud" rows="2"></textarea>
+                            <label class="nexo-form-label">Observaciones</label>
+                            <textarea class="form-control nexo-input" id="observaciones-solicitud" rows="2"
+                                      placeholder="Observaciones adicionales (opcional)..."></textarea>
                         </div>
                         
                         <!-- Sección Aval -->
                         <div class="col-12">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="requiere-aval">
-                                <label class="form-check-label" for="requiere-aval">
-                                    Requiere Aval
+                                <label class="form-check-label" for="requiere-aval" style="color: var(--nexo-text-primary); font-weight: 500;">
+                                    <i class="ri-user-follow-line me-1" style="color: var(--nexo-warning);"></i> Requiere Aval
                                 </label>
                             </div>
                         </div>
                         
-                        <div id="seccion-aval" style="display: none;">
+                        <div id="seccion-aval" class="col-12" style="display: none;">
+                            <div class="nexo-section-aval">
+                                <h6 class="mb-3" style="color: var(--nexo-text-primary);">
+                                    <i class="ri-shield-user-line" style="color: var(--nexo-warning);"></i> Datos del Aval
+                                </h6>
                             <div class="row g-3">
                                 <div class="col-md-4">
-                                    <label class="form-label">Nombre del Aval</label>
-                                    <input type="text" class="form-control" id="aval-nombre">
+                                        <label class="nexo-form-label">Nombre del Aval</label>
+                                        <input type="text" class="form-control nexo-input" id="aval-nombre" placeholder="Nombre completo">
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label">RUT del Aval</label>
-                                    <input type="text" class="form-control" id="aval-rut">
+                                        <label class="nexo-form-label">RUT del Aval</label>
+                                        <input type="text" class="form-control nexo-input" id="aval-rut" placeholder="12.345.678-9">
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label">Teléfono del Aval</label>
-                                    <input type="text" class="form-control" id="aval-telefono">
+                                        <label class="nexo-form-label">Teléfono del Aval</label>
+                                        <input type="text" class="form-control nexo-input" id="aval-telefono" placeholder="+56 9 1234 5678">
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="ri-save-line align-bottom me-1"></i> Guardar Crédito
+                </div>
+                <div class="modal-footer nexo-modal-footer">
+                    <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+                        <i class="ri-close-line me-1"></i> Cancelar
+                    </button>
+                    <button type="submit" class="nexo-btn-primary">
+                        <i class="ri-save-line me-1"></i> Guardar Crédito
                     </button>
                 </div>
             </form>
@@ -434,45 +971,155 @@
     </div>
 </div>
 
-<!-- Modal Detalle Crédito -->
+<!-- Modal Detalle Crédito - NEXO Style -->
 <div class="modal fade" id="modal-detalle-credito" tabindex="-1" aria-labelledby="modal-detalle-label" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modal-detalle-label">Detalle del Crédito</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-content nexo-modal">
+            <div class="modal-header nexo-modal-header" style="color: white;">
+                <h5 class="modal-title" id="modal-detalle-label" style="color: white;">
+                    <i class="ri-file-info-line me-1"></i> Detalle del Crédito
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="contenido-detalle-credito">
+            <div class="modal-body" id="contenido-detalle-credito" style="max-height: 70vh; overflow-y: auto;">
                 <!-- El contenido se carga dinámicamente -->
+            </div>
+            <div class="modal-footer nexo-modal-footer" id="footer-detalle-credito">
+                <!-- Se genera dinámicamente -->
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Registrar Pago -->
-<div class="modal fade" id="modal-pago" tabindex="-1" aria-labelledby="modal-pago-label" aria-hidden="true">
+<!-- Modal Reporte - NEXO Style -->
+<div class="modal fade" id="modal-reporte" tabindex="-1" aria-labelledby="modal-reporte-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content nexo-modal">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)); color: white; border: none;">
+                <h5 class="modal-title" id="modal-reporte-label" style="color: white;">
+                    <i class="ri-bar-chart-line me-1"></i> Reporte de Créditos
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-5">
+                        <label class="nexo-form-label">Fecha Desde</label>
+                        <input type="text" class="form-control nexo-input" id="reporte-fecha-inicio" placeholder="dd/mm/yyyy">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="nexo-form-label">Fecha Hasta</label>
+                        <input type="text" class="form-control nexo-input" id="reporte-fecha-fin" placeholder="dd/mm/yyyy">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="nexo-form-label">&nbsp;</label>
+                        <button type="button" class="nexo-btn-primary d-block w-100" onclick="generarReporte()">
+                            <i class="ri-refresh-line"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="contenido-reporte">
+                    <div class="text-center py-4">
+                        <div class="spinner-border nexo-spinner" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="mt-2" style="color: var(--nexo-text-muted);">Generando reporte...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer nexo-modal-footer">
+                <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i> Cerrar
+                </button>
+                <button type="button" class="nexo-btn-success" onclick="exportarReporte()">
+                    <i class="ri-file-excel-line me-1"></i> Exportar Excel
+                </button>
+                <button type="button" class="nexo-btn-info" onclick="imprimirReporte()">
+                    <i class="ri-printer-line me-1"></i> Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ajustar Monto - NEXO Style -->
+<div class="modal fade" id="modal-ajustar-monto" tabindex="-1" aria-labelledby="modal-ajustar-label" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modal-pago-label">Registrar Pago</h5>
+        <div class="modal-content nexo-modal">
+            <div class="modal-header" style="background-color: var(--nexo-warning); color: var(--nexo-secondary); border: none;">
+                <h5 class="modal-title" id="modal-ajustar-label">
+                    <i class="ri-edit-line me-1"></i> Ajustar Monto del Crédito
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="form-ajustar-monto">
+                <div class="modal-body">
+                    <input type="hidden" id="ajustar-credito-id">
+                    
+                    <div class="alert" style="background-color: rgba(255, 176, 32, 0.1); border-left: 4px solid var(--nexo-warning); border-radius: var(--nexo-radius-md);">
+                        <i class="ri-information-line" style="color: var(--nexo-warning);"></i>
+                        <strong>Importante:</strong> Solo se puede ajustar el monto si el crédito no tiene pagos registrados.
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="nexo-form-label">Crédito</label>
+                            <input type="text" class="form-control nexo-input" id="ajustar-numero-credito" readonly style="background: var(--nexo-bg-secondary);">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Monto Actual</label>
+                            <input type="text" class="form-control nexo-input" id="ajustar-monto-actual" readonly style="background: var(--nexo-bg-secondary);">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Nuevo Monto <span style="color: var(--nexo-error);">*</span></label>
+                            <input type="number" class="form-control nexo-input" id="ajustar-nuevo-monto" min="1" step="1" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="nexo-form-label">Motivo del Ajuste <span style="color: var(--nexo-error);">*</span></label>
+                            <textarea class="form-control nexo-input" id="ajustar-motivo" rows="3" required placeholder="Describa el motivo del ajuste de monto..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer nexo-modal-footer">
+                    <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+                        <i class="ri-close-line me-1"></i> Cancelar
+                    </button>
+                    <button type="submit" class="nexo-btn-warning">
+                        <i class="ri-save-line me-1"></i> Guardar Ajuste
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Registrar Pago - NEXO Style -->
+<div class="modal fade" id="modal-pago" tabindex="-1" aria-labelledby="modal-pago-label" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content nexo-modal">
+            <div class="modal-header" style="background-color: var(--nexo-success); color: white; border: none;">
+                <h5 class="modal-title" id="modal-pago-label">
+                    <i class="ri-money-dollar-circle-line me-1"></i> Registrar Pago
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="form-pago">
                 <div class="modal-body">
                     <input type="hidden" id="pago-credito-id">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Monto del Pago <span class="text-danger">*</span></label>
-                            <input type="number" class="form-control" id="pago-monto" min="1" step="1" required>
-                            <div class="form-text">Saldo pendiente: $<span id="pago-saldo-pendiente">0</span></div>
+                            <label class="nexo-form-label">Monto del Pago <span style="color: var(--nexo-error);">*</span></label>
+                            <input type="number" class="form-control nexo-input" id="pago-monto" min="1" step="1" required>
+                            <small style="color: var(--nexo-text-muted);">Saldo pendiente: $<span id="pago-saldo-pendiente">0</span></small>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Fecha del Pago <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="pago-fecha" placeholder="dd/mm/yyyy" required>
+                            <label class="nexo-form-label">Fecha del Pago <span style="color: var(--nexo-error);">*</span></label>
+                            <input type="text" class="form-control nexo-input" id="pago-fecha" placeholder="dd/mm/yyyy" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Método de Pago</label>
-                            <select class="form-select" id="pago-metodo">
+                            <label class="nexo-form-label">Método de Pago</label>
+                            <select class="form-select nexo-input" id="pago-metodo">
                                 <option value="EFECTIVO">Efectivo</option>
                                 <option value="TRANSFERENCIA">Transferencia</option>
                                 <option value="CHEQUE">Cheque</option>
@@ -481,31 +1128,33 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Número de Cuota</label>
-                            <input type="number" class="form-control" id="pago-numero-cuota" min="1">
+                            <label class="nexo-form-label">Número de Cuota</label>
+                            <input type="number" class="form-control nexo-input" id="pago-numero-cuota" min="1">
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Referencia/Voucher</label>
-                            <input type="text" class="form-control" id="pago-referencia">
+                            <label class="nexo-form-label">Referencia/Voucher</label>
+                            <input type="text" class="form-control nexo-input" id="pago-referencia" placeholder="N° de operación o voucher">
                         </div>
                         <div class="col-12">
-                            <label class="form-label">Observaciones</label>
-                            <textarea class="form-control" id="pago-observaciones" rows="2"></textarea>
+                            <label class="nexo-form-label">Observaciones</label>
+                            <textarea class="form-control nexo-input" id="pago-observaciones" rows="2" placeholder="Observaciones del pago..."></textarea>
                         </div>
                         <div class="col-12">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="pago-total">
-                                <label class="form-check-label" for="pago-total">
-                                    Es pago total del crédito
+                                <label class="form-check-label" for="pago-total" style="color: var(--nexo-text-primary); font-weight: 500;">
+                                    <i class="ri-checkbox-circle-line me-1" style="color: var(--nexo-success);"></i> Es pago total del crédito
                                 </label>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="ri-money-dollar-circle-line align-bottom me-1"></i> Registrar Pago
+                <div class="modal-footer nexo-modal-footer">
+                    <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+                        <i class="ri-close-line me-1"></i> Cancelar
+                    </button>
+                    <button type="submit" class="nexo-btn-success">
+                        <i class="ri-money-dollar-circle-line me-1"></i> Registrar Pago
                     </button>
                 </div>
             </form>
@@ -513,8 +1162,114 @@
     </div>
 </div>
 
+<!-- Modal Crear Trabajador - NEXO Style -->
+<div class="modal fade" id="modal-nuevo-trabajador" tabindex="-1" aria-labelledby="modal-trabajador-label" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content nexo-modal">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-info), var(--nexo-accent)); border: none;">
+                <h5 class="modal-title" id="modal-trabajador-label" style="color: white;">
+                    <i class="ri-user-add-line me-1"></i> Crear Nuevo Trabajador / Persona
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="form-nuevo-trabajador">
+                <div class="modal-body">
+                    <div class="alert" style="background-color: rgba(0, 108, 255, 0.1); border-left: 4px solid var(--nexo-info); border-radius: var(--nexo-radius-md);">
+                        <i class="ri-information-line" style="color: var(--nexo-info);"></i>
+                        <strong>Tipos de personas que puedes agregar:</strong>
+                        <ul class="mb-0 mt-1" style="font-size: 12px;">
+                            <li><strong>Vendedores:</strong> Personal de tienda que vende y puede tener comisión</li>
+                            <li><strong>Administrativos:</strong> Personal de oficina (no asociar a sucursal)</li>
+                            <li><strong>Externos:</strong> Personas de otras empresas o freelancers (no asociar a sucursal)</li>
+                        </ul>
+                    </div>
 
-<!-- Scripts de librerías ya incluidos más abajo -->
+                    <div class="row g-3">
+                        <!-- Datos Básicos -->
+                        <div class="col-12">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 8px;">
+                                <i class="ri-user-line me-1"></i> Datos Básicos
+                            </h6>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Nombre Completo <span style="color: var(--nexo-error);">*</span></label>
+                            <input type="text" class="form-control nexo-input" id="trabajador-nombre" required placeholder="Ej: Juan Pérez González">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Código Identificador <span style="color: var(--nexo-error);">*</span></label>
+                            <div class="input-group">
+                                <input type="text" class="form-control nexo-input" id="trabajador-codigo" required placeholder="Ej: VND001, ADM001, EXT001">
+                                <span class="input-group-text" id="codigo-status" style="background: var(--nexo-bg-secondary); border-color: var(--nexo-gray-300);">
+                                    <i class="ri-check-line" style="color: var(--nexo-gray-400);"></i>
+                                </span>
+                            </div>
+                            <small id="codigo-feedback" style="color: var(--nexo-text-muted);">Debe ser único en el sistema</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">RUT</label>
+                            <input type="text" class="form-control nexo-input" id="trabajador-rut" placeholder="12.345.678-9">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Correo Electrónico</label>
+                            <input type="email" class="form-control nexo-input" id="trabajador-correo" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="nexo-form-label">Fecha de Nacimiento</label>
+                            <input type="text" class="form-control nexo-input" id="trabajador-fecha-nacimiento" placeholder="dd/mm/yyyy">
+                        </div>
+
+                        <!-- Empresa -->
+                        <div class="col-12 mt-3">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 8px;">
+                                <i class="ri-building-line me-1"></i> Empresa
+                            </h6>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="nexo-form-label">Empresa a la que pertenece</label>
+                            <select class="form-select nexo-input" id="trabajador-empresa">
+                                <option value="">-- Usar empresa actual --</option>
+                                <!-- Se llenará dinámicamente -->
+                            </select>
+                            <small style="color: var(--nexo-text-muted);">Si no selecciona, se asignará a la empresa de la sesión actual</small>
+                        </div>
+
+                        <!-- Asignación a Sucursales -->
+                        <div class="col-12 mt-3">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 8px;">
+                                <i class="ri-store-2-line me-1"></i> Asignación a Sucursales <small style="color: var(--nexo-gray-500); font-weight: normal;">(Opcional)</small>
+                            </h6>
+                        </div>
+                        <div class="col-12">
+                            <div class="alert mb-2" style="background-color: rgba(255, 176, 32, 0.1); border-left: 4px solid var(--nexo-warning); border-radius: var(--nexo-radius-md); padding: 10px 15px;">
+                                <i class="ri-lightbulb-line" style="color: var(--nexo-warning);"></i>
+                                <small>
+                                    <strong>No seleccionar ninguna sucursal</strong> si es personal administrativo, externo o de otra empresa.
+                                </small>
+                            </div>
+                            <div id="sucursales-container" class="row g-2">
+                                <!-- Las sucursales se cargarán dinámicamente -->
+                                <div class="col-12 text-center py-3">
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                    <small class="ms-2" style="color: var(--nexo-text-muted);">Cargando sucursales...</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer nexo-modal-footer">
+                    <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+                        <i class="ri-close-line me-1"></i> Cancelar
+                    </button>
+                    <button type="submit" class="nexo-btn-info" id="btn-crear-trabajador">
+                        <i class="ri-user-add-line me-1"></i> Crear Trabajador
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}
 
 <script>
 $(document).ready(function() {
@@ -540,7 +1295,6 @@ $(document).ready(function() {
     $.ajaxSetup({
         beforeSend: function(xhr, settings) {
             if (!(/^http:.*/.test(settings.url) || /^https:.*/.test(settings.url))) {
-                // Only send the token to relative URLs i.e. locally.
                 xhr.setRequestHeader("X-CSRFToken", csrftoken);
             }
         }
@@ -553,6 +1307,7 @@ $(document).ready(function() {
     
     // Inicializar componentes
     initializeDatePickers();
+    setFiltrosMesActual();
     loadTrabajadores();
     loadEstadisticas();
     loadCreditos();
@@ -561,7 +1316,18 @@ $(document).ready(function() {
     $('#btn-nuevo-credito').click(function() {
         openNuevoCreditoModal();
     });
-    
+
+    // Event listener para crear nuevo trabajador
+    $('#btn-nuevo-trabajador').click(function() {
+        openNuevoTrabajadorModal();
+    });
+
+    // Form submit para nuevo trabajador
+    $('#form-nuevo-trabajador').on('submit', function(e) {
+        e.preventDefault();
+        crearNuevoTrabajador();
+    });
+
     // Event listeners para cálculo automático de vencimiento
     $('#mes-primer-pago, #año-primer-pago, #numero-cuotas').on('change', function() {
         calculateVencimiento();
@@ -576,6 +1342,19 @@ $(document).ready(function() {
         limpiarFiltros();
     });
     
+    $('#btn-exportar').click(function() {
+        exportarCreditos();
+    });
+    
+    $('#btn-reporte').click(function() {
+        abrirModalReporte();
+    });
+    
+    $('#form-ajustar-monto').submit(function(e) {
+        e.preventDefault();
+        guardarAjusteMonto();
+    });
+    
     $('#form-credito').submit(function(e) {
         e.preventDefault();
         guardarCredito();
@@ -588,9 +1367,9 @@ $(document).ready(function() {
     
     $('#requiere-aval').change(function() {
         if ($(this).is(':checked')) {
-            $('#seccion-aval').show();
+            $('#seccion-aval').slideDown(200);
         } else {
-            $('#seccion-aval').hide();
+            $('#seccion-aval').slideUp(200);
         }
     });
     
@@ -605,21 +1384,29 @@ $(document).ready(function() {
         flatpickr("#fecha-inicio", config);
         flatpickr("#fecha-fin", config);
         flatpickr("#pago-fecha", config);
+        flatpickr("#reporte-fecha-inicio", config);
+        flatpickr("#reporte-fecha-fin", config);
         
         // Inicializar selectores de año
         initializeYearSelectors();
+    }
+
+    function setFiltrosMesActual() {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        $('#fecha-inicio').val(firstDay.toLocaleDateString('es-CL'));
+        $('#fecha-fin').val(lastDay.toLocaleDateString('es-CL'));
     }
     
     function initializeYearSelectors() {
         const currentYear = new Date().getFullYear();
         const years = [];
         
-        // Agregar años desde el actual hasta 5 años en el futuro
         for (let i = 0; i <= 5; i++) {
             years.push(currentYear + i);
         }
         
-        // Poblar selectores de año
         const yearSelectors = ['#año-vencimiento', '#año-primer-pago'];
         yearSelectors.forEach(selector => {
             const select = $(selector);
@@ -637,17 +1424,14 @@ $(document).ready(function() {
         
         if (!mesPrimerPago || !añoPrimerPago) return;
         
-        // Calcular el mes de vencimiento (primer pago + cuotas - 1)
         let mesVencimiento = mesPrimerPago + numeroCuotas - 1;
         let añoVencimiento = añoPrimerPago;
         
-        // Ajustar si el mes excede 12
         while (mesVencimiento > 12) {
             mesVencimiento -= 12;
             añoVencimiento += 1;
         }
         
-        // Actualizar los selectores de vencimiento
         $('#mes-vencimiento').val(String(mesVencimiento).padStart(2, '0'));
         $('#año-vencimiento').val(añoVencimiento);
     }
@@ -660,7 +1444,6 @@ $(document).ready(function() {
         $('#mes-primer-pago').val(currentMonth);
         $('#año-primer-pago').val(currentYear);
         
-        // Calcular vencimiento después de establecer primer pago
         calculateVencimiento();
     }
     
@@ -670,8 +1453,7 @@ $(document).ready(function() {
         
         if (!mes || !año) return '';
         
-        // Construir fecha como último día del mes seleccionado
-        const fecha = new Date(parseInt(año), parseInt(mes), 0); // día 0 = último día del mes anterior
+        const fecha = new Date(parseInt(año), parseInt(mes), 0);
         const year = fecha.getFullYear();
         const month = String(fecha.getMonth() + 1).padStart(2, '0');
         const day = String(fecha.getDate()).padStart(2, '0');
@@ -686,12 +1468,12 @@ $(document).ready(function() {
                     const trabajadores = response.trabajadores;
                     let options = '<option value="">Seleccionar trabajador...</option>';
                     let filterOptions = '<option value="">Todos</option>';
-                    
+
                     trabajadores.forEach(function(trabajador) {
                         options += `<option value="${trabajador.id}">${trabajador.nombre} (${trabajador.codigo_vendedor})</option>`;
                         filterOptions += `<option value="${trabajador.id}">${trabajador.nombre}</option>`;
                     });
-                    
+
                     $('#trabajador-id').html(options);
                     $('#filtro-trabajador').html(filterOptions);
                 }
@@ -700,9 +1482,300 @@ $(document).ready(function() {
                 showError('Error al cargar trabajadores');
             });
     }
+
+    // ============ GESTIÓN DE TRABAJADORES ============
+    let sucursalesDisponibles = [];
+    let codigoValidoTimeout = null;
+    let codigoEsValido = true;
+
+    function openNuevoTrabajadorModal() {
+        // Limpiar formulario
+        $('#form-nuevo-trabajador')[0].reset();
+        $('#codigo-status').html('<i class="ri-check-line" style="color: var(--nexo-gray-400);"></i>');
+        $('#codigo-feedback').text('Debe ser único en el sistema').css('color', 'var(--nexo-text-muted)');
+        codigoEsValido = true;
+        
+        // Inicializar flatpickr para fecha de nacimiento
+        flatpickr('#trabajador-fecha-nacimiento', {
+            dateFormat: 'd-m-Y',
+            locale: 'es',
+            allowInput: true
+        });
+        
+        // Cargar empresas
+        cargarEmpresasParaTrabajador();
+        
+        // Cargar sucursales
+        cargarSucursalesParaTrabajador();
+        
+        // Mostrar modal
+        $('#modal-nuevo-trabajador').modal('show');
+    }
     
+    function cargarEmpresasParaTrabajador() {
+        $.get('/app/api/empresas/')
+            .done(function(response) {
+                if (response.success && response.empresas) {
+                    let options = '<option value="">-- Usar empresa actual --</option>';
+                    response.empresas.forEach(function(emp) {
+                        options += `<option value="${emp.id}">${emp.nombre}</option>`;
+                    });
+                    $('#trabajador-empresa').html(options);
+                }
+            })
+            .fail(function() {
+                console.warn('No se pudieron cargar las empresas');
+            });
+    }
+
+    function cargarSucursalesParaTrabajador() {
+        $('#sucursales-container').html(`
+            <div class="col-12 text-center py-3">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                <small class="ms-2" style="color: var(--nexo-text-muted);">Cargando sucursales...</small>
+            </div>
+        `);
+
+        $.get('/app/api/creditos/sucursales/')
+            .done(function(response) {
+                if (response.success) {
+                    sucursalesDisponibles = response.sucursales;
+                    renderSucursalesCheckboxes(response.sucursales);
+                } else {
+                    $('#sucursales-container').html(`
+                        <div class="col-12">
+                            <div class="alert alert-warning mb-0">
+                                <i class="ri-alert-line"></i> No se pudieron cargar las sucursales
+                            </div>
+                        </div>
+                    `);
+                }
+            })
+            .fail(function() {
+                $('#sucursales-container').html(`
+                    <div class="col-12">
+                        <div class="alert alert-danger mb-0">
+                            <i class="ri-error-warning-line"></i> Error al cargar sucursales
+                        </div>
+                    </div>
+                `);
+            });
+    }
+
+    function renderSucursalesCheckboxes(sucursales) {
+        if (sucursales.length === 0) {
+            $('#sucursales-container').html(`
+                <div class="col-12">
+                    <div class="alert alert-info mb-0">
+                        <i class="ri-information-line"></i> No hay sucursales disponibles
+                    </div>
+                </div>
+            `);
+            return;
+        }
+
+        let html = '';
+        sucursales.forEach(function(s) {
+            html += `
+                <div class="col-md-4 col-sm-6">
+                    <div class="form-check sucursal-checkbox-item" style="background: var(--nexo-bg-secondary); border-radius: var(--nexo-radius-md); padding: 10px 15px; border: 1px solid var(--nexo-gray-300); cursor: pointer;">
+                        <input class="form-check-input" type="checkbox" value="${s.id}" id="suc-${s.id}" name="sucursales">
+                        <label class="form-check-label" for="suc-${s.id}" style="cursor: pointer; width: 100%;">
+                            <strong style="color: var(--nexo-text-primary);">${s.alias}</strong>
+                            ${s.direccion ? `<br><small style="color: var(--nexo-text-muted);">${s.direccion}</small>` : ''}
+                        </label>
+                    </div>
+                </div>
+            `;
+        });
+        
+        // Agregar opción de "Ninguna"
+        html += `
+            <div class="col-12 mt-2">
+                <small style="color: var(--nexo-text-muted);">
+                    <i class="ri-checkbox-blank-circle-line me-1"></i>
+                    Si no seleccionas ninguna sucursal, el trabajador no estará asociado a ninguna tienda (ideal para administrativos o externos)
+                </small>
+            </div>
+        `;
+        
+        $('#sucursales-container').html(html);
+
+        // Estilo para checkbox seleccionado
+        $('.sucursal-checkbox-item').on('click', function(e) {
+            if (e.target.type !== 'checkbox') {
+                const checkbox = $(this).find('input[type="checkbox"]');
+                checkbox.prop('checked', !checkbox.prop('checked'));
+            }
+            updateSucursalStyle($(this));
+        });
+
+        $('input[name="sucursales"]').on('change', function() {
+            updateSucursalStyle($(this).closest('.sucursal-checkbox-item'));
+        });
+    }
+
+    function updateSucursalStyle(item) {
+        const checkbox = item.find('input[type="checkbox"]');
+        if (checkbox.prop('checked')) {
+            item.css({
+                'border-color': 'var(--nexo-primary)',
+                'background': 'rgba(0, 212, 170, 0.1)'
+            });
+        } else {
+            item.css({
+                'border-color': 'var(--nexo-gray-300)',
+                'background': 'var(--nexo-bg-secondary)'
+            });
+        }
+    }
+
+    // Validación de código único en tiempo real
+    $('#trabajador-codigo').on('input', function() {
+        const codigo = $(this).val().trim();
+        
+        // Cancelar timeout anterior
+        if (codigoValidoTimeout) {
+            clearTimeout(codigoValidoTimeout);
+        }
+        
+        if (!codigo) {
+            $('#codigo-status').html('<i class="ri-check-line" style="color: var(--nexo-gray-400);"></i>');
+            $('#codigo-feedback').text('Debe ser único en el sistema').css('color', 'var(--nexo-text-muted)');
+            codigoEsValido = true;
+            return;
+        }
+        
+        // Mostrar loading
+        $('#codigo-status').html('<div class="spinner-border spinner-border-sm" style="width: 14px; height: 14px;"></div>');
+        
+        // Esperar 500ms antes de validar
+        codigoValidoTimeout = setTimeout(function() {
+            $.get('/app/api/creditos/trabajadores/validar-codigo/', { codigo: codigo })
+                .done(function(response) {
+                    if (response.exists) {
+                        $('#codigo-status').html('<i class="ri-close-line" style="color: var(--nexo-error);"></i>');
+                        $('#codigo-feedback').html(`<span style="color: var(--nexo-error);">Ya existe: ${response.existente.nombre}</span>`);
+                        codigoEsValido = false;
+                    } else {
+                        $('#codigo-status').html('<i class="ri-check-line" style="color: var(--nexo-success);"></i>');
+                        $('#codigo-feedback').html('<span style="color: var(--nexo-success);">✓ Código disponible</span>');
+                        codigoEsValido = true;
+                    }
+                })
+                .fail(function() {
+                    $('#codigo-status').html('<i class="ri-question-line" style="color: var(--nexo-warning);"></i>');
+                    codigoEsValido = true; // Permitir enviar si falla la validación
+                });
+        }, 500);
+    });
+
+    function crearNuevoTrabajador() {
+        const nombre = $('#trabajador-nombre').val().trim();
+        const codigo = $('#trabajador-codigo').val().trim();
+        const rut = $('#trabajador-rut').val().trim();
+        const correo = $('#trabajador-correo').val().trim();
+        const fechaNacimiento = $('#trabajador-fecha-nacimiento').val();
+        const empresaId = $('#trabajador-empresa').val();
+        
+        // Obtener sucursales seleccionadas
+        const sucursalesSeleccionadas = [];
+        $('input[name="sucursales"]:checked').each(function() {
+            sucursalesSeleccionadas.push(parseInt($(this).val()));
+        });
+
+        if (!nombre) {
+            showError('El nombre es requerido');
+            return;
+        }
+
+        if (!codigo) {
+            showError('El código identificador es requerido');
+            return;
+        }
+
+        if (!codigoEsValido) {
+            showError('El código ingresado ya existe. Por favor, usa otro código.');
+            return;
+        }
+
+        // Validar formato de RUT si se proporciona
+        if (rut && !/^[\d]{1,2}\.?[\d]{3}\.?[\d]{3}-?[\dkK]$/.test(rut.replace(/\./g, ''))) {
+            showError('El formato del RUT no es válido');
+            return;
+        }
+
+        // Validar correo si se proporciona
+        if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+            showError('El formato del correo no es válido');
+            return;
+        }
+
+        // Mostrar loading
+        Swal.fire({
+            title: 'Creando trabajador...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        $.ajax({
+            url: '/app/api/creditos/trabajadores/crear/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                nombre: nombre,
+                codigo_vendedor: codigo,
+                rut: rut,
+                correo: correo,
+                fecha_nacimiento: fechaNacimiento,
+                sucursales: sucursalesSeleccionadas,
+                empresa_id: empresaId ? parseInt(empresaId) : null
+            }),
+            success: function(response) {
+                if (response.success) {
+                    $('#modal-nuevo-trabajador').modal('hide');
+                    
+                    let sucursalesMsg = response.trabajador.sucursales.length > 0 
+                        ? `<br><small style="color: var(--nexo-text-muted);">Sucursales: ${response.trabajador.sucursales.join(', ')}</small>`
+                        : `<br><small style="color: var(--nexo-warning);">Sin sucursal asignada (administrativo/externo)</small>`;
+                    
+                    let empresaMsg = response.trabajador.empresa 
+                        ? `<br><small style="color: var(--nexo-info);"><i class="ri-building-line me-1"></i>Empresa: ${response.trabajador.empresa}</small>`
+                        : '';
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Trabajador Creado!',
+                        html: `
+                            <p>Se ha creado el trabajador:</p>
+                            <strong>${response.trabajador.nombre}</strong><br>
+                            <small style="color: var(--nexo-text-muted);">Código: ${response.trabajador.codigo_vendedor}</small>
+                            ${empresaMsg}
+                            ${sucursalesMsg}
+                        `,
+                        confirmButtonColor: 'var(--nexo-primary)'
+                    });
+                    // Recargar lista de trabajadores
+                    loadTrabajadores();
+                } else {
+                    showError(response.error);
+                }
+            },
+            error: function(xhr) {
+                const error = xhr.responseJSON?.error || 'Error al crear el trabajador';
+                showError(error);
+            }
+        });
+    }
+
     function loadEstadisticas() {
-        $.get('/app/api/creditos/reporte/')
+        const filtros = {
+            fecha_inicio: $('#fecha-inicio').val(),
+            fecha_fin: $('#fecha-fin').val()
+        };
+        $.get('/app/api/creditos/reporte/', filtros)
             .done(function(response) {
                 if (response.success) {
                     const resumen = response.reporte.resumen;
@@ -740,7 +1813,11 @@ $(document).ready(function() {
             estado: $('#filtro-estado').val(),
             trabajador_id: $('#filtro-trabajador').val(),
             tipo_credito: $('#filtro-tipo').val(),
-            numero_credito: $('#filtro-numero').val()
+            numero_credito: $('#filtro-numero').val(),
+            trabajador_texto: $('#filtro-trabajador-texto').val(),
+            sucursal_texto: $('#filtro-sucursal-texto').val(),
+            saldo_min: $('#filtro-saldo-min').val(),
+            saldo_max: $('#filtro-saldo-max').val()
         };
         
         $.ajax({
@@ -773,98 +1850,107 @@ $(document).ready(function() {
         
         if (creditos.length === 0) {
             html = `
-                <div class="text-center py-5">
-                    <i class="ri-file-list-line font-size-48 text-muted"></i>
-                    <h5 class="mt-3">No se encontraron créditos</h5>
-                    <p class="text-muted">Intenta ajustar los filtros de búsqueda</p>
+                <div class="nexo-empty-state">
+                    <i class="ri-file-list-line"></i>
+                    <h5>No se encontraron créditos</h5>
+                    <p>Intenta ajustar los filtros de búsqueda o crea un nuevo crédito</p>
                 </div>
             `;
         } else {
-            creditos.forEach(function(credito) {
-                html += renderCreditoCard(credito);
-            });
+            html = `
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Crédito</th>
+                                <th>Trabajador</th>
+                                <th>Sucursal</th>
+                                <th>Fecha</th>
+                                <th>Monto</th>
+                                <th>Pagado</th>
+                                <th>Saldo</th>
+                                <th>Estado</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${creditos.map(credito => renderCreditoRow(credito)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         }
         
         $('#contenedor-creditos').html(html);
     }
     
-    function renderCreditoCard(credito) {
-        const estadoClass = `estado-${credito.estado.toLowerCase()}`;
-        const cardClass = credito.esta_vencido ? 'card-credito vencido' : 
-                         credito.estado === 'ACTIVO' ? 'card-credito activo' : 
-                         credito.estado === 'PAGADO' ? 'card-credito pagado' : 'card-credito';
-        
-        const porcentajePagado = credito.porcentaje_pagado || 0;
-        const progressClass = porcentajePagado >= 100 ? 'bg-success' : 
-                             porcentajePagado >= 50 ? 'bg-warning' : 'bg-danger';
-        
+    function renderCreditoRow(credito) {
+        const estadoClass = credito.estado.toLowerCase();
+        const montoBase = credito.monto_aprobado || credito.monto_solicitado;
+        const fechaMes = formatMonthLabel(credito.fecha_solicitud);
+        const sucursalLabel = credito.sucursal || 'Sin sucursal';
         return `
-            <div class="card ${cardClass} mb-3">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-3">
-                            <h6 class="mb-1">${credito.numero_credito}</h6>
-                            <p class="text-muted mb-1">${credito.trabajador.nombre}</p>
-                            <small class="text-muted">${credito.trabajador.codigo_vendedor}</small>
-                        </div>
-                        <div class="col-md-2">
-                            <span class="estado-badge ${estadoClass}">${credito.estado_display}</span>
-                            <p class="text-muted mb-0 mt-1">${credito.tipo_credito_display}</p>
-                        </div>
-                        <div class="col-md-2">
-                            <p class="mb-1"><strong>${formatCurrency(credito.monto_aprobado || credito.monto_solicitado)}</strong></p>
-                            <small class="text-muted">Pagado: ${formatCurrency(credito.monto_pagado)}</small>
-                        </div>
-                        <div class="col-md-2">
-                            <div class="progress progress-credito mb-1">
-                                <div class="progress-bar ${progressClass}" style="width: ${porcentajePagado}%"></div>
-                            </div>
-                            <small class="text-muted">${porcentajePagado.toFixed(1)}% pagado</small>
-                        </div>
-                        <div class="col-md-2">
-                            <p class="mb-1">Vence: ${credito.fecha_vencimiento}</p>
-                            ${credito.esta_vencido ? 
-                                `<small class="text-danger"><i class="ri-alarm-warning-line"></i> Vencido</small>` :
-                                `<small class="text-muted">${credito.dias_para_vencimiento} días</small>`
-                            }
-                        </div>
-                        <div class="col-md-1">
-                            <div class="dropdown">
-                                <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                    <i class="ri-more-2-line"></i>
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li><a class="dropdown-item" href="#" onclick="verDetalle(${credito.id})">
-                                        <i class="ri-eye-line me-2"></i>Ver Detalle
-                                    </a></li>
-                                    <li><a class="dropdown-item" href="#" onclick="imprimirVoucher(${credito.id})">
-                                        <i class="ri-printer-line me-2"></i>Imprimir Voucher
-                                    </a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    ${credito.estado === 'PENDIENTE' ? `
-                                        <li><a class="dropdown-item text-success" href="#" onclick="aprobarCredito(${credito.id})">
-                                            <i class="ri-check-line me-2"></i>Aprobar
-                                        </a></li>
-                                        <li><a class="dropdown-item text-danger" href="#" onclick="rechazarCredito(${credito.id})">
-                                            <i class="ri-close-line me-2"></i>Rechazar
-                                        </a></li>
-                                    ` : ''}
-                                    ${credito.estado === 'APROBADO' ? `
-                                        <li><a class="dropdown-item text-primary" href="#" onclick="activarCredito(${credito.id})">
-                                            <i class="ri-play-line me-2"></i>Activar
-                                        </a></li>
-                                    ` : ''}
-                                    ${(credito.estado === 'ACTIVO' || credito.estado === 'APROBADO') && credito.saldo_pendiente > 0 ? `
-                                        <li><a class="dropdown-item text-warning" href="#" onclick="registrarPagoModal(${credito.id})">
-                                            <i class="ri-money-dollar-circle-line me-2"></i>Registrar Pago
-                                        </a></li>
-                                    ` : ''}
-                                </ul>
-                            </div>
-                        </div>
+            <tr>
+                <td>
+                    <div class="fw-semibold text-primary">${credito.numero_credito}</div>
+                    <div class="text-muted small">${credito.tipo_credito_display}</div>
+                </td>
+                <td>
+                    <div class="fw-semibold">${credito.trabajador.nombre}</div>
+                    <div class="text-muted small">${credito.trabajador.codigo_vendedor || ''}</div>
+                </td>
+                <td title="${credito.sucursal_direccion || ''}">
+                    <div>${sucursalLabel}</div>
+                    <div class="text-muted small">${credito.sucursal_direccion || ''}</div>
+                </td>
+                <td>
+                    <div>${credito.fecha_solicitud}</div>
+                    <div class="text-muted small">${fechaMes}</div>
+                </td>
+                <td>${formatCurrency(montoBase)}</td>
+                <td>${formatCurrency(credito.monto_pagado)}</td>
+                <td>${formatCurrency(credito.saldo_pendiente)}</td>
+                <td><span class="nexo-badge nexo-badge-${estadoClass}">${credito.estado_display}</span></td>
+                <td class="text-end">
+                    <div class="dropdown">
+                        <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown" style="border-radius: var(--nexo-radius-md);">
+                            <i class="ri-more-2-line"></i>
+                        </button>
+                        <ul class="dropdown-menu nexo-dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#" onclick="verDetalle(${credito.id})">
+                                <i class="ri-eye-line me-2" style="color: var(--nexo-primary);"></i>Ver Detalle
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="imprimirVoucher(${credito.id})">
+                                <i class="ri-printer-line me-2" style="color: var(--nexo-info);"></i>Imprimir Voucher
+                            </a></li>
+                            ${credito.monto_pagado === 0 && (credito.estado === 'ACTIVO' || credito.estado === 'APROBADO' || credito.estado === 'PENDIENTE') ? `
+                            <li><a class="dropdown-item" href="#" onclick="ajustarMonto(${credito.id})">
+                                <i class="ri-edit-line me-2" style="color: var(--nexo-warning);"></i>Ajustar Monto
+                            </a></li>
+                            ` : ''}
+                            <li><hr class="dropdown-divider"></li>
+                            ${credito.estado === 'PENDIENTE' ? `
+                                <li><a class="dropdown-item text-success" href="#" onclick="aprobarCredito(${credito.id})">
+                                    <i class="ri-check-line me-2"></i>Aprobar
+                                </a></li>
+                                <li><a class="dropdown-item text-danger" href="#" onclick="rechazarCredito(${credito.id})">
+                                    <i class="ri-close-line me-2"></i>Rechazar
+                                </a></li>
+                            ` : ''}
+                            ${credito.estado === 'APROBADO' ? `
+                                <li><a class="dropdown-item" href="#" onclick="activarCredito(${credito.id})" style="color: var(--nexo-primary);">
+                                    <i class="ri-play-line me-2"></i>Activar
+                                </a></li>
+                            ` : ''}
+                            ${(credito.estado === 'ACTIVO' || credito.estado === 'APROBADO') && credito.saldo_pendiente > 0 ? `
+                                <li><a class="dropdown-item text-warning" href="#" onclick="registrarPagoModal(${credito.id})">
+                                    <i class="ri-money-dollar-circle-line me-2"></i>Registrar Pago
+                                </a></li>
+                            ` : ''}
+                        </ul>
                     </div>
-                </div>
-            </div>
+                </td>
+            </tr>
         `;
     }
     
@@ -874,14 +1960,14 @@ $(document).ready(function() {
         
         let html = '';
         
-        // Botón anterior
         html += `
             <li class="page-item ${!pagination.has_previous ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Anterior</a>
+                <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">
+                    <i class="ri-arrow-left-s-line"></i>
+                </a>
             </li>
         `;
         
-        // Números de página
         const startPage = Math.max(1, currentPage - 2);
         const endPage = Math.min(totalPages, currentPage + 2);
         
@@ -893,16 +1979,16 @@ $(document).ready(function() {
             `;
         }
         
-        // Botón siguiente
         html += `
             <li class="page-item ${!pagination.has_next ? 'disabled' : ''}">
-                <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Siguiente</a>
+                <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">
+                    <i class="ri-arrow-right-s-line"></i>
+                </a>
             </li>
         `;
         
         $('#paginacion').html(html);
         
-        // Actualizar info
         const desde = (currentPage - 1) * 10 + 1;
         const hasta = Math.min(currentPage * 10, pagination.total_items);
         $('#info-desde').text(desde);
@@ -913,23 +1999,20 @@ $(document).ready(function() {
     function openNuevoCreditoModal() {
         $('#form-credito')[0].reset();
         $('#seccion-aval').hide();
-        $('#modal-credito-label').text('Nuevo Crédito');
+        $('#modal-credito-label').html('<i class="ri-add-line me-1"></i> Nuevo Crédito');
         
-        // Establecer fecha actual como primer pago
         setCurrentDateAsPrimerPago();
         
         $('#modal-credito').modal('show');
     }
     
     function guardarCredito() {
-        // Validar campos requeridos
         const trabajadorId = $('#trabajador-id').val();
         let montoSolicitado = $('#monto-solicitado').val();
         const mesVencimiento = $('#mes-vencimiento').val();
         const añoVencimiento = $('#año-vencimiento').val();
         const motivoSolicitud = $('#motivo-solicitud').val();
         
-        // Limpiar el monto de posibles caracteres no numéricos (excepto punto y coma)
         if (montoSolicitado) {
             montoSolicitado = montoSolicitado.toString().replace(/[^\d.,]/g, '').replace(',', '.');
         }
@@ -960,7 +2043,6 @@ $(document).ready(function() {
             return;
         }
         
-        // Validar tasa de interés
         const tasaInteres = parseFloat($('#tasa-interes').val()) || 0;
         if (tasaInteres < 0 || tasaInteres > 999.99) {
             showError('La tasa de interés debe estar entre 0% y 999.99%');
@@ -995,27 +2077,27 @@ $(document).ready(function() {
                 if (response.success) {
                     $('#modal-credito').modal('hide');
                     
-                    // Mostrar modal de éxito con opción de imprimir
                     Swal.fire({
                         icon: 'success',
                         title: '✅ Crédito Creado',
                         html: `
                             <div class="text-center">
-                                <h4 class="text-success mb-3">${response.numero_credito}</h4>
+                                <h4 style="color: var(--nexo-success);" class="mb-3">${response.numero_credito}</h4>
                                 <p class="mb-2"><strong>Trabajador:</strong> ${response.trabajador}</p>
                                 <p class="mb-4"><strong>Monto:</strong> ${formatCurrency(response.monto_aprobado)}</p>
-                                <div class="alert alert-info">
-                                    <i class="ri-information-line"></i> 
+                                <div style="background-color: rgba(0, 102, 255, 0.1); padding: 12px; border-radius: 8px; border-left: 4px solid var(--nexo-info);">
+                                    <i class="ri-information-line" style="color: var(--nexo-info);"></i> 
                                     El crédito está ACTIVO y listo para usar
                                 </div>
-                                <button type="button" class="btn btn-primary btn-lg mt-3" onclick="imprimirVoucher(${response.credito_id})">
+                                <button type="button" class="nexo-btn-primary mt-3" onclick="imprimirVoucher(${response.credito_id})">
                                     <i class="ri-printer-line"></i> Imprimir Voucher
                                 </button>
                             </div>
                         `,
                         showConfirmButton: true,
                         confirmButtonText: 'Cerrar',
-                        width: '600px'
+                        confirmButtonColor: '#0066FF',
+                        width: '500px'
                     });
                     
                     loadCreditos();
@@ -1030,7 +2112,7 @@ $(document).ready(function() {
         });
     }
     
-    function registrarPagoModal(creditoId) {
+    window.registrarPagoModal = function(creditoId) {
         const credito = creditosData.find(c => c.id === creditoId);
         if (!credito) return;
         
@@ -1040,7 +2122,7 @@ $(document).ready(function() {
         $('#form-pago')[0].reset();
         $('#pago-fecha').val(new Date().toLocaleDateString('es-CL'));
         $('#modal-pago').modal('show');
-    }
+    };
     
     function registrarPago() {
         const formData = {
@@ -1106,19 +2188,20 @@ $(document).ready(function() {
     
     window.aprobarCredito = function(creditoId) {
         Swal.fire({
-            title: 'Aprobar Crédito',
+            title: '<i class="ri-check-line" style="color: var(--nexo-success);"></i> Aprobar Crédito',
             html: `
-                <div class="mb-3">
-                    <label class="form-label">Monto a Aprobar</label>
-                    <input type="number" id="monto-aprobar" class="form-control" min="1" step="1">
+                <div class="mb-3 text-start">
+                    <label class="nexo-form-label">Monto a Aprobar</label>
+                    <input type="number" id="monto-aprobar" class="form-control nexo-input" min="1" step="1">
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">Observaciones</label>
-                    <textarea id="obs-aprobar" class="form-control" rows="3"></textarea>
+                <div class="mb-3 text-start">
+                    <label class="nexo-form-label">Observaciones</label>
+                    <textarea id="obs-aprobar" class="form-control nexo-input" rows="3"></textarea>
                 </div>
             `,
             showCancelButton: true,
-            confirmButtonText: 'Aprobar',
+            confirmButtonText: '<i class="ri-check-line"></i> Aprobar',
+            confirmButtonColor: '#00D4AA',
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const monto = document.getElementById('monto-aprobar').value;
@@ -1162,16 +2245,16 @@ $(document).ready(function() {
     
     window.rechazarCredito = function(creditoId) {
         Swal.fire({
-            title: 'Rechazar Crédito',
+            title: '<i class="ri-close-line" style="color: var(--nexo-error);"></i> Rechazar Crédito',
             html: `
-                <div class="mb-3">
-                    <label class="form-label">Motivo del Rechazo</label>
-                    <textarea id="motivo-rechazo" class="form-control" rows="3" required></textarea>
+                <div class="mb-3 text-start">
+                    <label class="nexo-form-label">Motivo del Rechazo</label>
+                    <textarea id="motivo-rechazo" class="form-control nexo-input" rows="3" required placeholder="Describa el motivo del rechazo..."></textarea>
                 </div>
             `,
             showCancelButton: true,
-            confirmButtonText: 'Rechazar',
-            confirmButtonColor: '#dc3545',
+            confirmButtonText: '<i class="ri-close-line"></i> Rechazar',
+            confirmButtonColor: '#FF4D4D',
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const motivo = document.getElementById('motivo-rechazo').value;
@@ -1217,8 +2300,10 @@ $(document).ready(function() {
             title: '¿Activar Crédito?',
             text: 'Esto indica que el dinero ha sido entregado al trabajador',
             icon: 'question',
+            iconColor: '#0066FF',
             showCancelButton: true,
-            confirmButtonText: 'Sí, Activar',
+            confirmButtonText: '<i class="ri-play-line"></i> Sí, Activar',
+            confirmButtonColor: '#0066FF',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
@@ -1248,63 +2333,71 @@ $(document).ready(function() {
         const html = `
             <div class="row">
                 <div class="col-md-6">
-                    <h6>Información del Crédito</h6>
+                    <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="ri-bank-card-line me-1"></i> Información del Crédito
+                    </h6>
                     <table class="table table-borderless table-sm">
-                        <tr><td><strong>Número:</strong></td><td>${credito.numero_credito}</td></tr>
-                        <tr><td><strong>Trabajador:</strong></td><td>${credito.trabajador.nombre}</td></tr>
-                        <tr><td><strong>RUT:</strong></td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
-                        <tr><td><strong>Tipo:</strong></td><td>${credito.tipo_credito_display}</td></tr>
-                        <tr><td><strong>Estado:</strong></td><td><span class="estado-badge estado-${credito.estado.toLowerCase()}">${credito.estado_display}</span></td></tr>
-                        <tr><td><strong>Fecha Solicitud:</strong></td><td>${credito.fecha_solicitud}</td></tr>
-                        <tr><td><strong>Fecha Vencimiento:</strong></td><td>${credito.fecha_vencimiento}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted); width: 40%;">Número:</td><td style="font-weight: 600; color: var(--nexo-primary);">${credito.numero_credito}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Trabajador:</td><td style="font-weight: 500;">${credito.trabajador.nombre}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">RUT:</td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Tipo:</td><td>${credito.tipo_credito_display}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Estado:</td><td><span class="nexo-badge nexo-badge-${credito.estado.toLowerCase()}">${credito.estado_display}</span></td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Fecha Solicitud:</td><td>${credito.fecha_solicitud}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Fecha Vencimiento:</td><td>${credito.fecha_vencimiento}</td></tr>
                     </table>
                 </div>
                 <div class="col-md-6">
-                    <h6>Información Financiera</h6>
+                    <h6 style="color: var(--nexo-success); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="ri-money-dollar-circle-line me-1"></i> Información Financiera
+                    </h6>
                     <table class="table table-borderless table-sm">
-                        <tr><td><strong>Monto Solicitado:</strong></td><td>${formatCurrency(credito.monto_solicitado)}</td></tr>
-                        <tr><td><strong>Monto Aprobado:</strong></td><td>${formatCurrency(credito.monto_aprobado || 0)}</td></tr>
-                        <tr><td><strong>Monto Pagado:</strong></td><td>${formatCurrency(credito.monto_pagado)}</td></tr>
-                        <tr><td><strong>Saldo Pendiente:</strong></td><td><strong class="text-danger">${formatCurrency(credito.saldo_pendiente)}</strong></td></tr>
-                        <tr><td><strong>Tasa Interés:</strong></td><td>${credito.tasa_interes}%</td></tr>
-                        <tr><td><strong>Número Cuotas:</strong></td><td>${credito.numero_cuotas}</td></tr>
-                        <tr><td><strong>Valor Cuota:</strong></td><td>${formatCurrency(credito.valor_cuota || 0)}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted); width: 40%;">Monto Solicitado:</td><td style="font-weight: 500;">${formatCurrency(credito.monto_solicitado)}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Monto Aprobado:</td><td style="font-weight: 600; color: var(--nexo-success);">${formatCurrency(credito.monto_aprobado || 0)}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Monto Pagado:</td><td>${formatCurrency(credito.monto_pagado)}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Saldo Pendiente:</td><td style="font-weight: 600; color: var(--nexo-error);">${formatCurrency(credito.saldo_pendiente)}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Tasa Interés:</td><td>${credito.tasa_interes}%</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Número Cuotas:</td><td>${credito.numero_cuotas}</td></tr>
+                        <tr><td style="color: var(--nexo-text-muted);">Valor Cuota:</td><td>${formatCurrency(credito.valor_cuota || 0)}</td></tr>
                     </table>
                 </div>
             </div>
             
             <div class="row mt-4">
                 <div class="col-12">
-                    <h6>Motivo de la Solicitud</h6>
-                    <p class="text-muted">${credito.motivo_solicitud}</p>
+                    <h6 style="color: var(--nexo-warning); font-weight: 600; margin-bottom: 0.5rem;">
+                        <i class="ri-file-text-line me-1"></i> Motivo de la Solicitud
+                    </h6>
+                    <p style="color: var(--nexo-text-secondary); background: var(--nexo-bg-secondary); padding: 12px; border-radius: 8px;">${credito.motivo_solicitud}</p>
                 </div>
             </div>
             
             ${credito.pagos && credito.pagos.length > 0 ? `
                 <div class="row mt-4">
                     <div class="col-12">
-                        <h6>Historial de Pagos</h6>
+                        <h6 style="color: var(--nexo-info); font-weight: 600; margin-bottom: 1rem;">
+                            <i class="ri-history-line me-1"></i> Historial de Pagos
+                        </h6>
                         <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
+                            <table class="table table-sm" style="border-radius: var(--nexo-radius-md); overflow: hidden;">
+                                <thead style="background: var(--nexo-bg-secondary);">
                                     <tr>
-                                        <th>Número</th>
-                                        <th>Fecha</th>
-                                        <th>Monto</th>
-                                        <th>Método</th>
-                                        <th>Cuota</th>
-                                        <th>Registrado por</th>
+                                        <th style="color: var(--nexo-text-secondary); font-size: 12px; text-transform: uppercase;">Número</th>
+                                        <th style="color: var(--nexo-text-secondary); font-size: 12px; text-transform: uppercase;">Fecha</th>
+                                        <th style="color: var(--nexo-text-secondary); font-size: 12px; text-transform: uppercase;">Monto</th>
+                                        <th style="color: var(--nexo-text-secondary); font-size: 12px; text-transform: uppercase;">Método</th>
+                                        <th style="color: var(--nexo-text-secondary); font-size: 12px; text-transform: uppercase;">Cuota</th>
+                                        <th style="color: var(--nexo-text-secondary); font-size: 12px; text-transform: uppercase;">Registrado por</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${credito.pagos.map(pago => `
                                         <tr>
-                                            <td>${pago.numero_pago}</td>
+                                            <td style="color: var(--nexo-primary); font-weight: 500;">${pago.numero_pago}</td>
                                             <td>${pago.fecha_pago}</td>
-                                            <td>${formatCurrency(pago.monto_pago)}</td>
+                                            <td style="color: var(--nexo-success); font-weight: 500;">${formatCurrency(pago.monto_pago)}</td>
                                             <td>${pago.metodo_pago_display}</td>
                                             <td>${pago.numero_cuota || 'N/A'}</td>
-                                            <td>${pago.registrado_por}</td>
+                                            <td style="color: var(--nexo-text-muted);">${pago.registrado_por}</td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -1330,6 +2423,20 @@ $(document).ready(function() {
     function formatNumber(number) {
         return new Intl.NumberFormat('es-CL').format(number || 0);
     }
+
+    function formatMonthLabel(dateStr) {
+        if (!dateStr) return '';
+        const datePart = String(dateStr).split(' ')[0];
+        const parts = datePart.split('/');
+        if (parts.length !== 3) return '';
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) return '';
+        const date = new Date(year, month, 1);
+        const label = date.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    }
     
     function showSuccess(message) {
         Swal.fire({
@@ -1337,7 +2444,9 @@ $(document).ready(function() {
             title: 'Éxito',
             text: message,
             timer: 3000,
-            showConfirmButton: false
+            showConfirmButton: false,
+            background: '#fff',
+            iconColor: '#00D4AA'
         });
     }
     
@@ -1345,7 +2454,8 @@ $(document).ready(function() {
         Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: message
+            text: message,
+            confirmButtonColor: '#0066FF'
         });
     }
     
@@ -1354,6 +2464,674 @@ $(document).ready(function() {
         const url = `/app/api/creditos/imprimir-voucher/${creditoId}/`;
         window.open(url, '_blank', 'width=350,height=650');
     };
+    
+    // ============ EXPORTAR CREDITOS ============
+    function exportarCreditos() {
+        const filtros = {
+            fecha_inicio: $('#fecha-inicio').val(),
+            fecha_fin: $('#fecha-fin').val(),
+            estado: $('#filtro-estado').val(),
+            trabajador_id: $('#filtro-trabajador').val(),
+            tipo_credito: $('#filtro-tipo').val(),
+            numero_credito: $('#filtro-numero').val(),
+            trabajador_texto: $('#filtro-trabajador-texto').val(),
+            sucursal_texto: $('#filtro-sucursal-texto').val(),
+            saldo_min: $('#filtro-saldo-min').val(),
+            saldo_max: $('#filtro-saldo-max').val()
+        };
+        
+        // Construir URL con parámetros
+        let params = new URLSearchParams();
+        Object.keys(filtros).forEach(key => {
+            if (filtros[key]) params.append(key, filtros[key]);
+        });
+        
+        // Mostrar loading
+        Swal.fire({
+            title: 'Exportando...',
+            html: 'Generando archivo Excel',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        // Obtener todos los créditos para exportar
+        $.ajax({
+            url: '/app/api/creditos/cargar/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({...filtros, per_page: 9999}),
+            success: function(response) {
+                if (response.success) {
+                    generateExcelFile(response.creditos);
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function() {
+                Swal.fire('Error', 'Error al obtener datos para exportar', 'error');
+            }
+        });
+    }
+    
+    function generateExcelFile(creditos) {
+        if (creditos.length === 0) {
+            Swal.fire('Sin datos', 'No hay créditos para exportar', 'info');
+            return;
+        }
+
+        // Headers con nombres amigables - Incluyendo información de pagos
+        const headers = [
+            'N° Crédito',
+            'Trabajador',
+            'RUT Trabajador',
+            'Código Vendedor',
+            'Empresa Trabajador',
+            'Empresa Crédito',
+            'Sucursal Otorgamiento',
+            'Dirección Sucursal',
+            'Tipo Crédito',
+            'Estado',
+            'Monto Solicitado',
+            'Monto Aprobado',
+            'Monto Pagado',
+            'Saldo Pendiente',
+            '% Pagado',
+            'N° Cuotas',
+            'Valor Cuota',
+            'Tasa Interés',
+            'Fecha Solicitud',
+            'Mes Solicitud',
+            'Fecha Vencimiento',
+            'Mes Vencimiento',
+            'Días para Vencer',
+            'Vencido',
+            'Usuario Creación',
+            'Usuario Autorización',
+            // === NUEVAS COLUMNAS DE PAGO ===
+            'Sucursal Uso Ticket',
+            'Número Boleta',
+            'Fecha Pago',
+            'Monto Último Pago',
+            'Método Pago',
+            'Vendedor Cobro'
+        ];
+
+        // Crear contenido CSV con BOM para UTF-8
+        let csvRows = [];
+        csvRows.push(headers.join(';'));
+
+        creditos.forEach(c => {
+            // Datos del último pago (si existe)
+            const pago = c.ultimo_pago || {};
+            
+            const row = [
+                c.numero_credito || '',
+                c.trabajador?.nombre || '',
+                c.trabajador?.rut || '',
+                c.trabajador?.codigo_vendedor || '',
+                c.trabajador?.empresa || '',
+                c.empresa?.nombre || '',
+                c.sucursal || '',
+                c.sucursal_direccion || '',
+                c.tipo_credito_display || '',
+                c.estado_display || '',
+                c.monto_solicitado || 0,
+                c.monto_aprobado || 0,
+                c.monto_pagado || 0,
+                c.saldo_pendiente || 0,
+                (c.porcentaje_pagado || 0).toFixed(1),
+                c.numero_cuotas || 1,
+                c.valor_cuota || 0,
+                (c.tasa_interes || 0) + '%',
+                c.fecha_solicitud || '',
+                formatMonthLabel(c.fecha_solicitud),
+                c.fecha_vencimiento || '',
+                formatMonthLabel(c.fecha_vencimiento),
+                c.dias_para_vencimiento || 0,
+                c.esta_vencido ? 'SÍ' : 'NO',
+                c.solicitado_por || '',
+                c.autorizado_por || '',
+                // === DATOS DEL PAGO ===
+                pago.sucursal_cobro || '',
+                pago.numero_boleta || '',
+                pago.fecha_pago || '',
+                pago.monto_pago || '',
+                pago.metodo_pago || '',
+                pago.registrado_por || ''
+            ];
+            // Escapar comillas y wrap en comillas si hay punto y coma
+            csvRows.push(row.map(field => {
+                const str = String(field).replace(/"/g, '""');
+                return `"${str}"`;
+            }).join(';'));
+        });
+
+        // Crear Blob con BOM para UTF-8
+        const BOM = '\uFEFF';
+        const csvContent = BOM + csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        // Descargar archivo
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Creditos_Trabajadores_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Exportación Exitosa',
+            html: `
+                <p>Se exportaron <strong>${creditos.length}</strong> créditos</p>
+                <small style="color: var(--nexo-text-muted);">El archivo se puede abrir en Excel</small>
+            `,
+            timer: 3000,
+            showConfirmButton: false
+        });
+    }
+    
+    // ============ REPORTE ============
+    function abrirModalReporte() {
+        // Establecer fechas por defecto (último mes)
+        const hoy = new Date();
+        const hace30Dias = new Date();
+        hace30Dias.setDate(hace30Dias.getDate() - 30);
+        
+        $('#reporte-fecha-inicio').val(hace30Dias.toLocaleDateString('es-CL'));
+        $('#reporte-fecha-fin').val(hoy.toLocaleDateString('es-CL'));
+        
+        $('#modal-reporte').modal('show');
+        generarReporte();
+    }
+    
+    window.generarReporte = function() {
+        const fechaInicio = $('#reporte-fecha-inicio').val();
+        const fechaFin = $('#reporte-fecha-fin').val();
+        
+        $('#contenido-reporte').html(`
+            <div class="text-center py-4">
+                <div class="spinner-border nexo-spinner" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2" style="color: var(--nexo-text-muted);">Generando reporte...</p>
+            </div>
+        `);
+        
+        $.ajax({
+            url: '/app/api/creditos/cargar/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                fecha_inicio: fechaInicio,
+                fecha_fin: fechaFin,
+                per_page: 9999
+            }),
+            success: function(response) {
+                if (response.success) {
+                    renderReporte(response.creditos, fechaInicio, fechaFin);
+                } else {
+                    $('#contenido-reporte').html(`
+                        <div class="alert alert-danger">Error: ${response.error}</div>
+                    `);
+                }
+            },
+            error: function() {
+                $('#contenido-reporte').html(`
+                    <div class="alert alert-danger">Error al generar el reporte</div>
+                `);
+            }
+        });
+    };
+    
+    function renderReporte(creditos, fechaInicio, fechaFin) {
+        // Calcular estadísticas
+        const totalCreditos = creditos.length;
+        const totalMontoAprobado = creditos.reduce((sum, c) => sum + (c.monto_aprobado || 0), 0);
+        const totalMontoPagado = creditos.reduce((sum, c) => sum + c.monto_pagado, 0);
+        const totalSaldoPendiente = creditos.reduce((sum, c) => sum + c.saldo_pendiente, 0);
+        
+        // Por estado
+        const porEstado = {};
+        creditos.forEach(c => {
+            if (!porEstado[c.estado_display]) {
+                porEstado[c.estado_display] = { count: 0, monto: 0 };
+            }
+            porEstado[c.estado_display].count++;
+            porEstado[c.estado_display].monto += (c.monto_aprobado || c.monto_solicitado);
+        });
+        
+        // Por tipo
+        const porTipo = {};
+        creditos.forEach(c => {
+            if (!porTipo[c.tipo_credito_display]) {
+                porTipo[c.tipo_credito_display] = { count: 0, monto: 0 };
+            }
+            porTipo[c.tipo_credito_display].count++;
+            porTipo[c.tipo_credito_display].monto += (c.monto_aprobado || c.monto_solicitado);
+        });
+        
+        // Vencidos
+        const vencidos = creditos.filter(c => c.esta_vencido);
+        
+        const html = `
+            <div class="alert mb-4" style="background: var(--nexo-primary-light); border: none; border-radius: var(--nexo-radius-md);">
+                <strong style="color: var(--nexo-primary);"><i class="ri-calendar-line me-1"></i> Período:</strong> 
+                ${fechaInicio || 'Sin límite'} - ${fechaFin || 'Sin límite'}
+            </div>
+            
+            <!-- Resumen General -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="p-3 rounded" style="background: var(--nexo-bg-secondary);">
+                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Total Créditos</p>
+                        <h4 style="color: var(--nexo-primary); font-weight: 700;">${totalCreditos}</h4>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 rounded" style="background: var(--nexo-bg-secondary);">
+                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Monto Aprobado</p>
+                        <h4 style="color: var(--nexo-success); font-weight: 700;">${formatCurrency(totalMontoAprobado)}</h4>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 rounded" style="background: var(--nexo-bg-secondary);">
+                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Monto Pagado</p>
+                        <h4 style="color: var(--nexo-info); font-weight: 700;">${formatCurrency(totalMontoPagado)}</h4>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 rounded" style="background: var(--nexo-bg-secondary);">
+                        <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px; text-transform: uppercase;">Saldo Pendiente</p>
+                        <h4 style="color: var(--nexo-warning); font-weight: 700;">${formatCurrency(totalSaldoPendiente)}</h4>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <!-- Por Estado -->
+                <div class="col-md-6">
+                    <h6 style="color: var(--nexo-text-primary); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="ri-pie-chart-line me-1" style="color: var(--nexo-primary);"></i> Por Estado
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead style="background: var(--nexo-bg-secondary);">
+                                <tr>
+                                    <th style="font-size: 11px; text-transform: uppercase; color: var(--nexo-text-muted);">Estado</th>
+                                    <th style="font-size: 11px; text-transform: uppercase; color: var(--nexo-text-muted);">Cantidad</th>
+                                    <th style="font-size: 11px; text-transform: uppercase; color: var(--nexo-text-muted);">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.keys(porEstado).map(estado => `
+                                    <tr>
+                                        <td>${estado}</td>
+                                        <td><strong>${porEstado[estado].count}</strong></td>
+                                        <td>${formatCurrency(porEstado[estado].monto)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Por Tipo -->
+                <div class="col-md-6">
+                    <h6 style="color: var(--nexo-text-primary); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="ri-folder-chart-line me-1" style="color: var(--nexo-success);"></i> Por Tipo
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead style="background: var(--nexo-bg-secondary);">
+                                <tr>
+                                    <th style="font-size: 11px; text-transform: uppercase; color: var(--nexo-text-muted);">Tipo</th>
+                                    <th style="font-size: 11px; text-transform: uppercase; color: var(--nexo-text-muted);">Cantidad</th>
+                                    <th style="font-size: 11px; text-transform: uppercase; color: var(--nexo-text-muted);">Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.keys(porTipo).map(tipo => `
+                                    <tr>
+                                        <td>${tipo}</td>
+                                        <td><strong>${porTipo[tipo].count}</strong></td>
+                                        <td>${formatCurrency(porTipo[tipo].monto)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            ${vencidos.length > 0 ? `
+                <div class="mt-4">
+                    <h6 style="color: var(--nexo-error); font-weight: 600; margin-bottom: 1rem;">
+                        <i class="ri-alarm-warning-line me-1"></i> Créditos Vencidos (${vencidos.length})
+                    </h6>
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm">
+                            <thead style="background: rgba(255, 77, 77, 0.1); position: sticky; top: 0;">
+                                <tr>
+                                    <th style="font-size: 11px; color: var(--nexo-error);">Número</th>
+                                    <th style="font-size: 11px; color: var(--nexo-error);">Trabajador</th>
+                                    <th style="font-size: 11px; color: var(--nexo-error);">Saldo</th>
+                                    <th style="font-size: 11px; color: var(--nexo-error);">Vencimiento</th>
+                                    <th style="font-size: 11px; color: var(--nexo-error);">Días</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${vencidos.map(c => `
+                                    <tr>
+                                        <td style="color: var(--nexo-primary); font-weight: 500;">${c.numero_credito}</td>
+                                        <td>${c.trabajador.nombre}</td>
+                                        <td style="color: var(--nexo-error); font-weight: 500;">${formatCurrency(c.saldo_pendiente)}</td>
+                                        <td>${c.fecha_vencimiento}</td>
+                                        <td><span class="nexo-badge nexo-badge-error">${Math.abs(c.dias_para_vencimiento)} días</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ` : ''}
+        `;
+        
+        $('#contenido-reporte').html(html);
+        
+        // Guardar datos para exportar
+        window.reporteData = creditos;
+    }
+    
+    window.exportarReporte = function() {
+        if (!window.reporteData || window.reporteData.length === 0) {
+            showError('No hay datos para exportar');
+            return;
+        }
+        generateExcelFile(window.reporteData);
+    };
+    
+    window.imprimirReporte = function() {
+        const contenido = document.getElementById('contenido-reporte').innerHTML;
+        const ventana = window.open('', '_blank');
+        ventana.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Reporte de Créditos</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { color: #0066FF; }
+                    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background: #f5f5f7; }
+                    .nexo-badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; }
+                    .nexo-badge-error { background: #FF4D4D; color: white; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <h1>Reporte de Créditos a Trabajadores</h1>
+                <p>Fecha de generación: ${new Date().toLocaleString('es-CL')}</p>
+                ${contenido}
+            </body>
+            </html>
+        `);
+        ventana.document.close();
+        ventana.print();
+    };
+    
+    // ============ AJUSTAR MONTO ============
+    window.ajustarMonto = function(creditoId) {
+        const credito = creditosData.find(c => c.id === creditoId);
+        if (!credito) {
+            showError('Crédito no encontrado');
+            return;
+        }
+        
+        if (credito.monto_pagado > 0) {
+            showError('No se puede ajustar el monto de un crédito que ya tiene pagos registrados');
+            return;
+        }
+        
+        $('#ajustar-credito-id').val(creditoId);
+        $('#ajustar-numero-credito').val(credito.numero_credito + ' - ' + credito.trabajador.nombre);
+        $('#ajustar-monto-actual').val(formatCurrency(credito.monto_aprobado || credito.monto_solicitado));
+        $('#ajustar-nuevo-monto').val(credito.monto_aprobado || credito.monto_solicitado);
+        $('#ajustar-motivo').val('');
+        
+        $('#modal-ajustar-monto').modal('show');
+    };
+    
+    function guardarAjusteMonto() {
+        const creditoId = $('#ajustar-credito-id').val();
+        const nuevoMonto = $('#ajustar-nuevo-monto').val();
+        const motivo = $('#ajustar-motivo').val();
+        
+        if (!nuevoMonto || nuevoMonto <= 0) {
+            showError('Ingrese un monto válido mayor a 0');
+            return;
+        }
+        
+        if (!motivo.trim()) {
+            showError('Debe ingresar el motivo del ajuste');
+            return;
+        }
+        
+        $.ajax({
+            url: '/app/api/creditos/ajustar-monto/',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                credito_id: creditoId,
+                nuevo_monto: parseFloat(nuevoMonto),
+                motivo: motivo.trim()
+            }),
+            success: function(response) {
+                if (response.success) {
+                    $('#modal-ajustar-monto').modal('hide');
+                    showSuccess('Monto ajustado exitosamente');
+                    loadCreditos();
+                    loadEstadisticas();
+                } else {
+                    showError(response.error);
+                }
+            },
+            error: function() {
+                showError('Error al ajustar el monto');
+            }
+        });
+    }
+    
+    // ============ DETALLE MEJORADO ============
+    function renderDetalleCredito(credito) {
+        const porcentajePagado = credito.porcentaje_pagado || 0;
+        const progressClass = porcentajePagado >= 100 ? 'success' : 
+                             porcentajePagado >= 50 ? 'warning' : 'error';
+        
+        const html = `
+            <!-- Resumen Visual -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="p-4 rounded" style="background: linear-gradient(135deg, var(--nexo-primary-light), rgba(0, 212, 170, 0.1));">
+                        <div class="row align-items-center">
+                            <div class="col-md-4 text-center border-end">
+                                <h3 style="color: var(--nexo-primary); font-weight: 700; margin: 0;">${credito.numero_credito}</h3>
+                                <span class="nexo-badge nexo-badge-${credito.estado.toLowerCase()} mt-2">${credito.estado_display}</span>
+                            </div>
+                            <div class="col-md-4 text-center border-end">
+                                <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px;">MONTO APROBADO</p>
+                                <h3 style="color: var(--nexo-success); font-weight: 700; margin: 0;">${formatCurrency(credito.monto_aprobado || credito.monto_solicitado)}</h3>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <p class="mb-1" style="color: var(--nexo-text-muted); font-size: 12px;">SALDO PENDIENTE</p>
+                                <h3 style="color: var(--nexo-error); font-weight: 700; margin: 0;">${formatCurrency(credito.saldo_pendiente)}</h3>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small style="color: var(--nexo-text-muted);">Progreso de pago</small>
+                                <small style="color: var(--nexo-text-primary); font-weight: 600;">${porcentajePagado.toFixed(1)}%</small>
+                            </div>
+                            <div class="nexo-progress" style="height: 12px;">
+                                <div class="nexo-progress-bar ${progressClass}" style="width: ${porcentajePagado}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="nexo-card p-3 h-100">
+                        <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                            <i class="ri-user-line me-1"></i> Trabajador
+                        </h6>
+                        <table class="table table-borderless table-sm mb-0">
+                            <tr><td style="color: var(--nexo-text-muted); width: 40%;">Nombre:</td><td style="font-weight: 500;">${credito.trabajador.nombre}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Código:</td><td>${credito.trabajador.codigo_vendedor}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">RUT:</td><td>${credito.trabajador.rut || 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="nexo-card p-3 h-100">
+                        <h6 style="color: var(--nexo-accent); font-weight: 600; margin-bottom: 1rem;">
+                            <i class="ri-building-line me-1"></i> Empresa / Sucursal
+                        </h6>
+                        <table class="table table-borderless table-sm mb-0">
+                            <tr><td style="color: var(--nexo-text-muted); width: 40%;">Empresa:</td><td style="font-weight: 500;">${credito.empresa_origen?.nombre || credito.empresa?.nombre || '-'}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Sucursal:</td><td>${credito.sucursal?.alias || credito.sucursal || '-'}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Dirección:</td><td>${credito.sucursal?.direccion || credito.sucursal_direccion || '-'}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Creado por:</td><td><span class="nexo-badge nexo-badge-secondary">${credito.solicitado_por}</span></td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Autorizado por:</td><td>${credito.autorizado_por ? '<span class="nexo-badge nexo-badge-success">' + credito.autorizado_por + '</span>' : '-'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="nexo-card p-3 h-100">
+                        <h6 style="color: var(--nexo-success); font-weight: 600; margin-bottom: 1rem;">
+                            <i class="ri-calendar-line me-1"></i> Fechas y Condiciones
+                        </h6>
+                        <table class="table table-borderless table-sm mb-0">
+                            <tr><td style="color: var(--nexo-text-muted); width: 40%;">Solicitud:</td><td>${credito.fecha_solicitud}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Mes Solicitud:</td><td>${formatMonthLabel(credito.fecha_solicitud)}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Vencimiento:</td><td>${credito.fecha_vencimiento} ${credito.esta_vencido ? '<span class="nexo-badge nexo-badge-error">VENCIDO</span>' : ''}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Mes Vencimiento:</td><td>${formatMonthLabel(credito.fecha_vencimiento)}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Cuotas:</td><td>${credito.numero_cuotas} x ${formatCurrency(credito.valor_cuota || 0)}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Tasa Interés:</td><td>${credito.tasa_interes}%</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <div class="nexo-card p-3 h-100">
+                        <h6 style="color: var(--nexo-warning); font-weight: 600; margin-bottom: 1rem;">
+                            <i class="ri-bank-card-line me-1"></i> Detalles del Crédito
+                        </h6>
+                        <table class="table table-borderless table-sm mb-0">
+                            <tr><td style="color: var(--nexo-text-muted); width: 40%;">Tipo:</td><td>${credito.tipo_credito_display}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Monto Solicitado:</td><td>${formatCurrency(credito.monto_solicitado)}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Monto Aprobado:</td><td style="color: var(--nexo-success); font-weight: 600;">${formatCurrency(credito.monto_aprobado || 0)}</td></tr>
+                            <tr><td style="color: var(--nexo-text-muted);">Monto Pagado:</td><td>${formatCurrency(credito.monto_pagado)}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="nexo-card p-3 h-100">
+                        <h6 style="color: var(--nexo-info); font-weight: 600; margin-bottom: 1rem;">
+                            <i class="ri-file-text-line me-1"></i> Motivo/Justificación
+                        </h6>
+                        <p style="color: var(--nexo-text-secondary); margin: 0;">${credito.motivo_solicitud || 'Sin motivo registrado'}</p>
+                        ${credito.observaciones_solicitud ? `<p class="mt-2 mb-0" style="color: var(--nexo-text-muted); font-style: italic;">${credito.observaciones_solicitud}</p>` : ''}
+                    </div>
+                </div>
+            </div>
+            
+            ${credito.pagos && credito.pagos.length > 0 ? `
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                            <i class="ri-history-line me-1"></i> Historial de Pagos/Cobros (${credito.pagos.length})
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm" style="border-radius: var(--nexo-radius-md); overflow: hidden; border: 1px solid var(--nexo-gray-300);">
+                                <thead style="background: var(--nexo-primary); color: white;">
+                                    <tr>
+                                        <th style="font-size: 11px; text-transform: uppercase;">N°</th>
+                                        <th style="font-size: 11px; text-transform: uppercase;">Fecha</th>
+                                        <th style="font-size: 11px; text-transform: uppercase;">Monto</th>
+                                        <th style="font-size: 11px; text-transform: uppercase;">Método</th>
+                                        <th style="font-size: 11px; text-transform: uppercase;">Cuota</th>
+                                        <th style="font-size: 11px; text-transform: uppercase;">Sucursal Cobro</th>
+                                        <th style="font-size: 11px; text-transform: uppercase;">Registrado por</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${credito.pagos.map(pago => `
+                                        <tr>
+                                            <td style="color: var(--nexo-primary); font-weight: 600;">${pago.numero_pago}</td>
+                                            <td>${pago.fecha_pago}</td>
+                                            <td style="color: var(--nexo-success); font-weight: 600;">${formatCurrency(pago.monto_pago)}</td>
+                                            <td><span class="nexo-badge nexo-badge-info">${pago.metodo_pago_display}</span></td>
+                                            <td>${pago.numero_cuota || '-'}</td>
+                                            <td style="color: var(--nexo-warning);" title="${pago.sucursal_cobro_direccion || ''}">${pago.sucursal_cobro || '<span style="color: var(--nexo-text-muted);">-</span>'}</td>
+                                            <td style="color: var(--nexo-text-muted);">${pago.registrado_por}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            ` : `
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="text-center p-4" style="background: var(--nexo-bg-secondary); border-radius: var(--nexo-radius-md);">
+                            <i class="ri-inbox-line" style="font-size: 2rem; color: var(--nexo-gray-300);"></i>
+                            <p class="mb-0 mt-2" style="color: var(--nexo-text-muted);">No hay pagos registrados</p>
+                        </div>
+                    </div>
+                </div>
+            `}
+        `;
+        
+        $('#contenido-detalle-credito').html(html);
+        
+        // Footer con acciones
+        let footerHtml = `
+            <button type="button" class="nexo-btn-secondary" data-bs-dismiss="modal">
+                <i class="ri-close-line me-1"></i> Cerrar
+            </button>
+            <button type="button" class="nexo-btn-info" onclick="imprimirVoucher(${credito.id})">
+                <i class="ri-printer-line me-1"></i> Imprimir Voucher
+            </button>
+        `;
+        
+        if (credito.monto_pagado === 0 && ['ACTIVO', 'APROBADO', 'PENDIENTE'].includes(credito.estado)) {
+            footerHtml += `
+                <button type="button" class="nexo-btn-warning" onclick="$('#modal-detalle-credito').modal('hide'); ajustarMonto(${credito.id});">
+                    <i class="ri-edit-line me-1"></i> Ajustar Monto
+                </button>
+            `;
+        }
+        
+        if ((credito.estado === 'ACTIVO' || credito.estado === 'APROBADO') && credito.saldo_pendiente > 0) {
+            footerHtml += `
+                <button type="button" class="nexo-btn-success" onclick="$('#modal-detalle-credito').modal('hide'); registrarPagoModal(${credito.id});">
+                    <i class="ri-money-dollar-circle-line me-1"></i> Registrar Pago
+                </button>
+            `;
+        }
+        
+        $('#footer-detalle-credito').html(footerHtml);
+    }
 });
 </script>
 
@@ -1365,10 +3143,3 @@ $(document).ready(function() {
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 <script src="{% static 'libs/flatpickr/flatpickr.min.js' %}"></script>
 <script src="{% static 'libs/flatpickr/l10n/es.js' %}"></script>
-
-        </div>
-        <!-- container-fluid -->
-    </div>
-    <!-- End Page-content -->
-</div>
-<!-- end main content-->

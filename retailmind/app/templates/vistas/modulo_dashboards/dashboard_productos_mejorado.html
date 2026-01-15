@@ -1,0 +1,1558 @@
+{% load static %}
+{% load humanize %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+/* ==================== DASHBOARD PRODUCTOS MEJORADO - RetailMind ==================== */
+/* Siguiendo guía de estilos: templates/vistas/ESTILOS_MODULOS.md */
+
+:root {
+    --rm-primary: #405189;
+    --rm-accent: #0ab39c;
+    --rm-success: #0ab39c;
+    --rm-warning: #ffbe0b;
+    --rm-danger: #f06548;
+    --rm-info: #299cdb;
+    --rm-purple: #6f42c1;
+    --rm-indigo: #6610f2;
+    --rm-teal: #20c997;
+    --rm-cyan: #0dcaf0;
+}
+
+.page-content {
+    background: linear-gradient(135deg, #f8fafc 0%, #e8f4f8 100%) !important;
+    min-height: calc(100vh - 70px);
+}
+
+/* Header principal del dashboard */
+.dashboard-header {
+    background: linear-gradient(135deg, #405189 0%, #20c997 100%);
+    border-radius: 20px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 10px 40px rgba(64, 81, 137, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 60%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1));
+    transform: rotate(25deg);
+}
+
+.dashboard-header h1 {
+    color: white;
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dashboard-header p {
+    color: rgba(255,255,255,0.85);
+    margin: 8px 0 0;
+    font-size: 0.95rem;
+}
+
+/* Sección de filtros */
+.filter-section {
+    background: white;
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(64, 81, 137, 0.08);
+}
+
+.filter-section .form-label {
+    font-weight: 600;
+    color: #405189;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.filter-section .form-control,
+.filter-section .form-select {
+    border-radius: 10px;
+    border: 2px solid #e2e8f0;
+    padding: 10px 14px;
+    transition: all 0.3s ease;
+}
+
+.filter-section .form-control:focus,
+.filter-section .form-select:focus {
+    border-color: #405189;
+    box-shadow: 0 0 0 4px rgba(64, 81, 137, 0.1);
+}
+
+/* KPI Cards Mejoradas */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.kpi-card {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: none;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.12);
+}
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 16px 16px 0 0;
+}
+
+.kpi-card.kpi-primary::before { background: linear-gradient(90deg, #405189, #6366f1); }
+.kpi-card.kpi-success::before { background: linear-gradient(90deg, #0ab39c, #10b981); }
+.kpi-card.kpi-warning::before { background: linear-gradient(90deg, #ffbe0b, #fbbf24); }
+.kpi-card.kpi-danger::before { background: linear-gradient(90deg, #f06548, #ef4444); }
+.kpi-card.kpi-info::before { background: linear-gradient(90deg, #299cdb, #3b82f6); }
+.kpi-card.kpi-purple::before { background: linear-gradient(90deg, #6f42c1, #8b5cf6); }
+.kpi-card.kpi-teal::before { background: linear-gradient(90deg, #20c997, #14b8a6); }
+
+.kpi-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    margin-bottom: 12px;
+}
+
+.kpi-primary .kpi-icon { background: linear-gradient(135deg, #405189, #6366f1); }
+.kpi-success .kpi-icon { background: linear-gradient(135deg, #0ab39c, #10b981); }
+.kpi-warning .kpi-icon { background: linear-gradient(135deg, #ffbe0b, #fbbf24); }
+.kpi-danger .kpi-icon { background: linear-gradient(135deg, #f06548, #ef4444); }
+.kpi-info .kpi-icon { background: linear-gradient(135deg, #299cdb, #3b82f6); }
+.kpi-purple .kpi-icon { background: linear-gradient(135deg, #6f42c1, #8b5cf6); }
+.kpi-teal .kpi-icon { background: linear-gradient(135deg, #20c997, #14b8a6); }
+
+.kpi-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.kpi-label {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kpi-trend {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.kpi-trend.up { background: #d1fae5; color: #065f46; }
+.kpi-trend.down { background: #fee2e2; color: #991b1b; }
+.kpi-trend.neutral { background: #e2e8f0; color: #475569; }
+
+/* Section Headers */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.section-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    background: linear-gradient(135deg, #405189, #20c997);
+    color: white;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+/* Chart Cards */
+.chart-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.chart-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chart-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chart-body {
+    padding: 20px;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+}
+
+/* Data Tables */
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.data-table thead th {
+    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #405189;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #cbd5e1;
+}
+
+.data-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+    color: #334155;
+}
+
+.data-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Alert Cards */
+.alert-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+    border-left: 4px solid;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.alert-card.alert-danger { border-left-color: #f06548; background: #fef2f2; }
+.alert-card.alert-warning { border-left-color: #ffbe0b; background: #fffbeb; }
+.alert-card.alert-success { border-left-color: #0ab39c; background: #ecfdf5; }
+.alert-card.alert-info { border-left-color: #299cdb; background: #eff6ff; }
+
+.alert-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.alert-danger .alert-icon { background: #fee2e2; color: #dc2626; }
+.alert-warning .alert-icon { background: #fef3c7; color: #d97706; }
+.alert-success .alert-icon { background: #d1fae5; color: #059669; }
+.alert-info .alert-icon { background: #dbeafe; color: #2563eb; }
+
+.alert-content h6 {
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: #1e293b;
+}
+
+.alert-content p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+/* Badge Styles */
+.badge-stock {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-stock-alto { background: #d1fae5; color: #065f46; }
+.badge-stock-medio { background: #fef3c7; color: #92400e; }
+.badge-stock-bajo { background: #fee2e2; color: #991b1b; }
+.badge-stock-agotado { background: #e2e8f0; color: #475569; }
+
+/* Progress Bar */
+.progress-bar-custom {
+    height: 8px;
+    border-radius: 4px;
+    background: #e2e8f0;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+/* Animation */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadein {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.animate-fadein-delay-1 { animation-delay: 0.1s; }
+.animate-fadein-delay-2 { animation-delay: 0.2s; }
+.animate-fadein-delay-3 { animation-delay: 0.3s; }
+.animate-fadein-delay-4 { animation-delay: 0.4s; }
+
+/* Stats Card */
+.stats-mini {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+
+.stats-mini-label {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.stats-mini-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .dashboard-header {
+        padding: 20px;
+    }
+    
+    .dashboard-header h1 {
+        font-size: 1.4rem;
+    }
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <!-- ========== HEADER DEL DASHBOARD ========== -->
+        <div class="dashboard-header animate-fadein">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1>
+                        <i class="bi bi-box-seam-fill"></i>
+                        Dashboard de Productos
+                    </h1>
+                    <p>Análisis integral del inventario, rotación y rendimiento de productos</p>
+                </div>
+                <div class="col-lg-4 text-end">
+                    <button class="btn btn-light me-2" onclick="exportarReporte()">
+                        <i class="bi bi-download me-1"></i>Exportar
+                    </button>
+                    <button class="btn btn-light" onclick="actualizarDashboard()">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== FILTROS ========== -->
+        <div class="filter-section animate-fadein">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Categoría</label>
+                    <select id="filtroCategoria" class="form-select">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Sucursal</label>
+                    <select id="filtroSucursal" class="form-select">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estado Stock</label>
+                    <select id="filtroEstadoStock" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="alto">Stock Alto (&gt;50)</option>
+                        <option value="medio">Stock Medio (10-50)</option>
+                        <option value="bajo">Stock Bajo (&lt;10)</option>
+                        <option value="agotado">Sin Stock</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Período Ventas</label>
+                    <select id="filtroPeriodo" class="form-select">
+                        <option value="30">Últimos 30 días</option>
+                        <option value="60">Últimos 60 días</option>
+                        <option value="90">Últimos 90 días</option>
+                        <option value="365">Último año</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" onclick="aplicarFiltros()">
+                        <i class="bi bi-funnel me-1"></i>Aplicar
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100" onclick="limpiarFiltros()">
+                        <i class="bi bi-x-circle me-1"></i>Limpiar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== KPIs PRINCIPALES - INVENTARIO ========== -->
+        <div class="section-header animate-fadein">
+            <div class="section-icon"><i class="bi bi-boxes"></i></div>
+            <h3 class="section-title">Indicadores de Inventario</h3>
+        </div>
+
+        <div class="kpi-grid animate-fadein">
+            <!-- Total Productos -->
+            <div class="kpi-card kpi-primary">
+                <div class="kpi-icon"><i class="bi bi-box-seam"></i></div>
+                <div class="kpi-value" id="kpiTotalProductos">0</div>
+                <div class="kpi-label">Total Productos</div>
+                <small class="text-muted"><span id="kpiTotalSKUs">0</span> SKUs activos</small>
+            </div>
+
+            <!-- Valor Inventario (Costo) -->
+            <div class="kpi-card kpi-info">
+                <div class="kpi-icon"><i class="bi bi-cash-stack"></i></div>
+                <div class="kpi-value" id="kpiValorCosto">$0</div>
+                <div class="kpi-label">Valor Inventario (Costo)</div>
+                <small class="text-muted">Valoración FIFO</small>
+            </div>
+
+            <!-- Valor Inventario (Venta) -->
+            <div class="kpi-card kpi-success">
+                <div class="kpi-icon"><i class="bi bi-currency-dollar"></i></div>
+                <div class="kpi-value" id="kpiValorVenta">$0</div>
+                <div class="kpi-label">Valor Inventario (Venta)</div>
+                <small class="text-muted">Precio retail</small>
+            </div>
+
+            <!-- Margen Bruto Potencial -->
+            <div class="kpi-card kpi-purple">
+                <div class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                <div class="kpi-value" id="kpiMargenPotencial">$0</div>
+                <div class="kpi-label">Margen Potencial</div>
+                <span class="kpi-trend up" id="kpiMargenPorcentaje">
+                    <i class="bi bi-arrow-up"></i> 0%
+                </span>
+            </div>
+
+            <!-- Productos con Stock -->
+            <div class="kpi-card kpi-teal">
+                <div class="kpi-icon"><i class="bi bi-check-circle"></i></div>
+                <div class="kpi-value" id="kpiConStock">0</div>
+                <div class="kpi-label">Con Stock</div>
+                <small class="text-muted"><span id="kpiAgotados">0</span> agotados</small>
+            </div>
+
+            <!-- Índice de Rotación -->
+            <div class="kpi-card kpi-warning">
+                <div class="kpi-icon"><i class="bi bi-arrow-repeat"></i></div>
+                <div class="kpi-value" id="kpiRotacion">0.0</div>
+                <div class="kpi-label">Índice Rotación</div>
+                <small class="text-muted">veces/período</small>
+            </div>
+
+            <!-- Días de Cobertura -->
+            <div class="kpi-card kpi-info">
+                <div class="kpi-icon"><i class="bi bi-calendar3"></i></div>
+                <div class="kpi-value" id="kpiDiasCobertura">0</div>
+                <div class="kpi-label">Días Cobertura</div>
+                <small class="text-muted">al ritmo actual</small>
+            </div>
+
+            <!-- Velocidad de Venta -->
+            <div class="kpi-card kpi-success">
+                <div class="kpi-icon"><i class="bi bi-speedometer2"></i></div>
+                <div class="kpi-value" id="kpiVelocidadVenta">0</div>
+                <div class="kpi-label">Unid/Día Vendidas</div>
+                <small class="text-muted">promedio período</small>
+            </div>
+        </div>
+
+        <!-- ========== FLUJO DE PRODUCTOS ========== -->
+        <div class="section-header mt-4 animate-fadein">
+            <div class="section-icon"><i class="bi bi-arrow-left-right"></i></div>
+            <h3 class="section-title">Flujo de Productos (Compras → Stock → Ventas)</h3>
+        </div>
+
+        <div class="row animate-fadein">
+            <div class="col-lg-8">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-graph-up"></i>
+                            Flujo Mensual: Ingresos vs Egresos
+                        </h5>
+                    </div>
+                    <div class="chart-body">
+                        <div class="chart-container">
+                            <canvas id="chartFlujoMensual"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="chart-card h-100">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-pie-chart"></i>
+                            Resumen Movimientos
+                        </h5>
+                    </div>
+                    <div class="chart-body">
+                        <div class="stats-mini">
+                            <span class="stats-mini-label">Compras Recepcionadas</span>
+                            <span class="stats-mini-value text-success" id="statsCompras">0</span>
+                        </div>
+                        <div class="stats-mini">
+                            <span class="stats-mini-label">Ventas Realizadas</span>
+                            <span class="stats-mini-value text-primary" id="statsVentas">0</span>
+                        </div>
+                        <div class="stats-mini">
+                            <span class="stats-mini-label">Traspasos Enviados</span>
+                            <span class="stats-mini-value text-info" id="statsTraspasosSalida">0</span>
+                        </div>
+                        <div class="stats-mini">
+                            <span class="stats-mini-label">Traspasos Recibidos</span>
+                            <span class="stats-mini-value text-teal" id="statsTraspasosEntrada">0</span>
+                        </div>
+                        <div class="stats-mini">
+                            <span class="stats-mini-label">Ajustes Inventario</span>
+                            <span class="stats-mini-value text-warning" id="statsAjustes">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== ANÁLISIS DE STOCK ========== -->
+        <div class="section-header mt-4 animate-fadein">
+            <div class="section-icon"><i class="bi bi-bar-chart"></i></div>
+            <h3 class="section-title">Análisis de Stock por Categoría</h3>
+        </div>
+
+        <div class="row animate-fadein">
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-pie-chart-fill"></i>
+                            Distribución por Categoría
+                        </h5>
+                    </div>
+                    <div class="chart-body">
+                        <div class="chart-container">
+                            <canvas id="chartCategoria"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-boxes"></i>
+                            Estado del Stock
+                        </h5>
+                    </div>
+                    <div class="chart-body">
+                        <div class="chart-container">
+                            <canvas id="chartEstadoStock"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== ANÁLISIS ABC Y PARETO ========== -->
+        <div class="section-header mt-4 animate-fadein">
+            <div class="section-icon"><i class="bi bi-trophy"></i></div>
+            <h3 class="section-title">Análisis ABC y Rendimiento</h3>
+        </div>
+
+        <div class="row animate-fadein">
+            <div class="col-lg-4">
+                <div class="chart-card h-100">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-bar-chart-steps"></i>
+                            Clasificación ABC
+                        </h5>
+                    </div>
+                    <div class="chart-body">
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="chartABC"></canvas>
+                        </div>
+                        <div class="mt-3">
+                            <div class="stats-mini">
+                                <span class="stats-mini-label">
+                                    <span class="badge bg-success me-1">A</span> Alto Valor (80%)
+                                </span>
+                                <span class="stats-mini-value" id="abcA">0</span>
+                            </div>
+                            <div class="stats-mini">
+                                <span class="stats-mini-label">
+                                    <span class="badge bg-warning me-1">B</span> Medio Valor (15%)
+                                </span>
+                                <span class="stats-mini-value" id="abcB">0</span>
+                            </div>
+                            <div class="stats-mini">
+                                <span class="stats-mini-label">
+                                    <span class="badge bg-secondary me-1">C</span> Bajo Valor (5%)
+                                </span>
+                                <span class="stats-mini-value" id="abcC">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-8">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-star-fill text-warning"></i>
+                            Top 10 Productos Más Vendidos
+                        </h5>
+                    </div>
+                    <div class="chart-body p-0">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Producto</th>
+                                    <th>SKU</th>
+                                    <th class="text-end">Ventas</th>
+                                    <th class="text-end">Ingresos</th>
+                                    <th class="text-end">Stock</th>
+                                    <th class="text-center">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyTopVendidos">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="bi bi-hourglass-split"></i> Cargando...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== ALERTAS Y PROBLEMAS ========== -->
+        <div class="section-header mt-4 animate-fadein">
+            <div class="section-icon" style="background: linear-gradient(135deg, #f06548, #ef4444);">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <h3 class="section-title">Alertas y Acciones Requeridas</h3>
+        </div>
+
+        <div class="row animate-fadein">
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-bell-fill text-danger"></i>
+                            Alertas Críticas
+                        </h5>
+                    </div>
+                    <div class="chart-body" id="containerAlertas">
+                        <!-- Alertas dinámicas -->
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-exclamation-circle text-warning"></i>
+                            Productos con Bajo Stock
+                        </h5>
+                    </div>
+                    <div class="chart-body p-0" style="max-height: 350px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th class="text-end">Stock</th>
+                                    <th class="text-end">Venta/Día</th>
+                                    <th class="text-center">Días</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyBajoStock">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        <i class="bi bi-check-circle text-success"></i> Sin alertas
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== STOCK MUERTO Y LENTA ROTACIÓN ========== -->
+        <div class="row mt-4 animate-fadein">
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-hourglass-bottom text-danger"></i>
+                            Stock Muerto (Sin movimiento 90+ días)
+                        </h5>
+                    </div>
+                    <div class="chart-body">
+                        <div class="row text-center mb-3">
+                            <div class="col-6">
+                                <h3 class="text-danger" id="stockMuertoCount">0</h3>
+                                <small class="text-muted">Productos</small>
+                            </div>
+                            <div class="col-6">
+                                <h3 class="text-danger" id="stockMuertoValor">$0</h3>
+                                <small class="text-muted">Valor Inmovilizado</small>
+                            </div>
+                        </div>
+                        <div class="progress-bar-custom">
+                            <div class="progress-bar-fill bg-danger" id="progressStockMuerto" style="width: 0%;"></div>
+                        </div>
+                        <small class="text-muted mt-2 d-block" id="stockMuertoPorcentaje">0% del inventario</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-clock-history text-warning"></i>
+                            Productos de Lenta Rotación
+                        </h5>
+                    </div>
+                    <div class="chart-body p-0" style="max-height: 280px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th class="text-end">Stock</th>
+                                    <th class="text-end">Valor</th>
+                                    <th>Último Mov.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyLentaRotacion">
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">
+                                        <i class="bi bi-check-circle text-success"></i> Sin productos estancados
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== ANÁLISIS POR SUCURSAL ========== -->
+        <div class="section-header mt-4 animate-fadein">
+            <div class="section-icon"><i class="bi bi-shop"></i></div>
+            <h3 class="section-title">Análisis por Sucursal</h3>
+        </div>
+
+        <div class="row animate-fadein">
+            <div class="col-lg-7">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-bar-chart-fill"></i>
+                            Valor de Inventario por Sucursal
+                        </h5>
+                    </div>
+                    <div class="chart-body">
+                        <div class="chart-container">
+                            <canvas id="chartSucursales"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="chart-card h-100">
+                    <div class="chart-header">
+                        <h5 class="chart-title">
+                            <i class="bi bi-truck"></i>
+                            Traspasos Recientes
+                        </h5>
+                    </div>
+                    <div class="chart-body p-0" style="max-height: 350px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Origen → Destino</th>
+                                    <th class="text-end">Unidades</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyTraspasos">
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">
+                                        Sin traspasos recientes
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TABLA PRINCIPAL DE PRODUCTOS ========== -->
+        <div class="section-header mt-4 animate-fadein">
+            <div class="section-icon"><i class="bi bi-table"></i></div>
+            <h3 class="section-title">Catálogo de Productos</h3>
+        </div>
+
+        <div class="chart-card animate-fadein">
+            <div class="chart-header">
+                <h5 class="chart-title">
+                    <i class="bi bi-list-ul"></i>
+                    Listado Detallado
+                </h5>
+                <div class="d-flex gap-2">
+                    <input type="text" class="form-control form-control-sm" id="buscarProducto" 
+                           placeholder="Buscar producto..." style="width: 200px;">
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportarTabla()">
+                        <i class="bi bi-download"></i> Excel
+                    </button>
+                </div>
+            </div>
+            <div class="chart-body p-0">
+                <div class="table-responsive">
+                    <table class="data-table" id="tablaProductos">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Categoría</th>
+                                <th class="text-end">Stock</th>
+                                <th class="text-end">Costo</th>
+                                <th class="text-end">Precio</th>
+                                <th class="text-end">Margen</th>
+                                <th class="text-end">Ventas (30d)</th>
+                                <th class="text-center">Rotación</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyProductos">
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-4">
+                                    <i class="bi bi-hourglass-split"></i> Cargando productos...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- container-fluid -->
+</div><!-- page-content -->
+
+{% include 'layout/footer.html' %}
+
+<script>
+// ==================== DASHBOARD PRODUCTOS MEJORADO - JavaScript ====================
+
+let dashboardData = {};
+let charts = {};
+
+$(document).ready(function() {
+    console.log('🚀 Inicializando Dashboard de Productos Mejorado...');
+    
+    // Cargar datos iniciales
+    cargarDashboard();
+    
+    // Eventos
+    $('#buscarProducto').on('keyup', debounce(filtrarTabla, 300));
+    
+    // Actualizar cada 60 segundos
+    setInterval(actualizarDashboard, 60000);
+    
+    console.log('✅ Dashboard inicializado');
+});
+
+// Función principal para cargar el dashboard
+function cargarDashboard() {
+    showLoader();
+    
+    const params = {
+        categoria: $('#filtroCategoria').val() || '',
+        sucursal: $('#filtroSucursal').val() || '',
+        estado_stock: $('#filtroEstadoStock').val() || '',
+        periodo: $('#filtroPeriodo').val() || '30'
+    };
+    
+    $.ajax({
+        url: '/app/dashboard_productos_mejorado_api/',
+        method: 'GET',
+        data: params,
+        success: function(response) {
+            if (response.success) {
+                dashboardData = response;
+                actualizarKPIs(response.kpis);
+                actualizarGraficos(response);
+                actualizarTablas(response);
+                actualizarAlertas(response.alertas);
+                cargarFiltros(response.filtros);
+            } else {
+                showError(response.error || 'Error al cargar dashboard');
+            }
+        },
+        error: function(xhr) {
+            console.error('Error:', xhr);
+            showError('Error de conexión al servidor');
+        },
+        complete: function() {
+            hideLoader();
+        }
+    });
+}
+
+// Actualizar KPIs
+function actualizarKPIs(kpis) {
+    if (!kpis) return;
+    
+    // Inventario
+    $('#kpiTotalProductos').text(formatNumber(kpis.total_productos || 0));
+    $('#kpiTotalSKUs').text(formatNumber(kpis.total_skus || 0));
+    $('#kpiValorCosto').text(formatMoney(kpis.valor_costo || 0));
+    $('#kpiValorVenta').text(formatMoney(kpis.valor_venta || 0));
+    $('#kpiMargenPotencial').text(formatMoney(kpis.margen_potencial || 0));
+    
+    const margenPorcentaje = kpis.margen_porcentaje || 0;
+    $('#kpiMargenPorcentaje').html(`<i class="bi bi-arrow-up"></i> ${margenPorcentaje.toFixed(1)}%`);
+    
+    $('#kpiConStock').text(formatNumber(kpis.con_stock || 0));
+    $('#kpiAgotados').text(formatNumber(kpis.agotados || 0));
+    
+    // Rotación y eficiencia
+    $('#kpiRotacion').text((kpis.rotacion || 0).toFixed(2));
+    $('#kpiDiasCobertura').text(kpis.dias_cobertura || 0);
+    $('#kpiVelocidadVenta').text((kpis.velocidad_venta || 0).toFixed(1));
+    
+    // Movimientos
+    $('#statsCompras').text(formatNumber(kpis.compras_recepcionadas || 0));
+    $('#statsVentas').text(formatNumber(kpis.ventas_realizadas || 0));
+    $('#statsTraspasosSalida').text(formatNumber(kpis.traspasos_salida || 0));
+    $('#statsTraspasosEntrada').text(formatNumber(kpis.traspasos_entrada || 0));
+    $('#statsAjustes').text(formatNumber(kpis.ajustes || 0));
+    
+    // ABC
+    $('#abcA').text(formatNumber(kpis.abc_a || 0));
+    $('#abcB').text(formatNumber(kpis.abc_b || 0));
+    $('#abcC').text(formatNumber(kpis.abc_c || 0));
+    
+    // Stock muerto
+    $('#stockMuertoCount').text(formatNumber(kpis.stock_muerto_count || 0));
+    $('#stockMuertoValor').text(formatMoney(kpis.stock_muerto_valor || 0));
+    const stockMuertoPct = kpis.stock_muerto_porcentaje || 0;
+    $('#progressStockMuerto').css('width', Math.min(stockMuertoPct, 100) + '%');
+    $('#stockMuertoPorcentaje').text(stockMuertoPct.toFixed(1) + '% del inventario');
+}
+
+// Actualizar Gráficos
+function actualizarGraficos(data) {
+    actualizarChartFlujo(data.flujo_mensual || []);
+    actualizarChartCategoria(data.por_categoria || []);
+    actualizarChartEstadoStock(data.estado_stock || {});
+    actualizarChartABC(data.abc || {});
+    actualizarChartSucursales(data.por_sucursal || []);
+}
+
+function actualizarChartFlujo(flujo) {
+    const ctx = document.getElementById('chartFlujoMensual');
+    if (!ctx) return;
+    
+    if (charts.flujo) charts.flujo.destroy();
+    
+    const labels = flujo.map(f => f.mes || f.label);
+    
+    charts.flujo = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Ingresos (Compras + Traspasos)',
+                    data: flujo.map(f => f.ingresos || 0),
+                    borderColor: '#0ab39c',
+                    backgroundColor: 'rgba(10, 179, 156, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Egresos (Ventas + Traspasos)',
+                    data: flujo.map(f => f.egresos || 0),
+                    borderColor: '#f06548',
+                    backgroundColor: 'rgba(240, 101, 72, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                },
+                {
+                    label: 'Stock Resultante',
+                    data: flujo.map(f => f.stock || 0),
+                    borderColor: '#405189',
+                    backgroundColor: 'transparent',
+                    borderDash: [5, 5],
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function actualizarChartCategoria(categorias) {
+    const ctx = document.getElementById('chartCategoria');
+    if (!ctx) return;
+    
+    if (charts.categoria) charts.categoria.destroy();
+    
+    const colores = [
+        '#405189', '#0ab39c', '#ffbe0b', '#f06548', 
+        '#299cdb', '#6f42c1', '#20c997', '#fd7e14'
+    ];
+    
+    charts.categoria = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: categorias.map(c => c.nombre || 'Sin Categoría'),
+            datasets: [{
+                data: categorias.map(c => c.cantidad || 0),
+                backgroundColor: colores.slice(0, categorias.length),
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right' }
+            }
+        }
+    });
+}
+
+function actualizarChartEstadoStock(estado) {
+    const ctx = document.getElementById('chartEstadoStock');
+    if (!ctx) return;
+    
+    if (charts.estadoStock) charts.estadoStock.destroy();
+    
+    charts.estadoStock = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Stock Alto', 'Stock Medio', 'Stock Bajo', 'Agotado'],
+            datasets: [{
+                label: 'Productos',
+                data: [
+                    estado.alto || 0,
+                    estado.medio || 0,
+                    estado.bajo || 0,
+                    estado.agotado || 0
+                ],
+                backgroundColor: ['#0ab39c', '#ffbe0b', '#f06548', '#6c757d'],
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function actualizarChartABC(abc) {
+    const ctx = document.getElementById('chartABC');
+    if (!ctx) return;
+    
+    if (charts.abc) charts.abc.destroy();
+    
+    charts.abc = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['A (80%)', 'B (15%)', 'C (5%)'],
+            datasets: [{
+                data: [abc.a || 0, abc.b || 0, abc.c || 0],
+                backgroundColor: ['#0ab39c', '#ffbe0b', '#6c757d'],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function actualizarChartSucursales(sucursales) {
+    const ctx = document.getElementById('chartSucursales');
+    if (!ctx) return;
+    
+    if (charts.sucursales) charts.sucursales.destroy();
+    
+    charts.sucursales = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sucursales.map(s => s.nombre || s.alias),
+            datasets: [
+                {
+                    label: 'Valor Costo',
+                    data: sucursales.map(s => s.valor_costo || 0),
+                    backgroundColor: '#405189',
+                    borderRadius: 4
+                },
+                {
+                    label: 'Valor Venta',
+                    data: sucursales.map(s => s.valor_venta || 0),
+                    backgroundColor: '#0ab39c',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + (value / 1000000).toFixed(1) + 'M';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Actualizar Tablas
+function actualizarTablas(data) {
+    actualizarTablaTopVendidos(data.top_vendidos || []);
+    actualizarTablaBajoStock(data.bajo_stock || []);
+    actualizarTablaLentaRotacion(data.lenta_rotacion || []);
+    actualizarTablaTraspasos(data.traspasos_recientes || []);
+    actualizarTablaProductos(data.productos || []);
+}
+
+function actualizarTablaTopVendidos(productos) {
+    const tbody = $('#tbodyTopVendidos');
+    tbody.empty();
+    
+    if (productos.length === 0) {
+        tbody.html('<tr><td colspan="7" class="text-center text-muted py-4">Sin datos de ventas</td></tr>');
+        return;
+    }
+    
+    productos.forEach((p, i) => {
+        const estadoClass = p.stock > 10 ? 'badge-stock-alto' : 
+                           p.stock > 0 ? 'badge-stock-bajo' : 'badge-stock-agotado';
+        tbody.append(`
+            <tr>
+                <td><span class="badge bg-primary">#${i + 1}</span></td>
+                <td>
+                    <strong>${p.nombre || '-'}</strong>
+                    <br><small class="text-muted">${p.categoria || ''}</small>
+                </td>
+                <td><small class="text-muted">${p.sku || '-'}</small></td>
+                <td class="text-end">${formatNumber(p.ventas || 0)} u.</td>
+                <td class="text-end">${formatMoney(p.ingresos || 0)}</td>
+                <td class="text-end">${formatNumber(p.stock || 0)}</td>
+                <td class="text-center">
+                    <span class="badge-stock ${estadoClass}">${p.stock > 0 ? 'Disponible' : 'Agotado'}</span>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+function actualizarTablaBajoStock(productos) {
+    const tbody = $('#tbodyBajoStock');
+    tbody.empty();
+    
+    if (productos.length === 0) {
+        tbody.html('<tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-check-circle text-success"></i> Sin alertas de bajo stock</td></tr>');
+        return;
+    }
+    
+    productos.forEach(p => {
+        const diasClass = p.dias_cobertura < 7 ? 'text-danger fw-bold' : 
+                         p.dias_cobertura < 14 ? 'text-warning' : '';
+        tbody.append(`
+            <tr>
+                <td>
+                    <strong>${p.nombre || '-'}</strong>
+                    <br><small class="text-muted">${p.sku || ''}</small>
+                </td>
+                <td class="text-end"><span class="badge bg-danger">${p.stock || 0}</span></td>
+                <td class="text-end">${(p.venta_dia || 0).toFixed(1)}</td>
+                <td class="text-center ${diasClass}">${p.dias_cobertura || 0} días</td>
+            </tr>
+        `);
+    });
+}
+
+function actualizarTablaLentaRotacion(productos) {
+    const tbody = $('#tbodyLentaRotacion');
+    tbody.empty();
+    
+    if (productos.length === 0) {
+        tbody.html('<tr><td colspan="4" class="text-center text-muted py-4"><i class="bi bi-check-circle text-success"></i> Sin productos estancados</td></tr>');
+        return;
+    }
+    
+    productos.forEach(p => {
+        tbody.append(`
+            <tr>
+                <td>
+                    <strong>${p.nombre || '-'}</strong>
+                    <br><small class="text-muted">${p.sku || ''}</small>
+                </td>
+                <td class="text-end">${formatNumber(p.stock || 0)}</td>
+                <td class="text-end">${formatMoney(p.valor || 0)}</td>
+                <td><small class="text-muted">${p.ultimo_movimiento || 'N/A'}</small></td>
+            </tr>
+        `);
+    });
+}
+
+function actualizarTablaTraspasos(traspasos) {
+    const tbody = $('#tbodyTraspasos');
+    tbody.empty();
+    
+    if (traspasos.length === 0) {
+        tbody.html('<tr><td colspan="3" class="text-center text-muted py-4">Sin traspasos recientes</td></tr>');
+        return;
+    }
+    
+    traspasos.forEach(t => {
+        const estadoClass = t.estado === 'COMPLETADO' ? 'bg-success' :
+                           t.estado === 'EN_TRANSITO' ? 'bg-warning' : 'bg-secondary';
+        tbody.append(`
+            <tr>
+                <td>
+                    <strong>${t.origen || '-'}</strong>
+                    <br><small>→ ${t.destino || '-'}</small>
+                </td>
+                <td class="text-end">${formatNumber(t.unidades || 0)}</td>
+                <td><span class="badge ${estadoClass}">${t.estado || '-'}</span></td>
+            </tr>
+        `);
+    });
+}
+
+function actualizarTablaProductos(productos) {
+    const tbody = $('#tbodyProductos');
+    tbody.empty();
+    
+    if (productos.length === 0) {
+        tbody.html('<tr><td colspan="9" class="text-center text-muted py-4">Sin productos</td></tr>');
+        return;
+    }
+    
+    productos.forEach(p => {
+        const stockClass = p.stock === 0 ? 'badge-stock-agotado' :
+                          p.stock < 10 ? 'badge-stock-bajo' :
+                          p.stock < 50 ? 'badge-stock-medio' : 'badge-stock-alto';
+        
+        const rotacionClass = p.rotacion >= 1 ? 'text-success' :
+                             p.rotacion >= 0.5 ? 'text-warning' : 'text-danger';
+        
+        tbody.append(`
+            <tr>
+                <td>
+                    <strong>${p.nombre || '-'}</strong>
+                    <br><small class="text-muted">${p.sku || ''}</small>
+                </td>
+                <td><span class="badge bg-secondary">${p.categoria || '-'}</span></td>
+                <td class="text-end">
+                    <span class="badge-stock ${stockClass}">${formatNumber(p.stock || 0)}</span>
+                </td>
+                <td class="text-end">${formatMoney(p.costo || 0)}</td>
+                <td class="text-end">${formatMoney(p.precio || 0)}</td>
+                <td class="text-end ${p.margen >= 30 ? 'text-success' : 'text-warning'}">${(p.margen || 0).toFixed(1)}%</td>
+                <td class="text-end">${formatNumber(p.ventas_30d || 0)}</td>
+                <td class="text-center ${rotacionClass}">${(p.rotacion || 0).toFixed(2)}</td>
+                <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary btn-sm" onclick="verDetalle(${p.id})" title="Ver">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="editarProducto(${p.id})" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `);
+    });
+}
+
+// Actualizar Alertas
+function actualizarAlertas(alertas) {
+    const container = $('#containerAlertas');
+    container.empty();
+    
+    if (!alertas || alertas.length === 0) {
+        container.html(`
+            <div class="alert-card alert-success">
+                <div class="alert-icon"><i class="bi bi-check-circle"></i></div>
+                <div class="alert-content">
+                    <h6>Sin alertas críticas</h6>
+                    <p>El inventario se encuentra en buen estado.</p>
+                </div>
+            </div>
+        `);
+        return;
+    }
+    
+    alertas.forEach(alerta => {
+        const alertClass = alerta.tipo === 'danger' ? 'alert-danger' :
+                          alerta.tipo === 'warning' ? 'alert-warning' : 'alert-info';
+        const iconClass = alerta.tipo === 'danger' ? 'bi-exclamation-triangle' :
+                         alerta.tipo === 'warning' ? 'bi-exclamation-circle' : 'bi-info-circle';
+        
+        container.append(`
+            <div class="alert-card ${alertClass}">
+                <div class="alert-icon"><i class="bi ${iconClass}"></i></div>
+                <div class="alert-content">
+                    <h6>${alerta.titulo || 'Alerta'}</h6>
+                    <p>${alerta.mensaje || ''}</p>
+                </div>
+            </div>
+        `);
+    });
+}
+
+// Cargar opciones de filtros
+function cargarFiltros(filtros) {
+    if (!filtros) return;
+    
+    if (filtros.categorias) {
+        const select = $('#filtroCategoria');
+        const current = select.val();
+        select.find('option:not(:first)').remove();
+        filtros.categorias.forEach(c => {
+            select.append(`<option value="${c.id}">${c.nombre}</option>`);
+        });
+        select.val(current);
+    }
+    
+    if (filtros.sucursales) {
+        const select = $('#filtroSucursal');
+        const current = select.val();
+        select.find('option:not(:first)').remove();
+        filtros.sucursales.forEach(s => {
+            select.append(`<option value="${s.id}">${s.nombre}</option>`);
+        });
+        select.val(current);
+    }
+}
+
+// Funciones de utilidad
+function formatNumber(num) {
+    return new Intl.NumberFormat('es-CL').format(num || 0);
+}
+
+function formatMoney(num) {
+    return '$' + new Intl.NumberFormat('es-CL').format(Math.round(num || 0));
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+function filtrarTabla() {
+    const busqueda = $('#buscarProducto').val().toLowerCase();
+    $('#tbodyProductos tr').each(function() {
+        const texto = $(this).text().toLowerCase();
+        $(this).toggle(texto.includes(busqueda));
+    });
+}
+
+function aplicarFiltros() {
+    cargarDashboard();
+}
+
+function limpiarFiltros() {
+    $('#filtroCategoria').val('');
+    $('#filtroSucursal').val('');
+    $('#filtroEstadoStock').val('');
+    $('#filtroPeriodo').val('30');
+    cargarDashboard();
+}
+
+function actualizarDashboard() {
+    cargarDashboard();
+}
+
+function exportarReporte() {
+    window.open('/app/exportar_dashboard_productos/', '_blank');
+}
+
+function exportarTabla() {
+    const params = new URLSearchParams({
+        categoria: $('#filtroCategoria').val() || '',
+        sucursal: $('#filtroSucursal').val() || '',
+        estado_stock: $('#filtroEstadoStock').val() || '',
+        periodo: $('#filtroPeriodo').val() || '30'
+    });
+    window.open(`/app/exportar_productos_filtrado/?${params}`, '_blank');
+}
+
+function verDetalle(id) {
+    window.open(`/app/ver_detalle_producto/${id}/`, '_blank');
+}
+
+function editarProducto(id) {
+    window.open(`/app/editar_producto/${id}/`, '_blank');
+}
+
+function showLoader() {
+    if (typeof showGlobalLoader === 'function') {
+        showGlobalLoader();
+    }
+}
+
+function hideLoader() {
+    if (typeof hideGlobalLoader === 'function') {
+        hideGlobalLoader();
+    }
+}
+
+function showError(message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: message
+        });
+    } else {
+        alert(message);
+    }
+}
+</script>
+

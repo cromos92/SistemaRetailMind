@@ -1,0 +1,1883 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    /* ========== NEXO Design System - Variables ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-transition-fast: 150ms ease;
+    }
+
+    /* ========== Estilos Base del Reporte ========== */
+    .reporte-compras-container {
+        background: var(--nexo-gray-100);
+        min-height: 100vh;
+        padding-bottom: 40px;
+    }
+
+    .page-header-nexo {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D4A 100%);
+        padding: 28px 0;
+        margin-bottom: 24px;
+        border-bottom: 3px solid var(--nexo-accent);
+    }
+
+    .page-header-nexo h1 {
+        color: var(--nexo-white);
+        font-weight: 700;
+        font-size: 1.75rem;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .page-header-nexo p {
+        color: var(--nexo-gray-300);
+        margin: 6px 0 0;
+        font-size: 0.95rem;
+    }
+
+    /* ========== Cards KPI ========== */
+    .kpi-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px;
+        box-shadow: var(--nexo-shadow-md);
+        border: none;
+        transition: transform var(--nexo-transition-fast), box-shadow var(--nexo-transition-fast);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--nexo-shadow-lg);
+    }
+
+    .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+    }
+
+    .kpi-card.primary::before { background: var(--nexo-primary); }
+    .kpi-card.success::before { background: var(--nexo-success); }
+    .kpi-card.warning::before { background: var(--nexo-warning); }
+    .kpi-card.error::before { background: var(--nexo-error); }
+    .kpi-card.info::before { background: var(--nexo-info); }
+    .kpi-card.accent::before { background: var(--nexo-accent); }
+
+    .kpi-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: var(--nexo-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .kpi-icon.primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+    .kpi-icon.success { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
+    .kpi-icon.warning { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
+    .kpi-icon.error { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
+    .kpi-icon.info { background: var(--nexo-primary-light); color: var(--nexo-info); }
+    .kpi-icon.accent { background: rgba(0, 212, 170, 0.15); color: var(--nexo-accent); }
+
+    .kpi-title {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--nexo-gray-500);
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+
+    .kpi-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        line-height: 1.2;
+    }
+
+    .kpi-trend {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .kpi-trend.up { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
+    .kpi-trend.down { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
+    .kpi-trend.neutral { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
+
+    /* ========== Cards de Contenido ========== */
+    .nexo-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-md);
+        border: none;
+        overflow: hidden;
+    }
+
+    .nexo-card-header {
+        background: var(--nexo-gray-100);
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .nexo-card-header h5 {
+        margin: 0;
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .nexo-card-header h5 i {
+        color: var(--nexo-primary);
+    }
+
+    .nexo-card-body {
+        padding: 20px;
+    }
+
+    /* ========== Filtros ========== */
+    .filtros-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px;
+        box-shadow: var(--nexo-shadow-md);
+        margin-bottom: 24px;
+    }
+
+    .filtros-card .form-label {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--nexo-gray-700);
+        margin-bottom: 6px;
+    }
+
+    .filtros-card .form-control,
+    .filtros-card .form-select {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        transition: border-color var(--nexo-transition-fast), box-shadow var(--nexo-transition-fast);
+    }
+
+    .filtros-card .form-control:focus,
+    .filtros-card .form-select:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    }
+
+    /* ========== Botones NEXO ========== */
+    .btn-nexo-primary {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        padding: 10px 20px;
+        font-weight: 600;
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .btn-nexo-primary:hover {
+        background: var(--nexo-primary-dark);
+        color: var(--nexo-white);
+        transform: translateY(-2px);
+    }
+
+    .btn-nexo-outline {
+        background: transparent;
+        color: var(--nexo-primary);
+        border: 2px solid var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+        padding: 8px 18px;
+        font-weight: 600;
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .btn-nexo-outline:hover {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    .btn-nexo-success {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        padding: 10px 20px;
+        font-weight: 600;
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .btn-nexo-success:hover {
+        background: #00B894;
+        color: var(--nexo-white);
+    }
+
+    /* ========== Tablas ========== */
+    .table-nexo {
+        margin: 0;
+    }
+
+    .table-nexo thead th {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-700);
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 12px 16px;
+        border: none;
+        border-bottom: 2px solid var(--nexo-gray-300);
+    }
+
+    .table-nexo tbody td {
+        padding: 14px 16px;
+        vertical-align: middle;
+        border-bottom: 1px solid var(--nexo-gray-100);
+        color: var(--nexo-gray-700);
+        font-size: 0.9rem;
+    }
+
+    .table-nexo tbody tr:hover {
+        background: var(--nexo-gray-100);
+    }
+
+    /* ========== Badges de Estado ========== */
+    .badge-nexo {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+
+    .badge-nexo.success { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
+    .badge-nexo.warning { background: rgba(255, 176, 32, 0.15); color: #B37A00; }
+    .badge-nexo.error { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
+    .badge-nexo.info { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+    .badge-nexo.neutral { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+
+    /* ========== Barras de Progreso ========== */
+    .progress-nexo {
+        height: 8px;
+        border-radius: 10px;
+        background: var(--nexo-gray-100);
+        overflow: hidden;
+    }
+
+    .progress-nexo .progress-bar {
+        border-radius: 10px;
+        transition: width 0.6s ease;
+    }
+
+    .progress-nexo .progress-bar.success { background: var(--nexo-success); }
+    .progress-nexo .progress-bar.warning { background: var(--nexo-warning); }
+    .progress-nexo .progress-bar.error { background: var(--nexo-error); }
+    .progress-nexo .progress-bar.primary { background: var(--nexo-primary); }
+
+    /* ========== Alertas e Insights ========== */
+    .insight-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-md);
+        padding: 16px;
+        border-left: 4px solid var(--nexo-primary);
+        margin-bottom: 12px;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .insight-card.success { border-left-color: var(--nexo-success); }
+    .insight-card.warning { border-left-color: var(--nexo-warning); }
+    .insight-card.error { border-left-color: var(--nexo-error); }
+
+    .insight-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .insight-icon.success { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
+    .insight-icon.warning { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
+    .insight-icon.error { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
+    .insight-icon.info { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+
+    .insight-content h6 {
+        margin: 0 0 4px;
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+        font-size: 0.9rem;
+    }
+
+    .insight-content p {
+        margin: 0;
+        color: var(--nexo-gray-500);
+        font-size: 0.85rem;
+    }
+
+    /* ========== Tabs NEXO ========== */
+    .nav-tabs-nexo {
+        border-bottom: 2px solid var(--nexo-gray-200);
+        gap: 4px;
+    }
+
+    .nav-tabs-nexo .nav-link {
+        color: var(--nexo-gray-500);
+        font-weight: 600;
+        padding: 12px 20px;
+        border: none;
+        border-radius: var(--nexo-radius-md) var(--nexo-radius-md) 0 0;
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .nav-tabs-nexo .nav-link:hover {
+        color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+
+    .nav-tabs-nexo .nav-link.active {
+        color: var(--nexo-primary);
+        background: var(--nexo-white);
+        border-bottom: 3px solid var(--nexo-primary);
+    }
+
+    /* ========== Gráficos Containers ========== */
+    .chart-container {
+        position: relative;
+        height: 320px;
+        padding: 10px;
+    }
+
+    /* ========== Loading State ========== */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        border-radius: var(--nexo-radius-lg);
+    }
+
+    .spinner-nexo {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--nexo-gray-200);
+        border-top-color: var(--nexo-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ========== Responsive ========== */
+    @media (max-width: 768px) {
+        .kpi-card {
+            margin-bottom: 16px;
+        }
+        
+        .chart-container {
+            height: 280px;
+        }
+    }
+</style>
+
+<div class="page-content reporte-compras-container">
+    <div class="container-fluid">
+        
+        <!-- Header del Reporte -->
+        <div class="page-header-nexo">
+            <div class="container-fluid">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h1>
+                            <i class="ri-shopping-cart-2-line"></i> Reporte de Compras
+                        </h1>
+                        <p>Análisis integral de compras, proveedores y recepciones</p>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <button type="button" class="btn btn-nexo-success" id="btnExportar">
+                            <i class="ri-download-2-line"></i> Exportar Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="filtros-card">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label for="filtroAnio" class="form-label">Año</label>
+                    <select class="form-select" id="filtroAnio">
+                        <!-- Se llena dinámicamente -->
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filtroPeriodo" class="form-label">Período</label>
+                    <select class="form-select" id="filtroPeriodo">
+                        <option value="anual">Todo el Año</option>
+                        <option value="trimestre">Últimos 3 meses</option>
+                        <option value="mes">Último mes</option>
+                        <option value="semana">Última semana</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtroProveedor" class="form-label">Proveedor</label>
+                    <select class="form-select" id="filtroProveedor">
+                        <option value="">Todos los proveedores</option>
+                        <!-- Se llena dinámicamente -->
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filtroTemporada" class="form-label">Temporada</label>
+                    <select class="form-select" id="filtroTemporada">
+                        <option value="">Todas</option>
+                        <option value="PRIMAVERA">Primavera</option>
+                        <option value="VERANO">Verano</option>
+                        <option value="OTOÑO">Otoño</option>
+                        <option value="INVIERNO">Invierno</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="button" class="btn btn-nexo-primary w-100" id="btnFiltrar">
+                        <i class="ri-search-line"></i> Aplicar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPIs Principales -->
+        <div class="row g-3 mb-4">
+            <!-- Total Compras -->
+            <div class="col-xl-2 col-md-4 col-sm-6">
+                <div class="kpi-card primary">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon primary">
+                            <i class="ri-file-list-3-line"></i>
+                        </div>
+                        <div class="ms-3">
+                            <p class="kpi-title">Total Compras</p>
+                            <h3 class="kpi-value" id="kpiTotalCompras">0</h3>
+                            <span class="kpi-trend neutral" id="trendTotalCompras">
+                                <i class="ri-subtract-line"></i> --
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inversión Total -->
+            <div class="col-xl-2 col-md-4 col-sm-6">
+                <div class="kpi-card success">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon success">
+                            <i class="ri-money-dollar-circle-line"></i>
+                        </div>
+                        <div class="ms-3">
+                            <p class="kpi-title">Inversión Total</p>
+                            <h3 class="kpi-value" id="kpiInversion">$0</h3>
+                            <span class="kpi-trend neutral" id="trendInversion">
+                                <i class="ri-subtract-line"></i> --
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Unidades Compradas -->
+            <div class="col-xl-2 col-md-4 col-sm-6">
+                <div class="kpi-card info">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon info">
+                            <i class="ri-stack-line"></i>
+                        </div>
+                        <div class="ms-3">
+                            <p class="kpi-title">Unidades</p>
+                            <h3 class="kpi-value" id="kpiUnidades">0</h3>
+                            <span class="kpi-trend neutral" id="trendUnidades">
+                                <i class="ri-subtract-line"></i> --
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cumplimiento Recepción -->
+            <div class="col-xl-2 col-md-4 col-sm-6">
+                <div class="kpi-card accent">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon accent">
+                            <i class="ri-checkbox-circle-line"></i>
+                        </div>
+                        <div class="ms-3">
+                            <p class="kpi-title">Cumplimiento</p>
+                            <h3 class="kpi-value" id="kpiCumplimiento">0%</h3>
+                            <span class="kpi-trend neutral" id="trendCumplimiento">
+                                <i class="ri-subtract-line"></i> --
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROI Estimado -->
+            <div class="col-xl-2 col-md-4 col-sm-6">
+                <div class="kpi-card warning">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon warning">
+                            <i class="ri-percent-line"></i>
+                        </div>
+                        <div class="ms-3">
+                            <p class="kpi-title">ROI Estimado</p>
+                            <h3 class="kpi-value" id="kpiROI">0%</h3>
+                            <span class="kpi-trend neutral" id="trendROI">
+                                <i class="ri-subtract-line"></i> --
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proveedores Activos -->
+            <div class="col-xl-2 col-md-4 col-sm-6">
+                <div class="kpi-card error">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon error">
+                            <i class="ri-building-line"></i>
+                        </div>
+                        <div class="ms-3">
+                            <p class="kpi-title">Proveedores</p>
+                            <h3 class="kpi-value" id="kpiProveedores">0</h3>
+                            <span class="kpi-trend neutral" id="trendProveedores">
+                                <i class="ri-subtract-line"></i> --
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Segunda Fila de KPIs -->
+        <div class="row g-3 mb-4">
+            <!-- Valor de Venta Esperado -->
+            <div class="col-md-3">
+                <div class="kpi-card primary">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon primary">
+                            <i class="ri-line-chart-line"></i>
+                        </div>
+                        <div class="ms-3 flex-grow-1">
+                            <p class="kpi-title">Valor Venta Esperado</p>
+                            <h3 class="kpi-value" id="kpiValorVenta">$0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Margen Bruto -->
+            <div class="col-md-3">
+                <div class="kpi-card success">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon success">
+                            <i class="ri-funds-box-line"></i>
+                        </div>
+                        <div class="ms-3 flex-grow-1">
+                            <p class="kpi-title">Margen Bruto Esperado</p>
+                            <h3 class="kpi-value" id="kpiMargenBruto">$0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Costo Promedio Unidad -->
+            <div class="col-md-3">
+                <div class="kpi-card info">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon info">
+                            <i class="ri-price-tag-3-line"></i>
+                        </div>
+                        <div class="ms-3 flex-grow-1">
+                            <p class="kpi-title">Costo Promedio/Unidad</p>
+                            <h3 class="kpi-value" id="kpiCostoPromedio">$0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pendientes de Pago -->
+            <div class="col-md-3">
+                <div class="kpi-card warning">
+                    <div class="d-flex align-items-center">
+                        <div class="kpi-icon warning">
+                            <i class="ri-wallet-line"></i>
+                        </div>
+                        <div class="ms-3 flex-grow-1">
+                            <p class="kpi-title">Pendiente de Pago</p>
+                            <h3 class="kpi-value" id="kpiPendientePago">$0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs de Análisis -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <ul class="nav nav-tabs nav-tabs-nexo border-0" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#tabEvolucion" role="tab">
+                                    <i class="ri-line-chart-line me-1"></i> Evolución
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabProveedores" role="tab">
+                                    <i class="ri-building-2-line me-1"></i> Proveedores
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabRecepciones" role="tab">
+                                    <i class="ri-inbox-archive-line me-1"></i> Recepciones
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#tabPagos" role="tab">
+                                    <i class="ri-money-dollar-box-line me-1"></i> Pagos
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="nexo-card-body">
+                        <div class="tab-content">
+                            <!-- Tab Evolución Mensual -->
+                            <div class="tab-pane fade show active" id="tabEvolucion" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-lg-8">
+                                        <div class="nexo-card mb-4">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-bar-chart-grouped-line"></i> Evolución Mensual de Compras</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartEvolucionMensual"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <div class="nexo-card mb-4">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-pie-chart-line"></i> Distribución por Temporada</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartTemporadas"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Comparativa Anual -->
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="nexo-card">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-git-compare-line"></i> Comparativa vs Año Anterior</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartComparativaAnual"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Proveedores -->
+                            <div class="tab-pane fade" id="tabProveedores" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <div class="nexo-card mb-4">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-bar-chart-horizontal-line"></i> Pareto de Proveedores</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartParetoProveedores"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <div class="nexo-card mb-4">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-medal-line"></i> Ranking de Cumplimiento</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartCumplimientoProveedores"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Tabla de Proveedores -->
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="nexo-card">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-table-line"></i> Detalle por Proveedor</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-nexo" id="tablaProveedores">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Proveedor</th>
+                                                                <th class="text-center">Compras</th>
+                                                                <th class="text-end">Inversión</th>
+                                                                <th class="text-center">Unidades</th>
+                                                                <th class="text-center">Cumplimiento</th>
+                                                                <th class="text-center">ROI</th>
+                                                                <th class="text-center">Participación</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="tbodyProveedores">
+                                                            <!-- Se llena dinámicamente -->
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Recepciones -->
+                            <div class="tab-pane fade" id="tabRecepciones" role="tabpanel">
+                                <div class="row mb-4">
+                                    <!-- Estado de Recepciones -->
+                                    <div class="col-lg-6">
+                                        <div class="nexo-card h-100">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-donut-chart-line"></i> Estado de Recepciones</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartEstadoRecepciones"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Métricas de Recepción -->
+                                    <div class="col-lg-6">
+                                        <div class="nexo-card h-100">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-dashboard-3-line"></i> Métricas de Recepción</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="row g-3">
+                                                    <div class="col-6">
+                                                        <div class="text-center p-3 rounded" style="background: var(--nexo-gray-100);">
+                                                            <i class="ri-inbox-line fs-2 text-primary mb-2 d-block"></i>
+                                                            <p class="mb-1 text-muted small">Unidades Esperadas</p>
+                                                            <h4 class="mb-0" id="metricaUnidadesEsperadas">0</h4>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="text-center p-3 rounded" style="background: rgba(0, 212, 170, 0.1);">
+                                                            <i class="ri-checkbox-circle-line fs-2 text-success mb-2 d-block"></i>
+                                                            <p class="mb-1 text-muted small">Unidades Recibidas</p>
+                                                            <h4 class="mb-0" id="metricaUnidadesRecibidas">0</h4>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="text-center p-3 rounded" style="background: rgba(255, 176, 32, 0.1);">
+                                                            <i class="ri-error-warning-line fs-2 text-warning mb-2 d-block"></i>
+                                                            <p class="mb-1 text-muted small">Con Problemas</p>
+                                                            <h4 class="mb-0" id="metricaProblemas">0</h4>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6">
+                                                        <div class="text-center p-3 rounded" style="background: rgba(255, 77, 77, 0.1);">
+                                                            <i class="ri-close-circle-line fs-2 text-danger mb-2 d-block"></i>
+                                                            <p class="mb-1 text-muted small">Faltantes</p>
+                                                            <h4 class="mb-0" id="metricaFaltantes">0</h4>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <!-- Barra de Cumplimiento General -->
+                                                <div class="mt-4">
+                                                    <div class="d-flex justify-content-between mb-2">
+                                                        <span class="fw-semibold">Cumplimiento General</span>
+                                                        <span class="fw-bold" id="porcentajeCumplimiento">0%</span>
+                                                    </div>
+                                                    <div class="progress-nexo">
+                                                        <div class="progress-bar success" id="barraCumplimiento" style="width: 0%"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Tabla de Recepciones Pendientes -->
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="nexo-card">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-time-line"></i> Recepciones Pendientes / Con Problemas</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-nexo" id="tablaRecepciones">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Compra / DTE</th>
+                                                                <th>Proveedor</th>
+                                                                <th>Fecha</th>
+                                                                <th class="text-center">Esperadas</th>
+                                                                <th class="text-center">Recibidas</th>
+                                                                <th class="text-center">Estado</th>
+                                                                <th class="text-center">Acciones</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="tbodyRecepciones">
+                                                            <!-- Se llena dinámicamente -->
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Pagos -->
+                            <div class="tab-pane fade" id="tabPagos" role="tabpanel">
+                                <div class="row mb-4">
+                                    <div class="col-lg-4">
+                                        <div class="nexo-card h-100">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-pie-chart-2-line"></i> Estado de Pagos</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartEstadoPagos"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-8">
+                                        <div class="nexo-card h-100">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-calendar-todo-line"></i> Vencimientos Próximos</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="chart-container">
+                                                    <div id="chartVencimientos"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Resumen de Pagos -->
+                                <div class="row g-3 mb-4">
+                                    <div class="col-md-3">
+                                        <div class="insight-card success">
+                                            <div class="insight-icon success">
+                                                <i class="ri-checkbox-circle-fill"></i>
+                                            </div>
+                                            <div class="insight-content">
+                                                <h6>Pagados</h6>
+                                                <p id="montoPagados">$0</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="insight-card warning">
+                                            <div class="insight-icon warning">
+                                                <i class="ri-time-fill"></i>
+                                            </div>
+                                            <div class="insight-content">
+                                                <h6>Pendientes</h6>
+                                                <p id="montoPendientes">$0</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="insight-card error">
+                                            <div class="insight-icon error">
+                                                <i class="ri-alarm-warning-fill"></i>
+                                            </div>
+                                            <div class="insight-content">
+                                                <h6>Vencidos</h6>
+                                                <p id="montoVencidos">$0</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="insight-card">
+                                            <div class="insight-icon info">
+                                                <i class="ri-calendar-event-fill"></i>
+                                            </div>
+                                            <div class="insight-content">
+                                                <h6>Vencen esta semana</h6>
+                                                <p id="montoVencenSemana">$0</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Tabla de Pagos Pendientes -->
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="nexo-card">
+                                            <div class="nexo-card-header">
+                                                <h5><i class="ri-file-list-2-line"></i> Detalle de Pagos Pendientes</h5>
+                                            </div>
+                                            <div class="nexo-card-body">
+                                                <div class="table-responsive">
+                                                    <table class="table table-nexo" id="tablaPagos">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>N° DTE</th>
+                                                                <th>Proveedor</th>
+                                                                <th>Fecha Emisión</th>
+                                                                <th>Vencimiento</th>
+                                                                <th class="text-end">Monto</th>
+                                                                <th class="text-center">Días</th>
+                                                                <th class="text-center">Estado</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody id="tbodyPagos">
+                                                            <!-- Se llena dinámicamente -->
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Insights y Alertas -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <h5><i class="ri-lightbulb-flash-line"></i> Insights Estratégicos</h5>
+                    </div>
+                    <div class="nexo-card-body" id="containerInsights">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <h5><i class="ri-alarm-warning-line"></i> Alertas Importantes</h5>
+                    </div>
+                    <div class="nexo-card-body" id="containerAlertas">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<!-- ApexCharts -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<script>
+// ========== Variables Globales ==========
+let datosReporte = {};
+const coloresNexo = {
+    primary: '#0066FF',
+    primaryDark: '#0052CC',
+    primaryLight: '#E6F0FF',
+    success: '#00D4AA',
+    warning: '#FFB020',
+    error: '#FF4D4D',
+    info: '#0066FF',
+    gray500: '#8A8A9A',
+    gray700: '#4A4A5A'
+};
+
+// ========== Inicialización ==========
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarFiltros();
+    cargarProveedores();
+    cargarDatosReporte();
+    
+    // Event listeners
+    document.getElementById('btnFiltrar').addEventListener('click', cargarDatosReporte);
+    document.getElementById('btnExportar').addEventListener('click', exportarExcel);
+});
+
+// ========== Funciones de Inicialización ==========
+function inicializarFiltros() {
+    const selectAnio = document.getElementById('filtroAnio');
+    const anioActual = new Date().getFullYear();
+    
+    for (let i = anioActual; i >= anioActual - 5; i--) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = i;
+        if (i === anioActual) option.selected = true;
+        selectAnio.appendChild(option);
+    }
+}
+
+function cargarProveedores() {
+    fetch('/app/empresas_proveedoras/')
+        .then(response => response.json())
+        .then(data => {
+            // La API retorna un array directamente
+            const empresas = Array.isArray(data) ? data : (data.empresas || []);
+            const select = document.getElementById('filtroProveedor');
+            empresas.forEach(empresa => {
+                const option = document.createElement('option');
+                option.value = empresa.id;
+                option.textContent = empresa.nombre;
+                select.appendChild(option);
+            });
+        })
+        .catch(error => console.error('Error cargando proveedores:', error));
+}
+
+// ========== Carga Principal de Datos ==========
+function cargarDatosReporte() {
+    const anio = document.getElementById('filtroAnio').value;
+    const periodo = document.getElementById('filtroPeriodo').value;
+    const proveedor = document.getElementById('filtroProveedor').value;
+    const temporada = document.getElementById('filtroTemporada').value;
+    
+    // Mostrar loading
+    mostrarLoading(true);
+    
+    const params = new URLSearchParams({
+        anio: anio,
+        periodo: periodo,
+        proveedor: proveedor,
+        temporada: temporada
+    });
+    
+    fetch(`/app/api/reporte-compras/?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                datosReporte = data;
+                actualizarKPIs(data.metricas);
+                renderizarGraficos(data);
+                renderizarTablas(data);
+                renderizarInsights(data.insights);
+                renderizarAlertas(data.alertas);
+            } else {
+                mostrarError('Error al cargar datos del reporte');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarError('Error de conexión');
+        })
+        .finally(() => {
+            mostrarLoading(false);
+        });
+}
+
+// ========== Actualización de KPIs ==========
+function actualizarKPIs(metricas) {
+    // KPIs principales
+    document.getElementById('kpiTotalCompras').textContent = formatearNumero(metricas.total_compras || 0);
+    document.getElementById('kpiInversion').textContent = formatearMoneda(metricas.inversion_total || 0);
+    document.getElementById('kpiUnidades').textContent = formatearNumero(metricas.unidades_esperadas || 0);
+    document.getElementById('kpiCumplimiento').textContent = (metricas.cumplimiento_general || 0) + '%';
+    document.getElementById('kpiROI').textContent = (metricas.roi_promedio || 0) + '%';
+    document.getElementById('kpiProveedores').textContent = formatearNumero(metricas.proveedores_activos || 0);
+    
+    // KPIs secundarios
+    document.getElementById('kpiValorVenta').textContent = formatearMoneda(metricas.valor_venta_esperado || 0);
+    document.getElementById('kpiMargenBruto').textContent = formatearMoneda(metricas.margen_bruto_esperado || 0);
+    document.getElementById('kpiCostoPromedio').textContent = formatearMoneda(metricas.costo_promedio_unidad || 0);
+    document.getElementById('kpiPendientePago').textContent = formatearMoneda(metricas.pendiente_pago || 0);
+    
+    // Tendencias
+    actualizarTendencia('trendTotalCompras', metricas.tendencia_compras || 0);
+    actualizarTendencia('trendInversion', metricas.tendencia_inversion || 0);
+    actualizarTendencia('trendUnidades', metricas.tendencia_unidades || 0);
+    actualizarTendencia('trendCumplimiento', metricas.tendencia_cumplimiento || 0);
+    actualizarTendencia('trendROI', metricas.tendencia_roi || 0);
+    actualizarTendencia('trendProveedores', metricas.tendencia_proveedores || 0);
+}
+
+function actualizarTendencia(elementId, valor) {
+    const elemento = document.getElementById(elementId);
+    const esPositivo = valor > 0;
+    const esNeutro = valor === 0;
+    
+    elemento.className = 'kpi-trend ' + (esNeutro ? 'neutral' : (esPositivo ? 'up' : 'down'));
+    elemento.innerHTML = `
+        <i class="ri-arrow-${esNeutro ? 'right' : (esPositivo ? 'up' : 'down')}-s-line"></i>
+        ${esNeutro ? '--' : Math.abs(valor) + '%'}
+    `;
+}
+
+// ========== Renderizado de Gráficos ==========
+function renderizarGraficos(data) {
+    renderizarGraficoEvolucion(data.evolucion_mensual || []);
+    renderizarGraficoTemporadas(data.roi_temporadas || []);
+    renderizarGraficoComparativa(data.comparativa_anual || {});
+    renderizarGraficoParetoProveedores(data.pareto_proveedores || []);
+    renderizarGraficoCumplimientoProveedores(data.cumplimiento_proveedores || []);
+    renderizarGraficoEstadoRecepciones(data.estado_recepciones || {});
+    renderizarGraficoEstadoPagos(data.estado_pagos || {});
+    renderizarGraficoVencimientos(data.vencimientos || []);
+    
+    // Métricas de recepción
+    actualizarMetricasRecepcion(data.metricas_recepcion || {});
+}
+
+function renderizarGraficoEvolucion(datos) {
+    const chartElement = document.getElementById('chartEvolucionMensual');
+    if (!chartElement) return;
+    
+    // Limpiar gráfico anterior
+    chartElement.innerHTML = '';
+    
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    
+    const options = {
+        series: [{
+            name: 'Inversión',
+            type: 'column',
+            data: datos.map(d => d.inversion || 0)
+        }, {
+            name: 'Unidades',
+            type: 'line',
+            data: datos.map(d => d.unidades || 0)
+        }],
+        chart: {
+            height: 300,
+            type: 'line',
+            toolbar: { show: false },
+            fontFamily: 'inherit'
+        },
+        colors: [coloresNexo.primary, coloresNexo.success],
+        stroke: {
+            width: [0, 3],
+            curve: 'smooth'
+        },
+        plotOptions: {
+            bar: {
+                borderRadius: 6,
+                columnWidth: '60%'
+            }
+        },
+        fill: {
+            opacity: [1, 1]
+        },
+        markers: {
+            size: [0, 5],
+            strokeWidth: 0,
+            hover: { size: 8 }
+        },
+        xaxis: {
+            categories: datos.map(d => meses[d.mes - 1] || d.mes),
+            labels: { style: { colors: coloresNexo.gray500 } }
+        },
+        yaxis: [{
+            title: { text: 'Inversión ($)', style: { color: coloresNexo.gray500 } },
+            labels: {
+                formatter: (val) => formatearMonedaCorta(val),
+                style: { colors: coloresNexo.gray500 }
+            }
+        }, {
+            opposite: true,
+            title: { text: 'Unidades', style: { color: coloresNexo.gray500 } },
+            labels: {
+                formatter: (val) => formatearNumero(val),
+                style: { colors: coloresNexo.gray500 }
+            }
+        }],
+        tooltip: {
+            shared: true,
+            y: {
+                formatter: function(val, { seriesIndex }) {
+                    return seriesIndex === 0 ? formatearMoneda(val) : formatearNumero(val) + ' unidades';
+                }
+            }
+        },
+        legend: {
+            position: 'top',
+            horizontalAlign: 'right'
+        },
+        grid: {
+            borderColor: '#E6E6E6',
+            strokeDashArray: 4
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+}
+
+function renderizarGraficoTemporadas(datos) {
+    const chartElement = document.getElementById('chartTemporadas');
+    if (!chartElement) return;
+    
+    chartElement.innerHTML = '';
+    
+    const options = {
+        series: datos.map(d => d.inversion || 0),
+        chart: {
+            type: 'donut',
+            height: 300
+        },
+        labels: datos.map(d => d.temporada || 'Sin definir'),
+        colors: [coloresNexo.primary, coloresNexo.success, coloresNexo.warning, coloresNexo.error],
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '70%',
+                    labels: {
+                        show: true,
+                        total: {
+                            show: true,
+                            label: 'Total',
+                            formatter: function(w) {
+                                return formatearMonedaCorta(w.globals.seriesTotals.reduce((a, b) => a + b, 0));
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        legend: {
+            position: 'bottom',
+            fontSize: '12px'
+        },
+        tooltip: {
+            y: {
+                formatter: (val) => formatearMoneda(val)
+            }
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+}
+
+function renderizarGraficoComparativa(datos) {
+    const chartElement = document.getElementById('chartComparativaAnual');
+    if (!chartElement) return;
+    
+    chartElement.innerHTML = '';
+    
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    
+    const options = {
+        series: [{
+            name: 'Año Actual',
+            data: datos.actual || new Array(12).fill(0)
+        }, {
+            name: 'Año Anterior',
+            data: datos.anterior || new Array(12).fill(0)
+        }],
+        chart: {
+            type: 'area',
+            height: 300,
+            toolbar: { show: false },
+            fontFamily: 'inherit'
+        },
+        colors: [coloresNexo.primary, coloresNexo.gray500],
+        fill: {
+            type: 'gradient',
+            gradient: {
+                shadeIntensity: 1,
+                opacityFrom: 0.4,
+                opacityTo: 0.1
+            }
+        },
+        stroke: {
+            width: 3,
+            curve: 'smooth'
+        },
+        xaxis: {
+            categories: meses,
+            labels: { style: { colors: coloresNexo.gray500 } }
+        },
+        yaxis: {
+            labels: {
+                formatter: (val) => formatearMonedaCorta(val),
+                style: { colors: coloresNexo.gray500 }
+            }
+        },
+        tooltip: {
+            y: { formatter: (val) => formatearMoneda(val) }
+        },
+        legend: {
+            position: 'top',
+            horizontalAlign: 'right'
+        },
+        grid: {
+            borderColor: '#E6E6E6',
+            strokeDashArray: 4
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+}
+
+function renderizarGraficoParetoProveedores(datos) {
+    const chartElement = document.getElementById('chartParetoProveedores');
+    if (!chartElement) return;
+    
+    chartElement.innerHTML = '';
+    
+    const top10 = datos.slice(0, 10);
+    
+    const options = {
+        series: [{
+            name: 'Inversión',
+            data: top10.map(d => d.inversion || 0)
+        }],
+        chart: {
+            type: 'bar',
+            height: 300,
+            toolbar: { show: false }
+        },
+        colors: [coloresNexo.primary],
+        plotOptions: {
+            bar: {
+                borderRadius: 6,
+                horizontal: true
+            }
+        },
+        dataLabels: {
+            enabled: true,
+            formatter: (val) => formatearMonedaCorta(val),
+            style: { fontSize: '11px' }
+        },
+        xaxis: {
+            categories: top10.map(d => d.nombre || 'N/A'),
+            labels: {
+                formatter: (val) => formatearMonedaCorta(val),
+                style: { colors: coloresNexo.gray500 }
+            }
+        },
+        yaxis: {
+            labels: { style: { colors: coloresNexo.gray700 } }
+        },
+        tooltip: {
+            y: { formatter: (val) => formatearMoneda(val) }
+        },
+        grid: {
+            borderColor: '#E6E6E6',
+            strokeDashArray: 4
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+}
+
+function renderizarGraficoCumplimientoProveedores(datos) {
+    const chartElement = document.getElementById('chartCumplimientoProveedores');
+    if (!chartElement) return;
+    
+    chartElement.innerHTML = '';
+    
+    const top10 = datos.slice(0, 10);
+    
+    const options = {
+        series: [{
+            name: 'Cumplimiento',
+            data: top10.map(d => d.cumplimiento || 0)
+        }],
+        chart: {
+            type: 'bar',
+            height: 300,
+            toolbar: { show: false }
+        },
+        colors: top10.map(d => {
+            const cum = d.cumplimiento || 0;
+            if (cum >= 90) return coloresNexo.success;
+            if (cum >= 70) return coloresNexo.warning;
+            return coloresNexo.error;
+        }),
+        plotOptions: {
+            bar: {
+                borderRadius: 6,
+                horizontal: true,
+                distributed: true
+            }
+        },
+        dataLabels: {
+            enabled: true,
+            formatter: (val) => val + '%',
+            style: { fontSize: '11px', colors: ['#fff'] }
+        },
+        xaxis: {
+            categories: top10.map(d => d.nombre || 'N/A'),
+            max: 100,
+            labels: {
+                formatter: (val) => val + '%',
+                style: { colors: coloresNexo.gray500 }
+            }
+        },
+        yaxis: {
+            labels: { style: { colors: coloresNexo.gray700 } }
+        },
+        legend: { show: false },
+        grid: {
+            borderColor: '#E6E6E6',
+            strokeDashArray: 4
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+}
+
+function renderizarGraficoEstadoRecepciones(datos) {
+    const chartElement = document.getElementById('chartEstadoRecepciones');
+    if (!chartElement) return;
+    
+    chartElement.innerHTML = '';
+    
+    const labels = ['Recibido OK', 'Parcial', 'Pendiente', 'Con Problemas'];
+    const valores = [
+        datos.recibido_ok || 0,
+        datos.parcial || 0,
+        datos.pendiente || 0,
+        datos.con_problemas || 0
+    ];
+    
+    const options = {
+        series: valores,
+        chart: {
+            type: 'donut',
+            height: 300
+        },
+        labels: labels,
+        colors: [coloresNexo.success, coloresNexo.warning, coloresNexo.gray500, coloresNexo.error],
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '70%',
+                    labels: {
+                        show: true,
+                        total: {
+                            show: true,
+                            label: 'Total',
+                            formatter: function(w) {
+                                return formatearNumero(w.globals.seriesTotals.reduce((a, b) => a + b, 0));
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        legend: {
+            position: 'bottom',
+            fontSize: '12px'
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+}
+
+function renderizarGraficoEstadoPagos(datos) {
+    const chartElement = document.getElementById('chartEstadoPagos');
+    if (!chartElement) return;
+    
+    chartElement.innerHTML = '';
+    
+    const options = {
+        series: [datos.pagados || 0, datos.pendientes || 0, datos.vencidos || 0],
+        chart: {
+            type: 'donut',
+            height: 300
+        },
+        labels: ['Pagados', 'Pendientes', 'Vencidos'],
+        colors: [coloresNexo.success, coloresNexo.warning, coloresNexo.error],
+        plotOptions: {
+            pie: {
+                donut: {
+                    size: '70%',
+                    labels: {
+                        show: true,
+                        total: {
+                            show: true,
+                            label: 'Total',
+                            formatter: function(w) {
+                                return formatearMonedaCorta(w.globals.seriesTotals.reduce((a, b) => a + b, 0));
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        legend: {
+            position: 'bottom'
+        },
+        tooltip: {
+            y: { formatter: (val) => formatearMoneda(val) }
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+    
+    // Actualizar totales
+    document.getElementById('montoPagados').textContent = formatearMoneda(datos.pagados || 0);
+    document.getElementById('montoPendientes').textContent = formatearMoneda(datos.pendientes || 0);
+    document.getElementById('montoVencidos').textContent = formatearMoneda(datos.vencidos || 0);
+    document.getElementById('montoVencenSemana').textContent = formatearMoneda(datos.vencen_semana || 0);
+}
+
+function renderizarGraficoVencimientos(datos) {
+    const chartElement = document.getElementById('chartVencimientos');
+    if (!chartElement) return;
+    
+    chartElement.innerHTML = '';
+    
+    const options = {
+        series: [{
+            name: 'Monto a Vencer',
+            data: datos.map(d => d.monto || 0)
+        }],
+        chart: {
+            type: 'bar',
+            height: 300,
+            toolbar: { show: false }
+        },
+        colors: datos.map(d => {
+            if (d.dias_restantes < 0) return coloresNexo.error;
+            if (d.dias_restantes <= 7) return coloresNexo.warning;
+            return coloresNexo.primary;
+        }),
+        plotOptions: {
+            bar: {
+                borderRadius: 6,
+                distributed: true
+            }
+        },
+        dataLabels: { enabled: false },
+        xaxis: {
+            categories: datos.map(d => d.periodo || ''),
+            labels: { style: { colors: coloresNexo.gray500 } }
+        },
+        yaxis: {
+            labels: {
+                formatter: (val) => formatearMonedaCorta(val),
+                style: { colors: coloresNexo.gray500 }
+            }
+        },
+        legend: { show: false },
+        tooltip: {
+            y: { formatter: (val) => formatearMoneda(val) }
+        }
+    };
+
+    const chart = new ApexCharts(chartElement, options);
+    chart.render();
+}
+
+function actualizarMetricasRecepcion(metricas) {
+    document.getElementById('metricaUnidadesEsperadas').textContent = formatearNumero(metricas.unidades_esperadas || 0);
+    document.getElementById('metricaUnidadesRecibidas').textContent = formatearNumero(metricas.unidades_recibidas || 0);
+    document.getElementById('metricaProblemas').textContent = formatearNumero(metricas.con_problemas || 0);
+    document.getElementById('metricaFaltantes').textContent = formatearNumero(metricas.faltantes || 0);
+    
+    const cumplimiento = metricas.porcentaje_cumplimiento || 0;
+    document.getElementById('porcentajeCumplimiento').textContent = cumplimiento + '%';
+    
+    const barra = document.getElementById('barraCumplimiento');
+    barra.style.width = cumplimiento + '%';
+    barra.className = 'progress-bar ' + (cumplimiento >= 90 ? 'success' : (cumplimiento >= 70 ? 'warning' : 'error'));
+}
+
+// ========== Renderizado de Tablas ==========
+function renderizarTablas(data) {
+    renderizarTablaProveedores(data.top_proveedores || []);
+    renderizarTablaRecepciones(data.recepciones_pendientes || []);
+    renderizarTablaPagos(data.pagos_pendientes || []);
+}
+
+function renderizarTablaProveedores(datos) {
+    const tbody = document.getElementById('tbodyProveedores');
+    tbody.innerHTML = '';
+    
+    datos.forEach(proveedor => {
+        const cumplimientoClass = proveedor.cumplimiento >= 90 ? 'success' : (proveedor.cumplimiento >= 70 ? 'warning' : 'error');
+        const roiClass = proveedor.roi >= 50 ? 'success' : (proveedor.roi >= 30 ? 'warning' : 'error');
+        
+        tbody.innerHTML += `
+            <tr>
+                <td>
+                    <div class="fw-semibold">${proveedor.nombre}</div>
+                    <small class="text-muted">${proveedor.rut || ''}</small>
+                </td>
+                <td class="text-center">${formatearNumero(proveedor.total_compras)}</td>
+                <td class="text-end fw-semibold">${formatearMoneda(proveedor.inversion)}</td>
+                <td class="text-center">${formatearNumero(proveedor.unidades)}</td>
+                <td class="text-center">
+                    <span class="badge-nexo ${cumplimientoClass}">${proveedor.cumplimiento}%</span>
+                </td>
+                <td class="text-center">
+                    <span class="badge-nexo ${roiClass}">${proveedor.roi}%</span>
+                </td>
+                <td class="text-center">
+                    <div class="progress-nexo" style="width: 80px;">
+                        <div class="progress-bar primary" style="width: ${proveedor.participacion}%"></div>
+                    </div>
+                    <small class="text-muted">${proveedor.participacion}%</small>
+                </td>
+            </tr>
+        `;
+    });
+    
+    if (datos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No hay datos disponibles</td></tr>';
+    }
+}
+
+function renderizarTablaRecepciones(datos) {
+    const tbody = document.getElementById('tbodyRecepciones');
+    tbody.innerHTML = '';
+    
+    datos.forEach(recepcion => {
+        const estadoBadge = {
+            'PENDIENTE': '<span class="badge-nexo warning">Pendiente</span>',
+            'PARCIAL': '<span class="badge-nexo info">Parcial</span>',
+            'PROBLEMA': '<span class="badge-nexo error">Con Problemas</span>',
+            'EN_REGULARIZACION': '<span class="badge-nexo warning">En Regularización</span>'
+        };
+        
+        tbody.innerHTML += `
+            <tr>
+                <td class="fw-semibold">#${recepcion.numero}</td>
+                <td>${recepcion.proveedor}</td>
+                <td>${recepcion.fecha}</td>
+                <td class="text-center">${formatearNumero(recepcion.esperadas)}</td>
+                <td class="text-center">${formatearNumero(recepcion.recibidas)}</td>
+                <td class="text-center">${estadoBadge[recepcion.estado] || recepcion.estado}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-nexo-outline" onclick="verDetalleRecepcion(${recepcion.id})">
+                        <i class="ri-eye-line"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    if (datos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin recepciones pendientes</td></tr>';
+    }
+}
+
+function renderizarTablaPagos(datos) {
+    const tbody = document.getElementById('tbodyPagos');
+    tbody.innerHTML = '';
+    
+    datos.forEach(pago => {
+        const diasRestantes = pago.dias_restantes || 0;
+        let diasBadge, estadoBadge;
+        
+        if (diasRestantes < 0) {
+            diasBadge = `<span class="badge-nexo error">${Math.abs(diasRestantes)} días vencido</span>`;
+            estadoBadge = '<span class="badge-nexo error">Vencido</span>';
+        } else if (diasRestantes <= 7) {
+            diasBadge = `<span class="badge-nexo warning">${diasRestantes} días</span>`;
+            estadoBadge = '<span class="badge-nexo warning">Próximo</span>';
+        } else {
+            diasBadge = `<span class="badge-nexo neutral">${diasRestantes} días</span>`;
+            estadoBadge = '<span class="badge-nexo info">Pendiente</span>';
+        }
+        
+        tbody.innerHTML += `
+            <tr>
+                <td class="fw-semibold">${pago.numero_dte}</td>
+                <td>${pago.proveedor}</td>
+                <td>${pago.fecha_emision}</td>
+                <td>${pago.fecha_vencimiento}</td>
+                <td class="text-end fw-semibold">${formatearMoneda(pago.monto)}</td>
+                <td class="text-center">${diasBadge}</td>
+                <td class="text-center">${estadoBadge}</td>
+            </tr>
+        `;
+    });
+    
+    if (datos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin pagos pendientes</td></tr>';
+    }
+}
+
+// ========== Insights y Alertas ==========
+function renderizarInsights(insights) {
+    const container = document.getElementById('containerInsights');
+    container.innerHTML = '';
+    
+    if (!insights || insights.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-4">No hay insights disponibles</p>';
+        return;
+    }
+    
+    insights.forEach(insight => {
+        const iconClass = insight.tipo === 'success' ? 'ri-check-double-line' : 
+                         (insight.tipo === 'warning' ? 'ri-alert-line' : 'ri-information-line');
+        
+        container.innerHTML += `
+            <div class="insight-card ${insight.tipo || ''}">
+                <div class="insight-icon ${insight.tipo || 'info'}">
+                    <i class="${iconClass}"></i>
+                </div>
+                <div class="insight-content">
+                    <h6>${insight.titulo}</h6>
+                    <p>${insight.descripcion}</p>
+                </div>
+            </div>
+        `;
+    });
+}
+
+function renderizarAlertas(alertas) {
+    const container = document.getElementById('containerAlertas');
+    container.innerHTML = '';
+    
+    if (!alertas || alertas.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-4">No hay alertas activas</p>';
+        return;
+    }
+    
+    alertas.forEach(alerta => {
+        const iconClass = alerta.nivel === 'error' ? 'ri-error-warning-fill' : 
+                         (alerta.nivel === 'warning' ? 'ri-alarm-warning-fill' : 'ri-information-fill');
+        
+        container.innerHTML += `
+            <div class="insight-card ${alerta.nivel || 'warning'}">
+                <div class="insight-icon ${alerta.nivel || 'warning'}">
+                    <i class="${iconClass}"></i>
+                </div>
+                <div class="insight-content">
+                    <h6>${alerta.titulo}</h6>
+                    <p>${alerta.descripcion}</p>
+                </div>
+            </div>
+        `;
+    });
+}
+
+// ========== Funciones Auxiliares ==========
+function formatearMoneda(valor) {
+    return '$' + Math.round(valor).toLocaleString('es-CL');
+}
+
+function formatearMonedaCorta(valor) {
+    if (valor >= 1000000) {
+        return '$' + (valor / 1000000).toFixed(1) + 'M';
+    } else if (valor >= 1000) {
+        return '$' + (valor / 1000).toFixed(0) + 'K';
+    }
+    return '$' + Math.round(valor).toLocaleString('es-CL');
+}
+
+function formatearNumero(valor) {
+    return Math.round(valor).toLocaleString('es-CL');
+}
+
+function mostrarLoading(mostrar) {
+    // Implementar overlay de loading si es necesario
+}
+
+function mostrarError(mensaje) {
+    console.error(mensaje);
+    // Implementar toast o alerta de error
+}
+
+function verDetalleRecepcion(id) {
+    window.location.href = `/app/regularizar-recepciones/?recepcion_id=${id}`;
+}
+
+function exportarExcel() {
+    const anio = document.getElementById('filtroAnio').value;
+    const periodo = document.getElementById('filtroPeriodo').value;
+    const proveedor = document.getElementById('filtroProveedor').value;
+    const temporada = document.getElementById('filtroTemporada').value;
+    
+    const params = new URLSearchParams({
+        anio: anio,
+        periodo: periodo,
+        proveedor: proveedor,
+        temporada: temporada
+    });
+    
+    window.location.href = `/app/api/exportar-reporte-compras-excel/?${params}`;
+}
+</script>

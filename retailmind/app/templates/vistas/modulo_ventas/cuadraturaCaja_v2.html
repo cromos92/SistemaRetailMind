@@ -2578,20 +2578,12 @@ function mostrarModalDetalleArqueo(arqueo) {
                                     <div class="card-body">
                                         <table class="table table-sm mb-0">
                                             <tr>
-                                                <td>Falabella:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_falabella_teorico)}</td>
-                                            </tr>
-                                            <tr>
                                                 <td>Paris:</td>
                                                 <td class="text-end">${formatearMoneda(arqueo.total_paris_teorico)}</td>
                                             </tr>
                                             <tr>
                                                 <td>Ripley:</td>
                                                 <td class="text-end">${formatearMoneda(arqueo.total_ripley_teorico)}</td>
-                                            </tr>
-                                            <tr>
-                                                <td>MercadoPago:</td>
-                                                <td class="text-end">${formatearMoneda(arqueo.total_mercadopago_teorico)}</td>
                                             </tr>
                                             <tr>
                                                 <td>Klap:</td>
@@ -3868,13 +3860,6 @@ function generarTablaTickets(tickets) {
     
     html += `
                 </tbody>
-                <tfoot class="table-light">
-                    <tr class="fw-bold">
-                        <td colspan="5" class="text-end">TOTAL TICKETS:</td>
-                        <td class="text-end">${formatearMoneda(tickets.reduce((sum, t) => sum + (t.total || 0), 0))}</td>
-                        <td></td>
-                    </tr>
-                </tfoot>
             </table>
         </div>
     `;
@@ -4019,27 +4004,6 @@ function generarResumenMetodosPago(cuadratura) {
                 </div>
             </div>
             
-            <!-- Tarjetas Comerciales -->
-            <div class="col-md-6 mb-3">
-                <div class="card border-warning">
-                    <div class="card-header bg-warning text-dark">
-                        <strong><i class="ri-shopping-bag-line"></i> Tarjetas Comerciales</strong>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-sm mb-0">
-                            <tr>
-                                <td>🏪 Hites:</td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_hites || 0)}</td>
-                            </tr>
-                            <tr class="table-light">
-                                <td><strong>TOTAL COMERCIALES:</strong></td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_tarjetas_comerciales || 0)}</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Venta Internet -->
             <div class="col-md-6 mb-3">
                 <div class="card border-info">
@@ -4049,20 +4013,12 @@ function generarResumenMetodosPago(cuadratura) {
                     <div class="card-body">
                         <table class="table table-sm mb-0">
                             <tr>
-                                <td>🏬 Falabella:</td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_falabella || 0)}</td>
-                            </tr>
-                            <tr>
                                 <td>🏬 Paris:</td>
                                 <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_paris || 0)}</td>
                             </tr>
                             <tr>
                                 <td>🏬 Ripley:</td>
                                 <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_ripley || 0)}</td>
-                            </tr>
-                            <tr>
-                                <td>💙 MercadoPago:</td>
-                                <td class="text-end fw-bold">${formatearMoneda(cuadratura.total_mercadopago || 0)}</td>
                             </tr>
                             <tr>
                                 <td>⚡ Klap:</td>

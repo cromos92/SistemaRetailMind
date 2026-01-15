@@ -7,64 +7,546 @@
 <div class="container-fluid">
 
 <style>
-    .status-badge {
-        display: inline-block;
-        padding: 8px 20px;
-        border-radius: 20px;
-        font-weight: 600;
+    /* ========== NEXO DESIGN SYSTEM ========== */
+    :root {
+        /* Colores Primarios */
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        
+        /* Colores Secundarios */
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        
+        /* Colores Semánticos */
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        
+        /* Neutrales / Grises */
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        
+        /* Sombras */
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        
+        /* Bordes Redondeados */
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+        --nexo-radius-full: 9999px;
+        
+        /* Transiciones */
+        --nexo-transition-fast: 150ms ease;
+        --nexo-transition-normal: 250ms ease;
     }
-    .badge-success { background: #10b981; color: white; }
-    .badge-danger { background: #ef4444; color: white; }
-    .badge-warning { background: #f59e0b; color: white; }
-    .badge-info { background: #3b82f6; color: white; }
-    
-    .log-container {
-        background: #1a202c;
-        color: #68d391;
-        padding: 20px;
-        border-radius: 8px;
-        font-family: 'Courier New', monospace;
+
+    /* ========== BADGES DE ESTADO ========== */
+    .nexo-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: var(--nexo-radius-full);
+        font-weight: 600;
         font-size: 13px;
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .nexo-badge-success {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+        box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3);
+    }
+    
+    .nexo-badge-error {
+        background: var(--nexo-error);
+        color: var(--nexo-white);
+        box-shadow: 0 2px 8px rgba(255, 77, 77, 0.3);
+    }
+    
+    .nexo-badge-warning {
+        background: var(--nexo-warning);
+        color: var(--nexo-secondary);
+        box-shadow: 0 2px 8px rgba(255, 176, 32, 0.3);
+    }
+    
+    .nexo-badge-info {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        box-shadow: 0 2px 8px rgba(0, 102, 255, 0.3);
+    }
+    
+    .nexo-badge-neutral {
+        background: var(--nexo-gray-700);
+        color: var(--nexo-white);
+    }
+
+    /* ========== HEADER HERO ========== */
+    .nexo-hero {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D4A 50%, var(--nexo-primary-dark) 100%);
+        border-radius: var(--nexo-radius-xl);
+        padding: 32px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--nexo-shadow-lg);
+    }
+    
+    .nexo-hero::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(0, 212, 170, 0.15) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    
+    .nexo-hero::after {
+        content: '';
+        position: absolute;
+        bottom: -30%;
+        left: -10%;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(0, 102, 255, 0.1) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    
+    .nexo-hero-content {
+        position: relative;
+        z-index: 1;
+    }
+    
+    .nexo-hero h2 {
+        color: var(--nexo-white);
+        font-weight: 700;
+        font-size: 1.75rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .nexo-hero-badges {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+    }
+    
+    .nexo-hero-port {
+        color: var(--nexo-gray-300);
+        font-size: 14px;
+        margin-top: 12px;
+    }
+
+    /* ========== CARDS NEXO ========== */
+    .nexo-card {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        overflow: hidden;
+        transition: var(--nexo-transition-normal);
+    }
+    
+    .nexo-card:hover {
+        box-shadow: var(--nexo-shadow-md);
+    }
+    
+    .nexo-card-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .nexo-card-header h5 {
+        margin: 0;
+        font-weight: 600;
+        font-size: 1rem;
+    }
+    
+    .nexo-card-header-primary {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        border-bottom: none;
+    }
+    
+    .nexo-card-header-success {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+        border-bottom: none;
+    }
+    
+    .nexo-card-header-warning {
+        background: var(--nexo-warning);
+        color: var(--nexo-secondary);
+        border-bottom: none;
+    }
+    
+    .nexo-card-header-error {
+        background: var(--nexo-error);
+        color: var(--nexo-white);
+        border-bottom: none;
+    }
+    
+    .nexo-card-header-dark {
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+        border-bottom: none;
+    }
+    
+    .nexo-card-header-info {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        border-bottom: none;
+    }
+    
+    .nexo-card-body {
+        padding: 20px;
+    }
+
+    /* ========== BOTONES NEXO ========== */
+    .nexo-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 24px;
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .nexo-btn-lg {
+        padding: 16px 32px;
+        font-size: 16px;
+    }
+    
+    .nexo-btn-primary {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+    
+    .nexo-btn-primary:hover:not(:disabled) {
+        background: var(--nexo-primary-dark);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+    }
+    
+    .nexo-btn-success {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+    }
+    
+    .nexo-btn-success:hover:not(:disabled) {
+        background: #00B894;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 212, 170, 0.3);
+    }
+    
+    .nexo-btn-warning {
+        background: var(--nexo-warning);
+        color: var(--nexo-secondary);
+    }
+    
+    .nexo-btn-warning:hover:not(:disabled) {
+        background: #E6A020;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 176, 32, 0.3);
+    }
+    
+    .nexo-btn-error {
+        background: var(--nexo-error);
+        color: var(--nexo-white);
+    }
+    
+    .nexo-btn-error:hover:not(:disabled) {
+        background: #E63939;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 77, 77, 0.3);
+    }
+    
+    .nexo-btn-dark {
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+    }
+    
+    .nexo-btn-dark:hover:not(:disabled) {
+        background: #2D2D4A;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(26, 26, 46, 0.3);
+    }
+    
+    .nexo-btn-info {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+    
+    .nexo-btn-info:hover:not(:disabled) {
+        background: var(--nexo-primary-dark);
+    }
+    
+    .nexo-btn-outline {
+        background: transparent;
+        color: var(--nexo-gray-700);
+        border: 2px solid var(--nexo-gray-300);
+    }
+    
+    .nexo-btn-outline:hover:not(:disabled) {
+        border-color: var(--nexo-primary);
+        color: var(--nexo-primary);
+    }
+    
+    .nexo-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .nexo-btn-block {
+        width: 100%;
+    }
+
+    /* ========== ALERTAS NEXO ========== */
+    .nexo-alert {
+        padding: 14px 18px;
+        border-radius: var(--nexo-radius-md);
+        border-left: 4px solid;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .nexo-alert-warning {
+        background: rgba(255, 176, 32, 0.1);
+        border-color: var(--nexo-warning);
+        color: #996B00;
+    }
+    
+    .nexo-alert-error {
+        background: rgba(255, 77, 77, 0.1);
+        border-color: var(--nexo-error);
+        color: var(--nexo-error);
+    }
+    
+    .nexo-alert-success {
+        background: rgba(0, 212, 170, 0.1);
+        border-color: var(--nexo-success);
+        color: #00896A;
+    }
+    
+    .nexo-alert-info {
+        background: rgba(0, 102, 255, 0.1);
+        border-color: var(--nexo-primary);
+        color: var(--nexo-primary);
+    }
+
+    /* ========== LOG CONTAINER ========== */
+    .nexo-log {
+        background: var(--nexo-secondary);
+        color: var(--nexo-accent);
+        padding: 20px;
+        border-radius: var(--nexo-radius-lg);
+        font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+        font-size: 12px;
+        line-height: 1.6;
         max-height: 500px;
         overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
-    .log-success { color: #68d391; }
-    .log-error { color: #fc8181; }
-    .log-warning { color: #f6ad55; }
-    .log-info { color: #63b3ed; }
+    
+    .nexo-log::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .nexo-log::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+    }
+    
+    .nexo-log::-webkit-scrollbar-thumb {
+        background: var(--nexo-gray-700);
+        border-radius: 4px;
+    }
+    
+    .log-success { color: var(--nexo-success); }
+    .log-error { color: var(--nexo-error); }
+    .log-warning { color: var(--nexo-warning); }
+    .log-info { color: var(--nexo-primary-light); }
+
+    /* ========== FORM CONTROLS NEXO ========== */
+    .nexo-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 15px;
+        transition: var(--nexo-transition-fast);
+        background: var(--nexo-white);
+    }
+    
+    .nexo-input:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+    
+    .nexo-input-lg {
+        padding: 16px 20px;
+        font-size: 18px;
+    }
+    
+    .nexo-label {
+        display: block;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        margin-bottom: 8px;
+        font-size: 14px;
+    }
+    
+    .nexo-select {
+        width: 100%;
+        padding: 12px 16px;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 15px;
+        background: var(--nexo-white);
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .nexo-select:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    /* ========== INFO PANEL ========== */
+    .nexo-info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--nexo-gray-100);
+    }
+    
+    .nexo-info-item:last-child {
+        border-bottom: none;
+    }
+    
+    .nexo-info-label {
+        color: var(--nexo-gray-500);
+        font-size: 13px;
+    }
+    
+    .nexo-info-value {
+        color: var(--nexo-gray-900);
+        font-weight: 600;
+        font-size: 13px;
+    }
+
+    /* ========== RESULTADO VENTA ========== */
+    .nexo-result {
+        background: var(--nexo-gray-100);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px;
+        margin-top: 16px;
+    }
+    
+    .nexo-result-success {
+        background: rgba(0, 212, 170, 0.1);
+        border: 2px solid var(--nexo-success);
+    }
+    
+    .nexo-result h6 {
+        color: var(--nexo-success);
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+    
+    .nexo-result p {
+        margin-bottom: 6px;
+        font-size: 14px;
+    }
+
+    /* ========== ANIMACIONES ========== */
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    .nexo-pulse {
+        animation: pulse 2s infinite;
+    }
+    
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 768px) {
+        .nexo-hero-badges {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .nexo-badge {
+            width: 100%;
+            justify-content: center;
+        }
+    }
 </style>
 
-<!-- Header -->
-<div class="row">
+<!-- ========== HEADER HERO ========== -->
+<div class="row mb-4">
     <div class="col-12">
-        <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-            <div class="card-body text-center py-4">
-                <h2 class="mb-2 text-white">🏪 Transbank POS - SDK Web Serial Oficial</h2>
-                <div class="mt-3">
-                    <span class="status-badge badge-danger" id="browser-support">Verificando navegador...</span>
-                    <span class="status-badge badge-danger" id="pos-state">● DESCONECTADO</span>
-                    <span class="status-badge badge-info" id="sale-state">Sin venta</span>
+        <div class="nexo-hero">
+            <div class="nexo-hero-content text-center">
+                <h2>💳 Transbank POS Integrado</h2>
+                <p style="color: var(--nexo-gray-300); margin: 0;">SDK Web Serial Oficial - Conexión directa al terminal</p>
+                
+                <div class="nexo-hero-badges">
+                    <span class="nexo-badge nexo-badge-error" id="browser-support">
+                        <i class="ri-chrome-line"></i> Verificando navegador...
+                    </span>
+                    <span class="nexo-badge nexo-badge-error" id="pos-state">
+                        <span style="font-size: 10px;">●</span> DESCONECTADO
+                    </span>
+                    <span class="nexo-badge nexo-badge-neutral" id="sale-state">
+                        <i class="ri-shopping-cart-line"></i> Sin venta
+                    </span>
                 </div>
-                <p class="mb-0 mt-2" id="port-name">Puerto: Ninguno</p>
+                
+                <p class="nexo-hero-port" id="port-name">Puerto: Ninguno</p>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-3">
-    <!-- Columna Principal -->
+<div class="row">
+    <!-- ========== COLUMNA PRINCIPAL ========== -->
     <div class="col-lg-8">
+        
         <!-- Conexión -->
-        <div class="card mb-3">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0 text-white"><i class="ri-plug-line"></i> Conexión al POS</h5>
+        <div class="nexo-card mb-3">
+            <div class="nexo-card-header nexo-card-header-primary">
+                <i class="ri-plug-line"></i>
+                <h5>Conexión al POS</h5>
             </div>
-            <div class="card-body">
+            <div class="nexo-card-body">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Baudrate:</label>
-                        <select id="baudrate" class="form-select">
-                            <option value="115200" selected>115200</option>
+                        <label class="nexo-label">Baudrate:</label>
+                        <select id="baudrate" class="nexo-select">
+                            <option value="115200" selected>115200 (recomendado)</option>
                             <option value="57600">57600</option>
                             <option value="19200">19200</option>
                             <option value="14400">14400</option>
@@ -72,12 +554,12 @@
                         </select>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">&nbsp;</label>
+                        <label class="nexo-label">&nbsp;</label>
                         <div class="d-grid gap-2">
-                            <button onclick="conectar()" class="btn btn-success" id="btnConectar">
+                            <button onclick="conectar()" class="nexo-btn nexo-btn-success nexo-btn-block" id="btnConectar">
                                 <i class="ri-plug-line"></i> Conectar POS
                             </button>
-                            <button onclick="desconectar()" class="btn btn-danger" id="btnDesconectar" disabled>
+                            <button onclick="desconectar()" class="nexo-btn nexo-btn-error nexo-btn-block" id="btnDesconectar" disabled>
                                 <i class="ri-logout-box-line"></i> Desconectar
                             </button>
                         </div>
@@ -86,60 +568,67 @@
             </div>
         </div>
 
-        <!-- Operaciones -->
+        <!-- ========== OPERACIONES (oculto hasta conectar) ========== -->
         <div id="operations-panel" style="display: none;">
+            
             <!-- Cargar Llaves -->
-            <div class="card mb-3">
-                <div class="card-header bg-warning">
-                    <h5 class="mb-0"><i class="ri-key-2-line"></i> Cargar Llaves</h5>
+            <div class="nexo-card mb-3">
+                <div class="nexo-card-header nexo-card-header-warning">
+                    <i class="ri-key-2-line"></i>
+                    <h5>Cargar Llaves</h5>
                 </div>
-                <div class="card-body">
-                    <div class="alert alert-warning">
-                        <strong>⚠️ IMPORTANTE:</strong> El POS mostrará "¿Desea cargar llaves criptográficas?" - Presiona <strong>SÍ</strong>
+                <div class="nexo-card-body">
+                    <div class="nexo-alert nexo-alert-warning mb-3">
+                        <i class="ri-alert-line" style="font-size: 20px;"></i>
+                        <div>
+                            <strong>IMPORTANTE:</strong> El POS mostrará "¿Desea cargar llaves criptográficas?" - Presiona <strong>SÍ</strong> en el terminal.
+                        </div>
                     </div>
-                    <button onclick="cargarLlaves()" class="btn btn-warning btn-lg w-100">
+                    <button onclick="cargarLlaves()" class="nexo-btn nexo-btn-warning nexo-btn-lg nexo-btn-block">
                         <i class="ri-key-2-line"></i> Cargar Llaves
                     </button>
                 </div>
             </div>
 
             <!-- Venta -->
-            <div class="card mb-3">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0 text-white"><i class="ri-bank-card-line"></i> Procesar Venta</h5>
+            <div class="nexo-card mb-3">
+                <div class="nexo-card-header nexo-card-header-success">
+                    <i class="ri-bank-card-line"></i>
+                    <h5>Procesar Venta</h5>
                 </div>
-                <div class="card-body">
+                <div class="nexo-card-body">
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Monto (CLP):</label>
-                            <input type="number" id="monto" class="form-control form-control-lg" value="1000" min="50">
+                            <label class="nexo-label">Monto (CLP):</label>
+                            <input type="number" id="monto" class="nexo-input nexo-input-lg" value="1000" min="50">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Ticket:</label>
-                            <input type="text" id="ticket" class="form-control form-control-lg" readonly>
+                            <label class="nexo-label">Ticket:</label>
+                            <input type="text" id="ticket" class="nexo-input nexo-input-lg" readonly style="background: var(--nexo-gray-100);">
                         </div>
                     </div>
-                    <button onclick="procesarVenta()" class="btn btn-success btn-lg w-100">
+                    <button onclick="procesarVenta()" class="nexo-btn nexo-btn-success nexo-btn-lg nexo-btn-block">
                         <i class="ri-bank-card-line"></i> Procesar Venta
                     </button>
-                    <div id="resultado-venta" class="mt-3"></div>
+                    <div id="resultado-venta"></div>
                 </div>
             </div>
 
-            <!-- Últim Venta -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="ri-file-list-line"></i> Consultas</h5>
+            <!-- Consultas -->
+            <div class="nexo-card mb-3">
+                <div class="nexo-card-header">
+                    <i class="ri-file-list-line"></i>
+                    <h5>Consultas</h5>
                 </div>
-                <div class="card-body">
+                <div class="nexo-card-body">
                     <div class="d-grid gap-2">
-                        <button onclick="ultimaVenta()" class="btn btn-info">
+                        <button onclick="ultimaVenta()" class="nexo-btn nexo-btn-info nexo-btn-block">
                             <i class="ri-file-text-line"></i> Última Venta
                         </button>
-                        <button onclick="consultarTotales()" class="btn btn-info">
+                        <button onclick="consultarTotales()" class="nexo-btn nexo-btn-info nexo-btn-block">
                             <i class="ri-bar-chart-line"></i> Totales del Día
                         </button>
-                        <button onclick="detalleVentas()" class="btn btn-info">
+                        <button onclick="detalleVentas()" class="nexo-btn nexo-btn-info nexo-btn-block">
                             <i class="ri-file-list-3-line"></i> Detalle de Ventas
                         </button>
                     </div>
@@ -147,19 +636,19 @@
             </div>
 
             <!-- Anular -->
-            <div class="card mb-3">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0 text-white"><i class="ri-close-circle-line"></i> Anular Transacción</h5>
+            <div class="nexo-card mb-3">
+                <div class="nexo-card-header nexo-card-header-error">
+                    <i class="ri-close-circle-line"></i>
+                    <h5>Anular Transacción</h5>
                 </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-8">
-                            <label class="form-label">Operation ID:</label>
-                            <input type="number" id="operation-id" class="form-control" placeholder="ID de operación">
+                <div class="nexo-card-body">
+                    <div class="row align-items-end">
+                        <div class="col-md-8 mb-3 mb-md-0">
+                            <label class="nexo-label">Operation ID:</label>
+                            <input type="number" id="operation-id" class="nexo-input" placeholder="Ingresa el ID de operación">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">&nbsp;</label>
-                            <button onclick="anular()" class="btn btn-danger w-100">
+                            <button onclick="anular()" class="nexo-btn nexo-btn-error nexo-btn-block">
                                 <i class="ri-close-line"></i> Anular
                             </button>
                         </div>
@@ -168,15 +657,19 @@
             </div>
 
             <!-- Cerrar Día -->
-            <div class="card mb-3">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0 text-white"><i class="ri-shut-down-line"></i> Cerrar Día</h5>
+            <div class="nexo-card mb-3">
+                <div class="nexo-card-header nexo-card-header-dark">
+                    <i class="ri-shut-down-line"></i>
+                    <h5>Cerrar Día</h5>
                 </div>
-                <div class="card-body">
-                    <div class="alert alert-danger">
-                        <strong>⚠️</strong> Esto cerrará el batch del día en el POS
+                <div class="nexo-card-body">
+                    <div class="nexo-alert nexo-alert-error mb-3">
+                        <i class="ri-error-warning-line" style="font-size: 20px;"></i>
+                        <div>
+                            <strong>Atención:</strong> Esto cerrará el batch del día en el POS. Esta acción es irreversible.
+                        </div>
                     </div>
-                    <button onclick="cerrarDia()" class="btn btn-dark btn-lg w-100">
+                    <button onclick="cerrarDia()" class="nexo-btn nexo-btn-dark nexo-btn-lg nexo-btn-block">
                         <i class="ri-lock-line"></i> Cerrar Día
                     </button>
                 </div>
@@ -184,32 +677,46 @@
         </div>
     </div>
 
-    <!-- Columna Lateral: Log -->
+    <!-- ========== COLUMNA LATERAL ========== -->
     <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="ri-terminal-line"></i> Log de Comunicación
-                    <button onclick="limpiarLog()" class="btn btn-sm btn-secondary float-end">
-                        <i class="ri-delete-bin-line"></i> Limpiar
-                    </button>
-                </h5>
+        
+        <!-- Log de Comunicación -->
+        <div class="nexo-card mb-3">
+            <div class="nexo-card-header nexo-card-header-dark">
+                <i class="ri-terminal-line"></i>
+                <h5 style="flex: 1;">Log de Comunicación</h5>
+                <button onclick="limpiarLog()" class="nexo-btn nexo-btn-outline" style="padding: 6px 12px; font-size: 12px;">
+                    <i class="ri-delete-bin-line"></i> Limpiar
+                </button>
             </div>
-            <div class="card-body">
-                <div id="log" class="log-container"></div>
+            <div class="nexo-card-body" style="padding: 12px;">
+                <div id="log" class="nexo-log"></div>
             </div>
         </div>
 
-        <!-- Información SDK -->
-        <div class="card mt-3">
-            <div class="card-header bg-info text-white">
-                <h6 class="mb-0 text-white"><i class="ri-information-line"></i> Info SDK</h6>
+        <!-- Info SDK -->
+        <div class="nexo-card">
+            <div class="nexo-card-header nexo-card-header-info">
+                <i class="ri-information-line"></i>
+                <h5>Información SDK</h5>
             </div>
-            <div class="card-body">
-                <p class="mb-1"><strong>SDK:</strong> Transbank Web Serial</p>
-                <p class="mb-1"><strong>Versión:</strong> 1.0.0</p>
-                <p class="mb-1"><strong>Modo:</strong> <span id="sdk-mode">Detectando...</span></p>
-                <p class="mb-0"><strong>Navegador:</strong> <span id="browser-name"></span></p>
+            <div class="nexo-card-body">
+                <div class="nexo-info-item">
+                    <span class="nexo-info-label">SDK</span>
+                    <span class="nexo-info-value">Transbank Web Serial</span>
+                </div>
+                <div class="nexo-info-item">
+                    <span class="nexo-info-label">Versión</span>
+                    <span class="nexo-info-value">1.0.0</span>
+                </div>
+                <div class="nexo-info-item">
+                    <span class="nexo-info-label">Modo</span>
+                    <span class="nexo-info-value" id="sdk-mode">Detectando...</span>
+                </div>
+                <div class="nexo-info-item">
+                    <span class="nexo-info-label">Navegador</span>
+                    <span class="nexo-info-value" id="browser-name">—</span>
+                </div>
             </div>
         </div>
     </div>
@@ -264,26 +771,27 @@
     
     function limpiarLog() {
         document.getElementById('log').innerHTML = '';
+        log('Log limpiado', 'info');
     }
     
     // Actualizar estado
-    function actualizarEstado(conectado, portName = '') {
+    function actualizarEstado(estaConectado, portName = '') {
         const posState = document.getElementById('pos-state');
         const portNameEl = document.getElementById('port-name');
         const btnConectar = document.getElementById('btnConectar');
         const btnDesconectar = document.getElementById('btnDesconectar');
         const operations = document.getElementById('operations-panel');
         
-        if (conectado) {
-            posState.textContent = '● CONECTADO';
-            posState.className = 'status-badge badge-success';
+        if (estaConectado) {
+            posState.innerHTML = '<span style="font-size: 10px;">●</span> CONECTADO';
+            posState.className = 'nexo-badge nexo-badge-success';
             portNameEl.textContent = `Puerto: ${portName}`;
             btnConectar.disabled = true;
             btnDesconectar.disabled = false;
             operations.style.display = 'block';
         } else {
-            posState.textContent = '● DESCONECTADO';
-            posState.className = 'status-badge badge-danger';
+            posState.innerHTML = '<span style="font-size: 10px;">●</span> DESCONECTADO';
+            posState.className = 'nexo-badge nexo-badge-error';
             portNameEl.textContent = 'Puerto: Ninguno';
             btnConectar.disabled = false;
             btnDesconectar.disabled = true;
@@ -298,13 +806,13 @@
         const sdkMode = document.getElementById('sdk-mode');
         
         if ('serial' in navigator) {
-            browserSupport.textContent = '✅ Compatible';
-            browserSupport.className = 'status-badge badge-success';
+            browserSupport.innerHTML = '<i class="ri-check-line"></i> Compatible';
+            browserSupport.className = 'nexo-badge nexo-badge-success';
             log('✅ Web Serial API disponible', 'success');
             sdkMode.textContent = 'Web Serial API';
         } else {
-            browserSupport.textContent = '❌ No Compatible';
-            browserSupport.className = 'status-badge badge-danger';
+            browserSupport.innerHTML = '<i class="ri-close-line"></i> No Compatible';
+            browserSupport.className = 'nexo-badge nexo-badge-error';
             log('❌ Web Serial API no disponible', 'error');
             log('Usa Chrome/Edge/Opera 89+', 'warning');
             sdkMode.textContent = 'No disponible';
@@ -436,13 +944,13 @@
                 return;
             }
             
-            log(`💳 Venta: $${monto} - Ticket: ${ticket}`, 'info');
+            log(`💳 Venta: $${monto.toLocaleString()} - Ticket: ${ticket}`, 'info');
             log('⚠️ PASE LA TARJETA EN EL POS', 'warning');
             log('⏳ Esperando (hasta 90s)...', 'info');
             
             const saleState = document.getElementById('sale-state');
-            saleState.textContent = '⏳ Procesando...';
-            saleState.className = 'status-badge badge-warning';
+            saleState.innerHTML = '<i class="ri-loader-4-line nexo-pulse"></i> Procesando...';
+            saleState.className = 'nexo-badge nexo-badge-warning';
             
             // Usar SDK oficial
             const resultado = await pos.sale(monto, ticket);
@@ -451,10 +959,10 @@
             log(JSON.stringify(resultado, null, 2), 'info');
             log('━━━━━━━━━━━━━━━━━━━━━━', 'info');
             
-            saleState.textContent = 'Completado';
-            saleState.className = 'status-badge badge-success';
-            
             if (resultado.successful) {
+                saleState.innerHTML = '<i class="ri-check-line"></i> Aprobada';
+                saleState.className = 'nexo-badge nexo-badge-success';
+                
                 log('✅ VENTA APROBADA!', 'success');
                 log(`Autorización: ${resultado.authorizationCode}`, 'success');
                 log(`Operation Number: ${resultado.operationNumber}`, 'success');
@@ -465,12 +973,12 @@
                 document.getElementById('operation-id').value = resultado.operationNumber;
                 
                 document.getElementById('resultado-venta').innerHTML = `
-                    <div class="alert alert-success">
+                    <div class="nexo-result nexo-result-success">
                         <h6>✅ Venta Aprobada</h6>
-                        <p class="mb-1"><strong>Autorización:</strong> ${resultado.authorizationCode}</p>
-                        <p class="mb-1"><strong>Operation:</strong> ${resultado.operationNumber}</p>
-                        <p class="mb-1"><strong>Monto:</strong> $${resultado.amount.toLocaleString()}</p>
-                        <p class="mb-1"><strong>Tarjeta:</strong> ${resultado.cardType} ****${resultado.last4Digits}</p>
+                        <p><strong>Autorización:</strong> ${resultado.authorizationCode}</p>
+                        <p><strong>Operation:</strong> ${resultado.operationNumber}</p>
+                        <p><strong>Monto:</strong> $${resultado.amount.toLocaleString()}</p>
+                        <p><strong>Tarjeta:</strong> ${resultado.cardType} ****${resultado.last4Digits}</p>
                         <p class="mb-0"><strong>Cuotas:</strong> ${resultado.sharesNumber}</p>
                     </div>
                 `;
@@ -481,17 +989,18 @@
                 await guardarVentaDB(resultado, monto, ticket);
                 
             } else {
+                saleState.innerHTML = '<i class="ri-close-line"></i> Rechazada';
+                saleState.className = 'nexo-badge nexo-badge-error';
+                
                 log(`❌ RECHAZADA - Código: ${resultado.responseCode}`, 'error');
                 log(`Mensaje: ${resultado.responseMessage}`, 'error');
-                saleState.textContent = 'Rechazada';
-                saleState.className = 'status-badge badge-danger';
             }
             
         } catch (err) {
             log(`❌ Error: ${err}`, 'error');
             const saleState = document.getElementById('sale-state');
-            saleState.textContent = 'Error';
-            saleState.className = 'status-badge badge-danger';
+            saleState.innerHTML = '<i class="ri-error-warning-line"></i> Error';
+            saleState.className = 'nexo-badge nexo-badge-error';
         }
     }
     
@@ -622,7 +1131,7 @@
             return;
         }
         
-        if (!confirm('¿Cerrar el día?\n\nEsto cerrará el batch del POS.')) return;
+        if (!confirm('¿Cerrar el día?\n\nEsto cerrará el batch del POS y es irreversible.')) return;
         
         try {
             log('🔒 Cerrando día...', 'info');
@@ -691,25 +1200,25 @@
     // Inicialización
     verificarCompatibilidad();
     
-    log('✅ Transbank POS SDK OFICIAL - RetailMind', 'success');
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+    log('💳 TRANSBANK POS SDK - NEXO DESIGN', 'success');
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
     log('', 'info');
-    log('📦 SDK: GitHub TransbankDevelopers/transbank-pos-sdk-web-serial', 'success');
-    log('🔧 Versión: 1.0.0', 'info');
+    log('📦 SDK: TransbankDevelopers/transbank-pos-sdk-web-serial', 'success');
+    log('🎨 UI: NEXO Design System v1.0', 'info');
     log('🌐 Modo: Web Serial API (oficial)', 'info');
     log('', 'info');
-    log('✅ Funciones implementadas:', 'success');
-    log('  - connect() - Conectar al POS', 'info');
-    log('  - loadKeys() - Cargar llaves', 'info');
-    log('  - sale() - Procesar venta', 'info');
-    log('  - lastSale() - Última venta', 'info');
-    log('  - refund() - Anular transacción', 'info');
-    log('  - getTotals() - Totales del día', 'info');
-    log('  - salesDetail() - Detalle de ventas', 'info');
-    log('  - closeDay() - Cerrar día', 'info');
+    log('✅ Funciones disponibles:', 'success');
+    log('  • connect()     - Conectar al POS', 'info');
+    log('  • loadKeys()    - Cargar llaves', 'info');
+    log('  • sale()        - Procesar venta', 'info');
+    log('  • lastSale()    - Última venta', 'info');
+    log('  • refund()      - Anular transacción', 'info');
+    log('  • getTotals()   - Totales del día', 'info');
+    log('  • salesDetail() - Detalle de ventas', 'info');
+    log('  • closeDay()    - Cerrar día', 'info');
     log('', 'info');
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
-    log('💡 PASO 1: Click en "Conectar POS"', 'info');
+    log('💡 PASO 1: Click en "Conectar POS"', 'success');
     log('', 'info');
 </script>
-

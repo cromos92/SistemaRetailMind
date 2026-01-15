@@ -1,303 +1,1010 @@
 {% load static %}
 {% load humanize %}
 
-<!-- /.modal -->
 {% include 'layout/header.html' %}
-<!-- ========== App Menu ========== -->
 {% include 'layout/menu.html' %}
 {% include 'layout/footer.html' %}
 
-<div class="main-content">
+<style>
+/* ========== NEXO DESIGN SYSTEM - Dashboard FIFO ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
+
+/* Dashboard Background */
+.dashboard-fifo-container {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #E8EDF5 100%);
+    min-height: 100vh;
+    padding-bottom: 2rem;
+}
+
+/* Header Hero */
+.dashboard-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #252547 100%);
+    color: var(--nexo-white);
+    padding: 2rem;
+    border-radius: 0 0 var(--nexo-radius-xl) var(--nexo-radius-xl);
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0, 102, 255, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+}
+
+.dashboard-header::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: 10%;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(0, 212, 170, 0.1) 0%, transparent 70%);
+    border-radius: 50%;
+}
+
+.dashboard-header h4 {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.dashboard-header p {
+    opacity: 0.85;
+    position: relative;
+    z-index: 1;
+}
+
+.dashboard-header .header-actions {
+    position: relative;
+    z-index: 1;
+}
+
+/* NEXO Cards */
+.nexo-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-md);
+    border: none;
+    transition: all var(--nexo-transition-normal);
+    overflow: hidden;
+}
+
+.nexo-card:hover {
+    box-shadow: var(--nexo-shadow-lg);
+    transform: translateY(-2px);
+}
+
+.nexo-card-header {
+    background: transparent;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    padding: 1rem 1.5rem;
+}
+
+.nexo-card-header h6 {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    color: var(--nexo-secondary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nexo-card-body {
+    padding: 1.5rem;
+}
+
+/* KPI Cards */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--nexo-shadow-md);
+    position: relative;
+    overflow: hidden;
+    transition: all var(--nexo-transition-normal);
+}
+
+.kpi-card:hover {
+    box-shadow: var(--nexo-shadow-lg);
+    transform: translateY(-3px);
+}
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+}
+
+.kpi-card.primary::before { background: var(--nexo-primary); }
+.kpi-card.success::before { background: var(--nexo-success); }
+.kpi-card.warning::before { background: var(--nexo-warning); }
+.kpi-card.danger::before { background: var(--nexo-error); }
+.kpi-card.info::before { background: var(--nexo-info); }
+.kpi-card.accent::before { background: var(--nexo-accent); }
+
+.kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.kpi-icon.primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.kpi-icon.success { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
+.kpi-icon.warning { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
+.kpi-icon.danger { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
+.kpi-icon.info { background: var(--nexo-primary-light); color: var(--nexo-info); }
+.kpi-icon.accent { background: rgba(0, 212, 170, 0.15); color: var(--nexo-accent); }
+
+.kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    margin-bottom: 0.25rem;
+}
+
+.kpi-value {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    line-height: 1.2;
+}
+
+.kpi-trend {
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+}
+
+.kpi-trend.up { color: var(--nexo-success); }
+.kpi-trend.down { color: var(--nexo-error); }
+.kpi-trend.neutral { color: var(--nexo-gray-500); }
+
+/* Status Indicator */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-indicator.optimal {
+    background: rgba(0, 212, 170, 0.15);
+    color: var(--nexo-success);
+}
+
+.status-indicator.warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+}
+
+.status-indicator.critical {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.status-dot.optimal { background: var(--nexo-success); }
+.status-dot.warning { background: var(--nexo-warning); }
+.status-dot.critical { background: var(--nexo-error); }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Legend Panel */
+.legend-panel {
+    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #F0F5FF 100%);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.25rem;
+    border-left: 4px solid var(--nexo-primary);
+}
+
+.legend-title {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    color: var(--nexo-primary);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed rgba(0, 102, 255, 0.2);
+}
+
+.legend-item:last-child {
+    border-bottom: none;
+}
+
+.legend-badge {
+    min-width: 70px;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.legend-badge.optimal { background: var(--nexo-success); color: white; }
+.legend-badge.warning { background: var(--nexo-warning); color: var(--nexo-secondary); }
+.legend-badge.critical { background: var(--nexo-error); color: white; }
+
+.legend-text {
+    font-size: 0.8rem;
+    color: var(--nexo-gray-700);
+    line-height: 1.4;
+}
+
+.legend-range {
+    font-weight: 600;
+    color: var(--nexo-secondary);
+}
+
+/* Analysis Blocks */
+.analysis-block {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem;
+    text-align: center;
+    transition: all var(--nexo-transition-fast);
+}
+
+.analysis-block:hover {
+    background: var(--nexo-gray-100);
+}
+
+.analysis-value {
+    font-family: 'Poppins', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.analysis-label {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    margin-top: 0.5rem;
+}
+
+/* Progress Rings */
+.progress-ring {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto;
+}
+
+.progress-ring svg {
+    transform: rotate(-90deg);
+}
+
+.progress-ring-circle {
+    transition: stroke-dashoffset var(--nexo-transition-normal);
+}
+
+.progress-ring-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--nexo-secondary);
+}
+
+/* Gauge Indicator */
+.gauge-container {
+    position: relative;
+    width: 120px;
+    height: 60px;
+    margin: 0 auto 1rem;
+}
+
+.gauge-bg {
+    width: 100%;
+    height: 100%;
+    border-radius: 60px 60px 0 0;
+    background: linear-gradient(90deg, 
+        var(--nexo-error) 0%, 
+        var(--nexo-warning) 50%, 
+        var(--nexo-success) 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.gauge-mask {
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    width: 80%;
+    height: 70%;
+    background: var(--nexo-white);
+    border-radius: 50px 50px 0 0;
+}
+
+.gauge-needle {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 4px;
+    height: 50px;
+    background: var(--nexo-secondary);
+    transform-origin: bottom center;
+    transition: transform 0.5s ease;
+    border-radius: 2px 2px 0 0;
+}
+
+/* Filters Section */
+.filters-section {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.25rem;
+    box-shadow: var(--nexo-shadow-sm);
+    margin-bottom: 1.5rem;
+}
+
+.filter-group label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.nexo-input {
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    transition: all var(--nexo-transition-fast);
+    background: var(--nexo-white);
+}
+
+.nexo-input:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    outline: none;
+}
+
+.nexo-select {
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    transition: all var(--nexo-transition-fast);
+    background: var(--nexo-white);
+    cursor: pointer;
+}
+
+.nexo-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    outline: none;
+}
+
+/* NEXO Buttons */
+.nexo-btn {
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all var(--nexo-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+    transform: translateY(-1px);
+}
+
+.nexo-btn-success {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-success:hover {
+    background: #00B894;
+    transform: translateY(-1px);
+}
+
+.nexo-btn-outline {
+    background: transparent;
+    color: var(--nexo-gray-700);
+    border: 2px solid var(--nexo-gray-300);
+}
+
+.nexo-btn-outline:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.nexo-btn-secondary {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-secondary:hover {
+    background: #252547;
+}
+
+/* Table Styles */
+.nexo-table-container {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-md);
+    overflow: hidden;
+}
+
+.nexo-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.nexo-table thead {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+}
+
+.nexo-table th {
+    padding: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+}
+
+.nexo-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    font-size: 0.875rem;
+    color: var(--nexo-gray-700);
+}
+
+.nexo-table tbody tr {
+    transition: background var(--nexo-transition-fast);
+}
+
+.nexo-table tbody tr:hover {
+    background: var(--nexo-gray-100);
+}
+
+/* Badges */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.nexo-badge-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.nexo-badge-success { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
+.nexo-badge-warning { background: rgba(255, 176, 32, 0.15); color: #996B00; }
+.nexo-badge-danger { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
+.nexo-badge-gray { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+
+/* Alert Boxes */
+.nexo-alert {
+    padding: 1rem 1.25rem;
+    border-radius: var(--nexo-radius-md);
+    border-left: 4px solid;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.nexo-alert-success {
+    background: rgba(0, 212, 170, 0.1);
+    border-color: var(--nexo-success);
+    color: var(--nexo-success);
+}
+
+.nexo-alert-warning {
+    background: rgba(255, 176, 32, 0.1);
+    border-color: var(--nexo-warning);
+    color: #996B00;
+}
+
+.nexo-alert-danger {
+    background: rgba(255, 77, 77, 0.1);
+    border-color: var(--nexo-error);
+    color: var(--nexo-error);
+}
+
+.nexo-alert-info {
+    background: rgba(0, 102, 255, 0.1);
+    border-color: var(--nexo-info);
+    color: var(--nexo-info);
+}
+
+/* Loading States */
+.loading-shimmer {
+    background: linear-gradient(90deg, 
+        var(--nexo-gray-100) 25%, 
+        var(--nexo-gray-300) 50%, 
+        var(--nexo-gray-100) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--nexo-radius-sm);
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Tooltip */
+.nexo-tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.nexo-tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--nexo-transition-fast);
+    z-index: 100;
+}
+
+.nexo-tooltip:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Metric Comparison */
+.metric-comparison {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--nexo-gray-200);
+}
+
+.metric-comparison:last-child {
+    border-bottom: none;
+}
+
+.metric-name {
+    font-size: 0.85rem;
+    color: var(--nexo-gray-700);
+}
+
+.metric-values {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.metric-bar {
+    width: 100px;
+    height: 6px;
+    background: var(--nexo-gray-200);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.metric-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width var(--nexo-transition-normal);
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fadeInUp 0.4s ease forwards;
+}
+
+.animate-delay-1 { animation-delay: 0.1s; }
+.animate-delay-2 { animation-delay: 0.2s; }
+.animate-delay-3 { animation-delay: 0.3s; }
+.animate-delay-4 { animation-delay: 0.4s; }
+</style>
+
+<div class="main-content dashboard-fifo-container">
     <div class="page-content">
-        <div class="container-fluid">
+        <div class="container-fluid px-4">
         
-        <!-- ========== HEADER Y TÍTULO ========== -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center">
+            <!-- ========== HEADER HERO ========== -->
+            <div class="dashboard-header">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                     <div>
-                        <h4 class="mb-1">
-                            <i class="bi bi-graph-up text-primary me-2"></i>
+                        <h4>
+                            <i class="bi bi-layers-half me-2"></i>
                             Dashboard FIFO
                         </h4>
-                        <p class="text-muted mb-0">Análisis completo del inventario usando metodología FIFO</p>
+                        <p class="mb-0">Análisis de inventario con metodología First In, First Out</p>
+                        <div class="d-flex align-items-center gap-3 mt-3">
+                            <div class="status-indicator optimal" id="statusGeneral">
+                                <span class="status-dot optimal"></span>
+                                Inventario Saludable
+                            </div>
+                            <span class="text-white-50 small">
+                                <i class="bi bi-clock me-1"></i>
+                                Última actualización: <span id="ultimaActualizacion">Cargando...</span>
+                            </span>
+                        </div>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-success" onclick="exportarReporteFIFO()">
-                            <i class="bi bi-download"></i> Exportar
+                    <div class="header-actions d-flex gap-2 flex-wrap">
+                        <button class="nexo-btn nexo-btn-success" onclick="exportarReporteFIFO()">
+                            <i class="bi bi-download"></i> Exportar Excel
                         </button>
-                        <a href="{% url 'verGestionProducto' %}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-back"></i> Volver
+                        <a href="{% url 'verGestionProducto' %}" class="nexo-btn nexo-btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">
+                            <i class="bi bi-arrow-left"></i> Volver
                         </a>
                     </div>
                 </div>
             </div>
-        </div>
 
-            <!-- ========== MÉTRICAS PRINCIPALES ========== -->
-        <div class="row mb-4">
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="card border-left-primary shadow h-100">
-                    <div class="card-body">
-                        <div class="row no-gutters align-items-center">
-                            <div class="col mr-2">
-                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                    Valor Total FIFO
-                                </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="valorTotalFIFO">
-                                    <i class="bi bi-hourglass-split"></i> Cargando...
-                                </div>
+            <!-- ========== KPIs PRINCIPALES ========== -->
+            <div class="kpi-grid">
+                <!-- Valor Total Inventario FIFO -->
+                <div class="kpi-card primary animate-fade-in">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Valor Total Inventario FIFO</div>
+                            <div class="kpi-value" id="valorTotalFIFO">
+                                <span class="loading-shimmer" style="width: 120px; height: 28px; display: inline-block;"></span>
                             </div>
-                            <div class="col-auto">
-                                <i class="bi bi-currency-dollar fa-2x text-gray-300"></i>
+                            <div class="kpi-trend neutral" id="trendValor">
+                                <i class="bi bi-dash"></i> Calculando...
                             </div>
+                        </div>
+                        <div class="kpi-icon primary">
+                            <i class="bi bi-cash-stack"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rotación de Inventario -->
+                <div class="kpi-card success animate-fade-in animate-delay-1">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Rotación de Inventario</div>
+                            <div class="kpi-value" id="rotacionInventario">
+                                <span class="loading-shimmer" style="width: 80px; height: 28px; display: inline-block;"></span>
+                            </div>
+                            <div class="kpi-trend" id="trendRotacion">
+                                <span id="rotacionStatus" class="nexo-badge nexo-badge-success">Óptimo</span>
+                            </div>
+                        </div>
+                        <div class="kpi-icon success">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Días de Inventario -->
+                <div class="kpi-card warning animate-fade-in animate-delay-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Días de Inventario</div>
+                            <div class="kpi-value" id="diasInventario">
+                                <span class="loading-shimmer" style="width: 60px; height: 28px; display: inline-block;"></span>
+                            </div>
+                            <div class="kpi-trend" id="trendDias">
+                                <span id="diasStatus" class="nexo-badge nexo-badge-warning">Normal</span>
+                            </div>
+                        </div>
+                        <div class="kpi-icon warning">
+                            <i class="bi bi-calendar3"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Eficiencia FIFO -->
+                <div class="kpi-card accent animate-fade-in animate-delay-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Eficiencia FIFO</div>
+                            <div class="kpi-value" id="eficienciaFIFO">
+                                <span class="loading-shimmer" style="width: 70px; height: 28px; display: inline-block;"></span>
+                            </div>
+                            <div class="kpi-trend" id="trendEficiencia">
+                                <span id="eficienciaStatus" class="nexo-badge nexo-badge-success">Excelente</span>
+                            </div>
+                        </div>
+                        <div class="kpi-icon accent">
+                            <i class="bi bi-speedometer2"></i>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="card border-left-info shadow h-100">
-                    <div class="card-body">
-                        <div class="row no-gutters align-items-center">
-                            <div class="col mr-2">
-                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                    Productos con Lotes
-                                </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalProductos">
-                                    <i class="bi bi-hourglass-split"></i> Cargando...
-                                </div>
+            <!-- ========== SEGUNDA FILA KPIs ========== -->
+            <div class="kpi-grid">
+                <!-- Productos con Lotes -->
+                <div class="kpi-card info animate-fade-in">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Productos con Lotes Activos</div>
+                            <div class="kpi-value" id="totalProductos">
+                                <span class="loading-shimmer" style="width: 50px; height: 28px; display: inline-block;"></span>
                             </div>
-                            <div class="col-auto">
-                                <i class="bi bi-boxes fa-2x text-gray-300"></i>
+                            <div class="kpi-trend neutral">
+                                <i class="bi bi-box-seam"></i> Total en sistema
                             </div>
+                        </div>
+                        <div class="kpi-icon info">
+                            <i class="bi bi-boxes"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Con Diferencias -->
+                <div class="kpi-card warning animate-fade-in animate-delay-1">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Productos con Diferencias</div>
+                            <div class="kpi-value" id="productosConDiferencia">
+                                <span class="loading-shimmer" style="width: 50px; height: 28px; display: inline-block;"></span>
+                            </div>
+                            <div class="kpi-trend" id="trendDiferencias">
+                                <span class="nexo-badge nexo-badge-warning">Requiere atención</span>
+                            </div>
+                        </div>
+                        <div class="kpi-icon warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Diferencia Total -->
+                <div class="kpi-card danger animate-fade-in animate-delay-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Diferencia Total (FIFO vs Sistema)</div>
+                            <div class="kpi-value" id="diferenciaTotal">
+                                <span class="loading-shimmer" style="width: 100px; height: 28px; display: inline-block;"></span>
+                            </div>
+                            <div class="kpi-trend" id="porcentajeDiferenciaContainer">
+                                <span id="porcentajeDiferencia" class="nexo-badge nexo-badge-danger">0%</span>
+                            </div>
+                        </div>
+                        <div class="kpi-icon danger">
+                            <i class="bi bi-graph-down"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Antigüedad Promedio -->
+                <div class="kpi-card primary animate-fade-in animate-delay-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="kpi-label">Antigüedad Promedio Stock</div>
+                            <div class="kpi-value" id="antiguedadPromedio">
+                                <span class="loading-shimmer" style="width: 80px; height: 28px; display: inline-block;"></span>
+                            </div>
+                            <div class="kpi-trend" id="trendAntiguedad">
+                                <span id="antiguedadStatus" class="nexo-badge nexo-badge-success">Fresco</span>
+                            </div>
+                        </div>
+                        <div class="kpi-icon primary">
+                            <i class="bi bi-hourglass-split"></i>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="card border-left-warning shadow h-100">
-                    <div class="card-body">
-                        <div class="row no-gutters align-items-center">
-                            <div class="col mr-2">
-                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                    Con Diferencias
-                                </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="productosConDiferencia">
-                                    <i class="bi bi-hourglass-split"></i> Cargando...
-                                </div>
-                            </div>
-                            <div class="col-auto">
-                                <i class="bi bi-exclamation-triangle fa-2x text-gray-300"></i>
-                            </div>
+            <!-- ========== PANEL DE LEYENDAS KPIs ========== -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="nexo-card">
+                        <div class="nexo-card-header">
+                            <h6>
+                                <i class="bi bi-info-circle text-primary"></i>
+                                Guía de Indicadores - ¿Cómo interpretar los KPIs?
+                            </h6>
                         </div>
-                    </div>
-                </div>
-            </div>
+                        <div class="nexo-card-body">
+                            <div class="row g-4">
+                                <!-- Rotación de Inventario -->
+                                <div class="col-lg-3 col-md-6">
+                                    <div class="legend-panel">
+                                        <div class="legend-title">
+                                            <i class="bi bi-arrow-repeat"></i>
+                                            Rotación de Inventario
+                                        </div>
+                                        <p class="small text-muted mb-3">
+                                            Indica cuántas veces se renueva el inventario en un período. Mayor rotación = mejor eficiencia.
+                                        </p>
+                                        <div class="legend-item">
+                                            <span class="legend-badge optimal">Óptimo</span>
+                                            <span class="legend-text"><span class="legend-range">> 6 veces/año</span> - Excelente flujo de productos</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-badge warning">Normal</span>
+                                            <span class="legend-text"><span class="legend-range">3-6 veces/año</span> - Rotación aceptable</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-badge critical">Bajo</span>
+                                            <span class="legend-text"><span class="legend-range">< 3 veces/año</span> - Inventario estancado</span>
+                                        </div>
+                                    </div>
+                                </div>
 
-            <div class="col-xl-3 col-md-6 mb-3">
-                <div class="card border-left-{% if diferencia_total > 0 %}success{% else %}danger{% endif %} shadow h-100">
-                    <div class="card-body">
-                        <div class="row no-gutters align-items-center">
-                            <div class="col mr-2">
-                                <div class="text-xs font-weight-bold text-{% if diferencia_total > 0 %}success{% else %}danger{% endif %} text-uppercase mb-1">
-                                    Diferencia Total
+                                <!-- Días de Inventario -->
+                                <div class="col-lg-3 col-md-6">
+                                    <div class="legend-panel">
+                                        <div class="legend-title">
+                                            <i class="bi bi-calendar3"></i>
+                                            Días de Inventario
+                                        </div>
+                                        <p class="small text-muted mb-3">
+                                            Cuántos días de venta representa el stock actual. Menos días = menor inversión atrapada.
+                                        </p>
+                                        <div class="legend-item">
+                                            <span class="legend-badge optimal">Óptimo</span>
+                                            <span class="legend-text"><span class="legend-range">30-60 días</span> - Balance ideal cobertura/costo</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-badge warning">Alto</span>
+                                            <span class="legend-text"><span class="legend-range">61-90 días</span> - Sobreinventario moderado</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-badge critical">Excesivo</span>
+                                            <span class="legend-text"><span class="legend-range">> 90 días</span> - Capital inmovilizado</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="diferenciaTotal">
-                                    <i class="bi bi-hourglass-split"></i> Cargando...
-                                </div>
-                                <div class="text-xs text-muted" id="porcentajeDiferencia">
-                                    <i class="bi bi-hourglass-split"></i> Cargando...
-                                </div>
-                            </div>
-                            <div class="col-auto">
-                                <i class="bi bi-graph-up fa-2x text-gray-300"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- ========== ANÁLISIS FIFO DETALLADO ========== -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card shadow">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="bi bi-bar-chart me-2"></i>Análisis FIFO Detallado
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <!-- Distribución de Diferencias -->
-                            <div class="col-md-6">
-                                <h6 class="text-primary mb-3">
-                                    <i class="bi bi-pie-chart me-1"></i>Distribución de Diferencias
-                                </h6>
-                                <div class="row text-center">
-                                    <div class="col-4">
-                                        <div class="border-end">
-                                            <h4 class="text-success mb-1" id="diferenciasPositivas">0</h4>
-                                            <small class="text-muted">Positivas ↗</small>
+                                <!-- Eficiencia FIFO -->
+                                <div class="col-lg-3 col-md-6">
+                                    <div class="legend-panel">
+                                        <div class="legend-title">
+                                            <i class="bi bi-speedometer2"></i>
+                                            Eficiencia FIFO
                                         </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="border-end">
-                                            <h4 class="text-danger mb-1" id="diferenciasNegativas">0</h4>
-                                            <small class="text-muted">Negativas ↘</small>
+                                        <p class="small text-muted mb-3">
+                                            Porcentaje de lotes consumidos en orden correcto (primero en entrar, primero en salir).
+                                        </p>
+                                        <div class="legend-item">
+                                            <span class="legend-badge optimal">Excelente</span>
+                                            <span class="legend-text"><span class="legend-range">> 95%</span> - FIFO correctamente aplicado</span>
                                         </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div>
-                                            <h4 class="text-secondary mb-1" id="sinDiferencias">0</h4>
-                                            <small class="text-muted">Sin Diferencia</small>
+                                        <div class="legend-item">
+                                            <span class="legend-badge warning">Mejorable</span>
+                                            <span class="legend-text"><span class="legend-range">80-95%</span> - Revisar procesos de despacho</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-badge critical">Deficiente</span>
+                                            <span class="legend-text"><span class="legend-range">< 80%</span> - Urgente revisar operación</span>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <!-- Análisis de Stock -->
-                            <div class="col-md-6">
-                                <h6 class="text-primary mb-3">
-                                    <i class="bi bi-boxes me-1"></i>Análisis de Stock
-                                </h6>
-                                <div class="row text-center">
-                                    <div class="col-3">
-                                        <div class="border-end">
-                                            <h4 class="text-danger mb-1" id="stockBajo">0</h4>
-                                            <small class="text-muted">Bajo</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-3">
-                                        <div class="border-end">
-                                            <h4 class="text-warning mb-1" id="stockMedio">0</h4>
-                                            <small class="text-muted">Medio</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-3">
-                                        <div class="border-end">
-                                            <h4 class="text-success mb-1" id="stockAlto">0</h4>
-                                            <small class="text-muted">Alto</small>
-                                        </div>
-                                    </div>
-                                    <div class="col-3">
-                                        <div>
-                                            <h4 class="text-secondary mb-1" id="sinStock">0</h4>
-                                            <small class="text-muted">Sin Stock</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Alertas y Recomendaciones -->
-                        <div class="row mt-4">
-                            <div class="col-12">
-                                <h6 class="text-primary mb-3">
-                                    <i class="bi bi-exclamation-triangle me-1"></i>Alertas y Recomendaciones
-                                </h6>
-                                <div id="alertasFIFO">
-                                    <!-- Se llenará dinámicamente -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-            <!-- ========== BUSCADORES AVANZADOS ========== -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card border-0 bg-light">
-                    <div class="card-header bg-transparent">
-                        <h6 class="mb-0">
-                            <i class="bi bi-search me-2"></i>Buscadores y Filtros Avanzados
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <!-- Búsqueda por Producto -->
-                            <div class="col-md-3">
-                                <label class="form-label small text-muted">
-                                    <i class="bi bi-box me-1"></i>Producto
-                                </label>
-                                <input type="text" class="form-control form-control-sm" id="filtroProducto" placeholder="Buscar por artículo...">
-                            </div>
-                            
-                            <!-- Búsqueda por Talla -->
-                            <div class="col-md-2">
-                                <label class="form-label small text-muted">
-                                    <i class="bi bi-rulers me-1"></i>Talla
-                                </label>
-                                <input type="text" class="form-control form-control-sm" id="filtroTalla" placeholder="Filtrar talla...">
-                            </div>
-                            
-                            <!-- Filtro por Diferencia -->
-                            <div class="col-md-2">
-                                <label class="form-label small text-muted">
-                                    <i class="bi bi-graph-up me-1"></i>Diferencia
-                                </label>
-                                <select class="form-select form-select-sm" id="filtroDiferencia">
-                                    <option value="">Todas las diferencias</option>
-                                    <option value="positiva">Solo Positivas ↗</option>
-                                    <option value="negativa">Solo Negativas ↘</option>
-                                    <option value="cero">Sin Diferencia</option>
-                                    <option value="alta">Diferencia Alta (>10%)</option>
-                                    <option value="baja">Diferencia Baja (<5%)</option>
-                                </select>
-                            </div>
-                            
-                            <!-- Filtro por Stock -->
-                            <div class="col-md-2">
-                                <label class="form-label small text-muted">
-                                    <i class="bi bi-boxes me-1"></i>Stock
-                                </label>
-                                <select class="form-select form-select-sm" id="filtroStock">
-                                    <option value="">Todos</option>
-                                    <option value="bajo">Stock Bajo (<10)</option>
-                                    <option value="medio">Stock Medio (10-50)</option>
-                                    <option value="alto">Stock Alto (>50)</option>
-                                    <option value="agotado">Sin Stock</option>
-                                </select>
-                            </div>
-                            
-                            <!-- Ordenamiento -->
-                            <div class="col-md-3">
-                                <label class="form-label small text-muted">
-                                    <i class="bi bi-sort-down me-1"></i>Ordenar por
-                                </label>
-                                <select class="form-select form-select-sm" id="ordenarPor">
-                                    <option value="diferencia">Diferencia (Mayor)</option>
-                                    <option value="producto">Producto (A-Z)</option>
-                                    <option value="valor_fifo">Valor FIFO (Mayor)</option>
-                                    <option value="stock">Stock (Mayor)</option>
-                                    <option value="porcentaje">% Diferencia (Mayor)</option>
-                                    <option value="reciente">Más Recientes</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <!-- Botones de Acción -->
-                        <div class="row mt-3">
-                            <div class="col-12">
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <button class="btn btn-primary btn-sm" id="btnAplicarFiltros">
-                                        <i class="bi bi-search me-1"></i>Aplicar Filtros
-                                    </button>
-                                    <button class="btn btn-outline-secondary btn-sm" id="btnLimpiarFiltros">
-                                        <i class="bi bi-x-circle me-1"></i>Limpiar Todo
-                                    </button>
-                                    <button class="btn btn-outline-info btn-sm" id="btnExportarFiltrado">
-                                        <i class="bi bi-download me-1"></i>Exportar Filtrado
-                                    </button>
-                                    <div class="form-check form-switch ms-3">
-                                        <input class="form-check-input" type="checkbox" id="mostrarSoloDiferencias">
-                                        <label class="form-check-label small" for="mostrarSoloDiferencias">
-                                            Solo con diferencias
-                                        </label>
+                                <!-- Diferencia FIFO vs Sistema -->
+                                <div class="col-lg-3 col-md-6">
+                                    <div class="legend-panel">
+                                        <div class="legend-title">
+                                            <i class="bi bi-graph-down"></i>
+                                            Diferencia FIFO vs Sistema
+                                        </div>
+                                        <p class="small text-muted mb-3">
+                                            Discrepancia entre el valor calculado por FIFO y el costo fijo del sistema.
+                                        </p>
+                                        <div class="legend-item">
+                                            <span class="legend-badge optimal">Normal</span>
+                                            <span class="legend-text"><span class="legend-range">< 5%</span> - Variación esperada por lotes</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-badge warning">Atención</span>
+                                            <span class="legend-text"><span class="legend-range">5-15%</span> - Revisar costos de compra</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-badge critical">Crítico</span>
+                                            <span class="legend-text"><span class="legend-range">> 15%</span> - Anomalía en costos</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -305,54 +1012,338 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-    <!-- ========== TABLA PRINCIPAL ========== -->
-    <div class="card shadow">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">
-                <i class="bi bi-table me-2"></i>Análisis FIFO por Producto
-            </h6>
-            <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-primary" id="contadorProductos">
-                    <i class="bi bi-hourglass-split"></i> Cargando...
-                </span>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="mostrarSoloDiferencias">
-                    <label class="form-check-label small" for="mostrarSoloDiferencias">
-                        Solo con diferencias
-                    </label>
+            <!-- ========== ANÁLISIS DETALLADO ========== -->
+            <div class="row mb-4">
+                <!-- Distribución de Diferencias -->
+                <div class="col-lg-6 mb-4 mb-lg-0">
+                    <div class="nexo-card h-100">
+                        <div class="nexo-card-header">
+                            <h6>
+                                <i class="bi bi-pie-chart-fill text-primary"></i>
+                                Distribución de Diferencias
+                            </h6>
+                        </div>
+                        <div class="nexo-card-body">
+                            <div class="row g-3">
+                                <div class="col-4">
+                                    <div class="analysis-block">
+                                        <div class="analysis-value text-success" id="diferenciasPositivas">0</div>
+                                        <div class="analysis-label">
+                                            <i class="bi bi-arrow-up-circle me-1"></i>
+                                            Positivas
+                                        </div>
+                                        <small class="text-muted d-block mt-1">FIFO > Sistema</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="analysis-block">
+                                        <div class="analysis-value text-danger" id="diferenciasNegativas">0</div>
+                                        <div class="analysis-label">
+                                            <i class="bi bi-arrow-down-circle me-1"></i>
+                                            Negativas
+                                        </div>
+                                        <small class="text-muted d-block mt-1">FIFO < Sistema</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="analysis-block">
+                                        <div class="analysis-value text-secondary" id="sinDiferencias">0</div>
+                                        <div class="analysis-label">
+                                            <i class="bi bi-dash-circle me-1"></i>
+                                            Iguales
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Sin diferencia</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr class="my-3">
+                            <div class="small text-muted">
+                                <i class="bi bi-lightbulb text-warning me-1"></i>
+                                <strong>Tip:</strong> Las diferencias positivas indican que los lotes actuales tienen mayor costo que el promedio del sistema. Esto puede ocurrir por aumentos de precio en proveedores.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Análisis de Stock -->
+                <div class="col-lg-6">
+                    <div class="nexo-card h-100">
+                        <div class="nexo-card-header">
+                            <h6>
+                                <i class="bi bi-box-seam-fill text-primary"></i>
+                                Salud del Stock
+                            </h6>
+                        </div>
+                        <div class="nexo-card-body">
+                            <div class="row g-3">
+                                <div class="col-3">
+                                    <div class="analysis-block">
+                                        <div class="analysis-value text-danger" id="sinStock">0</div>
+                                        <div class="analysis-label">Sin Stock</div>
+                                        <div class="mt-2">
+                                            <span class="nexo-badge nexo-badge-danger">
+                                                <i class="bi bi-x-circle"></i> 0 uds
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="analysis-block">
+                                        <div class="analysis-value text-warning" id="stockBajo">0</div>
+                                        <div class="analysis-label">Stock Bajo</div>
+                                        <div class="mt-2">
+                                            <span class="nexo-badge nexo-badge-warning">
+                                                < 10 uds
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="analysis-block">
+                                        <div class="analysis-value text-primary" id="stockMedio">0</div>
+                                        <div class="analysis-label">Stock Medio</div>
+                                        <div class="mt-2">
+                                            <span class="nexo-badge nexo-badge-primary">
+                                                10-50 uds
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="analysis-block">
+                                        <div class="analysis-value text-success" id="stockAlto">0</div>
+                                        <div class="analysis-label">Stock Alto</div>
+                                        <div class="mt-2">
+                                            <span class="nexo-badge nexo-badge-success">
+                                                > 50 uds
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr class="my-3">
+                            <div class="small text-muted">
+                                <i class="bi bi-shield-check text-success me-1"></i>
+                                <strong>Recomendación:</strong> Mantener al menos 70% de productos con stock medio o alto para asegurar disponibilidad.
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover table-striped" id="tablaFIFO">
-                    <thead class="table-dark">
-                        <tr>
-                            <th>Producto</th>
-                            <th>Talla</th>
-                            <th>Stock Sistema</th>
-                            <th>Valor FIFO</th>
-                            <th>Costo Promedio FIFO</th>
-                            <th>Costo Sistema</th>
-                            <th>Diferencia</th>
-                            <th>% Diferencia</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="8" class="text-center py-5">
-                                <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
-                                <h6 class="text-muted mt-3">Cargando datos del dashboard FIFO...</h6>
-                                <p class="text-muted small">Los datos se cargarán automáticamente</p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+
+            <!-- ========== ALERTAS Y RECOMENDACIONES ========== -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="nexo-card">
+                        <div class="nexo-card-header d-flex justify-content-between align-items-center">
+                            <h6>
+                                <i class="bi bi-bell-fill text-warning"></i>
+                                Alertas y Recomendaciones
+                            </h6>
+                            <span class="nexo-badge nexo-badge-warning" id="contadorAlertas">0 alertas</span>
+                        </div>
+                        <div class="nexo-card-body" id="alertasFIFO">
+                            <div class="nexo-alert nexo-alert-info">
+                                <i class="bi bi-hourglass-split"></i>
+                                <span>Cargando alertas del sistema...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <!-- ========== FILTROS DE TIEMPO ========== -->
+            <div class="filters-section mb-4" style="background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #F0F5FF 100%); border-left: 4px solid var(--nexo-primary);">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0" style="color: var(--nexo-primary); font-weight: 600;">
+                        <i class="bi bi-calendar-range me-2"></i>
+                        Período de Análisis
+                    </h6>
+                    <span class="nexo-badge nexo-badge-primary" id="periodoActivo">
+                        <i class="bi bi-clock"></i> Todo el historial
+                    </span>
+                </div>
+                <div class="row g-3">
+                    <!-- Período Predefinido -->
+                    <div class="col-lg-3 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-clock-history"></i>
+                            Período Rápido
+                        </label>
+                        <select class="form-select nexo-select" id="filtroPeriodo">
+                            <option value="todo">📊 Todo el historial</option>
+                            <option value="hoy">📅 Hoy</option>
+                            <option value="semana">📆 Últimos 7 días</option>
+                            <option value="mes" selected>🗓️ Últimos 30 días</option>
+                            <option value="trimestre">📈 Último trimestre (90 días)</option>
+                            <option value="semestre">📉 Último semestre (180 días)</option>
+                            <option value="anio">🗃️ Último año</option>
+                        </select>
+                    </div>
+                    <!-- Fecha Desde -->
+                    <div class="col-lg-2 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-calendar-event"></i>
+                            Desde
+                        </label>
+                        <input type="date" class="form-control nexo-input" id="filtroFechaDesde">
+                    </div>
+                    <!-- Fecha Hasta -->
+                    <div class="col-lg-2 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-calendar-check"></i>
+                            Hasta
+                        </label>
+                        <input type="date" class="form-control nexo-input" id="filtroFechaHasta">
+                    </div>
+                    <!-- Antigüedad del Lote -->
+                    <div class="col-lg-2 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-hourglass-split"></i>
+                            Antigüedad Stock
+                        </label>
+                        <select class="form-select nexo-select" id="filtroAntiguedad">
+                            <option value="">Todas</option>
+                            <option value="fresco">🟢 Fresco (< 30 días)</option>
+                            <option value="normal">🟡 Normal (30-60 días)</option>
+                            <option value="antiguo">🟠 Antiguo (60-90 días)</option>
+                            <option value="critico">🔴 Crítico (> 90 días)</option>
+                        </select>
+                    </div>
+                    <!-- Info -->
+                    <div class="col-lg-3 col-md-6">
+                        <div class="p-2 rounded" style="background: rgba(0,102,255,0.1); font-size: 0.75rem;">
+                            <i class="bi bi-info-circle text-primary me-1"></i>
+                            <strong>Tip:</strong> El rango de fechas filtra por fecha de ingreso de los lotes. 
+                            Usa "Antigüedad Stock" para encontrar inventario viejo.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== FILTROS AVANZADOS ========== -->
+            <div class="filters-section mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0" style="color: var(--nexo-secondary); font-weight: 600;">
+                        <i class="bi bi-funnel me-2 text-primary"></i>
+                        Filtros de Producto
+                    </h6>
+                    <button class="nexo-btn nexo-btn-outline" id="btnLimpiarFiltros" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+                        <i class="bi bi-x-circle"></i> Limpiar Todo
+                    </button>
+                </div>
+                <div class="row g-3">
+                    <div class="col-lg-3 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-search"></i>
+                            Buscar Producto
+                        </label>
+                        <input type="text" class="form-control nexo-input" id="filtroProducto" placeholder="Nombre o código...">
+                    </div>
+                    <div class="col-lg-2 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-rulers"></i>
+                            Talla
+                        </label>
+                        <input type="text" class="form-control nexo-input" id="filtroTalla" placeholder="Ej: M, L, 42...">
+                    </div>
+                    <div class="col-lg-2 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-graph-up"></i>
+                            Diferencia
+                        </label>
+                        <select class="form-select nexo-select" id="filtroDiferencia">
+                            <option value="">Todas</option>
+                            <option value="positiva">Solo Positivas ↗</option>
+                            <option value="negativa">Solo Negativas ↘</option>
+                            <option value="cero">Sin Diferencia</option>
+                            <option value="alta">Alta (>10%)</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-2 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-box"></i>
+                            Nivel Stock
+                        </label>
+                        <select class="form-select nexo-select" id="filtroStock">
+                            <option value="">Todos</option>
+                            <option value="agotado">Sin Stock</option>
+                            <option value="bajo">Bajo (<10)</option>
+                            <option value="medio">Medio (10-50)</option>
+                            <option value="alto">Alto (>50)</option>
+                        </select>
+                    </div>
+                    <div class="col-lg-3 col-md-6 filter-group">
+                        <label>
+                            <i class="bi bi-sort-down"></i>
+                            Ordenar Por
+                        </label>
+                        <select class="form-select nexo-select" id="ordenarPor">
+                            <option value="diferencia">Mayor Diferencia</option>
+                            <option value="antiguedad">Mayor Antigüedad</option>
+                            <option value="producto">Producto (A-Z)</option>
+                            <option value="valor_fifo">Mayor Valor FIFO</option>
+                            <option value="stock">Mayor Stock</option>
+                            <option value="porcentaje">Mayor % Diferencia</option>
+                            <option value="reciente">Más Reciente</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-3 mt-3 pt-3 border-top">
+                    <button class="nexo-btn nexo-btn-primary" id="btnAplicarFiltros">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                    <button class="nexo-btn nexo-btn-success" id="btnExportarFiltrado">
+                        <i class="bi bi-file-earmark-excel"></i> Exportar Filtrado
+                    </button>
+                    <div class="form-check form-switch ms-auto">
+                        <input class="form-check-input" type="checkbox" id="mostrarSoloDiferencias" style="cursor: pointer;">
+                        <label class="form-check-label small" for="mostrarSoloDiferencias" style="cursor: pointer;">
+                            Solo productos con diferencias
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== TABLA PRINCIPAL ========== -->
+            <div class="nexo-table-container">
+                <div class="nexo-card-header d-flex justify-content-between align-items-center" style="background: var(--nexo-secondary); color: white; padding: 1rem 1.5rem;">
+                    <h6 class="mb-0" style="color: white;">
+                        <i class="bi bi-table me-2"></i>
+                        Detalle de Productos FIFO
+                    </h6>
+                    <span class="nexo-badge" id="contadorProductos" style="background: rgba(255,255,255,0.2); color: white;">
+                        Cargando...
+                    </span>
+                </div>
+                <div class="table-responsive">
+                    <table class="nexo-table" id="tablaFIFO">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th class="text-center">Talla</th>
+                                <th class="text-center">Stock</th>
+                                <th class="text-end">Valor FIFO</th>
+                                <th class="text-end">Costo Prom. FIFO</th>
+                                <th class="text-end">Costo Sistema</th>
+                                <th class="text-end">Diferencia</th>
+                                <th class="text-center">% Dif.</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaFIFOBody">
+                            <tr>
+                                <td colspan="9" class="text-center py-5">
+                                    <div class="loading-shimmer" style="width: 200px; height: 20px; margin: 0 auto 1rem;"></div>
+                                    <p class="text-muted mb-0">Cargando datos del inventario FIFO...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
         <!-- container-fluid -->
     </div>
@@ -362,306 +1353,484 @@
 
 <!-- ========== SCRIPTS ========== -->
 <script>
-// Funciones de utilidad para alertas
-function showErrorAlert(title, message) {
+// ========== VARIABLES GLOBALES ==========
+let datosProductos = [];
+
+// ========== FUNCIONES DE UTILIDAD ==========
+function formatCurrency(value) {
+    return '$' + Math.round(value).toLocaleString('es-CL');
+}
+
+function showAlert(type, title, message) {
     if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'error',
-            title: title,
-            text: message
-        });
+        Swal.fire({ icon: type, title: title, text: message });
     } else {
         alert(`${title}: ${message}`);
     }
 }
 
-function showWarningAlert(title, message) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'warning',
-            title: title,
-            text: message
-        });
+// ========== ACTUALIZAR STATUS GENERAL ==========
+function actualizarStatusGeneral(data) {
+    const statusEl = document.getElementById('statusGeneral');
+    const porcentajeDif = Math.abs(data.porcentaje_diferencia || 0);
+    
+    let statusClass, statusText;
+    if (porcentajeDif < 5) {
+        statusClass = 'optimal';
+        statusText = 'Inventario Saludable';
+    } else if (porcentajeDif < 15) {
+        statusClass = 'warning';
+        statusText = 'Requiere Atención';
     } else {
-        alert(`${title}: ${message}`);
+        statusClass = 'critical';
+        statusText = 'Estado Crítico';
     }
+    
+    statusEl.className = `status-indicator ${statusClass}`;
+    statusEl.innerHTML = `<span class="status-dot ${statusClass}"></span> ${statusText}`;
 }
 
-function showInfoAlert(title, message) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'info',
-            title: title,
-            text: message
-        });
-    } else {
-        alert(`${title}: ${message}`);
-    }
-}
-
-// Función para cargar datos iniciales
+// ========== CARGAR DATOS DEL DASHBOARD ==========
 function cargarDatosDashboard() {
-    filtrarTabla();
-}
-
-// Función para actualizar métricas
-function actualizarMetricas() {
-    $.ajax({
-        url: '/app/obtener_metricas_fifo/',
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                actualizarMetricas(response.metricas);
-            }
-        }
-    });
-}
-
-// Inicializar cuando jQuery esté disponible
-$(document).ready(function() {
-    console.log('🚀 Inicializando Dashboard FIFO...');
+    // Parámetros de filtros de tiempo
+    const periodo = document.getElementById('filtroPeriodo').value;
+    const fechaDesde = document.getElementById('filtroFechaDesde').value;
+    const fechaHasta = document.getElementById('filtroFechaHasta').value;
+    const filtroAntiguedad = document.getElementById('filtroAntiguedad').value;
     
-    // Cargar datos iniciales
-    cargarDatosDashboard();
-    
-    // Eventos de filtros
-    $('#filtroProducto, #filtroTalla, #filtroDiferencia, #filtroStock, #mostrarSoloDiferencias').on('change keyup', function() {
-        filtrarTabla();
+    const params = new URLSearchParams({
+        // Filtros de tiempo
+        periodo: periodo,
+        fecha_desde: fechaDesde,
+        fecha_hasta: fechaHasta,
+        filtro_antiguedad: filtroAntiguedad,
+        // Filtros de producto
+        filtro_producto: document.getElementById('filtroProducto').value,
+        filtro_talla: document.getElementById('filtroTalla').value,
+        filtro_diferencia: document.getElementById('filtroDiferencia').value,
+        filtro_stock: document.getElementById('filtroStock').value,
+        ordenar_por: document.getElementById('ordenarPor').value,
+        mostrar_solo_diferencias: document.getElementById('mostrarSoloDiferencias').checked
     });
     
-    // Evento para limpiar filtros
-    $('#btnLimpiarFiltros').on('click', function() {
-        limpiarFiltros();
-    });
+    // Actualizar badge del período activo
+    actualizarBadgePeriodo(periodo, fechaDesde, fechaHasta);
     
-    // Evento para ordenar
-    $('#ordenarPor').on('change', function() {
-        ordenarTabla($(this).val());
-    });
-    
-    // Evento para exportar filtrado
-    $('#btnExportarFiltrado').on('click', function() {
-        exportarFiltrado();
-    });
-    
-    // Actualizar métricas cada 30 segundos
-    setInterval(function() {
-        actualizarMetricas();
-    }, 30000);
-    
-    // Hacer funciones disponibles globalmente
-    window.verLotesFIFO = verLotesFIFO;
-    window.verMovimientosProducto = verMovimientosProducto;
-    window.exportarReporteFIFO = exportarReporteFIFO;
-    window.exportarFiltrado = exportarFiltrado;
-    window.limpiarFiltros = limpiarFiltros;
-    window.ordenarTabla = ordenarTabla;
-    window.filtrarTabla = filtrarTabla;
-    
-    console.log('✅ Dashboard FIFO inicializado');
-});
-
-
-
-function filtrarTabla() {
-    const filtroProducto = $('#filtroProducto').val();
-    const filtroTalla = $('#filtroTalla').val();
-    const filtroDiferencia = $('#filtroDiferencia').val();
-    const filtroStock = $('#filtroStock').val();
-    const ordenarPor = $('#ordenarPor').val();
-    const mostrarSoloDiferencias = $('#mostrarSoloDiferencias').is(':checked');
-    
-    // Mostrar loading
-    $('#tablaFIFO tbody').html('<tr><td colspan="8" class="text-center"><i class="bi bi-hourglass-split"></i> Cargando datos...</td></tr>');
-    
-    // Realizar petición AJAX
-    $.ajax({
-        url: '/app/obtener_datos_dashboard_fifo/',
-        method: 'GET',
-        data: {
-            filtro_producto: filtroProducto,
-            filtro_talla: filtroTalla,
-            filtro_diferencia: filtroDiferencia,
-            filtro_stock: filtroStock,
-            ordenar_por: ordenarPor,
-            mostrar_solo_diferencias: mostrarSoloDiferencias
-        },
-        success: function(response) {
-            if (response.success) {
-                actualizarTablaConDatos(response.productos);
-                actualizarMetricas(response);
-                actualizarAnalisis(response.analisis);
-                mostrarAlertas(response.alertas);
+    fetch(`/app/obtener_datos_dashboard_fifo/?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                datosProductos = data.productos;
+                actualizarKPIs(data);
+                actualizarKPIsTiempo(data.metricas_tiempo);
+                actualizarAnalisis(data.analisis);
+                actualizarTabla(data.productos);
+                actualizarAlertas(data.alertas);
+                actualizarStatusGeneral(data);
+                document.getElementById('ultimaActualizacion').textContent = new Date().toLocaleTimeString('es-CL');
             } else {
-                showErrorAlert('Error', response.error || 'Error al cargar datos');
+                showAlert('error', 'Error', data.error || 'Error al cargar datos');
             }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al cargar datos');
-        }
-    });
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('error', 'Error de conexión', 'No se pudieron cargar los datos');
+        });
 }
 
-function limpiarFiltros() {
-    $('#filtroProducto').val('');
-    $('#filtroTalla').val('');
-    $('#filtroDiferencia').val('');
-    $('#filtroStock').val('');
-    $('#mostrarSoloDiferencias').prop('checked', false);
-    filtrarTabla();
-}
-
-function ordenarTabla(criterio) {
-    const tbody = $('#tablaFIFO tbody');
-    const filas = tbody.find('tr.producto-fila').get();
+// ========== ACTUALIZAR BADGE DEL PERÍODO ==========
+function actualizarBadgePeriodo(periodo, fechaDesde, fechaHasta) {
+    const badge = document.getElementById('periodoActivo');
+    let texto = '';
     
-    filas.sort(function(a, b) {
-        const $a = $(a);
-        const $b = $(b);
-        
-        switch(criterio) {
-            case 'producto':
-                return $a.data('producto').localeCompare($b.data('producto'));
-            case 'valor_fifo':
-                return parseFloat($a.find('td:eq(3)').text().replace(/[$,]/g, '')) - 
-                       parseFloat($b.find('td:eq(3)').text().replace(/[$,]/g, ''));
-            case 'stock':
-                return parseInt($a.find('td:eq(2)').text()) - parseInt($b.find('td:eq(2)').text());
-            case 'diferencia':
-            default:
-                return Math.abs($b.data('diferencia')) - Math.abs($a.data('diferencia'));
-        }
-    });
-    
-    tbody.empty().append(filas);
-}
-
-function verLotesFIFO(producto_talla_id) {
-    window.open(`/app/lotes_producto/${producto_talla_id}/`, '_blank');
-}
-
-function verMovimientosProducto(producto_talla_id) {
-    window.open(`/app/verMovimientosProducto/?producto_talla_id=${producto_talla_id}`, '_blank');
-}
-
-function exportarReporteFIFO() {
-    // Implementar exportación a Excel/PDF
-    showInfoAlert('Exportar', 'Función de exportación en desarrollo');
-}
-
-function exportarFiltrado() {
-    const filtroProducto = $('#filtroProducto').val();
-    const filtroTalla = $('#filtroTalla').val();
-    const filtroDiferencia = $('#filtroDiferencia').val();
-    const filtroStock = $('#filtroStock').val();
-    
-    if (!filtroProducto && !filtroTalla && !filtroDiferencia && !filtroStock) {
-        showWarningAlert('Exportar', 'Aplica filtros antes de exportar');
-        return;
+    if (fechaDesde || fechaHasta) {
+        const desde = fechaDesde ? new Date(fechaDesde).toLocaleDateString('es-CL') : 'Inicio';
+        const hasta = fechaHasta ? new Date(fechaHasta).toLocaleDateString('es-CL') : 'Hoy';
+        texto = `📅 ${desde} - ${hasta}`;
+    } else {
+        const periodos = {
+            'todo': '📊 Todo el historial',
+            'hoy': '📅 Hoy',
+            'semana': '📆 Últimos 7 días',
+            'mes': '🗓️ Últimos 30 días',
+            'trimestre': '📈 Último trimestre',
+            'semestre': '📉 Último semestre',
+            'anio': '🗃️ Último año'
+        };
+        texto = periodos[periodo] || periodos['todo'];
     }
     
-    // Crear URL de exportación con filtros
-    const url = `/app/exportar_dashboard_fifo/?filtro_producto=${encodeURIComponent(filtroProducto)}&filtro_talla=${encodeURIComponent(filtroTalla)}&filtro_diferencia=${encodeURIComponent(filtroDiferencia)}&filtro_stock=${encodeURIComponent(filtroStock)}`;
-    
-    // Descargar archivo
-    window.open(url, '_blank');
+    badge.innerHTML = `<i class="bi bi-clock"></i> ${texto}`;
 }
 
-function actualizarTablaConDatos(productos) {
-    const tbody = $('#tablaFIFO tbody');
-    tbody.empty();
+// ========== ACTUALIZAR KPIs ==========
+function actualizarKPIs(data) {
+    // Valor Total FIFO
+    document.getElementById('valorTotalFIFO').textContent = formatCurrency(data.valor_total_inventario);
+    
+    // Total Productos
+    document.getElementById('totalProductos').textContent = data.total_productos;
+    
+    // Productos con Diferencia
+    document.getElementById('productosConDiferencia').textContent = data.productos_con_diferencia;
+    
+    // Diferencia Total
+    const difTotal = data.diferencia_total;
+    const difElement = document.getElementById('diferenciaTotal');
+    difElement.textContent = (difTotal >= 0 ? '+' : '') + formatCurrency(difTotal);
+    
+    // Porcentaje Diferencia
+    const porcDif = data.porcentaje_diferencia;
+    const porcElement = document.getElementById('porcentajeDiferencia');
+    porcElement.textContent = porcDif.toFixed(1) + '%';
+    
+    if (Math.abs(porcDif) < 5) {
+        porcElement.className = 'nexo-badge nexo-badge-success';
+    } else if (Math.abs(porcDif) < 15) {
+        porcElement.className = 'nexo-badge nexo-badge-warning';
+    } else {
+        porcElement.className = 'nexo-badge nexo-badge-danger';
+    }
+    
+}
+
+// ========== ACTUALIZAR KPIs DE TIEMPO (DATOS REALES) ==========
+function actualizarKPIsTiempo(metricas) {
+    if (!metricas) return;
+    
+    // Rotación de Inventario (calculado desde antigüedad real)
+    const rotacion = metricas.rotacion_estimada || 0;
+    document.getElementById('rotacionInventario').textContent = rotacion + 'x';
+    
+    const rotacionStatus = document.getElementById('rotacionStatus');
+    if (rotacion > 6) {
+        rotacionStatus.className = 'nexo-badge nexo-badge-success';
+        rotacionStatus.textContent = 'Óptimo';
+    } else if (rotacion >= 3) {
+        rotacionStatus.className = 'nexo-badge nexo-badge-warning';
+        rotacionStatus.textContent = 'Normal';
+    } else {
+        rotacionStatus.className = 'nexo-badge nexo-badge-danger';
+        rotacionStatus.textContent = 'Bajo';
+    }
+    
+    // Días de Inventario (antigüedad promedio real)
+    const dias = metricas.dias_inventario || 0;
+    document.getElementById('diasInventario').textContent = dias + ' días';
+    
+    const diasStatus = document.getElementById('diasStatus');
+    if (dias <= 60) {
+        diasStatus.className = 'nexo-badge nexo-badge-success';
+        diasStatus.textContent = 'Óptimo';
+    } else if (dias <= 90) {
+        diasStatus.className = 'nexo-badge nexo-badge-warning';
+        diasStatus.textContent = 'Alto';
+    } else {
+        diasStatus.className = 'nexo-badge nexo-badge-danger';
+        diasStatus.textContent = 'Excesivo';
+    }
+    
+    // Eficiencia FIFO (% lotes frescos + normales)
+    const eficiencia = metricas.eficiencia_fifo || 100;
+    document.getElementById('eficienciaFIFO').textContent = eficiencia + '%';
+    
+    const eficienciaStatus = document.getElementById('eficienciaStatus');
+    if (eficiencia >= 95) {
+        eficienciaStatus.className = 'nexo-badge nexo-badge-success';
+        eficienciaStatus.textContent = 'Excelente';
+    } else if (eficiencia >= 80) {
+        eficienciaStatus.className = 'nexo-badge nexo-badge-warning';
+        eficienciaStatus.textContent = 'Mejorable';
+    } else {
+        eficienciaStatus.className = 'nexo-badge nexo-badge-danger';
+        eficienciaStatus.textContent = 'Deficiente';
+    }
+    
+    // Antigüedad Promedio (real del backend)
+    const antiguedad = metricas.antiguedad_promedio || 0;
+    document.getElementById('antiguedadPromedio').textContent = antiguedad + ' días';
+    
+    const antiguedadStatus = document.getElementById('antiguedadStatus');
+    if (antiguedad <= 45) {
+        antiguedadStatus.className = 'nexo-badge nexo-badge-success';
+        antiguedadStatus.textContent = 'Fresco';
+    } else if (antiguedad <= 75) {
+        antiguedadStatus.className = 'nexo-badge nexo-badge-warning';
+        antiguedadStatus.textContent = 'Normal';
+    } else {
+        antiguedadStatus.className = 'nexo-badge nexo-badge-danger';
+        antiguedadStatus.textContent = 'Antiguo';
+    }
+    
+    // Mostrar info de lotes en consola para debug
+    console.log('📊 Métricas de tiempo:', {
+        'Lotes Frescos (<30d)': metricas.lotes_frescos,
+        'Lotes Normales (30-60d)': metricas.lotes_normales,
+        'Lotes Antiguos (60-90d)': metricas.lotes_antiguos,
+        'Lotes Críticos (>90d)': metricas.lotes_criticos,
+        'Total Analizados': metricas.total_lotes_analizados
+    });
+}
+
+// ========== ACTUALIZAR ANÁLISIS ==========
+function actualizarAnalisis(analisis) {
+    document.getElementById('diferenciasPositivas').textContent = analisis.diferencias_positivas;
+    document.getElementById('diferenciasNegativas').textContent = analisis.diferencias_negativas;
+    document.getElementById('sinDiferencias').textContent = analisis.sin_diferencias;
+    document.getElementById('stockBajo').textContent = analisis.stock_bajo;
+    document.getElementById('stockMedio').textContent = analisis.stock_medio;
+    document.getElementById('stockAlto').textContent = analisis.stock_alto;
+    document.getElementById('sinStock').textContent = analisis.sin_stock;
+}
+
+// ========== ACTUALIZAR TABLA ==========
+function actualizarTabla(productos) {
+    const tbody = document.getElementById('tablaFIFOBody');
     
     if (productos.length === 0) {
-        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron productos</td></tr>');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center py-5">
+                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3 mb-0">No se encontraron productos con los filtros aplicados</p>
+                </td>
+            </tr>
+        `;
+        document.getElementById('contadorProductos').textContent = '0 productos';
         return;
     }
     
-    productos.forEach(function(producto) {
-        const claseDiferencia = producto.diferencia_valor > 0 ? 'text-success' : producto.diferencia_valor < 0 ? 'text-danger' : 'text-secondary';
-        const iconoDiferencia = producto.diferencia_valor > 0 ? '↗' : producto.diferencia_valor < 0 ? '↘' : '→';
+    let html = '';
+    productos.forEach(producto => {
+        const difClass = producto.diferencia_valor > 0 ? 'text-success' : producto.diferencia_valor < 0 ? 'text-danger' : 'text-secondary';
+        const difIcon = producto.diferencia_valor > 0 ? '↗' : producto.diferencia_valor < 0 ? '↘' : '→';
         
-        const fila = `
-            <tr class="producto-fila" data-producto="${producto.articulo}" data-talla="${producto.talla}" data-diferencia="${producto.diferencia_valor}">
+        // Badge de stock
+        let stockBadge;
+        if (producto.stock_sistema === 0) {
+            stockBadge = 'nexo-badge-danger';
+        } else if (producto.stock_sistema < 10) {
+            stockBadge = 'nexo-badge-warning';
+        } else if (producto.stock_sistema <= 50) {
+            stockBadge = 'nexo-badge-primary';
+        } else {
+            stockBadge = 'nexo-badge-success';
+        }
+        
+        // Badge de porcentaje
+        let porcBadge;
+        const absPorc = Math.abs(producto.porcentaje_diferencia);
+        if (absPorc < 5) {
+            porcBadge = 'nexo-badge-success';
+        } else if (absPorc < 15) {
+            porcBadge = 'nexo-badge-warning';
+        } else {
+            porcBadge = 'nexo-badge-danger';
+        }
+        
+        html += `
+            <tr class="producto-fila" data-producto="${producto.articulo}" data-diferencia="${producto.diferencia_valor}">
                 <td>
-                    <div class="d-flex align-items-center">
-                        <div class="me-2">
-                            <strong>${producto.articulo}</strong>
-                            <br><small class="text-muted">SKU: ${producto.sku}</small>
-                        </div>
+                    <div>
+                        <strong style="color: var(--nexo-secondary);">${producto.articulo}</strong>
+                        <br>
+                        <small class="text-muted">SKU: ${producto.sku}</small>
                     </div>
                 </td>
-                <td class="text-center">${producto.talla}</td>
                 <td class="text-center">
-                    <span class="badge bg-${producto.stock_sistema === 0 ? 'danger' : producto.stock_sistema < 10 ? 'warning' : 'success'}">
-                        ${producto.stock_sistema}
-                    </span>
-                </td>
-                <td class="text-end">$${producto.valor_inventario_fifo.toLocaleString()}</td>
-                <td class="text-end">$${producto.costo_promedio_fifo.toLocaleString()}</td>
-                <td class="text-end ${claseDiferencia}">
-                    ${iconoDiferencia} $${Math.abs(producto.diferencia_valor).toLocaleString()}
+                    <span class="nexo-badge nexo-badge-gray">${producto.talla}</span>
                 </td>
                 <td class="text-center">
-                    <span class="badge bg-${Math.abs(producto.porcentaje_diferencia) > 20 ? 'danger' : Math.abs(producto.porcentaje_diferencia) > 10 ? 'warning' : 'success'}">
+                    <span class="nexo-badge ${stockBadge}">${producto.stock_sistema}</span>
+                </td>
+                <td class="text-end" style="font-weight: 600; color: var(--nexo-secondary);">
+                    ${formatCurrency(producto.valor_inventario_fifo)}
+                </td>
+                <td class="text-end">
+                    ${formatCurrency(producto.costo_promedio_fifo)}
+                </td>
+                <td class="text-end">
+                    ${formatCurrency(producto.costo_sistema)}
+                </td>
+                <td class="text-end ${difClass}" style="font-weight: 600;">
+                    ${difIcon} ${formatCurrency(Math.abs(producto.diferencia_valor))}
+                </td>
+                <td class="text-center">
+                    <span class="nexo-badge ${porcBadge}">
                         ${producto.porcentaje_diferencia.toFixed(1)}%
                     </span>
                 </td>
                 <td class="text-center">
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-primary btn-sm" onclick="verLotesFIFO(${producto.producto_talla_id})" title="Ver Lotes">
-                            <i class="bi bi-boxes"></i>
+                    <div class="d-flex gap-1 justify-content-center">
+                        <button class="nexo-btn nexo-btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" 
+                                onclick="verLotesFIFO(${producto.producto_talla_id})" title="Ver Lotes">
+                            <i class="bi bi-layers"></i>
                         </button>
-                        <button class="btn btn-outline-info btn-sm" onclick="verMovimientosProducto(${producto.producto_talla_id})" title="Ver Movimientos">
+                        <button class="nexo-btn nexo-btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" 
+                                onclick="verMovimientosProducto(${producto.producto_talla_id})" title="Ver Movimientos">
                             <i class="bi bi-arrow-left-right"></i>
                         </button>
                     </div>
                 </td>
             </tr>
         `;
-        tbody.append(fila);
     });
     
-    $('#contadorProductos').text(productos.length + ' productos');
+    tbody.innerHTML = html;
+    document.getElementById('contadorProductos').textContent = productos.length + ' productos';
 }
 
-function actualizarMetricas(data) {
-    $('#valorTotalFIFO').text('$' + data.valor_total_inventario.toLocaleString());
-    $('#totalProductos').text(data.total_productos);
-    $('#productosConDiferencia').text(data.productos_con_diferencia);
-    $('#diferenciaTotal').text('$' + data.diferencia_total.toLocaleString());
-    $('#porcentajeDiferencia').text(data.porcentaje_diferencia.toFixed(1) + '%');
-}
-
-function actualizarAnalisis(analisis) {
-    $('#diferenciasPositivas').text(analisis.diferencias_positivas);
-    $('#diferenciasNegativas').text(analisis.diferencias_negativas);
-    $('#sinDiferencias').text(analisis.sin_diferencias);
-    $('#stockBajo').text(analisis.stock_bajo);
-    $('#stockMedio').text(analisis.stock_medio);
-    $('#stockAlto').text(analisis.stock_alto);
-    $('#sinStock').text(analisis.sin_stock);
-}
-
-function mostrarAlertas(alertas) {
-    const alertasContainer = $('#alertasFIFO');
-    alertasContainer.empty();
+// ========== ACTUALIZAR ALERTAS ==========
+function actualizarAlertas(alertas) {
+    const container = document.getElementById('alertasFIFO');
+    const contador = document.getElementById('contadorAlertas');
     
-    if (alertas.length === 0) {
-        alertasContainer.html('<div class="text-muted">No hay alertas pendientes</div>');
+    if (!alertas || alertas.length === 0) {
+        container.innerHTML = `
+            <div class="nexo-alert nexo-alert-success">
+                <i class="bi bi-check-circle-fill"></i>
+                <span>¡Excelente! No hay alertas pendientes. El inventario está en buen estado.</span>
+            </div>
+        `;
+        contador.textContent = '0 alertas';
+        contador.className = 'nexo-badge nexo-badge-success';
         return;
     }
     
-    alertas.forEach(function(alerta) {
-        const alertaHTML = `
-            <div class="alert alert-${alerta.tipo} alert-dismissible fade show" role="alert">
-                <i class="bi bi-exclamation-triangle me-2"></i>
-                ${alerta.mensaje}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    let html = '';
+    alertas.forEach(alerta => {
+        const alertClass = alerta.tipo === 'danger' ? 'danger' : alerta.tipo === 'warning' ? 'warning' : 'info';
+        const icon = alerta.tipo === 'danger' ? 'exclamation-triangle-fill' : alerta.tipo === 'warning' ? 'exclamation-circle-fill' : 'info-circle-fill';
+        
+        html += `
+            <div class="nexo-alert nexo-alert-${alertClass}">
+                <i class="bi bi-${icon}"></i>
+                <span>${alerta.mensaje}</span>
             </div>
         `;
-        alertasContainer.append(alertaHTML);
     });
+    
+    container.innerHTML = html;
+    contador.textContent = alertas.length + ' alerta' + (alertas.length > 1 ? 's' : '');
+    contador.className = 'nexo-badge nexo-badge-warning';
 }
 
+// ========== FUNCIONES DE ACCIÓN ==========
+function verLotesFIFO(productoTallaId) {
+    window.open(`/app/lotes_producto/${productoTallaId}/`, '_blank');
+}
 
-</script> 
+function verMovimientosProducto(productoTallaId) {
+    window.open(`/app/verMovimientosProducto/?producto_talla_id=${productoTallaId}`, '_blank');
+}
+
+function limpiarFiltros() {
+    // Limpiar filtros de tiempo
+    document.getElementById('filtroPeriodo').value = 'mes';
+    document.getElementById('filtroFechaDesde').value = '';
+    document.getElementById('filtroFechaHasta').value = '';
+    document.getElementById('filtroAntiguedad').value = '';
+    
+    // Limpiar filtros de producto
+    document.getElementById('filtroProducto').value = '';
+    document.getElementById('filtroTalla').value = '';
+    document.getElementById('filtroDiferencia').value = '';
+    document.getElementById('filtroStock').value = '';
+    document.getElementById('ordenarPor').value = 'diferencia';
+    document.getElementById('mostrarSoloDiferencias').checked = false;
+    
+    cargarDatosDashboard();
+}
+
+function exportarReporteFIFO() {
+    const params = new URLSearchParams({
+        periodo: document.getElementById('filtroPeriodo').value,
+        fecha_desde: document.getElementById('filtroFechaDesde').value,
+        fecha_hasta: document.getElementById('filtroFechaHasta').value
+    });
+    window.open(`/app/exportar_dashboard_fifo/?${params}`, '_blank');
+}
+
+function exportarFiltrado() {
+    const params = new URLSearchParams({
+        // Filtros de tiempo
+        periodo: document.getElementById('filtroPeriodo').value,
+        fecha_desde: document.getElementById('filtroFechaDesde').value,
+        fecha_hasta: document.getElementById('filtroFechaHasta').value,
+        filtro_antiguedad: document.getElementById('filtroAntiguedad').value,
+        // Filtros de producto
+        filtro_producto: document.getElementById('filtroProducto').value,
+        filtro_talla: document.getElementById('filtroTalla').value,
+        filtro_diferencia: document.getElementById('filtroDiferencia').value,
+        filtro_stock: document.getElementById('filtroStock').value
+    });
+    window.open(`/app/exportar_dashboard_fifo/?${params}`, '_blank');
+}
+
+// ========== INICIALIZACIÓN ==========
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Inicializando Dashboard FIFO con NEXO Design System...');
+    
+    // Establecer fecha hasta como hoy por defecto
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('filtroFechaHasta').max = hoy;
+    
+    // Cargar datos iniciales
+    cargarDatosDashboard();
+    
+    // Event listeners para botones
+    document.getElementById('btnAplicarFiltros').addEventListener('click', cargarDatosDashboard);
+    document.getElementById('btnLimpiarFiltros').addEventListener('click', limpiarFiltros);
+    document.getElementById('btnExportarFiltrado').addEventListener('click', exportarFiltrado);
+    
+    // Event listeners para filtros de TIEMPO (cambio inmediato)
+    ['filtroPeriodo', 'filtroAntiguedad'].forEach(id => {
+        document.getElementById(id).addEventListener('change', function() {
+            // Si se selecciona un período predefinido, limpiar fechas personalizadas
+            if (id === 'filtroPeriodo' && this.value !== 'todo') {
+                document.getElementById('filtroFechaDesde').value = '';
+                document.getElementById('filtroFechaHasta').value = '';
+            }
+            cargarDatosDashboard();
+        });
+    });
+    
+    // Event listeners para fechas (limpiar período predefinido al usar fechas)
+    ['filtroFechaDesde', 'filtroFechaHasta'].forEach(id => {
+        document.getElementById(id).addEventListener('change', function() {
+            if (this.value) {
+                document.getElementById('filtroPeriodo').value = 'todo';
+            }
+            cargarDatosDashboard();
+        });
+    });
+    
+    // Filtros de producto con debounce
+    let debounceTimer;
+    ['filtroProducto', 'filtroTalla'].forEach(id => {
+        document.getElementById(id).addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(cargarDatosDashboard, 500);
+        });
+    });
+    
+    // Filtros de producto con cambio inmediato
+    ['filtroDiferencia', 'filtroStock', 'ordenarPor'].forEach(id => {
+        document.getElementById(id).addEventListener('change', cargarDatosDashboard);
+    });
+    
+    document.getElementById('mostrarSoloDiferencias').addEventListener('change', cargarDatosDashboard);
+    
+    // Actualización automática cada 60 segundos
+    setInterval(cargarDatosDashboard, 60000);
+    
+    console.log('✅ Dashboard FIFO inicializado correctamente');
+});
+
+// Hacer funciones disponibles globalmente
+window.verLotesFIFO = verLotesFIFO;
+window.verMovimientosProducto = verMovimientosProducto;
+window.exportarReporteFIFO = exportarReporteFIFO;
+window.exportarFiltrado = exportarFiltrado;
+window.limpiarFiltros = limpiarFiltros;
+</script>

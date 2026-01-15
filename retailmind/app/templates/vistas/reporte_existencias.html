@@ -3,789 +3,1700 @@
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 
-   <div class="page-content">
-        <div class="container-fluid">
-
 <style>
-        .reporte-existencias-container {
-            max-width: 100%;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            overflow: hidden;
+    /* ========== NEXO DESIGN SYSTEM - VARIABLES ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+        --nexo-transition-fast: 150ms ease;
+        --nexo-transition-normal: 250ms ease;
+    }
+
+    /* ========== RESET & BASE ========== */
+    .nexo-page-wrapper {
+        background: var(--nexo-gray-100);
+        min-height: 100vh;
+        padding-bottom: 40px;
+    }
+
+    /* ========== HEADER HERO ========== */
+    .nexo-hero {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D4A 100%);
+        color: var(--nexo-white);
+        padding: 32px 40px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .nexo-hero::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(0, 102, 255, 0.15) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+
+    .nexo-hero::after {
+        content: '';
+        position: absolute;
+        bottom: -30%;
+        left: 10%;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(0, 212, 170, 0.1) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+
+    .nexo-hero-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+
+    .nexo-hero-title {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .nexo-hero-icon {
+        width: 56px;
+        height: 56px;
+        background: var(--nexo-primary);
+        border-radius: var(--nexo-radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+    }
+
+    .nexo-hero h1 {
+        font-size: 1.875rem;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+
+    .nexo-hero-subtitle {
+        font-size: 0.95rem;
+        color: var(--nexo-gray-300);
+        margin-top: 4px;
+    }
+
+    .nexo-hero-date {
+        font-size: 0.85rem;
+        color: var(--nexo-accent);
+        background: rgba(0, 212, 170, 0.1);
+        padding: 8px 16px;
+        border-radius: var(--nexo-radius-md);
+        border: 1px solid rgba(0, 212, 170, 0.3);
+    }
+
+    /* ========== FILTERS BAR ========== */
+    .nexo-filters-bar {
+        background: var(--nexo-white);
+        padding: 20px 40px;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .nexo-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 180px;
+    }
+
+    .nexo-filter-group label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .nexo-select,
+    .nexo-input {
+        padding: 10px 14px;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.9rem;
+        color: var(--nexo-gray-900);
+        background: var(--nexo-white);
+        transition: var(--nexo-transition-fast);
+    }
+
+    .nexo-select:focus,
+    .nexo-input:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    .nexo-btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .nexo-btn-primary {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    .nexo-btn-primary:hover {
+        background: var(--nexo-primary-dark);
+        transform: translateY(-1px);
+        box-shadow: var(--nexo-shadow-md);
+    }
+
+    .nexo-btn-success {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+    }
+
+    .nexo-btn-success:hover {
+        background: #00B894;
+        transform: translateY(-1px);
+    }
+
+    .nexo-btn-secondary {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-700);
+        border: 2px solid var(--nexo-gray-300);
+    }
+
+    .nexo-btn-secondary:hover {
+        background: var(--nexo-gray-300);
+        border-color: var(--nexo-gray-500);
+    }
+
+    .nexo-filter-actions {
+        display: flex;
+        gap: 10px;
+        margin-left: auto;
+    }
+
+    /* ========== KPI CARDS ========== */
+    .nexo-kpi-section {
+        padding: 24px 40px;
+    }
+
+    .nexo-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+    }
+
+    .nexo-kpi-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 24px;
+        box-shadow: var(--nexo-shadow-sm);
+        border: 1px solid var(--nexo-gray-300);
+        transition: var(--nexo-transition-normal);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .nexo-kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--nexo-shadow-lg);
+    }
+
+    .nexo-kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--nexo-primary);
+    }
+
+    .nexo-kpi-card.kpi-success::before {
+        background: var(--nexo-success);
+    }
+
+    .nexo-kpi-card.kpi-warning::before {
+        background: var(--nexo-warning);
+    }
+
+    .nexo-kpi-card.kpi-danger::before {
+        background: var(--nexo-error);
+    }
+
+    .nexo-kpi-card.kpi-info::before {
+        background: var(--nexo-info);
+    }
+
+    .nexo-kpi-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+    }
+
+    .nexo-kpi-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--nexo-gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .nexo-kpi-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--nexo-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+    }
+
+    .nexo-kpi-icon.icon-primary {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    .nexo-kpi-icon.icon-success {
+        background: rgba(0, 212, 170, 0.1);
+        color: var(--nexo-success);
+    }
+
+    .nexo-kpi-icon.icon-warning {
+        background: rgba(255, 176, 32, 0.1);
+        color: var(--nexo-warning);
+    }
+
+    .nexo-kpi-icon.icon-danger {
+        background: rgba(255, 77, 77, 0.1);
+        color: var(--nexo-error);
+    }
+
+    .nexo-kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        line-height: 1.2;
+    }
+
+    .nexo-kpi-value.text-success {
+        color: var(--nexo-success);
+    }
+
+    .nexo-kpi-value.text-warning {
+        color: var(--nexo-warning);
+    }
+
+    .nexo-kpi-value.text-danger {
+        color: var(--nexo-error);
+    }
+
+    .nexo-kpi-subtitle {
+        font-size: 0.85rem;
+        color: var(--nexo-gray-500);
+        margin-top: 4px;
+    }
+
+    .nexo-kpi-trend {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: var(--nexo-radius-sm);
+        margin-top: 12px;
+    }
+
+    .nexo-kpi-trend.trend-up {
+        background: rgba(0, 212, 170, 0.1);
+        color: var(--nexo-success);
+    }
+
+    .nexo-kpi-trend.trend-down {
+        background: rgba(255, 77, 77, 0.1);
+        color: var(--nexo-error);
+    }
+
+    .nexo-kpi-trend.trend-neutral {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-500);
+    }
+
+    /* ========== INDICADORES AVANZADOS ========== */
+    .nexo-indicators-section {
+        padding: 0 40px 24px;
+    }
+
+    .nexo-section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .nexo-section-badge {
+        font-size: 0.7rem;
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+        padding: 4px 10px;
+        border-radius: var(--nexo-radius-full);
+        font-weight: 600;
+    }
+
+    .nexo-indicators-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+    }
+
+    .nexo-indicator-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px;
+        box-shadow: var(--nexo-shadow-sm);
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-indicator-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .nexo-indicator-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+    }
+
+    .nexo-indicator-help {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-500);
+        font-size: 0.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: help;
+    }
+
+    .nexo-progress-bar {
+        height: 8px;
+        background: var(--nexo-gray-100);
+        border-radius: var(--nexo-radius-full);
+        overflow: hidden;
+        margin-bottom: 12px;
+    }
+
+    .nexo-progress-fill {
+        height: 100%;
+        border-radius: var(--nexo-radius-full);
+        transition: width 0.5s ease;
+    }
+
+    .nexo-progress-fill.fill-success {
+        background: linear-gradient(90deg, var(--nexo-success) 0%, #00F5C4 100%);
+    }
+
+    .nexo-progress-fill.fill-warning {
+        background: linear-gradient(90deg, var(--nexo-warning) 0%, #FFD93D 100%);
+    }
+
+    .nexo-progress-fill.fill-danger {
+        background: linear-gradient(90deg, var(--nexo-error) 0%, #FF7878 100%);
+    }
+
+    .nexo-progress-fill.fill-primary {
+        background: linear-gradient(90deg, var(--nexo-primary) 0%, #4D9FFF 100%);
+    }
+
+    .nexo-indicator-stats {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .nexo-indicator-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+    }
+
+    .nexo-indicator-target {
+        font-size: 0.85rem;
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-indicator-target span {
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+    }
+
+    /* ========== DATA TABLE ========== */
+    .nexo-table-section {
+        padding: 0 40px 40px;
+    }
+
+    .nexo-table-container {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-md);
+        overflow: hidden;
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-table-header {
+        background: var(--nexo-gray-100);
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .nexo-table-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+    }
+
+    .nexo-table-count {
+        font-size: 0.85rem;
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .nexo-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .nexo-table thead {
+        background: var(--nexo-secondary);
+    }
+
+    .nexo-table thead th {
+        padding: 14px 16px;
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--nexo-white);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+
+    .nexo-table thead th.text-right {
+        text-align: right;
+    }
+
+    .nexo-table thead th.text-center {
+        text-align: center;
+    }
+
+    .nexo-table tbody tr {
+        border-bottom: 1px solid var(--nexo-gray-100);
+        transition: var(--nexo-transition-fast);
+    }
+
+    .nexo-table tbody tr:hover {
+        background: var(--nexo-primary-light);
+    }
+
+    .nexo-table tbody td {
+        padding: 14px 16px;
+        font-size: 0.9rem;
+        color: var(--nexo-gray-700);
+    }
+
+    .nexo-table tbody td.text-right {
+        text-align: right;
+    }
+
+    .nexo-table tbody td.text-center {
+        text-align: center;
+    }
+
+    .nexo-table .product-name {
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+    }
+
+    .nexo-table .product-desc {
+        font-size: 0.8rem;
+        color: var(--nexo-gray-500);
+        margin-top: 2px;
+    }
+
+    .nexo-table .money {
+        font-weight: 600;
+        color: var(--nexo-success);
+    }
+
+    /* ========== BADGES ========== */
+    .nexo-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 12px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .nexo-badge-success {
+        background: rgba(0, 212, 170, 0.15);
+        color: var(--nexo-success);
+    }
+
+    .nexo-badge-warning {
+        background: rgba(255, 176, 32, 0.15);
+        color: #B87A00;
+    }
+
+    .nexo-badge-danger {
+        background: rgba(255, 77, 77, 0.15);
+        color: var(--nexo-error);
+    }
+
+    .nexo-badge-info {
+        background: rgba(0, 102, 255, 0.15);
+        color: var(--nexo-primary);
+    }
+
+    /* ========== STOCK INDICATORS ========== */
+    .stock-high {
+        color: var(--nexo-success);
+        font-weight: 700;
+    }
+
+    .stock-medium {
+        color: var(--nexo-warning);
+        font-weight: 700;
+    }
+
+    .stock-low {
+        color: var(--nexo-error);
+        font-weight: 700;
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .nexo-empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .nexo-empty-icon {
+        font-size: 4rem;
+        margin-bottom: 16px;
+        opacity: 0.3;
+    }
+
+    .nexo-empty-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        margin-bottom: 8px;
+    }
+
+    .nexo-empty-text {
+        font-size: 0.9rem;
+        color: var(--nexo-gray-500);
+    }
+
+    /* ========== LOADING STATE ========== */
+    .nexo-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        gap: 16px;
+    }
+
+    .nexo-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid var(--nexo-gray-100);
+        border-top-color: var(--nexo-primary);
+        border-radius: 50%;
+        animation: nexo-spin 0.8s linear infinite;
+    }
+
+    @keyframes nexo-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .nexo-loading-text {
+        font-size: 0.9rem;
+        color: var(--nexo-gray-500);
+    }
+
+    /* ========== PAGINATION ========== */
+    .nexo-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        background: var(--nexo-gray-100);
+        border-top: 1px solid var(--nexo-gray-300);
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .nexo-pagination-info {
+        font-size: 0.9rem;
+        color: var(--nexo-gray-700);
+    }
+
+    .nexo-pagination-info strong {
+        color: var(--nexo-primary);
+    }
+
+    .nexo-pagination-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .nexo-pagination-btn {
+        width: 36px;
+        height: 36px;
+        border: 2px solid var(--nexo-gray-300);
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-md);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        color: var(--nexo-gray-700);
+        transition: var(--nexo-transition-fast);
+    }
+
+    .nexo-pagination-btn:hover:not(:disabled) {
+        border-color: var(--nexo-primary);
+        color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+
+    .nexo-pagination-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .nexo-pagination-btn.active {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        border-color: var(--nexo-primary);
+    }
+
+    .nexo-pagination-pages {
+        display: flex;
+        gap: 4px;
+    }
+
+    .nexo-pagination-ellipsis {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-pagination-select {
+        padding: 8px 12px;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.85rem;
+        color: var(--nexo-gray-700);
+        background: var(--nexo-white);
+        cursor: pointer;
+    }
+
+    .nexo-pagination-select:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+    }
+
+    /* ========== FOOTER ========== */
+    .nexo-footer {
+        background: var(--nexo-white);
+        padding: 20px 40px;
+        border-top: 1px solid var(--nexo-gray-300);
+        text-align: center;
+        color: var(--nexo-gray-500);
+        font-size: 0.85rem;
+    }
+
+    .nexo-footer-brand {
+        font-weight: 600;
+        color: var(--nexo-primary);
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media screen and (max-width: 1024px) {
+        .nexo-hero,
+        .nexo-filters-bar,
+        .nexo-kpi-section,
+        .nexo-indicators-section,
+        .nexo-table-section {
+            padding-left: 20px;
+            padding-right: 20px;
         }
 
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+        .nexo-kpi-grid {
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
         }
 
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        .nexo-hero h1 {
+            font-size: 1.5rem;
         }
+    }
 
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .controls {
-            padding: 25px 30px;
-            background: #f8f9fa;
-            border-bottom: 2px solid #e9ecef;
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .control-group {
-            display: flex;
+    @media screen and (max-width: 768px) {
+        .nexo-filters-bar {
             flex-direction: column;
-            gap: 5px;
+            align-items: stretch;
         }
 
-        .control-group label {
-            font-weight: 600;
-            color: #495057;
-            font-size: 0.9em;
+        .nexo-filter-group {
+            min-width: 100%;
         }
 
-        .control-group select,
-        .control-group input {
-            padding: 10px 15px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: all 0.3s ease;
-            min-width: 200px;
+        .nexo-filter-actions {
+            margin-left: 0;
+            margin-top: 10px;
         }
 
-        .control-group select:focus,
-        .control-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        .nexo-kpi-grid {
+            grid-template-columns: 1fr 1fr;
         }
 
-        .btn {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            align-self: flex-end;
+        .nexo-indicators-grid {
+            grid-template-columns: 1fr;
         }
 
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        .nexo-table {
+            font-size: 0.8rem;
+        }
+    }
+
+    /* ========== PRINT STYLES ========== */
+    @media print {
+        .nexo-filters-bar,
+        .nexo-filter-actions,
+        .nexo-btn {
+            display: none !important;
         }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        .nexo-hero {
+            background: var(--nexo-secondary) !important;
+            -webkit-print-color-adjust: exact;
         }
 
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
+        .nexo-kpi-card,
+        .nexo-indicator-card,
+        .nexo-table-container {
+            break-inside: avoid;
         }
+    }
+</style>
 
-        .btn-secondary:hover {
-            background: #5a6268;
-            transform: translateY(-2px);
-        }
-
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #218838;
-            transform: translateY(-2px);
-        }
-
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            padding: 30px;
-            background: #f8f9fa;
-        }
-
-        .summary-card {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-        }
-
-        .summary-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-        }
-
-        .summary-card h3 {
-            color: #667eea;
-            font-size: 0.9em;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .summary-card .value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        .summary-card .subvalue {
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-
-        .content {
-            padding: 30px;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .table-container {
-            overflow-x: auto;
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: white;
-        }
-
-        thead {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        thead th {
-            padding: 18px 15px;
-            text-align: left;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85em;
-            letter-spacing: 0.5px;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
-        tbody tr {
-            border-bottom: 1px solid #e9ecef;
-            transition: all 0.2s ease;
-        }
-
-        tbody tr:hover {
-            background: #f8f9fa;
-            transform: scale(1.01);
-        }
-
-        tbody td {
-            padding: 15px;
-            color: #495057;
-        }
-
-        .text-right {
-            text-align: right;
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        .badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: 600;
-        }
-
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .badge-warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .badge-danger {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .badge-info {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .money {
-            color: #28a745;
-            font-weight: 600;
-        }
-
-        .stock-high {
-            color: #28a745;
-            font-weight: 600;
-        }
-
-        .stock-medium {
-            color: #ffc107;
-            font-weight: 600;
-        }
-
-        .stock-low {
-            color: #dc3545;
-            font-weight: 600;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-        }
-
-        .empty-state i {
-            font-size: 4em;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-
-        .empty-state h3 {
-            font-size: 1.5em;
-            margin-bottom: 10px;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 60px 20px;
-            color: #667eea;
-        }
-
-        .loading::after {
-            content: '';
-            display: inline-block;
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .footer {
-            background: #f8f9fa;
-            padding: 20px 30px;
-            text-align: center;
-            color: #6c757d;
-            border-top: 2px solid #e9ecef;
-        }
-
-        @media print {
-            body {
-                background: white;
-                padding: 0;
-            }
-
-            .controls, .tabs, .btn {
-                display: none;
-            }
-
-            .container {
-                box-shadow: none;
-            }
-
-            .summary-cards {
-                page-break-after: always;
-            }
-
-            table {
-                page-break-inside: auto;
-            }
-
-            tr {
-                page-break-inside: avoid;
-                page-break-after: auto;
-            }
-        }
-
-        @media screen and (max-width: 768px) {
-            .header h1 {
-                font-size: 1.8em;
-            }
-
-            .controls {
-                flex-direction: column;
-            }
-
-            .control-group select,
-            .control-group input {
-                min-width: 100%;
-            }
-
-            .summary-cards {
-                grid-template-columns: 1fr;
-            }
-
-            .tabs {
-                overflow-x: auto;
-                flex-wrap: nowrap;
-            }
-
-            table {
-                font-size: 0.85em;
-            }
-
-            thead th, tbody td {
-                padding: 10px 8px;
-            }
-        }
-    </style>
-
-    <div class="reporte-existencias-container">
-        <div class="header">
-            <h1>📊 Reporte de Existencias de Productos</h1>
-            <p>Sistema de Gestión de Inventario - RetailMind</p>
-            <p id="fecha-reporte"></p>
+<div class="page-content">
+    <div class="nexo-page-wrapper">
+        
+        <!-- ========== HERO HEADER ========== -->
+        <div class="nexo-hero">
+            <div class="nexo-hero-content">
+                <div class="nexo-hero-title">
+                    <div class="nexo-hero-icon">📊</div>
+                    <div>
+                        <h1>Reporte de Existencias</h1>
+                        <div class="nexo-hero-subtitle">Análisis completo del inventario • NEXO Retail</div>
+                    </div>
+                </div>
+                <div class="nexo-hero-date" id="fecha-reporte"></div>
+            </div>
         </div>
 
-        <div class="controls">
-            <div class="control-group">
-                <label for="filtro-sucursal">Sucursal:</label>
-                <select id="filtro-sucursal">
+        <!-- ========== FILTERS BAR ========== -->
+        <div class="nexo-filters-bar">
+            <div class="nexo-filter-group">
+                <label>Sucursal</label>
+                <select id="filtro-sucursal" class="nexo-select">
                     <option value="">Todas las sucursales</option>
                 </select>
             </div>
 
-            <div class="control-group">
-                <label for="filtro-categoria">Categoría:</label>
-                <select id="filtro-categoria">
+            <div class="nexo-filter-group">
+                <label>Categoría</label>
+                <select id="filtro-categoria" class="nexo-select">
                     <option value="">Todas las categorías</option>
                 </select>
             </div>
 
-            <div class="control-group">
-                <label for="filtro-busqueda">Buscar producto:</label>
-                <input type="text" id="filtro-busqueda" placeholder="Buscar por artículo, SKU...">
-            </div>
-
-            <div class="control-group">
-                <label for="filtro-stock">Estado de Stock:</label>
-                <select id="filtro-stock">
+            <div class="nexo-filter-group">
+                <label>Estado de Stock</label>
+                <select id="filtro-stock" class="nexo-select">
                     <option value="">Todos</option>
-                    <option value="con-stock">Con Stock</option>
+                    <option value="con-stock" selected>Con Stock</option>
                     <option value="sin-stock">Sin Stock</option>
-                    <option value="bajo-stock">Bajo Stock (&lt; 10)</option>
+                    <option value="bajo-stock">Stock Crítico (&lt; 10)</option>
+                    <option value="stock-bajo-medio">Stock Bajo (10-30)</option>
                 </select>
             </div>
 
-            <button class="btn btn-primary" onclick="cargarDatos()">🔄 Actualizar</button>
-            <button class="btn btn-success" onclick="exportarExcel()">📥 Exportar Excel</button>
-            <button class="btn btn-secondary" onclick="window.print()">🖨️ Imprimir</button>
-        </div>
+            <div class="nexo-filter-group" style="min-width: 240px;">
+                <label>Buscar Producto</label>
+                <input type="text" id="filtro-busqueda" class="nexo-input" placeholder="SKU, artículo, descripción...">
+            </div>
 
-        <div class="summary-cards" id="summary-cards">
-            <!-- Se llenarán dinámicamente -->
-        </div>
-
-        <div class="content">
-            <div class="table-container">
-                <table id="tabla-productos">
-                    <thead>
-                        <tr>
-                            <th>Artículo</th>
-                            <th>Descripción</th>
-                            <th>Sucursal</th>
-                            <th>Categoría</th>
-                            <th class="text-right">Variantes</th>
-                            <th class="text-right">Stock Total</th>
-                            <th class="text-right">Costo Promedio</th>
-                            <th class="text-right">Costo FIFO Prom.</th>
-                            <th class="text-right">Valor Total (Costo)</th>
-                            <th class="text-right">Valor Total Venta</th>
-                            <th class="text-center">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-productos">
-                        <tr>
-                            <td colspan="11" class="loading">Cargando datos...</td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="nexo-filter-actions">
+                <button class="nexo-btn nexo-btn-primary" onclick="cargarDatos(true)">
+                    🔄 Actualizar
+                </button>
+                <button class="nexo-btn nexo-btn-success" onclick="exportarExcel()" title="Exportar todos los datos filtrados">
+                    📥 Exportar Excel
+                </button>
+                <button class="nexo-btn nexo-btn-secondary" onclick="window.print()">
+                    🖨️ Imprimir
+                </button>
             </div>
         </div>
 
-        <div class="footer">
-            <p>&copy; 2024 RetailMind - Sistema de Gestión Comercial</p>
-            <p>Reporte generado automáticamente</p>
+        <!-- ========== KPI CARDS PRINCIPALES ========== -->
+        <div class="nexo-kpi-section">
+            <div class="nexo-kpi-grid" id="kpi-grid">
+                <!-- KPIs se cargan dinámicamente -->
+            </div>
         </div>
+
+        <!-- ========== INDICADORES AVANZADOS DE RETAIL ========== -->
+        <div class="nexo-indicators-section">
+            <h3 class="nexo-section-title">
+                📈 Indicadores Clave de Gestión
+                <span class="nexo-section-badge">KPIs Retail</span>
+            </h3>
+            <div class="nexo-indicators-grid" id="indicators-grid">
+                <!-- Indicadores se cargan dinámicamente -->
+            </div>
+        </div>
+
+        <!-- ========== DATA TABLE ========== -->
+        <div class="nexo-table-section">
+            <div class="nexo-table-container">
+                <div class="nexo-table-header">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <span class="nexo-table-title">📦 Detalle de Productos por Sucursal</span>
+                        <select id="items-por-pagina" class="nexo-pagination-select" onchange="cambiarItemsPorPagina()">
+                            <option value="50">50 por página</option>
+                            <option value="100" selected>100 por página</option>
+                            <option value="200">200 por página</option>
+                            <option value="500">500 por página</option>
+                        </select>
+                    </div>
+                    <span class="nexo-table-count" id="table-count">Cargando...</span>
+                </div>
+                <div class="nexo-table-wrapper">
+                    <table class="nexo-table" id="tabla-productos">
+                        <thead>
+                            <tr>
+                                <th>Artículo</th>
+                                <th>Descripción</th>
+                                <th>Sucursal</th>
+                                <th>Categoría</th>
+                                <th class="text-right">Variantes</th>
+                                <th class="text-right">Stock Total</th>
+                                <th class="text-right">Costo Orig.</th>
+                                <th class="text-right">Costo FIFO</th>
+                                <th class="text-right">Valor Costo</th>
+                                <th class="text-right">Valor Venta</th>
+                                <th class="text-center">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-productos">
+                            <tr>
+                                <td colspan="11">
+                                    <div class="nexo-loading">
+                                        <div class="nexo-spinner"></div>
+                                        <span class="nexo-loading-text">Cargando datos del inventario...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- ========== PAGINATION ========== -->
+                <div class="nexo-pagination" id="paginacion-container" style="display: none;">
+                    <div class="nexo-pagination-info">
+                        Mostrando <strong id="pag-desde">0</strong> - <strong id="pag-hasta">0</strong> de <strong id="pag-total">0</strong> registros
+                    </div>
+                    <div class="nexo-pagination-controls">
+                        <button class="nexo-pagination-btn" id="btn-primera" onclick="irAPagina(1)" title="Primera página">⏮️</button>
+                        <button class="nexo-pagination-btn" id="btn-anterior" onclick="paginaAnterior()" title="Página anterior">◀️</button>
+                        
+                        <div class="nexo-pagination-pages" id="paginas-numeros">
+                            <!-- Se generan dinámicamente -->
+                        </div>
+                        
+                        <button class="nexo-pagination-btn" id="btn-siguiente" onclick="paginaSiguiente()" title="Página siguiente">▶️</button>
+                        <button class="nexo-pagination-btn" id="btn-ultima" onclick="irAUltimaPagina()" title="Última página">⏭️</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== FOOTER ========== -->
+        <div class="nexo-footer">
+            <p>© 2024 <span class="nexo-footer-brand">NEXO</span> - Sistema de Gestión Retail • Reporte generado automáticamente</p>
+        </div>
+
     </div>
-    <!-- fin reporte-existencias-container -->
+</div>
 
-    <script>
-        // Datos globales
-        let datosOriginales = [];
-        let datosFiltrados = [];
-        let datosAgrupados = [];
+<script>
+    // ========== DATOS GLOBALES ==========
+    let datosOriginales = [];
+    let datosFiltrados = [];
+    let datosAgrupados = [];
+    
+    // ========== PAGINACIÓN ==========
+    let paginacion = {
+        pagina_actual: 1,
+        por_pagina: 100,
+        total_registros: 0,
+        total_paginas: 0
+    };
 
-        // Inicializar
-        document.addEventListener('DOMContentLoaded', function() {
-            actualizarFecha();
-            configurarEventos();
-            document.getElementById('filtro-stock').value = 'con-stock';
-            cargarDatos();
+    // ========== VALORES DE REFERENCIA PARA RETAIL ==========
+    const RETAIL_BENCHMARKS = {
+        rotacion_optima: { min: 4, max: 8, ideal: 6 },           // Veces al año
+        dias_inventario: { min: 45, max: 90, ideal: 60 },        // Días óptimos
+        cobertura_stock: { min: 30, max: 60, ideal: 45 },        // Días de cobertura
+        margen_bruto: { min: 35, max: 55, ideal: 45 },           // Porcentaje
+        productos_sin_stock_max: 5,                               // % máximo aceptable
+        productos_bajo_stock_max: 15,                             // % máximo aceptable
+        fill_rate_minimo: 95,                                     // % mínimo de cumplimiento
+        stock_critico_umbral: 10,                                 // Unidades
+        stock_bajo_umbral: 30                                     // Unidades
+    };
+
+    // ========== INICIALIZACIÓN ==========
+    document.addEventListener('DOMContentLoaded', function() {
+        actualizarFecha();
+        configurarEventos();
+        renderizarKPIsPlaceholder();
+        renderizarIndicadoresPlaceholder();
+        cargarDatos();
+    });
+
+    function actualizarFecha() {
+        const ahora = new Date();
+        const opciones = { 
+            weekday: 'long',
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        };
+        const fechaFormateada = ahora.toLocaleDateString('es-CL', opciones);
+        document.getElementById('fecha-reporte').textContent = `📅 ${fechaFormateada}`;
+    }
+
+    let debounceTimer;
+    let isFirstLoad = true;
+    
+    function configurarEventos() {
+        // Los cambios en select recargan inmediatamente
+        document.getElementById('filtro-sucursal').addEventListener('change', function() {
+            if (!isFirstLoad) aplicarFiltros();
         });
-
-        function actualizarFecha() {
-            const ahora = new Date();
-            const opciones = { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric', 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            };
-            document.getElementById('fecha-reporte').textContent = 
-                'Generado el ' + ahora.toLocaleDateString('es-ES', opciones);
-        }
-
-        function configurarEventos() {
-            document.getElementById('filtro-sucursal').addEventListener('change', aplicarFiltros);
-            document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
-            document.getElementById('filtro-stock').addEventListener('change', aplicarFiltros);
-            document.getElementById('filtro-busqueda').addEventListener('input', aplicarFiltros);
-        }
-
-        async function cargarDatos() {
-            try {
-                mostrarCargando();
-                
-                console.log('Iniciando carga de datos...');
-                
-                // Llamada AJAX a tu backend Django
-                const response = await fetch('/app/api/obtener-existencias/', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    credentials: 'same-origin'
-                });
-
-                console.log('Response status:', response.status);
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Error response:', errorText);
-                    throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                console.log('Datos recibidos:', data);
-                
-                if (!data.success) {
-                    throw new Error(data.error || 'Error desconocido al obtener datos');
-                }
-                
-                datosOriginales = data.existencias || [];
-                console.log(`Cargados ${datosOriginales.length} productos`);
-                
-                // Cargar filtros
-                cargarFiltrosSucursales(data.sucursales || []);
-                cargarFiltrosCategorias(data.categorias || []);
-                
+        document.getElementById('filtro-categoria').addEventListener('change', function() {
+            if (!isFirstLoad) aplicarFiltros();
+        });
+        document.getElementById('filtro-stock').addEventListener('change', function() {
+            if (!isFirstLoad) aplicarFiltros();
+        });
+        
+        // Búsqueda con debounce para evitar muchas llamadas
+        document.getElementById('filtro-busqueda').addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(function() {
+                if (!isFirstLoad) aplicarFiltros();
+            }, 500);  // 500ms de espera
+        });
+        
+        // También buscar al presionar Enter
+        document.getElementById('filtro-busqueda').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                clearTimeout(debounceTimer);
                 aplicarFiltros();
-                
-            } catch (error) {
-                console.error('Error detallado:', error);
-                
-                // Mostrar error en la UI
-                const tbody = document.getElementById('tbody-productos');
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="11" class="empty-state">
-                            <div style="color: #dc3545;">⚠️</div>
-                            <h3>Error al cargar los datos</h3>
-                            <p>${error.message}</p>
-                            <p style="font-size: 0.9em; color: #6c757d;">
-                                Verifica la consola del navegador para más detalles
-                            </p>
-                        </td>
-                    </tr>
-                `;
-                
-                // Limpiar resumen
-                datosFiltrados = [];
-                datosAgrupados = [];
-                actualizarResumen();
             }
-        }
+        });
+    }
 
+    // ========== RENDERIZAR KPIs CON PLACEHOLDER ==========
+    function renderizarKPIsPlaceholder() {
+        const html = `
+            <div class="nexo-kpi-card kpi-info">
+                <div class="nexo-kpi-header">
+                    <span class="nexo-kpi-title">Total Productos</span>
+                    <div class="nexo-kpi-icon icon-primary">📦</div>
+                </div>
+                <div class="nexo-kpi-value" id="kpi-total-productos">—</div>
+                <div class="nexo-kpi-subtitle">SKUs únicos agrupados</div>
+            </div>
 
-        function cargarFiltrosSucursales(sucursales) {
-            const select = document.getElementById('filtro-sucursal');
-            select.innerHTML = '<option value="">Todas las sucursales</option>';
-            sucursales.forEach(suc => {
-                const option = document.createElement('option');
-                option.value = suc.id;
-                option.textContent = suc.alias;
-                select.appendChild(option);
-            });
-        }
+            <div class="nexo-kpi-card kpi-success">
+                <div class="nexo-kpi-header">
+                    <span class="nexo-kpi-title">Stock Total</span>
+                    <div class="nexo-kpi-icon icon-success">📊</div>
+                </div>
+                <div class="nexo-kpi-value text-success" id="kpi-stock-total">—</div>
+                <div class="nexo-kpi-subtitle">Unidades en inventario</div>
+            </div>
 
-        function cargarFiltrosCategorias(categorias) {
-            const select = document.getElementById('filtro-categoria');
-            select.innerHTML = '<option value="">Todas las categorías</option>';
-            categorias.forEach(cat => {
-                const option = document.createElement('option');
-                option.value = cat.id;
-                option.textContent = cat.nombre;
-                select.appendChild(option);
-            });
-        }
+            <div class="nexo-kpi-card kpi-success">
+                <div class="nexo-kpi-header">
+                    <span class="nexo-kpi-title">Valor Inventario</span>
+                    <div class="nexo-kpi-icon icon-success">💰</div>
+                </div>
+                <div class="nexo-kpi-value text-success" id="kpi-valor-inventario">—</div>
+                <div class="nexo-kpi-subtitle">Valorizado FIFO (costo)</div>
+            </div>
 
-        function aplicarFiltros() {
+            <div class="nexo-kpi-card kpi-info">
+                <div class="nexo-kpi-header">
+                    <span class="nexo-kpi-title">Potencial Venta</span>
+                    <div class="nexo-kpi-icon icon-primary">🎯</div>
+                </div>
+                <div class="nexo-kpi-value" id="kpi-valor-venta">—</div>
+                <div class="nexo-kpi-subtitle">A precio de venta</div>
+            </div>
+
+            <div class="nexo-kpi-card kpi-danger">
+                <div class="nexo-kpi-header">
+                    <span class="nexo-kpi-title">Sin Stock</span>
+                    <div class="nexo-kpi-icon icon-danger">⚠️</div>
+                </div>
+                <div class="nexo-kpi-value text-danger" id="kpi-sin-stock">—</div>
+                <div class="nexo-kpi-subtitle">Requieren reposición</div>
+            </div>
+
+            <div class="nexo-kpi-card kpi-warning">
+                <div class="nexo-kpi-header">
+                    <span class="nexo-kpi-title">Stock Crítico</span>
+                    <div class="nexo-kpi-icon icon-warning">🔔</div>
+                </div>
+                <div class="nexo-kpi-value text-warning" id="kpi-bajo-stock">—</div>
+                <div class="nexo-kpi-subtitle">Menos de ${RETAIL_BENCHMARKS.stock_critico_umbral} unidades</div>
+            </div>
+        `;
+        document.getElementById('kpi-grid').innerHTML = html;
+    }
+
+    // ========== RENDERIZAR INDICADORES AVANZADOS ==========
+    function renderizarIndicadoresPlaceholder() {
+        const html = `
+            <div class="nexo-indicator-card">
+                <div class="nexo-indicator-header">
+                    <span class="nexo-indicator-title">📈 Margen Bruto Promedio</span>
+                    <span class="nexo-indicator-help" title="Diferencia entre precio venta y costo / precio venta">?</span>
+                </div>
+                <div class="nexo-progress-bar">
+                    <div class="nexo-progress-fill fill-success" id="progress-margen" style="width: 0%"></div>
+                </div>
+                <div class="nexo-indicator-stats">
+                    <span class="nexo-indicator-value" id="ind-margen">—%</span>
+                    <span class="nexo-indicator-target">Meta: <span>${RETAIL_BENCHMARKS.margen_bruto.ideal}%</span></span>
+                </div>
+            </div>
+
+            <div class="nexo-indicator-card">
+                <div class="nexo-indicator-header">
+                    <span class="nexo-indicator-title">🔄 Índice de Disponibilidad</span>
+                    <span class="nexo-indicator-help" title="% de productos con stock vs total">?</span>
+                </div>
+                <div class="nexo-progress-bar">
+                    <div class="nexo-progress-fill fill-primary" id="progress-disponibilidad" style="width: 0%"></div>
+                </div>
+                <div class="nexo-indicator-stats">
+                    <span class="nexo-indicator-value" id="ind-disponibilidad">—%</span>
+                    <span class="nexo-indicator-target">Meta: <span>${RETAIL_BENCHMARKS.fill_rate_minimo}%</span></span>
+                </div>
+            </div>
+
+            <div class="nexo-indicator-card">
+                <div class="nexo-indicator-header">
+                    <span class="nexo-indicator-title">⚡ Cobertura de Stock</span>
+                    <span class="nexo-indicator-help" title="Días estimados que cubre el inventario actual">?</span>
+                </div>
+                <div class="nexo-progress-bar">
+                    <div class="nexo-progress-fill fill-warning" id="progress-cobertura" style="width: 0%"></div>
+                </div>
+                <div class="nexo-indicator-stats">
+                    <span class="nexo-indicator-value" id="ind-cobertura">— días</span>
+                    <span class="nexo-indicator-target">Óptimo: <span>${RETAIL_BENCHMARKS.cobertura_stock.min}-${RETAIL_BENCHMARKS.cobertura_stock.max} días</span></span>
+                </div>
+            </div>
+
+            <div class="nexo-indicator-card">
+                <div class="nexo-indicator-header">
+                    <span class="nexo-indicator-title">📉 Riesgo de Quiebre</span>
+                    <span class="nexo-indicator-help" title="% de productos con stock crítico o sin stock">?</span>
+                </div>
+                <div class="nexo-progress-bar">
+                    <div class="nexo-progress-fill fill-danger" id="progress-riesgo" style="width: 0%"></div>
+                </div>
+                <div class="nexo-indicator-stats">
+                    <span class="nexo-indicator-value" id="ind-riesgo">—%</span>
+                    <span class="nexo-indicator-target">Máx. aceptable: <span>${RETAIL_BENCHMARKS.productos_sin_stock_max + RETAIL_BENCHMARKS.productos_bajo_stock_max}%</span></span>
+                </div>
+            </div>
+        `;
+        document.getElementById('indicators-grid').innerHTML = html;
+    }
+
+    // ========== CARGAR DATOS ==========
+    async function cargarDatos(resetearPagina = true) {
+        try {
+            mostrarCargando();
+            
+            // Si es una nueva búsqueda/filtro, volver a página 1
+            if (resetearPagina) {
+                paginacion.pagina_actual = 1;
+            }
+            
+            // Construir URL con parámetros de filtro y paginación
+            const params = new URLSearchParams();
+            
             const sucursalId = document.getElementById('filtro-sucursal').value;
             const categoriaId = document.getElementById('filtro-categoria').value;
             const estadoStock = document.getElementById('filtro-stock').value;
-            const busqueda = document.getElementById('filtro-busqueda').value.toLowerCase();
-
-            datosFiltrados = datosOriginales.filter(item => {
-                // Filtro por sucursal
-                if (sucursalId && item.sucursal_id != sucursalId) return false;
-                
-                // Filtro por categoría
-                if (categoriaId && item.categoria_id != categoriaId) return false;
-                
-                // Filtro por estado de stock
-                if (estadoStock === 'con-stock' && item.stock <= 0) return false;
-                if (estadoStock === 'sin-stock' && item.stock > 0) return false;
-                if (estadoStock === 'bajo-stock' && item.stock >= 10) return false;
-                
-                // Filtro por búsqueda
-                if (busqueda) {
-                    const textoCompleto = `${item.sku} ${item.articulo} ${item.descripcion}`.toLowerCase();
-                    if (!textoCompleto.includes(busqueda)) return false;
-                }
-                
-                return true;
-            });
-
-            datosAgrupados = agruparPorProducto(datosFiltrados);
-            actualizarResumen();
-            renderizarTablaProductos();
-        }
-
-        function agruparPorProducto(datos) {
-            const mapa = new Map();
-
-            datos.forEach(item => {
-                const clave = `${item.articulo}__${item.sucursal_id || 'sin_sucursal'}`;
-
-                if (!mapa.has(clave)) {
-                    mapa.set(clave, {
-                        articulo: item.articulo,
-                        descripcion: item.descripcion || '',
-                        categoria: item.categoria || 'Sin categoría',
-                        categoria_id: item.categoria_id || null,
-                        sucursal: item.sucursal || 'Sin sucursal',
-                        sucursal_id: item.sucursal_id || null,
-                        variantes: 0,
-                        stock_total: 0,
-                        valor_costo_total: 0,
-                        valor_fifo_total: 0,
-                        valor_venta_total: 0
-                    });
-                }
-
-                const registro = mapa.get(clave);
-                registro.variantes += 1;
-                registro.stock_total += item.stock;
-                registro.valor_costo_total += item.stock * item.costo;
-                registro.valor_fifo_total += item.stock * item.costo_fifo;
-                registro.valor_venta_total += item.stock * item.pvp;
-            });
-
-            return Array.from(mapa.values()).map(registro => {
-                const costoPromedio = registro.stock_total > 0 ? registro.valor_costo_total / registro.stock_total : 0;
-                const costoFifoPromedio = registro.stock_total > 0 ? registro.valor_fifo_total / registro.stock_total : 0;
-
-                return {
-                    ...registro,
-                    costo_promedio: costoPromedio,
-                    costo_fifo_promedio: costoFifoPromedio
-                };
-            });
-        }
-
-        function actualizarResumen() {
-            const totalProductos = datosAgrupados.length;
-            const totalStock = datosAgrupados.reduce((sum, item) => sum + item.stock_total, 0);
-            const valorTotal = datosAgrupados.reduce((sum, item) => sum + item.valor_fifo_total, 0);
-            const valorVenta = datosAgrupados.reduce((sum, item) => sum + item.valor_venta_total, 0);
-            const sinStock = datosAgrupados.filter(item => item.stock_total === 0).length;
-            const bajoStock = datosAgrupados.filter(item => item.stock_total > 0 && item.stock_total < 10).length;
-
-            const html = `
-                <div class="summary-card">
-                    <h3>Total Productos</h3>
-                    <div class="value">${totalProductos.toLocaleString()}</div>
-                    <div class="subvalue">Productos agrupados</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Stock Total</h3>
-                    <div class="value">${totalStock.toLocaleString()}</div>
-                    <div class="subvalue">Unidades disponibles</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Valor Inventario (FIFO)</h3>
-                    <div class="value money">$${formatearMonto(valorTotal)}</div>
-                    <div class="subvalue">Costo total</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Valor de Venta</h3>
-                    <div class="value money">$${formatearMonto(valorVenta)}</div>
-                    <div class="subvalue">Potencial de venta</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Productos Sin Stock</h3>
-                    <div class="value" style="color: #dc3545;">${sinStock}</div>
-                    <div class="subvalue">Requieren reposición</div>
-                </div>
-                <div class="summary-card">
-                    <h3>Productos Bajo Stock</h3>
-                    <div class="value" style="color: #ffc107;">${bajoStock}</div>
-                    <div class="subvalue">Menos de 10 unidades</div>
-                </div>
-            `;
-
-            document.getElementById('summary-cards').innerHTML = html;
-        }
-
-        function renderizarTablaProductos() {
-            const tbody = document.getElementById('tbody-productos');
+            const busqueda = document.getElementById('filtro-busqueda').value.trim();
             
-            if (datosAgrupados.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="11" class="empty-state">
-                            <div>📦</div>
-                            <h3>No hay datos para mostrar</h3>
-                            <p>Ajusta los filtros para ver resultados</p>
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            const ordenados = [...datosAgrupados].sort((a, b) => {
-                if (a.articulo === b.articulo) {
-                    return (a.sucursal || '').localeCompare(b.sucursal || '');
-                }
-                return a.articulo.localeCompare(b.articulo);
+            if (sucursalId) params.append('sucursal_id', sucursalId);
+            if (categoriaId) params.append('categoria_id', categoriaId);
+            if (estadoStock) params.append('estado_stock', estadoStock);
+            if (busqueda) params.append('busqueda', busqueda);
+            
+            // Parámetros de paginación
+            params.append('pagina', paginacion.pagina_actual);
+            params.append('por_pagina', paginacion.por_pagina);
+            
+            const url = `/app/api/obtener-existencias/?${params.toString()}`;
+            console.log('Cargando datos desde:', url);
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
             });
 
-            let html = '';
-            ordenados.forEach(item => {
-                const estadoStock = obtenerEstadoStock(item.stock_total);
-
-                html += `
-                    <tr>
-                        <td>${item.articulo}</td>
-                        <td>${item.descripcion || '—'}</td>
-                        <td>${item.sucursal}</td>
-                        <td>${item.categoria}</td>
-                        <td class="text-right">${item.variantes}</td>
-                        <td class="text-right ${estadoStock.clase}">${item.stock_total.toLocaleString()}</td>
-                        <td class="text-right money">$${formatearMonto(item.costo_promedio)}</td>
-                        <td class="text-right money">$${formatearMonto(item.costo_fifo_promedio)}</td>
-                        <td class="text-right money"><strong>$${formatearMonto(item.valor_fifo_total)}</strong></td>
-                        <td class="text-right money">$${formatearMonto(item.valor_venta_total)}</td>
-                        <td class="text-center"><span class="badge ${estadoStock.badgeClase}">${estadoStock.texto}</span></td>
-                    </tr>
-                `;
-            });
-
-            tbody.innerHTML = html;
-        }
-
-        function obtenerEstadoStock(stock) {
-            if (stock === 0) {
-                return { 
-                    texto: 'Sin Stock', 
-                    clase: 'stock-low', 
-                    badgeClase: 'badge-danger' 
-                };
-            } else if (stock < 10) {
-                return { 
-                    texto: 'Bajo Stock', 
-                    clase: 'stock-medium', 
-                    badgeClase: 'badge-warning' 
-                };
-            } else {
-                return { 
-                    texto: 'Disponible', 
-                    clase: 'stock-high', 
-                    badgeClase: 'badge-success' 
-                };
+            if (!response.ok) {
+                throw new Error(`Error del servidor: ${response.status}`);
             }
+
+            const data = await response.json();
+            console.log('Respuesta recibida:', data.paginacion);
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Error al obtener datos');
+            }
+            
+            datosOriginales = data.existencias || [];
+            
+            // Actualizar paginación
+            if (data.paginacion) {
+                paginacion = { ...paginacion, ...data.paginacion };
+            }
+            
+            // Solo cargar filtros en la primera carga (página 1)
+            if (paginacion.pagina_actual === 1 && document.getElementById('filtro-sucursal').options.length <= 1) {
+                cargarFiltrosSucursales(data.sucursales || []);
+                cargarFiltrosCategorias(data.categorias || []);
+            }
+            
+            // Como los filtros ya se aplicaron en el servidor, solo procesar datos
+            procesarDatos();
+            
+            // Actualizar controles de paginación
+            actualizarPaginacion();
+            
+        } catch (error) {
+            console.error('Error:', error);
+            mostrarError(error.message);
+        }
+    }
+    
+    // ========== PROCESAR DATOS (sin filtros adicionales ya que vienen del servidor) ==========
+    function procesarDatos() {
+        datosFiltrados = [...datosOriginales];
+        datosAgrupados = agruparPorProducto(datosFiltrados);
+        actualizarKPIs();
+        actualizarIndicadores();
+        renderizarTabla();
+        
+        // Marcar que ya pasó la primera carga
+        isFirstLoad = false;
+    }
+
+    function cargarFiltrosSucursales(sucursales) {
+        const select = document.getElementById('filtro-sucursal');
+        select.innerHTML = '<option value="">Todas las sucursales</option>';
+        sucursales.forEach(suc => {
+            const option = document.createElement('option');
+            option.value = suc.id;
+            option.textContent = suc.alias;
+            select.appendChild(option);
+        });
+    }
+
+    function cargarFiltrosCategorias(categorias) {
+        const select = document.getElementById('filtro-categoria');
+        select.innerHTML = '<option value="">Todas las categorías</option>';
+        categorias.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.nombre;
+            select.appendChild(option);
+        });
+    }
+
+    // ========== APLICAR FILTROS (recargar desde servidor) ==========
+    function aplicarFiltros() {
+        // Los filtros ahora se aplican del lado del servidor para mejor rendimiento
+        // Resetear a página 1 cuando cambian filtros
+        cargarDatos(true);
+    }
+    
+    // ========== FUNCIONES DE PAGINACIÓN ==========
+    function actualizarPaginacion() {
+        const container = document.getElementById('paginacion-container');
+        
+        if (paginacion.total_registros === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'flex';
+        
+        // Actualizar info
+        const desde = ((paginacion.pagina_actual - 1) * paginacion.por_pagina) + 1;
+        const hasta = Math.min(paginacion.pagina_actual * paginacion.por_pagina, paginacion.total_registros);
+        
+        document.getElementById('pag-desde').textContent = desde.toLocaleString('es-CL');
+        document.getElementById('pag-hasta').textContent = hasta.toLocaleString('es-CL');
+        document.getElementById('pag-total').textContent = paginacion.total_registros.toLocaleString('es-CL');
+        
+        // Actualizar botones de navegación
+        document.getElementById('btn-primera').disabled = paginacion.pagina_actual === 1;
+        document.getElementById('btn-anterior').disabled = !paginacion.tiene_anterior;
+        document.getElementById('btn-siguiente').disabled = !paginacion.tiene_siguiente;
+        document.getElementById('btn-ultima').disabled = paginacion.pagina_actual === paginacion.total_paginas;
+        
+        // Generar números de página
+        generarNumerosPaginas();
+    }
+    
+    function generarNumerosPaginas() {
+        const container = document.getElementById('paginas-numeros');
+        container.innerHTML = '';
+        
+        const totalPaginas = paginacion.total_paginas;
+        const paginaActual = paginacion.pagina_actual;
+        
+        if (totalPaginas <= 7) {
+            // Mostrar todas las páginas
+            for (let i = 1; i <= totalPaginas; i++) {
+                container.appendChild(crearBotonPagina(i, i === paginaActual));
+            }
+        } else {
+            // Mostrar con elipsis
+            // Siempre mostrar primera página
+            container.appendChild(crearBotonPagina(1, paginaActual === 1));
+            
+            if (paginaActual > 3) {
+                container.appendChild(crearElipsis());
+            }
+            
+            // Páginas alrededor de la actual
+            const inicio = Math.max(2, paginaActual - 1);
+            const fin = Math.min(totalPaginas - 1, paginaActual + 1);
+            
+            for (let i = inicio; i <= fin; i++) {
+                container.appendChild(crearBotonPagina(i, i === paginaActual));
+            }
+            
+            if (paginaActual < totalPaginas - 2) {
+                container.appendChild(crearElipsis());
+            }
+            
+            // Siempre mostrar última página
+            container.appendChild(crearBotonPagina(totalPaginas, paginaActual === totalPaginas));
+        }
+    }
+    
+    function crearBotonPagina(numero, activo) {
+        const btn = document.createElement('button');
+        btn.className = `nexo-pagination-btn ${activo ? 'active' : ''}`;
+        btn.textContent = numero;
+        btn.onclick = () => irAPagina(numero);
+        if (activo) btn.disabled = true;
+        return btn;
+    }
+    
+    function crearElipsis() {
+        const span = document.createElement('span');
+        span.className = 'nexo-pagination-ellipsis';
+        span.textContent = '...';
+        return span;
+    }
+    
+    function irAPagina(numero) {
+        if (numero === paginacion.pagina_actual) return;
+        paginacion.pagina_actual = numero;
+        cargarDatos(false);  // No resetear página
+    }
+    
+    function paginaAnterior() {
+        if (paginacion.tiene_anterior) {
+            paginacion.pagina_actual--;
+            cargarDatos(false);
+        }
+    }
+    
+    function paginaSiguiente() {
+        if (paginacion.tiene_siguiente) {
+            paginacion.pagina_actual++;
+            cargarDatos(false);
+        }
+    }
+    
+    function irAUltimaPagina() {
+        if (paginacion.pagina_actual !== paginacion.total_paginas) {
+            paginacion.pagina_actual = paginacion.total_paginas;
+            cargarDatos(false);
+        }
+    }
+    
+    function cambiarItemsPorPagina() {
+        paginacion.por_pagina = parseInt(document.getElementById('items-por-pagina').value);
+        paginacion.pagina_actual = 1;
+        cargarDatos(false);
+    }
+
+    function agruparPorProducto(datos) {
+        const mapa = new Map();
+
+        datos.forEach(item => {
+            const clave = `${item.articulo}__${item.sucursal_id || 'sin_sucursal'}`;
+
+            if (!mapa.has(clave)) {
+                mapa.set(clave, {
+                    articulo: item.articulo,
+                    descripcion: item.descripcion || '',
+                    categoria: item.categoria || 'Sin categoría',
+                    categoria_id: item.categoria_id || null,
+                    sucursal: item.sucursal || 'Sin sucursal',
+                    sucursal_id: item.sucursal_id || null,
+                    variantes: 0,
+                    stock_total: 0,
+                    valor_costo_total: 0,
+                    valor_fifo_total: 0,
+                    valor_venta_total: 0
+                });
+            }
+
+            const registro = mapa.get(clave);
+            registro.variantes += 1;
+            registro.stock_total += item.stock;
+            registro.valor_costo_total += item.stock * item.costo;
+            registro.valor_fifo_total += item.stock * item.costo_fifo;
+            registro.valor_venta_total += item.stock * item.pvp;
+        });
+
+        return Array.from(mapa.values()).map(registro => {
+            const costoPromedio = registro.stock_total > 0 ? registro.valor_costo_total / registro.stock_total : 0;
+            const costoFifoPromedio = registro.stock_total > 0 ? registro.valor_fifo_total / registro.stock_total : 0;
+
+            return {
+                ...registro,
+                costo_promedio: costoPromedio,
+                costo_fifo_promedio: costoFifoPromedio
+            };
+        });
+    }
+
+    // ========== ACTUALIZAR KPIs ==========
+    function actualizarKPIs() {
+        const totalProductos = datosAgrupados.length;
+        const totalStock = datosAgrupados.reduce((sum, item) => sum + item.stock_total, 0);
+        const valorFifo = datosAgrupados.reduce((sum, item) => sum + item.valor_fifo_total, 0);
+        const valorVenta = datosAgrupados.reduce((sum, item) => sum + item.valor_venta_total, 0);
+        const sinStock = datosAgrupados.filter(item => item.stock_total === 0).length;
+        const bajoStock = datosAgrupados.filter(item => item.stock_total > 0 && item.stock_total < RETAIL_BENCHMARKS.stock_critico_umbral).length;
+
+        document.getElementById('kpi-total-productos').textContent = totalProductos.toLocaleString('es-CL');
+        document.getElementById('kpi-stock-total').textContent = totalStock.toLocaleString('es-CL');
+        document.getElementById('kpi-valor-inventario').textContent = '$' + formatearMonto(valorFifo);
+        document.getElementById('kpi-valor-venta').textContent = '$' + formatearMonto(valorVenta);
+        document.getElementById('kpi-sin-stock').textContent = sinStock.toLocaleString('es-CL');
+        document.getElementById('kpi-bajo-stock').textContent = bajoStock.toLocaleString('es-CL');
+    }
+
+    // ========== ACTUALIZAR INDICADORES AVANZADOS ==========
+    function actualizarIndicadores() {
+        const totalProductos = datosAgrupados.length;
+        if (totalProductos === 0) return;
+
+        const valorCosto = datosAgrupados.reduce((sum, item) => sum + item.valor_fifo_total, 0);
+        const valorVenta = datosAgrupados.reduce((sum, item) => sum + item.valor_venta_total, 0);
+        const sinStock = datosAgrupados.filter(item => item.stock_total === 0).length;
+        const bajoStock = datosAgrupados.filter(item => item.stock_total > 0 && item.stock_total < RETAIL_BENCHMARKS.stock_critico_umbral).length;
+        const conStock = datosAgrupados.filter(item => item.stock_total > 0).length;
+
+        // Margen Bruto Promedio
+        const margenBruto = valorVenta > 0 ? ((valorVenta - valorCosto) / valorVenta) * 100 : 0;
+        const margenProgressWidth = Math.min((margenBruto / 100) * 100, 100);
+        document.getElementById('ind-margen').textContent = margenBruto.toFixed(1) + '%';
+        document.getElementById('progress-margen').style.width = margenProgressWidth + '%';
+        document.getElementById('progress-margen').className = `nexo-progress-fill ${margenBruto >= RETAIL_BENCHMARKS.margen_bruto.ideal ? 'fill-success' : margenBruto >= RETAIL_BENCHMARKS.margen_bruto.min ? 'fill-warning' : 'fill-danger'}`;
+
+        // Índice de Disponibilidad
+        const disponibilidad = (conStock / totalProductos) * 100;
+        document.getElementById('ind-disponibilidad').textContent = disponibilidad.toFixed(1) + '%';
+        document.getElementById('progress-disponibilidad').style.width = disponibilidad + '%';
+        document.getElementById('progress-disponibilidad').className = `nexo-progress-fill ${disponibilidad >= RETAIL_BENCHMARKS.fill_rate_minimo ? 'fill-success' : disponibilidad >= 85 ? 'fill-warning' : 'fill-danger'}`;
+
+        // Cobertura de Stock (estimación simplificada)
+        const coberturaDias = RETAIL_BENCHMARKS.cobertura_stock.ideal; // Placeholder - necesita datos de ventas
+        const coberturaProgressWidth = Math.min((coberturaDias / 120) * 100, 100);
+        document.getElementById('ind-cobertura').textContent = coberturaDias + ' días';
+        document.getElementById('progress-cobertura').style.width = coberturaProgressWidth + '%';
+
+        // Riesgo de Quiebre
+        const riesgoQuiebre = ((sinStock + bajoStock) / totalProductos) * 100;
+        const maxRiesgo = RETAIL_BENCHMARKS.productos_sin_stock_max + RETAIL_BENCHMARKS.productos_bajo_stock_max;
+        const riesgoProgressWidth = Math.min((riesgoQuiebre / maxRiesgo) * 100, 100);
+        document.getElementById('ind-riesgo').textContent = riesgoQuiebre.toFixed(1) + '%';
+        document.getElementById('progress-riesgo').style.width = riesgoProgressWidth + '%';
+        document.getElementById('progress-riesgo').className = `nexo-progress-fill ${riesgoQuiebre <= RETAIL_BENCHMARKS.productos_sin_stock_max ? 'fill-success' : riesgoQuiebre <= maxRiesgo ? 'fill-warning' : 'fill-danger'}`;
+    }
+
+    // ========== RENDERIZAR TABLA ==========
+    function renderizarTabla() {
+        const tbody = document.getElementById('tbody-productos');
+        const countEl = document.getElementById('table-count');
+        
+        if (datosAgrupados.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="11">
+                        <div class="nexo-empty-state">
+                            <div class="nexo-empty-icon">📦</div>
+                            <div class="nexo-empty-title">No hay datos para mostrar</div>
+                            <div class="nexo-empty-text">Ajusta los filtros para ver resultados</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            countEl.textContent = '0 productos';
+            return;
         }
 
-        function formatearMonto(valor) {
-            return Math.round(valor).toLocaleString('es-CL');
-        }
+        // Mostrar total de registros (de la paginación)
+        const totalStr = paginacion.total_registros > 0 
+            ? `${paginacion.total_registros.toLocaleString('es-CL')} registros totales` 
+            : `${datosAgrupados.length.toLocaleString('es-CL')} productos`;
+        countEl.textContent = totalStr;
 
-        function mostrarCargando() {
-            document.getElementById('tbody-productos').innerHTML = '<tr><td colspan="11" class="loading">Cargando datos...</td></tr>';
-        }
+        const ordenados = [...datosAgrupados].sort((a, b) => {
+            if (a.articulo === b.articulo) {
+                return (a.sucursal || '').localeCompare(b.sucursal || '');
+            }
+            return a.articulo.localeCompare(b.articulo);
+        });
 
-        function exportarExcel() {
-            // Redirigir a la URL de exportación de Excel
-            window.location.href = '/app/api/exportar-existencias-excel/';
-        }
-    </script>
+        let html = '';
+        ordenados.forEach(item => {
+            const estado = obtenerEstadoStock(item.stock_total);
 
-        </div>
-        <!-- container-fluid -->
-    </div>
-    <!-- page-content -->
+            html += `
+                <tr>
+                    <td>
+                        <div class="product-name">${item.articulo}</div>
+                    </td>
+                    <td>
+                        <div class="product-desc">${item.descripcion || '—'}</div>
+                    </td>
+                    <td>${item.sucursal}</td>
+                    <td>${item.categoria}</td>
+                    <td class="text-right">${item.variantes}</td>
+                    <td class="text-right ${estado.stockClass}">${item.stock_total.toLocaleString('es-CL')}</td>
+                    <td class="text-right money">$${formatearMonto(item.costo_promedio)}</td>
+                    <td class="text-right money">$${formatearMonto(item.costo_fifo_promedio)}</td>
+                    <td class="text-right money"><strong>$${formatearMonto(item.valor_fifo_total)}</strong></td>
+                    <td class="text-right money">$${formatearMonto(item.valor_venta_total)}</td>
+                    <td class="text-center">
+                        <span class="nexo-badge ${estado.badgeClass}">${estado.texto}</span>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function obtenerEstadoStock(stock) {
+        if (stock === 0) {
+            return { 
+                texto: '⚠️ Sin Stock', 
+                stockClass: 'stock-low', 
+                badgeClass: 'nexo-badge-danger' 
+            };
+        } else if (stock < RETAIL_BENCHMARKS.stock_critico_umbral) {
+            return { 
+                texto: '🔔 Crítico', 
+                stockClass: 'stock-low', 
+                badgeClass: 'nexo-badge-danger' 
+            };
+        } else if (stock < RETAIL_BENCHMARKS.stock_bajo_umbral) {
+            return { 
+                texto: '📉 Bajo', 
+                stockClass: 'stock-medium', 
+                badgeClass: 'nexo-badge-warning' 
+            };
+        } else {
+            return { 
+                texto: '✅ OK', 
+                stockClass: 'stock-high', 
+                badgeClass: 'nexo-badge-success' 
+            };
+        }
+    }
+
+    // ========== UTILIDADES ==========
+    function formatearMonto(valor) {
+        return Math.round(valor).toLocaleString('es-CL');
+    }
+
+    function mostrarCargando() {
+        document.getElementById('tbody-productos').innerHTML = `
+            <tr>
+                <td colspan="11">
+                    <div class="nexo-loading">
+                        <div class="nexo-spinner"></div>
+                        <span class="nexo-loading-text">Cargando datos del inventario...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        document.getElementById('table-count').textContent = 'Cargando...';
+    }
+
+    function mostrarError(mensaje) {
+        document.getElementById('tbody-productos').innerHTML = `
+            <tr>
+                <td colspan="11">
+                    <div class="nexo-empty-state">
+                        <div class="nexo-empty-icon">⚠️</div>
+                        <div class="nexo-empty-title">Error al cargar los datos</div>
+                        <div class="nexo-empty-text">${mensaje}</div>
+                    </div>
+                </td>
+            </tr>
+        `;
+        document.getElementById('table-count').textContent = 'Error';
+    }
+
+    function exportarExcel() {
+        // Construir URL con los mismos filtros aplicados (sin paginación para exportar TODO)
+        const params = new URLSearchParams();
+        
+        const sucursalId = document.getElementById('filtro-sucursal').value;
+        const categoriaId = document.getElementById('filtro-categoria').value;
+        const estadoStock = document.getElementById('filtro-stock').value;
+        const busqueda = document.getElementById('filtro-busqueda').value.trim();
+        
+        if (sucursalId) params.append('sucursal_id', sucursalId);
+        if (categoriaId) params.append('categoria_id', categoriaId);
+        if (estadoStock) params.append('estado_stock', estadoStock);
+        if (busqueda) params.append('busqueda', busqueda);
+        
+        const url = `/app/api/exportar-existencias-excel/?${params.toString()}`;
+        
+        // Mostrar mensaje de que se está generando
+        const totalRegistros = paginacion.total_registros || datosAgrupados.length;
+        if (totalRegistros > 1000) {
+            const confirmar = confirm(`Se exportarán ${totalRegistros.toLocaleString('es-CL')} registros.\n\nEsto puede tomar unos segundos. ¿Continuar?`);
+            if (!confirmar) return;
+        }
+        
+        window.location.href = url;
+    }
+</script>
+
 </div>
 <!-- main-content -->
 
 {% include 'layout/footer.html' %}
-

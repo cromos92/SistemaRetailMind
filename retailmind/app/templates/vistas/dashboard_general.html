@@ -102,11 +102,23 @@
 .modulo-requerimientos { border-left-color: #ffc107; }
 .modulo-dte { border-left-color: #007bff; }
 .modulo-regularizaciones { border-left-color: #dc3545; }
+.modulo-precios { border-left-color: #6f42c1; }
 
 .bg-ventas { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
 .bg-requerimientos { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); }
 .bg-dte { background: linear-gradient(135deg, #007bff 0%, #6f42c1 100%); }
 .bg-regularizaciones { background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%); }
+.bg-precios { background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%); }
+
+/* Alerta de discrepancias críticas */
+.alerta-discrepancia {
+    animation: pulso-alerta 2s ease-in-out infinite;
+    border: 2px solid #dc3545;
+}
+@keyframes pulso-alerta {
+    0%, 100% { box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3); }
+    50% { box-shadow: 0 4px 20px rgba(220, 53, 69, 0.5); }
+}
 
 .text-ventas { color: #28a745 !important; }
 .text-requerimientos { color: #ffc107 !important; }
@@ -456,6 +468,136 @@
             </div>
         </div>
 
+        <!-- ========== DTEs RECIBIDOS PENDIENTES DE ACTUALIZAR ========== -->
+        {% if dtes_recibidos.requiere_atencion %}
+        <div class="section-header" style="border-left-color: #ff6b35;">
+            <h5>
+                <i class="ri-inbox-archive-line me-2"></i>
+                DTEs Recibidos Pendientes de Actualizar
+                <span class="badge bg-danger ms-2 animate__animated animate__pulse animate__infinite">
+                    {{ dtes_recibidos.total_pendientes }} pendiente{{ dtes_recibidos.total_pendientes|pluralize:"s" }}
+                </span>
+            </h5>
+        </div>
+
+        <div class="row mb-4">
+            <!-- Resumen de DTEs pendientes -->
+            <div class="col-lg-4 mb-3">
+                <div class="card dashboard-card h-100 border-warning alerta-discrepancia">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="text-white rounded-circle d-flex align-items-center justify-content-center me-3" 
+                                 style="width: 50px; height: 50px; background: linear-gradient(135deg, #ff6b35 0%, #f72585 100%);">
+                                <i class="ri-inbox-archive-fill" style="font-size: 1.5rem;"></i>
+                            </div>
+                            <div>
+                                <h3 class="mb-0" style="color: #ff6b35;">{{ dtes_recibidos.total_pendientes }}</h3>
+                                <small class="text-muted">DTEs Pendientes</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Monto Total:</span>
+                            <strong class="text-danger">${{ dtes_recibidos.monto_total|floatformat:0 }}</strong>
+                        </div>
+                        <div class="alert alert-warning alert-sm mt-3 mb-0">
+                            <i class="ri-alert-line me-1"></i>
+                            <strong>¡Atención!</strong> Tienes documentos de otras empresas esperando ser recepcionados para actualizar tu stock.
+                        </div>
+                        <div class="mt-3">
+                            <a href="{% url 'recepcion_dte' %}" class="btn btn-warning w-100">
+                                <i class="ri-inbox-fill me-1"></i> Ir a Recepción de Documentos
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de DTEs pendientes -->
+            <div class="col-lg-8 mb-3">
+                <div class="card dashboard-card h-100">
+                    <div class="card-header bg-light py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="ri-file-list-2-line me-1"></i>
+                                Documentos Pendientes de Recepción
+                            </h6>
+                            <a href="{% url 'recepcion_dte' %}" class="btn btn-sm btn-outline-warning">
+                                <i class="ri-eye-line me-1"></i> Ver Todos
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if dtes_recibidos.lista %}
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Documento</th>
+                                        <th>Emisor</th>
+                                        <th class="text-center">Fecha</th>
+                                        <th class="text-end">Monto</th>
+                                        <th class="text-center">Unidades</th>
+                                        <th class="text-center">Días</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for dte in dtes_recibidos.lista %}
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">
+                                                <span class="badge bg-info me-1">{{ dte.tipo_documento }}</span>
+                                                #{{ dte.numero_documento }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="text-truncate" style="max-width: 150px;" title="{{ dte.emisor_nombre }}">
+                                                {{ dte.emisor_nombre }}
+                                            </div>
+                                            <small class="text-muted">{{ dte.emisor_rut }}</small>
+                                        </td>
+                                        <td class="text-center">
+                                            <small>{{ dte.fecha_emision }}</small>
+                                        </td>
+                                        <td class="text-end">
+                                            <strong>${{ dte.monto_con_iva|floatformat:0 }}</strong>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-secondary">{{ dte.unidades_productos }}</span>
+                                        </td>
+                                        <td class="text-center">
+                                            {% if dte.dias_desde_emision > 7 %}
+                                            <span class="badge bg-danger">{{ dte.dias_desde_emision }}d</span>
+                                            {% elif dte.dias_desde_emision > 3 %}
+                                            <span class="badge bg-warning text-dark">{{ dte.dias_desde_emision }}d</span>
+                                            {% else %}
+                                            <span class="badge bg-success">{{ dte.dias_desde_emision }}d</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if dtes_recibidos.total_pendientes > 10 %}
+                        <div class="card-footer bg-light text-center py-2">
+                            <a href="{% url 'recepcion_dte' %}" class="text-warning">
+                                Ver los {{ dtes_recibidos.total_pendientes }} documentos pendientes <i class="ri-arrow-right-line"></i>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="ri-checkbox-circle-fill" style="font-size: 3rem; color: #28a745;"></i>
+                            <p class="mt-2 mb-0">¡Todo al día! No tienes documentos pendientes de recepcionar.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- ========== MÓDULO REGULARIZACIONES ========== -->
         <div class="section-header modulo-regularizaciones">
             <h5><i class="ri-settings-3-line me-2"></i>Módulo Regularizaciones</h5>
@@ -548,6 +690,185 @@
             </div>
         </div>
 
+        <!-- ========== MÓDULO CAMBIOS DE PRECIO PENDIENTES ========== -->
+        {% if cambios_precio.requiere_atencion or cambios_precio.total > 0 %}
+        <div class="section-header modulo-precios">
+            <h5>
+                <i class="ri-price-tag-3-line me-2"></i>
+                Cambios de Precio Pendientes
+                {% if cambios_precio.aprobados > 0 %}
+                <span class="badge bg-success ms-2">{{ cambios_precio.aprobados }} para aplicar</span>
+                {% endif %}
+            </h5>
+        </div>
+
+        <div class="row mb-4">
+            <!-- Resumen de cambios pendientes -->
+            <div class="col-lg-4 mb-3">
+                <div class="card dashboard-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="bg-precios text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
+                                <i class="ri-file-list-3-line" style="font-size: 1.5rem;"></i>
+                            </div>
+                            <div>
+                                <h3 class="mb-0 text-primary">{{ cambios_precio.total }}</h3>
+                                <small class="text-muted">Cambios Totales</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h5 class="text-success mb-0">{{ cambios_precio.aprobados }}</h5>
+                                <small class="text-muted">Aprobados</small>
+                            </div>
+                            <div class="col-4">
+                                <h5 class="text-warning mb-0">{{ cambios_precio.revisados }}</h5>
+                                <small class="text-muted">Revisados</small>
+                            </div>
+                            <div class="col-4">
+                                <h5 class="text-secondary mb-0">{{ cambios_precio.pendientes }}</h5>
+                                <small class="text-muted">Pendientes</small>
+                            </div>
+                        </div>
+                        {% if cambios_precio.aprobados > 0 %}
+                        <div class="alert alert-success alert-sm mt-3 mb-0">
+                            <i class="ri-check-double-line me-1"></i>
+                            <strong>{{ cambios_precio.aprobados }}</strong> cambios listos para aplicar
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de productos con cambios pendientes -->
+            <div class="col-lg-8 mb-3">
+                <div class="card dashboard-card h-100">
+                    <div class="card-header bg-light py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="ri-list-check-2 me-1"></i>
+                                Productos con Cambios de Precio
+                            </h6>
+                            <a href="{% url 'revisar_cambios_precios' %}" class="btn btn-sm btn-outline-primary">
+                                <i class="ri-eye-line me-1"></i> Ver Todos
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if cambios_precio.lista %}
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="min-width: 200px;">Producto</th>
+                                        <th class="text-end">Precio Actual</th>
+                                        <th class="text-end">Precio Nuevo</th>
+                                        <th class="text-center">Variación</th>
+                                        <th class="text-center">Estado</th>
+                                        <th class="text-center" style="width: 120px;">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in cambios_precio.lista %}
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold text-truncate" style="max-width: 200px;" title="{{ item.articulo }}">
+                                                {{ item.articulo }}
+                                            </div>
+                                            <small class="text-muted">{{ item.nombre }}</small>
+                                        </td>
+                                        <td class="text-end">
+                                            <span class="text-muted">${{ item.precio_anterior|floatformat:0 }}</span>
+                                        </td>
+                                        <td class="text-end">
+                                            <strong class="{% if item.diferencia > 0 %}text-success{% else %}text-danger{% endif %}">
+                                                ${{ item.precio_nuevo|floatformat:0 }}
+                                            </strong>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge {% if item.diferencia > 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                                {% if item.diferencia > 0 %}+{% endif %}{{ item.porcentaje|floatformat:1 }}%
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            {% if item.estado == 'APROBADO' %}
+                                            <span class="badge bg-success"><i class="ri-check-line"></i> Aprobado</span>
+                                            {% elif item.estado == 'REVISADO' %}
+                                            <span class="badge bg-warning text-dark"><i class="ri-eye-line"></i> Revisado</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary"><i class="ri-time-line"></i> Pendiente</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center">
+                                            {% if item.puede_aplicar %}
+                                            <button class="btn btn-sm btn-success" 
+                                                    onclick="aplicarCambioPrecio({{ item.id }})" 
+                                                    title="Aplicar cambio de precio">
+                                                <i class="ri-check-double-line"></i> Aplicar
+                                            </button>
+                                            {% else %}
+                                            <span class="text-muted small">
+                                                <i class="ri-hourglass-line"></i> Esperando
+                                            </span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if cambios_precio.total > 10 %}
+                        <div class="card-footer bg-light text-center py-2">
+                            <a href="{% url 'revisar_cambios_precios' %}" class="text-primary">
+                                Ver los {{ cambios_precio.total }} cambios pendientes <i class="ri-arrow-right-line"></i>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="ri-check-double-fill" style="font-size: 3rem;"></i>
+                            <p class="mt-2 mb-0">No hay cambios de precio pendientes</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- ========== DISCREPANCIAS DE PRECIOS (Informativo) ========== -->
+        {% if discrepancias_precios.requiere_atencion %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card dashboard-card border-warning">
+                    <div class="card-body py-3">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <i class="ri-error-warning-line text-warning me-3" style="font-size: 2rem;"></i>
+                                <div>
+                                    <h6 class="mb-0">
+                                        <span class="text-warning">{{ discrepancias_precios.total }}</span> 
+                                        productos con precios diferentes entre sucursales
+                                    </h6>
+                                    <small class="text-muted">
+                                        {% if discrepancias_precios.criticos > 0 %}
+                                        {{ discrepancias_precios.criticos }} críticos (variación &gt; 10%)
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                            <span class="badge bg-warning text-dark">
+                                <i class="ri-information-line me-1"></i>
+                                Contacte a un supervisor para regularizar
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Accesos Rápidos -->
         <div class="row">
             <div class="col-12">
@@ -574,9 +895,9 @@
                                 </a>
                             </div>
                             <div class="col-md-3 mb-2">
-                                <a href="{% url 'regularizar_recepciones' %}" class="quick-link">
-                                    <i class="ri-settings-3-line text-danger me-2"></i>
-                                    Regularizaciones
+                                <a href="{% url 'revisar_cambios_precios' %}" class="quick-link">
+                                    <i class="ri-price-tag-3-line text-purple me-2" style="color: #6f42c1 !important;"></i>
+                                    Cambios de Precio Pendientes
                                 </a>
                             </div>
                         </div>
@@ -587,6 +908,93 @@
 
     </div>
 </div>
+
+<!-- Script para aplicar cambios de precio -->
+<script>
+function aplicarCambioPrecio(cambioId) {
+    if (!cambioId) return;
+    
+    Swal.fire({
+        title: '¿Aplicar cambio de precio?',
+        text: 'El precio del producto será actualizado con el nuevo valor aprobado.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="ri-check-line"></i> Sí, aplicar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Mostrar loading
+            Swal.fire({
+                title: 'Aplicando cambio...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Llamar al endpoint para aprobar y aplicar
+            fetch('/app/gestion-precios/aprobar-cambio/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    cambio_id: cambioId,
+                    observaciones: 'Aplicado desde Dashboard Home'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Precio actualizado!',
+                        text: data.mensaje || 'El cambio de precio ha sido aplicado correctamente.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    }).then(() => {
+                        // Recargar la página para actualizar la lista
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.error || 'No se pudo aplicar el cambio de precio.'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error de conexión. Intente nuevamente.'
+                });
+            });
+        }
+    });
+}
+
+// Función auxiliar para obtener cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
 
 {% include 'layout/footer.html' %}
 

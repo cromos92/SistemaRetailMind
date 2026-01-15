@@ -26,24 +26,44 @@
                             <i class="ri-filter-3-line text-primary"></i> Filtros de Búsqueda
                         </h5>
                         <div class="row g-3">
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label for="tipoFiltroFecha" class="form-label">Tipo de Filtro</label>
+                                <select class="form-select" id="tipoFiltroFecha">
+                                    <option value="mes">Por Mes</option>
+                                    <option value="fecha">Por Fecha Específica</option>
+                                    <option value="rango">Por Rango de Fechas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2" id="contenedorMes">
                                 <label for="filtroMes" class="form-label">Mes</label>
                                 <input type="month" class="form-control" id="filtroMes">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2 d-none" id="contenedorFecha">
+                                <label for="filtroFecha" class="form-label">Fecha</label>
+                                <input type="date" class="form-control" id="filtroFecha">
+                            </div>
+                            <div class="col-md-2 d-none" id="contenedorFechaInicio">
+                                <label for="filtroFechaInicio" class="form-label">Fecha Inicio</label>
+                                <input type="date" class="form-control" id="filtroFechaInicio">
+                            </div>
+                            <div class="col-md-2 d-none" id="contenedorFechaFin">
+                                <label for="filtroFechaFin" class="form-label">Fecha Fin</label>
+                                <input type="date" class="form-control" id="filtroFechaFin">
+                            </div>
+                            <div class="col-md-2">
                                 <label for="filtroSucursal" class="form-label">Sucursal</label>
                                 <select class="form-select" id="filtroSucursal">
                                     <option value="">Todas las sucursales</option>
                                     <!-- Se llenará dinámicamente desde la API -->
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="filtroVendedor" class="form-label">Vendedor</label>
                                 <select class="form-select" id="filtroVendedor">
                                     <option value="">Todos los vendedores</option>
                                 </select>
                             </div>
-                            <div class="col-md-3 d-flex align-items-end">
+                            <div class="col-md-2 d-flex align-items-end">
                                 <button type="button" class="btn btn-primary w-100" id="btnFiltrar">
                                     <i class="ri-search-line"></i> Buscar
                                 </button>
@@ -216,11 +236,11 @@
                                                             <tr>
                                                                 <th>#</th>
                                                                 <th>Vendedor</th>
+                                                                <th>Código</th>
                                                                 <th class="text-end">Total Ventas</th>
                                                                 <th class="text-center">N° Documentos</th>
                                                                 <th class="text-end">Ticket Promedio</th>
                                                                 <th class="text-center">% Participación</th>
-                                                                <th class="text-center">Acciones</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -228,12 +248,11 @@
                                                         </tbody>
                                                         <tfoot class="table-secondary fw-bold">
                                                             <tr>
-                                                                <td colspan="2" class="text-end">TOTALES:</td>
+                                                                <td colspan="3" class="text-end">TOTALES:</td>
                                                                 <td class="text-end" id="totalVentasVendedores">$0</td>
                                                                 <td class="text-center" id="totalDocsVendedores">0</td>
                                                                 <td class="text-end" id="promedioVendedores">$0</td>
                                                                 <td class="text-center">100%</td>
-                                                                <td></td>
                                                             </tr>
                                                         </tfoot>
                                                     </table>
@@ -350,7 +369,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicializar fecha actual
     const hoy = new Date();
     const mesActual = hoy.toISOString().slice(0, 7);
+    const fechaActual = hoy.toISOString().slice(0, 10);
     document.getElementById('filtroMes').value = mesActual;
+    document.getElementById('filtroFecha').value = fechaActual;
+    document.getElementById('filtroFechaInicio').value = fechaActual;
+    document.getElementById('filtroFechaFin').value = fechaActual;
 
     // Variables globales para los gráficos
     let chartTopVendedores;
@@ -358,12 +381,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let chartVentasSucursales;
     let chartComparativaSucursales;
 
+    // Sucursal activa de la sesión (pasada desde Django)
+    const sucursalActivaId = '{{ sucursal_activa_id|default:"" }}';
+    const sucursalActivaNombre = '{{ sucursal_activa_nombre|default:"" }}';
+    const esSuperuser = {{ es_superuser|yesno:"true,false" }};
+
     // Cargar sucursales y vendedores
     cargarSucursales();
     cargarVendedores();
     
-    // Cargar datos iniciales
-    cargarDatos();
+    // Cargar datos iniciales (después de que se carguen las sucursales)
+    // Se llamará desde cargarSucursales una vez seleccionada la sucursal activa
 
     // Event listeners
     document.getElementById('btnFiltrar').addEventListener('click', cargarDatos);
@@ -375,6 +403,31 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnImprimirSucursales').addEventListener('click', imprimirSucursales);
     document.getElementById('btnExportarSucursales').addEventListener('click', exportarSucursalesExcel);
     document.getElementById('btnPDFSucursales').addEventListener('click', exportarSucursalesPDF);
+
+    // Event listener para cambio de tipo de filtro de fecha
+    document.getElementById('tipoFiltroFecha').addEventListener('change', function() {
+        const tipo = this.value;
+        const contenedorMes = document.getElementById('contenedorMes');
+        const contenedorFecha = document.getElementById('contenedorFecha');
+        const contenedorFechaInicio = document.getElementById('contenedorFechaInicio');
+        const contenedorFechaFin = document.getElementById('contenedorFechaFin');
+        
+        // Ocultar todos
+        contenedorMes.classList.add('d-none');
+        contenedorFecha.classList.add('d-none');
+        contenedorFechaInicio.classList.add('d-none');
+        contenedorFechaFin.classList.add('d-none');
+        
+        // Mostrar el correspondiente
+        if (tipo === 'mes') {
+            contenedorMes.classList.remove('d-none');
+        } else if (tipo === 'fecha') {
+            contenedorFecha.classList.remove('d-none');
+        } else if (tipo === 'rango') {
+            contenedorFechaInicio.classList.remove('d-none');
+            contenedorFechaFin.classList.remove('d-none');
+        }
+    });
 
     // Función para cargar sucursales
     function cargarSucursales() {
@@ -389,20 +442,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Sucursales cargadas:', data);
                 if (data.success) {
                     const selectSucursal = document.getElementById('filtroSucursal');
-                    // Limpiar opciones actuales (excepto "Todas")
-                    selectSucursal.innerHTML = '<option value="">Todas las sucursales</option>';
+                    
+                    // Si es superuser, mostrar opción "Todas", sino solo las sucursales
+                    if (esSuperuser) {
+                        selectSucursal.innerHTML = '<option value="">Todas las sucursales</option>';
+                    } else {
+                        selectSucursal.innerHTML = '';
+                    }
                     
                     if (data.sucursales && data.sucursales.length > 0) {
                         data.sucursales.forEach(s => {
                             const option = document.createElement('option');
                             option.value = s.id;
                             option.textContent = s.nombre;
+                            // Seleccionar la sucursal activa por defecto
+                            if (sucursalActivaId && s.id == sucursalActivaId) {
+                                option.selected = true;
+                            }
                             selectSucursal.appendChild(option);
                         });
+                        
+                        // Si no es superuser y no hay sucursal seleccionada, seleccionar la primera
+                        if (!esSuperuser && !sucursalActivaId && data.sucursales.length > 0) {
+                            selectSucursal.value = data.sucursales[0].id;
+                        }
+                        
                         console.log(`✓ ${data.sucursales.length} sucursales cargadas`);
+                        console.log(`✓ Sucursal activa: ${sucursalActivaId} (${sucursalActivaNombre})`);
                     } else {
                         console.warn('No hay sucursales disponibles');
                     }
+                    
+                    // Cargar datos después de seleccionar sucursal
+                    cargarDatos();
                 } else {
                     console.error('Error en respuesta:', data.error);
                     Swal.fire({
@@ -465,24 +537,53 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Función principal para cargar datos
     function cargarDatos() {
-        const mes = document.getElementById('filtroMes').value;
+        const tipoFiltro = document.getElementById('tipoFiltroFecha').value;
         const sucursal = document.getElementById('filtroSucursal').value;
         const vendedor = document.getElementById('filtroVendedor').value;
+        
+        // Construir parámetros de fecha según el tipo de filtro
+        let parametrosFecha = {};
+        
+        if (tipoFiltro === 'mes') {
+            const mes = document.getElementById('filtroMes').value;
+            parametrosFecha = { mes: mes };
+        } else if (tipoFiltro === 'fecha') {
+            const fecha = document.getElementById('filtroFecha').value;
+            parametrosFecha = { fecha: fecha };
+        } else if (tipoFiltro === 'rango') {
+            const fechaInicio = document.getElementById('filtroFechaInicio').value;
+            const fechaFin = document.getElementById('filtroFechaFin').value;
+            parametrosFecha = { fecha_inicio: fechaInicio, fecha_fin: fechaFin };
+        }
+
+        console.log('=== cargarDatos() ===');
+        console.log('Tipo filtro:', tipoFiltro);
+        console.log('Parámetros fecha:', parametrosFecha);
+        console.log('Sucursal seleccionada:', sucursal);
+        console.log('Vendedor:', vendedor);
 
         // Cargar datos de vendedores
-        cargarDatosVendedores(mes, sucursal, vendedor);
-        
+        cargarDatosVendedores(parametrosFecha, sucursal, vendedor);
+
         // Cargar datos de sucursales
-        cargarDatosSucursales(mes, sucursal);
-        
-        // Cargar comparativa mensual
-        cargarComparativaMensual(sucursal);
+        cargarDatosSucursales(parametrosFecha, sucursal);
+
+        // Cargar comparativa mensual (solo cuando es filtro por mes)
+        if (tipoFiltro === 'mes') {
+            cargarComparativaMensual(sucursal);
+        }
     }
 
     // Cargar datos de vendedores desde API
-    function cargarDatosVendedores(mes, sucursal, vendedor) {
+    function cargarDatosVendedores(parametrosFecha, sucursal, vendedor) {
         let url = '/app/api/reportes/ventas-por-vendedor/?';
-        if (mes) url += `mes=${mes}&`;
+        
+        // Agregar parámetros de fecha según el tipo
+        if (parametrosFecha.mes) url += `mes=${parametrosFecha.mes}&`;
+        if (parametrosFecha.fecha) url += `fecha=${parametrosFecha.fecha}&`;
+        if (parametrosFecha.fecha_inicio) url += `fecha_inicio=${parametrosFecha.fecha_inicio}&`;
+        if (parametrosFecha.fecha_fin) url += `fecha_fin=${parametrosFecha.fecha_fin}&`;
+        
         if (sucursal) url += `sucursal_id=${sucursal}&`;
         if (vendedor) url += `vendedor_id=${vendedor}&`;
         
@@ -535,13 +636,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Cargar datos de sucursales desde API
-    function cargarDatosSucursales(mes, sucursal) {
+    function cargarDatosSucursales(parametrosFecha, sucursal) {
         let url = '/app/api/reportes/ventas-por-sucursal/?';
-        if (mes) url += `mes=${mes}&`;
+        
+        // Agregar parámetros de fecha según el tipo
+        if (parametrosFecha.mes) url += `mes=${parametrosFecha.mes}&`;
+        if (parametrosFecha.fecha) url += `fecha=${parametrosFecha.fecha}&`;
+        if (parametrosFecha.fecha_inicio) url += `fecha_inicio=${parametrosFecha.fecha_inicio}&`;
+        if (parametrosFecha.fecha_fin) url += `fecha_fin=${parametrosFecha.fecha_fin}&`;
+        
         if (sucursal) url += `sucursal_id=${sucursal}&`;
-        
+
         console.log('Cargando ventas por sucursal:', url);
-        
+        console.log('Parámetros fecha:', parametrosFecha, 'sucursal:', sucursal);
+
         fetch(url)
             .then(response => {
                 if (!response.ok) {
@@ -551,10 +659,40 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(data => {
                 console.log('Datos de sucursales recibidos:', data);
-                if (data.success) {
+                console.log('Sucursales en respuesta:', data.sucursales);
+                if (data.success && data.sucursales && data.sucursales.length > 0) {
+                    console.log('Primera sucursal:', data.sucursales[0]);
                     llenarTablaSucursales(data.sucursales);
                     crearGraficosSucursales(data.sucursales);
+                    
+                    // SIEMPRE actualizar KPIs desde datos de sucursales cuando hay datos
+                    const totalVentasSuc = data.sucursales.reduce((sum, s) => sum + s.ventas, 0);
+                    const totalDocsSuc = data.sucursales.reduce((sum, s) => sum + s.documentos, 0);
+                    const ticketPromedioSuc = totalDocsSuc > 0 ? totalVentasSuc / totalDocsSuc : 0;
+                    
+                    // Actualizar KPIs principales con datos de sucursal
+                    document.getElementById('totalVentas').innerHTML = 
+                        `<span class="counter-value">$${formatearNumero(totalVentasSuc)}</span>`;
+                    document.getElementById('totalDocumentos').innerHTML = 
+                        `<span class="counter-value">${totalDocsSuc}</span>`;
+                    document.getElementById('ticketPromedio').innerHTML = 
+                        `<span class="counter-value">$${formatearNumero(ticketPromedioSuc)}</span>`;
+                    
+                    // Top vendedor desde sucursales (si hay)
+                    if (data.sucursales.length === 1) {
+                        document.getElementById('topVendedor').innerHTML = 
+                            `<span>${data.sucursales[0].nombre}</span>`;
+                    }
+                    
                     console.log('✓ Datos de sucursales cargados correctamente');
+                    console.log(`✓ KPIs actualizados: Ventas=$${formatearNumero(totalVentasSuc)}, Docs=${totalDocsSuc}`);
+                } else if (data.success && (!data.sucursales || data.sucursales.length === 0)) {
+                    console.warn('No hay sucursales en la respuesta');
+                    llenarTablaSucursales([]);
+                    // Resetear KPIs
+                    document.getElementById('totalVentas').innerHTML = '<span class="counter-value">$0</span>';
+                    document.getElementById('totalDocumentos').innerHTML = '<span class="counter-value">0</span>';
+                    document.getElementById('ticketPromedio').innerHTML = '<span class="counter-value">$0</span>';
                 } else {
                     console.error('Error en respuesta:', data.error);
                 }
@@ -611,16 +749,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 <tr>
                     <td>${index + 1}</td>
                     <td><strong>${vendedor.nombre}</strong></td>
+                    <td>${vendedor.codigo || '-'}</td>
                     <td class="text-end">$${formatearNumero(vendedor.ventas)}</td>
                     <td class="text-center">${vendedor.documentos}</td>
                     <td class="text-end">$${formatearNumero(ticketPromedio)}</td>
                     <td class="text-center">
                         <span class="badge bg-primary">${vendedor.participacion.toFixed(1)}%</span>
-                    </td>
-                    <td class="text-center">
-                        <button class="btn btn-sm btn-info" onclick="verDetalleVendedor(${vendedor.id})">
-                            <i class="ri-eye-line"></i>
-                        </button>
                     </td>
                 </tr>
             `;
@@ -907,7 +1041,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Función de impresión
     function imprimirSucursales() {
-        const mesSeleccionado = document.getElementById('filtroMes').value;
+        const tipoFiltro = document.getElementById('tipoFiltroFecha').value;
+        let periodoTexto = '';
+        
+        if (tipoFiltro === 'mes') {
+            const mes = document.getElementById('filtroMes').value;
+            const [anio, mesNum] = mes.split('-');
+            const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            periodoTexto = `${meses[parseInt(mesNum) - 1]} ${anio}`;
+        } else if (tipoFiltro === 'fecha') {
+            const fecha = document.getElementById('filtroFecha').value;
+            periodoTexto = formatearFechaLegible(fecha);
+        } else if (tipoFiltro === 'rango') {
+            const fechaInicio = document.getElementById('filtroFechaInicio').value;
+            const fechaFin = document.getElementById('filtroFechaFin').value;
+            periodoTexto = `${formatearFechaLegible(fechaInicio)} al ${formatearFechaLegible(fechaFin)}`;
+        }
+        
         const sucursalSeleccionada = document.getElementById('filtroSucursal').options[document.getElementById('filtroSucursal').selectedIndex].text;
         
         // Obtener la fecha formateada
@@ -980,7 +1130,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <body>
                 <div class="header">
                     <h1>📊 Reporte de Ventas por Sucursal</h1>
-                    <p><strong>Período:</strong> ${mesSeleccionado || 'Todos'}</p>
+                    <p><strong>Período:</strong> ${periodoTexto || 'Todos'}</p>
                     <p><strong>Sucursal:</strong> ${sucursalSeleccionada}</p>
                     <p><strong>Fecha de Generación:</strong> ${fechaReporte}</p>
                 </div>
@@ -1044,17 +1194,18 @@ document.addEventListener('DOMContentLoaded', function() {
     function formatearNumero(numero) {
         return new Intl.NumberFormat('es-CL').format(Math.round(numero));
     }
-});
 
-// Funciones globales para los botones de detalle
-function verDetalleVendedor(id) {
-    Swal.fire({
-        icon: 'info',
-        title: 'Ver Detalle Vendedor',
-        text: 'ID: ' + id + ' - Funcionalidad en desarrollo...',
-        timer: 2000
-    });
-}
+    // Función auxiliar para formatear fecha legible
+    function formatearFechaLegible(fechaStr) {
+        if (!fechaStr) return '';
+        const fecha = new Date(fechaStr + 'T00:00:00');
+        return fecha.toLocaleDateString('es-CL', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    }
+});
 
 function verDetalleSucursal(id) {
     Swal.fire({

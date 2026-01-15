@@ -257,13 +257,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <tr>
                     <td>${doc.id}</td>
                     <td>${doc.tipo_documento_display}</td>
-                    <td>${doc.metodo_pago_display}</td>
+                    <td>${doc.pagos_detalle_str || doc.metodo_pago_display}</td>
                     <td>${doc.correlativo}</td>
                     <td>${doc.cliente_info}</td>
                     <td class="text-end">$${formatearNumero(doc.total)}</td>
                     <td class="text-end">$${formatearNumero(doc.descuento)}</td>
                     <td class="text-end">$${formatearNumero(doc.total)}</td>
-                    <td>${doc.vendedor}</td>
+                    <td>${doc.vendedor_codigo ? `${doc.vendedor} (${doc.vendedor_codigo})` : doc.vendedor}</td>
                     <td>${doc.fecha}</td>
                     <td class="no-print">${doc.voucher || '-'}</td>
                 </tr>
@@ -403,12 +403,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Exportar a Excel
     function exportarExcel() {
-        Swal.fire({
-            icon: 'info',
-            title: 'Exportando a Excel',
-            text: 'Funcionalidad en desarrollo...',
-            timer: 2000
-        });
+        const fechaDesde = document.getElementById('filtroFechaDesde').value;
+        const fechaHasta = document.getElementById('filtroFechaHasta').value;
+        const tipoDoc = document.getElementById('filtroTipoDoc').value;
+        const metodoPago = document.getElementById('filtroMetodoPago').value;
+
+        const params = new URLSearchParams();
+        if (fechaDesde) params.append('fecha_desde', fechaDesde);
+        if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+        if (tipoDoc) params.append('tipo_documento', tipoDoc);
+        if (metodoPago) params.append('metodo_pago', metodoPago);
+
+        window.location.href = `/app/api/reportes/documentos-emitidos-excel/?${params.toString()}`;
     }
 
     // Función auxiliar para formatear números

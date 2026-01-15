@@ -1,0 +1,1243 @@
+/**
+ * NEXO Design System - RetailMind
+ * Sistema de diseño unificado para todas las vistas
+ * Versión: 1.0
+ */
+
+/* ========== Variables CSS ========== */
+:root {
+    /* Colores Primarios */
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    
+    /* Colores Secundarios */
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    
+    /* Colores Semánticos */
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    
+    /* Neutrales / Grises */
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    
+    /* Fondos */
+    --nexo-bg-primary: #FFFFFF;
+    --nexo-bg-secondary: #F5F5F7;
+    --nexo-bg-dark: #1A1A2E;
+    
+    /* Textos */
+    --nexo-text-primary: #1A1A2E;
+    --nexo-text-secondary: #4A4A5A;
+    --nexo-text-muted: #8A8A9A;
+    --nexo-text-inverse: #FFFFFF;
+    
+    /* Bordes */
+    --nexo-border-light: #D1D1D9;
+    --nexo-border-dark: #4A4A5A;
+    
+    /* Sombras */
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+    
+    /* Bordes Redondeados */
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-radius-full: 9999px;
+    
+    /* Transiciones */
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+    --nexo-transition-slow: 350ms ease;
+}
+
+/* ========== Botones ========== */
+.btn-nexo-primary {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-primary:hover {
+    background-color: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.btn-nexo-secondary {
+    background-color: var(--nexo-secondary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-secondary:hover {
+    background-color: #2A2A4E;
+    color: var(--nexo-white);
+}
+
+.btn-nexo-success {
+    background-color: var(--nexo-success);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-success:hover {
+    background-color: #00A080;
+    color: var(--nexo-white);
+}
+
+.btn-nexo-warning {
+    background-color: var(--nexo-warning);
+    color: var(--nexo-secondary);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-danger {
+    background-color: var(--nexo-error);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-outline {
+    background-color: transparent;
+    color: var(--nexo-primary);
+    border: 2px solid var(--nexo-primary);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 1.125rem;
+    font-weight: 600;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-outline:hover {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* ========== Cards ========== */
+.card-nexo {
+    background-color: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-normal);
+}
+
+.card-nexo:hover {
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.card-nexo-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--nexo-gray-100);
+}
+
+.card-nexo-body {
+    padding: 1.5rem;
+}
+
+.card-nexo-footer {
+    padding: 1rem 1.5rem;
+    background-color: var(--nexo-gray-100);
+    border-top: 1px solid var(--nexo-gray-100);
+}
+
+/* ========== Alertas ========== */
+.alert-nexo {
+    padding: 1rem 1.25rem;
+    border-radius: var(--nexo-radius-md);
+    border-left: 4px solid;
+}
+
+.alert-nexo-success {
+    background-color: rgba(0, 212, 170, 0.1);
+    border-color: var(--nexo-success);
+    color: #00A080;
+}
+
+.alert-nexo-warning {
+    background-color: rgba(255, 176, 32, 0.1);
+    border-color: var(--nexo-warning);
+    color: #996B00;
+}
+
+.alert-nexo-error {
+    background-color: rgba(255, 77, 77, 0.1);
+    border-color: var(--nexo-error);
+    color: var(--nexo-error);
+}
+
+.alert-nexo-info {
+    background-color: rgba(0, 102, 255, 0.1);
+    border-color: var(--nexo-info);
+    color: var(--nexo-info);
+}
+
+/* ========== Badges ========== */
+.badge-nexo {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-nexo-success {
+    background-color: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.badge-nexo-warning {
+    background-color: var(--nexo-warning);
+    color: var(--nexo-secondary);
+}
+
+.badge-nexo-error {
+    background-color: var(--nexo-error);
+    color: var(--nexo-white);
+}
+
+.badge-nexo-info {
+    background-color: var(--nexo-info);
+    color: var(--nexo-white);
+}
+
+.badge-nexo-secondary {
+    background-color: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+}
+
+/* ========== Estados de Stock ========== */
+.stock-ok { color: var(--nexo-success); }
+.stock-ok-bg { background-color: rgba(0, 212, 170, 0.1); }
+
+.stock-low { color: var(--nexo-warning); }
+.stock-low-bg { background-color: rgba(255, 176, 32, 0.1); }
+
+.stock-critical { color: var(--nexo-error); }
+.stock-critical-bg { background-color: rgba(255, 77, 77, 0.1); }
+
+.stock-out { color: var(--nexo-gray-500); }
+.stock-out-bg { background-color: var(--nexo-gray-100); }
+
+/* ========== Tablas ========== */
+.table-nexo {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-nexo th {
+    background: var(--nexo-gray-100);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+}
+
+.table-nexo td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--nexo-gray-100);
+    font-size: 0.875rem;
+    color: var(--nexo-text-primary);
+}
+
+.table-nexo tbody tr:hover {
+    background: var(--nexo-gray-100);
+}
+
+/* ========== Inputs ========== */
+.input-nexo {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.875rem;
+    color: var(--nexo-text-primary);
+    transition: var(--nexo-transition-fast);
+}
+
+.input-nexo:focus {
+    outline: none;
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px var(--nexo-primary-light);
+}
+
+.input-nexo::placeholder {
+    color: var(--nexo-gray-500);
+}
+
+/* ========== Animaciones ========== */
+@keyframes nexo-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes nexo-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes nexo-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.nexo-animate-pulse {
+    animation: nexo-pulse 2s ease-in-out infinite;
+}
+
+.nexo-animate-spin {
+    animation: nexo-spin 1s linear infinite;
+}
+
+.nexo-animate-bounce {
+    animation: nexo-bounce 1s ease-in-out infinite;
+}
+
+/* ========== Utilidades ========== */
+.text-nexo-primary { color: var(--nexo-primary) !important; }
+.text-nexo-secondary { color: var(--nexo-secondary) !important; }
+.text-nexo-accent { color: var(--nexo-accent) !important; }
+.text-nexo-success { color: var(--nexo-success) !important; }
+.text-nexo-warning { color: var(--nexo-warning) !important; }
+.text-nexo-error { color: var(--nexo-error) !important; }
+.text-nexo-muted { color: var(--nexo-gray-500) !important; }
+
+.bg-nexo-primary { background-color: var(--nexo-primary) !important; }
+.bg-nexo-secondary { background-color: var(--nexo-secondary) !important; }
+.bg-nexo-accent { background-color: var(--nexo-accent) !important; }
+.bg-nexo-success { background-color: var(--nexo-success) !important; }
+.bg-nexo-warning { background-color: var(--nexo-warning) !important; }
+.bg-nexo-error { background-color: var(--nexo-error) !important; }
+.bg-nexo-light { background-color: var(--nexo-gray-100) !important; }
+
+.border-nexo-primary { border-color: var(--nexo-primary) !important; }
+.border-nexo-success { border-color: var(--nexo-success) !important; }
+.border-nexo-warning { border-color: var(--nexo-warning) !important; }
+.border-nexo-error { border-color: var(--nexo-error) !important; }
+
+.shadow-nexo-sm { box-shadow: var(--nexo-shadow-sm) !important; }
+.shadow-nexo-md { box-shadow: var(--nexo-shadow-md) !important; }
+.shadow-nexo-lg { box-shadow: var(--nexo-shadow-lg) !important; }
+
+.rounded-nexo-sm { border-radius: var(--nexo-radius-sm) !important; }
+.rounded-nexo-md { border-radius: var(--nexo-radius-md) !important; }
+.rounded-nexo-lg { border-radius: var(--nexo-radius-lg) !important; }
+.rounded-nexo-xl { border-radius: var(--nexo-radius-xl) !important; }
+.rounded-nexo-full { border-radius: var(--nexo-radius-full) !important; }
+
+/* ========== KPI Cards ========== */
+.kpi-card-nexo {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-xl);
+    padding: 1.5rem;
+    box-shadow: var(--nexo-shadow-md);
+    transition: var(--nexo-transition-normal);
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card-nexo:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.kpi-card-nexo::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+}
+
+.kpi-card-nexo.primary::before { background: var(--nexo-primary); }
+.kpi-card-nexo.success::before { background: var(--nexo-success); }
+.kpi-card-nexo.warning::before { background: var(--nexo-warning); }
+.kpi-card-nexo.error::before { background: var(--nexo-error); }
+
+.kpi-value-nexo {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--nexo-secondary);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.kpi-label-nexo {
+    font-size: 0.875rem;
+    color: var(--nexo-gray-500);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ========== Progress Bar ========== */
+.progress-nexo {
+    height: 6px;
+    background: var(--nexo-gray-100);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-nexo-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.progress-nexo-bar.success { background: var(--nexo-success); }
+.progress-nexo-bar.warning { background: var(--nexo-warning); }
+.progress-nexo-bar.error { background: var(--nexo-error); }
+.progress-nexo-bar.primary { background: var(--nexo-primary); }
+
+/* ========== Empty State ========== */
+.empty-state-nexo {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--nexo-gray-500);
+}
+
+.empty-state-nexo i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.3;
+}
+
+.empty-state-nexo h4 {
+    color: var(--nexo-gray-700);
+    margin-bottom: 0.5rem;
+}
+
+/* ========== Hover Effects ========== */
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.hover-scale:hover {
+    transform: scale(1.02);
+}
+
+.hover-glow:hover {
+    box-shadow: 0 0 20px rgba(0, 102, 255, 0.3);
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 768px) {
+    .kpi-value-nexo {
+        font-size: 1.5rem;
+    }
+    
+    .kpi-card-nexo {
+        padding: 1rem;
+    }
+}
+
+/* ========== NEXO Dashboard Styles ========== */
+/* Page Container */
+.nexo-page {
+    background: var(--nexo-bg-secondary);
+    min-height: 100vh;
+    padding-bottom: 2rem;
+}
+
+/* Dashboard Header */
+.nexo-dashboard-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    border-radius: var(--nexo-radius-xl);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    color: var(--nexo-white);
+}
+
+.nexo-dashboard-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--nexo-white);
+    margin-bottom: 0.5rem;
+}
+
+.nexo-dashboard-title i {
+    color: var(--nexo-accent);
+    margin-right: 0.5rem;
+}
+
+.nexo-dashboard-subtitle {
+    font-size: 0.9rem;
+    color: var(--nexo-gray-300);
+    margin: 0;
+}
+
+.nexo-header-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.nexo-header-actions .btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--nexo-white);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-header-actions .btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--nexo-white);
+}
+
+/* Filter Section */
+.nexo-filter-section {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--nexo-shadow-sm);
+}
+
+.nexo-filter-shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--nexo-gray-100);
+}
+
+.nexo-filter-shortcuts .btn {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.813rem;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-filter-shortcuts .btn:hover {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.nexo-filter-shortcuts .btn.active {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-form-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.375rem;
+}
+
+.nexo-form-control,
+.nexo-form-select {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-form-control:focus,
+.nexo-form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px var(--nexo-primary-light);
+    outline: none;
+}
+
+/* NEXO Button */
+.nexo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: var(--nexo-radius-md);
+    border: none;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+/* Section Header */
+.nexo-section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.nexo-section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--nexo-radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: var(--nexo-white);
+    background: var(--nexo-gradient-primary);
+}
+
+.nexo-section-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin: 0;
+}
+
+/* Gradients */
+.nexo-gradient-primary,
+:root { --nexo-gradient-primary: linear-gradient(135deg, #0066FF 0%, #00D4AA 100%); }
+:root { --nexo-gradient-blue: linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%); }
+:root { --nexo-gradient-purple: linear-gradient(135deg, #6C5CE7 0%, #A29BFE 100%); }
+:root { --nexo-gradient-accent: linear-gradient(135deg, #00D4AA 0%, #00F5D4 100%); }
+
+/* KPI Grid */
+.nexo-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 1200px) {
+    .nexo-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .nexo-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* KPI Card */
+.nexo-kpi-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.25rem;
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-normal);
+    position: relative;
+    overflow: hidden;
+}
+
+.nexo-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+}
+
+.nexo-kpi-card.kpi-primary::before { background: var(--nexo-primary); }
+.nexo-kpi-card.kpi-success::before { background: var(--nexo-success); }
+.nexo-kpi-card.kpi-info::before { background: #4FACFE; }
+.nexo-kpi-card.kpi-warning::before { background: var(--nexo-warning); }
+.nexo-kpi-card.kpi-danger::before { background: var(--nexo-error); }
+.nexo-kpi-card.kpi-purple::before { background: #6C5CE7; }
+.nexo-kpi-card.kpi-pink::before { background: #FF6B9D; }
+
+.nexo-kpi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.nexo-kpi-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.kpi-primary .nexo-kpi-icon { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.kpi-success .nexo-kpi-icon { background: rgba(0, 212, 170, 0.1); color: var(--nexo-success); }
+.kpi-info .nexo-kpi-icon { background: rgba(79, 172, 254, 0.1); color: #4FACFE; }
+.kpi-warning .nexo-kpi-icon { background: rgba(255, 176, 32, 0.1); color: var(--nexo-warning); }
+.kpi-danger .nexo-kpi-icon { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
+.kpi-purple .nexo-kpi-icon { background: rgba(108, 92, 231, 0.1); color: #6C5CE7; }
+.kpi-pink .nexo-kpi-icon { background: rgba(255, 107, 157, 0.1); color: #FF6B9D; }
+
+.nexo-kpi-trend {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--nexo-radius-sm);
+}
+
+.nexo-kpi-trend.up {
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--nexo-success);
+}
+
+.nexo-kpi-trend.down {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+.nexo-kpi-trend.neutral {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-500);
+}
+
+.nexo-kpi-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--nexo-secondary);
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
+}
+
+.nexo-kpi-label {
+    font-size: 0.813rem;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    margin-bottom: 0.125rem;
+}
+
+.nexo-kpi-sublabel {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+}
+
+/* Chart Card */
+.nexo-chart-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.nexo-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--nexo-gray-100);
+}
+
+.nexo-chart-title {
+    font-size: 0.938rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nexo-chart-title i {
+    color: var(--nexo-primary);
+}
+
+.nexo-chart-body {
+    padding: 1.25rem;
+}
+
+.nexo-chart-container {
+    height: 300px;
+    position: relative;
+}
+
+.nexo-chart-container-sm {
+    height: 220px;
+    position: relative;
+}
+
+/* NEXO Table */
+.nexo-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.nexo-table th {
+    background: var(--nexo-gray-100);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+}
+
+.nexo-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--nexo-gray-100);
+    font-size: 0.875rem;
+    color: var(--nexo-text-primary);
+    vertical-align: middle;
+}
+
+.nexo-table tbody tr:hover {
+    background: var(--nexo-gray-100);
+}
+
+/* Rank Badge */
+.nexo-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.nexo-rank-badge.nexo-rank-1 {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    color: #5C4B00;
+}
+
+.nexo-rank-badge.nexo-rank-2 {
+    background: linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%);
+    color: #4A4A4A;
+}
+
+.nexo-rank-badge.nexo-rank-3 {
+    background: linear-gradient(135deg, #CD7F32 0%, #B87333 100%);
+    color: #fff;
+}
+
+.nexo-rank-badge.nexo-rank-default {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+}
+
+/* NEXO Progress */
+.nexo-progress {
+    height: 6px;
+    background: var(--nexo-gray-100);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.nexo-progress-bar {
+    height: 100%;
+    background: var(--nexo-primary);
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+/* NEXO Badge */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.nexo-badge-success {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00A080;
+}
+
+.nexo-badge-primary {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.nexo-badge-warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+}
+
+.nexo-badge-danger {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.nexo-badge-info {
+    background: rgba(79, 172, 254, 0.15);
+    color: #0066CC;
+}
+
+/* NEXO Alert */
+.nexo-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 0.75rem;
+}
+
+.nexo-alert:last-child {
+    margin-bottom: 0;
+}
+
+.nexo-alert-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.125rem;
+    flex-shrink: 0;
+}
+
+.nexo-alert-content h6 {
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+}
+
+.nexo-alert-content p {
+    font-size: 0.813rem;
+    margin: 0;
+    opacity: 0.8;
+}
+
+.nexo-alert-success {
+    background: rgba(0, 212, 170, 0.1);
+}
+
+.nexo-alert-success .nexo-alert-icon {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.nexo-alert-success .nexo-alert-content h6 { color: #00A080; }
+.nexo-alert-success .nexo-alert-content p { color: #00A080; }
+
+.nexo-alert-warning {
+    background: rgba(255, 176, 32, 0.1);
+}
+
+.nexo-alert-warning .nexo-alert-icon {
+    background: var(--nexo-warning);
+    color: var(--nexo-white);
+}
+
+.nexo-alert-warning .nexo-alert-content h6 { color: #996B00; }
+.nexo-alert-warning .nexo-alert-content p { color: #996B00; }
+
+.nexo-alert-danger {
+    background: rgba(255, 77, 77, 0.1);
+}
+
+.nexo-alert-danger .nexo-alert-icon {
+    background: var(--nexo-error);
+    color: var(--nexo-white);
+}
+
+.nexo-alert-danger .nexo-alert-content h6 { color: var(--nexo-error); }
+.nexo-alert-danger .nexo-alert-content p { color: var(--nexo-error); }
+
+.nexo-alert-info {
+    background: rgba(0, 102, 255, 0.1);
+}
+
+.nexo-alert-info .nexo-alert-icon {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-alert-info .nexo-alert-content h6 { color: var(--nexo-primary); }
+.nexo-alert-info .nexo-alert-content p { color: var(--nexo-primary); }
+
+/* Stats Mini */
+.nexo-stats-mini {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--nexo-gray-100);
+}
+
+.nexo-stats-mini:last-child {
+    border-bottom: none;
+}
+
+.nexo-stats-mini-label {
+    font-size: 0.813rem;
+    color: var(--nexo-gray-500);
+}
+
+.nexo-stats-mini-value {
+    font-size: 0.938rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+}
+
+.nexo-stats-mini-value.danger {
+    color: var(--nexo-error);
+}
+
+.nexo-stats-mini-value.warning {
+    color: var(--nexo-warning);
+}
+
+.nexo-stats-mini-value.success {
+    color: var(--nexo-success);
+}
+
+/* Animations */
+@keyframes nexo-fadein {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.nexo-animate-fadein {
+    animation: nexo-fadein 0.4s ease forwards;
+}
+
+.nexo-animate-delay-1 {
+    animation-delay: 0.1s;
+    opacity: 0;
+}
+
+.nexo-animate-delay-2 {
+    animation-delay: 0.2s;
+    opacity: 0;
+}
+
+.nexo-animate-delay-3 {
+    animation-delay: 0.3s;
+    opacity: 0;
+}
+
+/* Responsive adjustments for dashboard */
+@media (max-width: 992px) {
+    .nexo-dashboard-header {
+        padding: 1.5rem;
+    }
+    
+    .nexo-dashboard-title {
+        font-size: 1.5rem;
+    }
+    
+    .nexo-header-actions {
+        margin-top: 1rem;
+    }
+    
+    .nexo-filter-shortcuts {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 0.5rem;
+    }
+    
+    .nexo-filter-shortcuts .btn {
+        flex-shrink: 0;
+    }
+}
+
+@media (max-width: 576px) {
+    .nexo-kpi-value {
+        font-size: 1.5rem;
+    }
+    
+    .nexo-chart-container {
+        height: 250px;
+    }
+    
+    .nexo-chart-container-sm {
+        height: 180px;
+    }
+}
+
+/* ========== Tooltip Styles ========== */
+.tooltip {
+    --bs-tooltip-max-width: 320px;
+}
+
+.tooltip-inner {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 0.813rem;
+    line-height: 1.5;
+    background: var(--nexo-secondary);
+    border-radius: var(--nexo-radius-md);
+}
+
+/* KPI Status Indicators */
+.nexo-kpi-card[data-status="excellent"]::after {
+    content: '✓';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    background: var(--nexo-success);
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nexo-kpi-card[data-status="warning"]::after {
+    content: '!';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    background: var(--nexo-warning);
+    color: var(--nexo-secondary);
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nexo-kpi-card[data-status="critical"]::after {
+    content: '✕';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    background: var(--nexo-error);
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Info icon in KPI labels */
+.nexo-kpi-label .bi-info-circle-fill {
+    cursor: help;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.nexo-kpi-card:hover .nexo-kpi-label .bi-info-circle-fill {
+    opacity: 1;
+}
+
+/* Período Comparativo Info */
+#periodoComparacionInfo {
+    background: var(--nexo-primary-light);
+    padding: 0.5rem 1rem;
+    border-radius: var(--nexo-radius-md);
+    border-left: 3px solid var(--nexo-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+#periodoComparacionInfo .bi-arrow-left-right {
+    color: var(--nexo-primary);
+}
+
+#periodoActualLabel,
+#periodoComparativoLabel {
+    color: var(--nexo-text-secondary);
+}
+
+#periodoActualLabel strong,
+#periodoComparativoLabel strong {
+    color: var(--nexo-primary);
+}
+
+/* Trend badges mejorados */
+.nexo-kpi-trend {
+    cursor: help;
+    transition: transform 0.2s;
+}
+
+.nexo-kpi-trend:hover {
+    transform: scale(1.1);
+}
+
+.nexo-kpi-trend.up {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00A080;
+}
+
+.nexo-kpi-trend.down {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.nexo-kpi-trend.neutral {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-500);
+}

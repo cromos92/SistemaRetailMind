@@ -2,103 +2,768 @@
 
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
+
+<style>
+    /* ========== NEXO DESIGN SYSTEM ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+    }
+
+    /* ========== PAGE HEADER ========== */
+    .permisos-header {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        border-radius: var(--nexo-radius-xl);
+        padding: 24px 28px;
+        margin-bottom: 24px;
+        color: var(--nexo-white);
+        box-shadow: var(--nexo-shadow-lg);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .permisos-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+        pointer-events: none;
+    }
+
+    .permisos-header h4,
+    .permisos-header p,
+    .permisos-header small {
+        color: var(--nexo-white) !important;
+    }
+
+    /* ========== KPI CARDS ========== */
+    .kpi-card {
+        background: var(--nexo-white);
+        border: none;
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        transition: all 0.3s ease;
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--nexo-shadow-lg);
+    }
+
+    .kpi-card .card-body {
+        padding: 20px;
+    }
+
+    .kpi-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: var(--nexo-radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+
+    .kpi-icon.primary {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    .kpi-icon.success {
+        background: rgba(0, 212, 170, 0.12);
+        color: var(--nexo-success);
+    }
+
+    .kpi-icon.info {
+        background: rgba(0, 102, 255, 0.1);
+        color: var(--nexo-info);
+    }
+
+    .kpi-icon.warning {
+        background: rgba(255, 176, 32, 0.12);
+        color: var(--nexo-warning);
+    }
+
+    .kpi-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--nexo-secondary);
+        line-height: 1.2;
+    }
+
+    .kpi-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--nexo-gray-500);
+        font-weight: 600;
+    }
+
+    /* ========== MAIN CARD ========== */
+    .permisos-card {
+        background: var(--nexo-white);
+        border: none;
+        border-radius: var(--nexo-radius-xl);
+        box-shadow: var(--nexo-shadow-md);
+        overflow: hidden;
+    }
+
+    .permisos-card-header {
+        background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #EEEEF1 100%);
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--nexo-gray-300);
+    }
+
+    .permisos-card-header h5 {
+        color: var(--nexo-secondary);
+        font-weight: 600;
+        margin: 0;
+    }
+
+    /* ========== ROLE SELECTOR ========== */
+    .role-selector {
+        background: var(--nexo-white);
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 10px 16px;
+        font-weight: 500;
+        color: var(--nexo-secondary);
+        min-width: 200px;
+        transition: all 0.2s ease;
+    }
+
+    .role-selector:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+        outline: none;
+    }
+
+    /* ========== BUTTONS ========== */
+    .btn-nexo-primary {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        border: none;
+        color: var(--nexo-white);
+        padding: 10px 20px;
+        border-radius: var(--nexo-radius-md);
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+    .btn-nexo-primary:hover {
+        background: linear-gradient(135deg, var(--nexo-primary-dark) 0%, #003D99 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+        color: var(--nexo-white);
+    }
+
+    .btn-nexo-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .btn-nexo-success {
+        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B090 100%);
+        border: none;
+        color: var(--nexo-white);
+        padding: 10px 20px;
+        border-radius: var(--nexo-radius-md);
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+    .btn-nexo-success:hover {
+        background: linear-gradient(135deg, #00B090 0%, #009A7A 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 212, 170, 0.3);
+        color: var(--nexo-white);
+    }
+
+    .btn-nexo-success:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .btn-nexo-outline {
+        background: transparent;
+        border: 2px solid var(--nexo-primary);
+        color: var(--nexo-primary);
+        padding: 9px 18px;
+        border-radius: var(--nexo-radius-md);
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+    .btn-nexo-outline:hover {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    .btn-nexo-outline:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .empty-state-icon {
+        width: 100px;
+        height: 100px;
+        background: var(--nexo-primary-light);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+        font-size: 2.5rem;
+        color: var(--nexo-primary);
+    }
+
+    .empty-state h5 {
+        color: var(--nexo-secondary);
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .empty-state p {
+        color: var(--nexo-gray-500);
+        margin: 0;
+    }
+
+    /* ========== LIMITE DESCUENTO ========== */
+    .limite-descuento-card {
+        background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #D9E8FF 100%);
+        border: 2px solid var(--nexo-primary);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px 24px;
+        margin-bottom: 24px;
+    }
+
+    .limite-descuento-card h5 {
+        color: var(--nexo-primary-dark);
+        font-weight: 600;
+    }
+
+    .limite-descuento-input {
+        font-size: 1.25rem;
+        font-weight: 600;
+        text-align: center;
+        border: 2px solid var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+        padding: 12px;
+    }
+
+    .limite-descuento-input:focus {
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.2);
+        border-color: var(--nexo-primary-dark);
+    }
+
+    .limite-badge {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: var(--nexo-white);
+        padding: 12px 24px;
+        border-radius: var(--nexo-radius-lg);
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+
+    /* ========== MODULE CARDS ========== */
+    .modulo-card {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        margin-bottom: 16px;
+        overflow: hidden;
+        transition: all 0.2s ease;
+    }
+
+    .modulo-card:hover {
+        border-color: var(--nexo-primary);
+        box-shadow: var(--nexo-shadow-md);
+    }
+
+    .modulo-header {
+        background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #EEEEF1 100%);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .modulo-header:hover {
+        background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #D9E8FF 100%);
+    }
+
+    .modulo-header.collapsed .modulo-toggle i {
+        transform: rotate(-90deg);
+    }
+
+    .modulo-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .modulo-icon {
+        width: 40px;
+        height: 40px;
+        background: var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--nexo-white);
+        font-size: 1.1rem;
+    }
+
+    .modulo-name {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--nexo-secondary);
+        margin: 0;
+    }
+
+    .modulo-toggle {
+        width: 32px;
+        height: 32px;
+        background: var(--nexo-white);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--nexo-gray-500);
+        transition: all 0.2s ease;
+    }
+
+    .modulo-toggle i {
+        transition: transform 0.2s ease;
+    }
+
+    .modulo-body {
+        padding: 16px 20px;
+    }
+
+    /* ========== OPTION ROWS ========== */
+    .opcion-row {
+        background: var(--nexo-gray-100);
+        border: 1px solid transparent;
+        border-radius: var(--nexo-radius-md);
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        transition: all 0.2s ease;
+    }
+
+    .opcion-row:hover {
+        background: var(--nexo-white);
+        border-color: var(--nexo-gray-300);
+        box-shadow: var(--nexo-shadow-sm);
+    }
+
+    .opcion-row.sub-opcion {
+        margin-left: 32px;
+        background: var(--nexo-white);
+        border: 1px dashed var(--nexo-gray-300);
+    }
+
+    .opcion-row.sub-opcion::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: 50%;
+        width: 16px;
+        height: 2px;
+        background: var(--nexo-gray-300);
+    }
+
+    .opcion-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .opcion-icon {
+        width: 32px;
+        height: 32px;
+        background: var(--nexo-primary-light);
+        border-radius: var(--nexo-radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--nexo-primary);
+        font-size: 0.95rem;
+        flex-shrink: 0;
+    }
+
+    .opcion-nombre {
+        font-weight: 500;
+        color: var(--nexo-secondary);
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* ========== PERMISSION CHECKBOXES ========== */
+    .permisos-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .permiso-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-sm);
+        padding: 6px 10px;
+        transition: all 0.2s ease;
+    }
+
+    .permiso-item:hover {
+        border-color: var(--nexo-primary);
+    }
+
+    .permiso-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--nexo-primary);
+        cursor: pointer;
+    }
+
+    .permiso-item label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--nexo-gray-700);
+        cursor: pointer;
+        margin: 0;
+        letter-spacing: 0.3px;
+    }
+
+    .permiso-item.active {
+        background: var(--nexo-primary-light);
+        border-color: var(--nexo-primary);
+    }
+
+    .permiso-item.active label {
+        color: var(--nexo-primary);
+    }
+
+    /* Quick actions per permission type */
+    .quick-actions {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+
+    .quick-action-btn {
+        padding: 6px 12px;
+        border-radius: var(--nexo-radius-sm);
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 1px solid var(--nexo-gray-300);
+        background: var(--nexo-white);
+        color: var(--nexo-gray-700);
+    }
+
+    .quick-action-btn:hover {
+        background: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    /* ========== MODAL STYLES ========== */
+    .modal-content {
+        border: none;
+        border-radius: var(--nexo-radius-xl);
+        overflow: hidden;
+    }
+
+    .modal-header {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        padding: 20px 24px;
+        border: none;
+    }
+
+    .modal-header .modal-title {
+        color: var(--nexo-white) !important;
+        font-weight: 600;
+    }
+
+    .modal-header .btn-close {
+        filter: brightness(0) invert(1);
+        opacity: 0.8;
+    }
+
+    .modal-header .btn-close:hover {
+        opacity: 1;
+    }
+
+    .modal-body {
+        padding: 24px;
+    }
+
+    .modal-footer {
+        border-top: 1px solid var(--nexo-gray-300);
+        padding: 16px 24px;
+        background: var(--nexo-gray-100);
+    }
+
+    /* ========== USERS BY ROLE SECTION ========== */
+    .users-by-role {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        padding: 16px;
+        margin-top: 16px;
+    }
+
+    .users-by-role h6 {
+        color: var(--nexo-secondary);
+        font-weight: 600;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .user-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--nexo-gray-100);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-full);
+        padding: 6px 12px 6px 6px;
+        margin: 4px;
+        font-size: 0.85rem;
+        transition: all 0.2s ease;
+    }
+
+    .user-chip:hover {
+        background: var(--nexo-primary-light);
+        border-color: var(--nexo-primary);
+    }
+
+    .user-chip-avatar {
+        width: 28px;
+        height: 28px;
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--nexo-white);
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+
+    .user-chip-name {
+        color: var(--nexo-secondary);
+        font-weight: 500;
+    }
+
+    .user-chip-actions {
+        display: flex;
+        gap: 4px;
+        margin-left: 4px;
+    }
+
+    .user-chip-btn {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.75rem;
+    }
+
+    .user-chip-btn.edit {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    .user-chip-btn.edit:hover {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    .user-chip-btn.view {
+        background: rgba(0, 212, 170, 0.12);
+        color: var(--nexo-success);
+    }
+
+    .user-chip-btn.view:hover {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+    }
+
+    /* ========== ANIMATIONS ========== */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-fadeIn {
+        animation: fadeIn 0.3s ease forwards;
+    }
+
+    @keyframes countUp {
+        from { opacity: 0; transform: scale(0.5); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .kpi-value {
+        animation: countUp 0.5s ease forwards;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 992px) {
+        .permisos-group {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .opcion-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+        }
+    }
+</style>
+
 <div class="page-content">
     <div class="container-fluid">
-        <!-- Encabezado -->
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">
+        <!-- Page Header -->
+        <div class="permisos-header">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h4 class="mb-1 text-white">
                         <i class="ri-shield-user-line me-2"></i>
                         Gestión de Permisos por Rol
                     </h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
-                            <li class="breadcrumb-item">Configuración</li>
-                            <li class="breadcrumb-item active">Gestión de Permisos</li>
+                    <p class="mb-0 text-white opacity-75">
+                        Configura los permisos de acceso para cada rol del sistema
+                    </p>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb justify-content-md-end mb-0" style="--bs-breadcrumb-divider-color: rgba(255,255,255,0.5);">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}" class="text-white opacity-75">Inicio</a></li>
+                            <li class="breadcrumb-item text-white opacity-75">Configuración</li>
+                            <li class="breadcrumb-item text-white active">Permisos</li>
                         </ol>
-                    </div>
+                    </nav>
                 </div>
             </div>
         </div>
 
-        <!-- Tarjetas de estadísticas -->
+        <!-- KPI Cards -->
         <div class="row mb-4">
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate">
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="kpi-card card">
                     <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Total Módulos</p>
-                            </div>
-                            <div class="flex-shrink-0">
-                                <i class="ri-folder-line display-6 text-primary"></i>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-2">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ total_modulos }}</h4>
+                                <p class="kpi-label mb-1">Total Módulos</p>
+                                <h3 class="kpi-value mb-0">{{ total_modulos }}</h3>
+                            </div>
+                            <div class="kpi-icon primary">
+                                <i class="ri-folder-line"></i>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate">
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="kpi-card card">
                     <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Total Opciones</p>
-                            </div>
-                            <div class="flex-shrink-0">
-                                <i class="ri-menu-line display-6 text-success"></i>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-2">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ total_opciones }}</h4>
+                                <p class="kpi-label mb-1">Total Opciones</p>
+                                <h3 class="kpi-value mb-0">{{ total_opciones }}</h3>
+                            </div>
+                            <div class="kpi-icon success">
+                                <i class="ri-menu-line"></i>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate">
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="kpi-card card">
                     <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Total Permisos</p>
-                            </div>
-                            <div class="flex-shrink-0">
-                                <i class="ri-shield-check-line display-6 text-info"></i>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-2">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ total_permisos }}</h4>
+                                <p class="kpi-label mb-1">Total Permisos</p>
+                                <h3 class="kpi-value mb-0">{{ total_permisos }}</h3>
+                            </div>
+                            <div class="kpi-icon info">
+                                <i class="ri-shield-check-line"></i>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-xl-3 col-md-6">
-                <div class="card card-animate">
+            <div class="col-xl-3 col-md-6 mb-3">
+                <div class="kpi-card card">
                     <div class="card-body">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-grow-1">
-                                <p class="text-uppercase fw-medium text-muted mb-0">Roles Definidos</p>
-                            </div>
-                            <div class="flex-shrink-0">
-                                <i class="ri-user-settings-line display-6 text-warning"></i>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-end justify-content-between mt-2">
+                        <div class="d-flex align-items-center justify-content-between">
                             <div>
-                                <h4 class="fs-22 fw-semibold ff-secondary mb-0">{{ roles|length }}</h4>
+                                <p class="kpi-label mb-1">Roles Definidos</p>
+                                <h3 class="kpi-value mb-0">{{ roles|length }}</h3>
+                            </div>
+                            <div class="kpi-icon warning">
+                                <i class="ri-user-settings-line"></i>
                             </div>
                         </div>
                     </div>
@@ -106,31 +771,34 @@
             </div>
         </div>
 
-        <!-- Panel principal -->
+        <!-- Main Panel -->
         <div class="row">
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-light">
+                <div class="permisos-card card">
+                    <div class="permisos-card-header">
                         <div class="row align-items-center">
-                            <div class="col-md-4">
-                                <h5 class="card-title mb-md-0">
-                                    <i class="ri-settings-3-line me-1"></i>
+                            <div class="col-lg-4 mb-3 mb-lg-0">
+                                <h5>
+                                    <i class="ri-settings-3-line me-2" style="color: var(--nexo-primary);"></i>
                                     Configurar Permisos
                                 </h5>
                             </div>
-                            <div class="col-md-8">
-                                <div class="d-flex justify-content-md-end flex-wrap gap-2">
-                                    <select id="rolSelector" class="form-select" style="width: auto;">
+                            <div class="col-lg-8">
+                                <div class="d-flex justify-content-lg-end flex-wrap gap-2">
+                                    <select id="rolSelector" class="form-select role-selector">
                                         <option value="">-- Seleccionar Rol --</option>
                                         {% for rol_codigo, rol_nombre in roles %}
                                         <option value="{{ rol_codigo }}">{{ rol_nombre }}</option>
                                         {% endfor %}
                                     </select>
-                                    <button class="btn btn-success" id="btnGuardarTodo" disabled>
-                                        <i class="ri-save-line me-1"></i> Guardar Todos los Cambios
+                                    <button class="btn btn-nexo-success" id="btnGuardarTodo" disabled>
+                                        <i class="ri-save-line me-1"></i> Guardar Cambios
                                     </button>
-                                    <button class="btn btn-info" id="btnCopiarPermisos" disabled>
+                                    <button class="btn btn-nexo-outline" id="btnCopiarPermisos" disabled>
                                         <i class="ri-file-copy-line me-1"></i> Copiar de Otro Rol
+                                    </button>
+                                    <button class="btn btn-nexo-outline" id="btnVerUsuarios" disabled>
+                                        <i class="ri-team-line me-1"></i> Ver Usuarios
                                     </button>
                                 </div>
                             </div>
@@ -138,51 +806,80 @@
                     </div>
 
                     <div class="card-body">
-                        <!-- Mensaje inicial -->
-                        <div id="mensajeInicial" class="text-center text-muted py-5">
-                            <i class="ri-shield-user-line display-1 text-muted mb-3"></i>
-                            <p class="fs-15">Selecciona un rol para configurar sus permisos</p>
+                        <!-- Empty State -->
+                        <div id="mensajeInicial" class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="ri-shield-user-line"></i>
+                            </div>
+                            <h5>Selecciona un Rol</h5>
+                            <p>Elige un rol del menú desplegable para ver y configurar sus permisos</p>
                         </div>
 
-                        <!-- Contenedor de permisos -->
+                        <!-- Permissions Container -->
                         <div id="permisosContainer" style="display: none;">
-                            <!-- Configuración de límite de descuento -->
-                            <div class="alert alert-info border-0 mb-4">
+                            <!-- Discount Limit -->
+                            <div class="limite-descuento-card">
                                 <div class="row align-items-center">
-                                    <div class="col-md-6">
-                                        <h5 class="alert-heading mb-2">
+                                    <div class="col-md-6 mb-3 mb-md-0">
+                                        <h5 class="mb-2">
                                             <i class="ri-percent-line me-2"></i>
-                                            Límite de Descuento para este Rol
+                                            Límite de Descuento
                                         </h5>
                                         <p class="mb-0 text-muted small">
-                                            Define el porcentaje máximo de descuento que puede aplicar este rol en las ventas.
+                                            Porcentaje máximo de descuento que puede aplicar este rol en las ventas.
                                         </p>
                                     </div>
                                     <div class="col-md-6">
                                         <div class="row align-items-center">
-                                            <div class="col-md-8">
-                                                <label for="limiteDescuento" class="form-label mb-1 small">Porcentaje máximo (%)</label>
+                                            <div class="col-7">
                                                 <input type="number" 
-                                                       class="form-control form-control-lg" 
+                                                       class="form-control limite-descuento-input" 
                                                        id="limiteDescuento" 
                                                        min="0" 
                                                        max="100" 
                                                        step="0.01"
-                                                       placeholder="Ej: 15.00">
+                                                       placeholder="0.00">
                                             </div>
-                                            <div class="col-md-4 text-center">
-                                                <div class="mt-3">
-                                                    <span class="badge bg-primary fs-14 py-2 px-3" id="badgeLimite">0%</span>
-                                                </div>
+                                            <div class="col-5 text-center">
+                                                <span class="limite-badge" id="badgeLimite">0%</span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Permisos por módulo -->
+
+                            <!-- Users by Role Section -->
+                            <div class="users-by-role" id="usuariosRolSection" style="display: none;">
+                                <h6>
+                                    <i class="ri-team-line" style="color: var(--nexo-primary);"></i>
+                                    Usuarios con este Rol
+                                    <span class="badge bg-primary ms-2" id="countUsuariosRol">0</span>
+                                </h6>
+                                <div id="listaUsuariosRol">
+                                    <!-- Users will be loaded here -->
+                                </div>
+                            </div>
+
+                            <!-- Quick Actions -->
+                            <div class="quick-actions mt-4">
+                                <span class="text-muted small me-2">Acciones rápidas:</span>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_ver', true)">
+                                    <i class="ri-eye-line me-1"></i> Marcar todos Ver
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_crear', true)">
+                                    <i class="ri-add-line me-1"></i> Marcar todos Crear
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_editar', true)">
+                                    <i class="ri-edit-line me-1"></i> Marcar todos Editar
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="desmarcarTodos()">
+                                    <i class="ri-close-line me-1"></i> Desmarcar todos
+                                </button>
+                            </div>
+
+                            <!-- Modules & Permissions -->
                             <div id="modulosPermisosContainer">
-                                <!-- Aquí se cargarán los permisos dinámicamente -->
+                                <!-- Permissions will be loaded dynamically -->
                             </div>
                         </div>
                     </div>
@@ -192,9 +889,9 @@
     </div>
 </div>
 
-<!-- Modal para copiar permisos -->
+<!-- Modal: Copy Permissions -->
 <div class="modal fade" id="modalCopiarPermisos" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -204,24 +901,34 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Copiar permisos desde:</p>
-                <select id="rolOrigenCopiar" class="form-select mb-3">
-                    <option value="">-- Seleccionar Rol Origen --</option>
-                    {% for rol_codigo, rol_nombre in roles %}
-                    <option value="{{ rol_codigo }}">{{ rol_nombre }}</option>
-                    {% endfor %}
-                </select>
-                <p>Hacia: <strong id="rolDestinoCopiar"></strong></p>
-                <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" id="sobrescribirPermisos">
-                    <label class="form-check-label" for="sobrescribirPermisos">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Copiar permisos desde:</label>
+                    <select id="rolOrigenCopiar" class="form-select role-selector w-100">
+                        <option value="">-- Seleccionar Rol Origen --</option>
+                        {% for rol_codigo, rol_nombre in roles %}
+                        <option value="{{ rol_codigo }}">{{ rol_nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="alert" style="background: var(--nexo-primary-light); border: 1px solid var(--nexo-primary); border-radius: var(--nexo-radius-md);">
+                    <div class="d-flex align-items-center">
+                        <i class="ri-arrow-right-circle-line me-2" style="color: var(--nexo-primary); font-size: 1.25rem;"></i>
+                        <div>
+                            <small class="text-muted">Hacia:</small>
+                            <strong class="d-block" id="rolDestinoCopiar" style="color: var(--nexo-primary);">-</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-check form-switch mt-3">
+                    <input class="form-check-input" type="checkbox" id="sobrescribirPermisos" style="width: 40px; height: 20px;">
+                    <label class="form-check-label ms-2" for="sobrescribirPermisos">
                         Sobrescribir permisos existentes
                     </label>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnConfirmarCopiar">
+                <button type="button" class="btn btn-nexo-primary" id="btnConfirmarCopiar">
                     <i class="ri-checkbox-circle-line me-1"></i> Copiar Permisos
                 </button>
             </div>
@@ -229,71 +936,68 @@
     </div>
 </div>
 
-<style>
-.permiso-modulo {
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-    background: #f8f9fa;
-}
-
-.permiso-modulo-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #dee2e6;
-}
-
-.opcion-row {
-    padding: 8px 12px;
-    border-radius: 6px;
-    background: white;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: all 0.2s;
-}
-
-.opcion-row:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.permiso-checkbox {
-    margin: 0 5px;
-}
-
-.sub-opcion-row {
-    margin-left: 30px;
-    background: #f1f3f5;
-}
-
-.permiso-label {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: #6c757d;
-}
-</style>
+<!-- Modal: Edit User Role -->
+<div class="modal fade" id="modalEditarUsuarioRol" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-user-settings-line me-2"></i>
+                    Cambiar Rol de Usuario
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-4">
+                    <div style="width: 64px; height: 64px; background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: white; font-size: 1.5rem; font-weight: 700;">
+                        <span id="modalUserInitials">--</span>
+                    </div>
+                    <h5 class="mt-3 mb-1" id="modalUserName">Nombre Usuario</h5>
+                    <small class="text-muted" id="modalUserEmail">email@example.com</small>
+                </div>
+                <input type="hidden" id="modalUserId">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Nuevo Rol:</label>
+                    <select id="nuevoRolUsuario" class="form-select role-selector w-100">
+                        {% for rol_codigo, rol_nombre in roles %}
+                        <option value="{{ rol_codigo }}">{{ rol_nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="alert alert-warning" style="border-radius: var(--nexo-radius-md);">
+                    <i class="ri-alert-line me-2"></i>
+                    Al cambiar el rol, el usuario obtendrá los permisos asociados al nuevo rol.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-nexo-primary" id="btnConfirmarCambioRol">
+                    <i class="ri-check-line me-1"></i> Guardar Cambio
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 let rolActual = null;
 let permisosModificados = {};
+let usuariosRolActual = [];
 
-// Cargar permisos cuando se selecciona un rol
+// Load permissions when role is selected
 document.getElementById('rolSelector').addEventListener('change', function() {
     const rol = this.value;
     if (rol) {
         cargarPermisosRol(rol);
         document.getElementById('btnGuardarTodo').disabled = false;
         document.getElementById('btnCopiarPermisos').disabled = false;
+        document.getElementById('btnVerUsuarios').disabled = false;
     } else {
         document.getElementById('mensajeInicial').style.display = 'block';
         document.getElementById('permisosContainer').style.display = 'none';
         document.getElementById('btnGuardarTodo').disabled = true;
         document.getElementById('btnCopiarPermisos').disabled = true;
+        document.getElementById('btnVerUsuarios').disabled = true;
     }
 });
 
@@ -301,11 +1005,18 @@ function cargarPermisosRol(rol) {
     rolActual = rol;
     permisosModificados = {};
     
+    // Show loading
+    Swal.fire({
+        title: 'Cargando permisos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
     fetch(`/app/permisos/obtener-permisos-rol/?rol=${rol}`)
         .then(response => response.json())
         .then(data => {
+            Swal.close();
             if (data.success) {
-                // Establecer límite de descuento
                 const limiteDescuento = data.limite_descuento || 0;
                 document.getElementById('limiteDescuento').value = limiteDescuento;
                 document.getElementById('badgeLimite').textContent = limiteDescuento + '%';
@@ -313,97 +1024,249 @@ function cargarPermisosRol(rol) {
                 renderizarPermisos(data.modulos);
                 document.getElementById('mensajeInicial').style.display = 'none';
                 document.getElementById('permisosContainer').style.display = 'block';
+                
+                // Load users with this role
+                cargarUsuariosRol(rol);
             }
         })
         .catch(error => {
+            Swal.close();
             console.error('Error:', error);
             Swal.fire('Error', 'Error al cargar permisos', 'error');
         });
 }
 
+function cargarUsuariosRol(rol) {
+    // API call to get users with this role
+    fetch(`/users/api/usuarios-por-rol/?rol=${rol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                usuariosRolActual = data.usuarios;
+                renderizarUsuariosRol(data.usuarios);
+            }
+        })
+        .catch(error => {
+            console.error('Error al cargar usuarios:', error);
+        });
+}
+
+function renderizarUsuariosRol(usuarios) {
+    const container = document.getElementById('listaUsuariosRol');
+    const section = document.getElementById('usuariosRolSection');
+    const count = document.getElementById('countUsuariosRol');
+    
+    count.textContent = usuarios.length;
+    
+    if (usuarios.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    
+    section.style.display = 'block';
+    
+    let html = '';
+    usuarios.forEach(user => {
+        const initials = getInitials(user.nombre, user.apellido);
+        html += `
+            <div class="user-chip animate-fadeIn">
+                <div class="user-chip-avatar">${initials}</div>
+                <span class="user-chip-name">${user.nombre} ${user.apellido}</span>
+                <div class="user-chip-actions">
+                    <button type="button" class="user-chip-btn edit" onclick="abrirModalCambiarRol(${user.id}, '${user.nombre}', '${user.apellido}', '${user.email}', '${user.rol}')" title="Cambiar rol">
+                        <i class="ri-user-settings-line"></i>
+                    </button>
+                    <a href="/users/gestion/" class="user-chip-btn view" title="Ver en gestión">
+                        <i class="ri-external-link-line"></i>
+                    </a>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function getInitials(nombre, apellido) {
+    return ((nombre ? nombre[0] : '') + (apellido ? apellido[0] : '')).toUpperCase() || '??';
+}
+
+function abrirModalCambiarRol(id, nombre, apellido, email, rolActual) {
+    document.getElementById('modalUserId').value = id;
+    document.getElementById('modalUserName').textContent = nombre + ' ' + apellido;
+    document.getElementById('modalUserEmail').textContent = email;
+    document.getElementById('modalUserInitials').textContent = getInitials(nombre, apellido);
+    document.getElementById('nuevoRolUsuario').value = rolActual;
+    
+    new bootstrap.Modal(document.getElementById('modalEditarUsuarioRol')).show();
+}
+
+document.getElementById('btnConfirmarCambioRol').addEventListener('click', function() {
+    const userId = document.getElementById('modalUserId').value;
+    const nuevoRol = document.getElementById('nuevoRolUsuario').value;
+    
+    Swal.fire({
+        title: 'Cambiando rol...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    fetch('/users/api/cambiar-rol-usuario/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            user_id: userId,
+            nuevo_rol: nuevoRol
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Rol actualizado',
+                text: data.mensaje,
+                timer: 2000,
+                showConfirmButton: false
+            });
+            bootstrap.Modal.getInstance(document.getElementById('modalEditarUsuarioRol')).hide();
+            // Reload users
+            cargarUsuariosRol(rolActual);
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al cambiar rol', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al cambiar rol', 'error');
+    });
+});
+
 function renderizarPermisos(modulos) {
     const container = document.getElementById('modulosPermisosContainer');
     container.innerHTML = '';
     
-    modulos.forEach(modulo => {
+    modulos.forEach((modulo, index) => {
         const moduloDiv = document.createElement('div');
-        moduloDiv.className = 'permiso-modulo';
+        moduloDiv.className = 'modulo-card animate-fadeIn';
+        moduloDiv.style.animationDelay = `${index * 0.05}s`;
         
-        let html = `
-            <div class="permiso-modulo-header">
-                <h5 class="mb-0">
-                    <i class="${modulo.icono || 'ri-folder-line'} me-2"></i>
-                    ${modulo.nombre}
-                </h5>
-            </div>
-        `;
-        
+        let opcionesHtml = '';
         modulo.opciones.forEach(opcion => {
-            html += renderizarOpcion(opcion, false);
+            opcionesHtml += renderizarOpcion(opcion, false);
             
             if (opcion.subopciones && opcion.subopciones.length > 0) {
                 opcion.subopciones.forEach(subopcion => {
-                    html += renderizarOpcion(subopcion, true);
+                    opcionesHtml += renderizarOpcion(subopcion, true);
                 });
             }
         });
         
-        moduloDiv.innerHTML = html;
+        moduloDiv.innerHTML = `
+            <div class="modulo-header" data-bs-toggle="collapse" data-bs-target="#modulo-${modulo.id}">
+                <div class="modulo-title">
+                    <div class="modulo-icon">
+                        <i class="${modulo.icono || 'ri-folder-line'}"></i>
+                    </div>
+                    <h6 class="modulo-name">${modulo.nombre}</h6>
+                </div>
+                <div class="modulo-toggle">
+                    <i class="ri-arrow-down-s-line"></i>
+                </div>
+            </div>
+            <div class="collapse show" id="modulo-${modulo.id}">
+                <div class="modulo-body">
+                    ${opcionesHtml}
+                </div>
+            </div>
+        `;
+        
         container.appendChild(moduloDiv);
     });
     
-    // Agregar event listeners para checkboxes
+    // Add event listeners
     document.querySelectorAll('.permiso-check').forEach(checkbox => {
-        checkbox.addEventListener('change', marcarCambio);
+        checkbox.addEventListener('change', function(e) {
+            marcarCambio(e);
+            // Toggle active class
+            const parent = this.closest('.permiso-item');
+            if (this.checked) {
+                parent.classList.add('active');
+            } else {
+                parent.classList.remove('active');
+            }
+        });
+    });
+    
+    // Initialize active classes
+    document.querySelectorAll('.permiso-check:checked').forEach(checkbox => {
+        checkbox.closest('.permiso-item').classList.add('active');
     });
 }
 
 function renderizarOpcion(opcion, esSubopcion) {
     const permisos = opcion.permisos;
-    const rowClass = esSubopcion ? 'opcion-row sub-opcion-row' : 'opcion-row';
+    const rowClass = esSubopcion ? 'opcion-row sub-opcion' : 'opcion-row';
     
     return `
         <div class="${rowClass}">
-            <div class="flex-grow-1">
-                <i class="${opcion.icono || 'ri-file-line'} me-2 text-muted"></i>
-                <strong>${opcion.nombre}</strong>
+            <div class="opcion-info">
+                <div class="opcion-icon">
+                    <i class="${opcion.icono || 'ri-file-line'}"></i>
+                </div>
+                <span class="opcion-nombre">${opcion.nombre}</span>
             </div>
-            <div class="d-flex align-items-center gap-3">
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input permiso-check" type="checkbox" 
-                           data-opcion-id="${opcion.id}" data-permiso="puede_ver"
+            <div class="permisos-group">
+                <div class="permiso-item ${permisos.puede_ver ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check" 
+                           id="ver-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_ver"
                            ${permisos.puede_ver ? 'checked' : ''}>
-                    <label class="permiso-label">Ver</label>
+                    <label for="ver-${opcion.id}">Ver</label>
                 </div>
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input permiso-check" type="checkbox" 
-                           data-opcion-id="${opcion.id}" data-permiso="puede_crear"
+                <div class="permiso-item ${permisos.puede_crear ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check" 
+                           id="crear-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_crear"
                            ${permisos.puede_crear ? 'checked' : ''}>
-                    <label class="permiso-label">Crear</label>
+                    <label for="crear-${opcion.id}">Crear</label>
                 </div>
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input permiso-check" type="checkbox" 
-                           data-opcion-id="${opcion.id}" data-permiso="puede_editar"
+                <div class="permiso-item ${permisos.puede_editar ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check" 
+                           id="editar-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_editar"
                            ${permisos.puede_editar ? 'checked' : ''}>
-                    <label class="permiso-label">Editar</label>
+                    <label for="editar-${opcion.id}">Editar</label>
                 </div>
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input permiso-check" type="checkbox" 
-                           data-opcion-id="${opcion.id}" data-permiso="puede_eliminar"
+                <div class="permiso-item ${permisos.puede_eliminar ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check" 
+                           id="eliminar-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_eliminar"
                            ${permisos.puede_eliminar ? 'checked' : ''}>
-                    <label class="permiso-label">Eliminar</label>
+                    <label for="eliminar-${opcion.id}">Eliminar</label>
                 </div>
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input permiso-check" type="checkbox" 
-                           data-opcion-id="${opcion.id}" data-permiso="puede_exportar"
+                <div class="permiso-item ${permisos.puede_exportar ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check" 
+                           id="exportar-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_exportar"
                            ${permisos.puede_exportar ? 'checked' : ''}>
-                    <label class="permiso-label">Exportar</label>
+                    <label for="exportar-${opcion.id}">Exportar</label>
                 </div>
-                <div class="form-check form-check-inline">
-                    <input class="form-check-input permiso-check" type="checkbox" 
-                           data-opcion-id="${opcion.id}" data-permiso="puede_aprobar"
+                <div class="permiso-item ${permisos.puede_aprobar ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check" 
+                           id="aprobar-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_aprobar"
                            ${permisos.puede_aprobar ? 'checked' : ''}>
-                    <label class="permiso-label">Aprobar</label>
+                    <label for="aprobar-${opcion.id}">Aprobar</label>
                 </div>
             </div>
         </div>
@@ -421,70 +1284,99 @@ function marcarCambio(event) {
     permisosModificados[opcionId][permiso] = valor;
 }
 
-// Actualizar badge de límite de descuento
+// Quick action: mark all
+function marcarTodos(tipo, valor) {
+    document.querySelectorAll(`[data-permiso="${tipo}"]`).forEach(checkbox => {
+        checkbox.checked = valor;
+        const parent = checkbox.closest('.permiso-item');
+        if (valor) {
+            parent.classList.add('active');
+        } else {
+            parent.classList.remove('active');
+        }
+        
+        // Track change
+        const opcionId = checkbox.dataset.opcionId;
+        if (!permisosModificados[opcionId]) {
+            permisosModificados[opcionId] = {};
+        }
+        permisosModificados[opcionId][tipo] = valor;
+    });
+    
+    toastr.info(`Se ${valor ? 'marcaron' : 'desmarcaron'} todos los permisos de "${tipo.replace('puede_', '')}"`, '', {timeOut: 2000});
+}
+
+function desmarcarTodos() {
+    Swal.fire({
+        title: '¿Desmarcar todos los permisos?',
+        text: 'Esta acción quitará todos los permisos para este rol',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#FF4D4D',
+        confirmButtonText: 'Sí, desmarcar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.querySelectorAll('.permiso-check').forEach(checkbox => {
+                checkbox.checked = false;
+                checkbox.closest('.permiso-item').classList.remove('active');
+                
+                const opcionId = checkbox.dataset.opcionId;
+                const permiso = checkbox.dataset.permiso;
+                if (!permisosModificados[opcionId]) {
+                    permisosModificados[opcionId] = {};
+                }
+                permisosModificados[opcionId][permiso] = false;
+            });
+            toastr.info('Se desmarcaron todos los permisos', '', {timeOut: 2000});
+        }
+    });
+}
+
+// Update discount badge
 document.getElementById('limiteDescuento').addEventListener('input', function() {
     const valor = parseFloat(this.value) || 0;
     document.getElementById('badgeLimite').textContent = valor + '%';
 });
 
-// Guardar todos los cambios
+// Save all changes
 document.getElementById('btnGuardarTodo').addEventListener('click', function() {
     const limiteDescuento = parseFloat(document.getElementById('limiteDescuento').value) || 0;
     
-    // Validar límite de descuento
     if (limiteDescuento < 0 || limiteDescuento > 100) {
         Swal.fire('Error', 'El límite de descuento debe estar entre 0 y 100', 'error');
         return;
     }
     
-    // Verificar si hay cambios (permisos o límite de descuento modificado)
-    if (Object.keys(permisosModificados).length === 0) {
-        // Si no hay cambios de permisos, al menos guardar el límite de descuento
-        // Necesitamos al menos un permiso para actualizar
-        Swal.fire({
-            title: 'Guardar configuración',
-            text: 'Se guardará el límite de descuento para este rol',
-            icon: 'info',
-            showCancelButton: true,
-            confirmButtonText: 'Guardar',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                guardarConfiguracion(limiteDescuento);
-            }
-        });
-        return;
-    }
+    Swal.fire({
+        title: 'Guardando permisos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
     
     guardarConfiguracion(limiteDescuento);
 });
 
 function guardarConfiguracion(limiteDescuento) {
-    const permisosArray = Object.keys(permisosModificados).map(opcionId => ({
-        opcion_id: opcionId,
-        permisos: permisosModificados[opcionId]
-    }));
+    // Collect all permissions
+    const todosPermisos = [];
+    const opcionesVistas = new Set();
     
-    // Si no hay permisos modificados, obtener todos los permisos actuales
-    if (permisosArray.length === 0) {
-        // Recopilar todos los checkboxes actuales
-        const todosPermisos = [];
-        document.querySelectorAll('.permiso-check').forEach(checkbox => {
-            const opcionId = checkbox.dataset.opcionId;
-            if (!todosPermisos.find(p => p.opcion_id === opcionId)) {
-                const checks = document.querySelectorAll(`[data-opcion-id="${opcionId}"]`);
-                const permisos = {};
-                checks.forEach(check => {
-                    permisos[check.dataset.permiso] = check.checked;
-                });
-                todosPermisos.push({
-                    opcion_id: opcionId,
-                    permisos: permisos
-                });
-            }
-        });
-        permisosArray.push(...todosPermisos);
-    }
+    document.querySelectorAll('.permiso-check').forEach(checkbox => {
+        const opcionId = checkbox.dataset.opcionId;
+        if (!opcionesVistas.has(opcionId)) {
+            const checks = document.querySelectorAll(`[data-opcion-id="${opcionId}"]`);
+            const permisos = {};
+            checks.forEach(check => {
+                permisos[check.dataset.permiso] = check.checked;
+            });
+            todosPermisos.push({
+                opcion_id: opcionId,
+                permisos: permisos
+            });
+            opcionesVistas.add(opcionId);
+        }
+    });
     
     fetch('/app/permisos/guardar-permisos-masivos/', {
         method: 'POST',
@@ -494,14 +1386,20 @@ function guardarConfiguracion(limiteDescuento) {
         },
         body: JSON.stringify({
             rol: rolActual,
-            permisos: permisosArray,
+            permisos: todosPermisos,
             limite_descuento: limiteDescuento
         })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            Swal.fire('Éxito', data.mensaje, 'success');
+            Swal.fire({
+                icon: 'success',
+                title: '¡Guardado!',
+                text: data.mensaje,
+                timer: 2000,
+                showConfirmButton: false
+            });
             permisosModificados = {};
         } else {
             Swal.fire('Error', data.mensaje || 'Error al guardar', 'error');
@@ -513,7 +1411,18 @@ function guardarConfiguracion(limiteDescuento) {
     });
 }
 
-// Copiar permisos
+// View users button
+document.getElementById('btnVerUsuarios').addEventListener('click', function() {
+    const section = document.getElementById('usuariosRolSection');
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+        section.style.display = 'none';
+    }
+});
+
+// Copy permissions modal
 document.getElementById('btnCopiarPermisos').addEventListener('click', function() {
     const rolNombre = document.getElementById('rolSelector').selectedOptions[0].text;
     document.getElementById('rolDestinoCopiar').textContent = rolNombre;
@@ -528,6 +1437,17 @@ document.getElementById('btnConfirmarCopiar').addEventListener('click', function
         Swal.fire('Error', 'Selecciona un rol origen', 'error');
         return;
     }
+    
+    if (rolOrigen === rolActual) {
+        Swal.fire('Error', 'No puedes copiar un rol sobre sí mismo', 'error');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Copiando permisos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
     
     fetch('/app/permisos/copiar-permisos-rol/', {
         method: 'POST',
@@ -544,9 +1464,15 @@ document.getElementById('btnConfirmarCopiar').addEventListener('click', function
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            Swal.fire('Éxito', data.mensaje, 'success');
+            Swal.fire({
+                icon: 'success',
+                title: '¡Copiado!',
+                text: data.mensaje,
+                timer: 2000,
+                showConfirmButton: false
+            });
             bootstrap.Modal.getInstance(document.getElementById('modalCopiarPermisos')).hide();
-            cargarPermisosRol(rolActual); // Recargar permisos
+            cargarPermisosRol(rolActual);
         } else {
             Swal.fire('Error', data.mensaje || 'Error al copiar', 'error');
         }
@@ -574,4 +1500,3 @@ function getCookie(name) {
 </script>
 
 {% include 'layout/footer.html' %}
-

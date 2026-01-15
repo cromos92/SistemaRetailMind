@@ -1,0 +1,1 @@
+# Endpoints de sincronización bidireccional

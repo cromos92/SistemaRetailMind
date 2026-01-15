@@ -1,0 +1,890 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+/* ========== ESTILOS BASE (reutilizados de gestion_inventarios) ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+}
+
+.nexo-page {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+    min-height: calc(100vh - 60px);
+    padding: 1.5rem;
+}
+
+/* Header del inventario */
+.inventory-header {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--nexo-gray-300);
+    box-shadow: var(--nexo-shadow-sm);
+}
+
+.inventory-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.inventory-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin: 0;
+}
+
+.inventory-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.meta-item .label {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+}
+
+.meta-item .value {
+    font-weight: 600;
+    color: var(--nexo-secondary);
+}
+
+/* Progress bar grande */
+.progress-large {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.progress-large .progress-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.progress-large .progress-bar-container {
+    height: 12px;
+    background: var(--nexo-gray-300);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.progress-large .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--nexo-primary), var(--nexo-accent));
+    border-radius: 6px;
+    transition: width 0.5s ease;
+}
+
+/* Badges */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.nexo-badge-borrador { background: rgba(138, 138, 154, 0.15); color: var(--nexo-gray-700); }
+.nexo-badge-en_conteo { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.nexo-badge-conteo_finalizado { background: rgba(0, 212, 170, 0.15); color: #00a883; }
+.nexo-badge-en_revision { background: rgba(255, 176, 32, 0.15); color: #cc8c00; }
+.nexo-badge-pendiente_aprobacion { background: rgba(255, 176, 32, 0.3); color: #996600; }
+.nexo-badge-aprobado { background: rgba(0, 212, 170, 0.25); color: #008866; }
+.nexo-badge-completado { background: rgba(0, 212, 170, 0.4); color: #006644; }
+.nexo-badge-cancelado { background: rgba(255, 77, 77, 0.15); color: #cc3d3d; }
+
+/* Cards */
+.nexo-card {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    overflow: hidden;
+}
+
+.nexo-card-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
+    color: var(--nexo-white);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nexo-card-header h5 {
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nexo-card-header h5 i { color: var(--nexo-accent); }
+.nexo-card-body { padding: 1.5rem; }
+
+/* Filtros */
+.nexo-filters {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Tabla de conteo */
+.conteo-table {
+    font-size: 0.875rem;
+}
+
+.conteo-table thead th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-700);
+    background: var(--nexo-gray-100);
+    padding: 10px 8px;
+    border-bottom: 2px solid var(--nexo-gray-300);
+    white-space: nowrap;
+}
+
+.conteo-table tbody tr {
+    transition: background 0.15s;
+}
+
+.conteo-table tbody tr:hover {
+    background: var(--nexo-primary-light);
+}
+
+.conteo-table tbody td {
+    padding: 8px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+
+/* Input de conteo */
+.input-conteo {
+    width: 80px;
+    text-align: center;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    padding: 6px 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.input-conteo:focus {
+    border-color: var(--nexo-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--nexo-primary-light);
+}
+
+.input-conteo.contado {
+    background: rgba(0, 212, 170, 0.1);
+    border-color: var(--nexo-success);
+}
+
+.input-conteo.diferencia {
+    background: rgba(255, 176, 32, 0.1);
+    border-color: var(--nexo-warning);
+}
+
+/* Diferencias */
+.diferencia-positiva { color: var(--nexo-success); font-weight: 700; }
+.diferencia-negativa { color: var(--nexo-error); font-weight: 700; }
+
+/* Botones */
+.nexo-btn {
+    padding: 10px 20px;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    font-size: 0.9rem;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.nexo-btn-primary { background: var(--nexo-primary); color: white; }
+.nexo-btn-primary:hover { background: var(--nexo-primary-dark); color: white; }
+.nexo-btn-success { background: var(--nexo-success); color: white; }
+.nexo-btn-success:hover { background: #00b894; color: white; }
+.nexo-btn-warning { background: var(--nexo-warning); color: white; }
+.nexo-btn-outline { background: transparent; border: 1px solid var(--nexo-gray-300); color: var(--nexo-gray-700); }
+.nexo-btn-outline:hover { background: var(--nexo-gray-100); }
+.nexo-btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+
+/* Acciones flotantes */
+.floating-actions {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.floating-actions .nexo-btn {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Estado de fila */
+.row-contado {
+    background: rgba(0, 212, 170, 0.05);
+}
+
+.row-reconteo {
+    background: rgba(255, 176, 32, 0.1);
+}
+
+/* Paginación */
+.nexo-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    border-top: 1px solid var(--nexo-gray-300);
+    margin-top: 1rem;
+}
+
+.nexo-pagination-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--nexo-gray-300);
+    background: white;
+    border-radius: var(--nexo-radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nexo-pagination-btn:hover:not(.disabled) {
+    background: var(--nexo-primary);
+    color: white;
+    border-color: var(--nexo-primary);
+}
+
+.nexo-pagination-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Quick stats */
+.quick-stats {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.stat-item {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.75rem 1rem;
+    text-align: center;
+    flex: 1;
+}
+
+.stat-item .stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+}
+
+.stat-item .stat-label {
+    font-size: 0.7rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .inventory-meta { flex-direction: column; gap: 1rem; }
+    .quick-stats { flex-wrap: wrap; }
+    .stat-item { min-width: calc(50% - 0.5rem); }
+}
+</style>
+
+<div class="page-content nexo-page">
+    <div class="container-fluid">
+        
+        <!-- Header del inventario -->
+        <div class="inventory-header">
+            <div class="inventory-title">
+                <a href="/app/gestion-inventarios/" class="nexo-btn nexo-btn-outline nexo-btn-sm">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h1 id="nombreInventario">{{ inventario.nombre }}</h1>
+                <span class="nexo-badge" id="badgeEstado">{{ inventario.get_estado_display }}</span>
+            </div>
+            <div class="inventory-meta">
+                <div class="meta-item">
+                    <span class="label">Número:</span>
+                    <span class="value" id="numeroInventario">{{ inventario.numero_inventario }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">Tipo:</span>
+                    <span class="value">{{ inventario.get_tipo_inventario_display }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">Fecha Corte:</span>
+                    <span class="value">{{ inventario.fecha_corte|date:"d/m/Y H:i" }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="label">Sucursal:</span>
+                    <span class="value">{{ inventario.sucursal.alias }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Progress bar -->
+        <div class="progress-large">
+            <div class="progress-info">
+                <span>Progreso del conteo</span>
+                <span id="progresoTexto">0%</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-fill" id="progresoBar" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <!-- Quick stats -->
+        <div class="quick-stats">
+            <div class="stat-item">
+                <div class="stat-value" id="statTotal">0</div>
+                <div class="stat-label">Total Productos</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statContados">0</div>
+                <div class="stat-label">Contados</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statPendientes">0</div>
+                <div class="stat-label">Pendientes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value diferencia-positiva" id="statSobrantes">0</div>
+                <div class="stat-label">Sobrantes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value diferencia-negativa" id="statFaltantes">0</div>
+                <div class="stat-label">Faltantes</div>
+            </div>
+        </div>
+        
+        <!-- Card de conteo -->
+        <div class="nexo-card">
+            <div class="nexo-card-header">
+                <h5><i class="bi bi-list-check"></i> Conteo de Productos</h5>
+                <div class="d-flex gap-2">
+                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="exportarInventario()">
+                        <i class="bi bi-download"></i> Exportar
+                    </button>
+                </div>
+            </div>
+            <div class="nexo-card-body">
+                <!-- Filtros rápidos -->
+                <div class="nexo-filters">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control form-control-sm" id="filtroSearch" placeholder="Buscar SKU o producto...">
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="filtroEstadoConteo">
+                                <option value="">Todos</option>
+                                <option value="pendiente">Pendientes</option>
+                                <option value="contado">Contados</option>
+                                <option value="reconteo">Requiere Reconteo</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="filtroMarca">
+                                <option value="">Todas las marcas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select form-select-sm" id="filtroCategoria">
+                                <option value="">Todas las categorías</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="filtroDiferencias">
+                                <label class="form-check-label small" for="filtroDiferencias">Solo diferencias</label>
+                            </div>
+                        </div>
+                        <div class="col-md-1">
+                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline w-100" onclick="limpiarFiltros()">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabla de conteo -->
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table conteo-table" id="tablaConteo">
+                        <thead>
+                            <tr>
+                                <th style="width: 100px;">SKU</th>
+                                <th>Producto</th>
+                                <th>Talla</th>
+                                <th>Marca</th>
+                                <th style="width: 80px;">Stock Sist.</th>
+                                <th style="width: 100px;">Conteo</th>
+                                <th style="width: 80px;">Diferencia</th>
+                                <th style="width: 80px;">Estado</th>
+                                <th style="width: 120px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyConteo">
+                            <tr>
+                                <td colspan="9" class="text-center py-4">
+                                    <i class="bi bi-hourglass-split fs-3 text-muted"></i>
+                                    <p class="text-muted mb-0">Cargando productos...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Paginación -->
+                <div class="nexo-pagination">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="text-muted small">Mostrando <strong id="paginacionInfo">0</strong> productos</span>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button class="nexo-pagination-btn" id="btnPrevPage"><i class="bi bi-chevron-left"></i></button>
+                        <span id="pageInfo" class="px-3">Página 1 de 1</span>
+                        <button class="nexo-pagination-btn" id="btnNextPage"><i class="bi bi-chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Acciones flotantes -->
+<div class="floating-actions" id="floatingActions">
+    <button class="nexo-btn nexo-btn-warning" onclick="guardarConteos()" id="btnGuardar" style="display: none;">
+        <i class="bi bi-save"></i> Guardar Conteos
+    </button>
+    <button class="nexo-btn nexo-btn-success" onclick="finalizarConteo()" id="btnFinalizar">
+        <i class="bi bi-check-circle"></i> Finalizar Conteo
+    </button>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+// === VARIABLES GLOBALES ===
+const inventarioId = {{ inventario.id }};
+let currentPage = 1;
+let perPage = 50;
+let conteosPendientes = {}; // {detalle_id: stock_fisico}
+
+// === CARGA DE DATOS ===
+
+function cargarProductos(page = 1) {
+    const params = new URLSearchParams({
+        page: page,
+        per_page: perPage,
+        search: $('#filtroSearch').val() || '',
+        estado_conteo: $('#filtroEstadoConteo').val() || '',
+        marca: $('#filtroMarca').val() || '',
+        categoria: $('#filtroCategoria').val() || '',
+        solo_diferencias: $('#filtroDiferencias').is(':checked')
+    });
+    
+    $.get(`/app/gestion-inventarios/api/productos-conteo/${inventarioId}/?${params}`, function(response) {
+        if (!response.success) {
+            Swal.fire('Error', response.error, 'error');
+            return;
+        }
+        
+        const tbody = $('#tbodyConteo');
+        tbody.empty();
+        
+        if (response.productos.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="9" class="text-center py-4">
+                        <i class="bi bi-inbox fs-3 text-muted"></i>
+                        <p class="text-muted mb-0">No hay productos para mostrar</p>
+                    </td>
+                </tr>
+            `);
+        } else {
+            response.productos.forEach(p => {
+                const rowClass = p.reconteo_requerido ? 'row-reconteo' : (p.contado ? 'row-contado' : '');
+                const inputClass = p.contado ? (p.diferencia !== 0 ? 'contado diferencia' : 'contado') : '';
+                const diferenciaHtml = p.contado ? 
+                    `<span class="${p.diferencia > 0 ? 'diferencia-positiva' : p.diferencia < 0 ? 'diferencia-negativa' : ''}">${p.diferencia > 0 ? '+' : ''}${p.diferencia}</span>` : 
+                    '-';
+                
+                let estadoHtml = '';
+                if (p.reconteo_requerido) {
+                    estadoHtml = '<span class="badge bg-warning text-dark">Reconteo</span>';
+                } else if (p.contado) {
+                    estadoHtml = '<span class="badge bg-success">Contado</span>';
+                } else {
+                    estadoHtml = '<span class="badge bg-secondary">Pendiente</span>';
+                }
+                
+                tbody.append(`
+                    <tr class="${rowClass}" data-id="${p.id}">
+                        <td><code>${p.sku}</code></td>
+                        <td><strong>${p.producto_nombre}</strong></td>
+                        <td>${p.talla_nombre || '-'}</td>
+                        <td><small>${p.marca_nombre || '-'}</small></td>
+                        <td class="text-center fw-bold">${p.stock_sistema}</td>
+                        <td>
+                            <input type="number" 
+                                   class="input-conteo ${inputClass}" 
+                                   data-id="${p.id}" 
+                                   data-stock-sistema="${p.stock_sistema}"
+                                   value="${p.contado ? p.stock_fisico : ''}"
+                                   placeholder="0"
+                                   min="0"
+                                   onchange="registrarConteo(this)">
+                        </td>
+                        <td class="text-center">${diferenciaHtml}</td>
+                        <td class="text-center">${estadoHtml}</td>
+                        <td>
+                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            ${p.reconteo_requerido ? `
+                                <button class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="realizarReconteo(${p.id})" title="Reconteo">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `);
+            });
+        }
+        
+        // Actualizar paginación
+        const pagination = response.pagination;
+        currentPage = pagination.current_page;
+        $('#pageInfo').text(`Página ${pagination.current_page} de ${pagination.total_pages}`);
+        $('#paginacionInfo').text(response.productos.length);
+        $('#btnPrevPage').toggleClass('disabled', !pagination.has_previous);
+        $('#btnNextPage').toggleClass('disabled', !pagination.has_next);
+        
+        // Actualizar estadísticas (simplificado)
+        actualizarEstadisticas();
+    });
+}
+
+function actualizarEstadisticas() {
+    $.get(`/app/gestion-inventarios/api/analisis/${inventarioId}/`, function(response) {
+        if (response.success) {
+            const r = response.analisis.resumen;
+            const f = response.analisis.resumen_financiero;
+            
+            $('#statTotal').text(r.total_esperados);
+            $('#statContados').text(r.total_contados);
+            $('#statPendientes').text(r.total_esperados - r.total_contados);
+            $('#statSobrantes').text(r.sobrantes);
+            $('#statFaltantes').text(r.faltantes);
+            
+            // Actualizar progreso
+            $('#progresoTexto').text(`${r.progreso}%`);
+            $('#progresoBar').css('width', `${r.progreso}%`);
+        }
+    });
+}
+
+// === CONTEO ===
+
+function registrarConteo(input) {
+    const detalleId = $(input).data('id');
+    const stockFisico = parseInt($(input).val()) || 0;
+    const stockSistema = $(input).data('stock-sistema');
+    
+    // Agregar a pendientes
+    conteosPendientes[detalleId] = {
+        detalle_id: detalleId,
+        stock_fisico: stockFisico
+    };
+    
+    // Actualizar UI
+    $(input).addClass('contado');
+    if (stockFisico !== stockSistema) {
+        $(input).addClass('diferencia');
+    } else {
+        $(input).removeClass('diferencia');
+    }
+    
+    // Calcular diferencia visual
+    const diferencia = stockFisico - stockSistema;
+    const diferenciaCell = $(input).closest('tr').find('td:eq(6)');
+    if (diferencia !== 0) {
+        diferenciaCell.html(`<span class="${diferencia > 0 ? 'diferencia-positiva' : 'diferencia-negativa'}">${diferencia > 0 ? '+' : ''}${diferencia}</span>`);
+    } else {
+        diferenciaCell.html('0');
+    }
+    
+    // Mostrar botón guardar
+    $('#btnGuardar').show();
+}
+
+function guardarConteos() {
+    const conteos = Object.values(conteosPendientes);
+    
+    if (conteos.length === 0) {
+        Swal.fire('Info', 'No hay conteos pendientes de guardar', 'info');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Guardando conteos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    $.ajax({
+        url: `/app/gestion-inventarios/api/registrar-conteo/${inventarioId}/`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ conteos: conteos }),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(response) {
+            if (response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Guardado',
+                    text: response.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+                
+                conteosPendientes = {};
+                $('#btnGuardar').hide();
+                cargarProductos(currentPage);
+            } else {
+                Swal.fire('Error', response.error, 'error');
+            }
+        },
+        error: function() {
+            Swal.fire('Error', 'No se pudieron guardar los conteos', 'error');
+        }
+    });
+}
+
+function realizarReconteo(detalleId) {
+    Swal.fire({
+        title: 'Reconteo de Producto',
+        html: `
+            <p>Este producto tiene una diferencia significativa.</p>
+            <p>Por favor, realice un nuevo conteo:</p>
+            <input type="number" id="inputReconteo" class="form-control mt-3" placeholder="Nueva cantidad" min="0">
+            <textarea id="obsReconteo" class="form-control mt-2" placeholder="Observaciones (opcional)" rows="2"></textarea>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Confirmar Reconteo',
+        preConfirm: () => {
+            const cantidad = document.getElementById('inputReconteo').value;
+            if (!cantidad) {
+                Swal.showValidationMessage('Ingrese la cantidad');
+                return false;
+            }
+            return {
+                stock_reconteo: parseInt(cantidad),
+                observaciones: document.getElementById('obsReconteo').value
+            };
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/app/gestion-inventarios/api/registrar-reconteo/${inventarioId}/`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    reconteos: [{
+                        detalle_id: detalleId,
+                        stock_reconteo: result.value.stock_reconteo,
+                        observaciones: result.value.observaciones
+                    }]
+                }),
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire('Reconteo Registrado', '', 'success');
+                        cargarProductos(currentPage);
+                    } else {
+                        Swal.fire('Error', response.error, 'error');
+                    }
+                }
+            });
+        }
+    });
+}
+
+function finalizarConteo() {
+    // Primero guardar pendientes si los hay
+    if (Object.keys(conteosPendientes).length > 0) {
+        guardarConteos();
+        return;
+    }
+    
+    Swal.fire({
+        title: '¿Finalizar Conteo?',
+        text: 'Esto enviará el inventario a revisión/aprobación.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, Finalizar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/app/gestion-inventarios/api/finalizar-conteo/${inventarioId}/`,
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Conteo Finalizado',
+                            text: response.message
+                        }).then(() => {
+                            window.location.href = '/app/gestion-inventarios/';
+                        });
+                    } else {
+                        Swal.fire('Error', response.error, 'error');
+                    }
+                }
+            });
+        }
+    });
+}
+
+function verDetalleProducto(detalleId) {
+    // Mostrar modal con información detallada del producto
+    Swal.fire({
+        title: 'Detalle del Producto',
+        text: 'Funcionalidad en desarrollo',
+        icon: 'info'
+    });
+}
+
+function exportarInventario() {
+    window.open(`/app/gestion-inventarios/api/exportar/${inventarioId}/`, '_blank');
+}
+
+// === UTILIDADES ===
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function limpiarFiltros() {
+    $('#filtroSearch, #filtroEstadoConteo, #filtroMarca, #filtroCategoria').val('');
+    $('#filtroDiferencias').prop('checked', false);
+    cargarProductos(1);
+}
+
+// === EVENTOS ===
+
+$(document).ready(function() {
+    cargarProductos();
+    
+    // Filtros
+    $('#filtroSearch').on('input', debounce(function() {
+        cargarProductos(1);
+    }, 500));
+    
+    $('#filtroEstadoConteo, #filtroMarca, #filtroCategoria').on('change', function() {
+        cargarProductos(1);
+    });
+    
+    $('#filtroDiferencias').on('change', function() {
+        cargarProductos(1);
+    });
+    
+    // Paginación
+    $('#btnPrevPage').on('click', function() {
+        if (!$(this).hasClass('disabled') && currentPage > 1) {
+            cargarProductos(currentPage - 1);
+        }
+    });
+    
+    $('#btnNextPage').on('click', function() {
+        if (!$(this).hasClass('disabled')) {
+            cargarProductos(currentPage + 1);
+        }
+    });
+    
+    // Keyboard navigation
+    $(document).on('keydown', '.input-conteo', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const nextRow = $(this).closest('tr').next('tr');
+            if (nextRow.length) {
+                nextRow.find('.input-conteo').focus().select();
+            }
+        }
+    });
+});
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+</script>

@@ -4,176 +4,1065 @@
 {% include 'layout/menu.html' %}
 
 <style>
-.quick-edit-container {
-    padding: 20px;
+/* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
+
+/* ========== PÁGINA PRINCIPAL ========== */
+.gestion-precios-page {
+    background: var(--nexo-gray-100);
+    min-height: 100vh;
+}
+
+/* ========== MODAL HISTORIAL ========== */
+.modal-historial-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(26, 26, 46, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.modal-historial-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-historial {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-lg);
+    max-width: 700px;
+    width: 95%;
+    max-height: 85vh;
+    overflow: hidden;
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-historial-overlay.active .modal-historial {
+    transform: translateY(0);
+}
+
+.modal-historial-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    color: var(--nexo-white);
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-historial-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-historial-header h3 i {
+    color: var(--nexo-accent);
+}
+
+.modal-historial-header .btn-close-modal {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: var(--nexo-white);
+    width: 36px;
+    height: 36px;
+    border-radius: var(--nexo-radius-md);
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--nexo-transition-fast);
+}
+
+.modal-historial-header .btn-close-modal:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.modal-historial-body {
+    padding: 24px;
+    max-height: calc(85vh - 80px);
+    overflow-y: auto;
+}
+
+.historial-producto-info {
+    background: var(--nexo-gray-100);
+    padding: 16px;
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 20px;
+    border-left: 4px solid var(--nexo-primary);
+}
+
+.historial-producto-info h4 {
+    margin: 0 0 8px 0;
+    color: var(--nexo-secondary);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.historial-producto-info p {
+    margin: 0;
+    color: var(--nexo-gray-700);
+    font-size: 13px;
+}
+
+.historial-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.historial-table th {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.historial-table th:first-child {
+    border-radius: var(--nexo-radius-md) 0 0 0;
+}
+
+.historial-table th:last-child {
+    border-radius: 0 var(--nexo-radius-md) 0 0;
+}
+
+.historial-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    vertical-align: middle;
+}
+
+.historial-table tbody tr:hover {
+    background: var(--nexo-primary-light);
+}
+
+.historial-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.historial-table .precio-anterior {
+    color: var(--nexo-gray-500);
+    text-decoration: line-through;
+}
+
+.historial-table .precio-nuevo {
+    font-weight: 600;
+    color: var(--nexo-secondary);
+}
+
+.historial-table .variacion-positiva {
+    color: var(--nexo-success);
+    font-weight: 600;
+}
+
+.historial-table .variacion-negativa {
+    color: var(--nexo-error);
+    font-weight: 600;
+}
+
+.historial-table .usuario-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.historial-table .fecha-texto {
+    color: var(--nexo-gray-700);
+    font-size: 12px;
+}
+
+.historial-table .fecha-texto small {
+    color: var(--nexo-gray-500);
+    display: block;
+    margin-top: 2px;
+}
+
+.historial-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--nexo-gray-500);
+}
+
+.historial-empty i {
+    font-size: 48px;
+    color: var(--nexo-gray-300);
+    margin-bottom: 12px;
+}
+
+.historial-empty h4 {
+    color: var(--nexo-secondary);
+    margin: 0 0 8px 0;
+}
+
+.historial-loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--nexo-gray-500);
+}
+
+.historial-loading .spinner-historial {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--nexo-gray-300);
+    border-top-color: var(--nexo-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+
+/* Botón de historial */
+.btn-historial {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    border: none;
+    padding: 6px 12px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--nexo-transition-fast);
+    margin-left: 8px;
+}
+
+.btn-historial:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.btn-historial-small {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+/* Badge de historial en resultados de búsqueda */
+.info-badge-historial-btn {
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.info-badge-historial-btn:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* Estadísticas del historial */
+.historial-stats {
     display: grid;
-    grid-template-columns: 1fr 500px;
-    gap: 20px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.historial-stat-card {
+    background: var(--nexo-gray-100);
+    padding: 14px 16px;
+    border-radius: var(--nexo-radius-md);
+    text-align: center;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.historial-stat-card.tendencia-up {
+    background: rgba(0, 212, 170, 0.1);
+    border-color: var(--nexo-success);
+}
+
+.historial-stat-card.tendencia-down {
+    background: rgba(255, 77, 77, 0.1);
+    border-color: var(--nexo-error);
+}
+
+.historial-stat-card .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin-bottom: 4px;
+}
+
+.historial-stat-card .stat-label {
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.historial-stat-card.tendencia-up .stat-value {
+    color: var(--nexo-success);
+}
+
+.historial-stat-card.tendencia-down .stat-value {
+    color: var(--nexo-error);
+}
+
+/* Badge de tipo de cambio */
+.tipo-cambio-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.tipo-cambio-badge.tipo-manual {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.tipo-cambio-badge.tipo-promocion {
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+}
+
+.tipo-cambio-badge.tipo-ajuste {
+    background: rgba(0, 212, 170, 0.15);
+    color: #008866;
+}
+
+.tipo-cambio-badge.tipo-importacion {
+    background: rgba(138, 138, 154, 0.15);
+    color: var(--nexo-gray-700);
+}
+
+/* Motivo del cambio */
+.motivo-cambio {
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+    font-style: italic;
+    margin-top: 4px;
+    display: block;
+}
+
+/* Timeline visual */
+.historial-timeline {
+    position: relative;
+    padding-left: 24px;
+}
+
+.historial-timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--nexo-gray-300);
+}
+
+.historial-timeline-item {
+    position: relative;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    transition: var(--nexo-transition-fast);
+}
+
+.historial-timeline-item:hover {
+    box-shadow: var(--nexo-shadow-md);
+    border-color: var(--nexo-primary);
+}
+
+.historial-timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 20px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--nexo-primary);
+    border: 2px solid var(--nexo-white);
+    box-shadow: 0 0 0 2px var(--nexo-primary);
+}
+
+.historial-timeline-item:first-child::before {
+    background: var(--nexo-accent);
+    box-shadow: 0 0 0 2px var(--nexo-accent);
+}
+
+.historial-timeline-item.cambio-negativo::before {
+    background: var(--nexo-error);
+    box-shadow: 0 0 0 2px var(--nexo-error);
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.timeline-fecha {
+    font-size: 13px;
+    color: var(--nexo-secondary);
+    font-weight: 600;
+}
+
+.timeline-fecha small {
+    display: block;
+    font-weight: 400;
+    color: var(--nexo-gray-500);
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.timeline-precios {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.timeline-precio-box {
+    text-align: center;
+}
+
+.timeline-precio-box .label {
+    font-size: 10px;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.timeline-precio-box .value {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.timeline-precio-box .value.anterior {
+    color: var(--nexo-gray-500);
+    text-decoration: line-through;
+}
+
+.timeline-precio-box .value.nuevo {
+    color: var(--nexo-secondary);
+}
+
+.timeline-flecha {
+    font-size: 20px;
+    color: var(--nexo-gray-400);
+}
+
+.timeline-variacion {
+    padding: 6px 12px;
+    border-radius: var(--nexo-radius-sm);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.timeline-variacion.positivo {
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--nexo-success);
+}
+
+.timeline-variacion.negativo {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+.timeline-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px dashed var(--nexo-gray-300);
+}
+
+/* Vista toggle */
+.historial-view-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.historial-view-toggle button {
+    padding: 8px 16px;
+    border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.historial-view-toggle button:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.historial-view-toggle button.active {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border-color: var(--nexo-primary);
+}
+
+/* ========== PANEL HISTORIAL RECIENTE ========== */
+.btn-historial-header {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--nexo-white);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 10px 18px;
+    border-radius: var(--nexo-radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-historial-header:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: var(--nexo-accent);
+}
+
+.btn-historial-header .badge-count {
+    background: var(--nexo-accent);
+    color: var(--nexo-secondary);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Panel lateral de historial reciente */
+.historial-sidebar {
+    position: fixed;
+    top: 0;
+    right: -420px;
+    width: 420px;
+    height: 100vh;
+    background: var(--nexo-white);
+    box-shadow: -5px 0 25px rgba(26, 26, 46, 0.15);
+    z-index: 9998;
+    transition: right 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.historial-sidebar.active {
+    right: 0;
+}
+
+.historial-sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(26, 26, 46, 0.5);
+    z-index: 9997;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.historial-sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.historial-sidebar-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    color: var(--nexo-white);
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.historial-sidebar-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.historial-sidebar-header h3 i {
+    color: var(--nexo-accent);
+}
+
+.historial-sidebar-header .btn-close-sidebar {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: var(--nexo-white);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--nexo-radius-sm);
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--nexo-transition-fast);
+}
+
+.historial-sidebar-header .btn-close-sidebar:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.historial-sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.historial-reciente-item {
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 14px;
+    margin-bottom: 12px;
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+}
+
+.historial-reciente-item:hover {
+    border-color: var(--nexo-primary);
+    box-shadow: var(--nexo-shadow-sm);
+}
+
+.historial-reciente-item .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.historial-reciente-item .producto-nombre {
+    font-weight: 600;
+    color: var(--nexo-secondary);
+    font-size: 14px;
+    margin: 0;
+    flex: 1;
+}
+
+.historial-reciente-item .fecha-badge {
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+    background: var(--nexo-white);
+    padding: 3px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.historial-reciente-item .precios-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.historial-reciente-item .precio-anterior {
+    color: var(--nexo-gray-500);
+    text-decoration: line-through;
+    font-size: 13px;
+}
+
+.historial-reciente-item .precio-nuevo {
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    font-size: 15px;
+}
+
+.historial-reciente-item .variacion-badge {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.historial-reciente-item .variacion-badge.positivo {
+    background: rgba(0, 212, 170, 0.15);
+    color: var(--nexo-success);
+}
+
+.historial-reciente-item .variacion-badge.negativo {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.historial-reciente-item .item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px dashed var(--nexo-gray-300);
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+}
+
+.historial-reciente-item .usuario-info {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.historial-reciente-item .usuario-info i {
+    color: var(--nexo-primary);
+}
+
+.historial-sidebar-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--nexo-gray-500);
+}
+
+.historial-sidebar-empty i {
+    font-size: 48px;
+    color: var(--nexo-gray-300);
+    margin-bottom: 12px;
+    display: block;
+}
+
+.historial-sidebar-loading {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+@media (max-width: 600px) {
+    .historial-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.page-header-nexo {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    padding: 24px 0;
+    margin-bottom: 24px;
+    border-bottom: 3px solid var(--nexo-accent);
+}
+
+.page-header-nexo h1 {
+    color: var(--nexo-white);
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.page-header-nexo h1 i {
+    color: var(--nexo-accent);
+}
+
+.page-header-nexo .subtitle {
+    color: var(--nexo-gray-300);
+    font-size: 14px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-header-nexo .subtitle .badge-sucursal {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+/* ========== GRID PRINCIPAL ========== */
+.quick-edit-container {
+    padding: 0 20px 20px;
+    display: grid;
+    grid-template-columns: 1fr 520px;
+    gap: 24px;
     min-height: 600px;
     max-height: calc(100vh - 200px);
 }
 
+/* ========== PANEL DE BÚSQUEDA ========== */
 .search-panel {
-    background: white;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 24px;
+    box-shadow: var(--nexo-shadow-md);
     overflow-y: auto;
     max-height: calc(100vh - 200px);
-}
-
-.edit-panel {
-    background: white;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    max-height: calc(100vh - 200px);
+    border: 1px solid var(--nexo-gray-300);
 }
 
 .search-box {
     position: sticky;
     top: 0;
-    background: white;
-    padding-bottom: 15px;
-    border-bottom: 2px solid #e0e0e0;
-    margin-bottom: 15px;
+    background: var(--nexo-white);
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--nexo-gray-100);
+    margin-bottom: 20px;
     z-index: 10;
+}
+
+.search-box h3 {
+    margin: 0 0 12px 0;
+    color: var(--nexo-secondary);
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-box h3 i {
+    color: var(--nexo-primary);
 }
 
 .search-input {
     width: 100%;
-    padding: 12px 15px;
-    border: 2px solid #3498db;
-    border-radius: 8px;
-    font-size: 16px;
-    transition: all 0.3s;
+    padding: 14px 18px;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: 15px;
+    transition: var(--nexo-transition-fast);
+    background: var(--nexo-gray-100);
 }
 
 .search-input:focus {
     outline: none;
-    border-color: #2980b9;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.15);
+    background: var(--nexo-white);
 }
 
+.search-input::placeholder {
+    color: var(--nexo-gray-500);
+}
+
+/* ========== RESULTADOS DE BÚSQUEDA ========== */
 .product-search-result {
-    padding: 12px;
-    border: 1px solid #e0e0e0;
-    border-radius: 5px;
-    margin-bottom: 8px;
+    padding: 16px;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 10px;
     cursor: pointer;
-    transition: all 0.2s;
-    background: white;
+    transition: var(--nexo-transition-fast);
+    background: var(--nexo-white);
 }
 
 .product-search-result:hover {
-    background: #f8f9fa;
-    border-color: #3498db;
-    transform: translateX(3px);
+    background: var(--nexo-primary-light);
+    border-color: var(--nexo-primary);
+    transform: translateX(4px);
+    box-shadow: var(--nexo-shadow-sm);
 }
 
 .product-search-result.selected {
-    background: #e3f2fd;
-    border-color: #2196f3;
+    background: var(--nexo-primary-light);
+    border-color: var(--nexo-primary);
+    border-width: 2px;
 }
 
 .info-badge {
-    display: inline-block;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
     font-weight: 600;
-    margin-left: 5px;
+    margin-right: 6px;
 }
 
 .info-badge-sucursales {
-    background: #fff3cd;
-    color: #856404;
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+    border: 1px solid rgba(255, 176, 32, 0.3);
 }
 
 .info-badge-historial {
-    background: #d1ecf1;
-    color: #0c5460;
+    background: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-primary-dark);
+    border: 1px solid rgba(0, 102, 255, 0.2);
+}
+
+.info-badge-alerta {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+    border: 1px solid rgba(255, 77, 77, 0.2);
+    animation: pulse-alert 2s infinite;
+}
+
+@keyframes pulse-alert {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 .product-info-line {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 4px;
+    align-items: center;
+    margin-bottom: 6px;
 }
 
 .product-name {
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--nexo-secondary);
     font-size: 14px;
 }
 
 .product-meta {
     font-size: 12px;
-    color: #7f8c8d;
+    color: var(--nexo-gray-500);
 }
 
 .product-price {
     font-weight: 700;
-    color: #27ae60;
-    font-size: 14px;
+    color: var(--nexo-accent);
+    font-size: 16px;
+}
+
+/* ========== PANEL DE EDICIÓN ========== */
+.edit-panel {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 24px;
+    box-shadow: var(--nexo-shadow-md);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 200px);
+    border: 1px solid var(--nexo-gray-300);
 }
 
 .edit-list-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 15px;
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    color: var(--nexo-white);
+    padding: 18px 20px;
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .edit-list-header h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--nexo-white);
+}
+
+.edit-list-header .btn-expand-all {
+    background: rgba(255,255,255,0.2);
+    color: var(--nexo-white);
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 8px 14px;
+    border-radius: var(--nexo-radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.edit-list-header .btn-expand-all:hover {
+    background: rgba(255,255,255,0.3);
 }
 
 .edit-list-body {
     flex: 1;
     overflow-y: auto;
-    margin-bottom: 15px;
-    max-height: 450px;
-    min-height: 200px;
+    margin-bottom: 20px;
+    max-height: 420px;
+    min-height: 180px;
 }
 
+/* ========== ITEMS DE EDICIÓN ========== */
 .edit-item {
-    background: white;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    transition: all 0.3s;
+    background: var(--nexo-white);
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 12px;
+    transition: var(--nexo-transition-fast);
     overflow: hidden;
 }
 
 .edit-item.editing {
-    border-color: #3498db;
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
 }
 
 .edit-item.expanded {
-    border-color: #3498db;
+    border-color: var(--nexo-primary);
 }
 
 .edit-item-collapsed {
-    padding: 12px 15px;
+    padding: 14px 18px;
     cursor: pointer;
-    background: #f8f9fa;
-    transition: background 0.2s;
+    background: var(--nexo-gray-100);
+    transition: var(--nexo-transition-fast);
 }
 
 .edit-item-collapsed:hover {
-    background: #e3f2fd;
+    background: var(--nexo-primary-light);
 }
 
 .edit-item-details {
-    padding: 15px;
-    background: white;
+    padding: 18px;
+    background: var(--nexo-white);
     display: none;
-    border-top: 2px solid #e0e0e0;
+    border-top: 2px solid var(--nexo-gray-100);
 }
 
 .edit-item.expanded .edit-item-details {
@@ -192,7 +1081,7 @@
 
 .collapsed-prices {
     display: flex;
-    gap: 20px;
+    gap: 16px;
     align-items: center;
 }
 
@@ -202,38 +1091,41 @@
 
 .price-box-small .label {
     font-size: 10px;
-    color: #7f8c8d;
+    color: var(--nexo-gray-500);
     text-transform: uppercase;
+    font-weight: 500;
 }
 
 .price-box-small .value {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
 }
 
 .expand-icon {
-    margin-left: 15px;
+    margin-left: 12px;
     transition: transform 0.3s;
-    color: #3498db;
+    color: var(--nexo-primary);
+    font-size: 14px;
 }
 
 .edit-item.expanded .expand-icon {
     transform: rotate(180deg);
 }
 
+/* ========== TOTALES ========== */
 .totales-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    color: var(--nexo-white);
     padding: 20px;
-    border-radius: 8px;
-    margin-top: 15px;
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 20px;
 }
 
 .totales-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-    margin-bottom: 15px;
+    gap: 16px;
+    margin-bottom: 12px;
 }
 
 .total-item {
@@ -242,9 +1134,10 @@
 
 .total-label {
     font-size: 11px;
-    opacity: 0.8;
+    opacity: 0.7;
     text-transform: uppercase;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
+    font-weight: 500;
 }
 
 .total-value {
@@ -252,35 +1145,42 @@
     font-weight: 700;
 }
 
+/* ========== CAMPOS DE EDICIÓN ========== */
 .edit-item-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--nexo-gray-300);
 }
 
 .edit-item-title {
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--nexo-secondary);
     font-size: 14px;
 }
 
 .btn-remove {
-    background: #e74c3c;
-    color: white;
+    background: var(--nexo-error);
+    color: var(--nexo-white);
     border: none;
-    padding: 4px 10px;
-    border-radius: 4px;
+    padding: 6px 12px;
+    border-radius: var(--nexo-radius-sm);
     cursor: pointer;
     font-size: 11px;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-remove:hover {
+    background: #E53E3E;
 }
 
 .edit-fields {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 12px;
 }
 
 .field-group {
@@ -291,159 +1191,216 @@
 .field-label {
     font-size: 11px;
     font-weight: 600;
-    color: #666;
-    margin-bottom: 4px;
+    color: var(--nexo-gray-500);
+    margin-bottom: 6px;
     text-transform: uppercase;
 }
 
 .field-input {
-    padding: 8px 10px;
-    border: 2px solid #ddd;
-    border-radius: 5px;
+    padding: 10px 12px;
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
     font-size: 14px;
     font-weight: 600;
-    transition: all 0.2s;
+    transition: var(--nexo-transition-fast);
+    background: var(--nexo-gray-100);
 }
 
 .field-input:focus {
     outline: none;
-    border-color: #3498db;
-    background: #f0f8ff;
+    border-color: var(--nexo-primary);
+    background: var(--nexo-white);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
 }
 
 .field-input.changed {
-    border-color: #27ae60;
-    background: #d4edda;
+    border-color: var(--nexo-accent);
+    background: rgba(0, 212, 170, 0.1);
 }
 
+/* ========== BOTONES RÁPIDOS ========== */
 .quick-actions {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    gap: 5px;
-    margin-top: 8px;
+    gap: 8px;
+    margin-top: 12px;
 }
 
 .btn-quick {
-    padding: 6px 8px;
+    padding: 8px 12px;
     border: none;
-    border-radius: 4px;
-    font-size: 11px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--nexo-transition-fast);
 }
 
 .btn-quick:hover {
     transform: scale(1.05);
 }
 
-.btn-quick-10 { background: #fff3cd; color: #856404; }
-.btn-quick-20 { background: #ffe4b5; color: #c87e00; }
-.btn-quick-30 { background: #ffd4a3; color: #d35400; }
+.btn-quick-10 { 
+    background: rgba(255, 176, 32, 0.15); 
+    color: #996B00;
+    border: 1px solid rgba(255, 176, 32, 0.3);
+}
+.btn-quick-20 { 
+    background: rgba(255, 140, 0, 0.15); 
+    color: #CC6600;
+    border: 1px solid rgba(255, 140, 0, 0.3);
+}
+.btn-quick-30 { 
+    background: rgba(255, 77, 77, 0.15); 
+    color: #CC3333;
+    border: 1px solid rgba(255, 77, 77, 0.3);
+}
 
+/* ========== PREVIEW DE RESULTADOS ========== */
 .result-preview {
-    background: white;
-    padding: 8px;
-    border-radius: 4px;
-    margin-top: 8px;
-    border: 1px solid #e0e0e0;
+    background: var(--nexo-gray-100);
+    padding: 14px;
+    border-radius: var(--nexo-radius-sm);
+    margin-top: 14px;
+    border: 1px solid var(--nexo-gray-300);
 }
 
 .result-row {
     display: flex;
     justify-content: space-between;
-    padding: 4px 0;
-    font-size: 12px;
+    padding: 6px 0;
+    font-size: 13px;
 }
 
 .result-label {
-    color: #666;
+    color: var(--nexo-gray-500);
 }
 
 .result-value {
     font-weight: 600;
 }
 
-.result-good { color: #27ae60; }
-.result-warning { color: #f39c12; }
-.result-danger { color: #e74c3c; }
+.result-good { color: var(--nexo-accent); }
+.result-warning { color: var(--nexo-warning); }
+.result-danger { color: var(--nexo-error); }
 
+/* ========== ALERTA SUCURSALES ========== */
+.alert-sucursales {
+    background: linear-gradient(135deg, rgba(255, 176, 32, 0.1) 0%, rgba(255, 176, 32, 0.05) 100%);
+    border: 1px solid rgba(255, 176, 32, 0.3);
+    border-radius: var(--nexo-radius-sm);
+    padding: 12px;
+    margin-top: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.alert-sucursales i {
+    color: var(--nexo-warning);
+    font-size: 18px;
+    margin-top: 2px;
+}
+
+.alert-sucursales-content {
+    flex: 1;
+}
+
+.alert-sucursales-title {
+    font-weight: 600;
+    color: #996B00;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.alert-sucursales-text {
+    color: var(--nexo-gray-700);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+/* ========== BOTONES DE ACCIÓN ========== */
 .action-buttons {
     display: flex;
-    gap: 10px;
+    gap: 12px;
 }
 
 .btn-apply-all {
     flex: 1;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    color: var(--nexo-white);
     border: none;
-    padding: 15px;
-    border-radius: 8px;
-    font-size: 16px;
+    padding: 16px;
+    border-radius: var(--nexo-radius-md);
+    font-size: 15px;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: var(--nexo-transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .btn-apply-all:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+}
+
+.btn-apply-all:disabled {
+    background: var(--nexo-gray-300);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 .btn-clear-list {
-    background: #95a5a6;
-    color: white;
-    border: none;
-    padding: 15px 20px;
-    border-radius: 8px;
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    border: 2px solid var(--nexo-gray-300);
+    padding: 16px 24px;
+    border-radius: var(--nexo-radius-md);
     font-weight: 600;
     cursor: pointer;
+    transition: var(--nexo-transition-fast);
 }
 
+.btn-clear-list:hover {
+    background: var(--nexo-gray-300);
+    border-color: var(--nexo-gray-500);
+}
+
+/* ========== ESTADO VACÍO ========== */
 .empty-list {
     text-align: center;
-    padding: 60px 20px;
-    color: #95a5a6;
+    padding: 50px 20px;
+    color: var(--nexo-gray-500);
 }
 
 .empty-list i {
     font-size: 48px;
-    margin-bottom: 15px;
+    margin-bottom: 16px;
+    color: var(--nexo-gray-300);
 }
 
-.stats-bar {
-    background: #f8f9fa;
-    padding: 10px 15px;
-    border-radius: 5px;
-    display: flex;
-    justify-content: space-around;
-    margin-bottom: 15px;
+.empty-list h4 {
+    color: var(--nexo-gray-700);
+    margin-bottom: 8px;
+    font-weight: 600;
 }
 
-.stat-item {
-    text-align: center;
+.empty-list p {
+    font-size: 13px;
 }
 
-.stat-value {
-    font-size: 18px;
-    font-weight: 700;
-    color: #2c3e50;
-}
-
-.stat-label {
-    font-size: 10px;
-    color: #7f8c8d;
-    text-transform: uppercase;
-}
-
+/* ========== LOADING OVERLAY ========== */
 .loading-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.7);
+    background: rgba(26, 26, 46, 0.9);
     display: none;
     align-items: center;
     justify-content: center;
@@ -451,57 +1408,206 @@
 }
 
 .loading-content {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
+    background: var(--nexo-white);
+    padding: 40px;
+    border-radius: var(--nexo-radius-lg);
     text-align: center;
+    box-shadow: var(--nexo-shadow-lg);
 }
 
 .spinner {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
+    border: 4px solid var(--nexo-gray-100);
+    border-top: 4px solid var(--nexo-primary);
     border-radius: 50%;
     width: 50px;
     height: 50px;
     animation: spin 1s linear infinite;
-    margin: 0 auto 15px;
+    margin: 0 auto 20px;
+}
+
+.loading-content h4 {
+    color: var(--nexo-secondary);
+    margin-bottom: 8px;
+}
+
+.loading-content p {
+    color: var(--nexo-gray-500);
+    font-size: 14px;
 }
 
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* ========== BOTÓN CONFIRMAR ========== */
+.btn-confirm {
+    background: var(--nexo-accent);
+    color: var(--nexo-white);
+    border: none;
+    padding: 10px 12px;
+    border-radius: var(--nexo-radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    transition: var(--nexo-transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-confirm:hover {
+    background: #00B894;
+    transform: scale(1.05);
+}
+
+/* ========== INDICADOR DE SINCRONIZACIÓN ========== */
+.sync-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0, 212, 170, 0.1);
+    border: 1px solid rgba(0, 212, 170, 0.3);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #00997A;
+}
+
+.sync-indicator i {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ========== LOADING DE BÚSQUEDA ========== */
+.search-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--nexo-gray-500);
+}
+
+.search-loading .spinner-search {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--nexo-gray-200);
+    border-top: 3px solid var(--nexo-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+}
+
+.search-loading p {
+    font-size: 14px;
+    margin: 0;
+    color: var(--nexo-gray-500);
+}
+
+.search-loading .search-term {
+    font-weight: 600;
+    color: var(--nexo-primary);
+}
+
+/* Input con loading */
+.search-input-wrapper {
+    position: relative;
+}
+
+.search-input-wrapper .input-loading {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--nexo-gray-200);
+    border-top: 2px solid var(--nexo-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: none;
+}
+
+.search-input-wrapper.loading .input-loading {
+    display: block;
+}
+
+.search-input-wrapper.loading .search-input {
+    padding-right: 45px;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 1200px) {
+    .quick-edit-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .edit-panel {
+        max-height: none;
+    }
+}
 </style>
 
 <!-- El main-content ya está incluido en layout/menu.html -->
-<div class="page-content">
-    <div class="container-fluid">
-        <div style="margin-bottom: 20px;">
-            <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
-                <i class="fas fa-bolt"></i> Edición Rápida de Precios
-            </h1>
-            <p style="color: #7f8c8d; margin: 0;">Agrega productos y edita precios con Tab - Súper rápido ⚡</p>
+<div class="page-content gestion-precios-page">
+    <!-- Header de la página -->
+    <div class="page-header-nexo">
+        <div class="container-fluid">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h1>
+                        <i class="ri-price-tag-3-line"></i> Gestión de Precios
+                    </h1>
+                    <p class="subtitle">
+                        Edición rápida con navegación por Tab ⚡
+                        {% if alias_sucursal %}
+                        <span class="badge-sucursal">
+                            <i class="ri-store-2-line"></i> {{ alias_sucursal }}
+                        </span>
+                        {% endif %}
+                        <span class="sync-indicator" title="Los cambios se sincronizan automáticamente a otras sucursales">
+                            <i class="ri-refresh-line"></i> Sincronización activa
+                        </span>
+                    </p>
+                </div>
+                <button class="btn-historial-header" onclick="toggleHistorialReciente()">
+                    <i class="ri-history-line"></i> 
+                    Últimas Ediciones
+                    <span class="badge-count" id="historialCount">0</span>
+                </button>
+            </div>
         </div>
+    </div>
 
+    <div class="container-fluid">
         <div class="quick-edit-container">
             <!-- Panel Izquierdo: Búsqueda -->
             <div class="search-panel">
                 <div class="search-box">
-                    <h3 style="margin: 0 0 10px 0; color: #2c3e50;">
-                        <i class="fas fa-search"></i> Buscar Productos
+                    <h3>
+                        <i class="ri-search-line"></i> Buscar Productos
                     </h3>
-                    <input type="text" 
-                           id="quickSearch" 
-                           class="search-input"
-                           placeholder="Escribe nombre, SKU o categoría... (Enter para buscar)"
-                           onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarProductosRapido(); return false;}">
+                    <div class="search-input-wrapper" id="searchInputWrapper">
+                        <input type="text" 
+                               id="quickSearch" 
+                               class="search-input"
+                               placeholder="Escribe nombre, SKU o categoría... (Enter para buscar)"
+                               onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarProductosRapido(); return false;}">
+                        <div class="input-loading"></div>
+                    </div>
                     <button onclick="buscarProductosRapido()" 
                             style="display: none;" id="btnSearchHidden"></button>
                 </div>
 
                 <div id="searchResults">
                     <div class="empty-list">
-                        <i class="fas fa-search"></i>
+                        <i class="ri-search-line"></i>
                         <h4>Busca productos</h4>
                         <p>Escribe en el campo superior y presiona Enter</p>
                     </div>
@@ -511,22 +1617,20 @@
             <!-- Panel Derecho: Lista de Edición -->
             <div class="edit-panel">
                 <div class="edit-list-header">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0;">
-                            <i class="fas fa-list-check"></i> 
-                            Lista de Edición (<span id="itemCount">0</span>)
-                        </h3>
-                        <button onclick="toggleExpandirTodos()" 
-                                style="background: rgba(255,255,255,0.3); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;"
-                                id="btnExpandirTodos">
-                            <i class="fas fa-expand"></i> Expandir Todos
-                        </button>
-                    </div>
+                    <h3>
+                        <i class="ri-list-check"></i> 
+                        Lista de Edición (<span id="itemCount">0</span>)
+                    </h3>
+                    <button onclick="toggleExpandirTodos()" 
+                            class="btn-expand-all"
+                            id="btnExpandirTodos">
+                        <i class="ri-expand-diagonal-line"></i> Expandir Todos
+                    </button>
                 </div>
 
                 <div class="edit-list-body" id="editList">
                     <div class="empty-list">
-                        <i class="fas fa-inbox"></i>
+                        <i class="ri-inbox-line"></i>
                         <h4>Lista vacía</h4>
                         <p>Busca y agrega productos para editar</p>
                     </div>
@@ -539,10 +1643,10 @@
 
                 <div class="action-buttons">
                     <button class="btn-clear-list" onclick="limpiarLista()">
-                        <i class="fas fa-trash"></i> Limpiar
+                        <i class="ri-delete-bin-line"></i> Limpiar
                     </button>
                     <button class="btn-apply-all" onclick="aplicarTodosCambios()">
-                        <i class="fas fa-check-double"></i> Aplicar Todos (<span id="applyCount">0</span>)
+                        <i class="ri-check-double-line"></i> Aplicar Todos (<span id="applyCount">0</span>)
                     </button>
                 </div>
             </div>
@@ -561,25 +1665,231 @@
     </div>
 </div>
 
+<!-- Panel Lateral Historial Reciente -->
+<div class="historial-sidebar-overlay" id="historialSidebarOverlay" onclick="cerrarHistorialReciente()"></div>
+<div class="historial-sidebar" id="historialSidebar">
+    <div class="historial-sidebar-header">
+        <h3>
+            <i class="ri-history-line"></i> 
+            Últimas Ediciones
+        </h3>
+        <button class="btn-close-sidebar" onclick="cerrarHistorialReciente()">
+            <i class="ri-close-line"></i>
+        </button>
+    </div>
+    <div class="historial-sidebar-content" id="historialSidebarContent">
+        <div class="historial-sidebar-loading">
+            <div class="spinner-historial"></div>
+            <p>Cargando historial...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Historial de Precios -->
+<div class="modal-historial-overlay" id="modalHistorialOverlay" onclick="cerrarModalHistorial(event)">
+    <div class="modal-historial" onclick="event.stopPropagation()">
+        <div class="modal-historial-header">
+            <h3>
+                <i class="ri-history-line"></i> 
+                Historial de Precios
+            </h3>
+            <button class="btn-close-modal" onclick="cerrarModalHistorial()">
+                <i class="ri-close-line"></i>
+            </button>
+        </div>
+        <div class="modal-historial-body">
+            <div class="historial-producto-info" id="historialProductoInfo">
+                <h4 id="historialProductoNombre">-</h4>
+                <p id="historialProductoDetalle">Cargando información...</p>
+            </div>
+            
+            <div id="historialContent">
+                <div class="historial-loading">
+                    <div class="spinner-historial"></div>
+                    <p>Cargando historial...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% include 'layout/footer.html' %}
 
 <script>
 // Variables globales
 let listaEdicion = [];
 let productosDisponibles = [];
+let buscando = false; // Flag para evitar búsquedas múltiples
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('quickSearch').focus();
+    // Cargar contador de historial reciente
+    cargarContadorHistorial();
 });
+
+// ========== HISTORIAL RECIENTE ==========
+
+// Cargar contador de historial
+async function cargarContadorHistorial() {
+    try {
+        const response = await fetch('/app/gestion-precios/historial-reciente/');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('historialCount').textContent = data.total || 0;
+        }
+    } catch (error) {
+        console.error('Error cargando contador historial:', error);
+    }
+}
+
+// Toggle panel de historial reciente
+function toggleHistorialReciente() {
+    const sidebar = document.getElementById('historialSidebar');
+    const overlay = document.getElementById('historialSidebarOverlay');
+    
+    if (sidebar.classList.contains('active')) {
+        cerrarHistorialReciente();
+    } else {
+        sidebar.classList.add('active');
+        overlay.classList.add('active');
+        cargarHistorialReciente();
+    }
+}
+
+// Cerrar panel de historial
+function cerrarHistorialReciente() {
+    const sidebar = document.getElementById('historialSidebar');
+    const overlay = document.getElementById('historialSidebarOverlay');
+    
+    sidebar.classList.remove('active');
+    overlay.classList.remove('active');
+}
+
+// Cargar historial reciente
+async function cargarHistorialReciente() {
+    const container = document.getElementById('historialSidebarContent');
+    
+    container.innerHTML = `
+        <div class="historial-sidebar-loading">
+            <div class="spinner-historial"></div>
+            <p>Cargando historial...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('/app/gestion-precios/historial-reciente/');
+        const data = await response.json();
+        
+        if (data.success && data.historial && data.historial.length > 0) {
+            renderizarHistorialReciente(data.historial, container);
+        } else {
+            container.innerHTML = `
+                <div class="historial-sidebar-empty">
+                    <i class="ri-file-list-3-line"></i>
+                    <h4>Sin ediciones recientes</h4>
+                    <p>No hay cambios de precios registrados</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error cargando historial reciente:', error);
+        container.innerHTML = `
+            <div class="historial-sidebar-empty">
+                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+                <h4>Error de conexión</h4>
+                <p>No se pudo cargar el historial</p>
+            </div>
+        `;
+    }
+}
+
+// Renderizar historial reciente
+function renderizarHistorialReciente(historial, container) {
+    let html = '';
+    
+    historial.forEach(item => {
+        const variacion = item.diferencia || (item.precio_nuevo - item.precio_anterior);
+        const porcentaje = item.porcentaje_cambio || 
+            (item.precio_anterior > 0 ? ((variacion / item.precio_anterior) * 100) : 0);
+        
+        const variacionClass = variacion >= 0 ? 'positivo' : 'negativo';
+        const variacionIcon = variacion >= 0 ? '↑' : '↓';
+        
+        html += `
+            <div class="historial-reciente-item" onclick="verHistorial(${item.producto_id}, '${item.producto_nombre.replace(/'/g, "\\'")}', '${item.producto_talla || ''}', 0, ${item.precio_nuevo})">
+                <div class="item-header">
+                    <h4 class="producto-nombre">${item.producto_nombre}</h4>
+                    <span class="fecha-badge">${item.hace_cuanto || item.fecha_cambio}</span>
+                </div>
+                
+                <div class="precios-row">
+                    <span class="precio-anterior">${formatearMoneda(item.precio_anterior)}</span>
+                    <span style="color: var(--nexo-gray-400);">→</span>
+                    <span class="precio-nuevo">${formatearMoneda(item.precio_nuevo)}</span>
+                    <span class="variacion-badge ${variacionClass}">
+                        ${variacionIcon} ${variacion >= 0 ? '+' : ''}${porcentaje.toFixed(1)}%
+                    </span>
+                </div>
+                
+                <div class="item-footer">
+                    <span class="usuario-info">
+                        <i class="ri-user-line"></i> ${item.usuario}
+                    </span>
+                    <span>
+                        <i class="ri-store-2-line"></i> ${item.sucursal || 'N/A'}
+                    </span>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `
+        <div style="text-align: center; padding: 16px; font-size: 12px; color: var(--nexo-gray-500);">
+            <i class="ri-information-line"></i> Mostrando las últimas ${historial.length} ediciones
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
 
 // Buscar productos
 async function buscarProductosRapido() {
-    const termino = document.getElementById('quickSearch').value.trim();
-    
-    if (termino.length < 2) {
+    // Evitar búsquedas múltiples
+    if (buscando) {
+        console.log('⏳ Ya hay una búsqueda en progreso...');
         return;
     }
+    
+    const searchInput = document.getElementById('quickSearch');
+    const termino = searchInput.value.trim();
+    const container = document.getElementById('searchResults');
+    const inputWrapper = document.getElementById('searchInputWrapper');
+    
+    if (termino.length < 2) {
+        container.innerHTML = `
+            <div class="empty-list">
+                <i class="ri-search-line"></i>
+                <h4>Busca productos</h4>
+                <p>Escribe al menos 2 caracteres y presiona Enter</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Bloquear búsqueda e input
+    buscando = true;
+    searchInput.disabled = true;
+    searchInput.style.opacity = '0.7';
+    inputWrapper.classList.add('loading');
+    
+    container.innerHTML = `
+        <div class="search-loading">
+            <div class="spinner-search"></div>
+            <p>Buscando "<span class="search-term">${termino}</span>"...</p>
+        </div>
+    `;
     
     try {
         // 🔍 Obtener sucursal desde el contexto de Django
@@ -605,10 +1915,32 @@ async function buscarProductosRapido() {
             console.error('❌ Error en búsqueda:', data.error);
             if (data.error && data.error.includes('sucursal')) {
                 mostrarAlertaSucursal();
+            } else {
+                container.innerHTML = `
+                    <div class="empty-list">
+                        <i class="ri-error-warning-line" style="color: var(--nexo-error);"></i>
+                        <h4>Error en la búsqueda</h4>
+                        <p>${data.error || 'Intenta nuevamente'}</p>
+                    </div>
+                `;
             }
         }
     } catch (error) {
         console.error('❌ Error buscando:', error);
+        container.innerHTML = `
+            <div class="empty-list">
+                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+                <h4>Error de conexión</h4>
+                <p>No se pudo conectar con el servidor</p>
+            </div>
+        `;
+    } finally {
+        // Siempre desbloquear al terminar
+        buscando = false;
+        searchInput.disabled = false;
+        searchInput.style.opacity = '1';
+        inputWrapper.classList.remove('loading');
+        searchInput.focus(); // Devolver foco al input
     }
 }
 
@@ -619,6 +1951,7 @@ function mostrarAlertaSucursal() {
         title: 'Sin Sucursal Activa',
         text: 'No tienes una sucursal activa en tu sesión. Por favor, selecciona una sucursal.',
         confirmButtonText: 'Ir a Selección de Sucursal',
+        confirmButtonColor: '#0066FF',
         showCancelButton: true,
         cancelButtonText: 'Cancelar'
     }).then((result) => {
@@ -635,7 +1968,7 @@ function renderizarResultadosBusqueda(productos) {
     if (productos.length === 0) {
         container.innerHTML = `
             <div class="empty-list">
-                <i class="fas fa-inbox"></i>
+                <i class="ri-inbox-line"></i>
                 <h4>Sin resultados</h4>
                 <p>No se encontraron productos</p>
             </div>
@@ -661,15 +1994,32 @@ function renderizarResultadosBusqueda(productos) {
             const tooltipTexto = sucursalesTexto ? `También en: ${sucursalesTexto}` : 'Existe en otras sucursales';
             
             sucursalesInfo = `<span class="info-badge info-badge-sucursales" title="${tooltipTexto}">
-                <i class="fas fa-store"></i> ${producto.sucursales_lista ? producto.sucursales_lista.join(', ') : producto.sucursales_similares + ' sucursal' + (producto.sucursales_similares > 1 ? 'es' : '')}
+                <i class="ri-store-2-line"></i> ${producto.sucursales_lista ? producto.sucursales_lista.join(', ') : producto.sucursales_similares + ' sucursal' + (producto.sucursales_similares > 1 ? 'es' : '')}
             </span>`;
         }
         
-        // Info de último cambio
+        // Info de último cambio con botón de historial
         let historialInfo = '';
         if (producto.ultimo_cambio && producto.ultimo_cambio.usuario) {
-            historialInfo = `<span class="info-badge info-badge-historial" title="Último cambio">
-                <i class="fas fa-history"></i> ${producto.ultimo_cambio.usuario} (${producto.ultimo_cambio.hace_cuanto})
+            historialInfo = `<span class="info-badge info-badge-historial info-badge-historial-btn" 
+                onclick="event.stopPropagation(); verHistorial(${producto.id}, '${producto.nombre.replace(/'/g, "\\'")}', '${producto.talla || ''}', ${producto.costo || 0}, ${producto.precio_venta || 0})" 
+                title="Click para ver historial completo">
+                <i class="ri-history-line"></i> ${producto.ultimo_cambio.usuario} (${producto.ultimo_cambio.hace_cuanto})
+            </span>`;
+        } else {
+            // Mostrar botón de historial incluso si no hay cambios previos
+            historialInfo = `<span class="info-badge info-badge-historial info-badge-historial-btn" 
+                onclick="event.stopPropagation(); verHistorial(${producto.id}, '${producto.nombre.replace(/'/g, "\\'")}', '${producto.talla || ''}', ${producto.costo || 0}, ${producto.precio_venta || 0})" 
+                title="Click para ver historial de precios">
+                <i class="ri-history-line"></i> Ver Historial
+            </span>`;
+        }
+        
+        // Indicador de alerta si hay sucursales que serán notificadas
+        let alertaSync = '';
+        if (producto.sucursales_similares > 0) {
+            alertaSync = `<span class="info-badge info-badge-alerta" title="Cambios se sincronizarán a otras sucursales">
+                <i class="ri-notification-line"></i> Sincronización
             </span>`;
         }
         
@@ -682,15 +2032,16 @@ function renderizarResultadosBusqueda(productos) {
                 <span class="product-meta">
                     ${producto.talla} | ${producto.marca || ''} | Costo: ${formatearMoneda(producto.costo)}
                 </span>
-                <span class="product-meta" style="color: ${margen > 25 ? '#27ae60' : '#e74c3c'};">
+                <span class="product-meta" style="color: ${margen > 25 ? 'var(--nexo-accent)' : 'var(--nexo-error)'};">
                     Margen: ${margen.toFixed(1)}%
                 </span>
             </div>
-            <div style="margin-top: 6px;">
+            <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
                 ${sucursalesInfo}
                 ${historialInfo}
+                ${alertaSync}
             </div>
-            ${yaAgregado ? '<div style="color: #2196f3; font-size: 11px; margin-top: 4px;">✓ Ya agregado a la lista</div>' : ''}
+            ${yaAgregado ? '<div style="color: var(--nexo-primary); font-size: 11px; margin-top: 6px; font-weight: 600;"><i class="ri-check-line"></i> Ya agregado a la lista</div>' : ''}
         `;
         
         container.appendChild(div);
@@ -720,6 +2071,7 @@ function agregarALista(producto) {
         margen_nuevo: calcularMargen(producto.costo, producto.precio_venta),
         markup_nuevo: calcularMarkup(producto.costo, producto.precio_venta),
         sucursales_similares: producto.sucursales_similares || 0,
+        sucursales_lista: producto.sucursales_lista || [],
         ultimo_cambio: producto.ultimo_cambio
     });
     
@@ -745,7 +2097,7 @@ function renderizarListaEdicion() {
     if (listaEdicion.length === 0) {
         container.innerHTML = `
             <div class="empty-list">
-                <i class="fas fa-inbox"></i>
+                <i class="ri-inbox-line"></i>
                 <h4>Lista vacía</h4>
                 <p>Busca y agrega productos para editar</p>
             </div>
@@ -766,19 +2118,19 @@ function renderizarListaEdicion() {
         
         // Calcular diferencia de precio
         const diferencia = item.precio_nuevo - item.precio_original;
-        const diferenciaColor = diferencia < 0 ? '#e74c3c' : '#27ae60';
-        const diferenciaIcon = diferencia < 0 ? 'arrow-down' : 'arrow-up';
+        const diferenciaColor = diferencia < 0 ? 'var(--nexo-error)' : 'var(--nexo-accent)';
+        const diferenciaIcon = diferencia < 0 ? 'ri-arrow-down-line' : 'ri-arrow-up-line';
         
         // Info de sucursales y historial
         let infoExtra = '';
         if (item.sucursales_similares > 0) {
             infoExtra += `<span class="info-badge info-badge-sucursales" style="margin-right: 5px;">
-                <i class="fas fa-store"></i> ${item.sucursales_similares}
+                <i class="ri-store-2-line"></i> ${item.sucursales_similares}
             </span>`;
         }
         if (item.ultimo_cambio && item.ultimo_cambio.usuario) {
             infoExtra += `<span class="info-badge info-badge-historial" title="Último cambio: ${item.ultimo_cambio.fecha || ''}">
-                <i class="fas fa-user"></i> ${item.ultimo_cambio.usuario} ${item.ultimo_cambio.hace_cuanto ? '(' + item.ultimo_cambio.hace_cuanto + ')' : ''}
+                <i class="ri-user-line"></i> ${item.ultimo_cambio.usuario} ${item.ultimo_cambio.hace_cuanto ? '(' + item.ultimo_cambio.hace_cuanto + ')' : ''}
             </span>`;
         }
         
@@ -786,34 +2138,54 @@ function renderizarListaEdicion() {
         const descuentoAplicado = item.precio_nuevo !== item.precio_original ? 
             ((item.precio_original - item.precio_nuevo) / item.precio_original * 100) : 0;
         const descuentoText = descuentoAplicado !== 0 ? 
-            `<span style="color: ${descuentoAplicado > 0 ? '#e74c3c' : '#27ae60'}; font-weight: 600; font-size: 12px;">
+            `<span style="color: ${descuentoAplicado > 0 ? 'var(--nexo-error)' : 'var(--nexo-accent)'}; font-weight: 600; font-size: 12px;">
                 ${descuentoAplicado > 0 ? '-' : '+'}${Math.abs(descuentoAplicado).toFixed(1)}%
             </span>` : '';
+        
+        // Alerta de sincronización
+        let alertaSucursales = '';
+        if (item.sucursales_similares > 0) {
+            const listaSuc = item.sucursales_lista && item.sucursales_lista.length > 0 
+                ? item.sucursales_lista.join(', ') 
+                : `${item.sucursales_similares} sucursal${item.sucursales_similares > 1 ? 'es' : ''}`;
+            
+            alertaSucursales = `
+                <div class="alert-sucursales">
+                    <i class="ri-notification-badge-line"></i>
+                    <div class="alert-sucursales-content">
+                        <div class="alert-sucursales-title">🔔 Se notificará a otras sucursales</div>
+                        <div class="alert-sucursales-text">
+                            Este cambio creará una alerta para: <strong>${listaSuc}</strong>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
         
         div.innerHTML = `
             <!-- Vista Colapsada (Compacta) -->
             <div class="edit-item-collapsed" onclick="toggleExpand(${item.id})">
                 <div class="collapsed-info">
                     <div class="collapsed-left">
-                        <strong style="font-size: 14px; color: #2c3e50;">${index + 1}. ${item.nombre}</strong>
-                        <div style="font-size: 11px; color: #7f8c8d; margin-top: 3px;" id="info-${item.id}">
+                        <strong style="font-size: 14px; color: var(--nexo-secondary);">${index + 1}. ${item.nombre}</strong>
+                        <div style="font-size: 11px; color: var(--nexo-gray-500); margin-top: 4px;" id="info-${item.id}">
                             Costo: ${formatearMoneda(item.costo)} ${descuentoText} | ${infoExtra}
                         </div>
                     </div>
                     <div class="collapsed-prices">
                         <div class="price-box-small">
                             <div class="label">Original</div>
-                            <div class="value" style="color: #7f8c8d;">${formatearMoneda(item.precio_original)}</div>
+                            <div class="value" style="color: var(--nexo-gray-500);">${formatearMoneda(item.precio_original)}</div>
                         </div>
-                        <div style="color: ${diferenciaColor}; font-size: 18px;" id="flecha-${item.id}">
-                            <i class="fas fa-${diferenciaIcon}"></i>
+                        <div style="color: ${diferenciaColor}; font-size: 20px;" id="flecha-${item.id}">
+                            <i class="${diferenciaIcon}"></i>
                         </div>
                         <div class="price-box-small">
                             <div class="label">Nuevo</div>
                             <div class="value" style="color: ${diferenciaColor};" id="precioNuevoCollapsed-${item.id}">${formatearMoneda(item.precio_nuevo)}</div>
                         </div>
                         <span class="expand-icon">
-                            <i class="fas fa-chevron-down"></i>
+                            <i class="ri-arrow-down-s-line"></i>
                         </span>
                     </div>
                 </div>
@@ -824,19 +2196,24 @@ function renderizarListaEdicion() {
             <div class="edit-item-header">
                 <div>
                     <span class="edit-item-title">${item.nombre}</span>
-                    <div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;">
+                    <div style="font-size: 11px; color: var(--nexo-gray-500); margin-top: 4px;">
                         ${infoExtra}
                     </div>
                 </div>
-                <button class="btn-remove" onclick="removerDeLista(${item.id})">
-                    <i class="fas fa-times"></i> Quitar
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-historial btn-historial-small" onclick="verHistorial(${item.id}, '${item.nombre.replace(/'/g, "\\'")}', '${item.talla || ''}', ${item.costo || 0}, ${item.precio_original || 0})">
+                        <i class="ri-history-line"></i> Historial
+                    </button>
+                    <button class="btn-remove" onclick="removerDeLista(${item.id})">
+                        <i class="ri-close-line"></i> Quitar
+                    </button>
+                </div>
             </div>
             
             <div class="edit-fields">
                 <div class="field-group">
                     <label class="field-label">Desc. %</label>
-                    <div style="display: flex; gap: 5px;">
+                    <div style="display: flex; gap: 6px;">
                         <input type="number" 
                                id="desc-${item.id}"
                                class="field-input" 
@@ -848,16 +2225,16 @@ function renderizarListaEdicion() {
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
                         <button onclick="aplicarDescuentoPorcentaje(${item.id}, document.getElementById('desc-${item.id}').value)" 
-                                style="background: #27ae60; color: white; border: none; padding: 8px 10px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+                                class="btn-confirm"
                                 title="Enter o Click para aplicar">
-                            ✓
+                            <i class="ri-check-line"></i>
                         </button>
                     </div>
                 </div>
                 
                 <div class="field-group">
                     <label class="field-label">Desc. $</label>
-                    <div style="display: flex; gap: 5px;">
+                    <div style="display: flex; gap: 6px;">
                         <input type="number" 
                                id="descPesos-${item.id}"
                                class="field-input" 
@@ -869,16 +2246,16 @@ function renderizarListaEdicion() {
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
                         <button onclick="aplicarDescuentoPesos(${item.id}, document.getElementById('descPesos-${item.id}').value)" 
-                                style="background: #27ae60; color: white; border: none; padding: 8px 10px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+                                class="btn-confirm"
                                 title="Enter o Click para aplicar">
-                            ✓
+                            <i class="ri-check-line"></i>
                         </button>
                     </div>
                 </div>
                 
                 <div class="field-group">
                     <label class="field-label">Precio Nuevo</label>
-                    <div style="display: flex; gap: 5px;">
+                    <div style="display: flex; gap: 6px;">
                         <input type="number" 
                                id="precioDirecto-${item.id}"
                                class="field-input" 
@@ -889,16 +2266,16 @@ function renderizarListaEdicion() {
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
                         <button onclick="aplicarPrecioDirecto(${item.id}, document.getElementById('precioDirecto-${item.id}').value)" 
-                                style="background: #27ae60; color: white; border: none; padding: 8px 10px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+                                class="btn-confirm"
                                 title="Enter o Click para aplicar">
-                            ✓
+                            <i class="ri-check-line"></i>
                         </button>
                     </div>
                 </div>
                 
                 <div class="field-group">
                     <label class="field-label">Margen Obj. %</label>
-                    <div style="display: flex; gap: 5px;">
+                    <div style="display: flex; gap: 6px;">
                         <input type="number" 
                                id="margenObj-${item.id}"
                                class="field-input" 
@@ -909,9 +2286,9 @@ function renderizarListaEdicion() {
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
                         <button onclick="aplicarMargenObjetivo(${item.id}, document.getElementById('margenObj-${item.id}').value)" 
-                                style="background: #27ae60; color: white; border: none; padding: 8px 10px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+                                class="btn-confirm"
                                 title="Enter o Click para aplicar">
-                            ✓
+                            <i class="ri-check-line"></i>
                         </button>
                     </div>
                 </div>
@@ -926,7 +2303,7 @@ function renderizarListaEdicion() {
             <div class="result-preview">
                 <div class="result-row">
                     <span class="result-label">Costo:</span>
-                    <span class="result-value" style="color: #e74c3c;">${formatearMoneda(item.costo)}</span>
+                    <span class="result-value" style="color: var(--nexo-error);">${formatearMoneda(item.costo)}</span>
                 </div>
                 <div class="result-row">
                     <span class="result-label">Precio Original:</span>
@@ -934,7 +2311,7 @@ function renderizarListaEdicion() {
                 </div>
                 <div class="result-row">
                     <span class="result-label">Precio Nuevo:</span>
-                    <span class="result-value" style="font-size: 16px; font-weight: 700; color: #2c3e50;">${formatearMoneda(item.precio_nuevo)}</span>
+                    <span class="result-value" style="font-size: 16px; font-weight: 700; color: var(--nexo-secondary);">${formatearMoneda(item.precio_nuevo)}</span>
                 </div>
                 <div class="result-row">
                     <span class="result-label">Margen:</span>
@@ -944,17 +2321,9 @@ function renderizarListaEdicion() {
                     <span class="result-label">Markup:</span>
                     <span class="result-value ${markupClass}">${item.markup_nuevo.toFixed(1)}%</span>
                 </div>
-                ${item.sucursales_similares > 0 ? `
-                <div class="result-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e0e0e0;">
-                    <span class="result-label">
-                        <i class="fas fa-info-circle"></i> Cambio se aplicará también a:
-                    </span>
-                    <span class="result-value" style="color: #f39c12;">
-                        ${item.sucursales_similares} sucursal${item.sucursales_similares > 1 ? 'es' : ''}
-                    </span>
-                </div>
-                ` : ''}
             </div>
+            
+            ${alertaSucursales}
             </div>
         `;
         
@@ -1000,11 +2369,11 @@ function toggleExpandirTodos() {
     if (hayExpandidos) {
         // Colapsar todos
         items.forEach(item => item.classList.remove('expanded'));
-        btn.innerHTML = '<i class="fas fa-expand"></i> Expandir Todos';
+        btn.innerHTML = '<i class="ri-expand-diagonal-line"></i> Expandir Todos';
     } else {
         // Expandir todos
         items.forEach(item => item.classList.add('expanded'));
-        btn.innerHTML = '<i class="fas fa-compress"></i> Colapsar Todos';
+        btn.innerHTML = '<i class="ri-contract-left-right-line"></i> Colapsar Todos';
     }
 }
 
@@ -1027,6 +2396,14 @@ function renderizarTotales() {
     const diferencia = totalNuevo - totalOriginal;
     const porcentajeTotal = totalOriginal > 0 ? ((diferencia / totalOriginal) * 100) : 0;
     
+    // Contar sucursales que serán notificadas
+    const sucursalesNotificadas = new Set();
+    listaEdicion.forEach(item => {
+        if (item.precio_nuevo !== item.precio_original && item.sucursales_lista) {
+            item.sucursales_lista.forEach(suc => sucursalesNotificadas.add(suc));
+        }
+    });
+    
     totalesSection.innerHTML = `
         <div class="totales-grid">
             <div class="total-item">
@@ -1039,13 +2416,16 @@ function renderizarTotales() {
             </div>
             <div class="total-item">
                 <div class="total-label">Diferencia</div>
-                <div class="total-value" style="color: ${diferencia < 0 ? '#ffe4e1' : '#d4edda'};">
+                <div class="total-value" style="color: ${diferencia < 0 ? '#FFB4B4' : '#A8F0DC'};">
                     ${diferencia < 0 ? '' : '+'}${formatearMoneda(Math.round(diferencia))}
                 </div>
             </div>
         </div>
         <div style="text-align: center; font-size: 13px; opacity: 0.9;">
             Variación Total: ${porcentajeTotal >= 0 ? '+' : ''}${porcentajeTotal.toFixed(1)}%
+            ${sucursalesNotificadas.size > 0 ? `<br><span style="font-size: 11px; margin-top: 4px; display: inline-block;">
+                <i class="ri-notification-line"></i> Se notificará a ${sucursalesNotificadas.size} sucursal${sucursalesNotificadas.size > 1 ? 'es' : ''}
+            </span>` : ''}
         </div>
     `;
     
@@ -1169,7 +2549,7 @@ function actualizarItemCompleto(item) {
     item.markup_nuevo = calcularMarkup(item.costo, item.precio_nuevo);
     
     const diferencia = item.precio_nuevo - item.precio_original;
-    const diferenciaColor = diferencia < 0 ? '#e74c3c' : '#27ae60';
+    const diferenciaColor = diferencia < 0 ? 'var(--nexo-error)' : 'var(--nexo-accent)';
     const descuentoAplicado = ((item.precio_original - item.precio_nuevo) / item.precio_original * 100);
     
     // === ACTUALIZAR PRECIO NUEVO EN VISTA COLAPSADA (por ID) ===
@@ -1185,7 +2565,7 @@ function actualizarItemCompleto(item) {
         flechaDiv.style.color = diferenciaColor;
         const icon = flechaDiv.querySelector('i');
         if (icon) {
-            icon.className = diferencia < 0 ? 'fas fa-arrow-down' : 'fas fa-arrow-up';
+            icon.className = diferencia < 0 ? 'ri-arrow-down-line' : 'ri-arrow-up-line';
         }
     }
     
@@ -1193,7 +2573,7 @@ function actualizarItemCompleto(item) {
     const infoDiv = document.getElementById(`info-${item.id}`);
     if (infoDiv && descuentoAplicado !== 0) {
         const descTexto = (descuentoAplicado > 0 ? '-' : '+') + Math.abs(descuentoAplicado).toFixed(1) + '%';
-        const descColor = descuentoAplicado > 0 ? '#e74c3c' : '#27ae60';
+        const descColor = descuentoAplicado > 0 ? 'var(--nexo-error)' : 'var(--nexo-accent)';
         
         // Reconstruir el HTML del info manteniendo badges
         const badges = infoDiv.querySelectorAll('.info-badge');
@@ -1243,6 +2623,9 @@ function actualizarItemCompleto(item) {
     
     // Actualizar totales generales
     renderizarTotales();
+    
+    // Actualizar contador de cambios pendientes
+    document.getElementById('applyCount').textContent = listaEdicion.filter(i => i.precio_nuevo !== i.precio_original).length;
 }
 
 // Enfocar siguiente producto en la lista
@@ -1309,13 +2692,24 @@ function removerDeLista(productoId) {
 
 // Limpiar lista
 function limpiarLista() {
-    if (listaEdicion.length > 0 && !confirm('¿Limpiar toda la lista de edición?')) {
-        return;
+    if (listaEdicion.length > 0) {
+        Swal.fire({
+            title: '¿Limpiar lista?',
+            text: 'Se eliminarán todos los productos de la lista de edición',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#0066FF',
+            cancelButtonColor: '#8A8A9A',
+            confirmButtonText: 'Sí, limpiar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                listaEdicion = [];
+                renderizarListaEdicion();
+                actualizarEstadisticas();
+            }
+        });
     }
-    
-    listaEdicion = [];
-    renderizarListaEdicion();
-    actualizarEstadisticas();
 }
 
 // Actualizar estadísticas (ahora se hace en renderizarTotales)
@@ -1329,19 +2723,47 @@ async function aplicarTodosCambios() {
     const cambios = listaEdicion.filter(item => item.precio_nuevo !== item.precio_original);
     
     if (cambios.length === 0) {
-        alert('No hay cambios para aplicar');
+        Swal.fire({
+            icon: 'info',
+            title: 'Sin cambios',
+            text: 'No hay cambios de precio para aplicar',
+            confirmButtonColor: '#0066FF'
+        });
         return;
     }
     
-    if (!confirm(`¿Aplicar ${cambios.length} cambios de precio?`)) {
-        return;
+    // Contar sucursales que serán notificadas
+    const sucursalesNotificadas = new Set();
+    cambios.forEach(item => {
+        if (item.sucursales_lista) {
+            item.sucursales_lista.forEach(suc => sucursalesNotificadas.add(suc));
+        }
+    });
+    
+    let mensajeConfirmacion = `¿Aplicar ${cambios.length} cambio${cambios.length > 1 ? 's' : ''} de precio?`;
+    if (sucursalesNotificadas.size > 0) {
+        mensajeConfirmacion += `<br><br><small style="color: #996B00;"><i class="ri-notification-line"></i> Se crearán alertas para ${sucursalesNotificadas.size} sucursal${sucursalesNotificadas.size > 1 ? 'es' : ''}</small>`;
     }
+    
+    const confirmResult = await Swal.fire({
+        title: 'Confirmar cambios',
+        html: mensajeConfirmacion,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#0066FF',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: 'Sí, aplicar',
+        cancelButtonText: 'Cancelar'
+    });
+    
+    if (!confirmResult.isConfirmed) return;
     
     // Mostrar overlay de carga
     document.getElementById('loadingOverlay').style.display = 'flex';
     
     let exitosos = 0;
     let errores = 0;
+    let sucursalesNotificadasTotal = 0;
     
     for (let i = 0; i < cambios.length; i++) {
         const cambio = cambios[i];
@@ -1358,7 +2780,8 @@ async function aplicarTodosCambios() {
                 },
                 body: JSON.stringify({
                     producto_id: cambio.id,
-                    nuevo_precio: Math.round(cambio.precio_nuevo)
+                    nuevo_precio: Math.round(cambio.precio_nuevo),
+                    sincronizar_sucursales: true
                 })
             });
             
@@ -1366,6 +2789,9 @@ async function aplicarTodosCambios() {
             
             if (data.success) {
                 exitosos++;
+                if (data.sucursales_notificadas) {
+                    sucursalesNotificadasTotal += data.sucursales_notificadas;
+                }
             } else {
                 errores++;
             }
@@ -1382,10 +2808,31 @@ async function aplicarTodosCambios() {
     
     // Mostrar resultado
     if (exitosos > 0) {
-        alert(`✓ ${exitosos} productos actualizados correctamente` + (errores > 0 ? `\n✗ ${errores} errores` : ''));
-        limpiarLista();
+        let mensajeExito = `${exitosos} producto${exitosos > 1 ? 's' : ''} actualizado${exitosos > 1 ? 's' : ''} correctamente`;
+        if (sucursalesNotificadasTotal > 0) {
+            mensajeExito += `<br><br><small><i class="ri-notification-line"></i> ${sucursalesNotificadasTotal} notificaci${sucursalesNotificadasTotal > 1 ? 'ones enviadas' : 'ón enviada'} a otras sucursales</small>`;
+        }
+        if (errores > 0) {
+            mensajeExito += `<br><small style="color: var(--nexo-error);">⚠️ ${errores} error${errores > 1 ? 'es' : ''}</small>`;
+        }
+        
+        Swal.fire({
+            icon: 'success',
+            title: '¡Cambios aplicados!',
+            html: mensajeExito,
+            confirmButtonColor: '#0066FF'
+        });
+        
+        listaEdicion = [];
+        renderizarListaEdicion();
+        actualizarEstadisticas();
     } else {
-        alert('✗ Error: No se pudo actualizar ningún producto');
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'No se pudo actualizar ningún producto',
+            confirmButtonColor: '#0066FF'
+        });
     }
 }
 
@@ -1425,6 +2872,318 @@ document.addEventListener('keydown', function(e) {
     if (e.ctrlKey && e.key === 'Enter') {
         aplicarTodosCambios();
     }
+    // ESC para cerrar modal
+    if (e.key === 'Escape') {
+        cerrarModalHistorial();
+    }
 });
-</script>
 
+// ========== FUNCIONES DE HISTORIAL ==========
+
+// Abrir modal de historial
+async function verHistorial(productoId, nombre, talla, costo, precioActual) {
+    const modal = document.getElementById('modalHistorialOverlay');
+    const nombreEl = document.getElementById('historialProductoNombre');
+    const detalleEl = document.getElementById('historialProductoDetalle');
+    const contentEl = document.getElementById('historialContent');
+    
+    // Mostrar modal con loading
+    modal.classList.add('active');
+    
+    // Actualizar info del producto
+    nombreEl.textContent = nombre;
+    detalleEl.innerHTML = `
+        <span style="margin-right: 16px;"><strong>Talla:</strong> ${talla || 'N/A'}</span>
+        <span style="margin-right: 16px;"><strong>Costo:</strong> ${formatearMoneda(costo)}</span>
+        <span><strong>Precio Actual:</strong> ${formatearMoneda(precioActual)}</span>
+    `;
+    
+    // Mostrar loading
+    contentEl.innerHTML = `
+        <div class="historial-loading">
+            <div class="spinner-historial"></div>
+            <p>Cargando historial...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/app/gestion-precios/historial/${productoId}/`);
+        const data = await response.json();
+        
+        if (data.success && data.historial && data.historial.length > 0) {
+            renderizarHistorial(data.historial, contentEl);
+        } else {
+            contentEl.innerHTML = `
+                <div class="historial-empty">
+                    <i class="ri-file-list-3-line"></i>
+                    <h4>Sin historial</h4>
+                    <p>Este producto no tiene cambios de precio registrados</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error cargando historial:', error);
+        contentEl.innerHTML = `
+            <div class="historial-empty">
+                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+                <h4>Error de conexión</h4>
+                <p>No se pudo cargar el historial. Intenta nuevamente.</p>
+            </div>
+        `;
+    }
+}
+
+// Variable para vista actual del historial
+let historialVistaActual = 'timeline';
+let historialDataActual = [];
+
+// Renderizar historial completo
+function renderizarHistorial(historial, container) {
+    historialDataActual = historial;
+    
+    // Calcular estadísticas
+    const stats = calcularEstadisticasHistorial(historial);
+    
+    let html = `
+        <!-- Estadísticas -->
+        <div class="historial-stats">
+            <div class="historial-stat-card">
+                <div class="stat-value">${historial.length}</div>
+                <div class="stat-label">Cambios</div>
+            </div>
+            <div class="historial-stat-card ${stats.variacionTotal >= 0 ? 'tendencia-up' : 'tendencia-down'}">
+                <div class="stat-value">
+                    <i class="ri-arrow-${stats.variacionTotal >= 0 ? 'up' : 'down'}-line"></i>
+                    ${stats.variacionTotal >= 0 ? '+' : ''}${stats.variacionPorcentaje.toFixed(1)}%
+                </div>
+                <div class="stat-label">Variación Total</div>
+            </div>
+            <div class="historial-stat-card">
+                <div class="stat-value">${formatearMoneda(stats.precioPromedio)}</div>
+                <div class="stat-label">Precio Promedio</div>
+            </div>
+            <div class="historial-stat-card">
+                <div class="stat-value">${stats.diasDesdeUltimo}</div>
+                <div class="stat-label">Días últ. cambio</div>
+            </div>
+        </div>
+        
+        <!-- Toggle de vista -->
+        <div class="historial-view-toggle">
+            <button onclick="cambiarVistaHistorial('timeline')" class="${historialVistaActual === 'timeline' ? 'active' : ''}" id="btnVistaTimeline">
+                <i class="ri-time-line"></i> Timeline
+            </button>
+            <button onclick="cambiarVistaHistorial('tabla')" class="${historialVistaActual === 'tabla' ? 'active' : ''}" id="btnVistaTabla">
+                <i class="ri-table-line"></i> Tabla
+            </button>
+        </div>
+        
+        <!-- Contenedor de vista -->
+        <div id="historialVistaContainer">
+            ${historialVistaActual === 'timeline' ? renderizarTimeline(historial) : renderizarTabla(historial)}
+        </div>
+        
+        <div style="text-align: center; margin-top: 16px; font-size: 12px; color: var(--nexo-gray-500);">
+            <i class="ri-information-line"></i> Mostrando los últimos ${historial.length} cambios de precio
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Calcular estadísticas
+function calcularEstadisticasHistorial(historial) {
+    if (historial.length === 0) {
+        return { variacionTotal: 0, variacionPorcentaje: 0, precioPromedio: 0, diasDesdeUltimo: '-' };
+    }
+    
+    const primerCambio = historial[historial.length - 1];
+    const ultimoCambio = historial[0];
+    
+    const variacionTotal = ultimoCambio.precio_nuevo - primerCambio.precio_anterior;
+    const variacionPorcentaje = primerCambio.precio_anterior > 0 
+        ? (variacionTotal / primerCambio.precio_anterior) * 100 
+        : 0;
+    
+    const precioPromedio = historial.reduce((sum, c) => sum + c.precio_nuevo, 0) / historial.length;
+    
+    // Calcular días desde último cambio
+    let diasDesdeUltimo = '-';
+    if (ultimoCambio.hace_cuanto) {
+        const match = ultimoCambio.hace_cuanto.match(/(\d+)/);
+        if (match) {
+            if (ultimoCambio.hace_cuanto.includes('día')) {
+                diasDesdeUltimo = match[1];
+            } else if (ultimoCambio.hace_cuanto.includes('hora')) {
+                diasDesdeUltimo = '0';
+            } else if (ultimoCambio.hace_cuanto.includes('minuto') || ultimoCambio.hace_cuanto.includes('segundo')) {
+                diasDesdeUltimo = '0';
+            } else if (ultimoCambio.hace_cuanto.includes('mes')) {
+                diasDesdeUltimo = parseInt(match[1]) * 30;
+            }
+        } else if (ultimoCambio.hace_cuanto.includes('hoy') || ultimoCambio.hace_cuanto.includes('Hoy')) {
+            diasDesdeUltimo = '0';
+        }
+    }
+    
+    return { variacionTotal, variacionPorcentaje, precioPromedio, diasDesdeUltimo };
+}
+
+// Renderizar vista Timeline
+function renderizarTimeline(historial) {
+    let html = '<div class="historial-timeline">';
+    
+    historial.forEach((cambio, index) => {
+        const variacion = cambio.diferencia || (cambio.precio_nuevo - cambio.precio_anterior);
+        const porcentaje = cambio.porcentaje_cambio || 
+            (cambio.precio_anterior > 0 ? ((variacion / cambio.precio_anterior) * 100) : 0);
+        
+        const fechaFormateada = cambio.fecha_cambio || cambio.fecha || 'N/A';
+        const haceCuanto = cambio.hace_cuanto || '';
+        const tipoCambio = cambio.tipo_cambio || 'Manual';
+        const motivo = cambio.motivo || '';
+        
+        // Clase para tipo de cambio
+        const tipoClass = tipoCambio.toLowerCase().includes('promo') ? 'tipo-promocion' : 
+                          tipoCambio.toLowerCase().includes('ajuste') ? 'tipo-ajuste' :
+                          tipoCambio.toLowerCase().includes('import') ? 'tipo-importacion' : 'tipo-manual';
+        
+        html += `
+            <div class="historial-timeline-item ${variacion < 0 ? 'cambio-negativo' : ''}">
+                <div class="timeline-header">
+                    <div class="timeline-fecha">
+                        ${fechaFormateada}
+                        ${haceCuanto ? `<small>${haceCuanto}</small>` : ''}
+                    </div>
+                    <span class="tipo-cambio-badge ${tipoClass}">${tipoCambio}</span>
+                </div>
+                
+                <div class="timeline-precios">
+                    <div class="timeline-precio-box">
+                        <div class="label">Anterior</div>
+                        <div class="value anterior">${formatearMoneda(cambio.precio_anterior)}</div>
+                    </div>
+                    <div class="timeline-flecha">
+                        <i class="ri-arrow-right-line"></i>
+                    </div>
+                    <div class="timeline-precio-box">
+                        <div class="label">Nuevo</div>
+                        <div class="value nuevo">${formatearMoneda(cambio.precio_nuevo)}</div>
+                    </div>
+                    <div class="timeline-variacion ${variacion >= 0 ? 'positivo' : 'negativo'}">
+                        <i class="ri-arrow-${variacion >= 0 ? 'up' : 'down'}-line"></i>
+                        ${variacion >= 0 ? '+' : ''}${formatearMoneda(variacion)}
+                        <small>(${variacion >= 0 ? '+' : ''}${porcentaje.toFixed(1)}%)</small>
+                    </div>
+                </div>
+                
+                ${motivo && motivo !== 'Sin motivo' ? `<span class="motivo-cambio"><i class="ri-chat-quote-line"></i> ${motivo}</span>` : ''}
+                
+                <div class="timeline-footer">
+                    <span class="usuario-badge">
+                        <i class="ri-user-line"></i>
+                        ${cambio.usuario || 'Sistema'}
+                    </span>
+                    ${cambio.tallas_afectadas ? `<span style="font-size: 11px; color: var(--nexo-gray-500);"><i class="ri-t-shirt-line"></i> ${cambio.tallas_afectadas} tallas</span>` : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+// Renderizar vista Tabla
+function renderizarTabla(historial) {
+    let html = `
+        <table class="historial-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Precio Anterior</th>
+                    <th>Precio Nuevo</th>
+                    <th>Variación</th>
+                    <th>Usuario</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    historial.forEach((cambio, index) => {
+        const variacion = cambio.diferencia || (cambio.precio_nuevo - cambio.precio_anterior);
+        const porcentaje = cambio.porcentaje_cambio || 
+            (cambio.precio_anterior > 0 ? ((variacion / cambio.precio_anterior) * 100) : 0);
+        
+        const variacionClass = variacion >= 0 ? 'variacion-positiva' : 'variacion-negativa';
+        const variacionIcon = variacion >= 0 ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
+        
+        const fechaFormateada = cambio.fecha_cambio || cambio.fecha || 'N/A';
+        const haceCuanto = cambio.hace_cuanto || '';
+        const tipoCambio = cambio.tipo_cambio || 'Manual';
+        
+        const tipoClass = tipoCambio.toLowerCase().includes('promo') ? 'tipo-promocion' : 
+                          tipoCambio.toLowerCase().includes('ajuste') ? 'tipo-ajuste' :
+                          tipoCambio.toLowerCase().includes('import') ? 'tipo-importacion' : 'tipo-manual';
+        
+        const esReciente = index === 0 ? 'style="background: var(--nexo-primary-light);"' : '';
+        
+        html += `
+            <tr ${esReciente}>
+                <td>
+                    <div class="fecha-texto">
+                        ${fechaFormateada}
+                        ${haceCuanto ? `<small>${haceCuanto}</small>` : ''}
+                    </div>
+                </td>
+                <td>
+                    <span class="tipo-cambio-badge ${tipoClass}">${tipoCambio}</span>
+                </td>
+                <td class="precio-anterior">${formatearMoneda(cambio.precio_anterior)}</td>
+                <td class="precio-nuevo">${formatearMoneda(cambio.precio_nuevo)}</td>
+                <td class="${variacionClass}">
+                    <i class="${variacionIcon}"></i>
+                    ${variacion >= 0 ? '+' : ''}${formatearMoneda(variacion)}
+                    <br>
+                    <small style="font-weight: 400;">(${variacion >= 0 ? '+' : ''}${porcentaje.toFixed(1)}%)</small>
+                </td>
+                <td>
+                    <span class="usuario-badge">
+                        <i class="ri-user-line"></i>
+                        ${cambio.usuario || 'Sistema'}
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    return html;
+}
+
+// Cambiar vista del historial
+function cambiarVistaHistorial(vista) {
+    historialVistaActual = vista;
+    
+    // Actualizar botones
+    document.getElementById('btnVistaTimeline').classList.toggle('active', vista === 'timeline');
+    document.getElementById('btnVistaTabla').classList.toggle('active', vista === 'tabla');
+    
+    // Actualizar contenido
+    const container = document.getElementById('historialVistaContainer');
+    if (vista === 'timeline') {
+        container.innerHTML = renderizarTimeline(historialDataActual);
+    } else {
+        container.innerHTML = renderizarTabla(historialDataActual);
+    }
+}
+
+// Cerrar modal de historial
+function cerrarModalHistorial(event) {
+    if (event && event.target !== event.currentTarget) return;
+    
+    const modal = document.getElementById('modalHistorialOverlay');
+    modal.classList.remove('active');
+}
+</script>

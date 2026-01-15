@@ -5,110 +5,196 @@
 {% csrf_token %}
 
 <style>
+    /* ========== NEXO DESIGN SYSTEM - Variables CSS ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-transition-fast: 150ms ease;
+        --nexo-transition-normal: 250ms ease;
+    }
+
+    /* ========== Componentes Principales ========== */
     .arqueo-card {
-        border: 1px solid #e3e6f0;
-        border-radius: 0.35rem;
-        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-md);
         margin-bottom: 1rem;
+        background: var(--nexo-white);
     }
     
+    .arqueo-card:hover {
+        box-shadow: var(--nexo-shadow-lg);
+    }
+    
+    /* ========== Badges de Estado ========== */
     .estado-badge {
         font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 9999px;
         font-weight: 600;
+        display: inline-block;
     }
     
-    .estado-cerrado { background-color: #d4edda; color: #155724; }
-    .estado-abierto { background-color: #fff3cd; color: #856404; }
-    .estado-con-diferencias { background-color: #f8d7da; color: #721c24; }
-    .estado-revisado { background-color: #cce7ff; color: #004085; }
+    .estado-cerrado { 
+        background-color: rgba(0, 212, 170, 0.15); 
+        color: var(--nexo-success); 
+    }
+    .estado-abierto { 
+        background-color: rgba(255, 176, 32, 0.15); 
+        color: #996B00; 
+    }
+    .estado-con-diferencias { 
+        background-color: rgba(255, 77, 77, 0.15); 
+        color: var(--nexo-error); 
+    }
+    .estado-revisado { 
+        background-color: rgba(0, 102, 255, 0.15); 
+        color: var(--nexo-primary); 
+    }
     
-    .diferencia-positiva { color: #28a745; font-weight: bold; }
-    .diferencia-negativa { color: #dc3545; font-weight: bold; }
-    .diferencia-exacta { color: #6c757d; font-weight: bold; }
+    /* ========== Diferencias ========== */
+    .diferencia-positiva { 
+        color: var(--nexo-success); 
+        font-weight: 700; 
+    }
+    .diferencia-negativa { 
+        color: var(--nexo-error); 
+        font-weight: 700; 
+    }
+    .diferencia-exacta { 
+        color: var(--nexo-gray-500); 
+        font-weight: 700; 
+    }
     
+    /* ========== Inputs ========== */
     .conteo-input {
         width: 80px;
         text-align: center;
         margin: 0 5px;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-sm);
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .conteo-input:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+        outline: none;
     }
     
     .total-denominacion {
-        font-weight: bold;
-        color: #495057;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
     }
     
+    /* ========== Alertas ========== */
     .alert-diferencia {
-        border-left: 4px solid #dc3545;
-        background-color: #f8d7da;
-        border-color: #f5c6cb;
+        border-left: 4px solid var(--nexo-error);
+        background-color: rgba(255, 77, 77, 0.1);
+        border-color: rgba(255, 77, 77, 0.3);
+        border-radius: var(--nexo-radius-md);
     }
     
     .alert-exacto {
-        border-left: 4px solid #28a745;
-        background-color: #d4edda;
-        border-color: #c3e6cb;
+        border-left: 4px solid var(--nexo-success);
+        background-color: rgba(0, 212, 170, 0.1);
+        border-color: rgba(0, 212, 170, 0.3);
+        border-radius: var(--nexo-radius-md);
     }
     
+    /* ========== Loading Overlay ========== */
     .loading-overlay {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: rgba(26, 26, 46, 0.7);
         display: none;
         justify-content: center;
         align-items: center;
         z-index: 9999;
+        backdrop-filter: blur(4px);
     }
     
+    /* ========== Botones NEXO ========== */
     .btn-arqueo {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: var(--nexo-primary);
         border: none;
-        color: white;
+        color: var(--nexo-white);
         font-weight: 600;
-        transition: all 0.3s ease;
+        transition: var(--nexo-transition-fast);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.5rem 1rem;
     }
     
     .btn-arqueo:hover {
+        background: var(--nexo-primary-dark);
         transform: translateY(-2px);
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-        color: white;
+        box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4);
+        color: var(--nexo-white);
     }
     
-    /* Estilos para el grupo de botones */
+    /* ========== Grupo de Botones ========== */
     .btn-group .btn {
         font-weight: 600;
-        transition: all 0.3s ease;
+        transition: var(--nexo-transition-fast);
         border: none;
         margin-right: 0;
+        border-radius: var(--nexo-radius-md);
     }
     
     .btn-group .btn:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        box-shadow: var(--nexo-shadow-md);
     }
     
     .btn-group .btn-info {
-        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
-        color: white;
+        background: var(--nexo-info);
+        color: var(--nexo-white);
+    }
+    
+    .btn-group .btn-info:hover {
+        background: var(--nexo-primary-dark);
     }
     
     .btn-group .btn-success {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        color: white;
+        background: var(--nexo-success);
+        color: var(--nexo-white);
     }
     
+    .btn-group .btn-success:hover {
+        background: #00B894;
+    }
+    
+    /* ========== Validación de Formularios ========== */
     .form-control.is-invalid {
-        border-color: #dc3545;
-        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+        border-color: var(--nexo-error);
+        box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.15);
     }
     
     .form-control.is-valid {
-        border-color: #28a745;
-        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+        border-color: var(--nexo-success);
+        box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.15);
     }
     
     .invalid-feedback {
@@ -116,123 +202,827 @@
         width: 100%;
         margin-top: 0.25rem;
         font-size: 0.875rem;
-        color: #dc3545;
+        color: var(--nexo-error);
     }
     
     .border-danger {
-        border-color: #dc3545 !important;
-        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+        border-color: var(--nexo-error) !important;
+        box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.15) !important;
     }
     
-    /* Estilos para el modal de resumen de caja */
+    /* ========== Modal Fullscreen ========== */
     .modal-fullscreen .modal-body {
         overflow-y: auto;
         max-height: calc(100vh - 200px);
+        background: var(--nexo-gray-100);
     }
     
     .form-control-lg.text-end {
         font-weight: 600;
-        background-color: #f8f9fa;
+        background-color: var(--nexo-gray-100);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+    }
+    
+    /* ========== Cards ========== */
+    .card {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        background: var(--nexo-white);
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .card:hover {
+        box-shadow: var(--nexo-shadow-md);
+    }
+    
+    .card-header {
+        background: var(--nexo-white);
+        border-bottom: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0 !important;
+        padding: 1rem 1.25rem;
     }
     
     .card-header h6 {
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        color: var(--nexo-gray-900);
+        margin: 0;
     }
     
+    .card-header.bg-primary {
+        background: var(--nexo-primary) !important;
+        color: var(--nexo-white);
+    }
+    
+    .card-header.bg-primary h6 {
+        color: var(--nexo-white);
+    }
+    
+    .card-header.bg-success {
+        background: var(--nexo-success) !important;
+        color: var(--nexo-white);
+    }
+    
+    .card-header.bg-success h6 {
+        color: var(--nexo-white);
+    }
+    
+    .card-header.bg-warning {
+        background: var(--nexo-warning) !important;
+        color: var(--nexo-gray-900);
+    }
+    
+    .card-header.bg-warning h6 {
+        color: var(--nexo-gray-900);
+    }
+    
+    .card-header.bg-secondary {
+        background: var(--nexo-secondary) !important;
+        color: var(--nexo-white);
+    }
+    
+    .card-header.bg-secondary h6 {
+        color: var(--nexo-white);
+    }
+    
+    .card-header.bg-info {
+        background: var(--nexo-info) !important;
+        color: var(--nexo-white);
+    }
+    
+    .card-header.bg-info h6 {
+        color: var(--nexo-white);
+    }
+    
+    /* ========== Formularios ========== */
     .form-label.small {
         font-size: 0.875rem;
         font-weight: 500;
-        color: #495057;
+        color: var(--nexo-gray-700);
         margin-bottom: 0.25rem;
     }
     
+    .form-label {
+        font-weight: 500;
+        color: var(--nexo-gray-700);
+    }
+    
+    .form-control {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .form-control:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    }
+    
+    .form-select {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        transition: var(--nexo-transition-fast);
+    }
+    
+    .form-select:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    }
+    
+    /* ========== Colores de Texto NEXO ========== */
     .text-success {
-        color: #198754 !important;
+        color: var(--nexo-success) !important;
     }
     
     .text-primary {
-        color: #0d6efd !important;
+        color: var(--nexo-primary) !important;
     }
     
     .text-warning {
-        color: #fd7e14 !important;
+        color: var(--nexo-warning) !important;
     }
     
     .text-info {
-        color: #0dcaf0 !important;
+        color: var(--nexo-info) !important;
     }
     
-    /* Animación para los campos de la cuadratura */
+    .text-danger {
+        color: var(--nexo-error) !important;
+    }
+    
+    .text-muted {
+        color: var(--nexo-gray-500) !important;
+    }
+    
+    /* ========== Animación para campos readonly ========== */
     .form-control[readonly] {
-        transition: all 0.3s ease;
+        transition: var(--nexo-transition-fast);
+        background-color: var(--nexo-gray-100);
     }
     
     .form-control[readonly]:focus {
-        background-color: #e9ecef;
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        background-color: var(--nexo-gray-100);
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    }
+    
+    /* ========== Tabla ========== */
+    .table {
+        color: var(--nexo-gray-900);
+    }
+    
+    .table thead th {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-700);
+        font-weight: 600;
+        border-bottom: 2px solid var(--nexo-gray-300);
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: var(--nexo-primary-light);
+    }
+    
+    .table tbody td {
+        border-bottom: 1px solid var(--nexo-gray-300);
+        vertical-align: middle;
+        padding: 0.875rem 0.75rem;
+    }
+    
+    /* ========== Modal ========== */
+    .modal-header.bg-primary {
+        background: var(--nexo-primary) !important;
+    }
+    
+    .modal-header.bg-info {
+        background: var(--nexo-info) !important;
+    }
+    
+    .modal-content {
+        border-radius: var(--nexo-radius-lg);
+        border: none;
+        box-shadow: var(--nexo-shadow-xl);
+    }
+    
+    /* ========== Breadcrumb ========== */
+    .breadcrumb {
+        background: transparent;
+        margin: 0;
+    }
+    
+    .breadcrumb-item a {
+        color: var(--nexo-primary);
+        text-decoration: none;
+    }
+    
+    .breadcrumb-item.active {
+        color: var(--nexo-gray-500);
+    }
+    
+    /* ========== Page Title ========== */
+    .page-title-box h4 {
+        color: var(--nexo-gray-900);
+        font-weight: 600;
+    }
+    
+    /* ========== Botones Adicionales ========== */
+    .btn-primary {
+        background: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+    }
+    
+    .btn-primary:hover {
+        background: var(--nexo-primary-dark);
+        border-color: var(--nexo-primary-dark);
+    }
+    
+    .btn-outline-primary {
+        color: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+    }
+    
+    .btn-outline-primary:hover {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+    
+    .btn-outline-secondary {
+        color: var(--nexo-gray-700);
+        border-color: var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+    }
+    
+    .btn-outline-secondary:hover {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-900);
+        border-color: var(--nexo-gray-300);
+    }
+    
+    .btn-warning {
+        background: var(--nexo-warning);
+        border-color: var(--nexo-warning);
+        color: var(--nexo-gray-900);
+        border-radius: var(--nexo-radius-md);
+    }
+    
+    .btn-warning:hover {
+        background: #E69D00;
+        border-color: #E69D00;
+        color: var(--nexo-gray-900);
+    }
+    
+    .btn-secondary {
+        background: var(--nexo-gray-500);
+        border-color: var(--nexo-gray-500);
+        border-radius: var(--nexo-radius-md);
+    }
+    
+    .btn-secondary:hover {
+        background: var(--nexo-gray-700);
+        border-color: var(--nexo-gray-700);
+    }
+    
+    /* ========== Paginación ========== */
+    .pagination .page-item .page-link {
+        color: var(--nexo-primary);
+        border-color: var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-sm);
+        margin: 0 2px;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+    }
+    
+    .pagination .page-item .page-link:hover {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+    
+    /* ========== Alertas NEXO ========== */
+    .alert-info {
+        background-color: rgba(0, 102, 255, 0.1);
+        border-color: rgba(0, 102, 255, 0.2);
+        color: var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+        border-left: 4px solid var(--nexo-primary);
+    }
+    
+    .alert-success {
+        background-color: rgba(0, 212, 170, 0.1);
+        border-color: rgba(0, 212, 170, 0.2);
+        color: #00A080;
+        border-radius: var(--nexo-radius-md);
+        border-left: 4px solid var(--nexo-success);
+    }
+    
+    .alert-warning {
+        background-color: rgba(255, 176, 32, 0.1);
+        border-color: rgba(255, 176, 32, 0.2);
+        color: #996B00;
+        border-radius: var(--nexo-radius-md);
+        border-left: 4px solid var(--nexo-warning);
+    }
+    
+    .alert-danger {
+        background-color: rgba(255, 77, 77, 0.1);
+        border-color: rgba(255, 77, 77, 0.2);
+        color: var(--nexo-error);
+        border-radius: var(--nexo-radius-md);
+        border-left: 4px solid var(--nexo-error);
+    }
+    
+    /* ========== Background Colors ========== */
+    .bg-light {
+        background-color: var(--nexo-gray-100) !important;
+    }
+    
+    /* ========== Spinner ========== */
+    .spinner-border.text-primary {
+        color: var(--nexo-primary) !important;
+    }
+    
+    .spinner-border.text-light {
+        color: var(--nexo-white) !important;
+    }
+    
+    /* ========== Inputs especiales ========== */
+    .input-group-text {
+        background: var(--nexo-gray-100);
+        border-color: var(--nexo-gray-300);
+        color: var(--nexo-gray-700);
+    }
+    
+    /* ========== Línea divisora ========== */
+    hr {
+        border-color: var(--nexo-gray-300);
+        opacity: 0.5;
+    }
+    
+    /* ========== Workflow Steps ========== */
+    .workflow-step {
+        flex: 0 0 auto;
+    }
+    
+    .step-indicator {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.875rem;
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-500);
+        border: 2px solid var(--nexo-gray-300);
+        transition: all 0.3s ease;
+    }
+    
+    .step-indicator.completed {
+        background: var(--nexo-success);
+        color: white;
+        border-color: var(--nexo-success);
+    }
+    
+    .step-indicator.active {
+        background: var(--nexo-primary);
+        color: white;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.2);
+        animation: pulse-step 2s infinite;
+    }
+    
+    .step-indicator.warning {
+        background: var(--nexo-warning);
+        color: var(--nexo-gray-900);
+        border-color: var(--nexo-warning);
+    }
+    
+    .workflow-connector {
+        flex: 1;
+        height: 3px;
+        background: var(--nexo-gray-200);
+        margin: 0 8px;
+        border-radius: 2px;
+        position: relative;
+    }
+    
+    .workflow-connector.completed {
+        background: var(--nexo-success);
+    }
+    
+    .workflow-connector.active {
+        background: linear-gradient(90deg, var(--nexo-success), var(--nexo-primary));
+    }
+    
+    @keyframes pulse-step {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.2); }
+        50% { box-shadow: 0 0 0 8px rgba(0, 102, 255, 0.1); }
+    }
+    
+    /* ========== Alerta Post-Cierre ========== */
+    #alertaVentasPostCierre {
+        animation: slideIn 0.5s ease;
+    }
+    
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* ========== Cards de Resumen Mejorados ========== */
+    .resumen-card {
+        background: white;
+        border-radius: var(--nexo-radius-lg);
+        border: 1px solid var(--nexo-gray-200);
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .resumen-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: var(--nexo-primary);
+    }
+    
+    .resumen-card:hover {
+        box-shadow: var(--nexo-shadow-lg);
+        transform: translateY(-2px);
+    }
+    
+    .resumen-card.success::before {
+        background: var(--nexo-success);
+    }
+    
+    .resumen-card.warning::before {
+        background: var(--nexo-warning);
+    }
+    
+    .resumen-card.danger::before {
+        background: var(--nexo-error);
+    }
+    
+    /* ========== Mejoras en Modal de Arqueo ========== */
+    .conteo-section {
+        background: var(--nexo-gray-50);
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .conteo-section-title {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid var(--nexo-primary-light);
+    }
+    
+    .conteo-section-title i {
+        font-size: 1.5rem;
+        color: var(--nexo-primary);
+        margin-right: 0.75rem;
+    }
+    
+    .conteo-section-title h6 {
+        margin: 0;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+    }
+    
+    .denominacion-row {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        background: white;
+        border-radius: var(--nexo-radius-md);
+        margin-bottom: 0.5rem;
+        border: 1px solid var(--nexo-gray-200);
+        transition: all 0.2s ease;
+    }
+    
+    .denominacion-row:hover {
+        border-color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+    
+    .denominacion-row:focus-within {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+    
+    .denominacion-label {
+        min-width: 80px;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+    }
+    
+    .denominacion-input {
+        width: 80px;
+        text-align: center;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-sm);
+        padding: 0.375rem 0.5rem;
+        margin: 0 0.5rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+    
+    .denominacion-input:focus {
+        border-color: var(--nexo-primary);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    }
+    
+    .denominacion-total {
+        margin-left: auto;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        min-width: 100px;
+        text-align: right;
+    }
+    
+    /* ========== Resultado del Arqueo ========== */
+    .resultado-arqueo {
+        background: linear-gradient(135deg, var(--nexo-gray-100), white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .resultado-item {
+        padding: 1rem 0;
+        border-bottom: 1px dashed var(--nexo-gray-200);
+    }
+    
+    .resultado-item:last-child {
+        border-bottom: none;
+    }
+    
+    .resultado-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--nexo-gray-500);
+        margin-bottom: 0.25rem;
+    }
+    
+    .resultado-valor {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    
+    .resultado-valor.teorico {
+        color: var(--nexo-info);
+    }
+    
+    .resultado-valor.fisico {
+        color: var(--nexo-primary);
+    }
+    
+    .resultado-diferencia {
+        background: white;
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.25rem;
+        margin-top: 1rem;
+        border: 2px solid var(--nexo-gray-200);
+    }
+    
+    .resultado-diferencia.exacto {
+        border-color: var(--nexo-success);
+        background: rgba(0, 212, 170, 0.05);
+    }
+    
+    .resultado-diferencia.positivo {
+        border-color: var(--nexo-success);
+        background: rgba(0, 212, 170, 0.05);
+    }
+    
+    .resultado-diferencia.negativo {
+        border-color: var(--nexo-error);
+        background: rgba(255, 77, 77, 0.05);
+    }
+    
+    /* ========== Responsive ========== */
+    @media (max-width: 768px) {
+        .workflow-step {
+            display: none;
+        }
+        
+        .workflow-connector {
+            display: none;
+        }
+        
+        .denominacion-row {
+            flex-wrap: wrap;
+        }
+        
+        .denominacion-total {
+            width: 100%;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
     }
 </style>
 
 <div class="page-content">
     <div class="container-fluid">
         
-        <!-- Loading Overlay -->
+        <!-- Loading Overlay - NEXO Style -->
         <div class="loading-overlay" id="loadingOverlay">
-            <div class="text-center text-white">
-                <div class="spinner-border text-light mb-3" role="status">
-                    <span class="sr-only">Cargando...</span>
+            <div class="text-center">
+                <div class="rounded-4 p-4" style="background: var(--nexo-white); box-shadow: var(--nexo-shadow-xl);">
+                    <div class="spinner-border mb-3" role="status" style="color: var(--nexo-primary); width: 3rem; height: 3rem;">
+                        <span class="sr-only">Cargando...</span>
+                    </div>
+                    <h5 style="color: var(--nexo-gray-900); font-weight: 600; margin-bottom: 0.5rem;">Procesando arqueo</h5>
+                    <p style="color: var(--nexo-gray-500); margin: 0; font-size: 0.875rem;">Por favor espere...</p>
                 </div>
-                <h5>Procesando arqueo...</h5>
             </div>
         </div>
 
-        <!-- Header -->
-        <div class="row">
+        <!-- Header NEXO -->
+        <div class="row mb-4">
             <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">💰 Cuadratura y Arqueo de Caja</h4>
+                <div class="d-sm-flex align-items-center justify-content-between" style="padding: 1.5rem 0;">
+                    <div>
+                        <h4 class="mb-1" style="color: var(--nexo-gray-900); font-weight: 700; font-size: 1.5rem;">
+                            <i class="ri-money-dollar-box-line me-2" style="color: var(--nexo-primary);"></i>
+                            Cuadratura y Arqueo de Caja
+                        </h4>
+                        <p class="text-muted mb-0" style="font-size: 0.875rem;">
+                            Gestiona el cierre diario de caja y arqueo de efectivo
+                        </p>
+                    </div>
                     <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="javascript: void(0);">Ventas</a></li>
-                            <li class="breadcrumb-item active">Arqueo de Caja</li>
-                        </ol>
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb m-0" style="background: transparent;">
+                                <li class="breadcrumb-item">
+                                    <a href="{% url 'dashboard_home' %}" style="color: var(--nexo-primary); text-decoration: none;">
+                                        <i class="ri-home-4-line me-1"></i>Inicio
+                                    </a>
+                                </li>
+                                <li class="breadcrumb-item">
+                                    <a href="{% url 'gestion_ventas_documentos' %}" style="color: var(--nexo-primary); text-decoration: none;">Ventas</a>
+                                </li>
+                                <li class="breadcrumb-item active" style="color: var(--nexo-gray-500);">Arqueo de Caja</li>
+                            </ol>
+                        </nav>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Estado del Día -->
+        <!-- Estado del Día - Card Principal NEXO con Flujo Visual -->
         <div class="row mb-4">
             <div class="col-12">
-                <div class="arqueo-card">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col-md-3">
-                                <h5 class="card-title mb-1">📅 Estado de Hoy</h5>
-                                <p class="text-muted mb-0" id="fechaHoy"></p>
-                            </div>
-                            <div class="col-md-6">
-                                <div id="estadoHoy" class="text-center">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="sr-only">Cargando...</span>
+                <div class="arqueo-card" style="border-left: 4px solid var(--nexo-primary); position: relative; overflow: hidden;">
+                    <!-- Badge de Estado Superior -->
+                    <div id="badgeEstadoSuperior" style="position: absolute; top: 0; right: 0; padding: 0.5rem 1rem; 
+                         background: var(--nexo-gray-100); border-bottom-left-radius: var(--nexo-radius-md);
+                         font-size: 0.75rem; font-weight: 600; color: var(--nexo-gray-500);">
+                        <i class="ri-time-line me-1"></i>
+                        <span id="horaActual"></span>
+                    </div>
+                    
+                    <div class="card-body p-4">
+                        <!-- Alerta de Ventas Post-Cierre -->
+                        <div id="alertaVentasPostCierre" class="alert mb-4" style="display: none; 
+                             background: linear-gradient(135deg, rgba(255, 176, 32, 0.15), rgba(255, 77, 77, 0.1));
+                             border: 1px solid var(--nexo-warning); border-radius: var(--nexo-radius-lg);">
+                            <div class="d-flex align-items-start">
+                                <div class="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0" 
+                                     style="width: 48px; height: 48px; background: var(--nexo-warning);">
+                                    <i class="ri-alarm-warning-line" style="font-size: 1.5rem; color: white;"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="alert-heading mb-1" style="color: var(--nexo-gray-900); font-weight: 700;">
+                                        ⚠️ Ventas Detectadas Después del Cierre
+                                    </h6>
+                                    <p class="mb-2" style="color: var(--nexo-gray-700); font-size: 0.9rem;">
+                                        Se registraron <strong><span id="cantidadVentasPostCierre">0</span> ventas</strong> por un total de 
+                                        <strong style="color: var(--nexo-error);">$<span id="montoVentasPostCierre">0</span></strong> 
+                                        después de cerrar el arqueo del día.
+                                    </p>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        {% if es_administrador %}
+                                        <button type="button" class="btn btn-sm" onclick="reabrirArqueo()" 
+                                                style="background: var(--nexo-warning); color: var(--nexo-gray-900); border-radius: var(--nexo-radius-md);">
+                                            <i class="ri-lock-unlock-line me-1"></i>Reabrir Arqueo
+                                        </button>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-sm" onclick="verDetalleVentasPostCierre()"
+                                                style="background: var(--nexo-gray-100); color: var(--nexo-gray-700); border-radius: var(--nexo-radius-md);">
+                                            <i class="ri-file-list-3-line me-1"></i>Ver Detalle
+                                        </button>
                                     </div>
-                                    <p class="mt-2 text-muted">Verificando estado del arqueo...</p>
                                 </div>
                             </div>
-                            <div class="col-md-3 text-end">
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-info" onclick="abrirResumenCaja()">
-                                        <i class="ri-calculator-2-line me-1"></i>Resumen de Caja
+                        </div>
+                        
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-3" 
+                                         style="width: 56px; height: 56px; background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)); box-shadow: 0 4px 15px rgba(0, 102, 255, 0.3);">
+                                        <i class="ri-calendar-check-line" style="font-size: 1.75rem; color: white;"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-1" style="font-weight: 700; color: var(--nexo-gray-900); font-size: 1.1rem;">Estado de Hoy</h5>
+                                        <p class="mb-0" style="color: var(--nexo-gray-500); font-size: 0.875rem;" id="fechaHoy"></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div id="estadoHoy" class="text-center py-2">
+                                    <div class="spinner-border" role="status" style="color: var(--nexo-primary); width: 2rem; height: 2rem;">
+                                        <span class="sr-only">Cargando...</span>
+                                    </div>
+                                    <p class="mt-2 mb-0" style="color: var(--nexo-gray-500); font-size: 0.875rem;">Verificando estado del arqueo...</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="d-flex flex-wrap justify-content-end gap-2">
+                                    <button type="button" class="btn" onclick="abrirResumenCaja()" 
+                                            style="background: linear-gradient(135deg, var(--nexo-info), #0052CC); color: white; border-radius: var(--nexo-radius-md); font-weight: 600; padding: 0.6rem 1.2rem; box-shadow: 0 2px 8px rgba(0, 102, 255, 0.2);">
+                                        <i class="ri-calculator-2-line me-1"></i>Ver Resumen
                                     </button>
-                                    <button type="button" class="btn btn-success" onclick="generarCuadratura()">
-                                        <i class="ri-refresh-line me-1"></i>Generar Cuadratura
+                                    <button type="button" class="btn" onclick="generarCuadratura()"
+                                            style="background: linear-gradient(135deg, var(--nexo-success), #00B894); color: white; border-radius: var(--nexo-radius-md); font-weight: 600; padding: 0.6rem 1.2rem; box-shadow: 0 2px 8px rgba(0, 212, 170, 0.2);">
+                                        <i class="ri-refresh-line me-1"></i>Actualizar
                                     </button>
-                                    <button type="button" class="btn btn-arqueo" onclick="iniciarArqueoHoy()">
-                                        <i class="ri-calculator-line me-1"></i>Nuevo Arqueo
+                                    <button type="button" class="btn btn-arqueo" onclick="iniciarArqueoHoy()" 
+                                            style="padding: 0.6rem 1.2rem; font-weight: 600; box-shadow: 0 4px 15px rgba(0, 102, 255, 0.3);">
+                                        <i class="ri-add-circle-line me-1"></i>Nuevo Arqueo
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Indicador Visual de Flujo de Trabajo -->
+                        <div class="mt-4 pt-3" style="border-top: 1px solid var(--nexo-gray-200);">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="workflow-step" id="step1">
+                                    <div class="d-flex align-items-center">
+                                        <div class="step-indicator completed">
+                                            <i class="ri-check-line"></i>
+                                        </div>
+                                        <div class="ms-2">
+                                            <small class="d-block text-muted">Paso 1</small>
+                                            <span style="font-weight: 600; font-size: 0.875rem;">Ventas del Día</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="workflow-connector"></div>
+                                <div class="workflow-step" id="step2">
+                                    <div class="d-flex align-items-center">
+                                        <div class="step-indicator" id="stepIndicator2">
+                                            <span>2</span>
+                                        </div>
+                                        <div class="ms-2">
+                                            <small class="d-block text-muted">Paso 2</small>
+                                            <span style="font-weight: 600; font-size: 0.875rem;">Cuadratura</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="workflow-connector"></div>
+                                <div class="workflow-step" id="step3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="step-indicator" id="stepIndicator3">
+                                            <span>3</span>
+                                        </div>
+                                        <div class="ms-2">
+                                            <small class="d-block text-muted">Paso 3</small>
+                                            <span style="font-weight: 600; font-size: 0.875rem;">Arqueo Físico</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="workflow-connector"></div>
+                                <div class="workflow-step" id="step4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="step-indicator" id="stepIndicator4">
+                                            <span>4</span>
+                                        </div>
+                                        <div class="ms-2">
+                                            <small class="d-block text-muted">Paso 4</small>
+                                            <span style="font-weight: 600; font-size: 0.875rem;">Cierre</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -241,64 +1031,161 @@
             </div>
         </div>
 
-        <!-- Filtros y Controles -->
-        <div class="row mb-3">
-            <div class="col-md-8">
+        <!-- Filtros y Controles - NEXO Style -->
+        <div class="row mb-4">
+            <div class="col-lg-8">
                 <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="ri-filter-3-line me-2" style="color: var(--nexo-primary);"></i>
+                            Filtros de Búsqueda
+                        </h6>
+                    </div>
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-3">
-                                <label class="form-label">Desde</label>
+                                <label class="form-label">
+                                    <i class="ri-calendar-line me-1" style="color: var(--nexo-gray-500);"></i>Desde
+                                </label>
                                 <input type="date" class="form-control" id="fechaDesde">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">Hasta</label>
+                                <label class="form-label">
+                                    <i class="ri-calendar-line me-1" style="color: var(--nexo-gray-500);"></i>Hasta
+                                </label>
                                 <input type="date" class="form-control" id="fechaHasta">
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">Estado</label>
+                                <label class="form-label">
+                                    <i class="ri-bookmark-line me-1" style="color: var(--nexo-gray-500);"></i>Estado
+                                </label>
                                 <select class="form-select" id="filtroEstado">
-                                    <option value="">Todos</option>
-                                    <option value="CERRADO">Cerrado</option>
-                                    <option value="CON_DIFERENCIAS">Con Diferencias</option>
-                                    <option value="ABIERTO">Abierto</option>
-                                    <option value="REVISADO">Revisado</option>
+                                    <option value="">Todos los estados</option>
+                                    <option value="CERRADO">✓ Cerrado</option>
+                                    <option value="CON_DIFERENCIAS">⚠ Con Diferencias</option>
+                                    <option value="ABIERTO">◷ Abierto</option>
+                                    <option value="REVISADO">✔ Revisado</option>
                                 </select>
                             </div>
-                            <div class="col-md-3 d-flex align-items-end">
-                                <button type="button" class="btn btn-primary me-2" onclick="filtrarArqueos()">
-                                    <i class="ri-search-line me-1"></i>Filtrar
+                            <div class="col-md-3 d-flex align-items-end gap-2">
+                                <button type="button" class="btn btn-primary flex-grow-1" onclick="filtrarArqueos()">
+                                    <i class="ri-search-line me-1"></i>Buscar
                                 </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="limpiarFiltros()">
-                                    <i class="ri-refresh-line me-1"></i>Limpiar
+                                <button type="button" class="btn btn-outline-secondary" onclick="limpiarFiltros()" title="Limpiar filtros">
+                                    <i class="ri-refresh-line"></i>
                                 </button>
+                                {% if es_administrador %}
+                                <button type="button" class="btn btn-warning" onclick="crearArqueoFechaPasada()" title="Crear arqueo de fecha pasada">
+                                    <i class="ri-calendar-event-line"></i>
+                                </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card bg-light">
-                    <div class="card-body text-center">
-                        <h6 class="card-title">📊 Resumen Rápido</h6>
+            <div class="col-lg-4">
+                <div class="card h-100" style="background: var(--nexo-gray-100);">
+                    <div class="card-header" style="background: var(--nexo-gray-100); border-bottom: 1px solid var(--nexo-gray-300);">
+                        <h6 class="mb-0">
+                            <i class="ri-pie-chart-2-line me-2" style="color: var(--nexo-accent);"></i>
+                            Resumen Rápido
+                        </h6>
+                    </div>
+                    <div class="card-body">
                         <div class="row mb-3">
                             <div class="col-6">
-                                <div class="text-success">
-                                    <i class="ri-check-line"></i>
-                                    <span id="totalExactos">0</span> Exactos
+                                <div class="d-flex align-items-center">
+                                    <div class="rounded-circle me-2 d-flex align-items-center justify-content-center" 
+                                         style="width: 36px; height: 36px; background: rgba(0, 212, 170, 0.15);">
+                                        <i class="ri-check-double-line" style="color: var(--nexo-success);"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold" style="color: var(--nexo-success); font-size: 1.25rem;">
+                                            <span id="totalExactos">0</span>
+                                        </div>
+                                        <small style="color: var(--nexo-gray-500);">Exactos</small>
+                                    </div>
                                 </div>
                             </div>
                             <div class="col-6">
-                                <div class="text-danger">
-                                    <i class="ri-error-warning-line"></i>
-                                    <span id="totalDiferencias">0</span> Diferencias
+                                <div class="d-flex align-items-center">
+                                    <div class="rounded-circle me-2 d-flex align-items-center justify-content-center" 
+                                         style="width: 36px; height: 36px; background: rgba(255, 77, 77, 0.15);">
+                                        <i class="ri-error-warning-line" style="color: var(--nexo-error);"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold" style="color: var(--nexo-error); font-size: 1.25rem;">
+                                            <span id="totalDiferencias">0</span>
+                                        </div>
+                                        <small style="color: var(--nexo-gray-500);">Con Diferencias</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-12">
-                                <button type="button" class="btn btn-sm btn-warning" onclick="corregirArqueosExpress()" title="Corregir arqueos Express mal guardados">
-                                    <i class="ri-tools-line me-1"></i>Corregir Express
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-sm btn-warning" onclick="corregirArqueosExpress()" title="Corregir arqueos Express mal guardados">
+                                <i class="ri-tools-line me-1"></i>Corregir Arqueos Express
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if es_supervisor %}
+        <!-- Panel de Supervisión (Solo Administración/Administrador) -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card" style="border: 2px solid #9b59b6; background: linear-gradient(135deg, #f8f5ff 0%, #ede7f6 100%);">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); color: white;">
+                        <h6 class="mb-0">
+                            <i class="ri-shield-star-line me-2"></i>
+                            Panel de Supervisión
+                            <span class="badge bg-white text-dark ms-2" style="font-size: 0.7rem;">{{ rol_usuario|upper }}</span>
+                        </h6>
+                        <small class="opacity-75"><i class="ri-user-settings-line me-1"></i>Acciones de Administración</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Revisar Arqueos Pendientes -->
+                            <div class="col-md-3 col-6">
+                                <button type="button" class="btn w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3" 
+                                        onclick="abrirModalRevisionArqueos()"
+                                        style="background: rgba(155, 89, 182, 0.1); border: 2px dashed #9b59b6; border-radius: 12px; min-height: 100px;">
+                                    <i class="ri-file-search-line mb-2" style="font-size: 2rem; color: #9b59b6;"></i>
+                                    <span class="fw-bold" style="color: #9b59b6;">Revisar Arqueos</span>
+                                    <small class="text-muted">Aprobar cuadraturas</small>
+                                </button>
+                            </div>
+                            <!-- Registrar Comprobante Bancario -->
+                            <div class="col-md-3 col-6">
+                                <button type="button" class="btn w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3" 
+                                        onclick="abrirModalComprobanteBancario()"
+                                        style="background: rgba(46, 204, 113, 0.1); border: 2px dashed #2ecc71; border-radius: 12px; min-height: 100px;">
+                                    <i class="ri-bank-line mb-2" style="font-size: 2rem; color: #2ecc71;"></i>
+                                    <span class="fw-bold" style="color: #2ecc71;">Comprobante Bancario</span>
+                                    <small class="text-muted">Registrar depósito</small>
+                                </button>
+                            </div>
+                            <!-- Revisión Transbank -->
+                            <div class="col-md-3 col-6">
+                                <button type="button" class="btn w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3" 
+                                        onclick="abrirModalRevisionTransbank()"
+                                        style="background: rgba(52, 152, 219, 0.1); border: 2px dashed #3498db; border-radius: 12px; min-height: 100px;">
+                                    <i class="ri-bank-card-line mb-2" style="font-size: 2rem; color: #3498db;"></i>
+                                    <span class="fw-bold" style="color: #3498db;">Revisión Transbank</span>
+                                    <small class="text-muted">Verificar cierres POS</small>
+                                </button>
+                            </div>
+                            <!-- Arqueos Pendientes de Cuadre -->
+                            <div class="col-md-3 col-6">
+                                <button type="button" class="btn w-100 h-100 d-flex flex-column align-items-center justify-content-center p-3" 
+                                        onclick="filtrarArqueosPendientes()"
+                                        style="background: rgba(231, 76, 60, 0.1); border: 2px dashed #e74c3c; border-radius: 12px; min-height: 100px;">
+                                    <i class="ri-error-warning-line mb-2" style="font-size: 2rem; color: #e74c3c;"></i>
+                                    <span class="fw-bold" style="color: #e74c3c;">Pendientes Cuadre</span>
+                                    <small class="text-muted" id="contadorPendientesCuadre">0 arqueos</small>
                                 </button>
                             </div>
                         </div>
@@ -306,50 +1193,141 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
-        <!-- Lista de Arqueos -->
+        <!-- Panel de Indicadores Mensuales -->
+        <div class="row mb-4" id="panelIndicadoresMensuales">
+            <div class="col-12">
+                <div class="card" style="border: 2px solid var(--nexo-primary); background: linear-gradient(135deg, var(--nexo-white) 0%, var(--nexo-primary-light) 100%);">
+                    <div class="card-header d-flex justify-content-between align-items-center" style="background: var(--nexo-primary); color: white;">
+                        <h6 class="mb-0">
+                            <i class="ri-calendar-check-line me-2"></i>
+                            Indicadores del Mes Actual - <span id="mesIndicadores"></span>
+                        </h6>
+                        <span class="badge bg-white text-primary" id="porcentajeCumplimiento">0%</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <!-- Días hábiles -->
+                            <div class="col-md-2 col-6">
+                                <div class="text-center p-3 rounded" style="background: var(--nexo-gray-100);">
+                                    <div class="h3 mb-0" style="color: var(--nexo-primary);" id="indicadorDiasHabiles">0</div>
+                                    <small class="text-muted">Días Hábiles</small>
+                                </div>
+                            </div>
+                            <!-- Arqueos realizados -->
+                            <div class="col-md-2 col-6">
+                                <div class="text-center p-3 rounded" style="background: rgba(0, 212, 170, 0.1);">
+                                    <div class="h3 mb-0" style="color: var(--nexo-success);" id="indicadorRealizados">0</div>
+                                    <small class="text-muted">Realizados</small>
+                                </div>
+                            </div>
+                            <!-- Arqueos faltantes -->
+                            <div class="col-md-2 col-6">
+                                <div class="text-center p-3 rounded" style="background: rgba(255, 77, 77, 0.1);">
+                                    <div class="h3 mb-0" style="color: var(--nexo-error);" id="indicadorFaltantes">0</div>
+                                    <small class="text-muted">Faltantes</small>
+                                </div>
+                            </div>
+                            <!-- Arqueos pendientes -->
+                            <div class="col-md-2 col-6">
+                                <div class="text-center p-3 rounded" style="background: rgba(255, 176, 32, 0.1);">
+                                    <div class="h3 mb-0" style="color: var(--nexo-warning);" id="indicadorPendientes">0</div>
+                                    <small class="text-muted">Pendientes</small>
+                                </div>
+                            </div>
+                            <!-- Arqueos con diferencias -->
+                            <div class="col-md-2 col-6">
+                                <div class="text-center p-3 rounded" style="background: rgba(255, 100, 100, 0.1);">
+                                    <div class="h3 mb-0" style="color: #e74c3c;" id="indicadorConDiferencias">0</div>
+                                    <small class="text-muted">Con Diferencias</small>
+                                </div>
+                            </div>
+                            <!-- Arqueos cerrados -->
+                            <div class="col-md-2 col-6">
+                                <div class="text-center p-3 rounded" style="background: rgba(0, 212, 170, 0.15);">
+                                    <div class="h3 mb-0" style="color: var(--nexo-success);" id="indicadorCerrados">0</div>
+                                    <small class="text-muted">Cerrados OK</small>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Días faltantes detalle -->
+                        <div class="row mt-3" id="detalleDiasFaltantes" style="display: none;">
+                            <div class="col-12">
+                                <div class="alert alert-warning mb-0">
+                                    <i class="ri-calendar-close-line me-2"></i>
+                                    <strong>Días sin arqueo:</strong>
+                                    <span id="listaDiasFaltantes"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Totales de diferencias -->
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background: var(--nexo-gray-100);">
+                                    <span><i class="ri-money-dollar-circle-line me-1"></i> Diferencia Efectivo Mes:</span>
+                                    <span class="fw-bold" id="totalDiferenciaEfectivoMes">$0</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background: var(--nexo-gray-100);">
+                                    <span><i class="ri-bank-card-line me-1"></i> Diferencia Transbank Mes:</span>
+                                    <span class="fw-bold" id="totalDiferenciaTransbankMes">$0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Arqueos - NEXO Table -->
         <div class="row">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">📋 Historial de Arqueos</h5>
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h6 class="mb-0">
+                            <i class="ri-history-line me-2" style="color: var(--nexo-primary);"></i>
+                            Historial de Arqueos
+                        </h6>
+                        <span class="badge" style="background: var(--nexo-primary-light); color: var(--nexo-primary);">
+                            <i class="ri-database-2-line me-1"></i>Últimos registros
+                        </span>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
+                            <table class="table table-hover mb-0">
+                                <thead>
                                     <tr>
-                                        <th>Fecha</th>
-                                        <th>Usuario</th>
-                                        <th>Estado</th>
-                                        <th>Efectivo Teórico</th>
-                                        <th>Efectivo Físico</th>
-                                        <th>Diferencia</th>
-                                        <th>Venta Total</th>
-                                        <th>Acciones</th>
+                                        <th style="padding-left: 1.5rem;">
+                                            <i class="ri-calendar-line me-1"></i>Fecha
+                                        </th>
+                                        <th><i class="ri-user-line me-1"></i>Usuario</th>
+                                        <th><i class="ri-bookmark-line me-1"></i>Estado</th>
+                                        <th><i class="ri-money-dollar-circle-line me-1"></i>Efectivo</th>
+                                        <th><i class="ri-bank-card-line me-1"></i>Transbank</th>
+                                        <th><i class="ri-exchange-line me-1"></i>Diferencias</th>
+                                        <th><i class="ri-money-dollar-circle-line me-1"></i>Venta Total</th>
+                                        <th style="padding-right: 1.5rem;"><i class="ri-settings-3-line me-1"></i>Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tablaArqueos">
                                     <tr>
-                                        <td colspan="8" class="text-center">
-                                            <div class="spinner-border text-primary" role="status">
+                                        <td colspan="8" class="text-center py-5">
+                                            <div class="spinner-border" role="status" style="color: var(--nexo-primary); width: 2.5rem; height: 2.5rem;">
                                                 <span class="sr-only">Cargando...</span>
                                             </div>
-                                            <p class="mt-2 text-muted">Cargando arqueos...</p>
+                                            <p class="mt-3 mb-0" style="color: var(--nexo-gray-500);">Cargando historial de arqueos...</p>
                                         </td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                         
-                        <!-- Paginación -->
-                        <div class="row mt-3">
-                            <div class="col-sm-12 col-md-5">
-                                <div class="dataTables_info" id="infoArqueos"></div>
-                            </div>
-                            <div class="col-sm-12 col-md-7">
-                                <div class="dataTables_paginate" id="paginacionArqueos"></div>
-                            </div>
+                        <!-- Paginación NEXO -->
+                        <div class="d-flex align-items-center justify-content-between px-4 py-3" style="border-top: 1px solid var(--nexo-gray-300); background: var(--nexo-gray-100);">
+                            <div class="text-muted" style="font-size: 0.875rem;" id="infoArqueos"></div>
+                            <div id="paginacionArqueos"></div>
                         </div>
                     </div>
                 </div>
@@ -359,12 +1337,12 @@
     </div>
 </div>
 
-<!-- Modal de Arqueo -->
+<!-- Modal de Arqueo - NEXO Style -->
 <div class="modal fade" id="modalArqueo" tabindex="-1" aria-labelledby="modalArqueoLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="modalArqueoLabel">
+        <div class="modal-content" style="border-radius: var(--nexo-radius-lg); overflow: hidden;">
+            <div class="modal-header" style="background: var(--nexo-primary); padding: 1.25rem 1.5rem;">
+                <h5 class="modal-title text-white" id="modalArqueoLabel" style="font-weight: 600;">
                     <i class="ri-calculator-line me-2"></i>Arqueo de Caja - <span id="fechaArqueoModal"></span>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -390,47 +1368,144 @@
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <h6 class="card-title mb-0">💵 Conteo Físico de Efectivo</h6>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <input type="radio" class="btn-check" name="modoArqueo" id="modoDetallado" checked>
-                                    <label class="btn btn-outline-primary" for="modoDetallado">
-                                        <i class="ri-calculator-line me-1"></i>Detallado
-                                    </label>
-                                    <input type="radio" class="btn-check" name="modoArqueo" id="modoExpress">
+                                    <input type="radio" class="btn-check" name="modoArqueo" id="modoExpress" checked>
                                     <label class="btn btn-outline-success" for="modoExpress">
                                         <i class="ri-flashlight-line me-1"></i>Express
+                                    </label>
+                                    <input type="radio" class="btn-check" name="modoArqueo" id="modoDetallado">
+                                    <label class="btn btn-outline-primary" for="modoDetallado">
+                                        <i class="ri-calculator-line me-1"></i>Detallado
                                     </label>
                                 </div>
                             </div>
                             <div class="card-body">
                                 
-                                <!-- Modo Express -->
-                                <div id="conteoExpress" style="display: none;">
-                                    <div class="alert alert-info">
+                                <!-- Modo Express (por defecto) -->
+                                <div id="conteoExpress">
+                                    <div class="alert alert-info mb-3">
                                         <i class="ri-information-line me-2"></i>
-                                        <strong>Modo Express:</strong> Ingresa directamente el monto total de efectivo físico contado.
+                                        <strong>Modo Express:</strong> Ingresa directamente los montos de cierre de caja.
                                     </div>
-                                    <div class="row justify-content-center">
-                                        <div class="col-md-8">
-                                            <div class="form-group">
-                                                <label class="form-label h5 text-primary">💰 Monto Total Físico</label>
-                                                <div class="input-group input-group-lg">
-                                                    <span class="input-group-text">$</span>
-                                                    <input type="number" class="form-control text-center" id="montoTotalExpress" 
-                                                           placeholder="Ej: 10000" min="0" step="1" 
-                                                           style="font-size: 1.5rem; font-weight: bold;"
-                                                           onchange="calcularTotalExpressFisico()" 
-                                                           oninput="validarMontoExpress(this)">
+                                    
+                                    <!-- Efectivo -->
+                                    <div class="row mb-4">
+                                        <div class="col-12">
+                                            <div class="card border-success">
+                                                <div class="card-header bg-success text-white py-2">
+                                                    <h6 class="mb-0"><i class="ri-money-dollar-circle-line me-2"></i>Cierre de Efectivo</h6>
                                                 </div>
-                                                <small class="form-text text-muted mt-2">
-                                                    <i class="ri-lightbulb-line me-1"></i>
-                                                    Ingresa el total contado sin separar por denominaciones
-                                                </small>
+                                                <div class="card-body">
+                                                    <div class="row align-items-center">
+                                                        <div class="col-md-6">
+                                                            <label class="form-label">Efectivo Físico Contado</label>
+                                                            <div class="input-group input-group-lg">
+                                                                <span class="input-group-text">$</span>
+                                                                <input type="number" class="form-control text-center" id="montoTotalExpress" 
+                                                                       placeholder="0" min="0" step="1" 
+                                                                       style="font-size: 1.25rem; font-weight: bold;"
+                                                                       onchange="calcularTotalExpressFisico()" 
+                                                                       oninput="validarMontoExpress(this)">
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <label class="form-label text-muted">Efectivo Teórico (Sistema)</label>
+                                                            <div class="h4 text-info mb-0" id="efectivoTeoricoExpress">$0</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Cierre Transbank -->
+                                    <div class="row mb-3">
+                                        <div class="col-12">
+                                            <div class="card border-primary">
+                                                <div class="card-header bg-primary text-white py-2">
+                                                    <h6 class="mb-0"><i class="ri-bank-card-line me-2"></i>Cierre Transbank</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row g-3">
+                                                        <!-- Débito -->
+                                                        <div class="col-md-6">
+                                                            <div class="border rounded p-3" style="background: var(--nexo-gray-100);">
+                                                                <div class="d-flex align-items-center mb-2">
+                                                                    <span class="badge bg-info me-2">DÉBITO</span>
+                                                                    <small class="text-muted">Redcompra</small>
+                                                                </div>
+                                                                <div class="row align-items-center">
+                                                                    <div class="col-6">
+                                                                        <label class="form-label small mb-1">Cierre POS</label>
+                                                                        <div class="input-group">
+                                                                            <span class="input-group-text">$</span>
+                                                                            <input type="number" class="form-control text-center" id="cierreDebitoExpress" 
+                                                                                   placeholder="0" min="0" step="1"
+                                                                                   onchange="calcularDiferenciasTransbank()">
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-6">
+                                                                        <label class="form-label small text-muted mb-1">Teórico</label>
+                                                                        <div class="h6 mb-0" id="debitoTeoricoExpress">$0</div>
+                                                                        <small class="d-block" id="diferenciaDebitoExpress"></small>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <!-- Crédito -->
+                                                        <div class="col-md-6">
+                                                            <div class="border rounded p-3" style="background: var(--nexo-gray-100);">
+                                                                <div class="d-flex align-items-center mb-2">
+                                                                    <span class="badge bg-warning text-dark me-2">CRÉDITO</span>
+                                                                    <small class="text-muted">Visa/MC/Amex</small>
+                                                                </div>
+                                                                <div class="row align-items-center">
+                                                                    <div class="col-6">
+                                                                        <label class="form-label small mb-1">Cierre POS</label>
+                                                                        <div class="input-group">
+                                                                            <span class="input-group-text">$</span>
+                                                                            <input type="number" class="form-control text-center" id="cierreCreditoExpress" 
+                                                                                   placeholder="0" min="0" step="1"
+                                                                                   onchange="calcularDiferenciasTransbank()">
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-6">
+                                                                        <label class="form-label small text-muted mb-1">Teórico</label>
+                                                                        <div class="h6 mb-0" id="creditoTeoricoExpress">$0</div>
+                                                                        <small class="d-block" id="diferenciaCreditoExpress"></small>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <!-- Total Transbank -->
+                                                    <div class="row mt-3">
+                                                        <div class="col-12">
+                                                            <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background: var(--nexo-primary-light);">
+                                                                <span class="fw-bold text-primary">Total Transbank:</span>
+                                                                <div>
+                                                                    <span class="h5 mb-0 me-3" id="totalTransbankFisicoExpress">$0</span>
+                                                                    <span class="text-muted small">Teórico: <span id="totalTransbankTeoricoExpress">$0</span></span>
+                                                                    <span class="ms-2" id="diferenciaTransbankExpress"></span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <!-- Número de Lote -->
+                                                    <div class="row mt-3">
+                                                        <div class="col-md-6">
+                                                            <label class="form-label small">Número de Lote (opcional)</label>
+                                                            <input type="text" class="form-control" id="numeroLoteExpress" 
+                                                                   placeholder="Ej: 123456">
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <!-- Modo Detallado -->
-                                <div id="conteoDetallado">
+                                <!-- Modo Detallado (oculto por defecto) -->
+                                <div id="conteoDetallado" style="display: none;">
                                 
                                 <!-- Billetes -->
                                 <h6 class="text-primary mb-3">Billetes</h6>
@@ -584,17 +1659,21 @@
                 </div>
                 
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <div class="modal-footer" style="background: var(--nexo-gray-100); border-top: 1px solid var(--nexo-gray-300); padding: 1rem 1.5rem;">
+                <button type="button" class="btn" data-bs-dismiss="modal" 
+                        style="background: var(--nexo-gray-500); color: white; border-radius: var(--nexo-radius-md);">
                     <i class="ri-close-line me-1"></i>Cancelar
                 </button>
-                <button type="button" class="btn btn-warning" onclick="guardarConteo()" id="btnGuardarConteo">
+                <button type="button" class="btn" onclick="guardarConteo()" id="btnGuardarConteo"
+                        style="background: var(--nexo-warning); color: var(--nexo-gray-900); border-radius: var(--nexo-radius-md);">
                     <i class="ri-save-line me-1"></i>Guardar Conteo
                 </button>
-                <button type="button" class="btn btn-success" onclick="cerrarArqueo()" id="btnCerrarArqueo">
-                    <i class="ri-check-line me-1"></i>Cerrar Arqueo
+                <button type="button" class="btn" onclick="cerrarArqueo()" id="btnCerrarArqueo"
+                        style="background: var(--nexo-success); color: white; border-radius: var(--nexo-radius-md);">
+                    <i class="ri-check-double-line me-1"></i>Cerrar Arqueo
                 </button>
-                <button type="button" class="btn btn-info" onclick="imprimirArqueo()" id="btnImprimirArqueo">
+                <button type="button" class="btn" onclick="imprimirArqueo()" id="btnImprimirArqueo"
+                        style="background: var(--nexo-info); color: white; border-radius: var(--nexo-radius-md);">
                     <i class="ri-printer-line me-1"></i>Imprimir
                 </button>
             </div>
@@ -602,12 +1681,12 @@
     </div>
 </div>
 
-<!-- Modal de Resumen de Caja -->
+<!-- Modal de Resumen de Caja - NEXO Style -->
 <div class="modal fade" id="modalResumenCaja" tabindex="-1" aria-labelledby="modalResumenCajaLabel" aria-hidden="true">
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title" id="modalResumenCajaLabel">
+            <div class="modal-header" style="background: var(--nexo-secondary); padding: 1.25rem 1.5rem;">
+                <h5 class="modal-title text-white" id="modalResumenCajaLabel" style="font-weight: 600;">
                     <i class="ri-calculator-2-line me-2"></i>Resumen de Caja - <span id="fechaResumenCaja"></span>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -662,14 +1741,6 @@
                                     <label class="form-label small">PRESTO</label>
                                     <input type="text" class="form-control form-control-lg text-end" id="presto" readonly>
                                 </div>
-                                <div class="form-group mb-3">
-                                    <label class="form-label small">ABCDIN</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="abcdin" readonly>
-                                </div>
-                                <div class="form-group mb-3">
-                                    <label class="form-label small">TRICOT</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="tricot" readonly>
-                                </div>
                                 <div class="form-group mb-0">
                                     <label class="form-label small">HITES</label>
                                     <input type="text" class="form-control form-control-lg text-end" id="hites" readonly>
@@ -701,9 +1772,17 @@
                                     <label class="form-label small">CONVENIO</label>
                                     <input type="text" class="form-control form-control-lg text-end" id="convenio" readonly>
                                 </div>
+                                <div class="form-group mb-3">
+                                    <label class="form-label small" style="color: var(--nexo-primary);">
+                                        <i class="ri-user-heart-line me-1"></i>CRÉDITO TRABAJADOR
+                                    </label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="credito_trabajador" readonly style="border-color: var(--nexo-primary);">
+                                </div>
                                 <div class="form-group mb-0">
-                                    <label class="form-label small">CHEQUE</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="cheque" readonly>
+                                    <label class="form-label small" style="color: var(--nexo-warning);">
+                                        <i class="ri-bank-card-2-line me-1"></i>CRÉDITO EXTERNO
+                                    </label>
+                                    <input type="text" class="form-control form-control-lg text-end" id="credito_externo" readonly style="border-color: var(--nexo-warning);">
                                 </div>
                             </div>
                         </div>
@@ -721,24 +1800,12 @@
                                     <input type="text" class="form-control form-control-lg text-end" id="webpay" readonly>
                                 </div>
                                 <div class="form-group mb-3">
-                                    <label class="form-label small">MERCADOLIBRE</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="mercadolibre" readonly>
-                                </div>
-                                <div class="form-group mb-3">
-                                    <label class="form-label small">MERCADO PAGO</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="mercadopago" readonly>
-                                </div>
-                                <div class="form-group mb-3">
                                     <label class="form-label small">PARIS</label>
                                     <input type="text" class="form-control form-control-lg text-end" id="paris" readonly>
                                 </div>
                                 <div class="form-group mb-3">
                                     <label class="form-label small">RIPLEY</label>
                                     <input type="text" class="form-control form-control-lg text-end" id="ripley" readonly>
-                                </div>
-                                <div class="form-group mb-3">
-                                    <label class="form-label small">FALABELLA</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="falabella" readonly>
                                 </div>
                                 <div class="form-group mb-0">
                                     <label class="form-label small">TRANSFERENCIA INTERNET</label>
@@ -756,20 +1823,12 @@
                             </div>
                             <div class="card-body">
                                 <div class="form-group mb-3">
-                                    <label class="form-label small">TOTAL TICKETS</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="totaltickets" readonly>
-                                </div>
-                                <div class="form-group mb-3">
                                     <label class="form-label small">TOTAL BOLETA ELECTRÓNICA</label>
                                     <input type="text" class="form-control form-control-lg text-end" id="totalboletaelectronica" readonly>
                                 </div>
                                 <div class="form-group mb-3">
                                     <label class="form-label small">TOTAL FACTURA</label>
                                     <input type="text" class="form-control form-control-lg text-end" id="totalfactura" readonly>
-                                </div>
-                                <div class="form-group mb-3">
-                                    <label class="form-label small">TOTAL FACTURA EXENTA</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="totalfacturaexenta" readonly>
                                 </div>
                                 <div class="form-group mb-3">
                                     <label class="form-label small">TOTAL NOTAS CRÉDITO</label>
@@ -837,17 +1896,21 @@
                 </div>
 
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <div class="modal-footer" style="background: var(--nexo-gray-100); border-top: 1px solid var(--nexo-gray-300); padding: 1rem 1.5rem;">
+                <button type="button" class="btn" data-bs-dismiss="modal"
+                        style="background: var(--nexo-gray-500); color: white; border-radius: var(--nexo-radius-md);">
                     <i class="ri-close-line me-1"></i>Cerrar
                 </button>
-                <button type="button" class="btn btn-success" onclick="generarCuadratura()">
-                    <i class="ri-refresh-line me-1"></i>Actualizar Datos
+                <button type="button" class="btn" onclick="generarCuadratura()"
+                        style="background: var(--nexo-success); color: white; border-radius: var(--nexo-radius-md);">
+                    <i class="ri-refresh-line me-1"></i>Actualizar
                 </button>
-                <button type="button" class="btn btn-primary" onclick="exportarCuadraturaExcel()">
+                <button type="button" class="btn" onclick="exportarCuadraturaExcel()"
+                        style="background: var(--nexo-accent); color: white; border-radius: var(--nexo-radius-md);">
                     <i class="ri-file-excel-line me-1"></i>Exportar Excel
                 </button>
-                <button type="button" class="btn btn-info" onclick="imprimirResumenTermica()">
+                <button type="button" class="btn" onclick="imprimirResumenTermica()"
+                        style="background: var(--nexo-primary); color: white; border-radius: var(--nexo-radius-md);">
                     <i class="ri-printer-line me-1"></i>Imprimir Térmica
                 </button>
             </div>
@@ -855,23 +1918,209 @@
     </div>
 </div>
 
+{% if es_supervisor %}
+<!-- Modal Revisión de Arqueos (Supervisión) -->
+<div class="modal fade" id="modalRevisionArqueos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%); color: white;">
+                <h5 class="modal-title">
+                    <i class="ri-file-search-line me-2"></i>Revisar y Aprobar Arqueos
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Supervisor:</strong> Revise los arqueos con diferencias y apruébelos si están correctos.
+                </div>
+                
+                <!-- Lista de arqueos para revisar -->
+                <div id="listaArqueosRevisar">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Cargando arqueos...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Comprobante Bancario -->
+<div class="modal fade" id="modalComprobanteBancario" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); color: white;">
+                <h5 class="modal-title">
+                    <i class="ri-bank-line me-2"></i>Registrar Comprobante Bancario
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formComprobanteBancario" enctype="multipart/form-data">
+                    <div class="row g-3">
+                        <!-- Seleccionar Arqueo -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Arqueo Asociado *</label>
+                            <select class="form-select" id="arqueoComprobante" required>
+                                <option value="">Seleccione un arqueo...</option>
+                            </select>
+                        </div>
+                        <!-- Fecha del depósito -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Fecha del Depósito *</label>
+                            <input type="date" class="form-control" id="fechaDeposito" required>
+                        </div>
+                        <!-- Monto -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Monto Depositado *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="montoDeposito" placeholder="0" min="1" required>
+                            </div>
+                        </div>
+                        <!-- Banco -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Banco *</label>
+                            <select class="form-select" id="bancoDeposito" required>
+                                <option value="ESTADO">BancoEstado</option>
+                                <option value="SANTANDER">Santander</option>
+                                <option value="CHILE">Banco de Chile</option>
+                                <option value="BCI">BCI</option>
+                                <option value="SCOTIABANK">Scotiabank</option>
+                                <option value="ITAU">Itaú</option>
+                                <option value="FALABELLA">Banco Falabella</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
+                        <!-- Número de comprobante -->
+                        <div class="col-md-6">
+                            <label class="form-label">Número de Comprobante</label>
+                            <input type="text" class="form-control" id="numeroComprobante" placeholder="Ej: 123456789">
+                        </div>
+                        <!-- Imagen del comprobante -->
+                        <div class="col-md-6">
+                            <label class="form-label">Imagen del Comprobante</label>
+                            <input type="file" class="form-control" id="imagenComprobante" accept="image/*">
+                            <small class="text-muted">Foto o escaneo del comprobante (opcional)</small>
+                        </div>
+                        <!-- Vista previa de imagen -->
+                        <div class="col-12" id="previewImagenContainer" style="display: none;">
+                            <label class="form-label">Vista Previa:</label>
+                            <div class="border rounded p-2 text-center" style="max-height: 200px; overflow: hidden;">
+                                <img id="previewImagen" src="" alt="Vista previa" style="max-height: 180px; max-width: 100%;">
+                            </div>
+                        </div>
+                        <!-- Observaciones -->
+                        <div class="col-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observacionesDeposito" rows="2" placeholder="Observaciones adicionales..."></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="guardarComprobanteBancario()">
+                    <i class="ri-save-line me-1"></i>Registrar Comprobante
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Revisión Transbank -->
+<div class="modal fade" id="modalRevisionTransbank" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content" style="border-radius: 12px; overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white;">
+                <h5 class="modal-title">
+                    <i class="ri-bank-card-line me-2"></i>Revisión de Cierres Transbank
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Revisión de POS:</strong> Verifique que los cierres de Transbank coincidan con los reportes del sistema.
+                </div>
+                
+                <!-- Tabla de revisión Transbank -->
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tablaRevisionTransbank">
+                        <thead style="background: #f8f9fa;">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Débito (Sistema)</th>
+                                <th>Débito (POS)</th>
+                                <th>Crédito (Sistema)</th>
+                                <th>Crédito (POS)</th>
+                                <th>Diferencia Total</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyRevisionTransbank">
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status"></div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Scripts JavaScript del Arqueo -->
 <script>
 // Variables globales
 let arqueoActual = null;
 let paginaActual = 1;
+const esAdministrador = {{ es_administrador|yesno:"true,false" }}; // Solo admins pueden reabrir arqueos
+const esSupervisor = {{ es_supervisor|yesno:"true,false" }}; // Supervisores: Administración/Administrador
 
-$(document).ready(function() {
+// Función para esperar a que jQuery esté disponible
+function waitForJQuery(callback) {
+    if (typeof window.jQuery !== 'undefined') {
+        callback();
+    } else {
+        setTimeout(function() { waitForJQuery(callback); }, 100);
+    }
+}
+
+// Función principal de inicialización
+function initArqueoApp() {
     try {
-        console.log('🚀 Iniciando sistema de arqueo...');
+        console.log('🚀 Iniciando sistema de arqueo v2.1...');
         
         // Establecer fecha actual
-        const hoy = new Date().toISOString().split('T')[0];
-        $('#fechaHoy').text(new Date().toLocaleDateString('es-CL'));
-        $('#fechaDesde').val(hoy);
-        $('#fechaHasta').val(hoy);
+        const hoy = new Date();
+        const hoyStr = hoy.toISOString().split('T')[0];
+        $('#fechaHoy').text(hoy.toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
         
-        console.log('📅 Fecha configurada:', hoy);
+        // Filtro por defecto: mes completo actual
+        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+        
+        $('#fechaDesde').val(primerDiaMes.toISOString().split('T')[0]);
+        $('#fechaHasta').val(ultimoDiaMes.toISOString().split('T')[0]);
+        
+        // Actualizar hora en tiempo real
+        actualizarHora();
+        setInterval(actualizarHora, 1000);
+        
+        console.log('📅 Filtro mes configurado: desde', primerDiaMes.toISOString().split('T')[0], 'hasta', ultimoDiaMes.toISOString().split('T')[0]);
         
         // Cargar estado inicial
         console.log('🔍 Verificando estado de hoy...');
@@ -880,23 +2129,253 @@ $(document).ready(function() {
         console.log('📋 Cargando lista de arqueos...');
         cargarArqueos();
         
-        console.log('✅ Sistema de arqueo inicializado correctamente');
+        // Verificar ventas post-cierre
+        console.log('🔎 Verificando ventas post-cierre...');
+        verificarVentasPostCierre();
+        
+        console.log('✅ Sistema de arqueo v2.1 inicializado correctamente');
         
         // Configurar eventos para cambio de modo
         $('input[name="modoArqueo"]').change(function() {
             cambiarModoArqueo();
         });
         
+        // Actualizar workflow según estado
+        actualizarWorkflow('inicial');
+        
         // Verificar que las funciones estén definidas
         console.log('🔧 Verificando funciones:');
         console.log('- filtrarArqueos:', typeof filtrarArqueos);
         console.log('- limpiarFiltros:', typeof limpiarFiltros);
         console.log('- iniciarArqueoHoy:', typeof iniciarArqueoHoy);
+        console.log('- verificarVentasPostCierre:', typeof verificarVentasPostCierre);
         
     } catch (error) {
         console.error('❌ Error al inicializar sistema de arqueo:', error);
     }
+}
+
+// Inicializar cuando jQuery esté disponible
+waitForJQuery(function() {
+    $(document).ready(function() {
+        initArqueoApp();
+    });
 });
+
+// ========== FUNCIÓN PARA ACTUALIZAR HORA EN TIEMPO REAL ==========
+function actualizarHora() {
+    const ahora = new Date();
+    const hora = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    $('#horaActual').text(hora);
+}
+
+// ========== FUNCIÓN PARA ACTUALIZAR WORKFLOW VISUAL ==========
+function actualizarWorkflow(estado) {
+    // Resetear todos los indicadores
+    $('.step-indicator').removeClass('completed active warning');
+    $('.workflow-connector').removeClass('completed active');
+    
+    switch(estado) {
+        case 'inicial':
+            $('#stepIndicator2').html('<span>2</span>');
+            $('#stepIndicator3').html('<span>3</span>');
+            $('#stepIndicator4').html('<span>4</span>');
+            break;
+        case 'cuadratura_generada':
+            $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('.workflow-connector:eq(0)').addClass('completed');
+            $('#stepIndicator3').addClass('active').html('<span>3</span>');
+            $('.workflow-connector:eq(1)').addClass('active');
+            break;
+        case 'arqueo_en_proceso':
+            $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('#stepIndicator3').addClass('active').html('<span>3</span>');
+            $('.workflow-connector:eq(0)').addClass('completed');
+            $('.workflow-connector:eq(1)').addClass('active');
+            break;
+        case 'cerrado':
+            $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('#stepIndicator3').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('#stepIndicator4').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('.workflow-connector').addClass('completed');
+            break;
+        case 'con_diferencias':
+            $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('#stepIndicator3').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('#stepIndicator4').addClass('warning').html('<i class="ri-alert-line"></i>');
+            $('.workflow-connector:eq(0)').addClass('completed');
+            $('.workflow-connector:eq(1)').addClass('completed');
+            break;
+        case 'ventas_post_cierre':
+            $('#stepIndicator2').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('#stepIndicator3').addClass('completed').html('<i class="ri-check-line"></i>');
+            $('#stepIndicator4').addClass('warning').html('<i class="ri-alarm-warning-line"></i>');
+            $('.workflow-connector').addClass('completed');
+            break;
+    }
+}
+
+// ========== VERIFICAR VENTAS POST-CIERRE ==========
+function verificarVentasPostCierre() {
+    const hoy = new Date().toISOString().split('T')[0];
+    
+    $.ajax({
+        url: '/app/api/arqueo/verificar-ventas-post-cierre/',
+        method: 'GET',
+        data: { fecha: hoy },
+        success: function(response) {
+            if (response.success && response.tiene_ventas_post_cierre) {
+                console.log('⚠️ Ventas detectadas después del cierre:', response);
+                mostrarAlertaVentasPostCierre(response);
+                actualizarWorkflow('ventas_post_cierre');
+            } else {
+                $('#alertaVentasPostCierre').hide();
+            }
+        },
+        error: function(xhr, status, error) {
+            console.log('ℹ️ No se pudo verificar ventas post-cierre (puede que no haya arqueo cerrado)');
+        }
+    });
+}
+
+function mostrarAlertaVentasPostCierre(datos) {
+    $('#cantidadVentasPostCierre').text(datos.cantidad_ventas || 0);
+    $('#montoVentasPostCierre').text(formatearNumero(datos.monto_total || 0));
+    $('#alertaVentasPostCierre').show();
+    
+    // Guardar datos para uso posterior
+    window.ventasPostCierre = datos;
+}
+
+function reabrirArqueo() {
+    // Usa la fecha de hoy por defecto
+    const hoy = new Date().toISOString().split('T')[0];
+    reabrirArqueoFecha(hoy);
+}
+
+function reabrirArqueoFecha(fecha) {
+    // Solo administradores pueden reabrir arqueos
+    if (!esAdministrador) {
+        mostrarError('Solo los administradores pueden reabrir arqueos cerrados');
+        return;
+    }
+    
+    if (!confirm(`¿Está seguro de reabrir el arqueo del ${fecha}? Esto permitirá modificar el arqueo y agregar ventas.`)) {
+        return;
+    }
+    
+    mostrarLoading(true);
+    
+    $.ajax({
+        url: '/app/api/arqueo/reabrir/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ fecha: fecha }),
+        success: function(response) {
+            mostrarLoading(false);
+            
+            if (response.success) {
+                mostrarExito('Arqueo reabierto exitosamente. Ahora puede modificarlo.');
+                $('#alertaVentasPostCierre').hide();
+                verificarEstadoHoy();
+                cargarArqueos();
+                actualizarWorkflow('arqueo_en_proceso');
+            } else {
+                mostrarError('Error al reabrir arqueo: ' + response.error);
+            }
+        },
+        error: function(xhr) {
+            mostrarLoading(false);
+            mostrarError('Error de conexión al reabrir arqueo: ' + xhr.responseText);
+        }
+    });
+}
+
+function verDetalleVentasPostCierre() {
+    if (!window.ventasPostCierre) {
+        mostrarInfo('No hay datos de ventas post-cierre disponibles');
+        return;
+    }
+    
+    const datos = window.ventasPostCierre;
+    
+    let detalleHtml = `
+        <div class="text-start">
+            <div class="alert alert-warning mb-3">
+                <strong>Resumen de Ventas Post-Cierre</strong><br>
+                Estas ventas se registraron después del cierre del arqueo del día.
+            </div>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Documento</th>
+                        <th>Método Pago</th>
+                        <th class="text-end">Monto</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    if (datos.detalle && datos.detalle.length > 0) {
+        datos.detalle.forEach(function(venta) {
+            detalleHtml += `
+                <tr>
+                    <td>${venta.hora || '-'}</td>
+                    <td>${venta.tipo_documento || 'Ticket'} #${venta.numero || '-'}</td>
+                    <td>${venta.metodo_pago || '-'}</td>
+                    <td class="text-end fw-bold">$${formatearNumero(venta.monto || 0)}</td>
+                </tr>
+            `;
+        });
+    } else {
+        detalleHtml += `
+            <tr>
+                <td colspan="4" class="text-center text-muted">No hay detalle disponible</td>
+            </tr>
+        `;
+    }
+    
+    detalleHtml += `
+                </tbody>
+                <tfoot>
+                    <tr class="table-primary">
+                        <td colspan="3" class="fw-bold">TOTAL</td>
+                        <td class="text-end fw-bold">$${formatearNumero(datos.monto_total || 0)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div class="alert alert-info mt-3">
+                <i class="ri-information-line me-2"></i>
+                ${esAdministrador 
+                    ? '<strong>Recomendación:</strong> Reabra el arqueo para incluir estas ventas en la cuadratura final.' 
+                    : '<strong>Nota:</strong> Contacte a un administrador para reabrir el arqueo e incluir estas ventas.'}
+            </div>
+        </div>
+    `;
+    
+    // Solo mostrar botón de reabrir si es administrador
+    const swalConfig = {
+        title: '📋 Detalle de Ventas Post-Cierre',
+        html: detalleHtml,
+        width: 600,
+        showConfirmButton: true,
+        confirmButtonText: 'Cerrar',
+        confirmButtonColor: '#0066FF',
+        showCancelButton: esAdministrador, // Solo admins ven este botón
+        cancelButtonText: 'Reabrir Arqueo',
+        cancelButtonColor: '#FFB020',
+    };
+    
+    Swal.fire(swalConfig).then((result) => {
+        if (result.dismiss === Swal.DismissReason.cancel && esAdministrador) {
+            reabrirArqueo();
+        }
+    });
+}
 
 // ========== FUNCIONES PRINCIPALES ==========
 
@@ -937,57 +2416,230 @@ function mostrarEstadoHoy(arqueo) {
     switch(arqueo.estado) {
         case 'CERRADO':
             estadoHtml = `
-                <div class="text-center">
-                    <i class="ri-check-circle-line text-success" style="font-size: 2rem;"></i>
-                    <h6 class="mt-2 mb-1">✅ Arqueo Completado</h6>
-                    <p class="text-muted mb-1">Diferencia: <span class="diferencia-exacta">$0 (Perfecto!)</span></p>
-                    <small class="text-muted">Por: ${arqueo.usuario_responsable} - ${arqueo.fecha_cierre}</small>
-                </div>
-            `;
-            break;
-        case 'CON_DIFERENCIAS':
-            const tipoClass = arqueo.diferencia_efectivo > 0 ? 'diferencia-positiva' : 'diferencia-negativa';
-            estadoHtml = `
-                <div class="text-center">
-                    <i class="ri-error-warning-line text-warning" style="font-size: 2rem;"></i>
-                    <h6 class="mt-2 mb-1">⚠️ Con Diferencias</h6>
-                    <p class="text-muted mb-1">Diferencia: <span class="${tipoClass}">$${formatearNumero(arqueo.diferencia_absoluta)}</span></p>
-                    <small class="text-muted">Por: ${arqueo.usuario_responsable} - ${arqueo.fecha_cierre}</small>
-                </div>
-            `;
-            break;
-        case 'ABIERTO':
-            estadoHtml = `
-                <div class="text-center">
-                    <i class="ri-time-line text-warning" style="font-size: 2rem;"></i>
-                    <h6 class="mt-2 mb-1">🕒 En Proceso</h6>
-                    <p class="text-muted mb-1">Arqueo iniciado pero no finalizado</p>
-                    <small class="text-muted">Por: ${arqueo.usuario_responsable} - ${arqueo.fecha_creacion}</small>
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-warning" onclick="continuarArqueo(${arqueo.id})">
-                            <i class="ri-play-line me-1"></i>Continuar
-                        </button>
+                <div class="d-flex align-items-center justify-content-center">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center me-3" 
+                         style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--nexo-success), #00B894); box-shadow: 0 4px 15px rgba(0, 212, 170, 0.3);">
+                        <i class="ri-check-double-line" style="font-size: 2rem; color: white;"></i>
+                    </div>
+                    <div class="text-start">
+                        <div class="d-flex align-items-center mb-1">
+                            <h6 class="mb-0 me-2" style="color: var(--nexo-success); font-weight: 700;">✅ Arqueo Completado</h6>
+                            <span class="badge" style="background: var(--nexo-success); color: white; font-size: 0.7rem;">CERRADO</span>
+                        </div>
+                        <p class="mb-1" style="color: var(--nexo-gray-700); font-size: 0.9rem;">
+                            Diferencia: <span style="color: var(--nexo-success); font-weight: 700;">$0 (¡Perfecto!)</span>
+                        </p>
+                        <small style="color: var(--nexo-gray-500);">
+                            <i class="ri-user-line me-1"></i>${arqueo.usuario_responsable} 
+                            <span class="mx-1">•</span>
+                            <i class="ri-time-line me-1"></i>${arqueo.fecha_cierre}
+                        </small>
+                        ${esAdministrador ? `
+                        <div class="mt-2">
+                            <button class="btn btn-sm" onclick="reabrirArqueoFecha('${arqueo.fecha_arqueo}')"
+                                    style="background: var(--nexo-warning); color: var(--nexo-gray-900); border-radius: var(--nexo-radius-md);">
+                                <i class="ri-lock-unlock-line me-1"></i>Reabrir Arqueo
+                            </button>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
+            actualizarWorkflow('cerrado');
+            break;
+            
+        case 'CON_DIFERENCIAS':
+            const tipoColor = arqueo.diferencia_efectivo > 0 ? 'var(--nexo-success)' : 'var(--nexo-error)';
+            const tipoTexto = arqueo.diferencia_efectivo > 0 ? 'Sobrante' : 'Faltante';
+            const tipoIcono = arqueo.diferencia_efectivo > 0 ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
+            estadoHtml = `
+                <div class="d-flex align-items-center justify-content-center">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center me-3" 
+                         style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--nexo-warning), #E69D00); box-shadow: 0 4px 15px rgba(255, 176, 32, 0.3);">
+                        <i class="ri-error-warning-line" style="font-size: 2rem; color: white;"></i>
+                    </div>
+                    <div class="text-start">
+                        <div class="d-flex align-items-center mb-1">
+                            <h6 class="mb-0 me-2" style="color: var(--nexo-warning); font-weight: 700;">⚠️ Cerrado con Diferencias</h6>
+                            <span class="badge" style="background: var(--nexo-warning); color: var(--nexo-gray-900); font-size: 0.7rem;">${tipoTexto.toUpperCase()}</span>
+                        </div>
+                        <p class="mb-1" style="color: var(--nexo-gray-700); font-size: 0.9rem;">
+                            <i class="${tipoIcono}" style="color: ${tipoColor};"></i>
+                            Diferencia: <span style="color: ${tipoColor}; font-weight: 700;">$${formatearNumero(arqueo.diferencia_absoluta)}</span>
+                            <span style="color: var(--nexo-gray-500); font-size: 0.8rem;">(${tipoTexto})</span>
+                        </p>
+                        <small style="color: var(--nexo-gray-500);">
+                            <i class="ri-user-line me-1"></i>${arqueo.usuario_responsable} 
+                            <span class="mx-1">•</span>
+                            <i class="ri-time-line me-1"></i>${arqueo.fecha_cierre}
+                        </small>
+                        ${arqueo.observaciones_diferencia ? `<div class="mt-1"><small style="color: var(--nexo-gray-600);"><i class="ri-chat-3-line me-1"></i>"${arqueo.observaciones_diferencia.substring(0, 50)}${arqueo.observaciones_diferencia.length > 50 ? '...' : ''}"</small></div>` : ''}
+                        ${esAdministrador ? `
+                        <div class="mt-2">
+                            <button class="btn btn-sm" onclick="reabrirArqueoFecha('${arqueo.fecha_arqueo}')"
+                                    style="background: var(--nexo-warning); color: var(--nexo-gray-900); border-radius: var(--nexo-radius-md);">
+                                <i class="ri-lock-unlock-line me-1"></i>Reabrir Arqueo
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+            actualizarWorkflow('con_diferencias');
+            break;
+            
+        case 'ABIERTO':
+            estadoHtml = `
+                <div class="d-flex align-items-center justify-content-center">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center me-3" 
+                         style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)); box-shadow: 0 4px 15px rgba(0, 102, 255, 0.3); animation: pulse-step 2s infinite;">
+                        <i class="ri-loader-4-line" style="font-size: 2rem; color: white; animation: spin 2s linear infinite;"></i>
+                    </div>
+                    <div class="text-start">
+                        <div class="d-flex align-items-center mb-1">
+                            <h6 class="mb-0 me-2" style="color: var(--nexo-primary); font-weight: 700;">🔄 Arqueo en Proceso</h6>
+                            <span class="badge" style="background: var(--nexo-primary); color: white; font-size: 0.7rem;">EN PROCESO</span>
+                        </div>
+                        <p class="mb-1" style="color: var(--nexo-gray-700); font-size: 0.9rem;">
+                            El arqueo fue iniciado pero aún no se ha cerrado
+                        </p>
+                        <small style="color: var(--nexo-gray-500);">
+                            <i class="ri-user-line me-1"></i>${arqueo.usuario_responsable} 
+                            <span class="mx-1">•</span>
+                            <i class="ri-time-line me-1"></i>${arqueo.fecha_creacion}
+                        </small>
+                        <div class="mt-2">
+                            <button class="btn btn-sm" onclick="continuarArqueo(${arqueo.id})"
+                                    style="background: linear-gradient(135deg, var(--nexo-primary), var(--nexo-primary-dark)); color: white; border-radius: var(--nexo-radius-md); font-weight: 600; box-shadow: 0 2px 8px rgba(0, 102, 255, 0.3);">
+                                <i class="ri-play-fill me-1"></i>Continuar Arqueo
+                            </button>
+                            <button class="btn btn-sm ms-2" onclick="cancelarArqueoAbierto(${arqueo.id})"
+                                    style="background: var(--nexo-gray-100); color: var(--nexo-gray-700); border-radius: var(--nexo-radius-md);">
+                                <i class="ri-close-line me-1"></i>Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            actualizarWorkflow('arqueo_en_proceso');
+            break;
+            
+        case 'REVISADO':
+            estadoHtml = `
+                <div class="d-flex align-items-center justify-content-center">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center me-3" 
+                         style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--nexo-info), #0052CC); box-shadow: 0 4px 15px rgba(0, 102, 255, 0.3);">
+                        <i class="ri-checkbox-circle-line" style="font-size: 2rem; color: white;"></i>
+                    </div>
+                    <div class="text-start">
+                        <div class="d-flex align-items-center mb-1">
+                            <h6 class="mb-0 me-2" style="color: var(--nexo-info); font-weight: 700;">✔️ Revisado por Supervisor</h6>
+                            <span class="badge" style="background: var(--nexo-info); color: white; font-size: 0.7rem;">REVISADO</span>
+                        </div>
+                        <p class="mb-1" style="color: var(--nexo-gray-700); font-size: 0.9rem;">
+                            Arqueo verificado y aprobado
+                        </p>
+                        <small style="color: var(--nexo-gray-500);">
+                            <i class="ri-user-line me-1"></i>${arqueo.usuario_responsable} 
+                            <span class="mx-1">•</span>
+                            <i class="ri-time-line me-1"></i>${arqueo.fecha_cierre}
+                        </small>
+                    </div>
+                </div>
+            `;
+            actualizarWorkflow('cerrado');
             break;
     }
     
     $('#estadoHoy').html(estadoHtml);
 }
 
+// CSS Animation para el spinner
+const spinnerStyle = document.createElement('style');
+spinnerStyle.textContent = `
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(spinnerStyle);
+
+// Función para cancelar arqueo abierto
+function cancelarArqueoAbierto(arqueoId) {
+    Swal.fire({
+        title: '¿Cancelar arqueo?',
+        text: 'El arqueo se eliminará y podrá crear uno nuevo.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: 'Sí, cancelar',
+        cancelButtonText: 'No, mantener'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            mostrarLoading(true);
+            $.ajax({
+                url: '/app/api/arqueo/cancelar/',
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                data: JSON.stringify({ arqueo_id: arqueoId }),
+                success: function(response) {
+                    mostrarLoading(false);
+                    if (response.success) {
+                        mostrarExito('Arqueo cancelado exitosamente');
+                        verificarEstadoHoy();
+                        cargarArqueos();
+                        actualizarWorkflow('inicial');
+                    } else {
+                        mostrarError('Error al cancelar: ' + response.error);
+                    }
+                },
+                error: function(xhr) {
+                    mostrarLoading(false);
+                    mostrarError('Error de conexión: ' + xhr.responseText);
+                }
+            });
+        }
+    });
+}
+
 function mostrarSinArqueo() {
     $('#estadoHoy').html(`
-        <div class="text-center">
-            <i class="ri-calculator-line text-muted" style="font-size: 2rem;"></i>
-            <h6 class="mt-2 mb-1">📋 Sin Arqueo</h6>
-            <p class="text-muted mb-0">No se ha realizado arqueo para hoy</p>
+        <div class="d-flex align-items-center justify-content-center">
+            <div class="rounded-circle d-flex align-items-center justify-content-center me-3" 
+                 style="width: 60px; height: 60px; background: linear-gradient(135deg, var(--nexo-gray-200), var(--nexo-gray-100)); border: 2px dashed var(--nexo-gray-300);">
+                <i class="ri-file-add-line" style="font-size: 1.75rem; color: var(--nexo-gray-400);"></i>
+            </div>
+            <div class="text-start">
+                <div class="d-flex align-items-center mb-1">
+                    <h6 class="mb-0 me-2" style="color: var(--nexo-gray-700); font-weight: 700;">📋 Sin Arqueo del Día</h6>
+                    <span class="badge" style="background: var(--nexo-gray-200); color: var(--nexo-gray-600); font-size: 0.7rem;">PENDIENTE</span>
+                </div>
+                <p class="mb-2" style="color: var(--nexo-gray-500); font-size: 0.9rem;">
+                    Aún no se ha realizado el arqueo de caja para hoy
+                </p>
+                <div class="d-flex align-items-center gap-2">
+                    <span style="color: var(--nexo-gray-400); font-size: 0.8rem;">
+                        <i class="ri-arrow-right-line me-1"></i>
+                        Sigue los pasos: <strong>Resumen</strong> → <strong>Cuadratura</strong> → <strong>Arqueo</strong>
+                    </span>
+                </div>
+            </div>
         </div>
     `);
+    
+    // Actualizar workflow visual
+    actualizarWorkflow('inicial');
 }
 
 function iniciarArqueoHoy() {
     const hoy = new Date().toISOString().split('T')[0];
+    
+    // Limpiar el modal antes de cualquier acción
+    limpiarModalArqueo();
     
     mostrarLoading(true);
     
@@ -1013,10 +2665,24 @@ function iniciarArqueoHoy() {
                 
                 abrirModalArqueo();
                 verificarEstadoHoy();
+                cargarArqueos(); // Refrescar historial
             } else {
                 if (response.arqueo_id) {
-                    // Ya existe, continuar con ese arqueo
-                    continuarArqueo(response.arqueo_id);
+                    // Ya existe un arqueo para esta fecha
+                    Swal.fire({
+                        title: '📋 Ya existe un arqueo',
+                        html: `<p>Ya existe un arqueo para la fecha de hoy.</p>
+                               <p class="text-muted">¿Desea continuar editando el arqueo existente?</p>`,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="ri-edit-line me-1"></i>Continuar Arqueo',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#0066FF'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            continuarArqueo(response.arqueo_id);
+                        }
+                    });
                 } else {
                     mostrarError('Error al crear arqueo: ' + response.error);
                 }
@@ -1029,7 +2695,56 @@ function iniciarArqueoHoy() {
     });
 }
 
+// Función para limpiar el modal de arqueo
+function limpiarModalArqueo() {
+    // Limpiar variables globales
+    arqueoActual = null;
+    window.transbankTeoricos = { debito: 0, credito: 0, total: 0 };
+    
+    // Limpiar campos de efectivo
+    $('#montoTotalExpress').val('');
+    $('.conteo-input').val(0);
+    
+    // Limpiar campos de Transbank
+    $('#cierreDebitoExpress').val('');
+    $('#cierreCreditoExpress').val('');
+    $('#numeroLoteExpress').val('');
+    
+    // Limpiar observaciones
+    $('#observaciones').val('');
+    $('#observacionesDiferencia').val('');
+    $('#observacionesDiferenciaDiv').hide();
+    
+    // Resetear displays de totales
+    $('#efectivoTeorico').text('$0');
+    $('#efectivoTeoricoExpress').text('$0');
+    $('#efectivoFisico').text('$0');
+    $('#diferencia').text('$0').removeClass('diferencia-positiva diferencia-negativa').addClass('diferencia-exacta');
+    $('#porcentajeDiferencia').text('');
+    
+    // Resetear Transbank displays
+    $('#debitoTeoricoExpress').text('$0');
+    $('#creditoTeoricoExpress').text('$0');
+    $('#totalTransbankTeoricoExpress').text('$0');
+    $('#totalTransbankFisicoExpress').text('$0');
+    $('#diferenciaDebitoExpress').html('');
+    $('#diferenciaCreditoExpress').html('');
+    $('#diferenciaTransbankExpress').html('');
+    
+    // Resetear resumen de ventas
+    $('#resumenVentas').html('');
+    
+    // Modo Express por defecto
+    $('#modoExpress').prop('checked', true);
+    cambiarModoArqueo();
+    
+    console.log('🧹 Modal de arqueo limpiado');
+}
+
 function continuarArqueo(arqueoId) {
+    // Limpiar modal antes de cargar datos
+    limpiarModalArqueo();
+    
     mostrarLoading(true);
     
     $.ajax({
@@ -1064,28 +2779,111 @@ function abrirModalArqueo() {
     // Limpiar formulario
     $('.conteo-input').val(0);
     $('#montoTotalExpress').val(0);
+    $('#cierreDebitoExpress').val(0);
+    $('#cierreCreditoExpress').val(0);
+    $('#numeroLoteExpress').val('');
     $('#observaciones').val('');
     $('#observacionesDiferencia').val('');
     
-    // Resetear a modo detallado
-    $('#modoDetallado').prop('checked', true);
+    // Modo Express por defecto (más rápido para el usuario)
+    $('#modoExpress').prop('checked', true);
     cambiarModoArqueo();
     
     // Cargar datos de cuadratura
     if (arqueoActual.cuadratura) {
         cargarResumenVentas(arqueoActual.cuadratura);
         $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
+        $('#efectivoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_efectivo));
+        
+        // Cargar datos de Transbank teóricos
+        $('#debitoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_tarjeta_debito || 0));
+        $('#creditoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_tarjeta_credito || 0));
+        $('#totalTransbankTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_transbank || 0));
+        
+        // Guardar teóricos para cálculos
+        window.transbankTeoricos = {
+            debito: arqueoActual.cuadratura.total_tarjeta_debito || 0,
+            credito: arqueoActual.cuadratura.total_tarjeta_credito || 0,
+            total: arqueoActual.cuadratura.total_transbank || 0
+        };
     } else if (arqueoActual.arqueo) {
         cargarResumenVentasArqueo(arqueoActual.arqueo);
         $('#efectivoTeorico').text('$' + formatearNumero(arqueoActual.arqueo.totales_teoricos.efectivo));
+        $('#efectivoTeoricoExpress').text('$' + formatearNumero(arqueoActual.arqueo.totales_teoricos.efectivo));
+        
+        // Cargar datos de Transbank teóricos
+        const transbankData = arqueoActual.arqueo.totales_teoricos.transbank || {};
+        $('#debitoTeoricoExpress').text('$' + formatearNumero(transbankData.debito || 0));
+        $('#creditoTeoricoExpress').text('$' + formatearNumero(transbankData.credito || 0));
+        $('#totalTransbankTeoricoExpress').text('$' + formatearNumero(transbankData.total || 0));
+        
+        // Guardar teóricos para cálculos
+        window.transbankTeoricos = {
+            debito: transbankData.debito || 0,
+            credito: transbankData.credito || 0,
+            total: transbankData.total || 0
+        };
+        
+        // Si hay datos de cierre físico previos, cargarlos
+        if (arqueoActual.arqueo.cierre_transbank) {
+            $('#cierreDebitoExpress').val(arqueoActual.arqueo.cierre_transbank.debito_fisico || 0);
+            $('#cierreCreditoExpress').val(arqueoActual.arqueo.cierre_transbank.credito_fisico || 0);
+            $('#numeroLoteExpress').val(arqueoActual.arqueo.cierre_transbank.numero_lote || '');
+        }
     }
     
-    calcularTotalFisico();
+    calcularTotalExpressFisico();
+    calcularDiferenciasTransbank();
     $('#modalArqueo').modal('show');
 }
 
+// ========== FUNCIONES DE TRANSBANK ==========
+
+function calcularDiferenciasTransbank() {
+    const debitoFisico = parseInt($('#cierreDebitoExpress').val()) || 0;
+    const creditoFisico = parseInt($('#cierreCreditoExpress').val()) || 0;
+    const totalFisico = debitoFisico + creditoFisico;
+    
+    const teoricos = window.transbankTeoricos || { debito: 0, credito: 0, total: 0 };
+    
+    // Calcular diferencias
+    const difDebito = debitoFisico - teoricos.debito;
+    const difCredito = creditoFisico - teoricos.credito;
+    const difTotal = totalFisico - teoricos.total;
+    
+    // Mostrar total físico
+    $('#totalTransbankFisicoExpress').text('$' + formatearNumero(totalFisico));
+    
+    // Mostrar diferencia débito
+    if (difDebito === 0) {
+        $('#diferenciaDebitoExpress').html('<span class="text-success"><i class="ri-check-line"></i> Cuadra</span>');
+    } else if (difDebito > 0) {
+        $('#diferenciaDebitoExpress').html('<span class="text-success">+$' + formatearNumero(difDebito) + '</span>');
+    } else {
+        $('#diferenciaDebitoExpress').html('<span class="text-danger">-$' + formatearNumero(Math.abs(difDebito)) + '</span>');
+    }
+    
+    // Mostrar diferencia crédito
+    if (difCredito === 0) {
+        $('#diferenciaCreditoExpress').html('<span class="text-success"><i class="ri-check-line"></i> Cuadra</span>');
+    } else if (difCredito > 0) {
+        $('#diferenciaCreditoExpress').html('<span class="text-success">+$' + formatearNumero(difCredito) + '</span>');
+    } else {
+        $('#diferenciaCreditoExpress').html('<span class="text-danger">-$' + formatearNumero(Math.abs(difCredito)) + '</span>');
+    }
+    
+    // Mostrar diferencia total Transbank
+    if (difTotal === 0) {
+        $('#diferenciaTransbankExpress').html('<span class="badge bg-success"><i class="ri-check-line me-1"></i>Cuadra</span>');
+    } else if (difTotal > 0) {
+        $('#diferenciaTransbankExpress').html('<span class="badge bg-success">+$' + formatearNumero(difTotal) + '</span>');
+    } else {
+        $('#diferenciaTransbankExpress').html('<span class="badge bg-danger">-$' + formatearNumero(Math.abs(difTotal)) + '</span>');
+    }
+}
+
 function cargarDatosArqueoExistente(arqueo) {
-    // Cargar conteo físico existente
+    // Cargar conteo físico existente (denominaciones)
     $('#billetes_20000').val(arqueo.conteo_fisico.billetes['20000']);
     $('#billetes_10000').val(arqueo.conteo_fisico.billetes['10000']);
     $('#billetes_5000').val(arqueo.conteo_fisico.billetes['5000']);
@@ -1102,7 +2900,47 @@ function cargarDatosArqueoExistente(arqueo) {
     $('#observaciones').val(arqueo.observaciones);
     $('#observacionesDiferencia').val(arqueo.observaciones_diferencia);
     
-    calcularTotalFisico();
+    // Cargar datos de Transbank si existen
+    if (arqueo.cierre_transbank) {
+        $('#cierreDebitoExpress').val(arqueo.cierre_transbank.debito_fisico || 0);
+        $('#cierreCreditoExpress').val(arqueo.cierre_transbank.credito_fisico || 0);
+        $('#numeroLoteExpress').val(arqueo.cierre_transbank.numero_lote || '');
+        console.log('💳 Transbank cargado - Débito:', arqueo.cierre_transbank.debito_fisico, 'Crédito:', arqueo.cierre_transbank.credito_fisico);
+    }
+    
+    // Detectar si fue guardado en modo Express:
+    // Si todas las denominaciones son 0 pero hay un total_fisico > 0, fue modo Express
+    const sumaDenominaciones = 
+        (arqueo.conteo_fisico.billetes['20000'] * 20000) +
+        (arqueo.conteo_fisico.billetes['10000'] * 10000) +
+        (arqueo.conteo_fisico.billetes['5000'] * 5000) +
+        (arqueo.conteo_fisico.billetes['2000'] * 2000) +
+        (arqueo.conteo_fisico.billetes['1000'] * 1000) +
+        (arqueo.conteo_fisico.monedas['500'] * 500) +
+        (arqueo.conteo_fisico.monedas['100'] * 100) +
+        (arqueo.conteo_fisico.monedas['50'] * 50) +
+        (arqueo.conteo_fisico.monedas['10'] * 10) +
+        (arqueo.conteo_fisico.monedas['5'] * 5) +
+        (arqueo.conteo_fisico.monedas['1'] * 1);
+    
+    const totalFisicoGuardado = arqueo.conteo_fisico.total_fisico || 0;
+    
+    // Si las denominaciones suman 0 pero hay un total físico guardado, cambiar a modo Express
+    if (sumaDenominaciones === 0 && totalFisicoGuardado > 0) {
+        console.log('📦 Arqueo cargado fue guardado en Modo Express, total:', totalFisicoGuardado);
+        $('#modoExpress').prop('checked', true);
+        $('#montoTotalExpress').val(totalFisicoGuardado);
+        cambiarModoArqueo();
+        calcularTotalExpressFisico();
+    } else {
+        // Modo detallado normal
+        $('#modoDetallado').prop('checked', true);
+        cambiarModoArqueo();
+        calcularTotalFisico();
+    }
+    
+    // Calcular diferencias de Transbank
+    calcularDiferenciasTransbank();
 }
 
 function cargarResumenVentas(cuadratura) {
@@ -1339,7 +3177,11 @@ function guardarConteo() {
         arqueo_id: arqueoActual.id,
         observaciones: $('#observaciones').val(),
         observaciones_diferencia: $('#observacionesDiferencia').val(),
-        modo_express: modoExpress
+        modo_express: modoExpress,
+        // Datos de Transbank (siempre se envían)
+        cierre_debito: parseInt($('#cierreDebitoExpress').val()) || 0,
+        cierre_credito: parseInt($('#cierreCreditoExpress').val()) || 0,
+        numero_lote: $('#numeroLoteExpress').val() || ''
     };
     
     if (modoExpress) {
@@ -1347,6 +3189,7 @@ function guardarConteo() {
         const montoTotal = parseInt($('#montoTotalExpress').val()) || 0;
         datos.monto_total_express = montoTotal;
         console.log('💰 Guardando en modo Express:', montoTotal);
+        console.log('💳 Transbank - Débito:', datos.cierre_debito, 'Crédito:', datos.cierre_credito);
     } else {
         // Modo Detallado: enviar todas las denominaciones
         datos.billetes_20000 = parseInt($('#billetes_20000').val()) || 0;
@@ -1391,7 +3234,7 @@ function guardarConteo() {
     });
 }
 
-function cerrarArqueo() {
+async function cerrarArqueo() {
     if (!arqueoActual) {
         mostrarError('No hay arqueo activo');
         return;
@@ -1459,13 +3302,51 @@ function cerrarArqueo() {
         console.log('✅ Arqueo perfecto - Sin diferencias, procediendo a cerrar');
     }
     
-    // Confirmación final
-    let mensajeConfirmacion = '¿Está seguro de cerrar este arqueo? No podrá modificarlo después.';
-    if (diferencia > 0) {
-        mensajeConfirmacion = `¿Cerrar arqueo con diferencia de $${formatearNumero(diferencia)}? No podrá modificarlo después.`;
-    }
+    // Confirmación final mejorada con SweetAlert2
+    let iconType = diferencia === 0 ? 'success' : 'warning';
+    let titulo = diferencia === 0 ? '✅ ¡Arqueo Perfecto!' : '⚠️ Arqueo con Diferencias';
+    let mensajeHtml = diferencia === 0 
+        ? `<div class="text-center">
+               <div class="mb-3">
+                   <span style="font-size: 3rem;">🎉</span>
+               </div>
+               <p class="mb-2">El arqueo cuadra perfectamente.</p>
+               <p class="text-muted small">¿Desea cerrar el arqueo del día?</p>
+           </div>`
+        : `<div class="text-start">
+               <div class="alert ${efectivoFisico > efectivoTeorico ? 'alert-success' : 'alert-danger'} mb-3">
+                   <strong>${efectivoFisico > efectivoTeorico ? '📈 Sobrante' : '📉 Faltante'}:</strong> 
+                   $${formatearNumero(diferencia)}
+               </div>
+               <table class="table table-sm mb-0">
+                   <tr>
+                       <td>Efectivo Teórico:</td>
+                       <td class="text-end fw-bold">$${formatearNumero(efectivoTeorico)}</td>
+                   </tr>
+                   <tr>
+                       <td>Efectivo Físico:</td>
+                       <td class="text-end fw-bold">$${formatearNumero(efectivoFisico)}</td>
+                   </tr>
+               </table>
+               <p class="text-muted small mt-3 mb-0">
+                   <i class="ri-information-line me-1"></i>
+                   Una vez cerrado, no podrá modificar este arqueo.
+               </p>
+           </div>`;
     
-    if (!confirm(mensajeConfirmacion)) {
+    const result = await Swal.fire({
+        title: titulo,
+        html: mensajeHtml,
+        icon: iconType,
+        showCancelButton: true,
+        confirmButtonColor: diferencia === 0 ? '#00D4AA' : '#FFB020',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: '<i class="ri-check-double-line me-1"></i>Cerrar Arqueo',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true
+    });
+    
+    if (!result.isConfirmed) {
         return;
     }
     
@@ -1477,7 +3358,11 @@ function cerrarArqueo() {
         arqueo_id: arqueoActual.id,
         observaciones: $('#observaciones').val(),
         observaciones_diferencia: $('#observacionesDiferencia').val(),
-        modo_express: modoExpress
+        modo_express: modoExpress,
+        // Datos de Transbank
+        cierre_debito: parseInt($('#cierreDebitoExpress').val()) || 0,
+        cierre_credito: parseInt($('#cierreCreditoExpress').val()) || 0,
+        numero_lote: $('#numeroLoteExpress').val() || ''
     };
     
     if (modoExpress) {
@@ -1597,6 +3482,10 @@ function cargarArqueos() {
                 mostrarArqueos(response.arqueos);
                 actualizarPaginacion(response.pagination);
                 actualizarResumen(response.arqueos);
+                // Cargar indicadores mensuales
+                if (response.indicadores_mensuales) {
+                    cargarIndicadoresMensuales(response.indicadores_mensuales);
+                }
             } else {
                 console.error('❌ Error en respuesta:', response.error);
                 mostrarError('Error al cargar arqueos: ' + response.error);
@@ -1610,15 +3499,70 @@ function cargarArqueos() {
     });
 }
 
+// ========== FUNCIÓN PARA CARGAR INDICADORES MENSUALES ==========
+function cargarIndicadoresMensuales(indicadores) {
+    console.log('📊 Cargando indicadores mensuales:', indicadores);
+    
+    // Mes actual
+    $('#mesIndicadores').text(indicadores.mes_actual);
+    $('#porcentajeCumplimiento').text(indicadores.porcentaje_cumplimiento + '% Cumplimiento');
+    
+    // Indicadores numéricos
+    $('#indicadorDiasHabiles').text(indicadores.dias_habiles);
+    $('#indicadorRealizados').text(indicadores.arqueos_realizados);
+    $('#indicadorFaltantes').text(indicadores.arqueos_faltantes);
+    $('#indicadorPendientes').text(indicadores.arqueos_pendientes);
+    $('#indicadorConDiferencias').text(indicadores.arqueos_con_diferencias);
+    $('#indicadorCerrados').text(indicadores.arqueos_cerrados);
+    
+    // Días faltantes
+    if (indicadores.dias_faltantes && indicadores.dias_faltantes.length > 0) {
+        const diasFormateados = indicadores.dias_faltantes.map(d => {
+            const fecha = new Date(d + 'T12:00:00');
+            return fecha.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+        }).join(' | ');
+        $('#listaDiasFaltantes').text(diasFormateados);
+        $('#detalleDiasFaltantes').show();
+    } else {
+        $('#detalleDiasFaltantes').hide();
+    }
+    
+    // Totales de diferencias
+    const difEfectivo = indicadores.total_diferencia_efectivo || 0;
+    const difTransbank = indicadores.total_diferencia_transbank || 0;
+    
+    if (difEfectivo === 0) {
+        $('#totalDiferenciaEfectivoMes').text('$0').removeClass('text-danger text-success').addClass('text-success');
+    } else if (difEfectivo > 0) {
+        $('#totalDiferenciaEfectivoMes').text('+$' + formatearNumero(difEfectivo)).removeClass('text-danger').addClass('text-success');
+    } else {
+        $('#totalDiferenciaEfectivoMes').text('-$' + formatearNumero(Math.abs(difEfectivo))).removeClass('text-success').addClass('text-danger');
+    }
+    
+    if (difTransbank === 0) {
+        $('#totalDiferenciaTransbankMes').text('$0').removeClass('text-danger text-success').addClass('text-success');
+    } else if (difTransbank > 0) {
+        $('#totalDiferenciaTransbankMes').text('+$' + formatearNumero(difTransbank)).removeClass('text-danger').addClass('text-success');
+    } else {
+        $('#totalDiferenciaTransbankMes').text('-$' + formatearNumero(Math.abs(difTransbank))).removeClass('text-success').addClass('text-danger');
+    }
+}
+
 function mostrarArqueos(arqueos) {
     let html = '';
     
     if (arqueos.length === 0) {
         html = `
             <tr>
-                <td colspan="8" class="text-center text-muted">
-                    <i class="ri-inbox-line" style="font-size: 2rem;"></i>
-                    <p class="mt-2">No hay arqueos para mostrar</p>
+                <td colspan="8" class="text-center py-5">
+                    <div class="d-flex flex-column align-items-center">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center mb-3" 
+                             style="width: 64px; height: 64px; background: var(--nexo-gray-100);">
+                            <i class="ri-inbox-2-line" style="font-size: 2rem; color: var(--nexo-gray-400);"></i>
+                        </div>
+                        <p class="mb-1" style="color: var(--nexo-gray-700); font-weight: 500;">No hay arqueos para mostrar</p>
+                        <small style="color: var(--nexo-gray-500);">Ajusta los filtros o crea un nuevo arqueo</small>
+                    </div>
                 </td>
             </tr>
         `;
@@ -1626,32 +3570,74 @@ function mostrarArqueos(arqueos) {
         arqueos.forEach(function(arqueo) {
             const estadoBadge = `<span class="estado-badge estado-${arqueo.estado.toLowerCase().replace('_', '-')}">${arqueo.estado_display}</span>`;
             
-            let diferenciaHtml = '';
+            // Diferencia efectivo
+            let difEfectivoHtml = '';
             if (arqueo.diferencia_efectivo === 0) {
-                diferenciaHtml = '<span class="diferencia-exacta">$0</span>';
+                difEfectivoHtml = '<span class="text-success"><i class="ri-check-line"></i></span>';
             } else if (arqueo.diferencia_efectivo > 0) {
-                diferenciaHtml = `<span class="diferencia-positiva">+$${formatearNumero(arqueo.diferencia_absoluta)}</span>`;
+                difEfectivoHtml = `<span class="text-success">+$${formatearNumero(arqueo.diferencia_absoluta)}</span>`;
             } else {
-                diferenciaHtml = `<span class="diferencia-negativa">-$${formatearNumero(arqueo.diferencia_absoluta)}</span>`;
+                difEfectivoHtml = `<span class="text-danger">-$${formatearNumero(arqueo.diferencia_absoluta)}</span>`;
+            }
+            
+            // Diferencia Transbank
+            let difTransbankHtml = '';
+            if (arqueo.diferencia_transbank === 0) {
+                difTransbankHtml = '<span class="text-success"><i class="ri-check-line"></i></span>';
+            } else if (arqueo.diferencia_transbank > 0) {
+                difTransbankHtml = `<span class="text-success">+$${formatearNumero(arqueo.diferencia_transbank)}</span>`;
+            } else {
+                difTransbankHtml = `<span class="text-danger">-$${formatearNumero(Math.abs(arqueo.diferencia_transbank))}</span>`;
             }
             
             html += `
                 <tr>
-                    <td>${new Date(arqueo.fecha_arqueo).toLocaleDateString('es-CL')}</td>
-                    <td>${arqueo.usuario_responsable}</td>
-                    <td>${estadoBadge}</td>
-                    <td>$${formatearNumero(arqueo.efectivo_teorico)}</td>
-                    <td>$${formatearNumero(arqueo.efectivo_fisico)}</td>
-                    <td>${diferenciaHtml}</td>
-                    <td>$${formatearNumero(arqueo.venta_total)}</td>
+                    <td style="padding-left: 1.5rem; font-weight: 500;">${new Date(arqueo.fecha_arqueo).toLocaleDateString('es-CL')}</td>
                     <td>
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary" onclick="verDetalleArqueo(${arqueo.id})" title="Ver detalle">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center me-2" 
+                                 style="width: 28px; height: 28px; background: var(--nexo-primary-light);">
+                                <i class="ri-user-3-line" style="font-size: 0.875rem; color: var(--nexo-primary);"></i>
+                            </div>
+                            ${arqueo.usuario_responsable}
+                        </div>
+                    </td>
+                    <td>${estadoBadge}</td>
+                    <td>
+                        <div style="font-size: 0.85rem;">
+                            <div><span class="text-muted">T:</span> $${formatearNumero(arqueo.efectivo_teorico)}</div>
+                            <div><span class="text-muted">F:</span> $${formatearNumero(arqueo.efectivo_fisico)}</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-size: 0.85rem;">
+                            <div><span class="text-muted">T:</span> $${formatearNumero(arqueo.transbank_teorico || 0)}</div>
+                            <div><span class="text-muted">F:</span> $${formatearNumero(arqueo.transbank_fisico || 0)}</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-size: 0.85rem;">
+                            <div title="Efectivo"><i class="ri-money-dollar-circle-line text-muted me-1"></i>${difEfectivoHtml}</div>
+                            <div title="Transbank"><i class="ri-bank-card-line text-muted me-1"></i>${difTransbankHtml}</div>
+                        </div>
+                    </td>
+                    <td style="font-family: 'Consolas', monospace; font-weight: 600; color: var(--nexo-primary);">$${formatearNumero(arqueo.venta_total)}</td>
+                    <td style="padding-right: 1.5rem;">
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm" onclick="verDetalleArqueo(${arqueo.id})" title="Ver detalle"
+                                    style="background: var(--nexo-primary-light); color: var(--nexo-primary); border-radius: var(--nexo-radius-sm);">
                                 <i class="ri-eye-line"></i>
                             </button>
-                            <button class="btn btn-outline-info" onclick="imprimirArqueoId(${arqueo.id})" title="Imprimir">
+                            <button class="btn btn-sm" onclick="imprimirArqueoId(${arqueo.id})" title="Imprimir"
+                                    style="background: var(--nexo-gray-100); color: var(--nexo-gray-700); border-radius: var(--nexo-radius-sm);">
                                 <i class="ri-printer-line"></i>
                             </button>
+                            ${esAdministrador && (arqueo.estado === 'CERRADO' || arqueo.estado === 'CON_DIFERENCIAS') ? `
+                            <button class="btn btn-sm" onclick="reabrirArqueoFecha('${arqueo.fecha_arqueo}')" title="Reabrir arqueo"
+                                    style="background: var(--nexo-warning); color: var(--nexo-gray-900); border-radius: var(--nexo-radius-sm);">
+                                <i class="ri-lock-unlock-line"></i>
+                            </button>
+                            ` : ''}
                         </div>
                     </td>
                 </tr>
@@ -1718,12 +3704,139 @@ function filtrarArqueos() {
 }
 
 function limpiarFiltros() {
-    const hoy = new Date().toISOString().split('T')[0];
-    $('#fechaDesde').val(hoy);
-    $('#fechaHasta').val(hoy);
+    // Restablecer filtros al mes actual
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    
+    $('#fechaDesde').val(primerDiaMes.toISOString().split('T')[0]);
+    $('#fechaHasta').val(ultimoDiaMes.toISOString().split('T')[0]);
     $('#filtroEstado').val('');
     paginaActual = 1;
     cargarArqueos();
+}
+
+// ========== CREAR ARQUEO DE FECHA PASADA (Solo Admins) ==========
+function crearArqueoFechaPasada() {
+    if (!esAdministrador) {
+        mostrarError('Solo los administradores pueden crear arqueos de fechas pasadas');
+        return;
+    }
+    
+    // Usar la fecha del filtro "Desde" si está seleccionada, o abrir modal
+    const fechaDesde = $('#fechaDesde').val();
+    const hoy = new Date().toISOString().split('T')[0];
+    
+    Swal.fire({
+        title: '📅 Crear Arqueo de Fecha Pasada',
+        html: `
+            <div class="text-start">
+                <div class="alert alert-info mb-3">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Función de Administrador:</strong> Permite crear arqueos de días anteriores que no fueron cuadrados.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Seleccione la fecha:</label>
+                    <input type="date" id="fechaArqueoPasado" class="form-control form-control-lg text-center" 
+                           value="${fechaDesde !== hoy ? fechaDesde : ''}" max="${hoy}">
+                </div>
+                <small class="text-muted">
+                    <i class="ri-alert-line me-1"></i>Solo puede crear arqueos hasta la fecha de hoy.
+                </small>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-add-line me-1"></i>Crear Arqueo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FFB020',
+        preConfirm: () => {
+            const fecha = document.getElementById('fechaArqueoPasado').value;
+            if (!fecha) {
+                Swal.showValidationMessage('Debe seleccionar una fecha');
+                return false;
+            }
+            if (fecha > hoy) {
+                Swal.showValidationMessage('No puede crear arqueos de fechas futuras');
+                return false;
+            }
+            return fecha;
+        }
+    }).then((result) => {
+        if (result.isConfirmed && result.value) {
+            crearArqueoParaFecha(result.value);
+        }
+    });
+}
+
+function crearArqueoParaFecha(fecha) {
+    // Limpiar modal antes de crear
+    limpiarModalArqueo();
+    
+    mostrarLoading(true);
+    
+    $.ajax({
+        url: '/app/api/arqueo/crear/',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        },
+        data: JSON.stringify({ fecha: fecha }),
+        success: function(response) {
+            mostrarLoading(false);
+            
+            if (response.success) {
+                mostrarExito(`Arqueo creado para ${new Date(fecha).toLocaleDateString('es-CL')}`);
+                
+                // Guardar datos para el modal
+                arqueoActual = {
+                    id: response.arqueo_id,
+                    fecha: fecha,
+                    cuadratura: response.cuadratura
+                };
+                
+                // Preguntar si quiere abrir el modal de arqueo
+                Swal.fire({
+                    title: '✅ Arqueo Creado',
+                    text: '¿Desea completar el arqueo ahora?',
+                    icon: 'success',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, completar ahora',
+                    cancelButtonText: 'Más tarde',
+                    confirmButtonColor: '#0066FF'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        abrirModalArqueo();
+                    }
+                    cargarArqueos();
+                });
+            } else {
+                if (response.arqueo_id) {
+                    // Ya existe el arqueo - preguntar si quiere continuar
+                    Swal.fire({
+                        title: '📋 Ya existe un arqueo',
+                        html: `<p>Ya existe un arqueo para la fecha <strong>${new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL')}</strong>.</p>
+                               <p class="text-muted">¿Desea continuar editando el arqueo existente?</p>`,
+                        icon: 'info',
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="ri-edit-line me-1"></i>Continuar Arqueo',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#0066FF'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            continuarArqueo(response.arqueo_id);
+                        }
+                    });
+                } else {
+                    mostrarError('Error al crear arqueo: ' + response.error);
+                }
+            }
+        },
+        error: function(xhr) {
+            mostrarLoading(false);
+            mostrarError('Error de conexión: ' + xhr.responseText);
+        }
+    });
 }
 
 function verDetalleArqueo(arqueoId) {
@@ -1782,7 +3895,9 @@ function mostrarExito(mensaje) {
         title: '¡Éxito!',
         text: mensaje,
         timer: 3000,
-        showConfirmButton: false
+        showConfirmButton: false,
+        iconColor: '#00D4AA',
+        confirmButtonColor: '#0066FF'
     });
 }
 
@@ -1790,7 +3905,9 @@ function mostrarError(mensaje) {
     Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: mensaje
+        text: mensaje,
+        iconColor: '#FF4D4D',
+        confirmButtonColor: '#0066FF'
     });
 }
 
@@ -1798,7 +3915,9 @@ function mostrarInfo(mensaje) {
     Swal.fire({
         icon: 'info',
         title: 'Información',
-        text: mensaje
+        text: mensaje,
+        iconColor: '#0066FF',
+        confirmButtonColor: '#0066FF'
     });
 }
 
@@ -1841,10 +3960,11 @@ function abrirResumenCaja() {
 function limpiarCamposCuadratura() {
     // Limpiar todos los campos de la cuadratura
     const campos = [
-        'visa', 'debito', 'presto', 'abcdin', 'tricot', 'hites',
-        'efectivo', 'transferencia', 'nota_credito', 'convenio', 'cheque',
-        'webpay', 'mercadolibre', 'mercadopago', 'paris', 'ripley', 'falabella', 'transferenciaInternet',
-        'totaltickets', 'totalboletaelectronica', 'totalfactura', 'totalfacturaexenta', 'totalnotascredito',
+        'visa', 'debito', 'presto', 'hites',
+        'efectivo', 'transferencia', 'nota_credito', 'convenio',
+        'credito_trabajador', 'credito_externo',
+        'webpay', 'paris', 'ripley', 'transferenciaInternet',
+        'totalboletaelectronica', 'totalfactura', 'totalnotascredito',
         'ventatotal', 'totalefectivo', 'totaltbk', 'totalcomercial', 'totalinternet'
     ];
     
@@ -1919,8 +4039,6 @@ function cargarDatosCuadratura(cuadratura) {
     $('#visa').val(formatearMoneda(cuadratura.total_visa_mc_amex || 0));
     $('#debito').val(formatearMoneda(cuadratura.total_tarjeta_debito || 0));
     $('#presto').val(formatearMoneda(cuadratura.total_presto || 0));
-    $('#abcdin').val(formatearMoneda(cuadratura.total_abcdin || 0));
-    $('#tricot').val(formatearMoneda(cuadratura.total_tricot || 0));
     $('#hites').val(formatearMoneda(cuadratura.total_hites || 0));
     
     // Efectivo y Otros
@@ -1928,22 +4046,18 @@ function cargarDatosCuadratura(cuadratura) {
     $('#transferencia').val(formatearMoneda(cuadratura.total_transferencia || 0));
     $('#nota_credito').val(formatearMoneda(cuadratura.total_notas_credito || 0));
     $('#convenio').val(formatearMoneda(cuadratura.total_convenio || 0));
-    $('#cheque').val(formatearMoneda(cuadratura.total_cheque || 0));
+    $('#credito_trabajador').val(formatearMoneda(cuadratura.total_credito_trabajador || 0));
+    $('#credito_externo').val(formatearMoneda(cuadratura.total_credito_externo || 0));
     
     // Venta Internet
     $('#webpay').val(formatearMoneda(cuadratura.total_webpay || 0));
-    $('#mercadolibre').val(formatearMoneda(cuadratura.total_mercadolibre || 0));
-    $('#mercadopago').val(formatearMoneda(cuadratura.total_mercadopago || 0));
     $('#paris').val(formatearMoneda(cuadratura.total_paris || 0));
     $('#ripley').val(formatearMoneda(cuadratura.total_ripley || 0));
-    $('#falabella').val(formatearMoneda(cuadratura.total_falabella || 0));
     $('#transferenciaInternet').val(formatearMoneda(cuadratura.total_transferencia_internet || 0));
     
     // Documentos
-    $('#totaltickets').val(formatearMoneda(cuadratura.total_tickets || 0));
     $('#totalboletaelectronica').val(formatearMoneda(cuadratura.total_boletas_electronicas || 0));
     $('#totalfactura').val(formatearMoneda(cuadratura.total_facturas || 0));
-    $('#totalfacturaexenta').val(formatearMoneda(cuadratura.total_facturas_exentas || 0));
     $('#totalnotascredito').val(formatearMoneda(cuadratura.total_notas_credito || 0));
     
     // Totales
@@ -1993,21 +4107,14 @@ function imprimirResumenTermica() {
         visa: $('#visa').val(),
         debito: $('#debito').val(),
         presto: $('#presto').val(),
-        abcdin: $('#abcdin').val(),
-        tricot: $('#tricot').val(),
         hites: $('#hites').val(),
         paris: $('#paris').val(),
         ripley: $('#ripley').val(),
-        falabella: $('#falabella').val(),
         webpay: $('#webpay').val(),
-        mercadolibre: $('#mercadolibre').val(),
-        mercadopago: $('#mercadopago').val(),
         transferencia: $('#transferencia').val(),
         // Documentos
-        tickets: $('#totaltickets').val(),
         boletas_electronicas: $('#totalboletaelectronica').val(),
         facturas: $('#totalfactura').val(),
-        facturas_exentas: $('#totalfacturaexenta').val(),
         notas_credito: $('#totalnotascredito').val()
     };
     
@@ -2030,7 +4137,7 @@ function generarContenidoTermica(datos) {
         <html>
         <head>
             <meta charset="utf-8">
-            <title>Resumen de Caja</title>
+            <title>Resumen de Caja - NEXO</title>
             <style>
                 @media print {
                     body { margin: 0; padding: 0; }
@@ -2045,7 +4152,7 @@ function generarContenidoTermica(datos) {
                     padding: 8px;
                     width: 280px;
                     background: white;
-                    color: black;
+                    color: #1A1A2E;
                     -webkit-print-color-adjust: exact;
                     print-color-adjust: exact;
                 }
@@ -2064,13 +4171,13 @@ function generarContenidoTermica(datos) {
                 }
                 
                 .linea { 
-                    border-bottom: 1px dashed #000; 
+                    border-bottom: 1px dashed #D1D1D9; 
                     margin: 8px 0; 
                     height: 1px;
                 }
                 
                 .linea-doble { 
-                    border-bottom: 2px solid #000; 
+                    border-bottom: 2px solid #1A1A2E; 
                     margin: 8px 0; 
                     height: 2px;
                 }
@@ -2081,6 +4188,7 @@ function generarContenidoTermica(datos) {
                     margin: 8px 0;
                     text-transform: uppercase;
                     letter-spacing: 1px;
+                    color: #0066FF;
                 }
                 
                 .subtitulo {
@@ -2088,12 +4196,13 @@ function generarContenidoTermica(datos) {
                     font-weight: bold;
                     margin: 6px 0 4px 0;
                     text-transform: uppercase;
+                    color: #4A4A5A;
                 }
                 
                 .total { 
                     font-weight: bold; 
                     font-size: 13px;
-                    background: #000;
+                    background: #0066FF;
                     color: white;
                     padding: 4px;
                     margin: 8px 0;
@@ -2119,6 +4228,7 @@ function generarContenidoTermica(datos) {
                     width: 65%; 
                     text-align: left;
                     font-weight: normal;
+                    color: #4A4A5A;
                 }
                 
                 .monto { 
@@ -2126,29 +4236,32 @@ function generarContenidoTermica(datos) {
                     text-align: right;
                     font-weight: bold;
                     font-family: 'Courier New', monospace;
+                    color: #1A1A2E;
                 }
                 
                 .empresa {
                     font-size: 10px;
                     margin: 4px 0;
+                    color: #8A8A9A;
                 }
                 
                 .fecha-hora {
                     font-size: 9px;
                     margin: 4px 0;
-                    color: #666;
+                    color: #8A8A9A;
                 }
                 
                 .resumen-principal {
-                    background: #f0f0f0;
+                    background: #E6F0FF;
                     padding: 6px;
                     margin: 8px 0;
-                    border: 1px solid #000;
+                    border: 1px solid #0066FF;
                 }
                 
                 .resumen-principal .monto {
                     font-size: 12px;
                     font-weight: bold;
+                    color: #0066FF;
                 }
                 
                 /* Ocultar elementos con valor $0 */
@@ -2163,8 +4276,8 @@ function generarContenidoTermica(datos) {
         <body>
             <div class="centro">
                 <div class="titulo">RESUMEN DE CAJA</div>
-                <div class="empresa">RETAILMIND SYSTEM</div>
-                <div>${datos.fecha}</div>
+                <div class="empresa">NEXO RETAIL SYSTEM</div>
+                <div style="color: #4A4A5A;">${datos.fecha}</div>
             </div>
             <div class="linea-doble"></div>
             
@@ -2185,12 +4298,9 @@ function generarContenidoTermica(datos) {
                     ${datos.visa !== '$0' ? `<tr><td class="metodo">VISA/MC/AMEX:</td><td class="monto">${datos.visa}</td></tr>` : ''}
                     ${datos.debito !== '$0' ? `<tr><td class="metodo">REDCOMPRA DEBITO:</td><td class="monto">${datos.debito}</td></tr>` : ''}
                     ${datos.presto !== '$0' ? `<tr><td class="metodo">PRESTO:</td><td class="monto">${datos.presto}</td></tr>` : ''}
-                    ${datos.abcdin !== '$0' ? `<tr><td class="metodo">ABCDIN:</td><td class="monto">${datos.abcdin}</td></tr>` : ''}
-                    ${datos.tricot !== '$0' ? `<tr><td class="metodo">TRICOT:</td><td class="monto">${datos.tricot}</td></tr>` : ''}
                     ${datos.hites !== '$0' ? `<tr><td class="metodo">HITES:</td><td class="monto">${datos.hites}</td></tr>` : ''}
                     ${datos.paris !== '$0' ? `<tr><td class="metodo">PARIS:</td><td class="monto">${datos.paris}</td></tr>` : ''}
                     ${datos.ripley !== '$0' ? `<tr><td class="metodo">RIPLEY:</td><td class="monto">${datos.ripley}</td></tr>` : ''}
-                    ${datos.falabella !== '$0' ? `<tr><td class="metodo">FALABELLA:</td><td class="monto">${datos.falabella}</td></tr>` : ''}
                 </table>
             </div>
             <div class="linea"></div>
@@ -2199,8 +4309,6 @@ function generarContenidoTermica(datos) {
                 <div class="subtitulo">VENTA INTERNET</div>
                 <table>
                     ${datos.webpay !== '$0' ? `<tr><td class="metodo">WEBPAY:</td><td class="monto">${datos.webpay}</td></tr>` : ''}
-                    ${datos.mercadolibre !== '$0' ? `<tr><td class="metodo">MERCADOLIBRE:</td><td class="monto">${datos.mercadolibre}</td></tr>` : ''}
-                    ${datos.mercadopago !== '$0' ? `<tr><td class="metodo">MERCADO PAGO:</td><td class="monto">${datos.mercadopago}</td></tr>` : ''}
                     ${datos.transferencia !== '$0' ? `<tr><td class="metodo">TRANSFERENCIA:</td><td class="monto">${datos.transferencia}</td></tr>` : ''}
                 </table>
             </div>
@@ -2209,10 +4317,8 @@ function generarContenidoTermica(datos) {
             <div class="seccion">
                 <div class="subtitulo">DOCUMENTOS EMITIDOS</div>
                 <table>
-                    ${datos.tickets !== '$0' ? `<tr><td class="metodo">TICKETS:</td><td class="monto">${datos.tickets}</td></tr>` : ''}
                     ${datos.boletas_electronicas !== '$0' ? `<tr><td class="metodo">BOLETAS ELECTRONICAS:</td><td class="monto">${datos.boletas_electronicas}</td></tr>` : ''}
                     ${datos.facturas !== '$0' ? `<tr><td class="metodo">FACTURAS:</td><td class="monto">${datos.facturas}</td></tr>` : ''}
-                    ${datos.facturas_exentas !== '$0' ? `<tr><td class="metodo">FACTURAS EXENTAS:</td><td class="monto">${datos.facturas_exentas}</td></tr>` : ''}
                     ${datos.notas_credito !== '$0' ? `<tr><td class="metodo">NOTAS DE CREDITO:</td><td class="monto">${datos.notas_credito}</td></tr>` : ''}
                 </table>
             </div>
@@ -2227,7 +4333,7 @@ function generarContenidoTermica(datos) {
                 Impreso: ${new Date().toLocaleString('es-CL')}
             </div>
             <div class="centro fecha-hora">
-                Sistema RetailMind v2.0
+                NEXO Retail System v2.0
             </div>
             
             <scr${''}ipt>
@@ -2259,6 +4365,295 @@ console.log('- abrirResumenCaja:', typeof abrirResumenCaja);
 console.log('- generarCuadratura:', typeof generarCuadratura);
 console.log('- exportarCuadraturaExcel:', typeof exportarCuadraturaExcel);
 console.log('- imprimirResumenTermica:', typeof imprimirResumenTermica);
+
+// ========== FUNCIONES DE SUPERVISIÓN (ADMINISTRACIÓN/ADMINISTRADOR) ==========
+
+{% if es_supervisor %}
+// Abrir modal de revisión de arqueos
+function abrirModalRevisionArqueos() {
+    cargarArqueosParaRevisar();
+    $('#modalRevisionArqueos').modal('show');
+}
+
+// Cargar arqueos que necesitan revisión
+function cargarArqueosParaRevisar() {
+    $.ajax({
+        url: '/app/api/arqueos/',
+        method: 'GET',
+        data: { estado: 'CON_DIFERENCIAS', per_page: 50 },
+        success: function(response) {
+            if (response.success) {
+                renderizarListaRevision(response.arqueos);
+            }
+        }
+    });
+}
+
+function renderizarListaRevision(arqueos) {
+    let html = '';
+    
+    if (arqueos.length === 0) {
+        html = `
+            <div class="text-center py-5">
+                <i class="ri-checkbox-circle-line" style="font-size: 4rem; color: #2ecc71;"></i>
+                <h5 class="mt-3 text-success">¡Todo en orden!</h5>
+                <p class="text-muted">No hay arqueos pendientes de revisión.</p>
+            </div>
+        `;
+    } else {
+        arqueos.forEach(function(arqueo) {
+            const difClass = arqueo.diferencia_efectivo > 0 ? 'text-success' : 'text-danger';
+            const difIcon = arqueo.diferencia_efectivo > 0 ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
+            const difTexto = arqueo.diferencia_efectivo > 0 ? '+' : '-';
+            
+            html += `
+                <div class="card mb-2" style="border-left: 4px solid ${arqueo.diferencia_efectivo > 0 ? '#2ecc71' : '#e74c3c'};">
+                    <div class="card-body py-2">
+                        <div class="row align-items-center">
+                            <div class="col-md-2">
+                                <strong>${new Date(arqueo.fecha_arqueo).toLocaleDateString('es-CL')}</strong>
+                                <br><small class="text-muted">${arqueo.usuario_responsable}</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted">Efectivo</small>
+                                <div class="${difClass}">
+                                    <i class="${difIcon}"></i> ${difTexto}$${formatearNumero(Math.abs(arqueo.diferencia_efectivo))}
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted">Transbank</small>
+                                <div class="${arqueo.diferencia_transbank >= 0 ? 'text-success' : 'text-danger'}">
+                                    ${arqueo.diferencia_transbank >= 0 ? '+' : '-'}$${formatearNumero(Math.abs(arqueo.diferencia_transbank || 0))}
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Observaciones</small>
+                                <div class="small">${arqueo.observaciones || '<em class="text-muted">Sin observaciones</em>'}</div>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <button class="btn btn-sm btn-success me-1" onclick="aprobarArqueo(${arqueo.id})" title="Aprobar">
+                                    <i class="ri-check-line me-1"></i>Aprobar
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="verDetalleArqueo(${arqueo.id})" title="Ver detalle">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    $('#listaArqueosRevisar').html(html);
+    $('#contadorPendientesCuadre').text(arqueos.length + ' arqueos');
+}
+
+// Aprobar un arqueo
+function aprobarArqueo(arqueoId) {
+    Swal.fire({
+        title: '¿Aprobar Arqueo?',
+        html: `
+            <div class="mb-3">
+                <label class="form-label">Observaciones del supervisor (opcional):</label>
+                <textarea class="form-control" id="obsAprobacion" rows="3" placeholder="Agregar observaciones..."></textarea>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-check-line me-1"></i>Aprobar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#2ecc71'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const observaciones = document.getElementById('obsAprobacion').value;
+            
+            $.ajax({
+                url: '/app/api/arqueo/revisar/',
+                method: 'POST',
+                headers: { 
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                data: JSON.stringify({
+                    arqueo_id: arqueoId,
+                    observaciones: observaciones,
+                    aprobar: true
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        mostrarExito('Arqueo aprobado exitosamente');
+                        cargarArqueosParaRevisar();
+                        cargarArqueos();
+                    } else {
+                        mostrarError(response.error);
+                    }
+                },
+                error: function(xhr) {
+                    mostrarError('Error al aprobar: ' + xhr.responseText);
+                }
+            });
+        }
+    });
+}
+
+// Abrir modal de comprobante bancario
+function abrirModalComprobanteBancario() {
+    // Cargar arqueos del mes para el select
+    $.ajax({
+        url: '/app/api/arqueos/',
+        method: 'GET',
+        data: { per_page: 100 },
+        success: function(response) {
+            if (response.success) {
+                let options = '<option value="">Seleccione un arqueo...</option>';
+                response.arqueos.forEach(function(arq) {
+                    options += `<option value="${arq.id}">${new Date(arq.fecha_arqueo).toLocaleDateString('es-CL')} - ${arq.estado_display}</option>`;
+                });
+                $('#arqueoComprobante').html(options);
+            }
+        }
+    });
+    
+    // Establecer fecha de hoy
+    $('#fechaDeposito').val(new Date().toISOString().split('T')[0]);
+    
+    // Limpiar formulario
+    $('#formComprobanteBancario')[0].reset();
+    $('#previewImagenContainer').hide();
+    
+    $('#modalComprobanteBancario').modal('show');
+}
+
+// Preview de imagen del comprobante
+$('#imagenComprobante').on('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            $('#previewImagen').attr('src', e.target.result);
+            $('#previewImagenContainer').show();
+        };
+        reader.readAsDataURL(file);
+    } else {
+        $('#previewImagenContainer').hide();
+    }
+});
+
+// Guardar comprobante bancario
+function guardarComprobanteBancario() {
+    const arqueoId = $('#arqueoComprobante').val();
+    const monto = $('#montoDeposito').val();
+    
+    if (!arqueoId) {
+        mostrarError('Debe seleccionar un arqueo');
+        return;
+    }
+    if (!monto || monto <= 0) {
+        mostrarError('Debe ingresar un monto válido');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('arqueo_id', arqueoId);
+    formData.append('fecha_deposito', $('#fechaDeposito').val());
+    formData.append('monto', monto);
+    formData.append('banco', $('#bancoDeposito').val());
+    formData.append('numero_comprobante', $('#numeroComprobante').val());
+    formData.append('observaciones', $('#observacionesDeposito').val());
+    
+    const imagen = $('#imagenComprobante')[0].files[0];
+    if (imagen) {
+        formData.append('imagen_comprobante', imagen);
+    }
+    
+    $.ajax({
+        url: '/app/api/arqueo/comprobante/',
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            if (response.success) {
+                mostrarExito(response.message);
+                $('#modalComprobanteBancario').modal('hide');
+                cargarArqueos();
+            } else {
+                mostrarError(response.error);
+            }
+        },
+        error: function(xhr) {
+            mostrarError('Error al registrar: ' + xhr.responseText);
+        }
+    });
+}
+
+// Abrir modal de revisión Transbank
+function abrirModalRevisionTransbank() {
+    cargarRevisionTransbank();
+    $('#modalRevisionTransbank').modal('show');
+}
+
+// Cargar datos para revisión de Transbank
+function cargarRevisionTransbank() {
+    $.ajax({
+        url: '/app/api/arqueos/',
+        method: 'GET',
+        data: { per_page: 30 },
+        success: function(response) {
+            if (response.success) {
+                renderizarTablaTransbank(response.arqueos);
+            }
+        }
+    });
+}
+
+function renderizarTablaTransbank(arqueos) {
+    let html = '';
+    
+    arqueos.forEach(function(arq) {
+        const difTotal = (arq.diferencia_debito || 0) + (arq.diferencia_credito || 0);
+        const estadoClass = difTotal === 0 ? 'bg-success' : (difTotal > 0 ? 'bg-warning' : 'bg-danger');
+        const estadoTexto = difTotal === 0 ? 'Cuadrado' : 'Con diferencia';
+        
+        html += `
+            <tr>
+                <td>${new Date(arq.fecha_arqueo).toLocaleDateString('es-CL')}</td>
+                <td class="text-end">$${formatearNumero(arq.debito_teorico || 0)}</td>
+                <td class="text-end">$${formatearNumero(arq.debito_fisico || 0)}</td>
+                <td class="text-end">$${formatearNumero(arq.credito_teorico || 0)}</td>
+                <td class="text-end">$${formatearNumero(arq.credito_fisico || 0)}</td>
+                <td class="text-end fw-bold ${difTotal >= 0 ? 'text-success' : 'text-danger'}">
+                    ${difTotal >= 0 ? '+' : ''}$${formatearNumero(difTotal)}
+                </td>
+                <td><span class="badge ${estadoClass}">${estadoTexto}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="verDetalleArqueo(${arq.id})" title="Ver detalle">
+                        <i class="ri-eye-line"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    if (html === '') {
+        html = '<tr><td colspan="8" class="text-center py-4 text-muted">No hay datos de Transbank</td></tr>';
+    }
+    
+    $('#tbodyRevisionTransbank').html(html);
+}
+
+// Filtrar arqueos pendientes de cuadre
+function filtrarArqueosPendientes() {
+    $('#filtroEstado').val('CON_DIFERENCIAS');
+    filtrarArqueos();
+    
+    // Cerrar modal si está abierto
+    $('#modalRevisionArqueos').modal('hide');
+}
+{% endif %}
+
 console.log('✅ Todas las funciones del arqueo han sido definidas correctamente');
 </script>
 

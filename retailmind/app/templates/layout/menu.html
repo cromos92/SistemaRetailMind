@@ -1,22 +1,364 @@
 {% load static %}
 
 <body>
+<!-- NEXO Design System - Menu Styles -->
+<style>
+    /* ===== NEXO Sidebar ===== */
+    .app-menu.navbar-menu {
+        background: #1A1A2E !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .navbar-brand-box {
+        background: #1A1A2E !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 1rem !important;
+    }
+
+    .navbar-brand-box .logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+    }
+
+    /* Items del menú principal */
+    .navbar-nav > .nav-item {
+        margin: 2px 8px;
+    }
+
+    .navbar-nav > .nav-item > .nav-link.menu-link {
+        color: #D1D1D9 !important;
+        font-weight: 500;
+        font-size: 0.9rem;
+        border-radius: 8px;
+        padding: 12px 16px !important;
+        transition: 150ms ease;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .navbar-nav > .nav-item > .nav-link.menu-link:hover {
+        color: #FFFFFF !important;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .navbar-nav > .nav-item > .nav-link.menu-link[aria-expanded="true"] {
+        color: #FFFFFF !important;
+        background: #0066FF;
+        box-shadow: 0 4px 15px rgba(0, 102, 255, 0.35);
+    }
+
+    .navbar-nav > .nav-item > .nav-link.menu-link i {
+        font-size: 1.25rem;
+        color: #00D4AA;
+        transition: 150ms ease;
+        width: 24px;
+        min-width: 24px;
+        text-align: center;
+    }
+
+    .navbar-nav > .nav-item > .nav-link.menu-link:hover i,
+    .navbar-nav > .nav-item > .nav-link.menu-link[aria-expanded="true"] i {
+        color: #FFFFFF;
+    }
+
+    /* Título del menú */
+    .menu-title {
+        padding: 1rem 1rem 0.5rem !important;
+        margin-top: 0.5rem;
+    }
+
+    .menu-title span {
+        color: #8A8A9A !important;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+    }
+
+    /* Submenu - Primer nivel */
+    .menu-dropdown {
+        background: rgba(0, 0, 0, 0.15) !important;
+        border-radius: 6px;
+        margin: 4px 0 !important;
+        padding: 4px 0 !important;
+        border-left: none !important;
+    }
+
+    .menu-dropdown .nav-sm {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .menu-dropdown .nav-item {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .menu-dropdown .nav-link {
+        color: #D1D1D9 !important;
+        font-size: 0.85rem;
+        font-weight: 500;
+        padding: 10px 12px 10px 20px !important;
+        border-radius: 0 !important;
+        margin: 1px 8px !important;
+        border-radius: 6px !important;
+        transition: 150ms ease;
+        display: flex;
+        align-items: center;
+        width: calc(100% - 16px);
+        gap: 10px;
+    }
+
+    .menu-dropdown .nav-link:hover {
+        color: #FFFFFF !important;
+        background: rgba(0, 102, 255, 0.25);
+    }
+
+    .menu-dropdown .nav-link i,
+    .menu-dropdown .nav-link [class^="ri-"],
+    .menu-dropdown .nav-link [class^="bi-"],
+    .menu-dropdown .nav-link [class^="mdi"] {
+        font-size: 1rem;
+        color: #00D4AA;
+        width: 18px;
+        min-width: 18px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+
+    .menu-dropdown .nav-link:hover i,
+    .menu-dropdown .nav-link:hover [class^="ri-"],
+    .menu-dropdown .nav-link:hover [class^="bi-"],
+    .menu-dropdown .nav-link:hover [class^="mdi"] {
+        color: #FFFFFF;
+    }
+
+    /* Ocultar el guión "-" */
+    .menu-dropdown .nav-link::before,
+    .nav-sm .nav-link::before {
+        display: none !important;
+        content: none !important;
+    }
+
+    /* Sub-submenu dentro de dropdown (tercer nivel) */
+    .menu-dropdown .menu-dropdown {
+        margin: 4px 0 4px 12px !important;
+        padding: 4px 0 !important;
+        background: rgba(0, 0, 0, 0.12) !important;
+        border-radius: 6px;
+    }
+
+    .menu-dropdown .menu-dropdown .nav-link {
+        padding: 8px 12px 8px 16px !important;
+        font-size: 0.82rem;
+        margin: 1px 4px !important;
+    }
+
+    /* Links que son también collapse (submenu dentro de submenu) */
+    .menu-dropdown .nav-link.menu-link {
+        padding: 10px 12px 10px 20px !important;
+    }
+
+    .menu-dropdown .nav-link.menu-link i {
+        margin-right: 0;
+    }
+
+    /* Cuarto nivel si existe */
+    .menu-dropdown .menu-dropdown .menu-dropdown .nav-link {
+        padding-left: 24px !important;
+        font-size: 0.8rem;
+    }
+
+    /* Estilos para collapse dentro de dropdown */
+    .menu-dropdown .nav-link.collapsed,
+    .menu-dropdown .nav-link[data-bs-toggle="collapse"] {
+        position: relative;
+    }
+
+    .menu-dropdown .nav-link.collapsed::after,
+    .menu-dropdown .nav-link[data-bs-toggle="collapse"]::after {
+        content: "\ea4e";
+        font-family: "remixicon";
+        position: absolute;
+        right: 12px;
+        font-size: 0.75rem;
+        transition: transform 150ms ease;
+    }
+
+    .menu-dropdown .nav-link[aria-expanded="true"]::after {
+        transform: rotate(90deg);
+    }
+
+    /* Título de sección dentro del menú */
+    .menu-dropdown .menu-title {
+        padding: 12px 12px 6px 20px !important;
+        margin: 4px 8px 0 !important;
+    }
+
+    .menu-dropdown .menu-title span {
+        font-size: 0.65rem !important;
+        color: #8A8A9A !important;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+
+    /* ===== NEXO Header ===== */
+    #page-topbar {
+        background: #FFFFFF;
+        box-shadow: 0 4px 6px rgba(26, 26, 46, 0.1);
+        border-bottom: 1px solid #D1D1D9;
+    }
+
+    .btn-topbar {
+        color: #4A4A5A !important;
+        border-radius: 8px;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-topbar:hover {
+        background: #F5F5F7 !important;
+        color: #0066FF !important;
+    }
+
+    /* Dropdown del header */
+    .dropdown-head.bg-primary {
+        background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%) !important;
+    }
+
+    /* User dropdown */
+    .topbar-user .dropdown-menu {
+        border: 1px solid #D1D1D9;
+        box-shadow: 0 10px 15px rgba(26, 26, 46, 0.1);
+        border-radius: 12px;
+        padding: 8px;
+        min-width: 220px;
+    }
+
+    .topbar-user .dropdown-header {
+        background: #F5F5F7;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #1A1A2E;
+    }
+
+    .topbar-user .dropdown-item {
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        color: #4A4A5A;
+        transition: 150ms ease;
+    }
+
+    .topbar-user .dropdown-item:hover {
+        background: #F5F5F7;
+        color: #0066FF;
+        padding-left: 20px;
+    }
+
+    .topbar-user .dropdown-item i {
+        transition: 150ms ease;
+    }
+
+    .topbar-user .dropdown-item:hover i {
+        transform: scale(1.1);
+    }
+
+    /* Info usuario en header */
+    .navbar-header .border-start {
+        border-color: #D1D1D9 !important;
+        padding-left: 1rem;
+    }
+
+    /* Widget código autorización */
+    #codigo-autorizacion-widget > div {
+        background: rgba(0, 102, 255, 0.08) !important;
+        border: 2px solid #0066FF !important;
+        border-radius: 12px;
+    }
+
+    /* Avatar del usuario */
+    .header-profile-user {
+        border: 2px solid #D1D1D9;
+        transition: 150ms ease;
+    }
+
+    .topbar-user:hover .header-profile-user {
+        border-color: #0066FF;
+        box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.15);
+    }
+
+    /* Hamburger icon */
+    .hamburger-icon span {
+        background-color: #0066FF !important;
+    }
+
+    /* Notificaciones badge */
+    .topbar-badge {
+        background: #FF4D4D !important;
+    }
+
+    /* Scrollbar del sidebar */
+    .app-menu #scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .app-menu #scrollbar::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .app-menu #scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 3px;
+    }
+
+    .app-menu #scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Main content */
+    .main-content {
+        background: #F5F5F7;
+    }
+
+    /* Footer badge items */
+    .footer-badge-item {
+        background: rgba(26, 26, 46, 0.8) !important;
+        border: 1px solid rgba(0, 102, 255, 0.3) !important;
+    }
+
+    .footer-badge-item:hover {
+        background: rgba(0, 102, 255, 0.3) !important;
+        border-color: rgba(0, 102, 255, 0.5) !important;
+    }
+</style>
+
 <div id="loadingOverlay" style="
     display: none;
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.4);
+    background-color: rgba(26, 26, 46, 0.7);
     z-index: 9999;
     align-items: center;
     justify-content: center;
     color: white;
     font-size: 1.5rem;
-    backdrop-filter: blur(3px);
+    backdrop-filter: blur(8px);
 ">
-    <div>
-        <div class="spinner-border text-light mb-2" role="status"></div>
-        <div>Cargando, por favor espera...</div>
+    <div class="text-center">
+        <div class="spinner-border mb-3" role="status" style="width: 3rem; height: 3rem; color: #0066FF;"></div>
+        <div style="font-weight: 500;">Cargando, por favor espera...</div>
     </div>
 </div>
 
@@ -30,25 +372,21 @@
                     <div class="d-flex">
                         <!-- LOGO -->
                         <div class="navbar-brand-box horizontal-logo">
-                            <a href="index.html" class="logo logo-dark">
+                            <a href="{% url 'verHome' %}" class="logo logo-dark">
                                 <span class="logo-sm">
-                                    <img src="{% static 'images/logo-sm.png' %} " alt="" height="22">
-
+                                    <img src="{% static 'images/nexo-logo-sm.svg' %}" alt="NEXO" height="28">
                                 </span>
                                 <span class="logo-lg">
-                                    <img src="{% static 'images/logo-dark.png' %} " alt="" height="17">
-
+                                    <img src="{% static 'images/nexo-logo-horizontal.svg' %}" alt="NEXO" height="28">
                                 </span>
                             </a>
 
-                            <a href="index.html" class="logo logo-light">
+                            <a href="{% url 'verHome' %}" class="logo logo-light">
                                 <span class="logo-sm">
-                                    <img src="{% static 'images/logo-sm.png' %} " alt="" height="22">
-
+                                    <img src="{% static 'images/nexo-logo-sm.svg' %}" alt="NEXO" height="28">
                                 </span>
                                 <span class="logo-lg">
-
-                                    <img src="{% static 'images/logo-light.png' %} " alt="" height="17">
+                                    <img src="{% static 'images/nexo-logo-sidebar.svg' %}" alt="NEXO" height="28">
                                 </span>
                             </a>
                         </div>
@@ -86,45 +424,126 @@
                         <!-- Widget de Código de Autorización Dinámico (Solo para Administradores y Jefes de Local) -->
                         {% if user.rol == 'administrador' or user.rol == 'jefe_local' %}
                         <div class="ms-3 header-item d-none d-lg-flex" id="codigo-autorizacion-widget">
-                            <div class="d-flex align-items-center bg-soft-warning px-3 py-2 rounded" style="border: 2px solid #ffc107;">
-                                <div class="me-2">
-                                    <i class='bx bx-shield-quarter fs-20 text-warning'></i>
+                            <div class="d-flex align-items-center px-3 py-2" style="background: rgba(0, 102, 255, 0.08); border: 2px solid #0066FF; border-radius: 12px;">
+                                <div class="me-3">
+                                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                                        <i class='bx bx-shield-quarter' style="font-size: 1.4rem; color: white;"></i>
+                                    </div>
                                 </div>
                                 <div>
-                                    <small class="d-block text-muted" style="font-size: 0.7rem; line-height: 1;">Código de Autorización</small>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <strong id="codigo-autorizacion-display" class="text-dark fs-16 fw-bold font-monospace me-1" style="letter-spacing: 2px;">------</strong>
-                                        <button class="btn btn-sm btn-success p-0 px-1" 
-                                                onclick="copiarCodigoAutorizacion()" 
-                                                id="btn-copiar-codigo"
-                                                title="Copiar código">
-                                            <i class='bx bx-copy fs-14'></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-warning p-0 px-1" 
-                                                onclick="actualizarCodigoAutorizacion()" 
-                                                id="btn-refresh-codigo"
-                                                title="Actualizar código">
-                                            <i class='bx bx-refresh fs-14'></i>
-                                        </button>
+                                    <small class="d-block" style="font-size: 0.7rem; line-height: 1; color: #8A8A9A; font-weight: 500; margin-bottom: 4px;">Código de Autorización</small>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <!-- Código oculto (visible por defecto) -->
+                                        <span id="codigo-autorizacion-oculto" class="fw-bold font-monospace" style="font-size: 1.1rem; letter-spacing: 3px; color: #1A1A2E; cursor: pointer;" onclick="toggleCodigoAutorizacion()" title="Clic para ver el código">
+                                            ••••••
+                                        </span>
+                                        <!-- Código real (oculto por defecto) -->
+                                        <strong id="codigo-autorizacion-display" class="fw-bold font-monospace" style="font-size: 1.1rem; letter-spacing: 3px; color: #1A1A2E; display: none;">------</strong>
+                                        
+                                        <!-- Botones Touch-Friendly -->
+                                        <div class="d-flex align-items-center gap-1 ms-1">
+                                            <!-- Botón ver/ocultar -->
+                                            <button type="button"
+                                                    class="btn btn-codigo-action" 
+                                                    onclick="toggleCodigoAutorizacion()" 
+                                                    id="btn-toggle-codigo"
+                                                    title="Ver/Ocultar código"
+                                                    style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #F5F5F7; color: #8A8A9A; border: 2px solid #D1D1D9; border-radius: 8px; transition: all 150ms ease; cursor: pointer;">
+                                                <i class='bx bx-show' style="font-size: 1.2rem;" id="icon-toggle-codigo"></i>
+                                            </button>
+                                            <!-- Botón copiar -->
+                                            <button type="button"
+                                                    class="btn btn-codigo-action" 
+                                                    onclick="copiarCodigoAutorizacion()" 
+                                                    id="btn-copiar-codigo"
+                                                    title="Copiar código"
+                                                    style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #00D4AA 0%, #00B090 100%); color: white; border: none; border-radius: 8px; transition: all 150ms ease; cursor: pointer;">
+                                                <i class='bx bx-copy' style="font-size: 1.2rem;"></i>
+                                            </button>
+                                            <!-- Botón actualizar -->
+                                            <button type="button"
+                                                    class="btn btn-codigo-action" 
+                                                    onclick="actualizarCodigoAutorizacion()" 
+                                                    id="btn-refresh-codigo"
+                                                    title="Actualizar código"
+                                                    style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #E6F0FF; color: #0066FF; border: 2px solid #0066FF; border-radius: 8px; transition: all 150ms ease; cursor: pointer;">
+                                                <i class='bx bx-refresh' style="font-size: 1.2rem;" id="icon-refresh-codigo"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <small class="d-block text-muted" style="font-size: 0.65rem; line-height: 1;">
+                                    <small class="d-block" style="font-size: 0.65rem; line-height: 1; color: #8A8A9A; margin-top: 4px;">
                                         <span id="codigo-validez-display">Cargando...</span> 
-                                        <span class="text-danger fw-bold" id="codigo-tiempo-restante"></span>
+                                        <span class="fw-bold" id="codigo-tiempo-restante" style="color: #FF4D4D;"></span>
                                     </small>
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Estilos para botones touch-friendly -->
+                        <style>
+                            .btn-codigo-action {
+                                min-width: 36px;
+                                min-height: 36px;
+                                touch-action: manipulation;
+                                -webkit-tap-highlight-color: transparent;
+                                user-select: none;
+                            }
+                            .btn-codigo-action:hover {
+                                transform: scale(1.08);
+                                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                            }
+                            .btn-codigo-action:active {
+                                transform: scale(0.95);
+                            }
+                            .btn-codigo-action:disabled {
+                                opacity: 0.6;
+                                cursor: not-allowed;
+                                transform: none !important;
+                            }
+                            #btn-toggle-codigo.codigo-visible {
+                                background: #0066FF !important;
+                                color: white !important;
+                                border-color: #0066FF !important;
+                            }
+                            #btn-copiar-codigo:hover {
+                                background: linear-gradient(135deg, #00B090 0%, #009A7A 100%) !important;
+                            }
+                            #btn-refresh-codigo:hover {
+                                background: #0066FF !important;
+                                color: white !important;
+                            }
+                            #btn-refresh-codigo.refreshing i {
+                                animation: spin 1s linear infinite;
+                            }
+                            @keyframes spin {
+                                from { transform: rotate(0deg); }
+                                to { transform: rotate(360deg); }
+                            }
+                            /* Touch screens - botones más grandes */
+                            @media (pointer: coarse) {
+                                .btn-codigo-action {
+                                    width: 44px !important;
+                                    height: 44px !important;
+                                    min-width: 44px !important;
+                                    min-height: 44px !important;
+                                }
+                                .btn-codigo-action i {
+                                    font-size: 1.4rem !important;
+                                }
+                            }
+                        </style>
                         {% endif %}
 
                         <div class="dropdown topbar-head-dropdown ms-1 header-item" id="notificationDropdown">
                             <button type="button"
                                 class="btn btn-icon btn-topbar btn-ghost-secondary rounded-circle shadow-none"
                                 id="page-header-notifications-dropdown" data-bs-toggle="dropdown"
-                                data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false">
+                                data-bs-auto-close="outside" aria-haspopup="true" aria-expanded="false"
+                                onclick="cargarNotificacionesPrecio()">
                                 <i class='bx bx-bell fs-22'></i>
-                                <span
-                                    class="position-absolute topbar-badge fs-10 translate-middle badge rounded-pill bg-danger">3<span
-                                        class="visually-hidden">unread messages</span></span>
+                                <span id="notification-badge"
+                                    class="position-absolute topbar-badge fs-10 translate-middle badge rounded-pill bg-danger" style="display: none;">0<span
+                                        class="visually-hidden">notificaciones no leídas</span></span>
                             </button>
                             <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0"
                                 aria-labelledby="page-header-notifications-dropdown">
@@ -133,10 +552,12 @@
                                     <div class="p-3">
                                         <div class="row align-items-center">
                                             <div class="col">
-                                                <h6 class="m-0 fs-16 fw-semibold text-white"> Notifications </h6>
+                                                <h6 class="m-0 fs-16 fw-semibold text-white"> 
+                                                    <i class="ri-notification-3-line me-1"></i> Notificaciones 
+                                                </h6>
                                             </div>
                                             <div class="col-auto dropdown-tabs">
-                                                <span class="badge badge-soft-light fs-13"> 4 New</span>
+                                                <span class="badge badge-soft-light fs-13" id="notification-count-header">0 Nuevas</span>
                                             </div>
                                         </div>
                                     </div>
@@ -145,21 +566,23 @@
                                         <ul class="nav nav-tabs dropdown-tabs nav-tabs-custom" data-dropdown-tabs="true"
                                             id="notificationItemsTab" role="tablist">
                                             <li class="nav-item waves-effect waves-light">
-                                                <a class="nav-link active" data-bs-toggle="tab" href="#all-noti-tab"
+                                                <a class="nav-link" data-bs-toggle="tab" href="#dtes-noti-tab"
+                                                    role="tab" aria-selected="false" onclick="cargarNotificacionesDTE()">
+                                                    <i class="ri-inbox-archive-line me-1"></i> DTEs
+                                                    <span id="badge-dtes-pendientes" class="badge bg-danger ms-1" style="display: none;">0</span>
+                                                </a>
+                                            </li>
+                                            <li class="nav-item waves-effect waves-light">
+                                                <a class="nav-link" data-bs-toggle="tab" href="#regularizar-noti-tab"
+                                                    role="tab" aria-selected="false" onclick="cargarNotificacionesRegularizar()">
+                                                    <i class="ri-tools-line me-1"></i> Regularizar
+                                                    <span id="badge-regularizar-pendientes" class="badge bg-warning ms-1" style="display: none;">0</span>
+                                                </a>
+                                            </li>
+                                            <li class="nav-item waves-effect waves-light">
+                                                <a class="nav-link active" data-bs-toggle="tab" href="#precios-noti-tab"
                                                     role="tab" aria-selected="true">
-                                                    All (4)
-                                                </a>
-                                            </li>
-                                            <li class="nav-item waves-effect waves-light">
-                                                <a class="nav-link" data-bs-toggle="tab" href="#messages-tab" role="tab"
-                                                    aria-selected="false">
-                                                    Messages
-                                                </a>
-                                            </li>
-                                            <li class="nav-item waves-effect waves-light">
-                                                <a class="nav-link" data-bs-toggle="tab" href="#alerts-tab" role="tab"
-                                                    aria-selected="false">
-                                                    Alerts
+                                                    <i class="ri-money-dollar-circle-line me-1"></i> Precios
                                                 </a>
                                             </li>
                                         </ul>
@@ -168,238 +591,1048 @@
                                 </div>
 
                                 <div class="tab-content position-relative" id="notificationItemsTabContent">
-                                    <div class="tab-pane fade show active py-2 ps-2" id="all-noti-tab" role="tabpanel">
-                                        <!-- Información del usuario y empresa -->
-
-                                        <div data-simplebar style="max-height: 300px;" class="pe-2">
-                                            <div
-                                                class="text-reset notification-item d-block dropdown-item position-relative">
-                                                <div class="d-flex">
-                                                    <div class="avatar-xs me-3">
-                                                        <span
-                                                            class="avatar-title bg-soft-info text-info rounded-circle fs-16">
-                                                            <i class="bx bx-badge-check"></i>
-                                                        </span>
-                                                    </div>
-                                                    <div class="flex-1">
-                                                        <a href="#!" class="stretched-link">
-                                                            <h6 class="mt-0 mb-2 lh-base">Your <b>Elite</b> author
-                                                                Graphic Optimization <span
-                                                                    class="text-secondary">reward</span> is ready!
-                                                            </h6>
-                                                        </a>
-                                                        <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
-                                                            <span><i class="mdi mdi-clock-outline"></i> Just 30 sec
-                                                                ago</span>
-                                                        </p>
-                                                    </div>
-                                                    <div class="px-2 fs-15">
-                                                        <div class="form-check notification-check">
-                                                            <input class="form-check-input" type="checkbox" value=""
-                                                                id="all-notification-check01">
-                                                            <label class="form-check-label"
-                                                                for="all-notification-check01"></label>
-                                                        </div>
-                                                    </div>
+                                    <!-- Tab de DTEs Recibidos Pendientes -->
+                                    <div class="tab-pane fade py-2 ps-2" id="dtes-noti-tab" role="tabpanel">
+                                        <div data-simplebar style="max-height: 300px;" class="pe-2" id="dtes-container">
+                                            <!-- Loader -->
+                                            <div id="dtes-loader" class="text-center py-4">
+                                                <div class="spinner-border text-warning" role="status">
+                                                    <span class="visually-hidden">Cargando...</span>
                                                 </div>
+                                                <p class="mt-2 text-muted mb-0">Cargando DTEs pendientes...</p>
                                             </div>
-
-                                            <div
-                                                class="text-reset notification-item d-block dropdown-item position-relative">
-                                                <div class="d-flex">
-                                                    <img src="{% static 'images/users/user-dummy-img.jpg' %}"
-                                                        class="me-3 rounded-circle avatar-xs" alt="user-pic">
-                                                    <div class="flex-1">
-                                                        <a href="#!" class="stretched-link">
-                                                            <h6 class="mt-0 mb-1 fs-13 fw-semibold">Angela Bernier</h6>
-                                                        </a>
-                                                        <div class="fs-13 text-muted">
-                                                            <p class="mb-1">Answered to your comment on the cash flow
-                                                                forecast's graph 🔔.</p>
-                                                        </div>
-                                                        <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
-                                                            <span><i class="mdi mdi-clock-outline"></i> 48 min
-                                                                ago</span>
-                                                        </p>
-                                                    </div>
-                                                    <div class="px-2 fs-15">
-                                                        <div class="form-check notification-check">
-                                                            <input class="form-check-input" type="checkbox" value=""
-                                                                id="all-notification-check02">
-                                                            <label class="form-check-label"
-                                                                for="all-notification-check02"></label>
-                                                        </div>
-                                                    </div>
+                                            
+                                            <!-- Lista de DTEs (se llena dinámicamente) -->
+                                            <div id="dtes-list" style="display: none;"></div>
+                                            
+                                            <!-- Sin DTEs pendientes -->
+                                            <div id="no-dtes" class="text-center py-4" style="display: none;">
+                                                <div class="avatar-md mx-auto mb-3">
+                                                    <span class="avatar-title bg-soft-success text-success rounded-circle fs-24">
+                                                        <i class="ri-checkbox-circle-line"></i>
+                                                    </span>
                                                 </div>
-                                            </div>
-
-                                            <div
-                                                class="text-reset notification-item d-block dropdown-item position-relative">
-                                                <div class="d-flex">
-                                                    <div class="avatar-xs me-3">
-                                                        <span
-                                                            class="avatar-title bg-soft-danger text-danger rounded-circle fs-16">
-                                                            <i class='bx bx-message-square-dots'></i>
-                                                        </span>
-                                                    </div>
-                                                    <div class="flex-1">
-                                                        <a href="#!" class="stretched-link">
-                                                            <h6 class="mt-0 mb-2 fs-13 lh-base">You have received <b
-                                                                    class="text-success">20</b> new messages in the
-                                                                conversation
-                                                            </h6>
-                                                        </a>
-                                                        <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
-                                                            <span><i class="mdi mdi-clock-outline"></i> 2 hrs ago</span>
-                                                        </p>
-                                                    </div>
-                                                    <div class="px-2 fs-15">
-                                                        <div class="form-check notification-check">
-                                                            <input class="form-check-input" type="checkbox" value=""
-                                                                id="all-notification-check03">
-                                                            <label class="form-check-label"
-                                                                for="all-notification-check03"></label>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div
-                                                class="text-reset notification-item d-block dropdown-item position-relative">
-                                                <div class="d-flex">
-                                                    <img src=" " class="me-3 rounded-circle avatar-xs" alt="user-pic">
-                                                    <div class="flex-1">
-                                                        <a href="#!" class="stretched-link">
-                                                            <h6 class="mt-0 mb-1 fs-13 fw-semibold">Maureen Gibson</h6>
-                                                        </a>
-                                                        <div class="fs-13 text-muted">
-                                                            <p class="mb-1">We talked about a project on linkedin.</p>
-                                                        </div>
-                                                        <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
-                                                            <span><i class="mdi mdi-clock-outline"></i> 4 hrs ago</span>
-                                                        </p>
-                                                    </div>
-                                                    <div class="px-2 fs-15">
-                                                        <div class="form-check notification-check">
-                                                            <input class="form-check-input" type="checkbox" value=""
-                                                                id="all-notification-check04">
-                                                            <label class="form-check-label"
-                                                                for="all-notification-check04"></label>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div class="my-3 text-center view-all">
-                                                <button type="button"
-                                                    class="btn btn-soft-success waves-effect waves-light">View
-                                                    All Notifications <i
-                                                        class="ri-arrow-right-line align-middle"></i></button>
+                                                <h6 class="text-muted">¡Todo al día!</h6>
+                                                <p class="text-muted fs-12 mb-0">No tienes DTEs pendientes de recepcionar</p>
                                             </div>
                                         </div>
 
+                                        <div class="my-3 text-center view-all">
+                                            <a href="{% url 'recepcion_dte' %}"
+                                                class="btn btn-soft-warning waves-effect waves-light">
+                                                <i class="ri-inbox-archive-line me-1"></i>
+                                                Ir a Recepción de Documentos
+                                                <i class="ri-arrow-right-line align-middle"></i>
+                                            </a>
+                                        </div>
                                     </div>
 
-                                    <div class="tab-pane fade py-2 ps-2" id="messages-tab" role="tabpanel"
-                                        aria-labelledby="messages-tab">
-                                        <div data-simplebar style="max-height: 300px;" class="pe-2">
-                                            <div class="text-reset notification-item d-block dropdown-item">
-                                                <div class="d-flex">
-                                                    <img src=" " class="me-3 rounded-circle avatar-xs" alt="user-pic">
-                                                    <div class="flex-1">
-                                                        <a href="#!" class="stretched-link">
-                                                            <h6 class="mt-0 mb-1 fs-13 fw-semibold">James Lemire</h6>
-                                                        </a>
-                                                        <div class="fs-13 text-muted">
-                                                            <p class="mb-1">We talked about a project on linkedin.</p>
-                                                        </div>
-                                                        <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
-                                                            <span><i class="mdi mdi-clock-outline"></i> 30 min
-                                                                ago</span>
-                                                        </p>
-                                                    </div>
-                                                    <div class="px-2 fs-15">
-                                                        <div class="form-check notification-check">
-                                                            <input class="form-check-input" type="checkbox" value=""
-                                                                id="messages-notification-check01">
-                                                            <label class="form-check-label"
-                                                                for="messages-notification-check01"></label>
-                                                        </div>
-                                                    </div>
+                                    <!-- Tab de DTEs Pendientes de Regularizar (SOY EMISOR) -->
+                                    <div class="tab-pane fade py-2 ps-2" id="regularizar-noti-tab" role="tabpanel">
+                                        <div data-simplebar style="max-height: 300px;" class="pe-2" id="regularizar-container">
+                                            <!-- Loader -->
+                                            <div id="regularizar-loader" class="text-center py-4">
+                                                <div class="spinner-border text-warning" role="status">
+                                                    <span class="visually-hidden">Cargando...</span>
+                                                </div>
+                                                <p class="mt-2 text-muted mb-0">Buscando DTEs por regularizar...</p>
+                                            </div>
+                                            
+                                            <!-- Lista de DTEs por regularizar -->
+                                            <div id="regularizar-list" style="display: none;"></div>
+                                            
+                                            <!-- Sin DTEs por regularizar -->
+                                            <div id="no-regularizar" class="text-center py-4" style="display: none;">
+                                                <div class="avatar-md mx-auto mb-3">
+                                                    <span class="avatar-title bg-soft-success text-success rounded-circle fs-24">
+                                                        <i class="ri-checkbox-circle-line"></i>
+                                                    </span>
+                                                </div>
+                                                <h6 class="text-muted">¡Sin pendientes!</h6>
+                                                <p class="text-muted fs-12 mb-0">No hay DTEs con problemas por regularizar</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="my-3 text-center view-all">
+                                            <a href="{% url 'regularizar_recepciones' %}"
+                                                class="btn btn-soft-success waves-effect waves-light">
+                                                <i class="ri-tools-line me-1"></i>
+                                                Ir a Regularizar Recepciones
+                                                <i class="ri-arrow-right-line align-middle"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tab de Notificaciones de Precios -->
+                                    <div class="tab-pane fade show active py-2 ps-2" id="precios-noti-tab" role="tabpanel">
+                                        <!-- Acciones rápidas -->
+                                        <div id="notif-actions" class="d-flex justify-content-between align-items-center px-2 pb-2 border-bottom mb-2" style="display: none !important;">
+                                            <span class="text-muted fs-11" id="notif-count-label">0 sin leer</span>
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-soft-primary btn-sm" onclick="marcarTodasLeidas()" title="Marcar todas como leídas">
+                                                    <i class="ri-check-double-line"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-soft-danger btn-sm" onclick="eliminarNotificacionesLeidas()" title="Eliminar leídas">
+                                                    <i class="ri-delete-bin-line"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div data-simplebar style="max-height: 280px;" class="pe-2" id="notifications-container">
+                                            <!-- Loader -->
+                                            <div id="notifications-loader" class="text-center py-4">
+                                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                                    <span class="visually-hidden">Cargando...</span>
+                                                </div>
+                                                <p class="mt-2 text-muted mb-0 fs-12">Cargando...</p>
+                                            </div>
+                                            
+                                            <!-- Lista de notificaciones (se llena dinámicamente) -->
+                                            <div id="notifications-list" style="display: none;"></div>
+                                            
+                                            <!-- Sin notificaciones -->
+                                            <div id="no-notifications" class="text-center py-4" style="display: none;">
+                                                <div class="avatar-md mx-auto mb-3">
+                                                    <span class="avatar-title bg-soft-success text-success rounded-circle fs-24">
+                                                        <i class="ri-check-double-line"></i>
+                                                    </span>
+                                                </div>
+                                                <h6 class="text-muted">¡Todo al día!</h6>
+                                                <p class="text-muted fs-12 mb-0">No tienes notificaciones pendientes</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="my-3 text-center view-all">
+                                            <a href="{% url 'revisar_cambios_precios' %}"
+                                                class="btn btn-soft-primary waves-effect waves-light">
+                                                Ver Alertas de Precio
+                                                <i class="ri-arrow-right-line align-middle"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tab de Cambios Pendientes -->
+                                    <div class="tab-pane fade py-2 ps-2" id="pendientes-tab" role="tabpanel">
+                                        <div data-simplebar style="max-height: 300px;" class="pe-2" id="pendientes-container">
+                                            <div id="pendientes-loader" class="text-center py-4">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Cargando...</span>
                                                 </div>
                                             </div>
-
-
-
-
+                                            <div id="pendientes-list" style="display: none;"></div>
+                                            <div id="no-pendientes" class="text-center py-4" style="display: none;">
+                                                <div class="avatar-md mx-auto mb-3">
+                                                    <span class="avatar-title bg-soft-info text-info rounded-circle fs-24">
+                                                        <i class="ri-checkbox-circle-line"></i>
+                                                    </span>
+                                                </div>
+                                                <h6 class="text-muted">Sin cambios pendientes</h6>
+                                                <p class="text-muted fs-12 mb-0">No hay precios pendientes por aprobar</p>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div class="notification-actions" id="notification-actions">
-                                        <div class="d-flex text-muted justify-content-center">
-                                            Select
-                                            <div id="select-content" class="text-body fw-semibold px-1">0</div> Result
-                                            <button type="button" class="btn btn-link link-danger p-0 ms-3"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#removeNotificationModal">Remove</button>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Información Usuario y Sucursal -->
+                        <!-- Ocultar mensaje por defecto del tema -->
+                        <style>
+                            .empty-notification-elem { display: none !important; }
+                        </style>
+                        
+                        <!-- Script para cargar notificaciones dinámicamente -->
+                        <script>
+                        // Variables globales para evitar cargas múltiples
+                        let notificacionesCargadas = false;
+                        let pendientesCargados = false;
+                        let dtesCargados = false;
+                        let regularizarCargados = false;
+                        
+                        // Variables para conteo total de alertas
+                        let totalAlertasPrecios = 0;
+                        let totalAlertasDTEs = 0;
+                        let totalAlertasRegularizar = 0;
+                        
+                        // Actualizar badge total de la campanita (DTEs + Precios + Regularizar)
+                        function actualizarBadgeTotal() {
+                            const totalAlertas = totalAlertasPrecios + totalAlertasDTEs + totalAlertasRegularizar;
+                            const badge = document.getElementById('notification-badge');
+                            const headerCount = document.getElementById('notification-count-header');
+                            
+                            if (totalAlertas > 0) {
+                                badge.textContent = totalAlertas > 99 ? '99+' : totalAlertas;
+                                badge.style.display = 'inline-block';
+                                if (headerCount) {
+                                    headerCount.textContent = `${totalAlertas} Alerta${totalAlertas > 1 ? 's' : ''}`;
+                                }
+                            } else {
+                                badge.style.display = 'none';
+                                if (headerCount) {
+                                    headerCount.textContent = '0 Alertas';
+                                }
+                            }
+                        }
+                        
+                        // Cargar notificaciones al iniciar
+                        document.addEventListener('DOMContentLoaded', function() {
+                            actualizarBadgeNotificaciones();
+                            actualizarBadgeDTEs();
+                            actualizarBadgeRegularizar();
+                            // Actualizar cada 60 segundos
+                            setInterval(actualizarBadgeNotificaciones, 60000);
+                            setInterval(actualizarBadgeDTEs, 60000);
+                            setInterval(actualizarBadgeRegularizar, 60000);
+                        });
+                        
+                        // Actualizar el badge de DTEs pendientes
+                        async function actualizarBadgeDTEs() {
+                            try {
+                                const response = await fetch('/app/dtes-pendientes-recibir/');
+                                const data = await response.json();
+                                
+                                const badgeDtes = document.getElementById('badge-dtes-pendientes');
+                                
+                                if (data.success && data.total_pendientes > 0) {
+                                    totalAlertasDTEs = data.total_pendientes;
+                                    
+                                    // Mostrar badge en tab de DTEs
+                                    if (badgeDtes) {
+                                        badgeDtes.textContent = data.total_pendientes > 99 ? '99+' : data.total_pendientes;
+                                        badgeDtes.style.display = 'inline-block';
+                                    }
+                                } else {
+                                    totalAlertasDTEs = 0;
+                                    if (badgeDtes) {
+                                        badgeDtes.style.display = 'none';
+                                    }
+                                }
+                                
+                                // Actualizar badge total
+                                actualizarBadgeTotal();
+                            } catch (error) {
+                                console.error('Error al actualizar badge DTEs:', error);
+                                totalAlertasDTEs = 0;
+                            }
+                        }
+                        
+                        // Cargar notificaciones de DTEs
+                        async function cargarNotificacionesDTE() {
+                            if (dtesCargados) return;
+                            
+                            const loader = document.getElementById('dtes-loader');
+                            const list = document.getElementById('dtes-list');
+                            const noDtes = document.getElementById('no-dtes');
+                            
+                            try {
+                                const response = await fetch('/app/dtes-pendientes-recibir/');
+                                const data = await response.json();
+                                
+                                loader.style.display = 'none';
+                                
+                                if (data.success && data.dtes && data.dtes.length > 0) {
+                                    list.innerHTML = data.dtes.map(dte => `
+                                        <div class="text-reset notification-item d-block dropdown-item position-relative" id="dte-notif-${dte.id}">
+                                            <div class="d-flex">
+                                                <div class="avatar-xs me-3 flex-shrink-0">
+                                                    <span class="avatar-title ${dte.urgente ? 'bg-soft-danger text-danger' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
+                                                        <i class="ri-file-text-line"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h6 class="mt-0 mb-1 fs-13 fw-semibold">
+                                                        <span class="badge bg-info me-1">${dte.tipo_documento}</span>
+                                                        #${dte.numero_documento}
+                                                    </h6>
+                                                    <p class="fs-12 text-muted mb-1">
+                                                        De: <strong>${dte.emisor_nombre}</strong>
+                                                    </p>
+                                                    <p class="fs-12 mb-1">
+                                                        <span class="text-success fw-bold">$${Number(dte.monto_con_iva).toLocaleString('es-CL')}</span>
+                                                        <span class="text-muted">• ${dte.unidades_productos} uds</span>
+                                                    </p>
+                                                    <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
+                                                        <span><i class="mdi mdi-clock-outline"></i> ${dte.fecha_emision}</span>
+                                                        ${dte.urgente ? '<span class="badge bg-danger ms-2">+7 dias</span>' : 
+                                                         dte.dias_desde_emision > 3 ? '<span class="badge bg-warning text-dark ms-2">' + dte.dias_desde_emision + ' dias</span>' : ''}
+                                                    </p>
+                                                </div>
+                                                <button type="button" class="btn btn-sm btn-ghost-secondary position-absolute end-0 top-50 translate-middle-y me-2" 
+                                                        onclick="event.stopPropagation(); descartarNotificacionDTE(${dte.id})" 
+                                                        title="Descartar">
+                                                    <i class="ri-close-line fs-16"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('');
+                                    list.style.display = 'block';
+                                    noDtes.style.display = 'none';
+                                } else {
+                                    list.style.display = 'none';
+                                    noDtes.style.display = 'block';
+                                }
+                                
+                                dtesCargados = true;
+                                
+                            } catch (error) {
+                                console.error('Error al cargar DTEs:', error);
+                                loader.innerHTML = '<p class="text-danger text-center py-3">Error al cargar DTEs pendientes</p>';
+                            }
+                        }
+                        
+                        // Actualizar badge de DTEs pendientes de regularizar
+                        async function actualizarBadgeRegularizar() {
+                            try {
+                                const response = await fetch('/app/dtes-pendientes-regularizar/');
+                                const data = await response.json();
+                                
+                                const badge = document.getElementById('badge-regularizar-pendientes');
+                                if (badge) {
+                                    if (data.success && data.total_pendientes > 0) {
+                                        badge.textContent = data.total_pendientes;
+                                        badge.style.display = 'inline';
+                                        totalAlertasRegularizar = data.total_pendientes;
+                                    } else {
+                                        badge.style.display = 'none';
+                                        totalAlertasRegularizar = 0;
+                                    }
+                                    actualizarBadgeTotal();
+                                }
+                            } catch (error) {
+                                console.error('Error al actualizar badge regularizar:', error);
+                                totalAlertasRegularizar = 0;
+                            }
+                        }
+                        
+                        // Cargar notificaciones de DTEs pendientes de regularizar
+                        async function cargarNotificacionesRegularizar() {
+                            if (regularizarCargados) return;
+                            
+                            const loader = document.getElementById('regularizar-loader');
+                            const list = document.getElementById('regularizar-list');
+                            const noRegularizar = document.getElementById('no-regularizar');
+                            
+                            try {
+                                const response = await fetch('/app/dtes-pendientes-regularizar/');
+                                const data = await response.json();
+                                
+                                loader.style.display = 'none';
+                                
+                                if (data.success && data.dtes && data.dtes.length > 0) {
+                                    list.innerHTML = data.dtes.map(dte => `
+                                        <a href="{% url 'regularizar_recepciones' %}" class="text-reset notification-item d-block dropdown-item position-relative">
+                                            <div class="d-flex">
+                                                <div class="avatar-xs me-3 flex-shrink-0">
+                                                    <span class="avatar-title ${dte.urgente ? 'bg-soft-danger text-danger' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
+                                                        <i class="ri-tools-line"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h6 class="mt-0 mb-1 fs-13 fw-semibold">
+                                                        <span class="badge bg-secondary me-1">DTE #${dte.numero_documento}</span>
+                                                        ${dte.urgente ? '<span class="badge bg-danger">Urgente</span>' : ''}
+                                                    </h6>
+                                                    <p class="fs-12 text-muted mb-1">
+                                                        Enviado a: <strong>${dte.destino_nombre}</strong>
+                                                    </p>
+                                                    <p class="fs-12 mb-1">
+                                                        <span class="text-danger fw-bold">${dte.productos_problema} producto(s)</span>
+                                                        <span class="text-muted">con problemas</span>
+                                                    </p>
+                                                    <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
+                                                        <span><i class="mdi mdi-clock-outline"></i> Recibido: ${dte.fecha_recepcion}</span>
+                                                        ${dte.dias_pendiente > 0 ? '<span class="badge bg-warning text-dark ms-2">' + dte.dias_pendiente + ' días</span>' : ''}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    `).join('');
+                                    list.style.display = 'block';
+                                    noRegularizar.style.display = 'none';
+                                } else {
+                                    list.style.display = 'none';
+                                    noRegularizar.style.display = 'block';
+                                }
+                                
+                                regularizarCargados = true;
+                                
+                            } catch (error) {
+                                console.error('Error al cargar DTEs por regularizar:', error);
+                                loader.innerHTML = '<p class="text-danger text-center py-3">Error al cargar</p>';
+                            }
+                        }
+                        
+                        // Descartar una notificacion de DTE individual
+                        async function descartarNotificacionDTE(dteId) {
+                            try {
+                                // Ocultar la notificacion con animacion
+                                const notifElement = document.getElementById(`dte-notif-${dteId}`);
+                                if (notifElement) {
+                                    notifElement.style.transition = 'opacity 0.3s, transform 0.3s';
+                                    notifElement.style.opacity = '0';
+                                    notifElement.style.transform = 'translateX(20px)';
+                                    
+                                    setTimeout(() => {
+                                        notifElement.remove();
+                                        
+                                        // Verificar si quedan notificaciones
+                                        const list = document.getElementById('dtes-list');
+                                        const noDtes = document.getElementById('no-dtes');
+                                        
+                                        if (list && list.children.length === 0) {
+                                            list.style.display = 'none';
+                                            noDtes.style.display = 'block';
+                                        }
+                                        
+                                        // Actualizar badge
+                                        actualizarBadgeDTEs();
+                                    }, 300);
+                                }
+                            } catch (error) {
+                                console.error('Error al descartar notificacion:', error);
+                            }
+                        }
+                        
+                        // Actualizar el badge de notificaciones de precios
+                        async function actualizarBadgeNotificaciones() {
+                            try {
+                                const response = await fetch('/app/gestion-precios/notificaciones/?solo_no_leidas=true&limit=50');
+                                const data = await response.json();
+                                
+                                if (data.success) {
+                                    totalAlertasPrecios = data.total_no_leidas || 0;
+                                } else {
+                                    totalAlertasPrecios = 0;
+                                }
+                                
+                                // Actualizar badge total
+                                actualizarBadgeTotal();
+                            } catch (error) {
+                                console.error('Error al actualizar badge precios:', error);
+                                totalAlertasPrecios = 0;
+                            }
+                        }
+                        
+                        // Cargar notificaciones de precios
+                        async function cargarNotificacionesPrecio(forzar = false) {
+                            if (notificacionesCargadas && !forzar) return;
+                            
+                            const loader = document.getElementById('notifications-loader');
+                            const list = document.getElementById('notifications-list');
+                            const noNotif = document.getElementById('no-notifications');
+                            const actions = document.getElementById('notif-actions');
+                            const countLabel = document.getElementById('notif-count-label');
+                            
+                            if (forzar) {
+                                loader.style.display = 'block';
+                                list.style.display = 'none';
+                                noNotif.style.display = 'none';
+                            }
+                            
+                            try {
+                                const response = await fetch('/app/gestion-precios/notificaciones/?limit=20');
+                                const data = await response.json();
+                                
+                                loader.style.display = 'none';
+                                
+                                if (data.success && data.notificaciones.length > 0) {
+                                    // Mostrar acciones si hay notificaciones
+                                    actions.style.display = 'flex';
+                                    actions.style.setProperty('display', 'flex', 'important');
+                                    countLabel.textContent = `${data.total_no_leidas} sin leer`;
+                                    
+                                    list.innerHTML = data.notificaciones.map(notif => `
+                                        <div class="text-reset notification-item d-block dropdown-item position-relative ${notif.leida ? '' : 'unread'}" 
+                                             id="notif-${notif.id}"
+                                             style="cursor: pointer; transition: all 0.2s;">
+                                            <div class="d-flex align-items-start">
+                                                <div class="avatar-xs me-3 flex-shrink-0">
+                                                    <span class="avatar-title ${notif.leida ? 'bg-soft-secondary text-secondary' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
+                                                        <i class="ri-money-dollar-circle-line"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="flex-1" onclick="marcarNotificacionLeida(${notif.id}, this.parentElement.parentElement)">
+                                                    <h6 class="mt-0 mb-1 fs-13 ${notif.leida ? '' : 'fw-bold'}">
+                                                        ${notif.producto}
+                                                    </h6>
+                                                    <p class="fs-12 text-muted mb-1" style="line-height: 1.3;">${notif.mensaje}</p>
+                                                    <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
+                                                        <span><i class="ri-time-line"></i> ${notif.fecha_creacion}</span>
+                                                        ${!notif.leida ? '<span class="badge bg-warning ms-2">Nuevo</span>' : ''}
+                                                    </p>
+                                                </div>
+                                                <button class="btn btn-sm btn-link text-danger p-0 ms-2" 
+                                                        onclick="event.stopPropagation(); eliminarNotificacion(${notif.id})"
+                                                        title="Eliminar">
+                                                    <i class="ri-close-line"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('');
+                                    list.style.display = 'block';
+                                } else {
+                                    actions.style.display = 'none';
+                                    actions.style.setProperty('display', 'none', 'important');
+                                    noNotif.style.display = 'block';
+                                }
+                                
+                                notificacionesCargadas = true;
+                                
+                                // También cargar pendientes
+                                cargarCambiosPendientes();
+                                
+                            } catch (error) {
+                                console.error('Error al cargar notificaciones:', error);
+                                loader.innerHTML = '<p class="text-danger text-center py-3 fs-12">Error al cargar</p>';
+                            }
+                        }
+                        
+                        // Cargar cambios pendientes
+                        async function cargarCambiosPendientes() {
+                            if (pendientesCargados) return;
+                            
+                            const loader = document.getElementById('pendientes-loader');
+                            const list = document.getElementById('pendientes-list');
+                            const noPend = document.getElementById('no-pendientes');
+                            
+                            try {
+                                const response = await fetch('/app/gestion-precios/indicadores-pendientes/');
+                                const data = await response.json();
+                                
+                                loader.style.display = 'none';
+                                
+                                if (data.success && data.ultimos_cambios && data.ultimos_cambios.length > 0) {
+                                    list.innerHTML = data.ultimos_cambios.map(cambio => `
+                                        <div class="text-reset notification-item d-block dropdown-item position-relative">
+                                            <div class="d-flex">
+                                                <div class="avatar-xs me-3 flex-shrink-0">
+                                                    <span class="avatar-title bg-soft-${cambio.prioridad === 'URGENTE' ? 'danger' : cambio.prioridad === 'ALTA' ? 'warning' : 'info'} 
+                                                          text-${cambio.prioridad === 'URGENTE' ? 'danger' : cambio.prioridad === 'ALTA' ? 'warning' : 'info'} rounded-circle fs-16">
+                                                        <i class="ri-price-tag-3-line"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h6 class="mt-0 mb-1 fs-13 fw-semibold">${cambio.producto}</h6>
+                                                    <p class="fs-12 text-muted mb-1">
+                                                        $${Number(cambio.precio_anterior).toLocaleString('es-CL')} → 
+                                                        <strong class="${cambio.diferencia > 0 ? 'text-success' : 'text-danger'}">
+                                                            $${Number(cambio.precio_nuevo).toLocaleString('es-CL')}
+                                                        </strong>
+                                                        <span class="badge bg-${cambio.diferencia > 0 ? 'success' : 'danger'} ms-1">
+                                                            ${cambio.diferencia > 0 ? '+' : ''}${cambio.porcentaje}%
+                                                        </span>
+                                                    </p>
+                                                    <p class="mb-0 fs-11 text-muted">
+                                                        <i class="ri-user-line"></i> ${cambio.creado_por} • 
+                                                        <i class="ri-building-line"></i> ${cambio.sucursal}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('');
+                                    list.style.display = 'block';
+                                } else {
+                                    noPend.style.display = 'block';
+                                }
+                                
+                                pendientesCargados = true;
+                                
+                            } catch (error) {
+                                console.error('Error al cargar pendientes:', error);
+                                loader.innerHTML = '<p class="text-muted text-center py-3">Error al cargar</p>';
+                            }
+                        }
+                        
+                        // Marcar notificación como leída (con feedback visual inmediato)
+                        async function marcarNotificacionLeida(notificacionId, elemento) {
+                            // Feedback visual inmediato
+                            if (elemento) {
+                                elemento.style.opacity = '0.5';
+                                elemento.classList.remove('unread');
+                                const badge = elemento.querySelector('.badge.bg-warning');
+                                if (badge) badge.remove();
+                                const titulo = elemento.querySelector('h6');
+                                if (titulo) titulo.classList.remove('fw-bold');
+                                const avatar = elemento.querySelector('.avatar-title');
+                                if (avatar) {
+                                    avatar.classList.remove('bg-soft-warning', 'text-warning');
+                                    avatar.classList.add('bg-soft-secondary', 'text-secondary');
+                                }
+                                elemento.style.opacity = '1';
+                            }
+                            
+                            try {
+                                const response = await fetch('/app/gestion-precios/marcar-notificacion/', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': getCsrfToken()
+                                    },
+                                    body: JSON.stringify({ notificacion_id: notificacionId })
+                                });
+                                
+                                const data = await response.json();
+                                if (data.success) {
+                                    // Actualizar contador
+                                    const countLabel = document.getElementById('notif-count-label');
+                                    if (countLabel && data.restantes !== undefined) {
+                                        countLabel.textContent = `${data.restantes} sin leer`;
+                                    }
+                                    actualizarBadgeNotificaciones();
+                                }
+                            } catch (error) {
+                                console.error('Error al marcar notificación:', error);
+                            }
+                        }
+                        
+                        // Marcar TODAS como leídas
+                        async function marcarTodasLeidas() {
+                            const btn = event.target.closest('button');
+                            const originalHTML = btn.innerHTML;
+                            btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i>';
+                            btn.disabled = true;
+                            
+                            try {
+                                const response = await fetch('/app/gestion-precios/marcar-notificacion/', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': getCsrfToken()
+                                    },
+                                    body: JSON.stringify({ marcar_todas: true })
+                                });
+                                
+                                const data = await response.json();
+                                if (data.success) {
+                                    // Recargar lista
+                                    notificacionesCargadas = false;
+                                    cargarNotificacionesPrecio(true);
+                                    actualizarBadgeNotificaciones();
+                                }
+                            } catch (error) {
+                                console.error('Error:', error);
+                            } finally {
+                                btn.innerHTML = originalHTML;
+                                btn.disabled = false;
+                            }
+                        }
+                        
+                        // Eliminar una notificación
+                        async function eliminarNotificacion(notificacionId) {
+                            const elemento = document.getElementById(`notif-${notificacionId}`);
+                            if (elemento) {
+                                elemento.style.transform = 'translateX(100%)';
+                                elemento.style.opacity = '0';
+                            }
+                            
+                            try {
+                                const response = await fetch('/app/gestion-precios/eliminar-notificaciones/', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': getCsrfToken()
+                                    },
+                                    body: JSON.stringify({ notificacion_id: notificacionId })
+                                });
+                                
+                                const data = await response.json();
+                                if (data.success) {
+                                    // Remover elemento del DOM
+                                    setTimeout(() => {
+                                        if (elemento) elemento.remove();
+                                        
+                                        // Verificar si quedan notificaciones
+                                        const list = document.getElementById('notifications-list');
+                                        if (list && list.children.length === 0) {
+                                            list.style.display = 'none';
+                                            document.getElementById('no-notifications').style.display = 'block';
+                                            const actions = document.getElementById('notif-actions');
+                                            if (actions) actions.style.setProperty('display', 'none', 'important');
+                                        }
+                                    }, 200);
+                                    
+                                    actualizarBadgeNotificaciones();
+                                }
+                            } catch (error) {
+                                console.error('Error:', error);
+                                if (elemento) {
+                                    elemento.style.transform = '';
+                                    elemento.style.opacity = '1';
+                                }
+                            }
+                        }
+                        
+                        // Eliminar notificaciones leídas
+                        async function eliminarNotificacionesLeidas() {
+                            if (!confirm('¿Eliminar todas las notificaciones leídas?')) return;
+                            
+                            const btn = event.target.closest('button');
+                            const originalHTML = btn.innerHTML;
+                            btn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i>';
+                            btn.disabled = true;
+                            
+                            try {
+                                const response = await fetch('/app/gestion-precios/eliminar-notificaciones/', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': getCsrfToken()
+                                    },
+                                    body: JSON.stringify({ eliminar_leidas: true })
+                                });
+                                
+                                const data = await response.json();
+                                if (data.success) {
+                                    // Recargar lista
+                                    notificacionesCargadas = false;
+                                    cargarNotificacionesPrecio(true);
+                                }
+                            } catch (error) {
+                                console.error('Error:', error);
+                            } finally {
+                                btn.innerHTML = originalHTML;
+                                btn.disabled = false;
+                            }
+                        }
+                        
+                        // Obtener CSRF token
+                        function getCsrfToken() {
+                            const cookies = document.cookie.split(';');
+                            for (let cookie of cookies) {
+                                const [name, value] = cookie.trim().split('=');
+                                if (name === 'csrftoken') return value;
+                            }
+                            return '';
+                        }
+                        </script>
+
+                        <!-- Quick Sucursal Switcher - Solo para Administradores -->
                         {% if user.is_authenticated %}
-                        <div class="d-none d-lg-flex align-items-center ms-3 me-2 px-3 border-start">
-                            <div class="text-start">
-                                <div class="fw-semibold text-dark" style="font-size: 0.9rem; line-height: 1.3;">
-                                    <i class="ri-user-3-line text-primary me-1"></i>
-                                    {{ user.first_name|default:user.username|capfirst }} {{ user.last_name|capfirst }}
+                        {% if user.is_superuser or user.rol == 'administrador' %}
+                        <!-- Mobile: Quick access icon (Solo Admin) -->
+                        <a href="{% url 'cambiar_empresa' %}" 
+                           class="d-flex d-lg-none align-items-center justify-content-center me-2"
+                           style="width: 38px; height: 38px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 10px; text-decoration: none;"
+                           title="Cambiar sucursal">
+                            <i class="ri-store-3-fill" style="color: white; font-size: 1.1rem;"></i>
+                        </a>
+                        
+                        <!-- Desktop: Full dropdown (Solo Admin) -->
+                        <div class="dropdown d-none d-lg-flex align-items-center ms-3 me-2">
+                            <button type="button" class="btn btn-light border-0 d-flex align-items-center gap-2 px-3 py-2 nexo-sucursal-switcher" 
+                                    id="quick-sucursal-dropdown"
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false"
+                                    style="background: linear-gradient(135deg, #F5F5F7 0%, #FFFFFF 100%); border-radius: 10px; min-width: 200px;">
+                                <div class="nexo-switcher-icon" style="width: 36px; height: 36px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <i class="ri-store-3-fill" style="color: white; font-size: 1rem;"></i>
                                 </div>
-                                <div class="text-muted" style="font-size: 0.75rem; line-height: 1.2;">
-                                    <i class="ri-building-2-line text-success me-1"></i>
-                                    {{ request.session.nombreEmpresaActual|default:"Sin empresa" }}
-                                    <span class="mx-1">•</span>
-                                    <i class="ri-map-pin-line text-info me-1"></i>
-                                    {% firstof request.session.direccionSucursal request.session.direccion "Sin dirección" %}
+                                <div class="text-start flex-grow-1" style="min-width: 0;">
+                                    <div style="font-size: 0.7rem; color: #8A8A9A; text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Sucursal actual
+                                    </div>
+                                    <div style="font-size: 0.85rem; font-weight: 600; color: #1A1A2E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        {{ request.session.alias|default:"Sin sucursal" }}
+                                    </div>
+                                </div>
+                                <i class="ri-arrow-down-s-line" style="color: #8A8A9A; font-size: 1.25rem;"></i>
+                            </button>
+                            
+                            <div class="dropdown-menu dropdown-menu-end nexo-quick-switch-menu" aria-labelledby="quick-sucursal-dropdown" 
+                                 style="min-width: 320px; max-height: 400px; overflow-y: auto; border: none; box-shadow: 0 10px 40px rgba(26, 26, 46, 0.15); border-radius: 12px; padding: 0;">
+                                
+                                <!-- Header -->
+                                <div style="padding: 1rem 1.25rem; background: linear-gradient(135deg, #1A1A2E 0%, #2D2D44 100%); color: white; border-radius: 12px 12px 0 0;">
+                                    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(255,255,255,0.6); margin-bottom: 0.25rem;">
+                                        Cambio rápido
+                                    </div>
+                                    <div style="font-weight: 600;">Selecciona una sucursal</div>
+                                </div>
+                                
+                                <!-- Current -->
+                                <div style="padding: 0.75rem 1.25rem; background: rgba(0, 212, 170, 0.08); border-bottom: 1px solid #e5e7eb;">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <div style="width: 32px; height: 32px; background: #00D4AA; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                            <i class="ri-check-line" style="color: white;"></i>
+                                        </div>
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="font-size: 0.75rem; color: #00D4AA; font-weight: 600;">ACTUAL</div>
+                                            <div style="font-size: 0.875rem; font-weight: 600; color: #1A1A2E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                {{ request.session.alias|default:"Sin sucursal" }}
+                                            </div>
+                                            <div style="font-size: 0.75rem; color: #8A8A9A;">
+                                                {{ request.session.nombreEmpresaActual|default:"Sin empresa" }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Sucursales List - Loaded via AJAX -->
+                                <div id="quick-switch-list" style="padding: 0.5rem;">
+                                    <div class="text-center py-3" id="quick-switch-loader">
+                                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                        <span class="ms-2" style="color: #8A8A9A; font-size: 0.875rem;">Cargando sucursales...</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Footer -->
+                                <div style="padding: 0.75rem 1.25rem; border-top: 1px solid #e5e7eb; background: #F9FAFB;">
+                                    <a href="{% url 'cambiar_empresa' %}" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.875rem; font-weight: 600; color: #0066FF; text-decoration: none; padding: 0.5rem; border-radius: 8px; transition: background 150ms ease;">
+                                        <i class="ri-settings-3-line"></i>
+                                        Ver todas las opciones
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <!-- Non-Admin: Solo mostrar info de sucursal actual (sin dropdown) -->
+                        <div class="d-none d-lg-flex align-items-center ms-3 me-2 px-3 py-2" 
+                             style="background: linear-gradient(135deg, #F5F5F7 0%, #FFFFFF 100%); border-radius: 10px;">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 32px; height: 32px; background: rgba(138, 138, 154, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                    <i class="ri-store-3-fill" style="color: #8A8A9A; font-size: 0.9rem;"></i>
+                                </div>
+                                <div class="text-start" style="min-width: 0;">
+                                    <div style="font-size: 0.65rem; color: #8A8A9A; text-transform: uppercase; letter-spacing: 0.05em;">
+                                        Sucursal asignada
+                                    </div>
+                                    <div style="font-size: 0.8rem; font-weight: 600; color: #1A1A2E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">
+                                        {{ request.session.alias|default:"Sin sucursal" }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         {% endif %}
+                        
+                        <script>
+                        (function() {
+                            let sucursalesCargadas = false;
+                            
+                            const dropdown = document.getElementById('quick-sucursal-dropdown');
+                            if (dropdown) {
+                                dropdown.addEventListener('show.bs.dropdown', function() {
+                                    if (!sucursalesCargadas) {
+                                        cargarSucursalesRapido();
+                                    }
+                                });
+                            }
+                            
+                            async function cargarSucursalesRapido() {
+                                try {
+                                    const response = await fetch('{% url "api_sucursales_usuario" %}');
+                                    const data = await response.json();
+                                    
+                                    const loader = document.getElementById('quick-switch-loader');
+                                    const list = document.getElementById('quick-switch-list');
+                                    
+                                    if (data.sucursales && data.sucursales.length > 0) {
+                                        const currentId = {{ request.session.idSucursalActual|default:"null" }};
+                                        const otherSucursales = data.sucursales.filter(s => s.sucursal_id !== currentId);
+                                        
+                                        if (otherSucursales.length > 0) {
+                                            list.innerHTML = otherSucursales.map(s => `
+                                                <button type="button" 
+                                                        class="nexo-quick-switch-item"
+                                                        onclick="quickSwitchSucursal(${s.empresa_user_id}, '${s.empresa_nombre.replace(/'/g, "\\'")}', '${s.sucursal_alias.replace(/'/g, "\\'")}')"
+                                                        style="width: 100%; display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: none; background: transparent; border-radius: 8px; cursor: pointer; transition: background 150ms ease; text-align: left;">
+                                                    <div style="width: 32px; height: 32px; background: #E6F0FF; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                                        <i class="ri-store-2-line" style="color: #0066FF;"></i>
+                                                    </div>
+                                                    <div style="flex: 1; min-width: 0;">
+                                                        <div style="font-size: 0.875rem; font-weight: 600; color: #1A1A2E; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                            ${s.sucursal_alias}
+                                                        </div>
+                                                        <div style="font-size: 0.75rem; color: #8A8A9A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                            ${s.empresa_nombre}
+                                                        </div>
+                                                    </div>
+                                                    <i class="ri-arrow-right-s-line" style="color: #D1D1D9; font-size: 1.25rem;"></i>
+                                                </button>
+                                            `).join('');
+                                        } else {
+                                            list.innerHTML = '<div class="text-center py-3" style="color: #8A8A9A; font-size: 0.875rem;"><i class="ri-information-line me-1"></i>Solo tienes una sucursal asignada</div>';
+                                        }
+                                    } else {
+                                        list.innerHTML = '<div class="text-center py-3" style="color: #8A8A9A; font-size: 0.875rem;"><i class="ri-alert-line me-1"></i>No hay sucursales disponibles</div>';
+                                    }
+                                    
+                                    sucursalesCargadas = true;
+                                } catch (error) {
+                                    console.error('Error cargando sucursales:', error);
+                                    document.getElementById('quick-switch-list').innerHTML = '<div class="text-center py-3 text-danger"><i class="ri-error-warning-line me-1"></i>Error al cargar</div>';
+                                }
+                            }
+                        })();
+                        
+                        function quickSwitchSucursal(empresaUserId, empresaNombre, sucursalAlias) {
+                            // Close dropdown
+                            const dropdown = bootstrap.Dropdown.getInstance(document.getElementById('quick-sucursal-dropdown'));
+                            if (dropdown) dropdown.hide();
+                            
+                            // Show loading toast
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    title: 'Cambiando...',
+                                    html: `<div style="color: #4A4A5A;">Cambiando a <strong>${sucursalAlias}</strong></div>`,
+                                    allowOutsideClick: false,
+                                    allowEscapeKey: false,
+                                    showConfirmButton: false,
+                                    didOpen: () => {
+                                        Swal.showLoading();
+                                    }
+                                });
+                            }
+                            
+                            // Make request
+                            fetch('{% url "seleccionar_empresa_sucursal" %}', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'X-CSRFToken': '{{ csrf_token }}'
+                                },
+                                body: `empresa_user_id=${empresaUserId}`
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    if (typeof Swal !== 'undefined') {
+                                        Swal.fire({
+                                            icon: 'success',
+                                            title: '¡Listo!',
+                                            html: `<div style="color: #4A4A5A;">Ahora estás en <strong style="color: #00D4AA;">${sucursalAlias}</strong></div>`,
+                                            timer: 1500,
+                                            showConfirmButton: false
+                                        }).then(() => {
+                                            window.location.reload();
+                                        });
+                                    } else {
+                                        window.location.reload();
+                                    }
+                                } else {
+                                    if (typeof Swal !== 'undefined') {
+                                        Swal.fire({
+                                            icon: 'error',
+                                            title: 'Error',
+                                            text: data.error || 'No se pudo cambiar de sucursal'
+                                        });
+                                    } else {
+                                        alert('Error: ' + (data.error || 'No se pudo cambiar de sucursal'));
+                                    }
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                if (typeof Swal !== 'undefined') {
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: 'Error de conexión',
+                                        text: 'No se pudo conectar con el servidor'
+                                    });
+                                }
+                            });
+                        }
+                        </script>
+                        
+                        <style>
+                        .nexo-quick-switch-item:hover {
+                            background: #F5F5F7 !important;
+                        }
+                        .nexo-quick-switch-item:hover i.ri-arrow-right-s-line {
+                            color: #0066FF !important;
+                            transform: translateX(2px);
+                        }
+                        .nexo-quick-switch-menu::-webkit-scrollbar {
+                            width: 6px;
+                        }
+                        .nexo-quick-switch-menu::-webkit-scrollbar-track {
+                            background: transparent;
+                        }
+                        .nexo-quick-switch-menu::-webkit-scrollbar-thumb {
+                            background: #D1D1D9;
+                            border-radius: 3px;
+                        }
+                        .nexo-sucursal-switcher:hover {
+                            background: linear-gradient(135deg, #FFFFFF 0%, #F5F5F7 100%) !important;
+                            box-shadow: 0 2px 8px rgba(0, 102, 255, 0.1);
+                        }
+                        </style>
+                        {% endif %}
 
                         <div class="dropdown header-item topbar-user">
-                            <button type="button" class="btn shadow-none" id="page-header-user-dropdown"
+                            <button type="button" class="btn shadow-none p-1" id="page-header-user-dropdown"
                                 data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                 <span class="d-flex align-items-center">
                                     <img class="rounded-circle header-profile-user"
-                                        src="{% static 'images/users/user-dummy-img.jpg' %}" alt="Header Avatar">
+                                        src="{% static 'images/users/user-dummy-img.jpg' %}" alt="Header Avatar"
+                                        style="width: 38px; height: 38px; object-fit: cover;">
                                 </span>
                             </button>
-                            <div class="dropdown-menu dropdown-menu-end">
-                                <!-- Header -->
-                                <h6 class="dropdown-header">
-                                    <i class="ri-user-line text-primary me-1"></i>
-                                    Bienvenido {{ user.first_name|default:user.username|capfirst }}!
-                                </h6>
-                                <div class="dropdown-divider"></div>
+                            <div class="dropdown-menu dropdown-menu-end" style="min-width: 240px;">
+                                <!-- Header con avatar y rol -->
+                                <div class="dropdown-header" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 10px; padding: 16px; margin: 4px; margin-bottom: 8px;">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                            <i class="ri-user-3-fill" style="color: white; font-size: 1.25rem;"></i>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 600; color: #1A1A2E; font-size: 0.95rem;">
+                                                {{ user.first_name|default:user.username|capfirst }} {{ user.last_name|capfirst }}
+                                            </div>
+                                            <div style="font-size: 0.8rem; color: #64748b;">
+                                                {{ user.email|default:"Usuario" }}
+                                            </div>
+                                            <!-- Badge del Rol -->
+                                            <div style="margin-top: 6px;">
+                                                {% if user.is_superuser %}
+                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #FFB020 0%, #FF8C00 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                                    <i class="ri-vip-crown-fill" style="font-size: 0.7rem;"></i> Super Admin
+                                                </span>
+                                                {% elif user.rol == 'administrador' %}
+                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                                    <i class="ri-shield-star-fill" style="font-size: 0.7rem;"></i> Administrador
+                                                </span>
+                                                {% elif user.rol == 'jefe_local' %}
+                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #00D4AA 0%, #00B894 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                                    <i class="ri-user-star-fill" style="font-size: 0.7rem;"></i> Jefe Local
+                                                </span>
+                                                {% elif user.rol == 'cajero' %}
+                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                                    <i class="ri-calculator-fill" style="font-size: 0.7rem;"></i> Cajero
+                                                </span>
+                                                {% else %}
+                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #8A8A9A 0%, #6B7280 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                                    <i class="ri-user-fill" style="font-size: 0.7rem;"></i> Vendedor
+                                                </span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                                 
                                 <!-- Mi Perfil -->
                                 <a class="dropdown-item" href="{% url 'users:mi_perfil' %}">
-                                    <i class="ri-user-settings-line text-primary fs-16 align-middle me-1"></i>
+                                    <i class="ri-user-settings-line fs-16 align-middle me-2" style="color: #0066FF;"></i>
                                     <span class="align-middle">Mi Perfil</span>
                                 </a>
                                 
-                                <!-- Cambiar Sucursal -->
+                                <!-- Cambiar Sucursal / Ver Centro de Trabajo -->
+                                {% if user.is_superuser or user.rol == 'administrador' %}
                                 <a class="dropdown-item" href="{% url 'cambiar_empresa' %}">
-                                    <i class="ri-building-line text-success fs-16 align-middle me-1"></i>
+                                    <i class="ri-building-line fs-16 align-middle me-2" style="color: #00D4AA;"></i>
                                     <span class="align-middle">Cambiar Empresa/Sucursal</span>
                                 </a>
+                                {% else %}
+                                <a class="dropdown-item" href="{% url 'cambiar_empresa' %}">
+                                    <i class="ri-store-3-line fs-16 align-middle me-2" style="color: #8A8A9A;"></i>
+                                    <span class="align-middle">Mi Centro de Trabajo</span>
+                                </a>
+                                {% endif %}
                                 
-                                <div class="dropdown-divider"></div>
+                                <div class="dropdown-divider my-2"></div>
                                 
                                 <!-- Cerrar Sesión -->
-                                <a class="dropdown-item" href="{% url 'logout' %}">
-                                    <i class="ri-logout-circle-line text-danger fs-16 align-middle me-1"></i>
+                                <a class="dropdown-item" href="{% url 'logout' %}" style="color: #ef4444;">
+                                    <i class="ri-logout-circle-line fs-16 align-middle me-2"></i>
                                     <span class="align-middle">Cerrar Sesión</span>
                                 </a>
                             </div>
@@ -445,27 +1678,21 @@
             <!-- LOGO -->
             <div class="navbar-brand-box">
                 <!-- Dark Logo-->
-                <a href="index.html" class="logo logo-dark">
+                <a href="{% url 'verHome' %}" class="logo logo-dark">
                     <span class="logo-sm">
-
-
-                        <img src=" {% static 'images/logo-sm-1.png' %}" alt="" height="22">
+                        <img src="{% static 'images/nexo-logo-sm.svg' %}" alt="NEXO" height="32">
                     </span>
                     <span class="logo-lg">
-
-                        <img src=" {% static 'images/logo-dark.png' %}" alt="" height="17">
-
+                        <img src="{% static 'images/nexo-logo-sidebar.svg' %}" alt="NEXO" height="32">
                     </span>
                 </a>
                 <!-- Light Logo-->
-                <a href="index.html" class="logo logo-light">
+                <a href="{% url 'verHome' %}" class="logo logo-light">
                     <span class="logo-sm">
-                        <img src=" {% static 'images/logo-sm-1.png' %}" alt="" height="22">
-
+                        <img src="{% static 'images/nexo-logo-sm.svg' %}" alt="NEXO" height="32">
                     </span>
                     <span class="logo-lg">
-                        <img src=" {% static 'images/logo-light.png' %}" alt="" height="17">
-
+                        <img src="{% static 'images/nexo-logo-sidebar.svg' %}" alt="NEXO" height="32">
                     </span>
                 </a>
                 <button type="button" class="btn btn-sm p-0 fs-20 header-item float-end btn-vertical-sm-hover"
@@ -480,7 +1707,6 @@
                     <div id="two-column-menu">
                     </div>
                     <ul class="navbar-nav" id="navbar-nav">
-                        <li class="menu-title"><span data-key="t-menu">Menu</span></li>
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#dashboards" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="dashboards">
@@ -491,29 +1717,29 @@
 
                                     <li class="nav-item">
                                         <a href="{% url 'verHome' %}" class="nav-link" data-key="t-dashboard-general">
-                                            <i class="ri-dashboard-3-line me-1"></i> Dashboard General
+                                            <i class="ri-dashboard-3-line"></i> Dashboard General
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'dashboard_ventas' %}" class="nav-link" data-key="t-dashboard-ventas">
-                                            <i class="ri-dashboard-line me-1"></i> Dashboard Ventas
+                                            <i class="ri-dashboard-line"></i> Dashboard Ventas
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#dashboardExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="dashboardExistencias">
-                                            <i class="ri-store-3-line me-1"></i> Dashboard de Existencias
+                                            <i class="ri-store-3-line"></i> Dashboard de Existencias
                                         </a>
                                         <div class="menu-dropdown collapse" id="dashboardExistencias">
                                             <ul class="nav nav-sm flex-column">
                                                 <li class="nav-item">
                                                     <a href="/app/dashboard_productos/" class="nav-link" data-key="t-chartjs">
-                                                        <i class="bi bi-box-seam me-1"></i> Dashboard Productos
+                                                        <i class="bi bi-box-seam"></i> Dashboard Productos
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
                                                     <a href="/app/dashboard_fifo/" class="nav-link" data-key="t-echarts">
-                                                        <i class="bi bi-arrow-repeat me-1"></i> Dashboard FIFO
+                                                        <i class="bi bi-arrow-repeat"></i> Dashboard FIFO
                                                     </a>
                                                 </li>
                                             </ul>
@@ -521,7 +1747,7 @@
                                     </li>
                                     <li class="nav-item">
                                         <a href="/app/verDashboardCompras/" class="nav-link" data-key="t-dashboard-compras">
-                                            <i class="ri-shopping-bag-line me-1"></i> Dashboard de Compras
+                                            <i class="ri-shopping-bag-line"></i> Dashboard de Compras
                                         </a>
                                     </li>
 
@@ -542,32 +1768,32 @@
 
                                     <li class="nav-item">
                                         <a href="{% url 'ticket_venta' %}" class="nav-link" data-key="t-ticket-venta">
-                                            <i class="mdi mdi-receipt me-1"></i> Ticket de Venta
+                                            <i class="mdi mdi-receipt"></i> Ticket de Venta
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_cambios_devoluciones' %}" class="nav-link" data-key="t-cambios-devoluciones">
-                                            <i class="ri-exchange-line me-1"></i> Cambios y Devoluciones
+                                            <i class="ri-exchange-line"></i> Cambios y Devoluciones
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'pos_dashboard' %}" class="nav-link" data-key="t-generar-venta">
-                                            <i class="ri-dashboard-3-line me-1"></i> Generar Venta
+                                            <i class="ri-dashboard-3-line"></i> Generar Venta
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_ventas_documentos' %}" class="nav-link" data-key="t-consulta-documentos">
-                                            <i class="ri-file-search-line me-1"></i> Consulta Documentos
+                                            <i class="ri-file-search-line"></i> Consulta Documentos
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'cuadratura_caja' %}" class="nav-link" data-key="t-cuadratura-caja">
-                                            <i class="ri-calculator-line me-1"></i> Cuadratura y Arqueo
+                                            <i class="ri-calculator-line"></i> Cuadratura y Arqueo
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_transbank_pos_sdk' %}" class="nav-link" data-key="t-transbank">
-                                            <i class="ri-bank-card-line me-1"></i> POS Transbank (SDK Oficial)
+                                            <i class="ri-bank-card-line"></i> POS Transbank (SDK Oficial)
                                         </a>
                                     </li>
 
@@ -584,44 +1810,39 @@
 
                         <li class="nav-item">
                             <a href="/app/emisionDTE/" class="nav-link" data-key="t-chartjs">
-                                <i class="bi bi-file-earmark-plus me-1"></i> Emisión DTE
+                                <i class="bi bi-file-earmark-plus"></i> Emisión DTE
                             </a>
                         </li>
                         <li class="nav-item">
                             <a href="/app/documentos/gestion-dte/" class="nav-link" data-key="t-gestion-dte">
-                                <i class="bi bi-file-earmark-text me-1"></i> Gestión DTE
+                                <i class="bi bi-file-earmark-text"></i> Gestión DTE
                             </a>
                         </li>
                         <li class="nav-item">
                             <a href="/app/recepcion-dte/" class="nav-link" data-key="t-recepcion-dte">
-                                <i class="bi bi-box-arrow-in-down me-1"></i> Recepción Documentos
+                                <i class="bi bi-box-arrow-in-down"></i> Recepción Documentos
                             </a>
                         </li>
                         <li class="nav-item">
                             <a href="{% url 'regularizar_recepciones' %}" class="nav-link" data-key="t-regularizar">
-                                <i class="ri-settings-3-line me-1 text-warning"></i> Regularizar Recepciones
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'solicitudes_regularizacion_recibidas' %}" class="nav-link" data-key="t-solicitudes-recibidas">
-                                <i class="bi bi-envelope-paper me-1 text-primary"></i> Solicitudes Recibidas
+                                <i class="ri-settings-3-line"></i> Regularizar Recepciones
                             </a>
                         </li>
                       
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_cotizaciones' %}" class="nav-link" data-key="t-cotizaciones">
-                                            <i class="ri-file-text-line me-1"></i> Gestión Cotizaciones
+                                            <i class="ri-file-text-line"></i> Gestión Cotizaciones
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="/app/documentos/gestion-correlativos/" class="nav-link" data-key="t-gestion-correlativos">
-                                            <i class="ri-file-list-3-line me-1"></i> Gestión Correlativos
+                                            <i class="ri-file-list-3-line"></i> Gestión Correlativos
                                         </a>
                                     </li>
                                   
                                     <li class="nav-item">
                                         <a href="/app/documentos/gestion-creditos/" class="nav-link" data-key="t-gestion-creditos">
-                                            <i class="ri-bank-card-line me-1"></i> Gestión Créditos
+                                            <i class="ri-bank-card-line"></i> Gestión Créditos
                                         </a>
                                     </li>
 
@@ -638,23 +1859,33 @@
 
                                     <li class="nav-item">
                                         <a href="/app/verGestionProducto/" class="nav-link" data-key="t-chartjs">
-                                            <i class="ri-box-3-line me-1"></i> Gestión Producto
+                                            <i class="ri-archive-line"></i> Gestión Producto
                                         </a>
                                     </li>
                                     
                                     <li class="nav-item">
                                         <a href="{% url 'edicion_rapida_precios' %}" class="nav-link" data-key="t-edicion-rapida">
-                                            <i class="ri-flashlight-line me-1"></i> Edición Rápida
+                                            <i class="ri-price-tag-3-line"></i> Gestión de Precios
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'revisar_cambios_precios' %}" class="nav-link" data-key="t-revisar-precios">
-                                            <i class="ri-task-line me-1"></i> Revisar Cambios Precios
+                                            <i class="ri-notification-badge-line"></i> Alertas de Precios
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="/app/verMovimientosProducto/" class="nav-link" data-key="t-echarts">
-                                            <i class="ri-arrow-left-right-line me-1"></i> Movimientos Por Sucursal
+                                            <i class="ri-arrow-left-right-line"></i> Movimientos Por Sucursal
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{% url 'gestion_inventarios' %}" class="nav-link" data-key="t-gestion-inventarios">
+                                            <i class="ri-clipboard-line"></i> Gestión de Inventarios
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a href="{% url 'gestion_etiquetas_zebra' %}" class="nav-link" data-key="t-etiquetas-zebra">
+                                            <i class="ri-printer-line"></i> Impresión Etiquetas Zebra
                                         </a>
                                     </li>
                                 </ul>
@@ -667,17 +1898,16 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloCompras">
                                 <ul class="nav nav-sm flex-column">
-
                                     <li class="nav-item">
-                                        <a href="/app/verGestionCompras/" class="nav-link" data-key="t-chartjs"> Gestion
-                                            Compras </a>
+                                        <a href="/app/verGestionCompras/" class="nav-link" data-key="t-chartjs">
+                                            <i class="ri-shopping-cart-2-line"></i> Gestión Compras
+                                        </a>
                                     </li>
                                     <li class="nav-item">
-                                        <a href="/app/verGestionDteCompras/" class="nav-link" data-key="t-echarts">Gestion
-                                            Documentos Compras </a>
+                                        <a href="/app/verGestionDteCompras/" class="nav-link" data-key="t-echarts">
+                                            <i class="ri-file-list-2-line"></i> Gestión Documentos Compras
+                                        </a>
                                     </li>
-
-
                                 </ul>
                             </div>
                         </li>
@@ -690,17 +1920,17 @@
                                 <ul class="nav nav-sm flex-column">
                                     <li class="nav-item">
                                         <a href="{% url 'modulo_requerimientos' %}" class="nav-link" data-key="t-lista-requerimientos">
-                                            <i class="ri-list-check me-1"></i> Lista de Requerimientos
+                                            <i class="ri-list-check"></i> Lista de Requerimientos
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link" data-key="t-crear-requerimiento">
-                                            <i class="ri-add-circle-line me-1"></i> Crear Requerimiento
+                                            <i class="ri-add-circle-line"></i> Crear Requerimiento
                                         </a>
                                     </li>
                                     <li class="nav-item">
                                         <a href="{% url 'gestionar_requerimientos_vista' %}" class="nav-link" data-key="t-gestionar-requerimientos">
-                                            <i class="ri-settings-3-line me-1"></i> Gestionar Requerimientos
+                                            <i class="ri-settings-3-line"></i> Gestionar Requerimientos
                                         </a>
                                     </li>
                                 </ul>
@@ -713,7 +1943,6 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloReportes">
                                 <ul class="nav nav-sm flex-column">
-                                    <li class="menu-title"><span>Reportes de Gestión</span></li>
                                     <!-- Sección: Reportes Compras -->
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesCompras" data-bs-toggle="collapse"
@@ -728,8 +1957,8 @@
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
-                                                    <a href="#" class="nav-link disabled" data-key="t-chartjs">
-                                                        <i class="bi bi-bag"></i> Reporte de Compras (próximamente)
+                                                    <a href="/app/reportes/compras/" class="nav-link" data-key="t-reporte-compras">
+                                                        <i class="bi bi-bag"></i> Reporte de Compras
                                                     </a>
                                                 </li>
                                             </ul>
@@ -761,12 +1990,12 @@
                                             <ul class="nav nav-sm flex-column">
                                                 <li class="nav-item">
                                                     <a href="/app/reportes/ventas-sucursal/" class="nav-link" data-key="t-ventas-sucursal">
-                                                        <i class="ri-store-2-line me-1"></i> Ventas Sucursal
+                                                        <i class="ri-store-2-line"></i> Ventas Sucursal
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
                                                     <a href="/app/reportes/documentos-emitidos/" class="nav-link" data-key="t-documentos-emitidos">
-                                                        <i class="ri-file-list-3-line me-1"></i> Documentos Emitidos
+                                                        <i class="ri-file-list-3-line"></i> Documentos Emitidos
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
@@ -792,22 +2021,27 @@
                                             <ul class="nav nav-sm flex-column">
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias' %}" class="nav-link" data-key="t-reporte-existencias">
-                                                        <i class="ri-file-list-3-line me-1"></i> Reporte de Existencias
+                                                        <i class="ri-file-list-3-line"></i> Reporte de Existencias
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias_marca' %}" class="nav-link" data-key="t-reporte-existencias-marca">
-                                                        <i class="ri-price-tag-3-line me-1"></i> Existencias por Marca
+                                                        <i class="ri-price-tag-3-line"></i> Existencias por Marca
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias_sucursal' %}" class="nav-link" data-key="t-reporte-existencias-sucursal">
-                                                        <i class="ri-store-2-line me-1"></i> Existencias por Sucursal
+                                                        <i class="ri-store-2-line"></i> Existencias por Sucursal
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_resumen_existencias' %}" class="nav-link" data-key="t-resumen-existencias">
-                                                        <i class="ri-pie-chart-line me-1"></i> Resumen Existencias
+                                                        <i class="ri-pie-chart-line"></i> Resumen Existencias
+                                                    </a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a href="{% url 'ver_reporte_movimientos_sucursal' %}" class="nav-link" data-key="t-movimientos-sucursal">
+                                                        <i class="ri-exchange-line"></i> Inicial vs Restante
                                                     </a>
                                                 </li>
                                                 <li class="nav-item">
@@ -867,7 +2101,7 @@
                                     </li>
                                     <li class="nav-item">
                                         <a href="/app/configuracion/interfaz-prueba-acepta/" class="nav-link" data-key="t-interfaz-acepta">
-                                            <i class="ri-file-text-line text-success"></i> Interfaz Prueba Acepta
+                                            <i class="ri-file-text-line"></i> Interfaz Prueba Acepta
                                         </a>
                                     </li>
 

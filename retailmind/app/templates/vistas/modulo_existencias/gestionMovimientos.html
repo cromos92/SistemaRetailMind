@@ -3,66 +3,494 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-.pagination-controls {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-    border: 1px solid #dee2e6;
+/* ========== NEXO DESIGN SYSTEM - Variables ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
 }
-.search-highlight {
-    background-color: #fff3cd;
-    font-weight: bold;
+
+/* ========== PAGE CONTAINER ========== */
+.nexo-page {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+    min-height: calc(100vh - 60px);
+    padding: 1.5rem;
 }
-.page-info {
-    min-width: 120px;
-    text-align: center;
+
+/* ========== TABS NAVIGATION ========== */
+.nexo-tabs {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 6px;
+    box-shadow: var(--nexo-shadow-sm);
+    margin-bottom: 1.5rem;
+    display: inline-flex;
+    gap: 4px;
+}
+
+.nexo-tabs .nav-link {
+    border: none;
+    background: transparent;
+    color: var(--nexo-gray-700);
+    padding: 10px 20px;
+    border-radius: var(--nexo-radius-md);
     font-weight: 500;
-}
-.pagination-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-#tablaMovimientos {
     font-size: 0.9rem;
+    transition: var(--nexo-transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
-#tablaMovimientos th {
+
+.nexo-tabs .nav-link:hover {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-secondary);
+}
+
+.nexo-tabs .nav-link.active {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-tabs .nav-link i {
+    font-size: 1rem;
+}
+
+/* ========== CARD COMPONENT ========== */
+.nexo-card {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    overflow: hidden;
+    transition: var(--nexo-transition-normal);
+}
+
+.nexo-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-card-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
+    color: var(--nexo-white);
+    padding: 1rem 1.5rem;
+    border-bottom: none;
+}
+
+.nexo-card-header h5 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--nexo-white);
+}
+
+.nexo-card-header h5 i {
+    color: var(--nexo-accent);
+}
+
+.nexo-card-header small {
+    color: var(--nexo-gray-300);
+    display: block;
+    margin-top: 4px;
+}
+
+.nexo-card-body {
+    padding: 1.5rem;
+}
+
+/* ========== FILTERS SECTION ========== */
+.nexo-filters {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-filters .form-label {
     font-size: 0.8rem;
     font-weight: 600;
+    color: var(--nexo-gray-700);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-bottom: 6px;
 }
+
+.nexo-filters .form-control,
+.nexo-filters .form-select {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    transition: var(--nexo-transition-fast);
+    background: var(--nexo-white);
+}
+
+.nexo-filters .form-control:focus,
+.nexo-filters .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px var(--nexo-primary-light);
+    outline: none;
+}
+
+.nexo-filters .form-control::placeholder {
+    color: var(--nexo-gray-500);
+}
+
+/* ========== TABLE STYLES ========== */
+.nexo-table-container {
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-table {
+    margin-bottom: 0;
+    font-size: 0.875rem;
+}
+
+.nexo-table thead {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+}
+
+.nexo-table thead th {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-700);
+    padding: 12px 10px;
+    border-bottom: 2px solid var(--nexo-gray-300);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    background: var(--nexo-gray-100);
+}
+
+.nexo-table tbody tr {
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-table tbody tr:hover {
+    background: var(--nexo-primary-light);
+}
+
+.nexo-table tbody td {
+    padding: 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    color: var(--nexo-gray-900);
+}
+
+.nexo-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ========== BADGES ========== */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.nexo-badge-ingreso {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00a883;
+}
+
+.nexo-badge-egreso {
+    background: rgba(255, 77, 77, 0.15);
+    color: #cc3d3d;
+}
+
+.nexo-badge-traspaso {
+    background: rgba(0, 102, 255, 0.15);
+    color: var(--nexo-primary);
+}
+
+.nexo-badge-ajuste {
+    background: rgba(255, 176, 32, 0.15);
+    color: #cc8c00;
+}
+
+/* ========== CANTIDAD STYLES ========== */
+.cantidad-positiva {
+    color: var(--nexo-success);
+    font-weight: 600;
+}
+
+.cantidad-negativa {
+    color: var(--nexo-error);
+    font-weight: 600;
+}
+
+/* ========== PAGINATION ========== */
+.nexo-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    border-top: 1px solid var(--nexo-gray-300);
+    margin-top: 1rem;
+}
+
+.nexo-pagination-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--nexo-gray-700);
+    font-size: 0.875rem;
+}
+
+.nexo-pagination-info select {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    padding: 4px 8px;
+    font-size: 0.875rem;
+    background: var(--nexo-white);
+}
+
+.nexo-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.nexo-pagination-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm);
+    color: var(--nexo-gray-700);
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+}
+
+.nexo-pagination-btn:hover:not(.disabled) {
+    background: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-pagination-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.nexo-pagination-page {
+    padding: 8px 16px;
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--nexo-gray-700);
+    min-width: 140px;
+    text-align: center;
+}
+
+/* ========== BUTTONS ========== */
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: var(--nexo-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-success {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: var(--nexo-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nexo-btn-success:hover {
+    background: #00b894;
+    color: var(--nexo-white);
+}
+
+/* ========== INFO BOX ========== */
+.nexo-info-box {
+    background: var(--nexo-primary-light);
+    border: 1px solid rgba(0, 102, 255, 0.2);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.nexo-info-box .info-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nexo-info-box .info-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    text-transform: uppercase;
+}
+
+.nexo-info-box .info-value {
+    font-size: 0.95rem;
+    color: var(--nexo-secondary);
+    font-weight: 500;
+}
+
+/* ========== EMPTY STATE ========== */
+.nexo-empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--nexo-gray-500);
+}
+
+.nexo-empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--nexo-gray-300);
+}
+
+.nexo-empty-state p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+/* ========== REFERENCIA CELL ========== */
+.referencia-cell {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.referencia-devolucion {
+    color: var(--nexo-accent);
+    font-weight: 500;
+}
+
+.referencia-ticket {
+    color: var(--nexo-info);
+}
+
+.referencia-dte {
+    color: var(--nexo-warning);
+}
+
+.referencia-traspaso {
+    color: var(--nexo-primary);
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 992px) {
+    .nexo-filters .row > div {
+        margin-bottom: 1rem;
+    }
+    
+    .nexo-pagination {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
+
 @media (max-width: 768px) {
-    .pagination-controls .row > div {
-        margin-bottom: 10px;
-    }
-    .pagination-controls .btn-group {
+    .nexo-tabs {
         width: 100%;
+        flex-direction: column;
     }
-    .pagination-controls .btn-group .btn {
-        flex: 1;
+    
+    .nexo-tabs .nav-link {
+        width: 100%;
+        justify-content: center;
     }
+}
+
+/* ========== SELECT2 NEXO THEME ========== */
+.select2-container--bootstrap-5 .select2-selection {
+    border: 1px solid var(--nexo-gray-300) !important;
+    border-radius: var(--nexo-radius-sm) !important;
+}
+
+.select2-container--bootstrap-5.select2-container--focus .select2-selection {
+    border-color: var(--nexo-primary) !important;
+    box-shadow: 0 0 0 3px var(--nexo-primary-light) !important;
+}
+
+/* ========== TEMPUS DOMINUS NEXO ========== */
+.tempus-dominus-widget {
+    border-radius: var(--nexo-radius-md) !important;
+    box-shadow: var(--nexo-shadow-lg) !important;
 }
 </style>
 
-<div class="page-content">
+<div class="page-content nexo-page">
     <div class="container-fluid">
         
         <!-- === TABS DE NAVEGACIÓN === -->
-        <ul class="nav nav-tabs mb-3" id="movimientosTabs" role="tablist">
+        <ul class="nav nexo-tabs" id="movimientosTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="movimientos-tab" data-bs-toggle="tab" data-bs-target="#movimientos" type="button" role="tab">
-                    <i class="bi bi-list-ul me-1"></i> Movimientos
+                    <i class="bi bi-list-ul"></i> Movimientos
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="kardex-tab" data-bs-toggle="tab" data-bs-target="#kardex" type="button" role="tab">
-                    <i class="bi bi-file-text me-1"></i> Kardex por Talla
+                    <i class="bi bi-file-text"></i> Kardex por Talla
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="kardex-agrupado-tab" data-bs-toggle="tab" data-bs-target="#kardex-agrupado" type="button" role="tab">
-                    <i class="bi bi-collection me-1"></i> Kardex Agrupado
+                    <i class="bi bi-collection"></i> Kardex Agrupado
                 </button>
             </li>
         </ul>
@@ -71,99 +499,102 @@
             
             <!-- === TAB MOVIMIENTOS === -->
             <div class="tab-pane fade show active" id="movimientos" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-list-ul me-2"></i>Movimientos de Productos</h5>
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <h5><i class="bi bi-arrow-left-right"></i> Historial de Movimientos</h5>
                     </div>
-                    <div class="card-body">
+                    <div class="nexo-card-body">
                         <!-- Filtros -->
-                        <div class="row mb-3">
-                            <div class="col-md-2">
-                                <label class="form-label">Fecha Inicio</label>
-                                <input type="date" class="form-control" id="filtroFechaInicio">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Fecha Fin</label>
-                                <input type="date" class="form-control" id="filtroFechaFin">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Tipo</label>
-                                <select class="form-select" id="filtroTipo">
-                                    <option value="">Todos</option>
-                                    <option value="INGRESO">Ingreso</option>
-                                    <option value="EGRESO">Egreso</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Concepto</label>
-                                <input type="text" class="form-control" id="filtroConcepto" placeholder="Buscar concepto...">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Artículo</label>
-                                <input type="text" class="form-control" id="filtroArticulo" placeholder="Buscar artículo...">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Responsable</label>
-                                <input type="text" class="form-control" id="filtroResponsable" placeholder="Buscar responsable...">
+                        <div class="nexo-filters">
+                            <div class="row g-3">
+                                <div class="col-lg-2 col-md-4 col-6">
+                                    <label class="form-label">Fecha Inicio</label>
+                                    <input type="date" class="form-control" id="filtroFechaInicio">
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-6">
+                                    <label class="form-label">Fecha Fin</label>
+                                    <input type="date" class="form-control" id="filtroFechaFin">
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-6">
+                                    <label class="form-label">Tipo</label>
+                                    <select class="form-select" id="filtroTipo">
+                                        <option value="">Todos</option>
+                                        <option value="INGRESO">Ingreso</option>
+                                        <option value="EGRESO">Egreso</option>
+                                        <option value="TRASPASO">Traspaso</option>
+                                        <option value="AJUSTE">Ajuste</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-6">
+                                    <label class="form-label">Concepto</label>
+                                    <input type="text" class="form-control" id="filtroConcepto" placeholder="Buscar...">
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-6">
+                                    <label class="form-label">Artículo</label>
+                                    <input type="text" class="form-control" id="filtroArticulo" placeholder="Buscar...">
+                                </div>
+                                <div class="col-lg-2 col-md-4 col-6">
+                                    <label class="form-label">Responsable</label>
+                                    <input type="text" class="form-control" id="filtroResponsable" placeholder="Buscar...">
+                                </div>
                             </div>
                         </div>
                         
                         <!-- Tabla de movimientos -->
-                        <div class="table-responsive">
-                            <table class="table table-hover" id="tablaMovimientos">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Hora</th>
-                                        <th>Artículo</th>
-                                        <th>Descripción</th>
-                                        <th>Marca</th>
-                                        <th>Color</th>
-                                        <th>Género</th>
-                                        <th>Talla</th>
-                                        <th>SKU</th>
-                                        <th>Cantidad</th>
-                                        <th>Tipo</th>
-                                        <th>Concepto</th>
-                                        <th>Responsable</th>
-                                        <th>Referencia</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbodyMovimientos"></tbody>
-                            </table>
+                        <div class="nexo-table-container">
+                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                <table class="table nexo-table" id="tablaMovimientos">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Hora</th>
+                                            <th>Artículo</th>
+                                            <th>Descripción</th>
+                                            <th>Marca</th>
+                                            <th>Color</th>
+                                            <th>Género</th>
+                                            <th>Talla</th>
+                                            <th>SKU</th>
+                                            <th>Cantidad</th>
+                                            <th>Tipo</th>
+                                            <th>Concepto</th>
+                                            <th>Responsable</th>
+                                            <th>Referencia</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyMovimientos">
+                                        <tr>
+                                            <td colspan="14">
+                                                <div class="nexo-empty-state">
+                                                    <i class="bi bi-hourglass-split"></i>
+                                                    <p>Cargando movimientos...</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                         
                         <!-- Paginación -->
-                        <div class="row mt-3">
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-center">
-                                    <label class="me-2">Mostrar:</label>
-                                    <select class="form-select form-select-sm" id="pageSizeMovimientos" style="width: auto;">
-                                        <option value="25">25</option>
-                                        <option value="50" selected>50</option>
-                                        <option value="100">100</option>
-                                    </select>
-                                    <span class="ms-2">elementos por página</span>
-                                </div>
+                        <div class="nexo-pagination">
+                            <div class="nexo-pagination-info">
+                                <span>Mostrar:</span>
+                                <select id="pageSizeMovimientos">
+                                    <option value="25">25</option>
+                                    <option value="50" selected>50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span>elementos por página</span>
                             </div>
-                            <div class="col-md-6">
-                                <nav aria-label="Paginación de movimientos">
-                                    <ul class="pagination justify-content-end mb-0">
-                                        <li class="page-item" id="btnPrevPageMovimientos">
-                                            <a class="page-link" href="#" aria-label="Anterior">
-                                                <span aria-hidden="true">&laquo;</span>
-                                            </a>
-                                        </li>
-                                        <li class="page-item">
-                                            <span class="page-link" id="pageInfoMovimientos">Página 1 de 1</span>
-                                        </li>
-                                        <li class="page-item" id="btnNextPageMovimientos">
-                                            <a class="page-link" href="#" aria-label="Siguiente">
-                                                <span aria-hidden="true">&raquo;</span>
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </nav>
+                            <div class="nexo-pagination-controls">
+                                <button class="nexo-pagination-btn" id="btnPrevPageMovimientos" aria-label="Anterior">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                <span class="nexo-pagination-page" id="pageInfoMovimientos">Página 1 de 1</span>
+                                <button class="nexo-pagination-btn" id="btnNextPageMovimientos" aria-label="Siguiente">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -172,69 +603,94 @@
 
             <!-- === TAB KARDEX POR TALLA === -->
             <div class="tab-pane fade" id="kardex" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-file-text me-2"></i>Kardex por Talla</h5>
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <h5><i class="bi bi-file-earmark-ruled"></i> Kardex por Talla</h5>
                     </div>
-                    <div class="card-body">
+                    <div class="nexo-card-body">
                         <!-- Filtros para kardex -->
-                        <div class="row mb-3">
-                            <div class="col-md-3">
-                                <label class="form-label">Producto con Talla</label>
-                                <select class="form-select" id="selectProductoKardex">
-                                    <option value="">Seleccionar producto...</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Fecha Inicio</label>
-                                <input type="date" class="form-control" id="filtroFechaInicioKardex">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Fecha Fin</label>
-                                <input type="date" class="form-control" id="filtroFechaFinKardex">
-                            </div>
-                            <div class="col-md-2">
-                                <button class="btn btn-primary w-100" id="btnGenerarKardex">
-                                    <i class="bi bi-search me-1"></i> Generar Kardex
-                                </button>
+                        <div class="nexo-filters">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-lg-4 col-md-6">
+                                    <label class="form-label">Producto con Talla</label>
+                                    <select class="form-select" id="selectProductoKardex">
+                                        <option value="">Seleccionar producto...</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-2 col-md-3">
+                                    <label class="form-label">Fecha Inicio</label>
+                                    <input type="date" class="form-control" id="filtroFechaInicioKardex">
+                                </div>
+                                <div class="col-lg-2 col-md-3">
+                                    <label class="form-label">Fecha Fin</label>
+                                    <input type="date" class="form-control" id="filtroFechaFinKardex">
+                                </div>
+                                <div class="col-lg-2 col-md-3">
+                                    <button class="nexo-btn-primary w-100" id="btnGenerarKardex">
+                                        <i class="bi bi-search"></i> Generar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
                         <!-- Información del producto -->
-                        <div id="infoProductoKardex" class="mb-3" style="display: none;">
+                        <div id="infoProductoKardex" class="nexo-info-box" style="display: none;">
                             <div class="row">
                                 <div class="col-md-3">
-                                    <strong>Artículo:</strong> <span id="articuloKardex"></span>
+                                    <div class="info-item">
+                                        <span class="info-label">Artículo:</span>
+                                        <span class="info-value" id="articuloKardex"></span>
+                                    </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <strong>Talla:</strong> <span id="tallaKardex"></span>
+                                    <div class="info-item">
+                                        <span class="info-label">Talla:</span>
+                                        <span class="info-value" id="tallaKardex"></span>
+                                    </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <strong>SKU:</strong> <span id="skuKardex"></span>
+                                    <div class="info-item">
+                                        <span class="info-label">SKU:</span>
+                                        <span class="info-value" id="skuKardex"></span>
+                                    </div>
                                 </div>
                                 <div class="col-md-3">
-                                    <strong>Stock Actual:</strong> <span id="stockActualKardex"></span>
+                                    <div class="info-item">
+                                        <span class="info-label">Stock Actual:</span>
+                                        <span class="info-value" id="stockActualKardex"></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Tabla de kardex -->
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Hora</th>
-                                        <th>Concepto</th>
-                                        <th>Entrada</th>
-                                        <th>Salida</th>
-                                        <th>Saldo</th>
-                                        <th>Responsable</th>
-                                        <th>Referencia</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbodyKardex"></tbody>
-                            </table>
+                        <div class="nexo-table-container">
+                            <div class="table-responsive">
+                                <table class="table nexo-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Hora</th>
+                                            <th>Concepto</th>
+                                            <th>Entrada</th>
+                                            <th>Salida</th>
+                                            <th>Saldo</th>
+                                            <th>Responsable</th>
+                                            <th>Referencia</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyKardex">
+                                        <tr>
+                                            <td colspan="8">
+                                                <div class="nexo-empty-state">
+                                                    <i class="bi bi-box-seam"></i>
+                                                    <p>Selecciona un producto para ver su Kardex</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -242,95 +698,105 @@
 
             <!-- === TAB KARDEX AGRUPADO === -->
             <div class="tab-pane fade" id="kardex-agrupado" role="tabpanel">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-collection me-2"></i>Kardex Agrupado por Producto</h5>
-                        <small class="text-muted">Muestra movimientos agrupados sin detalles de talla ni SKU</small>
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <h5><i class="bi bi-collection"></i> Kardex Agrupado por Producto</h5>
+                        <small>Movimientos agrupados sin detalles de talla ni SKU</small>
                     </div>
-                    <div class="card-body">
+                    <div class="nexo-card-body">
                         <!-- Filtros para kardex agrupado -->
-                        <div class="row mb-3">
-                            <div class="col-md-3">
-                                <label class="form-label">Producto</label>
-                                <select class="form-select" id="selectProductoKardexAgrupado">
-                                    <option value="">Seleccionar producto...</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Fecha Inicio</label>
-                                <input type="date" class="form-control" id="filtroFechaInicioKardexAgrupado">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Fecha Fin</label>
-                                <input type="date" class="form-control" id="filtroFechaFinKardexAgrupado">
-                            </div>
-                            <div class="col-md-2">
-                                <button class="btn btn-success w-100" id="btnGenerarKardexAgrupado">
-                                    <i class="bi bi-search me-1"></i> Generar Kardex
-                                </button>
+                        <div class="nexo-filters">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-lg-4 col-md-6">
+                                    <label class="form-label">Producto</label>
+                                    <select class="form-select" id="selectProductoKardexAgrupado">
+                                        <option value="">Seleccionar producto...</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-2 col-md-3">
+                                    <label class="form-label">Fecha Inicio</label>
+                                    <input type="date" class="form-control" id="filtroFechaInicioKardexAgrupado">
+                                </div>
+                                <div class="col-lg-2 col-md-3">
+                                    <label class="form-label">Fecha Fin</label>
+                                    <input type="date" class="form-control" id="filtroFechaFinKardexAgrupado">
+                                </div>
+                                <div class="col-lg-2 col-md-3">
+                                    <button class="nexo-btn-success w-100" id="btnGenerarKardexAgrupado">
+                                        <i class="bi bi-search"></i> Generar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
                         <!-- Información del producto agrupado -->
-                        <div id="infoProductoKardexAgrupado" class="mb-3" style="display: none;">
+                        <div id="infoProductoKardexAgrupado" class="nexo-info-box" style="display: none;">
                             <div class="row">
-                                <div class="col-md-3">
-                                    <strong>Artículo:</strong> <span id="articuloKardexAgrupado"></span>
+                                <div class="col-md-4">
+                                    <div class="info-item">
+                                        <span class="info-label">Artículo:</span>
+                                        <span class="info-value" id="articuloKardexAgrupado"></span>
+                                    </div>
                                 </div>
-                                <div class="col-md-3">
-                                    <strong>Descripción:</strong> <span id="descripcionKardexAgrupado"></span>
+                                <div class="col-md-4">
+                                    <div class="info-item">
+                                        <span class="info-label">Descripción:</span>
+                                        <span class="info-value" id="descripcionKardexAgrupado"></span>
+                                    </div>
                                 </div>
-                                <div class="col-md-3">
-                                    <strong>Stock Total:</strong> <span id="stockTotalKardexAgrupado"></span>
+                                <div class="col-md-4">
+                                    <div class="info-item">
+                                        <span class="info-label">Stock Total:</span>
+                                        <span class="info-value" id="stockTotalKardexAgrupado"></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- Tabla de kardex agrupado -->
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Hora</th>
-                                        <th>Concepto</th>
-                                        <th>Entrada</th>
-                                        <th>Salida</th>
-                                        <th>Saldo</th>
-                                        <th>Responsable</th>
-                                        <th>Referencia</th>
-                                        <th>Detalle</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbodyKardexAgrupado"></tbody>
-                            </table>
+                        <div class="nexo-table-container">
+                            <div class="table-responsive">
+                                <table class="table nexo-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Hora</th>
+                                            <th>Concepto</th>
+                                            <th>Entrada</th>
+                                            <th>Salida</th>
+                                            <th>Saldo</th>
+                                            <th>Responsable</th>
+                                            <th>Referencia</th>
+                                            <th>Detalle</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbodyKardexAgrupado">
+                                        <tr>
+                                            <td colspan="9">
+                                                <div class="nexo-empty-state">
+                                                    <i class="bi bi-box-seam"></i>
+                                                    <p>Selecciona un producto para ver su Kardex Agrupado</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                         
                         <!-- Paginación para kardex agrupado -->
-                        <div class="row mt-3">
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-center">
-                                    <span class="me-2">Elementos por página: 50</span>
-                                </div>
+                        <div class="nexo-pagination">
+                            <div class="nexo-pagination-info">
+                                <span>50 elementos por página</span>
                             </div>
-                            <div class="col-md-6">
-                                <nav aria-label="Paginación de kardex agrupado">
-                                    <ul class="pagination justify-content-end mb-0">
-                                        <li class="page-item" id="btnPrevPageKardexAgrupado">
-                                            <a class="page-link" href="#" aria-label="Anterior">
-                                                <span aria-hidden="true">&laquo;</span>
-                                            </a>
-                                        </li>
-                                        <li class="page-item">
-                                            <span class="page-link" id="pageInfoKardexAgrupado">Página 1 de 1</span>
-                                        </li>
-                                        <li class="page-item" id="btnNextPageKardexAgrupado">
-                                            <a class="page-link" href="#" aria-label="Siguiente">
-                                                <span aria-hidden="true">&raquo;</span>
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </nav>
+                            <div class="nexo-pagination-controls">
+                                <button class="nexo-pagination-btn" id="btnPrevPageKardexAgrupado" aria-label="Anterior">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                <span class="nexo-pagination-page" id="pageInfoKardexAgrupado">Página 1 de 1</span>
+                                <button class="nexo-pagination-btn" id="btnNextPageKardexAgrupado" aria-label="Siguiente">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -366,6 +832,18 @@ function cargarMovimientos(page = 1) {
     const articulo = $('#filtroArticulo').val();
     const responsable = $('#filtroResponsable').val();
     
+    // Mostrar loading
+    $('#tbodyMovimientos').html(`
+        <tr>
+            <td colspan="14">
+                <div class="nexo-empty-state">
+                    <i class="bi bi-hourglass-split" style="animation: spin 1s linear infinite;"></i>
+                    <p>Cargando movimientos...</p>
+                </div>
+            </td>
+        </tr>
+    `);
+    
     $.ajax({
         url: '/app/obtener_movimientos_producto/',
         method: 'GET',
@@ -389,30 +867,48 @@ function cargarMovimientos(page = 1) {
             tbody.empty();
             
             if (response.items.length === 0) {
-                tbody.append('<tr><td colspan="14" class="text-center text-muted">No hay movimientos para los filtros seleccionados</td></tr>');
+                tbody.html(`
+                    <tr>
+                        <td colspan="14">
+                            <div class="nexo-empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>No hay movimientos para los filtros seleccionados</p>
+                            </div>
+                        </td>
+                    </tr>
+                `);
             } else {
                 response.items.forEach(function (mov) {
-                    const cantidadClass = mov.cantidad > 0 ? 'text-success' : 'text-danger';
+                    // Formatear cantidad con estilo
+                    const cantidadClass = mov.cantidad > 0 ? 'cantidad-positiva' : 'cantidad-negativa';
                     const cantidadSign = mov.cantidad > 0 ? '+' : '';
+                    
                     // Formatear fecha a dd/mm/aaaa
                     const fechaParts = mov.fecha.split('-');
                     const fechaFormateada = fechaParts.length === 3 ? `${fechaParts[2]}/${fechaParts[1]}/${fechaParts[0]}` : mov.fecha;
+                    
+                    // Obtener clase para badge de tipo
+                    const tipoBadgeClass = getTipoBadgeClass(mov.tipo_movimiento);
+                    
+                    // Obtener clase para referencia
+                    const referenciaClass = getReferenciaClass(mov.concepto, mov.referencia_externa);
+                    
                     const fila = `
                         <tr>
                             <td>${fechaFormateada}</td>
                             <td>${mov.hora}</td>
-                            <td>${mov.articulo}</td>
-                            <td>${mov.descripcion}</td>
-                            <td>${mov.marca}</td>
-                            <td>${mov.color}</td>
-                            <td>${mov.genero}</td>
+                            <td><strong>${mov.articulo}</strong></td>
+                            <td>${mov.descripcion || '-'}</td>
+                            <td>${mov.marca || '-'}</td>
+                            <td>${mov.color || '-'}</td>
+                            <td>${mov.genero || '-'}</td>
                             <td>${mov.talla}</td>
-                            <td>${mov.sku}</td>
+                            <td><code>${mov.sku}</code></td>
                             <td class="${cantidadClass}">${cantidadSign}${mov.cantidad}</td>
-                            <td><span class="badge bg-${getTipoColor(mov.tipo_movimiento)}">${mov.tipo_movimiento}</span></td>
-                            <td>${mov.concepto}</td>
+                            <td><span class="nexo-badge ${tipoBadgeClass}">${mov.tipo_movimiento}</span></td>
+                            <td>${formatearConcepto(mov.concepto)}</td>
                             <td>${mov.responsable}</td>
-                            <td>${mov.referencia_externa || '-'}</td>
+                            <td class="referencia-cell ${referenciaClass}" title="${mov.referencia_externa || '-'}">${mov.referencia_externa || '-'}</td>
                         </tr>`;
                     tbody.append(fila);
                 });
@@ -427,14 +923,29 @@ function cargarMovimientos(page = 1) {
     });
 }
 
-function getTipoColor(tipo) {
-    const colores = {
-        'INGRESO': 'success',
-        'EGRESO': 'danger',
-        'TRASPASO': 'primary',
-        'AJUSTE': 'warning'
+function getTipoBadgeClass(tipo) {
+    const clases = {
+        'INGRESO': 'nexo-badge-ingreso',
+        'EGRESO': 'nexo-badge-egreso',
+        'TRASPASO': 'nexo-badge-traspaso',
+        'AJUSTE': 'nexo-badge-ajuste'
     };
-    return colores[tipo] || 'secondary';
+    return clases[tipo] || 'nexo-badge-ajuste';
+}
+
+function getReferenciaClass(concepto, referencia) {
+    if (!referencia || referencia === '-') return '';
+    if (concepto && concepto.includes('DEVOLUCION')) return 'referencia-devolucion';
+    if (referencia.includes('Ticket')) return 'referencia-ticket';
+    if (referencia.includes('DTE') || referencia.includes('#')) return 'referencia-dte';
+    if (referencia.includes('Destino')) return 'referencia-traspaso';
+    return '';
+}
+
+function formatearConcepto(concepto) {
+    // Formatear concepto para mejor legibilidad
+    if (!concepto) return '-';
+    return concepto.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
 }
 
 function updatePaginationMovimientos(pagination) {
@@ -497,10 +1008,21 @@ function cargarKardex(page = 1) {
     const producto_talla_id = $('#selectProductoKardex').val();
     const fecha_inicio = toIsoDate($('#filtroFechaInicioKardex').val());
     const fecha_fin = toIsoDate($('#filtroFechaFinKardex').val());
+    
     if (!producto_talla_id) {
-        $('#tbodyKardex').html('<tr><td colspan="8" class="text-center text-muted">Selecciona un producto</td></tr>');
+        $('#tbodyKardex').html(`
+            <tr>
+                <td colspan="8">
+                    <div class="nexo-empty-state">
+                        <i class="bi bi-box-seam"></i>
+                        <p>Selecciona un producto para ver su Kardex</p>
+                    </div>
+                </td>
+            </tr>
+        `);
         return;
     }
+    
     $.ajax({
         url: '/app/reporte_movimientos_kardex/',
         method: 'GET',
@@ -519,19 +1041,28 @@ function cargarKardex(page = 1) {
             const tbody = $('#tbodyKardex');
             tbody.empty();
             if (!response.items.length) {
-                tbody.append('<tr><td colspan="8" class="text-center text-muted">No hay movimientos para este producto</td></tr>');
+                tbody.html(`
+                    <tr>
+                        <td colspan="8">
+                            <div class="nexo-empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>No hay movimientos para este producto</p>
+                            </div>
+                        </td>
+                    </tr>
+                `);
             } else {
                 response.items.forEach(function (mov) {
                     const fila = `
                         <tr>
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
-                            <td>${mov.concepto}</td>
-                            <td>${mov.entrada}</td>
-                            <td>${mov.salida}</td>
-                            <td>${mov.saldo}</td>
+                            <td>${formatearConcepto(mov.concepto)}</td>
+                            <td class="cantidad-positiva">${mov.entrada || '-'}</td>
+                            <td class="cantidad-negativa">${mov.salida || '-'}</td>
+                            <td><strong>${mov.saldo}</strong></td>
                             <td>${mov.responsable}</td>
-                            <td>${mov.referencia}</td>
+                            <td>${mov.referencia || '-'}</td>
                         </tr>`;
                     tbody.append(fila);
                 });
@@ -606,7 +1137,16 @@ function cargarKardexAgrupado(page = 1) {
     const fecha_fin = toIsoDate($('#filtroFechaFinKardexAgrupado').val());
     
     if (!producto_id) {
-        $('#tbodyKardexAgrupado').html('<tr><td colspan="9" class="text-center text-muted">Selecciona un producto</td></tr>');
+        $('#tbodyKardexAgrupado').html(`
+            <tr>
+                <td colspan="9">
+                    <div class="nexo-empty-state">
+                        <i class="bi bi-box-seam"></i>
+                        <p>Selecciona un producto para ver su Kardex Agrupado</p>
+                    </div>
+                </td>
+            </tr>
+        `);
         $('#infoProductoKardexAgrupado').hide();
         return;
     }
@@ -637,7 +1177,16 @@ function cargarKardexAgrupado(page = 1) {
             tbody.empty();
             
             if (!response.items.length) {
-                tbody.append('<tr><td colspan="9" class="text-center text-muted">No hay movimientos para este producto</td></tr>');
+                tbody.html(`
+                    <tr>
+                        <td colspan="9">
+                            <div class="nexo-empty-state">
+                                <i class="bi bi-inbox"></i>
+                                <p>No hay movimientos para este producto</p>
+                            </div>
+                        </td>
+                    </tr>
+                `);
             } else {
                 response.items.forEach(function (mov) {
                     // Crear botón de detalle si hay múltiples tallas
@@ -654,9 +1203,9 @@ function cargarKardexAgrupado(page = 1) {
                         <tr>
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
-                            <td>${mov.concepto}</td>
-                            <td class="text-success">${mov.entrada || '-'}</td>
-                            <td class="text-danger">${mov.salida || '-'}</td>
+                            <td>${formatearConcepto(mov.concepto)}</td>
+                            <td class="cantidad-positiva">${mov.entrada || '-'}</td>
+                            <td class="cantidad-negativa">${mov.salida || '-'}</td>
                             <td><strong>${mov.saldo}</strong></td>
                             <td>${mov.responsable}</td>
                             <td>${mov.referencia || '-'}</td>
@@ -678,12 +1227,23 @@ function cargarKardexAgrupado(page = 1) {
 function mostrarDetalleTallas(detalleJson) {
     const detalle = JSON.parse(detalleJson.replace(/&quot;/g, '"'));
     
-    let contenido = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Talla</th><th>SKU</th><th>Cantidad</th></tr></thead><tbody>';
+    let contenido = `
+        <div class="nexo-table-container">
+            <table class="table nexo-table">
+                <thead>
+                    <tr>
+                        <th>Talla</th>
+                        <th>SKU</th>
+                        <th>Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
     
     detalle.forEach(function(item) {
-        const cantidadClass = item.cantidad > 0 ? 'text-success' : 'text-danger';
+        const cantidadClass = item.cantidad > 0 ? 'cantidad-positiva' : 'cantidad-negativa';
         const cantidadSign = item.cantidad > 0 ? '+' : '';
-        contenido += `<tr><td>${item.talla}</td><td>${item.sku}</td><td class="${cantidadClass}">${cantidadSign}${item.cantidad}</td></tr>`;
+        contenido += `<tr><td>${item.talla}</td><td><code>${item.sku}</code></td><td class="${cantidadClass}">${cantidadSign}${item.cantidad}</td></tr>`;
     });
     
     contenido += '</tbody></table></div>';
@@ -692,7 +1252,8 @@ function mostrarDetalleTallas(detalleJson) {
         title: 'Detalle por Tallas',
         html: contenido,
         width: '600px',
-        confirmButtonText: 'Cerrar'
+        confirmButtonText: 'Cerrar',
+        confirmButtonColor: '#0066FF'
     });
 }
 
@@ -708,6 +1269,7 @@ function updatePaginationKardexAgrupado(pagination) {
 $(document).ready(function() {
     // Cambiar los inputs de fecha a type="text" para compatibilidad visual
     $('#filtroFechaInicio, #filtroFechaFin, #filtroFechaInicioKardex, #filtroFechaFinKardex, #filtroFechaInicioKardexAgrupado, #filtroFechaFinKardexAgrupado').attr('type', 'text');
+    
     // Inicializar Tempus Dominus en los inputs de fecha
     const options = {
         display: {
@@ -743,12 +1305,14 @@ $(document).ready(function() {
             startOfTheWeek: 1
         }
     };
+    
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaInicio'), options);
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaFin'), options);
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaInicioKardex'), options);
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaFinKardex'), options);
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaInicioKardexAgrupado'), options);
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaFinKardexAgrupado'), options);
+    
     // Cargar datos iniciales
     cargarMovimientos();
     cargarProductosKardex();
@@ -771,7 +1335,7 @@ $(document).ready(function() {
     // Eventos de paginación para movimientos
     $('#btnPrevPageMovimientos').on('click', function(e) {
         e.preventDefault();
-        if (currentPageMovimientos > 1) {
+        if (!$(this).hasClass('disabled') && currentPageMovimientos > 1) {
             currentPageMovimientos--;
             cargarMovimientos(currentPageMovimientos);
         }
@@ -779,8 +1343,10 @@ $(document).ready(function() {
     
     $('#btnNextPageMovimientos').on('click', function(e) {
         e.preventDefault();
-        currentPageMovimientos++;
-        cargarMovimientos(currentPageMovimientos);
+        if (!$(this).hasClass('disabled')) {
+            currentPageMovimientos++;
+            cargarMovimientos(currentPageMovimientos);
+        }
     });
     
     $('#pageSizeMovimientos').on('change', function() {
@@ -793,10 +1359,11 @@ $(document).ready(function() {
     $('#btnGenerarKardex').on('click', function() {
         cargarKardex(1);
     });
-    // Eventos para filtros y generación de Kardex
+    
     $('#selectProductoKardex, #filtroFechaInicioKardex, #filtroFechaFinKardex').on('change', function() {
         cargarKardex(1);
     });
+    
     // Paginación Kardex
     $('#btnPrevPageKardex').on('click', function(e) {
         e.preventDefault();
@@ -804,6 +1371,7 @@ $(document).ready(function() {
             cargarKardex($(this).data('page'));
         }
     });
+    
     $('#btnNextPageKardex').on('click', function(e) {
         e.preventDefault();
         if (!$(this).hasClass('disabled')) {
@@ -815,10 +1383,11 @@ $(document).ready(function() {
     $('#btnGenerarKardexAgrupado').on('click', function() {
         cargarKardexAgrupado(1);
     });
-    // Eventos para filtros y generación de Kardex Agrupado
+    
     $('#selectProductoKardexAgrupado, #filtroFechaInicioKardexAgrupado, #filtroFechaFinKardexAgrupado').on('change', function() {
         cargarKardexAgrupado(1);
     });
+    
     // Paginación Kardex Agrupado
     $('#btnPrevPageKardexAgrupado').on('click', function(e) {
         e.preventDefault();
@@ -827,6 +1396,7 @@ $(document).ready(function() {
             cargarKardexAgrupado(currentPageKardexAgrupado);
         }
     });
+    
     $('#btnNextPageKardexAgrupado').on('click', function(e) {
         e.preventDefault();
         if (!$(this).hasClass('disabled')) {
@@ -835,4 +1405,14 @@ $(document).ready(function() {
         }
     });
 });
-</script> 
+
+// Animación de carga
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(style);
+</script>

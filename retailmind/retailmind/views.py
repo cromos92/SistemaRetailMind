@@ -2,11 +2,39 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import render, redirect
 from django.contrib.auth import get_user_model
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
 from app.models import EmpresaUser
-def login_view(request):
-    # Si el usuario ya está autenticado, redirigir al home
+
+
+@require_GET
+def check_session_status(request):
+    """
+    API endpoint para verificar si la sesión del usuario sigue activa.
+    Usado para polling periódico desde el frontend.
+    """
     if request.user.is_authenticated:
-        return redirect('verHome')
+        return JsonResponse({
+            'authenticated': True,
+            'username': request.user.username,
+            'email': request.user.email
+        })
+    else:
+        return JsonResponse({
+            'authenticated': False
+        })
+def login_view(request):
+    # Si el usuario ya está autenticado, mostrar opción de continuar o cambiar cuenta
+    if request.user.is_authenticated:
+        # Si hace clic en "continuar", redirigir al home
+        if request.GET.get('continue') == 'true':
+            return redirect('verHome')
+        # Si hace clic en "cambiar cuenta", cerrar sesión y mostrar login
+        if request.GET.get('switch') == 'true':
+            logout(request)
+            return redirect('login')
+        # Mostrar template con sesión activa
+        return render(request, 'registration/login.html', {'session_active': True})
     
     if request.method == 'POST':
         email = request.POST['email'].lower()

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="180" height="50" viewBox="0 0 180 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icono peque�o -->
+  <g transform="translate(3, 7)">
+    <!-- Nodo superior izquierdo -->
+    <circle cx="9" cy="9" r="7" fill="#0066FF"/>
+    <circle cx="9" cy="9" r="3.5" fill="#FFFFFF"/>
+    
+    <!-- Nodo superior derecho -->
+    <circle cx="27" cy="9" r="7" fill="#00D4AA"/>
+    <circle cx="27" cy="9" r="3.5" fill="#FFFFFF"/>
+    
+    <!-- Nodo inferior izquierdo -->
+    <circle cx="9" cy="27" r="7" fill="#00D4AA"/>
+    <circle cx="9" cy="27" r="3.5" fill="#FFFFFF"/>
+    
+    <!-- Nodo inferior derecho -->
+    <circle cx="27" cy="27" r="7" fill="#0066FF"/>
+    <circle cx="27" cy="27" r="3.5" fill="#FFFFFF"/>
+    
+    <!-- Conexiones -->
+    <line x1="9" y1="16" x2="9" y2="20" stroke="#0066FF" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="13" y1="13" x2="23" y2="23" stroke="#00D4AA" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="27" y1="16" x2="27" y2="20" stroke="#0066FF" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Texto NEXO -->
+  <text x="52" y="34" font-family="Arial Black, Arial, sans-serif" font-size="28" font-weight="900" fill="#1A1A2E" letter-spacing="3">
+    NEXO
+  </text>
+</svg>

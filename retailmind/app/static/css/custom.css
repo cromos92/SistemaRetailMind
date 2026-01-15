@@ -1,12 +1,705 @@
 /*
-Template Name: Velzon - Admin & Dashboard Template
-Author: Themesbrand
-Website: https://themesbrand.com/
-Contact: support@themesbrand.com
-File: Custom Css File
-*/
+ * NEXO - Design System CSS
+ * Sistema de Gestión Retail
+ * WebAppSolutions - 2024
+ */
 
-/* Fix para dropdown del perfil en el header */
+/* ===== NEXO Design System Variables ===== */
+:root {
+    /* ========== COLORES PRIMARIOS ========== */
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-primary-rgb: 0, 102, 255;
+    
+    /* ========== COLORES SECUNDARIOS ========== */
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-accent-rgb: 0, 212, 170;
+    
+    /* ========== COLORES SEMÁNTICOS ========== */
+    --nexo-success: #00D4AA;
+    --nexo-success-light: rgba(0, 212, 170, 0.1);
+    --nexo-warning: #FFB020;
+    --nexo-warning-light: rgba(255, 176, 32, 0.1);
+    --nexo-error: #FF4D4D;
+    --nexo-error-light: rgba(255, 77, 77, 0.1);
+    --nexo-info: #0066FF;
+    --nexo-info-light: rgba(0, 102, 255, 0.1);
+    
+    /* ========== NEUTRALES / GRISES ========== */
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    
+    /* ========== FONDOS ========== */
+    --nexo-bg-primary: #FFFFFF;
+    --nexo-bg-secondary: #F5F5F7;
+    --nexo-bg-dark: #1A1A2E;
+    
+    /* ========== TEXTOS ========== */
+    --nexo-text-primary: #1A1A2E;
+    --nexo-text-secondary: #4A4A5A;
+    --nexo-text-muted: #8A8A9A;
+    --nexo-text-inverse: #FFFFFF;
+    
+    /* ========== BORDES ========== */
+    --nexo-border-light: #D1D1D9;
+    --nexo-border-dark: #4A4A5A;
+    
+    /* ========== SOMBRAS ========== */
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+    
+    /* ========== BORDES REDONDEADOS ========== */
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-radius-full: 9999px;
+    
+    /* ========== TRANSICIONES ========== */
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+    --nexo-transition-slow: 350ms ease;
+
+    /* ========== ALIAS PARA COMPATIBILIDAD ========== */
+    --rm-primary: var(--nexo-primary);
+    --rm-primary-dark: var(--nexo-primary-dark);
+    --rm-primary-light: var(--nexo-primary-light);
+    --rm-secondary: var(--nexo-accent);
+    --rm-accent: var(--nexo-accent);
+    --rm-success: var(--nexo-success);
+    --rm-warning: var(--nexo-warning);
+    --rm-danger: var(--nexo-error);
+    --rm-info: var(--nexo-info);
+}
+
+/* ===== Override Bootstrap Colors ===== */
+.bg-primary, .btn-primary {
+    background-color: var(--nexo-primary) !important;
+    border-color: var(--nexo-primary) !important;
+}
+
+.btn-primary:hover, .btn-primary:focus {
+    background-color: var(--nexo-primary-dark) !important;
+    border-color: var(--nexo-primary-dark) !important;
+    box-shadow: 0 4px 15px rgba(var(--nexo-primary-rgb), 0.4) !important;
+}
+
+.text-primary { color: var(--nexo-primary) !important; }
+.border-primary { border-color: var(--nexo-primary) !important; }
+
+.bg-success, .btn-success {
+    background-color: var(--nexo-success) !important;
+    border-color: var(--nexo-success) !important;
+}
+
+.text-success { color: var(--nexo-success) !important; }
+
+.bg-warning, .btn-warning {
+    background-color: var(--nexo-warning) !important;
+    border-color: var(--nexo-warning) !important;
+}
+
+.text-warning { color: var(--nexo-warning) !important; }
+
+.bg-danger, .btn-danger {
+    background-color: var(--nexo-error) !important;
+    border-color: var(--nexo-error) !important;
+}
+
+.text-danger { color: var(--nexo-error) !important; }
+
+.bg-info, .btn-info {
+    background-color: var(--nexo-info) !important;
+    border-color: var(--nexo-info) !important;
+}
+
+.text-info { color: var(--nexo-info) !important; }
+
+/* Soft Buttons */
+.btn-soft-primary {
+    background-color: var(--nexo-primary-light) !important;
+    color: var(--nexo-primary) !important;
+}
+
+.btn-soft-primary:hover {
+    background-color: var(--nexo-primary) !important;
+    color: var(--nexo-white) !important;
+}
+
+.btn-soft-success {
+    background-color: var(--nexo-success-light) !important;
+    color: var(--nexo-success) !important;
+}
+
+.btn-soft-success:hover {
+    background-color: var(--nexo-success) !important;
+    color: var(--nexo-white) !important;
+}
+
+.btn-soft-warning {
+    background-color: var(--nexo-warning-light) !important;
+    color: #996B00 !important;
+}
+
+.btn-soft-warning:hover {
+    background-color: var(--nexo-warning) !important;
+    color: var(--nexo-secondary) !important;
+}
+
+.btn-soft-danger {
+    background-color: var(--nexo-error-light) !important;
+    color: var(--nexo-error) !important;
+}
+
+.btn-soft-danger:hover {
+    background-color: var(--nexo-error) !important;
+    color: var(--nexo-white) !important;
+}
+
+/* ===== Sidebar / App Menu ===== */
+.app-menu.navbar-menu {
+    background: var(--nexo-secondary) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.navbar-brand-box {
+    background: var(--nexo-secondary) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.navbar-nav .nav-link {
+    color: var(--nexo-gray-300) !important;
+    font-weight: 500;
+    border-radius: var(--nexo-radius-md);
+    margin: 2px 8px;
+    padding: 10px 15px !important;
+    transition: var(--nexo-transition-fast);
+}
+
+.navbar-nav .nav-link:hover {
+    color: var(--nexo-white) !important;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.navbar-nav .nav-link.active {
+    color: var(--nexo-white) !important;
+    background: var(--nexo-primary) !important;
+    box-shadow: 0 4px 15px rgba(var(--nexo-primary-rgb), 0.3);
+}
+
+.navbar-nav .nav-link i {
+    color: var(--nexo-accent);
+    transition: var(--nexo-transition-fast);
+}
+
+.navbar-nav .nav-link:hover i,
+.navbar-nav .nav-link.active i {
+    color: var(--nexo-white);
+}
+
+.menu-title span {
+    color: var(--nexo-gray-500) !important;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* ===== Header / Topbar ===== */
+#page-topbar {
+    background: var(--nexo-white);
+    box-shadow: var(--nexo-shadow-md);
+    overflow: visible !important;
+}
+
+.navbar-header {
+    overflow: visible !important;
+}
+
+.btn-topbar {
+    color: var(--nexo-gray-700) !important;
+    border-radius: var(--nexo-radius-md);
+}
+
+.btn-topbar:hover {
+    background: var(--nexo-gray-100) !important;
+    color: var(--nexo-primary) !important;
+}
+
+/* User Dropdown */
+.topbar-user .dropdown-menu {
+    z-index: 1050 !important;
+    border: 1px solid var(--nexo-gray-300);
+    box-shadow: var(--nexo-shadow-lg);
+    border-radius: var(--nexo-radius-lg);
+    padding: 0.5rem;
+}
+
+.topbar-user .dropdown-item {
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1rem;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    color: var(--nexo-text-secondary);
+}
+
+.topbar-user .dropdown-item:hover {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-primary);
+}
+
+.topbar-user .dropdown-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--nexo-text-primary);
+}
+
+.header-item.topbar-user {
+    position: relative;
+    overflow: visible !important;
+}
+
+.dropdown.header-item.topbar-user .dropdown-menu.show {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* ===== Cards ===== */
+.card {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-normal);
+    background: var(--nexo-white);
+}
+
+.card:hover {
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.card-header {
+    background: transparent;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    font-weight: 600;
+    color: var(--nexo-text-primary);
+}
+
+/* ===== Botones ===== */
+.btn {
+    font-weight: 500;
+    border-radius: var(--nexo-radius-md);
+    transition: var(--nexo-transition-fast);
+    padding: 0.5rem 1rem;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-gradient-primary {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    border: none;
+    color: var(--nexo-white);
+}
+
+.btn-gradient-primary:hover {
+    box-shadow: 0 8px 25px rgba(var(--nexo-primary-rgb), 0.4);
+    color: var(--nexo-white);
+}
+
+.btn-gradient-success {
+    background: linear-gradient(135deg, var(--nexo-success) 0%, #00B392 100%);
+    border: none;
+    color: var(--nexo-white);
+}
+
+.btn-gradient-success:hover {
+    box-shadow: 0 8px 25px rgba(var(--nexo-accent-rgb), 0.4);
+    color: var(--nexo-white);
+}
+
+/* ===== Form Controls ===== */
+.form-control, .form-select {
+    border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1rem;
+    transition: var(--nexo-transition-fast);
+    font-size: 0.9rem;
+    color: var(--nexo-text-primary);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 4px var(--nexo-primary-light);
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--nexo-text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+/* ===== Tables ===== */
+.table {
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+}
+
+.table thead th {
+    background: var(--nexo-gray-100);
+    border-bottom: 2px solid var(--nexo-gray-300);
+    font-weight: 600;
+    color: var(--nexo-text-secondary);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    padding: 1rem;
+}
+
+.table tbody tr {
+    transition: var(--nexo-transition-fast);
+}
+
+.table tbody tr:hover {
+    background: var(--nexo-gray-100);
+}
+
+.table td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-color: var(--nexo-gray-100);
+    color: var(--nexo-text-primary);
+}
+
+/* ===== Badges ===== */
+.badge {
+    font-weight: 600;
+    padding: 0.4em 0.8em;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.75rem;
+}
+
+.badge-soft-primary, .bg-soft-primary {
+    background: var(--nexo-primary-light) !important;
+    color: var(--nexo-primary) !important;
+}
+
+.badge-soft-success, .bg-soft-success {
+    background: var(--nexo-success-light) !important;
+    color: var(--nexo-success) !important;
+}
+
+.badge-soft-warning, .bg-soft-warning {
+    background: var(--nexo-warning-light) !important;
+    color: #996B00 !important;
+}
+
+.badge-soft-danger, .bg-soft-danger {
+    background: var(--nexo-error-light) !important;
+    color: var(--nexo-error) !important;
+}
+
+.badge-soft-info, .bg-soft-info {
+    background: var(--nexo-info-light) !important;
+    color: var(--nexo-info) !important;
+}
+
+/* ===== Alerts ===== */
+.alert {
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    border-left: 4px solid;
+}
+
+.alert-success {
+    background: var(--nexo-success-light);
+    border-color: var(--nexo-success);
+    color: var(--nexo-success);
+}
+
+.alert-warning {
+    background: var(--nexo-warning-light);
+    border-color: var(--nexo-warning);
+    color: #996B00;
+}
+
+.alert-danger {
+    background: var(--nexo-error-light);
+    border-color: var(--nexo-error);
+    color: var(--nexo-error);
+}
+
+.alert-info {
+    background: var(--nexo-info-light);
+    border-color: var(--nexo-info);
+    color: var(--nexo-info);
+}
+
+/* ===== Dropdown ===== */
+.dropdown-menu {
+    border: 1px solid var(--nexo-gray-300);
+    box-shadow: var(--nexo-shadow-lg);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem;
+}
+
+.dropdown-item {
+    border-radius: var(--nexo-radius-sm);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+    color: var(--nexo-text-secondary);
+}
+
+.dropdown-item:hover {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-primary);
+}
+
+.dropdown-item.active, .dropdown-item:active {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* ===== Page Header ===== */
+.page-title-box {
+    padding: 1.5rem 0;
+}
+
+.page-title-box h4 {
+    font-weight: 700;
+    color: var(--nexo-text-primary);
+    margin: 0;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    color: var(--nexo-gray-500);
+}
+
+.breadcrumb-item a {
+    color: var(--nexo-primary);
+    text-decoration: none;
+}
+
+.breadcrumb-item.active {
+    color: var(--nexo-text-muted);
+}
+
+/* ===== Modal ===== */
+.modal-content {
+    border: none;
+    border-radius: var(--nexo-radius-xl);
+    box-shadow: var(--nexo-shadow-xl);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--nexo-gray-300);
+    padding: 1.25rem 1.5rem;
+}
+
+.modal-title {
+    font-weight: 700;
+    color: var(--nexo-text-primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: 1px solid var(--nexo-gray-300);
+    padding: 1rem 1.5rem;
+}
+
+/* ===== Pagination ===== */
+.pagination .page-link {
+    border: none;
+    color: var(--nexo-text-secondary);
+    font-weight: 500;
+    border-radius: var(--nexo-radius-md);
+    margin: 0 2px;
+    transition: var(--nexo-transition-fast);
+}
+
+.pagination .page-link:hover {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-primary);
+}
+
+.pagination .page-item.active .page-link {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* ===== Stats Cards ===== */
+.stats-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
+    transition: var(--nexo-transition-normal);
+}
+
+.stats-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.stats-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.stats-icon.primary {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.stats-icon.success {
+    background: var(--nexo-success-light);
+    color: var(--nexo-success);
+}
+
+.stats-icon.warning {
+    background: var(--nexo-warning-light);
+    color: var(--nexo-warning);
+}
+
+.stats-icon.danger {
+    background: var(--nexo-error-light);
+    color: var(--nexo-error);
+}
+
+/* ===== Stock Status Colors ===== */
+.stock-ok { color: var(--nexo-success); }
+.stock-ok-bg { background-color: var(--nexo-success-light); }
+
+.stock-low { color: var(--nexo-warning); }
+.stock-low-bg { background-color: var(--nexo-warning-light); }
+
+.stock-critical { color: var(--nexo-error); }
+.stock-critical-bg { background-color: var(--nexo-error-light); }
+
+.stock-out { color: var(--nexo-gray-500); }
+.stock-out-bg { background-color: var(--nexo-gray-100); }
+
+/* ===== Loading Overlay ===== */
+#loadingOverlay {
+    background-color: rgba(26, 26, 46, 0.7) !important;
+    backdrop-filter: blur(8px);
+}
+
+#loadingOverlay .spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border-width: 3px;
+    color: var(--nexo-primary) !important;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--nexo-gray-100);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--nexo-gray-300);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--nexo-gray-500);
+}
+
+/* ===== Animations ===== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* ===== Utility Classes ===== */
+.text-gradient-primary {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+}
+
+.bg-gradient-dark {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D44 100%);
+}
+
+.shadow-primary {
+    box-shadow: 0 8px 25px rgba(var(--nexo-primary-rgb), 0.25);
+}
+
+/* ===== Footer ===== */
+.footer {
+    background: var(--nexo-gray-100);
+    border-top: 1px solid var(--nexo-gray-300);
+    padding: 1rem 0;
+}
+
+.footer a {
+    color: var(--nexo-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.footer a:hover {
+    color: var(--nexo-primary-dark);
+}
+
+/* ===== Main Content ===== */
+.main-content {
+    background: var(--nexo-bg-secondary);
+}
+
+/* ===== Text Colors ===== */
+.text-muted {
+    color: var(--nexo-text-muted) !important;
+}
+
+/* ===== Fix for Dropdown in Header ===== */
 #page-topbar {
     overflow: visible !important;
 }
@@ -15,18 +708,239 @@ File: Custom Css File
     overflow: visible !important;
 }
 
-.topbar-user .dropdown-menu {
-    z-index: 1050 !important;
+/* ===== NEXO Icon System ===== */
+/* 
+ * Regla unificada para todos los iconos del sistema
+ * Todos los iconos usan el color accent (verde #00D4AA) por defecto
+ * En hover o active cambian a blanco
+ */
+
+/* Iconos en el Sidebar/Menu - Color accent (verde) */
+.navbar-nav .nav-link i,
+.navbar-nav .nav-link .ri,
+.navbar-nav .nav-link [class^="ri-"],
+.navbar-nav .nav-link [class*=" ri-"],
+.navbar-nav .nav-link .bi,
+.navbar-nav .nav-link [class^="bi-"],
+.navbar-nav .nav-link [class*=" bi-"],
+.navbar-nav .nav-link .bx,
+.navbar-nav .nav-link [class^="bx-"],
+.navbar-nav .nav-link [class*=" bx-"] {
+    color: var(--nexo-accent) !important;
+    transition: var(--nexo-transition-fast);
+    font-size: 1.1rem;
+    margin-right: 0.5rem;
+    vertical-align: middle;
 }
 
-.header-item.topbar-user {
-    position: relative;
-    overflow: visible !important;
+/* Iconos en hover/active - Color blanco */
+.navbar-nav .nav-link:hover i,
+.navbar-nav .nav-link:hover .ri,
+.navbar-nav .nav-link:hover [class^="ri-"],
+.navbar-nav .nav-link:hover [class*=" ri-"],
+.navbar-nav .nav-link:hover .bi,
+.navbar-nav .nav-link:hover [class^="bi-"],
+.navbar-nav .nav-link:hover [class*=" bi-"],
+.navbar-nav .nav-link:hover .bx,
+.navbar-nav .nav-link:hover [class^="bx-"],
+.navbar-nav .nav-link:hover [class*=" bx-"],
+.navbar-nav .nav-link.active i,
+.navbar-nav .nav-link.active .ri,
+.navbar-nav .nav-link.active [class^="ri-"],
+.navbar-nav .nav-link.active [class*=" ri-"],
+.navbar-nav .nav-link.active .bi,
+.navbar-nav .nav-link.active [class^="bi-"],
+.navbar-nav .nav-link.active [class*=" bi-"],
+.navbar-nav .nav-link.active .bx,
+.navbar-nav .nav-link.active [class^="bx-"],
+.navbar-nav .nav-link.active [class*=" bx-"] {
+    color: var(--nexo-white) !important;
 }
 
-/* Asegurar que el dropdown se muestre correctamente */
-.dropdown.header-item.topbar-user .dropdown-menu.show {
-    display: block !important;
-    opacity: 1 !important;
-    visibility: visible !important;
+/* Iconos en el Header/Topbar - Color gris oscuro, azul en hover */
+.btn-topbar i,
+.btn-topbar .ri,
+.btn-topbar [class^="ri-"],
+.btn-topbar [class*=" ri-"],
+.btn-topbar .bi,
+.btn-topbar [class^="bi-"],
+.btn-topbar [class*=" bi-"],
+.btn-topbar .bx,
+.btn-topbar [class^="bx-"],
+.btn-topbar [class*=" bx-"],
+.header-item i,
+.header-item .bx {
+    color: var(--nexo-gray-700) !important;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-topbar:hover i,
+.btn-topbar:hover .ri,
+.btn-topbar:hover [class^="ri-"],
+.btn-topbar:hover [class*=" ri-"],
+.btn-topbar:hover .bi,
+.btn-topbar:hover [class^="bi-"],
+.btn-topbar:hover [class*=" bi-"],
+.btn-topbar:hover .bx,
+.btn-topbar:hover [class^="bx-"],
+.btn-topbar:hover [class*=" bx-"],
+.header-item:hover i,
+.header-item:hover .bx {
+    color: var(--nexo-primary) !important;
+}
+
+/* Iconos en Cards - Color primario (azul) */
+.card-header i,
+.card-title i,
+.card-header [class^="ri-"],
+.card-header [class*=" ri-"],
+.card-title [class^="ri-"],
+.card-title [class*=" ri-"] {
+    color: var(--nexo-primary) !important;
+}
+
+/* Iconos en Botones - Heredan color del texto */
+.btn i,
+.btn [class^="ri-"],
+.btn [class*=" ri-"],
+.btn [class^="bi-"],
+.btn [class*=" bi-"],
+.btn [class^="bx-"],
+.btn [class*=" bx-"] {
+    color: inherit !important;
+    font-size: 1rem;
+    vertical-align: middle;
+}
+
+/* Iconos en Dropdowns - Color gris, azul en hover */
+.dropdown-item i,
+.dropdown-item [class^="ri-"],
+.dropdown-item [class*=" ri-"],
+.dropdown-item [class^="bi-"],
+.dropdown-item [class*=" bi-"] {
+    color: var(--nexo-gray-500) !important;
+    margin-right: 0.5rem;
+    transition: var(--nexo-transition-fast);
+}
+
+.dropdown-item:hover i,
+.dropdown-item:hover [class^="ri-"],
+.dropdown-item:hover [class*=" ri-"],
+.dropdown-item:hover [class^="bi-"],
+.dropdown-item:hover [class*=" bi-"] {
+    color: var(--nexo-primary) !important;
+}
+
+.dropdown-item.active i,
+.dropdown-item:active i {
+    color: var(--nexo-white) !important;
+}
+
+/* Iconos en Alertas - Heredan color de la alerta */
+.alert i,
+.alert [class^="ri-"],
+.alert [class*=" ri-"] {
+    color: inherit !important;
+}
+
+/* Iconos en Badges - Heredan color del badge */
+.badge i,
+.badge [class^="ri-"],
+.badge [class*=" ri-"] {
+    color: inherit !important;
+    font-size: 0.85em;
+}
+
+/* Iconos en Tablas - Color gris por defecto */
+.table i,
+.table [class^="ri-"],
+.table [class*=" ri-"],
+.table [class^="bi-"],
+.table [class*=" bi-"] {
+    color: var(--nexo-gray-500);
+}
+
+/* Iconos de acción en tablas */
+.table .btn-icon i,
+.table .action-icon i {
+    color: inherit !important;
+}
+
+/* Iconos de Stats Cards */
+.stats-card i,
+.stats-icon i {
+    color: inherit !important;
+    font-size: 1.5rem;
+}
+
+/* Iconos Específicos por Color */
+.icon-primary, .icon-primary i { color: var(--nexo-primary) !important; }
+.icon-success, .icon-success i { color: var(--nexo-success) !important; }
+.icon-warning, .icon-warning i { color: var(--nexo-warning) !important; }
+.icon-danger, .icon-danger i { color: var(--nexo-error) !important; }
+.icon-info, .icon-info i { color: var(--nexo-info) !important; }
+.icon-muted, .icon-muted i { color: var(--nexo-gray-500) !important; }
+.icon-accent, .icon-accent i { color: var(--nexo-accent) !important; }
+
+/* Iconos con Background */
+.icon-bg-primary {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary) !important;
+    padding: 0.5rem;
+    border-radius: var(--nexo-radius-md);
+}
+
+.icon-bg-success {
+    background: var(--nexo-success-light);
+    color: var(--nexo-success) !important;
+    padding: 0.5rem;
+    border-radius: var(--nexo-radius-md);
+}
+
+.icon-bg-warning {
+    background: var(--nexo-warning-light);
+    color: var(--nexo-warning) !important;
+    padding: 0.5rem;
+    border-radius: var(--nexo-radius-md);
+}
+
+.icon-bg-danger {
+    background: var(--nexo-error-light);
+    color: var(--nexo-error) !important;
+    padding: 0.5rem;
+    border-radius: var(--nexo-radius-md);
+}
+
+/* Hamburger Icon */
+.hamburger-icon span {
+    background-color: var(--nexo-primary) !important;
+}
+
+/* Page Title Icons */
+.page-title-box i,
+.page-title-box [class^="ri-"],
+.page-title-box [class*=" ri-"] {
+    color: var(--nexo-primary) !important;
+}
+
+/* Breadcrumb Icons */
+.breadcrumb i {
+    color: var(--nexo-gray-500) !important;
+}
+
+/* Modal Icons */
+.modal-header i,
+.modal-title i {
+    color: var(--nexo-primary) !important;
+}
+
+/* Form Icons */
+.form-icon,
+.input-group-text i {
+    color: var(--nexo-gray-500) !important;
+}
+
+.form-control:focus + .input-group-text i,
+.form-control:focus ~ .form-icon {
+    color: var(--nexo-primary) !important;
 }

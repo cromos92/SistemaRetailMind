@@ -1,266 +1,403 @@
 {% load static %}
 
 {% include 'layout/header.html' %}
-
-<!-- CSRF Token para AJAX -->
 {% csrf_token %}
 {% include 'layout/menu.html' %}
 {% include 'layout/footer.html' %}
 
+<!-- NEXO Design System - Gestión de Empresas -->
 <style>
-.empresa-card {
-    border-radius: 15px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
+/* ===== NEXO Variables ===== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
 }
 
-.empresa-card:hover {
-    transform: translateY(-2px);
+/* ===== Page Layout ===== */
+.nexo-page { background: var(--nexo-gray-100); min-height: calc(100vh - 150px); }
+
+/* ===== Page Header ===== */
+.nexo-page-header {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem;
 }
-
-.status-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 500;
+.nexo-page-title {
+    display: flex; align-items: center; gap: 0.75rem;
+    font-size: 1.5rem; font-weight: 700; color: var(--nexo-gray-900); margin: 0;
 }
-
-.status-activo { background-color: #d4edda; color: #155724; }
-.status-inactivo { background-color: #f8d7da; color: #721c24; }
-
-.tipo-badge {
-    background: linear-gradient(45deg, #28a745, #20c997);
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 500;
+.nexo-page-title-icon {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    border-radius: var(--nexo-radius-lg); display: flex; align-items: center;
+    justify-content: center; color: white; font-size: 1.5rem;
 }
+.nexo-page-subtitle { color: var(--nexo-gray-500); font-size: 0.875rem; margin-top: 0.25rem; }
+.nexo-header-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 
-.table-responsive {
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+/* ===== Stats Row ===== */
+.nexo-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+@media (max-width: 1200px) { .nexo-stats-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 576px) { .nexo-stats-row { grid-template-columns: 1fr; } }
+
+.nexo-stat-card {
+    background: var(--nexo-white); border-radius: var(--nexo-radius-lg);
+    padding: 1.25rem; display: flex; align-items: center; gap: 1rem;
+    box-shadow: var(--nexo-shadow-sm); transition: all 0.2s ease;
 }
-
-.filter-section {
-    background: #f8f9fa;
-    border-radius: 10px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+.nexo-stat-card:hover { box-shadow: var(--nexo-shadow-md); transform: translateY(-2px); }
+.nexo-stat-icon {
+    width: 48px; height: 48px; border-radius: var(--nexo-radius-md);
+    display: flex; align-items: center; justify-content: center; font-size: 1.25rem;
 }
+.nexo-stat-icon.primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.nexo-stat-icon.success { background: rgba(0, 212, 170, 0.1); color: var(--nexo-success); }
+.nexo-stat-icon.info { background: rgba(0, 102, 255, 0.1); color: var(--nexo-info); }
+.nexo-stat-icon.warning { background: rgba(255, 176, 32, 0.1); color: var(--nexo-warning); }
+.nexo-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--nexo-gray-900); line-height: 1; }
+.nexo-stat-label { font-size: 0.8rem; color: var(--nexo-gray-500); margin-top: 0.25rem; }
 
-.modal-xl .modal-dialog {
-    max-width: 900px;
+/* ===== Filter Card ===== */
+.nexo-filter-card {
+    background: var(--nexo-white); border-radius: var(--nexo-radius-lg);
+    padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: var(--nexo-shadow-sm);
 }
-
-.form-floating > .form-control {
-    height: calc(3.5rem + 2px);
-    line-height: 1.25;
+.nexo-filter-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
+.nexo-filter-group { flex: 1; min-width: 150px; }
+.nexo-filter-group.search { min-width: 250px; flex: 2; }
+.nexo-filter-label { font-size: 0.75rem; font-weight: 600; color: var(--nexo-gray-500); margin-bottom: 0.375rem; text-transform: uppercase; }
+.nexo-filter-input, .nexo-filter-select {
+    width: 100%; padding: 0.625rem 1rem; border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); font-size: 0.875rem; transition: all 0.2s ease;
+    background: var(--nexo-white);
 }
-
-.form-floating > .form-control:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+.nexo-filter-input:focus, .nexo-filter-select:focus {
+    outline: none; border-color: var(--nexo-primary); box-shadow: 0 0 0 3px var(--nexo-primary-light);
 }
+.nexo-filter-actions { display: flex; gap: 0.5rem; }
 
-.btn-action {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    border-radius: 0.375rem;
+/* ===== Main Card ===== */
+.nexo-card { background: var(--nexo-white); border-radius: var(--nexo-radius-xl); box-shadow: var(--nexo-shadow-sm); overflow: hidden; }
+.nexo-card-header {
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex; justify-content: space-between; align-items: center;
+    background: linear-gradient(to right, var(--nexo-white), var(--nexo-gray-100));
 }
+.nexo-card-title { font-size: 1rem; font-weight: 600; color: var(--nexo-gray-900); display: flex; align-items: center; gap: 0.5rem; margin: 0; }
+.nexo-card-title i { color: var(--nexo-primary); }
+.nexo-card-body { padding: 1.5rem; }
 
-.avatar-placeholder {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: linear-gradient(45deg, #007bff, #0056b3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    font-size: 1.2rem;
+/* ===== Buttons ===== */
+.nexo-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    padding: 0.625rem 1.25rem; font-size: 0.875rem; font-weight: 600;
+    border-radius: var(--nexo-radius-md); border: none; cursor: pointer;
+    transition: all 0.2s ease; text-decoration: none;
 }
+.nexo-btn-primary { background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); color: white; }
+.nexo-btn-primary:hover { box-shadow: 0 4px 15px rgba(0, 102, 255, 0.35); transform: translateY(-1px); color: white; }
+.nexo-btn-success { background: linear-gradient(135deg, var(--nexo-success) 0%, #00B894 100%); color: white; }
+.nexo-btn-success:hover { box-shadow: 0 4px 15px rgba(0, 212, 170, 0.35); transform: translateY(-1px); color: white; }
+.nexo-btn-outline { background: transparent; border: 2px solid var(--nexo-gray-300); color: var(--nexo-gray-700); }
+.nexo-btn-outline:hover { border-color: var(--nexo-primary); color: var(--nexo-primary); background: var(--nexo-primary-light); }
+.nexo-btn-sm { padding: 0.5rem 0.875rem; font-size: 0.8rem; }
 
-.pagination-info {
-    font-size: 0.875rem;
-    color: #6c757d;
+/* ===== Table ===== */
+.nexo-table-wrapper { overflow-x: auto; }
+.nexo-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.nexo-table thead th {
+    background: var(--nexo-gray-100); padding: 0.875rem 1rem;
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--nexo-gray-500);
+    border-bottom: 2px solid var(--nexo-gray-300); text-align: left;
 }
+.nexo-table tbody tr { transition: background 0.15s ease; }
+.nexo-table tbody tr:hover { background: var(--nexo-primary-light); }
+.nexo-table tbody td { padding: 0.875rem 1rem; border-bottom: 1px solid var(--nexo-gray-300); color: var(--nexo-gray-700); font-size: 0.875rem; vertical-align: middle; }
 
-.pagination-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+/* ===== Company Cell ===== */
+.nexo-company-cell { display: flex; align-items: center; gap: 0.75rem; }
+.nexo-company-avatar {
+    width: 42px; height: 42px; border-radius: var(--nexo-radius-md);
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 1rem; flex-shrink: 0;
 }
+.nexo-company-name { font-weight: 600; color: var(--nexo-gray-900); }
+.nexo-company-fantasy { font-size: 0.75rem; color: var(--nexo-gray-500); }
 
-.pagination-controls .form-select {
-    width: auto;
-    min-width: 80px;
+/* ===== Badges ===== */
+.nexo-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.25rem 0.625rem; font-size: 0.7rem; font-weight: 600;
+    border-radius: var(--nexo-radius-sm); text-transform: uppercase;
+}
+.nexo-badge-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.nexo-badge-success { background: rgba(0, 212, 170, 0.15); color: #00A386; }
+.nexo-badge-warning { background: rgba(255, 176, 32, 0.15); color: #996B00; }
+.nexo-badge-info { background: rgba(0, 102, 255, 0.1); color: var(--nexo-primary); }
+.nexo-badge-secondary { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+
+/* ===== Action Buttons ===== */
+.nexo-actions { display: flex; gap: 0.375rem; justify-content: flex-end; }
+.nexo-action-btn {
+    width: 32px; height: 32px; border-radius: var(--nexo-radius-md); border: none;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; transition: all 0.2s ease;
+}
+.nexo-action-btn.view { background: rgba(0, 102, 255, 0.1); color: var(--nexo-info); }
+.nexo-action-btn.view:hover { background: var(--nexo-info); color: white; }
+.nexo-action-btn.branches { background: rgba(0, 212, 170, 0.1); color: var(--nexo-success); }
+.nexo-action-btn.branches:hover { background: var(--nexo-success); color: white; }
+.nexo-action-btn.edit { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.nexo-action-btn.edit:hover { background: var(--nexo-primary); color: white; }
+.nexo-action-btn.delete { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
+.nexo-action-btn.delete:hover { background: var(--nexo-error); color: white; }
+
+/* ===== Pagination ===== */
+.nexo-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; padding-top: 1rem; border-top: 1px solid var(--nexo-gray-300); margin-top: 1rem; }
+.nexo-pagination-info { font-size: 0.8rem; color: var(--nexo-gray-500); }
+.nexo-pagination-controls { display: flex; align-items: center; gap: 0.5rem; }
+.nexo-pagination-btn {
+    display: flex; align-items: center; gap: 0.25rem; padding: 0.5rem 0.875rem;
+    border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-md);
+    background: var(--nexo-white); color: var(--nexo-gray-700); font-size: 0.8rem;
+    cursor: pointer; transition: all 0.15s ease;
+}
+.nexo-pagination-btn:hover:not(:disabled) { border-color: var(--nexo-primary); color: var(--nexo-primary); background: var(--nexo-primary-light); }
+.nexo-pagination-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.nexo-pagination-select { padding: 0.5rem; border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-md); font-size: 0.8rem; }
+
+/* ===== Empty State ===== */
+.nexo-empty-state { text-align: center; padding: 3rem 2rem; }
+.nexo-empty-icon { width: 80px; height: 80px; background: var(--nexo-gray-100); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 2rem; color: var(--nexo-gray-500); }
+.nexo-empty-title { font-size: 1.125rem; font-weight: 600; color: var(--nexo-gray-900); margin-bottom: 0.5rem; }
+.nexo-empty-text { color: var(--nexo-gray-500); font-size: 0.875rem; }
+
+/* ===== Loading ===== */
+.nexo-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem; }
+.nexo-spinner { width: 40px; height: 40px; border: 3px solid var(--nexo-gray-300); border-top-color: var(--nexo-primary); border-radius: 50%; animation: nexo-spin 0.8s linear infinite; }
+@keyframes nexo-spin { to { transform: rotate(360deg); } }
+.nexo-loading-text { margin-top: 1rem; color: var(--nexo-gray-500); font-size: 0.875rem; }
+
+/* ===== Modal ===== */
+.nexo-modal .modal-content { border: none; border-radius: var(--nexo-radius-xl); overflow: hidden; box-shadow: var(--nexo-shadow-lg); }
+.nexo-modal .modal-header { background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D44 100%); color: white; padding: 1.25rem 1.5rem; border: none; }
+.nexo-modal .modal-title { font-size: 1.125rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; color: #FFFFFF; }
+.nexo-modal .modal-title i { color: var(--nexo-accent); }
+.nexo-modal .btn-close { filter: brightness(0) invert(1); opacity: 0.7; }
+.nexo-modal .btn-close:hover { opacity: 1; }
+.nexo-modal .modal-body { padding: 1.5rem; max-height: 70vh; overflow-y: auto; }
+.nexo-modal .modal-footer { padding: 1rem 1.5rem; background: var(--nexo-gray-100); border-top: 1px solid var(--nexo-gray-300); gap: 0.75rem; }
+
+/* ===== Form ===== */
+.nexo-form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem; }
+@media (max-width: 768px) { .nexo-form-row { grid-template-columns: 1fr; } }
+.nexo-form-row.full { grid-template-columns: 1fr; }
+.nexo-form-row.thirds { grid-template-columns: repeat(3, 1fr); }
+.nexo-form-group { margin-bottom: 0; }
+.nexo-label { display: flex; align-items: center; gap: 0.375rem; font-size: 0.8rem; font-weight: 600; color: var(--nexo-gray-700); margin-bottom: 0.375rem; }
+.nexo-label i { color: var(--nexo-primary); font-size: 0.9rem; }
+.nexo-label .required { color: var(--nexo-error); }
+.nexo-input, .nexo-select {
+    width: 100%; padding: 0.625rem 0.875rem; border: 2px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md); font-size: 0.875rem; transition: all 0.2s ease;
+    background: var(--nexo-white);
+}
+.nexo-input:focus, .nexo-select:focus { outline: none; border-color: var(--nexo-primary); box-shadow: 0 0 0 3px var(--nexo-primary-light); }
+.nexo-input::placeholder { color: var(--nexo-gray-500); }
+.nexo-form-section { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--nexo-gray-300); }
+.nexo-form-section:last-child { border-bottom: none; margin-bottom: 0; }
+.nexo-form-section-title { font-size: 0.9rem; font-weight: 700; color: var(--nexo-primary); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.nexo-alert-errors { background: rgba(255, 77, 77, 0.1); border-left: 4px solid var(--nexo-error); padding: 1rem; border-radius: var(--nexo-radius-md); margin-top: 1rem; }
+.nexo-alert-errors ul { margin: 0; padding-left: 1.25rem; color: var(--nexo-error); font-size: 0.875rem; }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .nexo-page-header { flex-direction: column; align-items: flex-start; }
+    .nexo-filter-row { flex-direction: column; }
+    .nexo-filter-group, .nexo-filter-group.search { min-width: 100%; flex: none; }
+    .nexo-pagination { flex-direction: column; align-items: center; }
+    .nexo-form-row.thirds { grid-template-columns: 1fr; }
 }
 </style>
 
 <div class="main-content">
-    <div class="page-content">
+    <div class="page-content nexo-page">
         <div class="container-fluid">
             
-            <!-- ========== HEADER Y TÍTULO ========== -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center">
+            <!-- Page Header -->
+            <div class="nexo-page-header">
+                <div>
+                    <h1 class="nexo-page-title">
+                        <div class="nexo-page-title-icon">
+                            <i class="ri-building-4-fill"></i>
+                        </div>
                         <div>
-                            <h2 class="mb-1">
-                                <i class="bi bi-building-fill text-primary me-2"></i>
-                                Gestión de Empresas
-                            </h2>
-                            <p class="text-muted mb-0">Administra las empresas y sus sucursales</p>
+                            Gestión de Empresas
+                            <div class="nexo-page-subtitle">Administra empresas, sucursales y contactos</div>
                         </div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-success" onclick="exportarEmpresas()">
-                                <i class="bi bi-download me-1"></i>Exportar
-                            </button>
-                            <button class="btn btn-primary" onclick="abrirModalCrear()">
-                                <i class="bi bi-plus-circle me-1"></i>Nueva Empresa
-                            </button>
-                        </div>
+                    </h1>
+                </div>
+                <div class="nexo-header-actions">
+                    <button class="nexo-btn nexo-btn-outline" onclick="exportarEmpresas()">
+                        <i class="ri-download-2-line"></i>
+                        Exportar
+                    </button>
+                    <button class="nexo-btn nexo-btn-success" onclick="abrirModalCrear()">
+                        <i class="ri-add-line"></i>
+                        Nueva Empresa
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="nexo-stats-row">
+                <div class="nexo-stat-card">
+                    <div class="nexo-stat-icon primary"><i class="ri-building-2-line"></i></div>
+                    <div>
+                        <div class="nexo-stat-value" id="totalEmpresas">0</div>
+                        <div class="nexo-stat-label">Total Empresas</div>
+                    </div>
+                </div>
+                <div class="nexo-stat-card">
+                    <div class="nexo-stat-icon success"><i class="ri-checkbox-circle-line"></i></div>
+                    <div>
+                        <div class="nexo-stat-value" id="empresasActivas">0</div>
+                        <div class="nexo-stat-label">Empresas Activas</div>
+                    </div>
+                </div>
+                <div class="nexo-stat-card">
+                    <div class="nexo-stat-icon info"><i class="ri-store-2-line"></i></div>
+                    <div>
+                        <div class="nexo-stat-value" id="totalSucursales">0</div>
+                        <div class="nexo-stat-label">Total Sucursales</div>
+                    </div>
+                </div>
+                <div class="nexo-stat-card">
+                    <div class="nexo-stat-icon warning"><i class="ri-contacts-line"></i></div>
+                    <div>
+                        <div class="nexo-stat-value" id="totalContactos">0</div>
+                        <div class="nexo-stat-label">Total Contactos</div>
                     </div>
                 </div>
             </div>
 
-            <!-- ========== MÉTRICAS RÁPIDAS ========== -->
-            <div class="row mb-4">
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card empresa-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-primary mb-1" id="totalEmpresas">0</div>
-                            <div class="text-muted">Total Empresas</div>
-                        </div>
+            <!-- Filters -->
+            <div class="nexo-filter-card">
+                <div class="nexo-filter-row">
+                    <div class="nexo-filter-group search">
+                        <div class="nexo-filter-label">Buscar</div>
+                        <input type="text" class="nexo-filter-input" id="filtroBusqueda" placeholder="Nombre, RUT o razón social...">
                     </div>
-                </div>
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card empresa-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-success mb-1" id="empresasActivas">0</div>
-                            <div class="text-muted">Empresas Activas</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card empresa-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-info mb-1" id="totalSucursales">0</div>
-                            <div class="text-muted">Total Sucursales</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card empresa-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-warning mb-1" id="totalContactos">0</div>
-                            <div class="text-muted">Total Contactos</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ========== FILTROS ========== -->
-            <div class="filter-section">
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label">Buscar</label>
-                        <input type="text" class="form-control" id="filtroBusqueda" placeholder="Nombre, RUT o razón social...">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Estado</label>
-                        <select class="form-select" id="filtroEstado">
+                    <div class="nexo-filter-group">
+                        <div class="nexo-filter-label">Estado</div>
+                        <select class="nexo-filter-select" id="filtroEstado">
                             <option value="">Todos</option>
                             <option value="activo">Activas</option>
                             <option value="inactivo">Inactivas</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Tipo</label>
-                        <select class="form-select" id="filtroTipo">
+                    <div class="nexo-filter-group">
+                        <div class="nexo-filter-label">Tipo</div>
+                        <select class="nexo-filter-select" id="filtroTipo">
                             <option value="">Todos</option>
                             <option value="cliente">Cliente</option>
                             <option value="proveedor">Proveedor</option>
-                            <option value="ambos">Ambos</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Ordenar por</label>
-                        <select class="form-select" id="ordenarPor">
+                    <div class="nexo-filter-group">
+                        <div class="nexo-filter-label">Ordenar por</div>
+                        <select class="nexo-filter-select" id="ordenarPor">
                             <option value="nombre">Nombre</option>
                             <option value="rut">RUT</option>
                             <option value="fecha">Fecha</option>
                             <option value="sucursales">Sucursales</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-primary" onclick="aplicarFiltros()">
-                                <i class="bi bi-search me-1"></i>Filtrar
-                            </button>
-                            <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
-                                <i class="bi bi-x-circle me-1"></i>Limpiar
-                            </button>
-                        </div>
+                    <div class="nexo-filter-actions">
+                        <button class="nexo-btn nexo-btn-primary nexo-btn-sm" onclick="aplicarFiltros()">
+                            <i class="ri-search-line"></i> Filtrar
+                        </button>
+                        <button class="nexo-btn nexo-btn-outline nexo-btn-sm" onclick="limpiarFiltros()">
+                            <i class="ri-refresh-line"></i>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- ========== TABLA PRINCIPAL ========== -->
-            <div class="card shadow">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="bi bi-table me-2"></i>Lista de Empresas
-                    </h6>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary" id="contadorEmpresas">0 empresas</span>
-                    </div>
+            <!-- Main Table Card -->
+            <div class="nexo-card">
+                <div class="nexo-card-header">
+                    <h2 class="nexo-card-title">
+                        <i class="ri-list-check-2"></i>
+                        Lista de Empresas
+                    </h2>
+                    <span class="nexo-badge nexo-badge-primary" id="contadorEmpresas">0 empresas</span>
                 </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover table-striped" id="tablaEmpresas">
-                            <thead class="table-dark">
+                <div class="nexo-card-body">
+                    <div class="nexo-table-wrapper">
+                        <table class="nexo-table" id="tablaEmpresas">
+                            <thead>
                                 <tr>
-                                    <th>Empresa</th>
-                                    <th>RUT</th>
-                                    <th>Razón Social</th>
-                                    <th>Tipo</th>
-                                    <th>Sucursales</th>
-                                    <th>Contactos</th>
-                                    <th>Estado</th>
-                                    <th>Acciones</th>
+                                    <th style="width: 25%;">Empresa</th>
+                                    <th style="width: 12%;">RUT</th>
+                                    <th style="width: 18%;">Razón Social</th>
+                                    <th style="width: 10%;">Tipo</th>
+                                    <th style="width: 8%;">Sucursales</th>
+                                    <th style="width: 8%;">Contactos</th>
+                                    <th style="width: 8%;">Estado</th>
+                                    <th style="width: 11%; text-align: right;">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="8" class="text-center py-5">
-                                        <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
-                                        <h6 class="text-muted mt-3">Cargando empresas...</h6>
-                                        <p class="text-muted small">Los datos se cargarán automáticamente</p>
+                                <tr id="loadingRow">
+                                    <td colspan="8">
+                                        <div class="nexo-loading">
+                                            <div class="nexo-spinner"></div>
+                                            <div class="nexo-loading-text">Cargando empresas...</div>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    
-                    <!-- ========== PAGINACIÓN ========== -->
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <div class="pagination-info">
-                            Mostrando <span id="inicioPagina">0</span> a <span id="finPagina">0</span> de <span id="totalRegistros">0</span> empresas
+
+                    <!-- Pagination -->
+                    <div class="nexo-pagination">
+                        <div class="nexo-pagination-info">
+                            Mostrando <strong id="inicioPagina">0</strong> - <strong id="finPagina">0</strong> de <strong id="totalRegistros">0</strong> empresas
                         </div>
-                        <div class="pagination-controls">
-                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarPagina('anterior')" id="btnAnterior" disabled>
-                                <i class="bi bi-chevron-left"></i> Anterior
+                        <div class="nexo-pagination-controls">
+                            <button class="nexo-pagination-btn" onclick="cambiarPagina('anterior')" id="btnAnterior" disabled>
+                                <i class="ri-arrow-left-s-line"></i> Anterior
                             </button>
-                            <span class="mx-2">Página <span id="paginaActual">1</span> de <span id="totalPaginas">1</span></span>
-                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarPagina('siguiente')" id="btnSiguiente">
-                                Siguiente <i class="bi bi-chevron-right"></i>
+                            <span style="font-size: 0.8rem; color: var(--nexo-gray-700);">
+                                Página <strong id="paginaActual">1</strong> de <strong id="totalPaginas">1</strong>
+                            </span>
+                            <button class="nexo-pagination-btn" onclick="cambiarPagina('siguiente')" id="btnSiguiente">
+                                Siguiente <i class="ri-arrow-right-s-line"></i>
                             </button>
-                            <select class="form-select form-select-sm" id="registrosPorPagina" onchange="cambiarRegistrosPorPagina()">
+                            <select class="nexo-pagination-select" id="registrosPorPagina" onchange="cambiarRegistrosPorPagina()">
                                 <option value="10">10</option>
                                 <option value="25" selected>25</option>
                                 <option value="50">50</option>
@@ -272,334 +409,243 @@
             </div>
 
         </div>
-        <!-- container-fluid -->
     </div>
-    <!-- page-content -->
 </div>
-<!-- main-content -->
 
-<!-- ========== MODAL CREAR/EDITAR EMPRESA ========== -->
-<div class="modal fade" id="modalEmpresa" tabindex="-1" aria-labelledby="modalEmpresaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+<!-- Modal Crear/Editar Empresa -->
+<div class="modal fade nexo-modal" id="modalEmpresa" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalEmpresaLabel">
-                    <i class="bi bi-building me-2"></i>Nueva Empresa
+                    <i class="ri-building-line"></i> Nueva Empresa
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="formEmpresa">
                     <input type="hidden" id="empresaId" name="empresa_id">
                     
-                    <div class="row g-3">
-                        <!-- Información Básica -->
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="rutEmpresa" name="rut" placeholder="RUT" required>
-                                <label for="rutEmpresa">RUT *</label>
+                    <!-- Información Básica -->
+                    <div class="nexo-form-section">
+                        <div class="nexo-form-section-title"><i class="ri-information-line"></i> Información Básica</div>
+                        <div class="nexo-form-row">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-file-text-line"></i> RUT <span class="required">*</span></label>
+                                <input type="text" class="nexo-input" id="rutEmpresa" name="rut" placeholder="12.345.678-9" required>
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-building-2-line"></i> Razón Social <span class="required">*</span></label>
+                                <input type="text" class="nexo-input" id="razonSocial" name="razon_social" placeholder="Razón social de la empresa" required>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="razonSocial" name="razon_social" placeholder="Razón Social" required>
-                                <label for="razonSocial">Razón Social *</label>
+                        <div class="nexo-form-row">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-store-line"></i> Nombre Fantasía</label>
+                                <input type="text" class="nexo-input" id="nombreFantasia" name="nombre_fantasia" placeholder="Nombre comercial">
                             </div>
-                        </div>
-                        <div class="col-md-12">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="nombreFantasia" name="nombre_fantasia" placeholder="Nombre de Fantasía">
-                                <label for="nombreFantasia">Nombre de Fantasía</label>
-                            </div>
-                        </div>
-                        
-                        <!-- Tipo de Empresa -->
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <select class="form-select" id="tipoEmpresa" name="tipo" required>
-                                    <option value="">Seleccionar tipo</option>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-price-tag-3-line"></i> Tipo <span class="required">*</span></label>
+                                <select class="nexo-select" id="tipoEmpresa" name="tipo" required>
+                                    <option value="">Seleccionar...</option>
                                     <option value="cliente">Cliente</option>
                                     <option value="proveedor">Proveedor</option>
                                     <option value="ambos">Cliente y Proveedor</option>
                                 </select>
-                                <label for="tipoEmpresa">Tipo de Empresa *</label>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="giroComercial" name="giro_comercial" placeholder="Giro Comercial">
-                                <label for="giroComercial">Giro Comercial</label>
-                            </div>
-                        </div>
-                        
-                        <!-- Contacto -->
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="email" class="form-control" id="correoVendedor" name="correoVendedor" placeholder="Correo vendedor">
-                                <label for="correoVendedor">Correo vendedor</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="email" class="form-control" id="correoIntercambio" name="correoIntercambio" placeholder="Correo intercambio">
-                                <label for="correoIntercambio">Correo intercambio</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="email" class="form-control" id="correoAdministrador" name="correoAdministrador" placeholder="Correo administrador">
-                                <label for="correoAdministrador">Correo administrador</label>
-                            </div>
-                        </div>
-
-                        <!-- Contactos adicionales -->
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="contacto1Empresa" name="contacto1" placeholder="Contacto principal">
-                                <label for="contacto1Empresa">Contacto principal</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="contacto2Empresa" name="contacto2" placeholder="Contacto secundario">
-                                <label for="contacto2Empresa">Contacto secundario</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="actecoEmpresa" name="acteco" placeholder="Código Acteco">
-                                <label for="actecoEmpresa">Código Acteco</label>
-                            </div>
-                        </div>
-                        
-                        <!-- Dirección -->
-                        <div class="col-md-12">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="direccionEmpresa" name="direccion" placeholder="Dirección">
-                                <label for="direccionEmpresa">Dirección</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="ciudadEmpresa" name="ciudad" placeholder="Ciudad">
-                                <label for="ciudadEmpresa">Ciudad</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="regionEmpresa" name="region" placeholder="Región">
-                                <label for="regionEmpresa">Región</label>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="codigoPostal" name="codigo_postal" placeholder="Código Postal">
-                                <label for="codigoPostal">Código Postal</label>
-                            </div>
-                        </div>
-                        
-                        <!-- Información Adicional -->
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="sitioWeb" name="sitio_web" placeholder="Sitio Web">
-                                <label for="sitioWeb">Sitio Web</label>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="representanteLegal" name="representante_legal" placeholder="Representante Legal">
-                                <label for="representanteLegal">Representante Legal</label>
+                        <div class="nexo-form-row full">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-briefcase-line"></i> Giro Comercial</label>
+                                <input type="text" class="nexo-input" id="giroComercial" name="giro_comercial" placeholder="Actividad comercial">
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Validaciones -->
-                    <div id="erroresFormulario" class="alert alert-danger mt-3" style="display: none;">
-                        <ul id="listaErrores" class="mb-0"></ul>
+
+                    <!-- Contacto -->
+                    <div class="nexo-form-section">
+                        <div class="nexo-form-section-title"><i class="ri-mail-line"></i> Información de Contacto</div>
+                        <div class="nexo-form-row thirds">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-mail-send-line"></i> Correo Vendedor</label>
+                                <input type="email" class="nexo-input" id="correoVendedor" name="correoVendedor" placeholder="ventas@empresa.cl">
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-exchange-line"></i> Correo Intercambio</label>
+                                <input type="email" class="nexo-input" id="correoIntercambio" name="correoIntercambio" placeholder="intercambio@empresa.cl">
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-admin-line"></i> Correo Admin</label>
+                                <input type="email" class="nexo-input" id="correoAdministrador" name="correoAdministrador" placeholder="admin@empresa.cl">
+                            </div>
+                        </div>
+                        <div class="nexo-form-row thirds">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-phone-line"></i> Contacto 1</label>
+                                <input type="text" class="nexo-input" id="contacto1Empresa" name="contacto1" placeholder="+56 9 1234 5678">
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-phone-line"></i> Contacto 2</label>
+                                <input type="text" class="nexo-input" id="contacto2Empresa" name="contacto2" placeholder="+56 9 8765 4321">
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-hashtag"></i> Código Acteco</label>
+                                <input type="text" class="nexo-input" id="actecoEmpresa" name="acteco" placeholder="123456">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dirección -->
+                    <div class="nexo-form-section">
+                        <div class="nexo-form-section-title"><i class="ri-map-pin-line"></i> Dirección</div>
+                        <div class="nexo-form-row full">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-road-map-line"></i> Dirección</label>
+                                <input type="text" class="nexo-input" id="direccionEmpresa" name="direccion" placeholder="Av. Principal 123, Of. 456">
+                            </div>
+                        </div>
+                        <div class="nexo-form-row thirds">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-building-line"></i> Ciudad</label>
+                                <input type="text" class="nexo-input" id="ciudadEmpresa" name="ciudad" placeholder="Santiago">
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-map-2-line"></i> Región</label>
+                                <input type="text" class="nexo-input" id="regionEmpresa" name="region" placeholder="Metropolitana">
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-mail-open-line"></i> Código Postal</label>
+                                <input type="text" class="nexo-input" id="codigoPostal" name="codigo_postal" placeholder="8320000">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Info Adicional -->
+                    <div class="nexo-form-section">
+                        <div class="nexo-form-section-title"><i class="ri-more-line"></i> Información Adicional</div>
+                        <div class="nexo-form-row">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-global-line"></i> Sitio Web</label>
+                                <input type="text" class="nexo-input" id="sitioWeb" name="sitio_web" placeholder="https://www.empresa.cl">
+                            </div>
+                            <div class="nexo-form-group">
+                                <label class="nexo-label"><i class="ri-user-star-line"></i> Representante Legal</label>
+                                <input type="text" class="nexo-input" id="representanteLegal" name="representante_legal" placeholder="Juan Pérez González">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="erroresFormulario" class="nexo-alert-errors" style="display: none;">
+                        <ul id="listaErrores"></ul>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle me-1"></i>Cancelar
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                    <i class="ri-close-line"></i> Cancelar
                 </button>
-                <button type="button" class="btn btn-primary" onclick="guardarEmpresa()">
-                    <i class="bi bi-check-circle me-1"></i>Guardar
+                <button type="button" class="nexo-btn nexo-btn-success" onclick="guardarEmpresa()">
+                    <i class="ri-save-line"></i> Guardar Empresa
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ========== MODAL DETALLE EMPRESA ========== -->
-<div class="modal fade" id="modalDetalleEmpresa" tabindex="-1" aria-labelledby="modalDetalleEmpresaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+<!-- Modal Detalle Empresa -->
+<div class="modal fade nexo-modal" id="modalDetalleEmpresa" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalDetalleEmpresaLabel">
-                    <i class="bi bi-info-circle me-2"></i>Detalle de Empresa
+                    <i class="ri-eye-line"></i> Detalle de Empresa
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <div id="contenidoDetalleEmpresa">
-                    <!-- El contenido se cargará dinámicamente -->
-                </div>
-            </div>
+            <div class="modal-body" id="contenidoDetalleEmpresa"></div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ========== MODAL CONFIRMAR ELIMINACIÓN ========== -->
-<div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirmar Eliminación
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>¿Estás seguro de que deseas eliminar la empresa <strong id="nombreEmpresaEliminar"></strong>?</p>
-                <p class="text-muted small">Esta acción no se puede deshacer y eliminará también todas las sucursales y contactos asociados.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" onclick="confirmarEliminar()">
-                    <i class="bi bi-trash me-1"></i>Eliminar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ========== MODAL GESTIONAR SUCURSALES ========== -->
-<div class="modal fade" id="modalSucursales" tabindex="-1" aria-labelledby="modalSucursalesLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+<!-- Modal Gestionar Sucursales -->
+<div class="modal fade nexo-modal" id="modalSucursales" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalSucursalesLabel">
-                    <i class="bi bi-building me-2"></i>Gestionar Sucursales
+                    <i class="ri-store-2-line"></i> Gestionar Sucursales
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <!-- Información de la empresa -->
-                <div class="alert alert-info">
-                    <h6 class="mb-1">
-                        <i class="bi bi-info-circle me-2"></i>Empresa: <span id="empresaSucursalesNombre"></span>
-                        <small class="text-muted ms-2">(ID: <span id="empresaSucursalesId"></span>)</small>
-                    </h6>
-                    <small class="text-muted">Gestiona las sucursales de esta empresa</small>
-                </div>
-                
-                <!-- Botón para agregar nueva sucursal -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0">Lista de Sucursales</h6>
-                    <button class="btn btn-primary btn-sm" onclick="abrirModalNuevaSucursal()">
-                        <i class="bi bi-plus-circle me-1"></i>Nueva Sucursal
+                <div style="background: var(--nexo-primary-light); padding: 1rem; border-radius: var(--nexo-radius-md); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="color: var(--nexo-primary);">Empresa:</strong>
+                        <span id="empresaSucursalesNombre" style="color: var(--nexo-gray-900);"></span>
+                        <small style="color: var(--nexo-gray-500); margin-left: 0.5rem;">(ID: <span id="empresaSucursalesId"></span>)</small>
+                    </div>
+                    <button class="nexo-btn nexo-btn-success nexo-btn-sm" onclick="abrirModalNuevaSucursal()">
+                        <i class="ri-add-line"></i> Nueva Sucursal
                     </button>
                 </div>
-                
-                <!-- Tabla de sucursales -->
-                <div class="table-responsive">
-                    <table class="table table-hover" id="tablaSucursales">
-                        <thead class="table-light">
+                <div class="nexo-table-wrapper">
+                    <table class="nexo-table" id="tablaSucursales">
+                        <thead>
                             <tr>
                                 <th>Alias</th>
                                 <th>Dirección</th>
-                                <th>Acciones</th>
+                                <th style="text-align: right;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="3" class="text-center text-muted">
-                                    <i class="bi bi-hourglass-split"></i> Cargando sucursales...
-                                </td>
-                            </tr>
+                            <tr><td colspan="3" class="text-center" style="padding: 2rem; color: var(--nexo-gray-500);"><i class="ri-loader-4-line"></i> Cargando...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ========== MODAL CREAR/EDITAR SUCURSAL ========== -->
-<div class="modal fade" id="modalSucursal" tabindex="-1" aria-labelledby="modalSucursalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+<!-- Modal Crear/Editar Sucursal -->
+<div class="modal fade nexo-modal" id="modalSucursal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalSucursalLabel">
-                    <i class="bi bi-building me-2"></i>Nueva Sucursal
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title" id="modalSucursalLabel"><i class="ri-store-line"></i> Nueva Sucursal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <form id="formSucursal">
                     <input type="hidden" id="sucursalId" name="sucursal_id">
                     <input type="hidden" id="sucursalEmpresaId" name="empresa_id">
-                    
-                    <div class="mb-3">
-                        <label for="aliasSucursal" class="form-label">Alias de la Sucursal *</label>
-                        <input type="text" class="form-control" id="aliasSucursal" name="alias" placeholder="Ej: Casa Matriz, Sucursal Centro, etc." required>
+                    <div class="nexo-form-group" style="margin-bottom: 1rem;">
+                        <label class="nexo-label"><i class="ri-price-tag-3-line"></i> Alias <span class="required">*</span></label>
+                        <input type="text" class="nexo-input" id="aliasSucursal" name="alias" placeholder="Ej: Casa Matriz, Sucursal Centro" required>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="direccionSucursal" class="form-label">Dirección *</label>
-                        <input type="text" class="form-control" id="direccionSucursal" name="direccion" placeholder="Dirección completa de la sucursal" required>
+                    <div class="nexo-form-group">
+                        <label class="nexo-label"><i class="ri-map-pin-line"></i> Dirección <span class="required">*</span></label>
+                        <input type="text" class="nexo-input" id="direccionSucursal" name="direccion" placeholder="Dirección completa" required>
                     </div>
-                    
-                    <!-- Errores -->
-                    <div id="erroresSucursal" class="alert alert-danger" style="display: none;">
-                        <ul id="listaErroresSucursal" class="mb-0"></ul>
+                    <div id="erroresSucursal" class="nexo-alert-errors" style="display: none;">
+                        <ul id="listaErroresSucursal"></ul>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle me-1"></i>Cancelar
-                </button>
-                <button type="button" class="btn btn-primary" onclick="guardarSucursal()">
-                    <i class="bi bi-check-circle me-1"></i>Guardar
-                </button>
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal"><i class="ri-close-line"></i> Cancelar</button>
+                <button type="button" class="nexo-btn nexo-btn-success" onclick="guardarSucursal()"><i class="ri-save-line"></i> Guardar</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ========== MODAL CONFIRMAR ELIMINACIÓN SUCURSAL ========== -->
-<div class="modal fade" id="modalConfirmarEliminarSucursal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirmar Eliminación
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>¿Estás seguro de que deseas eliminar la sucursal <strong id="nombreSucursalEliminar"></strong>?</p>
-                <p class="text-muted small">Esta acción no se puede deshacer.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" onclick="confirmarEliminarSucursal()">
-                    <i class="bi bi-trash me-1"></i>Eliminar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ========== SCRIPTS ========== -->
 <script>
 // Variables globales
 let empresas = [];
@@ -609,25 +655,20 @@ let paginaActual = 1;
 let registrosPorPagina = 25;
 let totalRegistros = 0;
 let totalPaginas = 1;
+let empresaSeleccionadaSucursales = null;
+let sucursalSeleccionada = null;
+let modoEdicionSucursal = false;
 
-// Inicializar cuando jQuery esté disponible
 $(document).ready(function() {
-    console.log('🚀 Inicializando Gestión de Empresas...');
-    
-    // Cargar datos iniciales
+    console.log('🚀 Inicializando Gestión de Empresas NEXO...');
     cargarEmpresas();
     cargarMetricas();
     
     // Eventos de filtros
-    $('#filtroBusqueda').on('keyup', function() {
-        aplicarFiltros();
-    });
+    $('#filtroBusqueda').on('keyup', debounce(aplicarFiltros, 400));
+    $('#filtroEstado, #filtroTipo, #ordenarPor').on('change', aplicarFiltros);
     
-    $('#filtroEstado, #filtroTipo, #ordenarPor').on('change', function() {
-        aplicarFiltros();
-    });
-    
-    // Hacer funciones disponibles globalmente
+    // Hacer funciones globales
     window.abrirModalCrear = abrirModalCrear;
     window.editarEmpresa = editarEmpresa;
     window.eliminarEmpresa = eliminarEmpresa;
@@ -638,302 +679,23 @@ $(document).ready(function() {
     window.limpiarFiltros = limpiarFiltros;
     window.cambiarPagina = cambiarPagina;
     window.cambiarRegistrosPorPagina = cambiarRegistrosPorPagina;
-    
-    // Funciones de sucursales
     window.gestionarSucursales = gestionarSucursales;
     window.abrirModalNuevaSucursal = abrirModalNuevaSucursal;
     window.editarSucursal = editarSucursal;
     window.eliminarSucursal = eliminarSucursal;
     window.guardarSucursal = guardarSucursal;
-    window.confirmarEliminarSucursal = confirmarEliminarSucursal;
     
-    console.log('✅ Gestión de Empresas inicializada');
+    console.log('✅ Gestión de Empresas NEXO inicializada');
 });
 
-// Función para cargar empresas
-function cargarEmpresas() {
-    const params = new URLSearchParams({
-        page: paginaActual,
-        page_size: registrosPorPagina
-    });
-    
-    $.ajax({
-        url: `/empresa_management/lista_empresas/?${params}`,
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                empresas = response.empresas;
-                totalRegistros = response.total_registros;
-                totalPaginas = response.total_paginas;
-                actualizarTabla(empresas);
-                actualizarPaginacion();
-            } else {
-                showErrorAlert('Error', response.error || 'Error al cargar empresas');
-            }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al cargar empresas');
-        }
-    });
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
 }
 
-// Función para cargar métricas
-function cargarMetricas() {
-    $.ajax({
-        url: '/empresa_management/dashboard/',
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                actualizarMetricas(response.metricas);
-            }
-        }
-    });
-}
-
-// Función para actualizar tabla
-function actualizarTabla(empresas) {
-    const tbody = $('#tablaEmpresas tbody');
-    tbody.empty();
-    
-    if (empresas.length === 0) {
-        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron empresas</td></tr>');
-        return;
-    }
-    
-    empresas.forEach(function(empresa) {
-        const fila = `
-            <tr>
-                <td>
-                    <div class="d-flex align-items-center">
-                        <div class="avatar-placeholder me-3">
-                            ${empresa.razon_social ? empresa.razon_social.charAt(0).toUpperCase() : 'E'}
-                        </div>
-                        <div>
-                            <strong>${empresa.razon_social || 'Sin razón social'}</strong>
-                            <br><small class="text-muted">${empresa.nombre_fantasia || ''}</small>
-                        </div>
-                    </div>
-                </td>
-                <td>${empresa.rut || 'Sin RUT'}</td>
-                <td>${empresa.razon_social || 'Sin razón social'}</td>
-                <td>
-                    <span class="tipo-badge">${empresa.get_tipo_display || empresa.tipo}</span>
-                </td>
-                <td>
-                    <span class="badge bg-info">${empresa.num_sucursales || 0}</span>
-                </td>
-                <td>
-                    <span class="badge bg-secondary">${empresa.num_contactos || 0}</span>
-                </td>
-                <td>
-                    <span class="status-badge ${empresa.activo ? 'status-activo' : 'status-inactivo'}">
-                        ${empresa.activo ? 'Activa' : 'Inactiva'}
-                    </span>
-                </td>
-                <td>
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-info btn-action" onclick="verDetalleEmpresa(${empresa.id})" title="Ver Detalle">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-success btn-action" onclick="gestionarSucursales(${empresa.id}, '${empresa.razon_social}')" title="Gestionar Sucursales">
-                            <i class="bi bi-building"></i>
-                        </button>
-                        <button class="btn btn-outline-primary btn-action" onclick="editarEmpresa(${empresa.id})" title="Editar">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-action" onclick="eliminarEmpresa(${empresa.id}, '${empresa.razon_social}')" title="Eliminar">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
-        tbody.append(fila);
-    });
-    
-    $('#contadorEmpresas').text(empresas.length + ' empresas');
-}
-
-// Función para actualizar métricas
-function actualizarMetricas(metricas) {
-    $('#totalEmpresas').text(metricas.total_empresas || 0);
-    $('#empresasActivas').text(metricas.empresas_activas || 0);
-    $('#totalSucursales').text(metricas.total_sucursales || 0);
-    $('#totalContactos').text(metricas.total_contactos || 0);
-}
-
-// Función para actualizar paginación
-function actualizarPaginacion() {
-    const inicio = ((paginaActual - 1) * registrosPorPagina) + 1;
-    const fin = Math.min(paginaActual * registrosPorPagina, totalRegistros);
-    
-    $('#inicioPagina').text(inicio);
-    $('#finPagina').text(fin);
-    $('#totalRegistros').text(totalRegistros);
-    $('#paginaActual').text(paginaActual);
-    $('#totalPaginas').text(totalPaginas);
-    
-    $('#btnAnterior').prop('disabled', paginaActual === 1);
-    $('#btnSiguiente').prop('disabled', paginaActual === totalPaginas);
-}
-
-// Función para cambiar página
-function cambiarPagina(direccion) {
-    if (direccion === 'anterior' && paginaActual > 1) {
-        paginaActual--;
-    } else if (direccion === 'siguiente' && paginaActual < totalPaginas) {
-        paginaActual++;
-    }
-    cargarEmpresas();
-}
-
-// Función para cambiar registros por página
-function cambiarRegistrosPorPagina() {
-    registrosPorPagina = parseInt($('#registrosPorPagina').val());
-    paginaActual = 1;
-    cargarEmpresas();
-}
-
-// Función para abrir modal de creación
-function abrirModalCrear() {
-    modoEdicion = false;
-    $('#modalEmpresaLabel').html('<i class="bi bi-building me-2"></i>Nueva Empresa');
-    $('#formEmpresa')[0].reset();
-    $('#empresaId').val('');
-    $('#erroresFormulario').hide();
-    $('#modalEmpresa').modal('show');
-}
-
-// Función para editar empresa
-function editarEmpresa(empresaId) {
-    $.ajax({
-        url: `/empresa_management/obtener_empresa/${empresaId}/`,
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                const empresa = response.empresa;
-                modoEdicion = true;
-                empresaSeleccionada = empresa;
-                
-                $('#modalEmpresaLabel').html('<i class="bi bi-pencil me-2"></i>Editar Empresa');
-                $('#empresaId').val(empresa.id);
-                $('#rutEmpresa').val(empresa.rut);
-                $('#razonSocial').val(empresa.razon_social);
-                $('#nombreFantasia').val(empresa.nombre_fantasia);
-                $('#tipoEmpresa').val(empresa.tipo);
-                $('#giroComercial').val(empresa.giro_comercial);
-                $('#correoVendedor').val(empresa.correoVendedor || empresa.email || '');
-                $('#correoIntercambio').val(empresa.correoIntercambio || '');
-                $('#correoAdministrador').val(empresa.correoAdministrador || '');
-                $('#contacto1Empresa').val(empresa.contacto1 || empresa.telefono || '');
-                $('#contacto2Empresa').val(empresa.contacto2 || '');
-                $('#actecoEmpresa').val(empresa.acteco || '');
-                $('#direccionEmpresa').val(empresa.direccion);
-                $('#ciudadEmpresa').val(empresa.ciudad);
-                $('#regionEmpresa').val(empresa.region);
-                $('#codigoPostal').val(empresa.codigo_postal);
-                $('#sitioWeb').val(empresa.sitio_web);
-                $('#representanteLegal').val(empresa.representante_legal);
-                $('#erroresFormulario').hide();
-                
-                $('#modalEmpresa').modal('show');
-            } else {
-                showErrorAlert('Error', response.error || 'Error al cargar empresa');
-            }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al cargar empresa');
-        }
-    });
-}
-
-// Función para ver detalle de empresa
-function verDetalleEmpresa(empresaId) {
-    $.ajax({
-        url: `/empresa_management/obtener_empresa/${empresaId}/`,
-        method: 'GET',
-        success: function(response) {
-            if (response.success) {
-                const empresa = response.empresa;
-                const contenido = `
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6 class="text-primary">Información Básica</h6>
-                            <table class="table table-sm">
-                                <tr><td><strong>RUT:</strong></td><td>${empresa.rut || 'No especificado'}</td></tr>
-                                <tr><td><strong>Razón Social:</strong></td><td>${empresa.razon_social || 'No especificada'}</td></tr>
-                                <tr><td><strong>Nombre Fantasía:</strong></td><td>${empresa.nombre_fantasia || 'No especificado'}</td></tr>
-                                <tr><td><strong>Tipo:</strong></td><td><span class="tipo-badge">${empresa.get_tipo_display || empresa.tipo}</span></td></tr>
-                                <tr><td><strong>Giro Comercial:</strong></td><td>${empresa.giro_comercial || 'No especificado'}</td></tr>
-                            </table>
-                        </div>
-                        <div class="col-md-6">
-                            <h6 class="text-primary">Información de Contacto</h6>
-                            <table class="table table-sm">
-                                <tr><td><strong>Correo vendedor:</strong></td><td>${empresa.correoVendedor || empresa.email || 'No especificado'}</td></tr>
-                                <tr><td><strong>Correo intercambio:</strong></td><td>${empresa.correoIntercambio || 'No especificado'}</td></tr>
-                                <tr><td><strong>Correo administrador:</strong></td><td>${empresa.correoAdministrador || 'No especificado'}</td></tr>
-                                <tr><td><strong>Contacto principal:</strong></td><td>${empresa.contacto1 || empresa.telefono || 'No especificado'}</td></tr>
-                                <tr><td><strong>Contacto secundario:</strong></td><td>${empresa.contacto2 || 'No especificado'}</td></tr>
-                                <tr><td><strong>Código Acteco:</strong></td><td>${empresa.acteco || 'No especificado'}</td></tr>
-                                <tr><td><strong>Sitio Web:</strong></td><td>${empresa.sitio_web || 'No especificado'}</td></tr>
-                                <tr><td><strong>Representante Legal:</strong></td><td>${empresa.representante_legal || 'No especificado'}</td></tr>
-                                <tr><td><strong>Estado:</strong></td><td><span class="status-badge ${empresa.activo ? 'status-activo' : 'status-inactivo'}">${empresa.activo ? 'Activa' : 'Inactiva'}</span></td></tr>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-12">
-                            <h6 class="text-primary">Dirección</h6>
-                            <p>${empresa.direccion || 'No especificada'}, ${empresa.ciudad || ''} ${empresa.region || ''} ${empresa.codigo_postal || ''}</p>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-12">
-                            <h6 class="text-primary">Estadísticas</h6>
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-primary">${empresa.num_sucursales || 0}</div>
-                                        <small class="text-muted">Sucursales</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-success">${empresa.num_contactos || 0}</div>
-                                        <small class="text-muted">Contactos</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-info">${empresa.fecha_creacion ? new Date(empresa.fecha_creacion).toLocaleDateString() : 'N/A'}</div>
-                                        <small class="text-muted">Fecha Creación</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-warning">${empresa.fecha_actualizacion ? new Date(empresa.fecha_actualizacion).toLocaleDateString() : 'N/A'}</div>
-                                        <small class="text-muted">Última Actualización</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                $('#contenidoDetalleEmpresa').html(contenido);
-                $('#modalDetalleEmpresa').modal('show');
-            } else {
-                showErrorAlert('Error', response.error || 'Error al cargar detalle de empresa');
-            }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al cargar detalle de empresa');
-        }
-    });
-}
-
-// Función para obtener token CSRF
 function getCSRFToken() {
     const name = 'csrftoken';
     let cookieValue = null;
@@ -950,110 +712,122 @@ function getCSRFToken() {
     return cookieValue;
 }
 
-// Función para guardar empresa
-function guardarEmpresa() {
-    const formData = new FormData($('#formEmpresa')[0]);
-    const data = Object.fromEntries(formData);
-
-    Object.keys(data).forEach(function(key) {
-        if (typeof data[key] === 'string') {
-            data[key] = data[key].trim();
-        }
-    });
-    
-    // Validaciones básicas
-    const errores = [];
-    if (!data.rut) errores.push('El RUT es obligatorio');
-    if (!data.razon_social) errores.push('La razón social es obligatoria');
-    if (!data.tipo) errores.push('El tipo de empresa es obligatorio');
-    
-    if (errores.length > 0) {
-        mostrarErrores(errores);
-        return;
-    }
-    
-    $('#erroresFormulario').hide();
-    $('#listaErrores').empty();
-
-    const url = modoEdicion ? '/empresa_management/editar_empresa/' : '/empresa_management/crear_empresa/';
-    const method = modoEdicion ? 'PUT' : 'POST';
-    
-    $.ajax({
-        url: url,
-        method: method,
-        data: JSON.stringify(data),
-        contentType: 'application/json',
-        headers: {
-            'X-CSRFToken': getCSRFToken()
-        },
-        success: function(response) {
-            if (response.success) {
-                showSuccessAlert(
-                    modoEdicion ? 'Empresa Actualizada' : 'Empresa Creada',
-                    response.message
-                );
-                $('#modalEmpresa').modal('hide');
-                cargarEmpresas();
-            } else {
-                const erroresRespuesta = response.errors || (response.error ? [response.error] : []);
-                mostrarErrores(erroresRespuesta);
-            }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al guardar empresa');
-        }
-    });
-}
-
-// Función para eliminar empresa
-function eliminarEmpresa(empresaId, nombre) {
-    empresaSeleccionada = empresaId;
-    $('#nombreEmpresaEliminar').text(nombre);
-    $('#modalConfirmarEliminar').modal('show');
-}
-
-// Función para confirmar eliminación
-function confirmarEliminar() {
-    $.ajax({
-        url: `/empresa_management/eliminar_empresa/${empresaSeleccionada}/`,
-        method: 'DELETE',
-        headers: {
-            'X-CSRFToken': getCSRFToken()
-        },
-        success: function(response) {
-            if (response.success) {
-                showSuccessAlert('Empresa Eliminada', response.message);
-                $('#modalConfirmarEliminar').modal('hide');
-                cargarEmpresas();
-            } else {
-                showErrorAlert('Error', response.error);
-            }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al eliminar empresa');
-        }
-    });
-}
-
-// Función para aplicar filtros
-function aplicarFiltros() {
-    const busqueda = $('#filtroBusqueda').val();
-    const estado = $('#filtroEstado').val();
-    const tipo = $('#filtroTipo').val();
-    const ordenar = $('#ordenarPor').val();
-    
-    const params = new URLSearchParams({
-        page: 1,
-        page_size: registrosPorPagina,
-        search: busqueda,
-        estado: estado,
-        tipo: tipo,
-        ordenar: ordenar
-    });
-    
+function cargarEmpresas() {
+    const params = new URLSearchParams({ page: paginaActual, page_size: registrosPorPagina });
     $.ajax({
         url: `/empresa_management/lista_empresas/?${params}`,
         method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function(response) {
+            if (response.success) {
+                empresas = response.empresas;
+                totalRegistros = response.total_registros;
+                totalPaginas = response.total_paginas;
+                actualizarTabla(empresas);
+                actualizarPaginacion();
+            } else {
+                showAlert('error', 'Error', response.error || 'Error al cargar empresas');
+            }
+        },
+        error: function() { showAlert('error', 'Error', 'Error de conexión'); }
+    });
+}
+
+function cargarMetricas() {
+    $.ajax({
+        url: '/empresa_management/dashboard/',
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function(response) {
+            if (response.success && response.metricas) {
+                $('#totalEmpresas').text(response.metricas.total_empresas || 0);
+                $('#empresasActivas').text(response.metricas.empresas_activas || 0);
+                $('#totalSucursales').text(response.metricas.total_sucursales || 0);
+                $('#totalContactos').text(response.metricas.total_contactos || 0);
+            }
+        }
+    });
+}
+
+function actualizarTabla(empresas) {
+    const tbody = $('#tablaEmpresas tbody');
+    tbody.empty();
+    
+    if (empresas.length === 0) {
+        tbody.html(`<tr><td colspan="8"><div class="nexo-empty-state"><div class="nexo-empty-icon"><i class="ri-building-line"></i></div><div class="nexo-empty-title">No se encontraron empresas</div><div class="nexo-empty-text">Intenta con otros filtros o crea una nueva empresa</div></div></td></tr>`);
+        return;
+    }
+    
+    empresas.forEach(function(e) {
+        const initial = (e.razon_social || e.nombre || 'E').charAt(0).toUpperCase();
+        const fila = `
+            <tr>
+                <td>
+                    <div class="nexo-company-cell">
+                        <div class="nexo-company-avatar">${initial}</div>
+                        <div>
+                            <div class="nexo-company-name">${e.razon_social || 'Sin razón social'}</div>
+                            <div class="nexo-company-fantasy">${e.nombre_fantasia || ''}</div>
+                        </div>
+                    </div>
+                </td>
+                <td><code style="background: var(--nexo-gray-100); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${e.rut || 'N/A'}</code></td>
+                <td style="color: var(--nexo-gray-700);">${e.razon_social || '-'}</td>
+                <td><span class="nexo-badge ${e.tipo === 'proveedor' ? 'nexo-badge-warning' : 'nexo-badge-info'}">${e.get_tipo_display || e.tipo}</span></td>
+                <td><span class="nexo-badge nexo-badge-primary">${e.num_sucursales || 0}</span></td>
+                <td><span class="nexo-badge nexo-badge-secondary">${e.num_contactos || 0}</span></td>
+                <td><span class="nexo-badge nexo-badge-success">${e.activo ? 'Activa' : 'Inactiva'}</span></td>
+                <td>
+                    <div class="nexo-actions">
+                        <button class="nexo-action-btn view" onclick="verDetalleEmpresa(${e.id})" title="Ver detalle"><i class="ri-eye-line"></i></button>
+                        <button class="nexo-action-btn branches" onclick="gestionarSucursales(${e.id}, '${(e.razon_social || '').replace(/'/g, "\\'")}')" title="Sucursales"><i class="ri-store-2-line"></i></button>
+                        <button class="nexo-action-btn edit" onclick="editarEmpresa(${e.id})" title="Editar"><i class="ri-edit-line"></i></button>
+                        <button class="nexo-action-btn delete" onclick="eliminarEmpresa(${e.id}, '${(e.razon_social || '').replace(/'/g, "\\'")}')" title="Eliminar"><i class="ri-delete-bin-line"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        tbody.append(fila);
+    });
+    $('#contadorEmpresas').text(empresas.length + ' empresas');
+}
+
+function actualizarPaginacion() {
+    const inicio = totalRegistros > 0 ? ((paginaActual - 1) * registrosPorPagina) + 1 : 0;
+    const fin = Math.min(paginaActual * registrosPorPagina, totalRegistros);
+    $('#inicioPagina').text(inicio);
+    $('#finPagina').text(fin);
+    $('#totalRegistros').text(totalRegistros);
+    $('#paginaActual').text(paginaActual);
+    $('#totalPaginas').text(totalPaginas || 1);
+    $('#btnAnterior').prop('disabled', paginaActual === 1);
+    $('#btnSiguiente').prop('disabled', paginaActual >= totalPaginas);
+}
+
+function cambiarPagina(dir) {
+    if (dir === 'anterior' && paginaActual > 1) paginaActual--;
+    else if (dir === 'siguiente' && paginaActual < totalPaginas) paginaActual++;
+    cargarEmpresas();
+}
+
+function cambiarRegistrosPorPagina() {
+    registrosPorPagina = parseInt($('#registrosPorPagina').val());
+    paginaActual = 1;
+    cargarEmpresas();
+}
+
+function aplicarFiltros() {
+    const params = new URLSearchParams({
+        page: 1, page_size: registrosPorPagina,
+        search: $('#filtroBusqueda').val(),
+        estado: $('#filtroEstado').val(),
+        tipo: $('#filtroTipo').val(),
+        ordenar: $('#ordenarPor').val()
+    });
+    $.ajax({
+        url: `/empresa_management/lista_empresas/?${params}`,
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
         success: function(response) {
             if (response.success) {
                 empresas = response.empresas;
@@ -1062,17 +836,11 @@ function aplicarFiltros() {
                 paginaActual = 1;
                 actualizarTabla(empresas);
                 actualizarPaginacion();
-            } else {
-                showErrorAlert('Error', response.error || 'Error al aplicar filtros');
             }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al aplicar filtros');
         }
     });
 }
 
-// Función para limpiar filtros
 function limpiarFiltros() {
     $('#filtroBusqueda').val('');
     $('#filtroEstado').val('');
@@ -1082,141 +850,226 @@ function limpiarFiltros() {
     cargarEmpresas();
 }
 
-// Función para exportar empresas
-function exportarEmpresas() {
-    const busqueda = $('#filtroBusqueda').val();
-    const estado = $('#filtroEstado').val();
-    const tipo = $('#filtroTipo').val();
-    
-    const params = new URLSearchParams({
-        search: busqueda,
-        estado: estado,
-        tipo: tipo
-    });
-    
-    window.open(`/empresa_management/exportar_empresas/?${params}`, '_blank');
+function abrirModalCrear() {
+    modoEdicion = false;
+    $('#modalEmpresaLabel').html('<i class="ri-building-line"></i> Nueva Empresa');
+    $('#formEmpresa')[0].reset();
+    $('#empresaId').val('');
+    $('#erroresFormulario').hide();
+    $('#modalEmpresa').modal('show');
 }
 
-// Función para mostrar errores
-function mostrarErrores(errores) {
-    const lista = $('#listaErrores');
-    lista.empty();
-    
-    const mensajes = (errores || []).filter(Boolean);
-    if (mensajes.length === 0) {
-        mensajes.push('Ocurrió un error desconocido. Intente nuevamente.');
-    }
-
-    mensajes.forEach(function(error) {
-        lista.append(`<li>${error}</li>`);
-    });
-    
-    $('#erroresFormulario').show();
-}
-
-// Funciones de utilidad para alertas
-function showSuccessAlert(title, message) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'success',
-            title: title,
-            text: message
-        });
-    } else {
-        alert(`${title}: ${message}`);
-    }
-}
-
-function showErrorAlert(title, message) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'error',
-            title: title,
-            text: message
-        });
-    } else {
-        alert(`${title}: ${message}`);
-    }
-}
-
-// ========== FUNCIONES PARA GESTIÓN DE SUCURSALES ==========
-
-// Variables globales para sucursales
-let empresaSeleccionadaSucursales = null;
-let sucursalSeleccionada = null;
-let modoEdicionSucursal = false;
-
-// Función para gestionar sucursales de una empresa
-function gestionarSucursales(empresaId, empresaNombre) {
-    empresaSeleccionadaSucursales = empresaId;
-    $('#empresaSucursalesNombre').text(empresaNombre);
-    $('#empresaSucursalesId').text(empresaId);
-    $('#modalSucursales').modal('show');
-    cargarSucursales(empresaId);
-}
-
-// Función para cargar sucursales de una empresa
-function cargarSucursales(empresaId) {
+function editarEmpresa(id) {
     $.ajax({
-        url: `/empresa_management/empresas/${empresaId}/sucursales/`,
+        url: `/empresa_management/obtener_empresa/${id}/`,
         method: 'GET',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        },
         success: function(response) {
             if (response.success) {
-                actualizarTablaSucursales(response.sucursales);
+                const e = response.empresa;
+                modoEdicion = true;
+                empresaSeleccionada = e;
+                $('#modalEmpresaLabel').html('<i class="ri-edit-line"></i> Editar Empresa');
+                $('#empresaId').val(e.id);
+                $('#rutEmpresa').val(e.rut);
+                $('#razonSocial').val(e.razon_social);
+                $('#nombreFantasia').val(e.nombre_fantasia);
+                $('#tipoEmpresa').val(e.tipo);
+                $('#giroComercial').val(e.giro_comercial);
+                $('#correoVendedor').val(e.correoVendedor || e.email || '');
+                $('#correoIntercambio').val(e.correoIntercambio || '');
+                $('#correoAdministrador').val(e.correoAdministrador || '');
+                $('#contacto1Empresa').val(e.contacto1 || e.telefono || '');
+                $('#contacto2Empresa').val(e.contacto2 || '');
+                $('#actecoEmpresa').val(e.acteco || '');
+                $('#direccionEmpresa').val(e.direccion);
+                $('#ciudadEmpresa').val(e.ciudad);
+                $('#regionEmpresa').val(e.region);
+                $('#codigoPostal').val(e.codigo_postal);
+                $('#sitioWeb').val(e.sitio_web);
+                $('#representanteLegal').val(e.representante_legal);
+                $('#erroresFormulario').hide();
+                $('#modalEmpresa').modal('show');
             } else {
-                showErrorAlert('Error', response.error || 'Error al cargar sucursales');
+                showAlert('error', 'Error', response.error);
             }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al cargar sucursales');
         }
     });
 }
 
-// Función para actualizar la tabla de sucursales
-function actualizarTablaSucursales(sucursales) {
-    const tbody = $('#tablaSucursales tbody');
-    tbody.empty();
+function guardarEmpresa() {
+    const formData = new FormData($('#formEmpresa')[0]);
+    const data = Object.fromEntries(formData);
+    Object.keys(data).forEach(k => { if (typeof data[k] === 'string') data[k] = data[k].trim(); });
     
-    if (sucursales.length === 0) {
-        tbody.html(`
-            <tr>
-                <td colspan="3" class="text-center text-muted">
-                    <i class="bi bi-building"></i> No hay sucursales registradas
-                </td>
-            </tr>
-        `);
-        return;
-    }
+    const errores = [];
+    if (!data.rut) errores.push('El RUT es obligatorio');
+    if (!data.razon_social) errores.push('La razón social es obligatoria');
+    if (!data.tipo) errores.push('El tipo es obligatorio');
     
-    sucursales.forEach(function(sucursal) {
-        const fila = `
-            <tr>
-                <td><strong>${sucursal.alias}</strong></td>
-                <td>${sucursal.direccion}</td>
-                <td>
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-primary btn-sm" onclick="editarSucursal(${sucursal.id})" title="Editar">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-sm" onclick="eliminarSucursal(${sucursal.id}, '${sucursal.alias}')" title="Eliminar">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
-        tbody.append(fila);
+    if (errores.length > 0) { mostrarErrores(errores); return; }
+    
+    $('#erroresFormulario').hide();
+    const url = modoEdicion ? '/empresa_management/editar_empresa/' : '/empresa_management/crear_empresa/';
+    
+    $.ajax({
+        url: url,
+        method: modoEdicion ? 'PUT' : 'POST',
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        success: function(response) {
+            if (response.success) {
+                showAlert('success', modoEdicion ? 'Actualizada' : 'Creada', response.message);
+                $('#modalEmpresa').modal('hide');
+                cargarEmpresas();
+                cargarMetricas();
+            } else {
+                mostrarErrores(response.errors || [response.error]);
+            }
+        },
+        error: function() { showAlert('error', 'Error', 'Error de conexión'); }
     });
 }
 
-// Función para abrir modal de nueva sucursal
+function eliminarEmpresa(id, nombre) {
+    Swal.fire({
+        title: '¿Eliminar empresa?',
+        html: `<p>Vas a eliminar <strong>${nombre}</strong></p><p style="color: var(--nexo-error); font-size: 0.85rem;"><i class="ri-error-warning-line"></i> Esta acción eliminará sucursales y contactos asociados</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: '<i class="ri-delete-bin-line"></i> Eliminar',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/empresa_management/eliminar_empresa/${id}/`,
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                success: function(response) {
+                    if (response.success) {
+                        showAlert('success', 'Eliminada', response.message);
+                        cargarEmpresas();
+                        cargarMetricas();
+                    } else {
+                        showAlert('error', 'Error', response.error);
+                    }
+                }
+            });
+        }
+    });
+}
+
+function verDetalleEmpresa(id) {
+    $.ajax({
+        url: `/empresa_management/obtener_empresa/${id}/`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const e = response.empresa;
+                const html = `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+                        <div>
+                            <h6 style="color: var(--nexo-primary); font-weight: 700; margin-bottom: 0.75rem;"><i class="ri-information-line"></i> Información Básica</h6>
+                            <table style="width: 100%; font-size: 0.875rem;">
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">RUT:</td><td style="font-weight: 600;">${e.rut || '-'}</td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Razón Social:</td><td style="font-weight: 600;">${e.razon_social || '-'}</td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Nombre Fantasía:</td><td>${e.nombre_fantasia || '-'}</td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Tipo:</td><td><span class="nexo-badge nexo-badge-info">${e.get_tipo_display || e.tipo}</span></td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Giro:</td><td>${e.giro_comercial || '-'}</td></tr>
+                            </table>
+                        </div>
+                        <div>
+                            <h6 style="color: var(--nexo-primary); font-weight: 700; margin-bottom: 0.75rem;"><i class="ri-mail-line"></i> Contacto</h6>
+                            <table style="width: 100%; font-size: 0.875rem;">
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Correo Vend:</td><td>${e.correoVendedor || e.email || '-'}</td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Correo Int:</td><td>${e.correoIntercambio || '-'}</td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Correo Admin:</td><td>${e.correoAdministrador || '-'}</td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Contacto 1:</td><td>${e.contacto1 || e.telefono || '-'}</td></tr>
+                                <tr><td style="color: var(--nexo-gray-500); padding: 0.375rem 0;">Contacto 2:</td><td>${e.contacto2 || '-'}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1.5rem;">
+                        <h6 style="color: var(--nexo-primary); font-weight: 700; margin-bottom: 0.75rem;"><i class="ri-map-pin-line"></i> Dirección</h6>
+                        <p style="color: var(--nexo-gray-700);">${e.direccion || 'Sin dirección'}, ${e.ciudad || ''} ${e.region || ''}</p>
+                    </div>
+                    <div style="margin-top: 1.5rem; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;">
+                        <div style="background: var(--nexo-primary-light); padding: 1rem; border-radius: var(--nexo-radius-md);"><div style="font-size: 1.5rem; font-weight: 700; color: var(--nexo-primary);">${e.num_sucursales || 0}</div><div style="font-size: 0.75rem; color: var(--nexo-gray-500);">Sucursales</div></div>
+                        <div style="background: rgba(0,212,170,0.1); padding: 1rem; border-radius: var(--nexo-radius-md);"><div style="font-size: 1.5rem; font-weight: 700; color: var(--nexo-success);">${e.num_contactos || 0}</div><div style="font-size: 0.75rem; color: var(--nexo-gray-500);">Contactos</div></div>
+                        <div style="background: rgba(0,102,255,0.1); padding: 1rem; border-radius: var(--nexo-radius-md);"><div style="font-size: 0.9rem; font-weight: 600; color: var(--nexo-info);">${e.acteco || '-'}</div><div style="font-size: 0.75rem; color: var(--nexo-gray-500);">Acteco</div></div>
+                        <div style="background: rgba(255,176,32,0.1); padding: 1rem; border-radius: var(--nexo-radius-md);"><div style="font-size: 1.5rem; font-weight: 700; color: var(--nexo-warning);">${e.activo ? '✓' : '✗'}</div><div style="font-size: 0.75rem; color: var(--nexo-gray-500);">Estado</div></div>
+                    </div>
+                `;
+                $('#contenidoDetalleEmpresa').html(html);
+                $('#modalDetalleEmpresa').modal('show');
+            }
+        }
+    });
+}
+
+function exportarEmpresas() {
+    const params = new URLSearchParams({
+        search: $('#filtroBusqueda').val(),
+        estado: $('#filtroEstado').val(),
+        tipo: $('#filtroTipo').val()
+    });
+    window.open(`/empresa_management/exportar_empresas/?${params}`, '_blank');
+}
+
+function mostrarErrores(errores) {
+    const lista = $('#listaErrores');
+    lista.empty();
+    (errores || ['Error desconocido']).forEach(e => lista.append(`<li>${e}</li>`));
+    $('#erroresFormulario').show();
+}
+
+// ========== SUCURSALES ==========
+function gestionarSucursales(id, nombre) {
+    empresaSeleccionadaSucursales = id;
+    $('#empresaSucursalesNombre').text(nombre);
+    $('#empresaSucursalesId').text(id);
+    $('#modalSucursales').modal('show');
+    cargarSucursalesEmpresa(id);
+}
+
+function cargarSucursalesEmpresa(id) {
+    $.ajax({
+        url: `/empresa_management/empresas/${id}/sucursales/`,
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        success: function(response) {
+            if (response.success) {
+                const tbody = $('#tablaSucursales tbody');
+                tbody.empty();
+                if (response.sucursales.length === 0) {
+                    tbody.html('<tr><td colspan="3" style="text-align: center; padding: 2rem; color: var(--nexo-gray-500);"><i class="ri-store-line"></i> No hay sucursales</td></tr>');
+                    return;
+                }
+                response.sucursales.forEach(s => {
+                    tbody.append(`
+                        <tr>
+                            <td><strong style="color: var(--nexo-gray-900);"><i class="ri-store-2-fill" style="color: var(--nexo-accent);"></i> ${s.alias}</strong></td>
+                            <td style="color: var(--nexo-gray-500);"><i class="ri-map-pin-line" style="color: var(--nexo-warning);"></i> ${s.direccion}</td>
+                            <td>
+                                <div class="nexo-actions">
+                                    <button class="nexo-action-btn edit" onclick="editarSucursal(${s.id})" title="Editar"><i class="ri-edit-line"></i></button>
+                                    <button class="nexo-action-btn delete" onclick="eliminarSucursal(${s.id}, '${s.alias.replace(/'/g, "\\'")}')" title="Eliminar"><i class="ri-delete-bin-line"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                    `);
+                });
+            }
+        }
+    });
+}
+
 function abrirModalNuevaSucursal() {
     modoEdicionSucursal = false;
-    $('#modalSucursalLabel').html('<i class="bi bi-building me-2"></i>Nueva Sucursal');
+    $('#modalSucursalLabel').html('<i class="ri-store-line"></i> Nueva Sucursal');
     $('#formSucursal')[0].reset();
     $('#sucursalId').val('');
     $('#sucursalEmpresaId').val(empresaSeleccionadaSucursales);
@@ -1224,18 +1077,14 @@ function abrirModalNuevaSucursal() {
     $('#modalSucursal').modal('show');
 }
 
-// Función para editar sucursal
-function editarSucursal(sucursalId) {
-    // Para simplicidad, vamos a usar los datos que ya tenemos en la tabla
-    // En una implementación más robusta, harías una llamada AJAX para obtener los datos
-    const fila = $(`button[onclick="editarSucursal(${sucursalId})"]`).closest('tr');
-    const alias = fila.find('td:first strong').text();
-    const direccion = fila.find('td:nth-child(2)').text();
-    
+function editarSucursal(id) {
+    const fila = $(`button[onclick="editarSucursal(${id})"]`).closest('tr');
+    const alias = fila.find('td:first strong').text().trim();
+    const direccion = fila.find('td:nth-child(2)').text().trim();
     modoEdicionSucursal = true;
-    sucursalSeleccionada = sucursalId;
-    $('#modalSucursalLabel').html('<i class="bi bi-pencil me-2"></i>Editar Sucursal');
-    $('#sucursalId').val(sucursalId);
+    sucursalSeleccionada = id;
+    $('#modalSucursalLabel').html('<i class="ri-edit-line"></i> Editar Sucursal');
+    $('#sucursalId').val(id);
     $('#sucursalEmpresaId').val(empresaSeleccionadaSucursales);
     $('#aliasSucursal').val(alias);
     $('#direccionSucursal').val(direccion);
@@ -1243,95 +1092,93 @@ function editarSucursal(sucursalId) {
     $('#modalSucursal').modal('show');
 }
 
-// Función para eliminar sucursal
-function eliminarSucursal(sucursalId, alias) {
-    sucursalSeleccionada = sucursalId;
-    $('#nombreSucursalEliminar').text(alias);
-    $('#modalConfirmarEliminarSucursal').modal('show');
-}
-
-// Función para confirmar eliminación de sucursal
-function confirmarEliminarSucursal() {
-    $.ajax({
-        url: `/empresa_management/sucursales/${sucursalSeleccionada}/eliminar/`,
-        method: 'DELETE',
-        headers: {
-            'X-CSRFToken': getCSRFToken()
-        },
-        success: function(response) {
-            if (response.success) {
-                showSuccessAlert('Sucursal Eliminada', response.message);
-                $('#modalConfirmarEliminarSucursal').modal('hide');
-                cargarSucursales(empresaSeleccionadaSucursales);
-                // Actualizar contador en la tabla principal
-                cargarEmpresas();
-            } else {
-                showErrorAlert('Error', response.error);
-            }
-        },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al eliminar sucursal');
+function eliminarSucursal(id, alias) {
+    Swal.fire({
+        title: '¿Eliminar sucursal?',
+        html: `<p>Vas a eliminar <strong>${alias}</strong></p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonColor: '#8A8A9A',
+        confirmButtonText: 'Eliminar',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/empresa_management/sucursales/${id}/eliminar/`,
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': getCSRFToken() },
+                success: function(response) {
+                    if (response.success) {
+                        showAlert('success', 'Eliminada', response.message);
+                        cargarSucursalesEmpresa(empresaSeleccionadaSucursales);
+                        cargarEmpresas();
+                        cargarMetricas();
+                    } else {
+                        showAlert('error', 'Error', response.error);
+                    }
+                }
+            });
         }
     });
 }
 
-// Función para guardar sucursal (crear o editar)
 function guardarSucursal() {
     const formData = new FormData($('#formSucursal')[0]);
     const data = Object.fromEntries(formData);
     
-    // Validaciones básicas
     const errores = [];
-    if (!data.alias) errores.push('El alias de la sucursal es obligatorio');
-    if (!data.direccion) errores.push('La dirección de la sucursal es obligatoria');
+    if (!data.alias) errores.push('El alias es obligatorio');
+    if (!data.direccion) errores.push('La dirección es obligatoria');
     
     if (errores.length > 0) {
-        mostrarErroresSucursal(errores);
+        const lista = $('#listaErroresSucursal');
+        lista.empty();
+        errores.forEach(e => lista.append(`<li>${e}</li>`));
+        $('#erroresSucursal').show();
         return;
     }
     
     const url = modoEdicionSucursal ? 
         `/empresa_management/sucursales/${sucursalSeleccionada}/editar/` : 
         `/empresa_management/empresas/${empresaSeleccionadaSucursales}/sucursales/crear/`;
-    const method = modoEdicionSucursal ? 'PUT' : 'POST';
     
     $.ajax({
         url: url,
-        method: method,
+        method: modoEdicionSucursal ? 'PUT' : 'POST',
         data: JSON.stringify(data),
         contentType: 'application/json',
-        headers: {
-            'X-CSRFToken': getCSRFToken()
-        },
+        headers: { 'X-CSRFToken': getCSRFToken() },
         success: function(response) {
             if (response.success) {
-                showSuccessAlert(
-                    modoEdicionSucursal ? 'Sucursal Actualizada' : 'Sucursal Creada',
-                    response.message
-                );
+                showAlert('success', modoEdicionSucursal ? 'Actualizada' : 'Creada', response.message);
                 $('#modalSucursal').modal('hide');
-                cargarSucursales(empresaSeleccionadaSucursales);
-                // Actualizar contador en la tabla principal
+                cargarSucursalesEmpresa(empresaSeleccionadaSucursales);
                 cargarEmpresas();
+                cargarMetricas();
             } else {
-                mostrarErroresSucursal([response.error]);
+                const lista = $('#listaErroresSucursal');
+                lista.empty();
+                lista.append(`<li>${response.error}</li>`);
+                $('#erroresSucursal').show();
             }
         },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al guardar sucursal');
-        }
+        error: function() { showAlert('error', 'Error', 'Error de conexión'); }
     });
 }
 
-// Función para mostrar errores de sucursal
-function mostrarErroresSucursal(errores) {
-    const lista = $('#listaErroresSucursal');
-    lista.empty();
-    
-    errores.forEach(function(error) {
-        lista.append(`<li>${error}</li>`);
-    });
-    
-    $('#erroresSucursal').show();
+// Función de alertas
+function showAlert(type, title, message) {
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: type,
+            title: title,
+            text: message,
+            confirmButtonColor: type === 'success' ? '#00D4AA' : type === 'error' ? '#FF4D4D' : '#0066FF'
+        });
+    } else {
+        alert(`${title}: ${message}`);
+    }
 }
-</script> 
+</script>

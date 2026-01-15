@@ -4,160 +4,806 @@
 {% include '../../layout/menu.html' %}
 {% csrf_token %}
 
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<!-- NEXO Design System - Gestión de Sucursales -->
 <style>
-.sucursal-card {
-    transition: all 0.3s ease;
-    border-left: 4px solid #0ab39c;
-}
+    /* ===== Variables Nexo ===== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+    }
 
-.sucursal-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
+    /* ===== Page Container ===== */
+    .nexo-page {
+        background: var(--nexo-gray-100);
+        min-height: calc(100vh - 150px);
+    }
 
-.sucursal-inactive {
-    border-left-color: #dc3545;
-    opacity: 0.7;
-}
+    /* ===== Page Header ===== */
+    .nexo-page-header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
 
-.badge-activa {
-    background-color: #0ab39c;
-}
+    .nexo-page-title {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        margin: 0;
+    }
 
-.badge-inactiva {
-    background-color: #dc3545;
-}
+    .nexo-page-title-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        border-radius: var(--nexo-radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
 
-.loading-spinner {
-    display: inline-block;
-    width: 1rem;
-    height: 1rem;
-    border: 0.2em solid currentColor;
-    border-right-color: transparent;
-    border-radius: 50%;
-    animation: spinner-border 0.75s linear infinite;
-}
+    .nexo-page-subtitle {
+        color: var(--nexo-gray-500);
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+
+    /* ===== Stats Cards ===== */
+    .nexo-stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .nexo-stat-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        box-shadow: var(--nexo-shadow-sm);
+        transition: all 0.2s ease;
+    }
+
+    .nexo-stat-card:hover {
+        box-shadow: var(--nexo-shadow-md);
+        transform: translateY(-2px);
+    }
+
+    .nexo-stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--nexo-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .nexo-stat-icon.primary {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    .nexo-stat-icon.success {
+        background: rgba(0, 212, 170, 0.1);
+        color: var(--nexo-success);
+    }
+
+    .nexo-stat-icon.warning {
+        background: rgba(255, 176, 32, 0.1);
+        color: var(--nexo-warning);
+    }
+
+    .nexo-stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        line-height: 1;
+    }
+
+    .nexo-stat-label {
+        font-size: 0.8rem;
+        color: var(--nexo-gray-500);
+        margin-top: 0.25rem;
+    }
+
+    /* ===== Main Card ===== */
+    .nexo-card {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-xl);
+        box-shadow: var(--nexo-shadow-sm);
+        overflow: hidden;
+    }
+
+    .nexo-card-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        background: linear-gradient(to right, var(--nexo-white), var(--nexo-gray-100));
+    }
+
+    .nexo-card-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0;
+    }
+
+    .nexo-card-title i {
+        color: var(--nexo-primary);
+    }
+
+    .nexo-card-body {
+        padding: 1.5rem;
+    }
+
+    /* ===== Search & Actions Bar ===== */
+    .nexo-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .nexo-search-box {
+        position: relative;
+        flex: 1;
+        min-width: 250px;
+        max-width: 400px;
+    }
+
+    .nexo-search-box input {
+        width: 100%;
+        padding: 0.625rem 1rem 0.625rem 2.5rem;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+        background: var(--nexo-white);
+    }
+
+    .nexo-search-box input:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px var(--nexo-primary-light);
+    }
+
+    .nexo-search-box i {
+        position: absolute;
+        left: 0.875rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        border-radius: var(--nexo-radius-md);
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+
+    .nexo-btn-primary {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: white;
+    }
+
+    .nexo-btn-primary:hover {
+        box-shadow: 0 4px 15px rgba(0, 102, 255, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .nexo-btn-success {
+        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B894 100%);
+        color: white;
+    }
+
+    .nexo-btn-success:hover {
+        box-shadow: 0 4px 15px rgba(0, 212, 170, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .nexo-btn-outline {
+        background: transparent;
+        border: 2px solid var(--nexo-gray-300);
+        color: var(--nexo-gray-700);
+    }
+
+    .nexo-btn-outline:hover {
+        border-color: var(--nexo-primary);
+        color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+
+    /* ===== Table ===== */
+    .nexo-table-wrapper {
+        overflow-x: auto;
+    }
+
+    .nexo-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .nexo-table thead th {
+        background: var(--nexo-gray-100);
+        padding: 0.875rem 1rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--nexo-gray-500);
+        border-bottom: 2px solid var(--nexo-gray-300);
+        text-align: left;
+    }
+
+    .nexo-table tbody tr {
+        transition: background 0.15s ease;
+    }
+
+    .nexo-table tbody tr:hover {
+        background: var(--nexo-primary-light);
+    }
+
+    .nexo-table tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        color: var(--nexo-gray-700);
+        font-size: 0.875rem;
+    }
+
+    .nexo-table .td-alias {
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+    }
+
+    .nexo-table .td-alias i {
+        color: var(--nexo-accent);
+        margin-right: 0.5rem;
+    }
+
+    .nexo-table .td-direccion {
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-table .td-direccion i {
+        color: var(--nexo-warning);
+        margin-right: 0.375rem;
+    }
+
+    .nexo-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.625rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        border-radius: var(--nexo-radius-sm);
+        text-transform: uppercase;
+    }
+
+    .nexo-badge-info {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    /* ===== Action Buttons ===== */
+    .nexo-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .nexo-action-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--nexo-radius-md);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+    }
+
+    .nexo-action-btn.edit {
+        background: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    .nexo-action-btn.edit:hover {
+        background: var(--nexo-primary);
+        color: white;
+    }
+
+    .nexo-action-btn.delete {
+        background: rgba(255, 77, 77, 0.1);
+        color: var(--nexo-error);
+    }
+
+    .nexo-action-btn.delete:hover {
+        background: var(--nexo-error);
+        color: white;
+    }
+
+    /* ===== Empty State ===== */
+    .nexo-empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+    }
+
+    .nexo-empty-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--nexo-gray-100);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        font-size: 2rem;
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-empty-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+        margin-bottom: 0.5rem;
+    }
+
+    .nexo-empty-text {
+        color: var(--nexo-gray-500);
+        font-size: 0.875rem;
+    }
+
+    /* ===== Pagination ===== */
+    .nexo-pagination {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--nexo-gray-300);
+        margin-top: 1rem;
+    }
+
+    .nexo-pagination-info {
+        font-size: 0.8rem;
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-pagination-list {
+        display: flex;
+        gap: 0.25rem;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .nexo-pagination-list li a,
+    .nexo-pagination-list li span {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 0.5rem;
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.15s ease;
+        color: var(--nexo-gray-700);
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-pagination-list li a:hover {
+        background: var(--nexo-primary-light);
+        border-color: var(--nexo-primary);
+        color: var(--nexo-primary);
+    }
+
+    .nexo-pagination-list li.active a {
+        background: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+        color: white;
+    }
+
+    .nexo-pagination-list li.disabled span {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* ===== Modal ===== */
+    .nexo-modal .modal-content {
+        border: none;
+        border-radius: var(--nexo-radius-xl);
+        overflow: hidden;
+        box-shadow: var(--nexo-shadow-lg);
+    }
+
+    .nexo-modal .modal-header {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D44 100%);
+        color: white;
+        padding: 1.25rem 1.5rem;
+        border: none;
+    }
+
+    .nexo-modal .modal-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #FFFFFF;
+    }
+
+    .nexo-modal .modal-title i {
+        color: var(--nexo-accent);
+    }
+
+    .nexo-modal .btn-close {
+        filter: brightness(0) invert(1);
+        opacity: 0.7;
+    }
+
+    .nexo-modal .btn-close:hover {
+        opacity: 1;
+    }
+
+    .nexo-modal .modal-body {
+        padding: 1.5rem;
+    }
+
+    .nexo-modal .modal-footer {
+        padding: 1rem 1.5rem;
+        background: var(--nexo-gray-100);
+        border-top: 1px solid var(--nexo-gray-300);
+        gap: 0.75rem;
+    }
+
+    /* ===== Form ===== */
+    .nexo-form-group {
+        margin-bottom: 1.25rem;
+    }
+
+    .nexo-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        margin-bottom: 0.5rem;
+    }
+
+    .nexo-label i {
+        color: var(--nexo-primary);
+    }
+
+    .nexo-label .required {
+        color: var(--nexo-error);
+    }
+
+    .nexo-input {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        background: var(--nexo-white);
+    }
+
+    .nexo-input:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px var(--nexo-primary-light);
+    }
+
+    .nexo-input::placeholder {
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-input-hint {
+        font-size: 0.75rem;
+        color: var(--nexo-gray-500);
+        margin-top: 0.375rem;
+    }
+
+    /* ===== Loading ===== */
+    .nexo-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem;
+    }
+
+    .nexo-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--nexo-gray-300);
+        border-top-color: var(--nexo-primary);
+        border-radius: 50%;
+        animation: nexo-spin 0.8s linear infinite;
+    }
+
+    @keyframes nexo-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .nexo-loading-text {
+        margin-top: 1rem;
+        color: var(--nexo-gray-500);
+        font-size: 0.875rem;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+        .nexo-page-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .nexo-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .nexo-search-box {
+            max-width: none;
+        }
+
+        .nexo-stats-row {
+            grid-template-columns: 1fr;
+        }
+
+        .nexo-table thead th,
+        .nexo-table tbody td {
+            padding: 0.75rem;
+        }
+
+        .nexo-pagination {
+            flex-direction: column;
+            align-items: center;
+        }
+    }
+
+    /* ===== Select2 NEXO Styles ===== */
+    .select2-container--default .select2-selection--single {
+        height: 48px;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.625rem 1rem;
+        background-color: var(--nexo-white);
+        transition: all 0.2s ease;
+    }
+
+    .select2-container--default .select2-selection--single:hover {
+        border-color: var(--nexo-primary);
+    }
+
+    .select2-container--default.select2-container--focus .select2-selection--single {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+        outline: none;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 26px;
+        padding-left: 0;
+        color: var(--nexo-gray-900);
+        font-size: 0.9375rem;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 46px;
+        right: 10px;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow b {
+        border-color: var(--nexo-gray-500) transparent transparent transparent;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__placeholder {
+        color: var(--nexo-gray-500);
+    }
+
+    .select2-dropdown {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        box-shadow: var(--nexo-shadow-lg);
+        overflow: hidden;
+    }
+
+    .select2-container--default .select2-search--dropdown .select2-search__field {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.75rem 1rem;
+        font-size: 0.9375rem;
+    }
+
+    .select2-container--default .select2-search--dropdown .select2-search__field:focus {
+        border-color: var(--nexo-primary);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    .select2-container--default .select2-results__option {
+        padding: 0.75rem 1rem;
+        font-size: 0.9375rem;
+    }
+
+    .select2-container--default .select2-results__option--highlighted[aria-selected] {
+        background-color: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    .select2-container--default .select2-results__option[aria-selected=true] {
+        background-color: var(--nexo-primary-light);
+        color: var(--nexo-primary);
+    }
+
+    .select2-container {
+        width: 100% !important;
+    }
 </style>
 
-<div class="page-content">
+<div class="page-content nexo-page">
     <div class="container-fluid">
         
-        <!-- Título de página -->
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">
-                        <i class="ri-building-2-line text-primary me-2"></i>
+        <!-- Page Header -->
+        <div class="nexo-page-header">
+            <div>
+                <h1 class="nexo-page-title">
+                    <div class="nexo-page-title-icon">
+                        <i class="ri-store-2-fill"></i>
+                    </div>
+                    <div>
                         Gestión de Sucursales
-                    </h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="javascript: void(0);">Configuración</a></li>
-                            <li class="breadcrumb-item active">Gestión de Sucursales</li>
-                        </ol>
+                        <div class="nexo-page-subtitle">Administra las sucursales de tu empresa</div>
+                    </div>
+                </h1>
+            </div>
+            {% if puede_crear %}
+            <button type="button" class="nexo-btn nexo-btn-success" id="btnNuevaSucursal">
+                <i class="ri-add-line"></i>
+                Nueva Sucursal
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="nexo-stats-row">
+            <div class="nexo-stat-card">
+                <div class="nexo-stat-icon primary">
+                    <i class="ri-building-4-line"></i>
+                </div>
+                <div>
+                    <div class="nexo-stat-value" id="totalSucursales">0</div>
+                    <div class="nexo-stat-label">Total Sucursales</div>
+                </div>
+            </div>
+            <div class="nexo-stat-card">
+                <div class="nexo-stat-icon success">
+                    <i class="ri-building-2-fill"></i>
+                </div>
+                <div>
+                    <div class="nexo-stat-value">{{ empresa.nombre|truncatechars:15 }}</div>
+                    <div class="nexo-stat-label">Empresa Actual</div>
+                </div>
+            </div>
+            {% if empresa.rut %}
+            <div class="nexo-stat-card">
+                <div class="nexo-stat-icon warning">
+                    <i class="ri-file-text-line"></i>
+                </div>
+                <div>
+                    <div class="nexo-stat-value">{{ empresa.rut }}</div>
+                    <div class="nexo-stat-label">RUT Empresa</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Main Card -->
+        <div class="nexo-card">
+            <div class="nexo-card-header">
+                <h2 class="nexo-card-title">
+                    <i class="ri-list-check-2"></i>
+                    Lista de Sucursales
+                </h2>
+                <div class="nexo-toolbar">
+                    <div class="nexo-search-box">
+                        <i class="ri-search-line"></i>
+                        <input type="text" id="searchInput" placeholder="Buscar por alias o dirección...">
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Información de empresa -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="alert alert-info">
-                    <i class="ri-information-line me-2"></i>
-                    <strong>Empresa:</strong> {{ empresa.nombre }}
-                    {% if empresa.rut %}
-                    <span class="ms-3">
-                        <i class="ri-file-text-line me-1"></i>
-                        <strong>RUT:</strong> {{ empresa.rut }}
-                    </span>
-                    {% endif %}
+            
+            <div class="nexo-card-body">
+                <div class="nexo-table-wrapper">
+                    <table class="nexo-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Sucursal</th>
+                                <th style="width: 40%;">Dirección</th>
+                                <th style="width: 20%;">Empresa</th>
+                                <th style="width: 15%; text-align: right;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaSucursales">
+                            <tr id="loadingRow">
+                                <td colspan="4">
+                                    <div class="nexo-loading">
+                                        <div class="nexo-spinner"></div>
+                                        <div class="nexo-loading-text">Cargando sucursales...</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-        </div>
 
-        <!-- Controles superiores -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row g-3 align-items-center">
-                            <div class="col-md-6">
-                                <div class="input-group">
-                                    <span class="input-group-text">
-                                        <i class="ri-search-line"></i>
-                                    </span>
-                                    <input type="text" class="form-control" id="searchInput" 
-                                           placeholder="Buscar por alias o dirección...">
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <!-- Filtros removidos, solo búsqueda simple -->
-                            </div>
-                            <div class="col-md-3 text-end">
-                                {% if puede_crear %}
-                                <button type="button" class="btn btn-success" id="btnNuevaSucursal">
-                                    <i class="ri-add-line me-1"></i>
-                                    Nueva Sucursal
-                                </button>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabla de sucursales -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-list-check me-2"></i>
-                            Lista de Sucursales
-                            <span class="badge bg-primary ms-2" id="totalSucursales">0</span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th width="30%">Alias</th>
-                                        <th width="40%">Dirección</th>
-                                        <th width="20%">Empresa</th>
-                                        <th width="10%" class="text-end">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tablaSucursales">
-                                    <tr id="loadingRow">
-                                        <td colspan="4" class="text-center py-5">
-                                            <div class="spinner-border text-primary" role="status">
-                                                <span class="visually-hidden">Cargando...</span>
-                                            </div>
-                                            <p class="mt-2 text-muted">Cargando sucursales...</p>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Paginación -->
-                        <div class="row mt-3">
-                            <div class="col-sm-12 col-md-5">
-                                <div class="dataTables_info" id="infoTabla"></div>
-                            </div>
-                            <div class="col-sm-12 col-md-7">
-                                <div class="dataTables_paginate">
-                                    <nav>
-                                        <ul class="pagination pagination-sm justify-content-end mb-0" id="paginacion">
-                                        </ul>
-                                    </nav>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Pagination -->
+                <div class="nexo-pagination">
+                    <div class="nexo-pagination-info" id="infoTabla"></div>
+                    <ul class="nexo-pagination-list" id="paginacion"></ul>
                 </div>
             </div>
         </div>
@@ -166,50 +812,61 @@
 </div>
 
 <!-- Modal para crear/editar sucursal -->
-<div class="modal fade" id="modalSucursal" tabindex="-1" aria-labelledby="modalSucursalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade nexo-modal" id="modalSucursal" tabindex="-1" aria-labelledby="modalSucursalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title text-white" id="modalSucursalLabel">
-                    <i class="ri-building-2-line me-2"></i>
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalSucursalLabel">
+                    <i class="ri-store-2-line"></i>
                     Nueva Sucursal
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="formSucursal">
                 <div class="modal-body">
                     <input type="hidden" id="sucursalId">
                     
-                    <div class="row g-3">
-                        <!-- Alias -->
-                        <div class="col-12">
-                            <label for="inputAlias" class="form-label">
-                                <i class="ri-price-tag-3-line me-1"></i>
-                                Alias <span class="text-danger">*</span>
-                            </label>
-                            <input type="text" class="form-control" id="inputAlias" required
-                                   placeholder="Ej: EDEL, PAO1, NICK1">
-                            <small class="text-muted">Identificador único de la sucursal</small>
-                        </div>
+                    <div class="nexo-form-group">
+                        <label class="nexo-label" for="inputAlias">
+                            <i class="ri-price-tag-3-line"></i>
+                            Alias / Nombre <span class="required">*</span>
+                        </label>
+                        <input type="text" class="nexo-input" id="inputAlias" required
+                               placeholder="Ej: EDEL, PAO1, NICK1, Casa Matriz">
+                        <div class="nexo-input-hint">Identificador único para esta sucursal</div>
+                    </div>
 
-                        <!-- Dirección -->
-                        <div class="col-12">
-                            <label for="inputDireccion" class="form-label">
-                                <i class="ri-map-pin-line me-1"></i>
-                                Dirección <span class="text-danger">*</span>
-                            </label>
-                            <input type="text" class="form-control" id="inputDireccion" required
-                                   placeholder="Dirección completa de la sucursal">
-                        </div>
+                    <div class="nexo-form-group">
+                        <label class="nexo-label" for="inputDireccion">
+                            <i class="ri-map-pin-line"></i>
+                            Dirección <span class="required">*</span>
+                        </label>
+                        <input type="text" class="nexo-input" id="inputDireccion" required
+                               placeholder="Ej: Av. Principal 123, Santiago">
+                        <div class="nexo-input-hint">Dirección completa de la sucursal</div>
+                    </div>
+
+                    <div class="nexo-form-group">
+                        <label class="nexo-label" for="inputEmpresa">
+                            <i class="ri-building-2-line"></i>
+                            Empresa <span class="required">*</span>
+                        </label>
+                        <select class="nexo-input" id="inputEmpresa" required>
+                            <option value="">Seleccionar empresa...</option>
+                            {% for emp in empresas %}
+                            <option value="{{ emp.id }}">{{ emp.nombre }} ({{ emp.rut }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="nexo-input-hint">Empresa a la que pertenece esta sucursal</div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="ri-close-line me-1"></i>
+                    <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
+                        <i class="ri-close-line"></i>
                         Cancelar
                     </button>
-                    <button type="submit" class="btn btn-success" id="btnGuardarSucursal">
-                        <i class="ri-save-line me-1"></i>
+                    <button type="submit" class="nexo-btn nexo-btn-success" id="btnGuardarSucursal">
+                        <i class="ri-save-line"></i>
                         Guardar Sucursal
                     </button>
                 </div>
@@ -220,11 +877,62 @@
 
 {% include '../../layout/footer.html' %}
 
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
 $(document).ready(function() {
     const csrftoken = $('[name=csrfmiddlewaretoken]').val();
     let paginaActual = 1;
     let modoEdicion = false;
+
+    // Inicializar Select2 para el campo Empresa
+    function inicializarSelect2Empresa() {
+        $('#inputEmpresa').select2({
+            placeholder: 'Buscar empresa...',
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#modalSucursal'),
+            language: {
+                noResults: function() {
+                    return 'No se encontraron empresas';
+                },
+                searching: function() {
+                    return 'Buscando...';
+                }
+            },
+            templateResult: formatEmpresaOption,
+            templateSelection: formatEmpresaSelection
+        });
+    }
+
+    // Formato para las opciones del dropdown
+    function formatEmpresaOption(empresa) {
+        if (!empresa.id) {
+            return empresa.text;
+        }
+        return $('<span><i class="ri-building-2-fill" style="color: var(--nexo-primary); margin-right: 8px;"></i>' + empresa.text + '</span>');
+    }
+
+    // Formato para la selección
+    function formatEmpresaSelection(empresa) {
+        if (!empresa.id) {
+            return empresa.text;
+        }
+        return $('<span><i class="ri-building-2-fill" style="color: var(--nexo-primary); margin-right: 8px;"></i>' + empresa.text + '</span>');
+    }
+
+    // Inicializar Select2 cuando se muestre el modal
+    $('#modalSucursal').on('shown.bs.modal', function() {
+        inicializarSelect2Empresa();
+    });
+
+    // Destruir Select2 cuando se oculte el modal (para evitar duplicados)
+    $('#modalSucursal').on('hidden.bs.modal', function() {
+        if ($('#inputEmpresa').hasClass('select2-hidden-accessible')) {
+            $('#inputEmpresa').select2('destroy');
+        }
+    });
 
     // Cargar sucursales al inicio
     cargarSucursales();
@@ -244,17 +952,21 @@ $(document).ready(function() {
         searchTimeout = setTimeout(function() {
             paginaActual = 1;
             cargarSucursales();
-        }, 500);
+        }, 400);
     });
 
     // Abrir modal para nueva sucursal
     $('#btnNuevaSucursal').click(function() {
         modoEdicion = false;
-        $('#modalSucursalLabel').html('<i class="ri-building-2-line me-2"></i> Nueva Sucursal');
+        $('#modalSucursalLabel').html('<i class="ri-store-2-line"></i> Nueva Sucursal');
         $('#formSucursal')[0].reset();
         $('#sucursalId').val('');
-        $('#inputActiva').prop('checked', true);
+        // Mostrar modal primero (Select2 se inicializará en el evento shown.bs.modal)
         $('#modalSucursal').modal('show');
+        // Seleccionar empresa actual del usuario por defecto después de que Select2 esté listo
+        setTimeout(function() {
+            $('#inputEmpresa').val('{{ empresa.id }}').trigger('change');
+        }, 100);
     });
 
     // Guardar sucursal
@@ -273,12 +985,6 @@ $(document).ready(function() {
         const sucursalId = $(this).data('id');
         const alias = $(this).data('alias');
         eliminarSucursal(sucursalId, alias);
-    });
-
-    $(document).on('click', '.btn-activar', function() {
-        const sucursalId = $(this).data('id');
-        const alias = $(this).data('alias');
-        activarSucursal(sucursalId, alias);
     });
 
     // Función para cargar sucursales
@@ -302,11 +1008,21 @@ $(document).ready(function() {
                     renderizarPaginacion(response.pagination);
                     $('#totalSucursales').text(response.pagination.total_items);
                 } else {
-                    Swal.fire('Error', response.error, 'error');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: response.error,
+                        confirmButtonColor: '#0066FF'
+                    });
                 }
             },
             error: function(xhr) {
-                Swal.fire('Error', 'Error al cargar las sucursales', 'error');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al cargar las sucursales',
+                    confirmButtonColor: '#0066FF'
+                });
                 console.error(xhr);
             },
             complete: function() {
@@ -323,9 +1039,14 @@ $(document).ready(function() {
         if (sucursales.length === 0) {
             tbody.html(`
                 <tr>
-                    <td colspan="4" class="text-center py-4">
-                        <i class="ri-inbox-line" style="font-size: 3rem; color: #ccc;"></i>
-                        <p class="text-muted mt-2">No se encontraron sucursales</p>
+                    <td colspan="4">
+                        <div class="nexo-empty-state">
+                            <div class="nexo-empty-icon">
+                                <i class="ri-store-line"></i>
+                            </div>
+                            <div class="nexo-empty-title">No se encontraron sucursales</div>
+                            <div class="nexo-empty-text">Intenta con otros términos de búsqueda o crea una nueva sucursal</div>
+                        </div>
                     </td>
                 </tr>
             `);
@@ -335,15 +1056,26 @@ $(document).ready(function() {
         sucursales.forEach(function(sucursal) {
             tbody.append(`
                 <tr>
-                    <td><strong>${sucursal.alias}</strong></td>
-                    <td>${sucursal.direccion}</td>
-                    <td><span class="badge bg-info">${sucursal.empresa_nombre || 'N/A'}</span></td>
-                    <td class="text-end">
-                        <div class="btn-group" role="group">
-                            <button class="btn btn-sm btn-primary btn-editar" data-id="${sucursal.id}" title="Editar">
+                    <td class="td-alias">
+                        <i class="ri-store-2-fill"></i>
+                        ${sucursal.alias}
+                    </td>
+                    <td class="td-direccion">
+                        <i class="ri-map-pin-2-fill"></i>
+                        ${sucursal.direccion || 'Sin dirección'}
+                    </td>
+                    <td>
+                        <span class="nexo-badge nexo-badge-info">
+                            <i class="ri-building-line"></i>
+                            ${sucursal.empresa_nombre || 'N/A'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="nexo-actions">
+                            <button class="nexo-action-btn edit btn-editar" data-id="${sucursal.id}" title="Editar">
                                 <i class="ri-edit-line"></i>
                             </button>
-                            <button class="btn btn-sm btn-danger btn-eliminar" data-id="${sucursal.id}" data-alias="${sucursal.alias}" title="Eliminar">
+                            <button class="nexo-action-btn delete btn-eliminar" data-id="${sucursal.id}" data-alias="${sucursal.alias}" title="Eliminar">
                                 <i class="ri-delete-bin-line"></i>
                             </button>
                         </div>
@@ -355,7 +1087,11 @@ $(document).ready(function() {
 
     // Renderizar paginación
     function renderizarPaginacion(pagination) {
-        const info = `Mostrando ${((pagination.current_page - 1) * pagination.page_size) + 1} a ${Math.min(pagination.current_page * pagination.page_size, pagination.total_items)} de ${pagination.total_items} sucursales`;
+        const start = ((pagination.current_page - 1) * pagination.page_size) + 1;
+        const end = Math.min(pagination.current_page * pagination.page_size, pagination.total_items);
+        const info = pagination.total_items > 0 
+            ? `Mostrando ${start} - ${end} de ${pagination.total_items} sucursales`
+            : 'Sin resultados';
         $('#infoTabla').text(info);
 
         const paginacion = $('#paginacion');
@@ -365,10 +1101,11 @@ $(document).ready(function() {
 
         // Botón anterior
         paginacion.append(`
-            <li class="page-item ${!pagination.has_previous ? 'disabled' : ''}">
-                <a class="page-link" href="#" data-page="${pagination.current_page - 1}">
-                    <i class="ri-arrow-left-s-line"></i>
-                </a>
+            <li class="${!pagination.has_previous ? 'disabled' : ''}">
+                ${pagination.has_previous 
+                    ? `<a href="#" data-page="${pagination.current_page - 1}"><i class="ri-arrow-left-s-line"></i></a>`
+                    : `<span><i class="ri-arrow-left-s-line"></i></span>`
+                }
             </li>
         `);
 
@@ -376,26 +1113,27 @@ $(document).ready(function() {
         for (let i = 1; i <= pagination.total_pages; i++) {
             if (i === 1 || i === pagination.total_pages || (i >= pagination.current_page - 2 && i <= pagination.current_page + 2)) {
                 paginacion.append(`
-                    <li class="page-item ${i === pagination.current_page ? 'active' : ''}">
-                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    <li class="${i === pagination.current_page ? 'active' : ''}">
+                        <a href="#" data-page="${i}">${i}</a>
                     </li>
                 `);
             } else if (i === pagination.current_page - 3 || i === pagination.current_page + 3) {
-                paginacion.append(`<li class="page-item disabled"><span class="page-link">...</span></li>`);
+                paginacion.append(`<li class="disabled"><span>...</span></li>`);
             }
         }
 
         // Botón siguiente
         paginacion.append(`
-            <li class="page-item ${!pagination.has_next ? 'disabled' : ''}">
-                <a class="page-link" href="#" data-page="${pagination.current_page + 1}">
-                    <i class="ri-arrow-right-s-line"></i>
-                </a>
+            <li class="${!pagination.has_next ? 'disabled' : ''}">
+                ${pagination.has_next 
+                    ? `<a href="#" data-page="${pagination.current_page + 1}"><i class="ri-arrow-right-s-line"></i></a>`
+                    : `<span><i class="ri-arrow-right-s-line"></i></span>`
+                }
             </li>
         `);
 
         // Evento click en paginación
-        $('#paginacion .page-link').click(function(e) {
+        $('#paginacion a').click(function(e) {
             e.preventDefault();
             const page = $(this).data('page');
             if (page && page !== paginaActual) {
@@ -415,6 +1153,7 @@ $(document).ready(function() {
         const datos = {
             alias: $('#inputAlias').val(),
             direccion: $('#inputDireccion').val(),
+            empresa_id: $('#inputEmpresa').val(),
         };
 
         $.ajax({
@@ -426,31 +1165,42 @@ $(document).ready(function() {
             },
             beforeSend: function() {
                 $('#btnGuardarSucursal').prop('disabled', true).html(
-                    '<span class="loading-spinner me-1"></span> Guardando...'
+                    '<div class="nexo-spinner" style="width:16px;height:16px;border-width:2px;"></div> Guardando...'
                 );
             },
             success: function(response) {
                 if (response.success) {
                     Swal.fire({
                         icon: 'success',
-                        title: '¡Éxito!',
+                        title: '¡Guardado!',
                         text: response.message,
                         timer: 2000,
-                        showConfirmButton: false
+                        showConfirmButton: false,
+                        timerProgressBar: true
                     });
                     $('#modalSucursal').modal('hide');
                     cargarSucursales();
                 } else {
-                    Swal.fire('Error', response.error, 'error');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: response.error,
+                        confirmButtonColor: '#0066FF'
+                    });
                 }
             },
             error: function(xhr) {
-                Swal.fire('Error', 'Error al guardar la sucursal', 'error');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al guardar la sucursal',
+                    confirmButtonColor: '#0066FF'
+                });
                 console.error(xhr);
             },
             complete: function() {
                 $('#btnGuardarSucursal').prop('disabled', false).html(
-                    '<i class="ri-save-line me-1"></i> Guardar Sucursal'
+                    '<i class="ri-save-line"></i> Guardar Sucursal'
                 );
             }
         });
@@ -466,18 +1216,34 @@ $(document).ready(function() {
                     modoEdicion = true;
                     const sucursal = response.sucursal;
                     
-                    $('#modalSucursalLabel').html('<i class="ri-edit-line me-2"></i> Editar Sucursal');
+                    $('#modalSucursalLabel').html('<i class="ri-edit-line"></i> Editar Sucursal');
                     $('#sucursalId').val(sucursal.id);
                     $('#inputAlias').val(sucursal.alias);
                     $('#inputDireccion').val(sucursal.direccion);
                     
+                    // Mostrar modal primero
                     $('#modalSucursal').modal('show');
+                    
+                    // Establecer valor del Select2 después de que se inicialice
+                    setTimeout(function() {
+                        $('#inputEmpresa').val(sucursal.empresa_id).trigger('change');
+                    }, 100);
                 } else {
-                    Swal.fire('Error', response.error, 'error');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: response.error,
+                        confirmButtonColor: '#0066FF'
+                    });
                 }
             },
             error: function(xhr) {
-                Swal.fire('Error', 'Error al cargar los datos de la sucursal', 'error');
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: 'Error al cargar los datos de la sucursal',
+                    confirmButtonColor: '#0066FF'
+                });
                 console.error(xhr);
             }
         });
@@ -487,14 +1253,24 @@ $(document).ready(function() {
     function eliminarSucursal(sucursalId, alias) {
         Swal.fire({
             title: '¿Eliminar sucursal?',
-            html: `¿Estás seguro de que deseas eliminar la sucursal <strong>"${alias}"</strong>?<br><br>
-                   <small class="text-muted text-danger">⚠️ Esta acción no se puede deshacer si la sucursal no tiene datos relacionados.</small>`,
+            html: `<div style="text-align: left; padding: 0.5rem 0;">
+                    <p style="margin-bottom: 0.5rem; color: #4A4A5A;">Vas a eliminar la sucursal:</p>
+                    <div style="background: #F5F5F7; padding: 1rem; border-radius: 8px;">
+                        <div style="font-weight: 700; color: #1A1A2E;">
+                            <i class="ri-store-2-fill" style="color: #00D4AA;"></i> ${alias}
+                        </div>
+                    </div>
+                    <p style="margin-top: 1rem; color: #FF4D4D; font-size: 0.85rem;">
+                        <i class="ri-error-warning-line"></i> Esta acción no se puede deshacer
+                    </p>
+                   </div>`,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
+            confirmButtonColor: '#FF4D4D',
+            cancelButtonColor: '#8A8A9A',
+            confirmButtonText: '<i class="ri-delete-bin-line me-1"></i> Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
@@ -510,15 +1286,26 @@ $(document).ready(function() {
                                 title: '¡Eliminada!',
                                 text: response.message,
                                 timer: 2000,
-                                showConfirmButton: false
+                                showConfirmButton: false,
+                                timerProgressBar: true
                             });
                             cargarSucursales();
                         } else {
-                            Swal.fire('Error', response.error, 'error');
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error',
+                                text: response.error,
+                                confirmButtonColor: '#0066FF'
+                            });
                         }
                     },
                     error: function(xhr) {
-                        Swal.fire('Error', 'Error al eliminar la sucursal', 'error');
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Error al eliminar la sucursal',
+                            confirmButtonColor: '#0066FF'
+                        });
                         console.error(xhr);
                     }
                 });
@@ -527,4 +1314,3 @@ $(document).ready(function() {
     }
 });
 </script>
-

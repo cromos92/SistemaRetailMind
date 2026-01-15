@@ -19,16 +19,20 @@ from .models import Cliente, LogCliente, Empresa
 
 @login_required
 def lista_clientes(request):
-    """Vista para listar clientes con filtros y paginación"""
+    """Vista para listar clientes con filtros y paginación (HTML y JSON)"""
     
     # Obtener parámetros de filtro
     search = request.GET.get('search', '')
-    tipo_cliente = request.GET.get('tipo_cliente', '')
+    tipo_cliente = request.GET.get('tipo_cliente', '') or request.GET.get('tipo', '')
     empresa_id = request.GET.get('empresa', '')
-    activo = request.GET.get('activo', '')
-    orden = request.GET.get('orden', 'apellido')
+    activo = request.GET.get('activo', '') or request.GET.get('estado', '')
+    orden = request.GET.get('orden', 'apellido') or request.GET.get('ordenar', 'apellido')
     
-    # Query base
+    # Parámetros de paginación AJAX
+    page_size = request.GET.get('page_size', None)
+    page = request.GET.get('page', 1)
+    
+    # Query base - TODOS los clientes de TODAS las sucursales
     clientes = Cliente.objects.select_related('empresa').all()
     
     # Aplicar filtros
@@ -42,29 +46,74 @@ def lista_clientes(request):
         )
     
     if tipo_cliente:
-        clientes = clientes.filter(tipo_cliente=tipo_cliente)
+        if tipo_cliente in ['natural', 'INDIVIDUAL']:
+            clientes = clientes.filter(tipo_cliente='INDIVIDUAL')
+        elif tipo_cliente in ['juridica', 'EMPRESA']:
+            clientes = clientes.filter(tipo_cliente='EMPRESA')
+        else:
+            clientes = clientes.filter(tipo_cliente=tipo_cliente)
     
     if empresa_id:
         clientes = clientes.filter(empresa_id=empresa_id)
     
     if activo != '':
-        clientes = clientes.filter(activo=activo == 'true')
+        if activo in ['activo', 'true', 'True', '1']:
+            clientes = clientes.filter(activo=True)
+        elif activo in ['inactivo', 'false', 'False', '0']:
+            clientes = clientes.filter(activo=False)
     
     # Aplicar ordenamiento
-    if orden == 'apellido':
+    if orden in ['apellido', 'nombre']:
         clientes = clientes.order_by('apellido', 'nombre')
-    elif orden == 'nombre':
-        clientes = clientes.order_by('nombre', 'apellido')
     elif orden == 'rut':
         clientes = clientes.order_by('rut')
-    elif orden == 'fecha_creacion':
+    elif orden in ['fecha_creacion', 'fecha']:
         clientes = clientes.order_by('-created_at')
     elif orden == 'tipo':
         clientes = clientes.order_by('tipo_cliente', 'apellido', 'nombre')
-    elif orden == 'empresa':
+    elif orden in ['empresa', 'ventas']:
         clientes = clientes.order_by('empresa__nombre', 'apellido', 'nombre')
+    else:
+        clientes = clientes.order_by('apellido', 'nombre')
     
-    # Paginación
+    # Si es una solicitud AJAX (tiene page_size), devolver JSON
+    if page_size:
+        try:
+            page_size = int(page_size)
+            page = int(page)
+        except ValueError:
+            page_size = 25
+            page = 1
+        
+        # Paginación
+        paginator = Paginator(clientes, page_size)
+        page_obj = paginator.get_page(page)
+        
+        # Serializar clientes
+        clientes_data = []
+        for cliente in page_obj:
+            clientes_data.append({
+                'id': cliente.id,
+                'nombre': cliente.nombre_completo if hasattr(cliente, 'nombre_completo') else f"{cliente.nombre} {cliente.apellido}".strip(),
+                'rut': cliente.rut or '',
+                'tipo': cliente.tipo_cliente,
+                'get_tipo_display': cliente.get_tipo_cliente_display() if hasattr(cliente, 'get_tipo_cliente_display') else cliente.tipo_cliente,
+                'email': cliente.email or '',
+                'telefono': cliente.telefono or cliente.celular or '',
+                'empresa': cliente.empresa.nombre if cliente.empresa else '',
+                'activo': cliente.activo,
+                'created_at': cliente.created_at.strftime('%Y-%m-%d %H:%M') if cliente.created_at else '',
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'clientes': clientes_data,
+            'total_registros': paginator.count,
+            'total_paginas': paginator.num_pages,
+            'pagina_actual': page,
+        })
+    
+    # Si no es AJAX, devolver HTML normal
     paginator = Paginator(clientes, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)

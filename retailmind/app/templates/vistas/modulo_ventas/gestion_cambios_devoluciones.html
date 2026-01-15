@@ -11,22 +11,903 @@
 <link href="{% static 'libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
 <style>
-    .card-stats {
-        background: #ffffff;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
+    /* ========== NEXO DESIGN SYSTEM - VARIABLES ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+        --nexo-radius-full: 9999px;
+        --nexo-transition-fast: 150ms ease;
+        --nexo-transition-normal: 250ms ease;
+    }
+
+    /* ========== PAGE BACKGROUND ========== */
+    .page-content {
+        background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #ECEEF2 100%);
+        min-height: 100vh;
+    }
+
+    /* ========== PAGE HEADER ========== */
+    .page-header-nexo {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+        border-radius: var(--nexo-radius-xl);
+        padding: 2rem;
+        margin-bottom: 1.5rem;
+        color: var(--nexo-white);
+        box-shadow: var(--nexo-shadow-lg);
+    }
+
+    .page-header-nexo h1 {
+        font-weight: 700;
+        font-size: 1.75rem;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .page-header-nexo h1 i {
+        color: var(--nexo-accent);
+        font-size: 2rem;
+    }
+
+    .page-header-nexo .sucursal-info {
+        color: var(--nexo-gray-300);
+        font-size: 0.95rem;
+    }
+
+    .page-header-nexo .sucursal-info strong {
+        color: var(--nexo-accent);
+    }
+
+    /* ========== CARD STATS NEXO ========== */
+    .card-stats-nexo {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-md);
+        transition: all var(--nexo-transition-normal);
+        border: 1px solid var(--nexo-gray-300);
+        overflow: hidden;
     }
     
-    .card-stats:hover {
+    .card-stats-nexo:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--nexo-shadow-lg);
+        border-color: var(--nexo-primary);
+    }
+
+    .card-stats-nexo .card-body {
+        padding: 1.5rem;
+    }
+
+    .card-stats-nexo .stat-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: var(--nexo-radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: var(--nexo-white);
+    }
+
+    .card-stats-nexo .stat-icon.bg-nexo-primary { background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%); }
+    .card-stats-nexo .stat-icon.bg-nexo-warning { background: linear-gradient(135deg, var(--nexo-warning) 0%, #E59B00 100%); }
+    .card-stats-nexo .stat-icon.bg-nexo-success { background: linear-gradient(135deg, var(--nexo-success) 0%, #00B08A 100%); }
+    .card-stats-nexo .stat-icon.bg-nexo-info { background: linear-gradient(135deg, var(--nexo-info) 0%, #0052CC 100%); }
+    .card-stats-nexo .stat-icon.bg-nexo-error { background: linear-gradient(135deg, var(--nexo-error) 0%, #CC3D3D 100%); }
+
+    .card-stats-nexo .stat-label {
+        color: var(--nexo-gray-500);
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.25rem;
+    }
+
+    .card-stats-nexo .stat-value {
+        color: var(--nexo-secondary);
+        font-size: 1.75rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    /* ========== STATUS BADGES NEXO ========== */
+    .status-badge {
+        padding: 6px 14px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    
+    .status-solicitado { background: rgba(255, 176, 32, 0.15); color: #CC8C00; border: 1px solid rgba(255, 176, 32, 0.3); }
+    .status-aprobado { background: rgba(0, 102, 255, 0.1); color: var(--nexo-primary); border: 1px solid rgba(0, 102, 255, 0.25); }
+    .status-en_proceso { background: rgba(0, 102, 255, 0.15); color: var(--nexo-primary-dark); border: 1px solid rgba(0, 102, 255, 0.3); }
+    .status-ejecutado { background: rgba(0, 102, 255, 0.2); color: var(--nexo-primary-dark); border: 1px solid rgba(0, 102, 255, 0.35); }
+    .status-ejecutado_cobro_pendiente { background: rgba(255, 176, 32, 0.2); color: #B87C00; border: 1px solid rgba(255, 176, 32, 0.4); }
+    .status-completado { background: rgba(0, 212, 170, 0.15); color: #00A080; border: 1px solid rgba(0, 212, 170, 0.3); }
+    .status-rechazado { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); border: 1px solid rgba(255, 77, 77, 0.3); }
+    .status-cancelado { background: rgba(138, 138, 154, 0.15); color: var(--nexo-gray-700); border: 1px solid rgba(138, 138, 154, 0.3); }
+    
+    /* ========== TIPO BADGES NEXO ========== */
+    .tipo-badge {
+        padding: 5px 12px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 11px;
+        font-weight: 600;
+    }
+    
+    .tipo-cambio-simple { background: rgba(0, 102, 255, 0.1); color: var(--nexo-primary); border: 1px solid rgba(0, 102, 255, 0.2); }
+    .tipo-cambio-diferencia { background: rgba(255, 176, 32, 0.1); color: #B87C00; border: 1px solid rgba(255, 176, 32, 0.2); }
+    .tipo-devolucion-total { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); border: 1px solid rgba(255, 77, 77, 0.2); }
+    .tipo-devolucion-parcial { background: rgba(138, 138, 154, 0.1); color: var(--nexo-gray-700); border: 1px solid rgba(138, 138, 154, 0.2); }
+    
+    /* ========== SEARCH/FILTER SECTION ========== */
+    .search-section {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid var(--nexo-gray-300);
+        box-shadow: var(--nexo-shadow-sm);
+    }
+    
+    .search-section .form-label {
+        color: var(--nexo-gray-700);
+        font-weight: 600;
+        font-size: 0.85rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .search-section .form-control,
+    .search-section .form-select {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.625rem 1rem;
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .search-section .form-control:focus,
+    .search-section .form-select:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    /* ========== TICKET INFO CARD ========== */
+    .ticket-info {
+        background: var(--nexo-white);
+        border: 2px solid var(--nexo-accent);
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+        box-shadow: var(--nexo-shadow-md);
+        position: relative;
+    }
+
+    .ticket-info::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--nexo-accent), var(--nexo-primary));
+        border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
+    }
+    
+    /* ========== PRODUCTOS SECTION ========== */
+    .productos-section {
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--nexo-shadow-md);
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .productos-section h6 {
+        color: var(--nexo-secondary);
+        font-weight: 700;
+    }
+
+    .productos-section h6 i {
+        color: var(--nexo-primary);
+    }
+    
+    /* ========== TABLA BUSQUEDA PRODUCTOS ========== */
+    #panel-resultados-busqueda {
+        border: 2px solid var(--nexo-primary) !important;
+        border-radius: var(--nexo-radius-lg);
+        overflow: hidden;
+    }
+    
+    #panel-resultados-busqueda .card-header {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%) !important;
+        border-bottom: none;
+    }
+    
+    #tabla-busqueda-productos {
+        margin-bottom: 0 !important;
+    }
+    
+    #tabla-busqueda-productos thead th {
+        background: var(--nexo-gray-100);
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--nexo-secondary);
+        border-bottom: 2px solid var(--nexo-gray-300);
+        padding: 0.75rem 0.5rem;
+    }
+    
+    #tabla-busqueda-productos tbody tr {
+        transition: all var(--nexo-transition-fast);
+    }
+    
+    #tabla-busqueda-productos tbody tr:hover {
+        background: var(--nexo-primary-light) !important;
+    }
+    
+    #tabla-busqueda-productos tbody tr.table-success {
+        background: rgba(0, 212, 170, 0.15) !important;
+    }
+    
+    #tabla-busqueda-productos tbody td {
+        vertical-align: middle;
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    /* DataTable custom styling */
+    #panel-resultados-busqueda .dataTables_wrapper {
+        padding: 1rem;
+    }
+    
+    #panel-resultados-busqueda .dataTables_filter input {
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.5rem 1rem;
+        transition: all var(--nexo-transition-fast);
+    }
+    
+    #panel-resultados-busqueda .dataTables_filter input:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+        outline: none;
+    }
+    
+    #panel-resultados-busqueda .dataTables_length select {
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.35rem 0.75rem;
+    }
+    
+    #panel-resultados-busqueda .page-link {
+        color: var(--nexo-primary);
+        border-radius: var(--nexo-radius-sm);
+        margin: 0 2px;
+    }
+    
+    #panel-resultados-busqueda .page-item.active .page-link {
+        background: var(--nexo-primary);
+        border-color: var(--nexo-primary);
+    }
+    
+    /* ========== TOTAL SECTION ========== */
+    .total-section {
+        background: var(--nexo-white);
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        padding: 1.5rem;
+        text-align: center;
+        margin: 1rem 0;
+        box-shadow: var(--nexo-shadow-sm);
+    }
+    
+    /* ========== DIFERENCIA COLORS ========== */
+    .diferencia-positiva { 
+        color: var(--nexo-error) !important; 
+        font-weight: 700;
+    }
+    .diferencia-negativa { 
+        color: var(--nexo-success) !important; 
+        font-weight: 700;
+    }
+    .diferencia-cero { 
+        color: var(--nexo-gray-500) !important; 
+        font-weight: 700;
+    }
+    
+    #card-diferencia.bg-danger { background: rgba(255, 77, 77, 0.08) !important; border: 2px solid var(--nexo-error); }
+    #card-diferencia.bg-danger #label-diferencia { color: var(--nexo-error); }
+    #card-diferencia.bg-danger #resumen-diferencia { color: var(--nexo-error) !important; }
+    
+    #card-diferencia.bg-success { background: rgba(0, 212, 170, 0.08) !important; border: 2px solid var(--nexo-success); }
+    #card-diferencia.bg-success #label-diferencia { color: var(--nexo-success); }
+    #card-diferencia.bg-success #resumen-diferencia { color: var(--nexo-success) !important; }
+    
+    #card-diferencia.bg-secondary { background: var(--nexo-gray-100) !important; border: 2px solid var(--nexo-gray-300); }
+    #card-diferencia.bg-secondary #label-diferencia { color: var(--nexo-gray-500); }
+    #card-diferencia.bg-secondary #resumen-diferencia { color: var(--nexo-gray-500) !important; }
+    
+    /* ========== TIMELINE NEXO ========== */
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(180deg, var(--nexo-primary) 0%, var(--nexo-accent) 100%);
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -19px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--nexo-primary);
+        box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.15);
+    }
+    
+    /* ========== BUTTONS NEXO ========== */
+    .btn-nexo-primary {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: var(--nexo-white);
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.625rem 1.25rem;
+        font-weight: 600;
+        transition: all var(--nexo-transition-fast);
+        box-shadow: 0 2px 4px rgba(0, 102, 255, 0.25);
+    }
+
+    .btn-nexo-primary:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        box-shadow: 0 4px 12px rgba(0, 102, 255, 0.35);
+        color: var(--nexo-white);
+    }
+
+    .btn-nexo-success {
+        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B08A 100%);
+        color: var(--nexo-white);
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.625rem 1.25rem;
+        font-weight: 600;
+        transition: all var(--nexo-transition-fast);
+        box-shadow: 0 2px 4px rgba(0, 212, 170, 0.25);
+    }
+
+    .btn-nexo-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 212, 170, 0.35);
+        color: var(--nexo-white);
+    }
+
+    .btn-nexo-warning {
+        background: linear-gradient(135deg, var(--nexo-warning) 0%, #E59B00 100%);
+        color: var(--nexo-secondary);
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        padding: 0.625rem 1.25rem;
+        font-weight: 600;
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .btn-nexo-outline {
+        background: transparent;
+        color: var(--nexo-primary);
+        border: 2px solid var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+        padding: 0.5rem 1.125rem;
+        font-weight: 600;
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .btn-nexo-outline:hover {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    .btn-action {
+        margin: 2px;
+        padding: 6px 12px;
+        font-size: 12px;
+        border-radius: var(--nexo-radius-md);
+    }
+
+    /* ========== WIZARD STEPPER NEXO ========== */
+    .wizard-stepper {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+    }
+
+    .wizard-step {
+        position: relative;
+        flex: 1;
+        text-align: center;
+        padding: 0 0.5rem;
+        color: var(--nexo-gray-500);
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: color var(--nexo-transition-normal);
+    }
+
+    .wizard-step:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        top: 1.25rem;
+        right: -50%;
+        width: 100%;
+        height: 3px;
+        background: var(--nexo-gray-300);
+        z-index: 1;
+        border-radius: 2px;
+    }
+
+    .wizard-step .wizard-circle {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 0.75rem;
+        border-radius: 50%;
+        border: 3px solid var(--nexo-gray-300);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--nexo-white);
+        color: var(--nexo-gray-500);
+        font-weight: 700;
+        font-size: 1rem;
+        position: relative;
+        z-index: 2;
+        transition: all var(--nexo-transition-normal);
+    }
+
+    .wizard-step .wizard-label {
+        font-size: 0.85rem;
+    }
+
+    .wizard-step.active {
+        color: var(--nexo-primary);
+    }
+
+    .wizard-step.active .wizard-circle {
+        border-color: var(--nexo-primary);
+        color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+        box-shadow: 0 0 0 6px rgba(0, 102, 255, 0.1);
+    }
+
+    .wizard-step.completed {
+        color: var(--nexo-success);
+    }
+
+    .wizard-step.completed .wizard-circle {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+        border-color: var(--nexo-success);
+        box-shadow: 0 0 0 6px rgba(0, 212, 170, 0.15);
+    }
+
+    .wizard-step.completed:not(:last-child)::after {
+        background: linear-gradient(90deg, var(--nexo-success) 0%, rgba(0, 212, 170, 0.4) 100%);
+    }
+
+    /* ========== RESUMEN CARD NEXO ========== */
+    .resumen-card {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-xl);
+        box-shadow: var(--nexo-shadow-md);
+        overflow: hidden;
+    }
+
+    .resumen-card .card-header {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+        color: var(--nexo-white);
+        border: none;
+        padding: 1rem 1.5rem;
+    }
+
+    .resumen-card .card-header h6 {
+        color: var(--nexo-white);
+        font-weight: 700;
+    }
+
+    .resumen-card .card-header h6 i {
+        color: var(--nexo-accent);
+    }
+
+    .resumen-card.position-sticky {
+        top: 88px;
+    }
+
+    .resumen-card .card-body {
+        padding: 1.5rem;
+    }
+
+    .resumen-metric {
+        padding: 1rem;
+        background: var(--nexo-gray-100);
+        border-radius: var(--nexo-radius-md);
+        margin-bottom: 1rem;
+    }
+
+    .resumen-metric small {
+        color: var(--nexo-gray-500);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+    }
+
+    .resumen-metric h4, .resumen-metric h3 {
+        font-weight: 700;
+        color: var(--nexo-secondary);
+        margin: 0.25rem 0 0;
+    }
+
+    .resumen-chips .badge {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.875rem;
+        border-radius: var(--nexo-radius-full);
+        font-weight: 600;
+    }
+
+    .badge-pending {
+        background: rgba(255, 176, 32, 0.15);
+        color: #B87C00;
+        border: 1px solid rgba(255, 176, 32, 0.35);
+    }
+
+    .badge-neutral {
+        background: rgba(138, 138, 154, 0.15);
+        color: var(--nexo-gray-700);
+        border: 1px solid rgba(138, 138, 154, 0.3);
+    }
+
+    /* ========== TABLE STYLES NEXO ========== */
+    .table-nexo {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .table-nexo thead th {
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem;
+        border: none;
+    }
+
+    .table-nexo thead th:first-child {
+        border-radius: var(--nexo-radius-md) 0 0 0;
+    }
+
+    .table-nexo thead th:last-child {
+        border-radius: 0 var(--nexo-radius-md) 0 0;
+    }
+
+    .table-nexo tbody tr {
+        transition: all var(--nexo-transition-fast);
+    }
+
+    .table-nexo tbody tr:hover {
+        background: var(--nexo-primary-light);
+    }
+
+    .table-nexo tbody td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        vertical-align: middle;
+    }
+
+    .table-glow {
+        animation: tableGlow 1.6s ease;
+    }
+
+    @keyframes tableGlow {
+        0% { box-shadow: inset 0 0 0 rgba(0, 102, 255, 0); background-color: rgba(0, 102, 255, 0.08); }
+        40% { background-color: rgba(0, 102, 255, 0.15); }
+        100% { box-shadow: inset 0 0 0 rgba(0, 102, 255, 0); background-color: transparent; }
+    }
+
+    tr.cambio-cobro-pendiente td {
+        background-color: rgba(255, 176, 32, 0.08);
+    }
+
+    tr.cambio-aprobado td {
+        background-color: rgba(0, 102, 255, 0.04);
+    }
+
+    /* ========== DIFFERENCE INDICATORS ========== */
+    .difference-positive {
+        color: var(--nexo-error);
+        font-weight: 700;
+    }
+
+    .difference-negative {
+        color: var(--nexo-success);
+        font-weight: 700;
+    }
+
+    .difference-zero {
+        color: var(--nexo-gray-500);
+        font-weight: 700;
+    }
+
+    /* ========== ALERTS NEXO ========== */
+    .alert-nexo-info {
+        background: rgba(0, 102, 255, 0.08);
+        border: 1px solid rgba(0, 102, 255, 0.2);
+        border-left: 4px solid var(--nexo-primary);
+        border-radius: var(--nexo-radius-md);
+        color: var(--nexo-primary-dark);
+    }
+
+    .alert-nexo-success {
+        background: rgba(0, 212, 170, 0.08);
+        border: 1px solid rgba(0, 212, 170, 0.2);
+        border-left: 4px solid var(--nexo-success);
+        border-radius: var(--nexo-radius-md);
+        color: #00866A;
+    }
+
+    .alert-nexo-warning {
+        background: rgba(255, 176, 32, 0.08);
+        border: 1px solid rgba(255, 176, 32, 0.2);
+        border-left: 4px solid var(--nexo-warning);
+        border-radius: var(--nexo-radius-md);
+        color: #996600;
+    }
+
+    .alert-nexo-error {
+        background: rgba(255, 77, 77, 0.08);
+        border: 1px solid rgba(255, 77, 77, 0.2);
+        border-left: 4px solid var(--nexo-error);
+        border-radius: var(--nexo-radius-md);
+        color: var(--nexo-error);
+    }
+
+    /* ========== CARD NEXO ========== */
+    .card-nexo {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        overflow: hidden;
+    }
+
+    .card-nexo .card-header {
+        background: var(--nexo-gray-100);
+        border-bottom: 1px solid var(--nexo-gray-300);
+        padding: 1rem 1.5rem;
+        font-weight: 700;
+        color: var(--nexo-secondary);
+    }
+
+    .card-nexo .card-header i {
+        color: var(--nexo-primary);
+    }
+
+    /* ========== MODAL STYLES NEXO ========== */
+    .modal-content {
+        border: none;
+        border-radius: var(--nexo-radius-xl);
+        box-shadow: 0 25px 50px rgba(26, 26, 46, 0.25);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid var(--nexo-gray-300);
+        padding: 1.25rem 1.5rem;
+    }
+
+    .modal-header.bg-nexo-primary {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: var(--nexo-white);
+    }
+
+    .modal-header.bg-nexo-success {
+        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B08A 100%);
+        color: var(--nexo-white);
+    }
+
+    .modal-header.bg-nexo-secondary {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+        color: var(--nexo-white);
+    }
+
+    .modal-footer {
+        border-top: 1px solid var(--nexo-gray-300);
+        padding: 1rem 1.5rem;
+    }
+
+    /* ========== MODAL NUEVO CAMBIO - EXTRA GRANDE ========== */
+    #modalNuevoCambio .modal-dialog {
+        max-width: 95vw;
+        width: 95vw;
+        margin: 1rem auto;
     }
     
-    .bg-soft {
-        background-color: rgba(13, 110, 253, 0.1) !important;
+    #modalNuevoCambio .modal-content {
+        height: calc(100vh - 2rem);
+        display: flex;
+        flex-direction: column;
     }
     
+    #modalNuevoCambio .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem 1.5rem;
+    }
+    
+    #modalNuevoCambio .modal-header {
+        padding: 0.75rem 1.5rem;
+        flex-shrink: 0;
+    }
+    
+    #modalNuevoCambio .modal-footer {
+        flex-shrink: 0;
+        padding: 0.75rem 1.5rem;
+    }
+    
+    /* Compactar alerts en el modal */
+    #modalNuevoCambio .alert {
+        padding: 0.5rem 0.75rem;
+        margin-bottom: 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    #modalNuevoCambio .alert h6 {
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    /* Compactar cards en el modal */
+    #modalNuevoCambio .card-nexo .card-header {
+        padding: 0.625rem 1rem;
+    }
+    
+    #modalNuevoCambio .card-nexo .card-body {
+        padding: 0.875rem 1rem;
+    }
+    
+    /* Compactar secciones de productos */
+    #modalNuevoCambio .productos-section {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+    }
+    
+    /* Tablas más compactas */
+    #modalNuevoCambio .table-sm td,
+    #modalNuevoCambio .table-sm th {
+        padding: 0.35rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    /* Wizard stepper más compacto */
+    #modalNuevoCambio .wizard-stepper {
+        margin-bottom: 1rem;
+        padding: 0.5rem 0;
+    }
+    
+    /* Panel resumen más compacto */
+    #modalNuevoCambio .resumen-card .card-header {
+        padding: 0.5rem 0.75rem;
+    }
+    
+    #modalNuevoCambio .resumen-card .card-body {
+        padding: 0.75rem;
+    }
+    
+    #modalNuevoCambio .resumen-metric {
+        margin-bottom: 0.5rem !important;
+    }
+    
+    #modalNuevoCambio .resumen-metric h4 {
+        font-size: 1.25rem;
+    }
+    
+    /* Doc-type options más compactas en el modal */
+    #modalNuevoCambio .doc-type-option {
+        padding: 0.5rem;
+        min-width: 120px;
+    }
+    
+    #modalNuevoCambio .doc-type-option i {
+        font-size: 1.25rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    #modalNuevoCambio .doc-type-option .doc-label {
+        font-size: 0.85rem;
+    }
+    
+    #modalNuevoCambio .doc-type-option small {
+        font-size: 0.7rem;
+    }
+    
+    /* Ticket info más compacta */
+    #modalNuevoCambio .ticket-info {
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    #modalNuevoCambio .ticket-cambio-badge {
+        padding: 0.35rem 0.75rem;
+        font-size: 0.75rem;
+    }
+    
+    /* Paso 3 más compacto */
+    #modalNuevoCambio #paso-resumen .card .card-body {
+        padding: 0.75rem !important;
+    }
+    
+    #modalNuevoCambio #paso-resumen h3 {
+        font-size: 1.5rem;
+    }
+
+    /* ========== INPUT GROUP NEXO ========== */
+    .input-group-nexo .input-group-text {
+        background: var(--nexo-gray-100);
+        border: 1px solid var(--nexo-gray-300);
+        border-right: none;
+        color: var(--nexo-primary);
+    }
+
+    .input-group-nexo .form-control {
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .input-group-nexo .form-control:focus {
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    /* ========== AVATAR STYLES ========== */
     .avatar-sm {
         height: 3rem;
         width: 3rem;
@@ -41,309 +922,71 @@
         justify-content: center;
         width: 100%;
     }
-    
-    .status-badge {
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
-    }
-    
-    .status-solicitado { background-color: #ffc107; color: #000; }
-    .status-aprobado { background-color: #17a2b8; color: #fff; }
-    .status-ejecutado { background-color: #0d6efd; color: #fff; }
-    .status-ejecutado_cobro_pendiente { background-color: #fd7e14; color: #fff; }
-    .status-completado { background-color: #28a745; color: #fff; }
-    .status-rechazado { background-color: #dc3545; color: #fff; }
-    .status-cancelado { background-color: #6c757d; color: #fff; }
-    
-    .tipo-badge {
-        padding: 4px 8px;
-        border-radius: 15px;
-        font-size: 11px;
-        font-weight: bold;
-    }
-    
-    .tipo-cambio-simple { background-color: #e3f2fd; color: #1976d2; }
-    .tipo-cambio-diferencia { background-color: #fff3e0; color: #f57c00; }
-    .tipo-devolucion-total { background-color: #fce4ec; color: #c2185b; }
-    .tipo-devolucion-parcial { background-color: #f3e5f5; color: #7b1fa2; }
-    
-    .search-section {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    
-    .ticket-info {
-        background: #fff;
-        border: 2px solid #e9ecef;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    
-    .productos-section {
-        background: #fff;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    
-    .total-section {
-        background: #ffffff;
-        border: 2px solid #e9ecef;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        margin: 10px 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    }
-    
-    .diferencia-positiva { 
-        color: #dc3545 !important; 
-        font-weight: bold;
-    }
-    .diferencia-negativa { 
-        color: #28a745 !important; 
-        font-weight: bold;
-    }
-    .diferencia-cero { 
-        color: #6c757d !important; 
-        font-weight: bold;
-    }
-    
-    #card-diferencia.bg-danger { background-color: #fff5f5 !important; }
-    #card-diferencia.bg-danger #label-diferencia { color: #dc3545; }
-    #card-diferencia.bg-danger #resumen-diferencia { color: #dc3545 !important; }
-    
-    #card-diferencia.bg-success { background-color: #f0fdf4 !important; }
-    #card-diferencia.bg-success #label-diferencia { color: #16a34a; }
-    #card-diferencia.bg-success #resumen-diferencia { color: #16a34a !important; }
-    
-    #card-diferencia.bg-secondary { background-color: #f8f9fa !important; }
-    #card-diferencia.bg-secondary #label-diferencia { color: #6c757d; }
-    #card-diferencia.bg-secondary #resumen-diferencia { color: #6c757d !important; }
-    
-    .timeline {
-        position: relative;
-        padding-left: 30px;
-    }
-    
-    .timeline::before {
-        content: '';
-        position: absolute;
-        left: 15px;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: #dee2e6;
-    }
-    
-    .timeline-item {
-        position: relative;
-        margin-bottom: 20px;
-    }
-    
-    .timeline-item::before {
-        content: '';
-        position: absolute;
-        left: -19px;
-        top: 5px;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #007bff;
-    }
-    
-    .btn-action {
-        margin: 2px;
-        padding: 5px 10px;
-        font-size: 12px;
-    }
-    
-    /* Mejoras para botones pequeños */
-    .btn-sm {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.875rem;
-        line-height: 1.5;
-        border-radius: 0.2rem;
-    }
-    
-    /* Espaciado para botones en línea */
-    .me-1 {
-        margin-right: 0.25rem !important;
-    }
-    
-    .me-2 {
-        margin-right: 0.5rem !important;
-    }
-    
-    /* Asegurar que los botones no se rompan en múltiples líneas */
-    .text-nowrap {
-        white-space: nowrap !important;
-    }
-    
-    /* Mejorar apariencia de badges */
-    .badge {
-        font-weight: 500;
-        padding: 0.35em 0.65em;
+
+    /* ========== SCAN INPUT HIGHLIGHT ========== */
+    #input-escanear-sku:focus {
+        border-color: var(--nexo-accent);
+        box-shadow: 0 0 0 4px rgba(0, 212, 170, 0.2);
+        background: rgba(0, 212, 170, 0.03);
     }
 
-    /* Indicador de pasos */
-    .wizard-stepper {
+    /* ========== DOCUMENT TYPE SELECTOR ========== */
+    .doc-type-selector {
         display: flex;
-        justify-content: space-between;
         gap: 1rem;
-        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
     }
 
-    .wizard-step {
-        position: relative;
+    .doc-type-option {
         flex: 1;
+        min-width: 140px;
+        padding: 1rem;
+        border: 2px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
         text-align: center;
-        padding: 0 0.5rem;
-        color: #adb5bd;
+        cursor: pointer;
+        transition: all var(--nexo-transition-fast);
+        background: var(--nexo-white);
+    }
+
+    .doc-type-option:hover {
+        border-color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+
+    .doc-type-option.active {
+        border-color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+        box-shadow: 0 0 0 4px rgba(0, 102, 255, 0.1);
+    }
+
+    .doc-type-option i {
+        font-size: 2rem;
+        color: var(--nexo-primary);
+        margin-bottom: 0.5rem;
+    }
+
+    .doc-type-option .doc-label {
         font-weight: 600;
-        font-size: 0.9rem;
-        transition: color 0.3s ease;
+        color: var(--nexo-secondary);
     }
 
-    .wizard-step:not(:last-child)::after {
-        content: '';
-        position: absolute;
-        top: 1.1rem;
-        right: -50%;
-        width: 100%;
-        height: 2px;
-        background: #dee2e6;
-        z-index: 1;
-    }
-
-    .wizard-step .wizard-circle {
-        width: 34px;
-        height: 34px;
-        margin: 0 auto 0.5rem;
-        border-radius: 50%;
-        border: 2px solid #dee2e6;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #fff;
-        color: #6c757d;
+    /* ========== TICKET CAMBIO BADGE ========== */
+    .ticket-cambio-badge {
+        background: linear-gradient(135deg, var(--nexo-warning) 0%, #E59B00 100%);
+        color: var(--nexo-secondary);
+        padding: 0.5rem 1rem;
+        border-radius: var(--nexo-radius-full);
         font-weight: 700;
-        position: relative;
-        z-index: 2;
-        transition: all 0.3s ease;
-    }
-
-    .wizard-step.active {
-        color: #0d6efd;
-    }
-
-    .wizard-step.active .wizard-circle {
-        border-color: #0d6efd;
-        color: #0d6efd;
-        box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.1);
-    }
-
-    .wizard-step.completed {
-        color: #198754;
-    }
-
-    .wizard-step.completed .wizard-circle {
-        background: #198754;
-        color: #fff;
-        border-color: #198754;
-        box-shadow: 0 0 0 4px rgba(25, 135, 84, 0.15);
-    }
-
-    .wizard-step.completed:not(:last-child)::after {
-        background: linear-gradient(90deg, rgba(25,135,84,1) 0%, rgba(25,135,84,0.35) 100%);
-    }
-
-    /* Panel resumen lateral */
-    .resumen-card {
-        border: 1px solid rgba(13, 110, 253, 0.08);
-        border-radius: 16px;
-        backdrop-filter: blur(4px);
-    }
-
-    .resumen-card.position-sticky {
-        top: 88px;
-    }
-
-    .resumen-card .card-body {
-        padding: 1.5rem;
-    }
-
-    .resumen-metric h4, .resumen-metric h3 {
-        font-weight: 700;
-    }
-
-    .resumen-metric + hr {
-        margin: 1.25rem 0;
-    }
-
-    .resumen-chips .badge {
-        font-size: 0.75rem;
-        padding: 0.4rem 0.75rem;
-        border-radius: 999px;
-    }
-
-    .badge-pending {
-        background: rgba(255,193,7,0.15);
-        color: #d39e00;
-        border: 1px solid rgba(255,193,7,0.35);
-    }
-
-    .badge-neutral {
-        background: rgba(108,117,125,0.15);
-        color: #495057;
-        border: 1px solid rgba(108,117,125,0.3);
-    }
-
-    .table-glow {
-        animation: tableGlow 1.6s ease;
-    }
-
-    @keyframes tableGlow {
-        0% { box-shadow: inset 0 0 0 rgba(13,110,253,0); background-color: rgba(13,110,253,0.08); }
-        40% { background-color: rgba(13,110,253,0.12); }
-        100% { box-shadow: inset 0 0 0 rgba(13,110,253,0); background-color: transparent; }
-    }
-
-    .btn-action-group .btn {
-        min-width: 110px;
+        font-size: 0.85rem;
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        gap: 0.35rem;
+        gap: 0.5rem;
+        box-shadow: 0 2px 8px rgba(255, 176, 32, 0.3);
     }
 
-    tr.cambio-cobro-pendiente td {
-        background-color: rgba(255, 193, 7, 0.08);
-    }
-
-    tr.cambio-aprobado td {
-        background-color: rgba(13, 110, 253, 0.04);
-    }
-
-    .difference-positive {
-        color: #dc3545;
-        font-weight: 600;
-    }
-
-    .difference-negative {
-        color: #198754;
-        font-weight: 600;
-    }
-
-    .difference-zero {
-        color: #6c757d;
-        font-weight: 600;
+    .ticket-cambio-badge i {
+        font-size: 1rem;
     }
 </style>
 
@@ -353,96 +996,94 @@
 <div class="main-content">
     <div class="page-content">
         <div class="container-fluid">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h1 class="h3 mb-0">🔄 Gestión de Cambios y Devoluciones</h1>
-                    <p class="text-muted">Sucursal: <strong>{{ sucursal_actual.alias }}</strong></p>
-                </div>
-                <div>
-                    <button class="btn btn-primary" onclick="mostrarFormularioNuevoCambio()">
-                        <i class="fas fa-plus"></i> Nuevo Cambio/Devolución
-                    </button>
-                </div>
+    
+    <!-- Header NEXO -->
+    <div class="page-header-nexo mb-4">
+        <div class="row align-items-center">
+            <div class="col">
+                <h1><i class="ri-exchange-line"></i> Gestión de Cambios y Devoluciones</h1>
+                <p class="sucursal-info mb-0">
+                    <i class="ri-store-2-line me-1"></i> Sucursal: <strong>{{ sucursal_actual.alias }}</strong>
+                </p>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-nexo-success btn-lg" onclick="mostrarFormularioNuevoCambio()">
+                    <i class="ri-add-line me-1"></i> Nuevo Cambio/Devolución
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Estadísticas -->
+    <!-- Estadísticas NEXO -->
     <div class="row mb-4 g-3" id="estadisticas-cards">
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body p-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card-stats-nexo h-100">
+                <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
-                            <div class="avatar-sm rounded-circle bg-primary bg-soft">
-                                <span class="avatar-title rounded-circle bg-primary">
-                                    <i class="ri-exchange-line text-white fs-4"></i>
-                                </span>
+                            <div class="stat-icon bg-nexo-primary">
+                                <i class="ri-exchange-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1 ms-3">
-                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Total Cambios</p>
-                            <h3 class="fs-3 fw-bold mb-0" id="stat-total">0</h3>
+                            <p class="stat-label mb-1">Total Cambios</p>
+                            <h3 class="stat-value mb-0" id="stat-total">0</h3>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body p-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card-stats-nexo h-100">
+                <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
-                            <div class="avatar-sm rounded-circle bg-warning bg-soft">
-                                <span class="avatar-title rounded-circle bg-warning">
-                                    <i class="ri-time-line text-white fs-4"></i>
-                                </span>
+                            <div class="stat-icon bg-nexo-warning">
+                                <i class="ri-time-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1 ms-3">
-                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Pendientes</p>
-                            <h3 class="fs-3 fw-bold mb-0" id="stat-pendientes">0</h3>
+                            <p class="stat-label mb-1">Pendientes</p>
+                            <h3 class="stat-value mb-0" id="stat-pendientes">0</h3>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body p-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card-stats-nexo h-100">
+                <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
-                            <div class="avatar-sm rounded-circle bg-success bg-soft">
-                                <span class="avatar-title rounded-circle bg-success">
-                                    <i class="ri-check-double-line text-white fs-4"></i>
-                                </span>
+                            <div class="stat-icon bg-nexo-success">
+                                <i class="ri-check-double-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1 ms-3">
-                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Completados</p>
-                            <h3 class="fs-3 fw-bold mb-0" id="stat-completados">0</h3>
+                            <p class="stat-label mb-1">Completados</p>
+                            <h3 class="stat-value mb-0" id="stat-completados">0</h3>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body p-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card-stats-nexo h-100 {% if total_tickets_pendientes > 0 %}border border-danger border-2{% endif %}">
+                <div class="card-body">
                     <div class="d-flex align-items-center">
                         <div class="flex-shrink-0">
-                            <div class="avatar-sm rounded-circle bg-info bg-soft">
-                                <span class="avatar-title rounded-circle bg-info">
-                                    <i class="ri-money-dollar-circle-line text-white fs-4"></i>
-                                </span>
+                            <div class="stat-icon bg-danger">
+                                <i class="ri-wallet-3-line"></i>
                             </div>
                         </div>
                         <div class="flex-grow-1 ms-3">
-                            <p class="text-uppercase fw-medium text-muted text-truncate mb-1 fs-6">Diferencia Total</p>
-                            <h3 class="fs-3 fw-bold mb-0" id="stat-diferencia">$0</h3>
+                            <p class="stat-label mb-1">Pendientes Cobro</p>
+                            <h3 class="stat-value mb-0 {% if total_tickets_pendientes > 0 %}text-danger{% endif %}" id="stat-pendientes-cobro">{{ total_tickets_pendientes }}</h3>
+                            {% if total_tickets_pendientes > 0 %}
+                            <small class="text-danger"><i class="ri-alert-fill"></i> Por procesar</small>
+                            {% else %}
+                            <small class="text-success"><i class="ri-check-line"></i> Al día</small>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -450,187 +1091,350 @@
         </div>
     </div>
 
-    <!-- Filtros -->
-    <div class="card mb-4">
-        <div class="card-body search-section">
-            <div class="row">
-                <div class="col-md-2">
-                    <label class="form-label">Fecha Desde</label>
-                    <input type="date" class="form-control" id="filtro-fecha-desde">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Fecha Hasta</label>
-                    <input type="date" class="form-control" id="filtro-fecha-hasta">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Tipo Operación</label>
-                    <select class="form-control" id="filtro-tipo-operacion">
-                        <option value="">Todos</option>
-                        {% for value, display in tipo_operacion_choices %}
-                        <option value="{{ value }}">{{ display }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Estado</label>
-                    <select class="form-control" id="filtro-estado">
-                        <option value="">Todos</option>
-                        {% for value, display in estado_choices %}
-                        <option value="{{ value }}">{{ display }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Buscar</label>
-                    <input type="text" class="form-control" id="filtro-buscar" placeholder="Nº Operación, Ticket, Cliente...">
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label">&nbsp;</label>
-                    <button class="btn btn-info btn-block" onclick="aplicarFiltros()">
-                        <i class="fas fa-search"></i>
-                    </button>
-                </div>
+    <!-- ✅ SECCIÓN: Tickets de Cambio Pendientes de Cobro/Devolución -->
+    {% if tickets_cambio_pendientes %}
+    <div class="card shadow-sm mb-4 border-warning">
+        <div class="card-header bg-warning text-dark py-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="ri-wallet-3-line me-2"></i> 
+                    Tickets de Cambio Pendientes de Cobro/Devolución
+                    <span class="badge bg-danger ms-2">{{ total_tickets_pendientes }}</span>
+                </h5>
+                <a href="{% url 'pos_dashboard' %}" class="btn btn-sm btn-dark">
+                    <i class="ri-arrow-right-line me-1"></i> Ir al POS
+                </a>
             </div>
         </div>
-    </div>
-
-    <!-- Tabla de Cambios -->
-    <div class="card">
-        <div class="card-body">
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-striped" id="tabla-cambios">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th width="100"># Ticket</th>
+                            <th>Cliente</th>
+                            <th width="120" class="text-center">Tipo</th>
+                            <th width="120" class="text-end">Monto</th>
+                            <th width="150">Vendedor</th>
+                            <th width="120">Fecha/Hora</th>
+                            <th width="120" class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ticket in tickets_cambio_pendientes %}
+                        <tr>
+                            <td>
+                                <span class="fw-bold fs-5 text-primary">#{{ ticket.correlativo }}</span>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">{{ ticket.cliente_nombre }}</div>
+                                {% if ticket.cliente_rut %}
+                                <small class="text-muted">{{ ticket.cliente_rut }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-{{ ticket.clase }} fs-6">
+                                    {{ ticket.icono }} {{ ticket.texto }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <span class="fw-bold fs-5 text-{{ ticket.clase }}">${{ ticket.total|floatformat:0 }}</span>
+                            </td>
+                            <td>{{ ticket.vendedor }}</td>
+                            <td>
+                                <small>{{ ticket.fecha }}</small><br>
+                                <small class="text-muted">{{ ticket.hora }}</small>
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'pos_dashboard' %}?ticket={{ ticket.correlativo }}" 
+                                   class="btn btn-sm btn-{{ ticket.clase }}" 
+                                   title="Procesar en POS">
+                                    {% if ticket.tipo_operacion == 'COBRO' %}
+                                    <i class="ri-money-dollar-circle-line me-1"></i> Cobrar
+                                    {% elif ticket.tipo_operacion == 'DEVOLUCION' %}
+                                    <i class="ri-refund-2-line me-1"></i> Devolver
+                                    {% else %}
+                                    <i class="ri-check-line me-1"></i> Procesar
+                                    {% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Filtros NEXO -->
+    <div class="search-section mb-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label"><i class="ri-calendar-line me-1"></i> Fecha Desde</label>
+                <input type="date" class="form-control" id="filtro-fecha-desde">
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label"><i class="ri-calendar-check-line me-1"></i> Fecha Hasta</label>
+                <input type="date" class="form-control" id="filtro-fecha-hasta">
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label"><i class="ri-file-list-3-line me-1"></i> Tipo Operación</label>
+                <select class="form-select" id="filtro-tipo-operacion">
+                    <option value="">Todos los tipos</option>
+                    {% for value, display in tipo_operacion_choices %}
+                    <option value="{{ value }}">{{ display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-4">
+                <label class="form-label"><i class="ri-checkbox-circle-line me-1"></i> Estado</label>
+                <select class="form-select" id="filtro-estado">
+                    <option value="">Todos los estados</option>
+                    {% for value, display in estado_choices %}
+                    <option value="{{ value }}">{{ display }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label"><i class="ri-search-line me-1"></i> Buscar</label>
+                <div class="input-group input-group-nexo">
+                    <span class="input-group-text"><i class="ri-search-2-line"></i></span>
+                    <input type="text" class="form-control" id="filtro-buscar" placeholder="Nº Operación, Ticket, Cliente, RUT...">
+                </div>
+            </div>
+            <div class="col-lg-1 col-md-2">
+                <button class="btn btn-nexo-primary w-100" onclick="aplicarFiltros()">
+                    <i class="ri-search-line"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Cambios NEXO -->
+    <div class="card-nexo">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <i class="ri-file-list-3-line me-2"></i>
+                <span class="fw-bold">Historial de Cambios y Devoluciones</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-nexo-outline" onclick="exportarCambios()">
+                    <i class="ri-file-excel-line me-1"></i> Exportar
+                </button>
+                <button class="btn btn-sm btn-nexo-outline" onclick="actualizarDashboard()">
+                    <i class="ri-refresh-line me-1"></i> Actualizar
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-nexo mb-0" id="tabla-cambios">
                     <thead>
                         <tr>
                             <th>Nº Operación</th>
                             <th>Fecha</th>
                             <th>Tipo</th>
                             <th>Estado</th>
-                            <th>Ticket Original</th>
+                            <th>Doc. Original</th>
                             <th>Cliente</th>
-                            <th>Diferencia</th>
+                            <th class="text-end">Diferencia</th>
                             <th>Solicitado por</th>
-                            <th>Acciones</th>
+                            <th class="text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-cambios">
                         <!-- Datos cargados dinámicamente -->
+                        <tr>
+                            <td colspan="9" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="text-muted mt-2 mb-0">Cargando cambios y devoluciones...</p>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
             
-            <!-- Paginación -->
-            <div class="d-flex justify-content-between align-items-center mt-3">
-                <div>
-                    <span id="info-paginacion">Mostrando 0 de 0 registros</span>
+            <!-- Paginación NEXO -->
+            <div class="d-flex justify-content-between align-items-center p-3 border-top">
+                <div class="text-muted">
+                    <small id="info-paginacion">Mostrando 0 de 0 registros</small>
                 </div>
                 <nav>
-                    <ul class="pagination" id="paginacion">
+                    <ul class="pagination pagination-sm mb-0" id="paginacion">
                         <!-- Paginación dinámica -->
                     </ul>
                 </nav>
             </div>
         </div>
-        <!-- container-fluid -->
     </div>
     <!-- End Page-content -->
 </div>
 <!-- end main content-->
 
-<!-- Modal: Nuevo Cambio/Devolución -->
+<!-- Modal: Nuevo Cambio/Devolución NEXO -->
 <div class="modal fade" id="modalNuevoCambio" tabindex="-1" data-backdrop="static">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">🔄 Nuevo Cambio/Devolución</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-nexo-secondary">
+                <h5 class="modal-title text-white">
+                    <i class="ri-exchange-line me-2" style="color: var(--nexo-accent);"></i> 
+                    Nuevo Cambio/Devolución
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body" style="background: var(--nexo-gray-100);">
+                <!-- Wizard Stepper NEXO -->
                 <div class="wizard-stepper" id="wizard-stepper">
                     <div class="wizard-step active" data-step="1">
-                        <div class="wizard-circle">1</div>
+                        <div class="wizard-circle">
+                            <i class="ri-search-line"></i>
+                        </div>
                         <div class="wizard-label">Buscar documento</div>
                     </div>
                     <div class="wizard-step" data-step="2">
-                        <div class="wizard-circle">2</div>
+                        <div class="wizard-circle">
+                            <i class="ri-shopping-bag-line"></i>
+                        </div>
                         <div class="wizard-label">Seleccionar productos</div>
                     </div>
                     <div class="wizard-step" data-step="3">
-                        <div class="wizard-circle">3</div>
+                        <div class="wizard-circle">
+                            <i class="ri-check-double-line"></i>
+                        </div>
                         <div class="wizard-label">Revisar y enviar</div>
                     </div>
                 </div>
-                <!-- Paso 1: Buscar DTE Original -->
+                
+                <!-- Paso 1: Buscar Documento Original -->
                 <div id="paso-buscar-ticket">
-                    <div class="alert alert-primary border-primary">
-                        <h6 class="alert-heading mb-2"><i class="ri-information-line"></i> Paso 1: Buscar Documento de Venta</h6>
-                        <p class="mb-0 small">Ingrese el <strong>número de DTE</strong> (Factura o Boleta Electrónica) y la <strong>fecha de compra</strong> para buscar el documento</p>
+                    <div class="alert alert-nexo-info mb-3 py-2">
+                        <span class="small">
+                            <i class="ri-information-line me-1"></i> <strong>Paso 1:</strong> Seleccione tipo de documento, ingrese fecha y número para buscar la venta original.
+                        </span>
                     </div>
-                    <div class="row">
-                        <div class="col-md-4">
-                            <label class="form-label fw-bold">Fecha de Compra <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control form-control-lg" id="input-fecha-compra" required>
-                            <small class="text-muted">Fecha de emisión del documento</small>
+
+                    <!-- Selector de tipo de documento -->
+                    <div class="card-nexo mb-3" id="seccion-tipo-documento">
+                        <div class="card-header py-2">
+                            <i class="ri-file-search-line me-2"></i> Tipo de Documento
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label fw-bold">Número de DTE (Factura/Boleta) *</label>
-                            <div class="input-group input-group-lg">
-                                <span class="input-group-text">
-                                    <i class="ri-file-list-line"></i>
-                                </span>
-                                <input type="text" class="form-control" id="input-ticket-correlativo" placeholder="Ej: 12345" required>
-                                <button class="btn btn-primary" onclick="buscarDocumentoParaCambio()">
-                                    <i class="fas fa-search"></i> Buscar
-                                </button>
+                        <div class="card-body py-2">
+                            <div class="doc-type-selector">
+                                <div class="doc-type-option active" data-tipo="DTE" onclick="seleccionarTipoDocumento('DTE')">
+                                    <i class="ri-file-text-line"></i>
+                                    <div class="doc-label">DTE / Boleta</div>
+                                    <small class="text-muted">Factura o Boleta Electrónica</small>
+                                </div>
+                                <div class="doc-type-option" data-tipo="TICKET_CAMBIO" onclick="seleccionarTipoDocumento('TICKET_CAMBIO')">
+                                    <i class="ri-exchange-line"></i>
+                                    <div class="doc-label">Ticket de Cambio</div>
+                                    <small class="text-muted">Ticket impreso para cambios</small>
+                                </div>
+                                <div class="doc-type-option" data-tipo="TICKET" onclick="seleccionarTipoDocumento('TICKET')">
+                                    <i class="ri-ticket-2-line"></i>
+                                    <div class="doc-label">Nº Ticket Interno</div>
+                                    <small class="text-muted">Correlativo interno del sistema</small>
+                                </div>
                             </div>
-                            <small class="text-muted">Número del documento tributario electrónico</small>
-                        </div>
-                        <div class="col-md-3 d-flex align-items-end">
-                            <button class="btn btn-outline-secondary w-100" onclick="limpiarBusqueda()">
-                                <i class="ri-refresh-line"></i> Limpiar
-                            </button>
+                            <input type="hidden" id="tipo-documento-seleccionado" value="DTE">
                         </div>
                     </div>
                     
-                    <!-- Información del Ticket -->
-                    <div id="info-ticket" class="ticket-info" style="display: none;">
-                        <div class="row">
-                            <div class="col-md-2">
-                                <strong>Ticket #:</strong>
-                                <div id="ticket-correlativo">-</div>
-                            </div>
-                            <div class="col-md-2">
-                                <strong>Fecha:</strong>
-                                <div id="ticket-fecha">-</div>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Cliente:</strong>
-                                <div id="ticket-cliente">-</div>
-                            </div>
-                            <div class="col-md-2">
-                                <strong>Total:</strong>
-                                <div id="ticket-total">$0</div>
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Vendedor:</strong>
-                                <div id="ticket-vendedor">-</div>
+                    <!-- Búsqueda del documento -->
+                    <div class="card-nexo mb-3" id="seccion-datos-documento">
+                        <div class="card-header py-2">
+                            <i class="ri-search-2-line me-2"></i> Datos del Documento
+                        </div>
+                        <div class="card-body py-2">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">
+                                        <i class="ri-calendar-line me-1 text-primary"></i> Fecha <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="date" class="form-control" id="input-fecha-compra" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small mb-1">
+                                        <i class="ri-file-list-line me-1 text-primary"></i> 
+                                        <span id="label-numero-documento">Número de DTE</span> <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group input-group-nexo">
+                                        <span class="input-group-text">
+                                            <i class="ri-hashtag" id="icono-tipo-documento"></i>
+                                        </span>
+                                        <input type="text" class="form-control" id="input-ticket-correlativo" 
+                                               placeholder="Ej: 12345" required autocomplete="off">
+                                        <button class="btn btn-nexo-primary" onclick="buscarDocumentoParaCambio()">
+                                            <i class="ri-search-line me-1"></i> Buscar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-nexo-outline w-100" onclick="limpiarBusqueda()">
+                                        <i class="ri-refresh-line me-1"></i> Limpiar
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="row mt-2">
-                            <div class="col-md-3">
-                                <strong>Días transcurridos:</strong>
-                                <div id="ticket-dias">0</div>
+                    </div>
+                    
+                    <!-- Información del Ticket Encontrado -->
+                    <div id="info-ticket" class="ticket-info" style="display: none;">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="ticket-cambio-badge">
+                                    <i class="ri-check-double-line"></i> Documento Encontrado
+                                </span>
+                                <span class="badge" id="badge-tipo-documento-encontrado">DTE</span>
+                                <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="limpiarBusqueda()" title="Buscar otro documento">
+                                    <i class="ri-refresh-line"></i> Cambiar
+                                </button>
                             </div>
-                            <div class="col-md-3">
-                                <strong>Fecha límite:</strong>
-                                <div id="ticket-fecha-limite">-</div>
+                            <div class="d-flex align-items-center gap-3">
+                                <span class="small"><i class="ri-time-line text-warning me-1"></i> <strong id="ticket-dias">0</strong> días</span>
+                                <span id="ticket-estado-plazo" class="badge bg-success">-</span>
+                                <span class="small text-muted"><i class="ri-history-line me-1"></i> <span id="ticket-cambios-anteriores">0</span> cambios prev.</span>
                             </div>
-                            <div class="col-md-3">
-                                <strong>Estado:</strong>
-                                <div id="ticket-estado-plazo">-</div>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col">
+                                <div class="bg-light rounded p-2 text-center">
+                                    <small class="text-muted d-block">Doc #</small>
+                                    <strong id="ticket-correlativo">-</strong>
+                                </div>
                             </div>
-                            <div class="col-md-3">
-                                <strong>Cambios anteriores:</strong>
-                                <div id="ticket-cambios-anteriores">0</div>
+                            <div class="col">
+                                <div class="bg-light rounded p-2 text-center">
+                                    <small class="text-muted d-block">Fecha</small>
+                                    <strong id="ticket-fecha">-</strong>
+                                </div>
+                            </div>
+                            <div class="col-3">
+                                <div class="bg-light rounded p-2 text-center">
+                                    <small class="text-muted d-block">Cliente</small>
+                                    <strong id="ticket-cliente" class="text-truncate d-block">-</strong>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="bg-light rounded p-2 text-center">
+                                    <small class="text-muted d-block">Total</small>
+                                    <strong id="ticket-total" class="text-success">$0</strong>
+                                </div>
+                            </div>
+                            <div class="col-2">
+                                <div class="bg-light rounded p-2 text-center">
+                                    <small class="text-muted d-block">Vendedor</small>
+                                    <strong id="ticket-vendedor" class="text-truncate d-block">-</strong>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="bg-light rounded p-2 text-center">
+                                    <small class="text-muted d-block">Límite</small>
+                                    <strong id="ticket-fecha-limite">-</strong>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -638,24 +1442,15 @@
 
                 <!-- Paso 2: Seleccionar Productos -->
                 <div id="paso-seleccionar-productos" style="display: none;">
-                    <div class="row g-4">
-                        <div class="col-xl-8 col-lg-8">
-                            <div class="alert alert-primary border-primary">
-                                <h6 class="alert-heading mb-2"><i class="ri-information-line"></i> Paso 2: Seleccionar Productos</h6>
-                                <ol class="mb-0 ps-3 small">
-                                    <li>Marca los productos que el cliente está devolviendo</li>
-                                    <li>Escanea o agrega los productos nuevos que entregarás</li>
-                                    <li>Ingresa observaciones relevantes</li>
-                                </ol>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">
-                                        <i class="ri-question-line"></i> Motivo Principal *
-                                    </label>
-                                    <select class="form-control form-control-lg" id="select-motivo-principal" required>
-                                        <option value="">-- Seleccionar motivo --</option>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="alert alert-primary border-primary mb-0 py-2 px-3 flex-grow-1 me-3">
+                                    <span class="small"><i class="ri-information-line me-1"></i> <strong>Paso 2:</strong> Escanea productos a devolver → Agrega nuevos → Completa observaciones</span>
+                                </div>
+                                <div style="min-width: 200px;">
+                                    <select class="form-control form-control-sm" id="select-motivo-principal" required>
+                                        <option value="">Motivo *</option>
                                         {% for value, display in motivo_choices %}
                                         <option value="{{ value }}">{{ display }}</option>
                                         {% endfor %}
@@ -664,72 +1459,60 @@
                             </div>
 
                     <!-- Sistema de Escaneo de Productos -->
-                    <div class="card border-primary mb-4">
-                        <div class="card-header bg-primary text-white">
-                            <h6 class="mb-0"><i class="ri-barcode-line"></i> Escaneo de Productos a Devolver/Cambiar</h6>
+                    <div class="card border-primary mb-3">
+                        <div class="card-header bg-primary py-2">
+                            <h6 class="mb-0 small text-white"><i class="ri-barcode-line me-1"></i> Escaneo de Productos a Devolver/Cambiar</h6>
                         </div>
-                        <div class="card-body">
-                            <div class="alert alert-info mb-3">
-                                <i class="ri-lightbulb-line"></i> 
-                                <strong>Recomendado:</strong> Escanee los productos que el cliente está devolviendo para validar que correspondan al documento.
-                            </div>
-                            
-                            <div class="row mb-3">
-                                <div class="col-md-8">
-                                    <label class="form-label fw-bold">
-                                        <i class="ri-barcode-line"></i> Escanear SKU del Producto
-                                    </label>
-                                    <div class="input-group input-group-lg">
-                                        <span class="input-group-text">
+                        <div class="card-body py-2 px-3">
+                            <div class="row g-2 align-items-center">
+                                <div class="col">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light">
                                             <i class="ri-scan-line"></i>
                                         </span>
                                         <input 
                                             type="text" 
                                             class="form-control" 
                                             id="input-escanear-sku" 
-                                            placeholder="Escanee o escriba el SKU del producto..."
+                                            placeholder="Escanee o escriba SKU..."
                                             autocomplete="off">
                                         <button class="btn btn-primary" onclick="escanearProducto()">
                                             <i class="ri-add-line"></i> Agregar
                                         </button>
                                     </div>
-                                    <small class="text-muted">Presione Enter después de escanear o escribir el SKU</small>
                                 </div>
-                                <div class="col-md-4 d-flex align-items-end gap-2">
-                                    <button class="btn btn-outline-info flex-fill" onclick="verDetalleDocumento()">
-                                        <i class="ri-eye-line"></i> Ver Detalle
+                                <div class="col-auto d-flex gap-2">
+                                    <button class="btn btn-outline-info" onclick="verDetalleDocumento()" title="Ver detalle documento">
+                                        <i class="ri-eye-line me-1"></i> Ver
                                     </button>
-                                    <button class="btn btn-outline-secondary flex-fill" onclick="limpiarEscaneos()">
-                                        <i class="ri-delete-bin-line"></i> Limpiar
+                                    <button class="btn btn-outline-secondary" onclick="limpiarEscaneos()" title="Limpiar escaneos">
+                                        <i class="ri-delete-bin-line me-1"></i> Limpiar
                                     </button>
                                 </div>
                             </div>
                             
                             <!-- Lista de productos escaneados -->
-                            <div id="productos-escaneados-container" style="display: none;">
-                                <div class="alert alert-success">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span>
-                                            <i class="ri-check-line"></i> 
-                                            <strong><span id="count-escaneados">0</span> producto(s) escaneado(s)</strong>
-                                        </span>
-                                        <button class="btn btn-sm btn-success" onclick="aplicarProductosEscaneados()">
-                                            <i class="ri-checkbox-multiple-line"></i> Aplicar Selección
-                                        </button>
-                                    </div>
+                            <div id="productos-escaneados-container" style="display: none;" class="mt-2">
+                                <div class="d-flex justify-content-between align-items-center bg-success-subtle rounded px-2 py-1 mb-1">
+                                    <span class="small text-success fw-bold">
+                                        <i class="ri-check-line"></i> <span id="count-escaneados">0</span> escaneado(s)
+                                    </span>
+                                    <button class="btn btn-sm btn-success py-0" onclick="aplicarProductosEscaneados()">
+                                        <i class="ri-checkbox-multiple-line"></i> Aplicar
+                                    </button>
                                 </div>
-                                <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
-                                    <table class="table table-sm table-striped">
-                                        <thead class="table-dark sticky-top">
+                                <div class="table-responsive" style="max-height: 120px; overflow-y: auto;">
+                                    <table class="table table-sm table-striped mb-0">
+                                        <thead class="table-dark sticky-top" style="font-size: 0.8rem;">
                                             <tr>
                                                 <th>SKU</th>
                                                 <th>Artículo</th>
                                                 <th>Talla</th>
-                                                <th>Veces Escaneado</th>
-                                                <th>Acción</th>
+                                                <th>Veces</th>
+                                                <th></th>
                                             </tr>
                                         </thead>
-                                        <tbody id="tbody-productos-escaneados">
+                                        <tbody id="tbody-productos-escaneados" style="font-size: 0.8rem;">
                                             <!-- Productos escaneados dinámicamente -->
                                         </tbody>
                                     </table>
@@ -739,39 +1522,29 @@
                     </div>
 
                     <!-- Productos del Ticket Original -->
-                    <div class="productos-section">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="mb-0"><i class="ri-shopping-bag-line"></i> Productos Disponibles para Cambio</h6>
+                    <div class="productos-section mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 small"><i class="ri-shopping-bag-line text-primary"></i> Productos Disponibles para Cambio <small class="text-muted">(escanee para habilitar)</small></h6>
                             <span class="badge bg-info" id="badge-productos-seleccionados">0 seleccionados</span>
                         </div>
-                        <div class="alert alert-warning mt-2 mb-3">
-                            <i class="ri-information-line"></i> 
-                            <strong>Importante:</strong> El precio mostrado es el precio de compra original. 
-                            Si el precio actual del producto cambió, se calculará una diferencia.
-                        </div>
-                        <div class="alert alert-info mt-2 mb-3">
-                            <i class="ri-lock-line"></i> 
-                            <strong>Validación por Escaneo:</strong> Los checkboxes están bloqueados. 
-                            Debe escanear cada producto para habilitarlos y validar que correspondan al documento.
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover">
-                                <thead class="table-light">
+                        <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light sticky-top" style="font-size: 0.8rem;">
                                     <tr>
-                                        <th width="60">
-                                            <input type="checkbox" class="form-check-input" id="check-all-productos" title="Escanee los productos para habilitar" disabled>
+                                        <th width="40">
+                                            <input type="checkbox" class="form-check-input" id="check-all-productos" title="Escanee productos" disabled>
                                         </th>
                                         <th class="columna-sku-validacion" style="display: none;">SKU</th>
                                         <th>Artículo</th>
                                         <th>Talla</th>
-                                        <th>Cant. Original</th>
-                                        <th>Cant. Disponible</th>
-                                        <th>Precio Compra</th>
-                                        <th width="100">Cantidad</th>
+                                        <th class="text-center">Orig.</th>
+                                        <th class="text-center">Disp.</th>
+                                        <th class="text-end">Precio</th>
+                                        <th width="70" class="text-center">Cant.</th>
                                         <th>Condición</th>
                                     </tr>
                                 </thead>
-                                <tbody id="tbody-productos-originales">
+                                <tbody id="tbody-productos-originales" style="font-size: 0.85rem;">
                                     <!-- Productos cargados dinámicamente -->
                                 </tbody>
                             </table>
@@ -779,91 +1552,105 @@
                     </div>
 
                     <!-- Productos Nuevos (solo para cambios) -->
-                    <div id="seccion-productos-nuevos" class="productos-section">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="mb-0"><i class="ri-add-circle-line"></i> Productos Nuevos</h6>
+                    <div id="seccion-productos-nuevos" class="productos-section mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 small"><i class="ri-add-circle-line text-success"></i> Productos Nuevos para Entregar</h6>
                             <span class="badge bg-success" id="badge-productos-nuevos">0 agregados</span>
                         </div>
-                        <div class="row mb-3">
-                            <div class="col-md-8">
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="ri-search-line"></i></span>
-                                    <input type="text" class="form-control" id="input-buscar-producto" placeholder="Buscar producto por SKU o nombre...">
-                                    <button class="btn btn-primary" onclick="buscarProductosParaCambio()">
-                                        <i class="ri-search-line"></i> Buscar
-                                    </button>
+                        
+                        <!-- Buscador de Productos -->
+                        <div class="bg-light rounded p-2 mb-2">
+                            <div class="row g-2 align-items-center">
+                                <div class="col">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white"><i class="ri-barcode-line"></i></span>
+                                        <input type="text" class="form-control" id="input-buscar-producto" 
+                                               placeholder="Buscar SKU, nombre o marca..."
+                                               autocomplete="off">
+                                        <button class="btn btn-primary" onclick="buscarProductosParaCambio()">
+                                            <i class="ri-search-line"></i> Buscar
+                                        </button>
+                                    </div>
                                 </div>
-                                <small class="text-muted">Busca el producto que entregarás al cliente</small>
                             </div>
                         </div>
                         
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>SKU</th>
-                                        <th>Artículo</th>
-                                        <th>Marca</th>
-                                        <th>Talla</th>
-                                        <th>Stock</th>
-                                        <th>Precio</th>
-                                        <th>Cantidad</th>
-                                        <th>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbody-productos-nuevos">
-                                    <!-- Productos nuevos seleccionados -->
-                                </tbody>
-                            </table>
+                        <!-- Tabla de Resultados de Búsqueda -->
+                        <div id="panel-resultados-busqueda" class="card border shadow-sm mb-2" style="display: none;">
+                            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-1 px-2">
+                                <span class="small"><i class="ri-list-check-2"></i> Resultados</span>
+                                <div>
+                                    <span id="contador-resultados" class="badge bg-white text-primary me-1 small">0</span>
+                                    <button class="btn btn-sm btn-light py-0 px-1" onclick="cerrarResultadosBusqueda()" title="Cerrar">
+                                        <i class="ri-close-line"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 180px; overflow-y: auto;">
+                                    <table id="tabla-busqueda-productos" class="table table-sm table-hover table-striped mb-0">
+                                        <thead class="table-light sticky-top" style="font-size: 0.8rem;">
+                                            <tr>
+                                                <th>SKU</th>
+                                                <th>Producto</th>
+                                                <th>Marca</th>
+                                                <th class="text-center">Talla</th>
+                                                <th class="text-center">Stock</th>
+                                                <th class="text-end">Precio</th>
+                                                <th class="text-center" width="60"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-resultados-busqueda" style="font-size: 0.8rem;">
+                                            <!-- Resultados de búsqueda -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tabla de Productos Seleccionados -->
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white py-1 px-2">
+                                <span class="small"><i class="ri-shopping-bag-3-line"></i> Productos a Entregar</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 160px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light sticky-top" style="font-size: 0.8rem;">
+                                            <tr>
+                                                <th>SKU</th>
+                                                <th>Artículo</th>
+                                                <th>Marca</th>
+                                                <th class="text-center">Talla</th>
+                                                <th class="text-center">Stock</th>
+                                                <th class="text-end">Precio</th>
+                                                <th class="text-center" width="60">Cant.</th>
+                                                <th class="text-center" width="40"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody-productos-nuevos" style="font-size: 0.85rem;">
+                                            <tr id="fila-sin-productos-nuevos">
+                                                <td colspan="8" class="text-center text-muted py-2">
+                                                    <i class="ri-inbox-2-line opacity-50 me-1"></i>
+                                                    <span class="small">Busca y agrega productos para entregar</span>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                             <!-- Observaciones -->
-                            <div class="row">
+                            <div class="row g-2 mt-1">
                                 <div class="col-md-6">
-                                    <label class="form-label">Observaciones del Cliente</label>
-                                    <textarea class="form-control" id="textarea-obs-cliente" rows="3"></textarea>
+                                    <label class="form-label small mb-1">Observaciones del Cliente</label>
+                                    <textarea class="form-control form-control-sm" id="textarea-obs-cliente" rows="2" placeholder="Motivo del cliente..."></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Observaciones del Vendedor</label>
-                                    <textarea class="form-control" id="textarea-obs-vendedor" rows="3"></textarea>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-xl-4 col-lg-4">
-                            <div id="panel-resumen-cambio" class="card shadow-sm resumen-card position-sticky top-0">
-                                <div class="card-header bg-white border-0 pb-0">
-                                    <h6 class="mb-1"><i class="ri-dashboard-line"></i> Resumen en tiempo real</h6>
-                                    <small class="text-muted">Actualizado con cada selección</small>
-                                </div>
-                                <div class="card-body">
-                                    <div class="d-flex flex-wrap gap-2 mb-3 resumen-chips">
-                                        <span class="badge bg-light text-muted" id="chip-tipo-operacion">Se detectará automáticamente</span>
-                                        <span class="badge bg-secondary" id="chip-diferencia">Sin diferencia</span>
-                                    </div>
-                                    <div class="resumen-metric mb-3">
-                                        <small class="text-muted d-block mb-1">Productos a devolver</small>
-                                        <h4 class="mb-0" id="panel-productos-devolver">0</h4>
-                                        <span class="text-muted" id="panel-monto-original">$0</span>
-                                    </div>
-                                    <div class="resumen-metric mb-3">
-                                        <small class="text-muted d-block mb-1">Productos nuevos</small>
-                                        <h4 class="mb-0" id="panel-productos-nuevos">0</h4>
-                                        <span class="text-muted" id="panel-monto-nuevo">$0</span>
-                                    </div>
-                                    <div class="resumen-metric mb-3">
-                                        <small class="text-muted d-block mb-1">Diferencia</small>
-                                        <h3 class="mb-1" id="panel-diferencia">$0</h3>
-                                        <span class="badge bg-secondary" id="panel-estado-cobro">Sin diferencia</span>
-                                    </div>
-                                    <hr>
-                                    <div class="resumen-extra">
-                                        <small class="text-muted d-block mb-2">Consejos</small>
-                                        <ul class="list-unstyled small mb-0" id="panel-notas">
-                                            <li><i class="ri-checkbox-circle-line text-success me-1"></i> Escanea productos del ticket para asignarlos rápidamente.</li>
-                                            <li><i class="ri-checkbox-circle-line text-success me-1"></i> Agrega productos nuevos para cambios de talla o color.</li>
-                                        </ul>
-                                    </div>
+                                    <label class="form-label small mb-1">Observaciones del Vendedor</label>
+                                    <textarea class="form-control form-control-sm" id="textarea-obs-vendedor" rows="2" placeholder="Notas internas..."></textarea>
                                 </div>
                             </div>
                         </div>
@@ -910,19 +1697,48 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="ri-close-line"></i> Cancelar
-                </button>
-                <button type="button" class="btn btn-outline-secondary" id="btn-anterior" onclick="pasoAnterior()" style="display: none;">
-                    <i class="ri-arrow-left-line"></i> Anterior
-                </button>
-                <button type="button" class="btn btn-primary" id="btn-siguiente" onclick="siguientePaso()" style="display: none;">
-                    Siguiente <i class="ri-arrow-right-line"></i>
-                </button>
-                <button type="button" class="btn btn-success" id="btn-crear-cambio" onclick="crearCambioDevolucion()" style="display: none;">
-                    <i class="ri-save-line"></i> Crear Solicitud
-                </button>
+            <div class="modal-footer d-flex justify-content-between align-items-center py-2" style="background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #fff 100%);">
+                <!-- Resumen compacto en el footer -->
+                <div id="footer-resumen" class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2 px-3 py-1 rounded" style="background: rgba(0,102,255,0.1);">
+                        <i class="ri-arrow-down-circle-line text-primary"></i>
+                        <div class="text-start">
+                            <small class="text-muted d-block" style="font-size: 0.7rem; line-height: 1;">Devuelve</small>
+                            <strong class="text-primary" id="footer-monto-original" style="font-size: 0.95rem;">$0</strong>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 px-3 py-1 rounded" style="background: rgba(0,212,170,0.1);">
+                        <i class="ri-arrow-up-circle-line text-success"></i>
+                        <div class="text-start">
+                            <small class="text-muted d-block" style="font-size: 0.7rem; line-height: 1;">Recibe</small>
+                            <strong class="text-success" id="footer-monto-nuevo" style="font-size: 0.95rem;">$0</strong>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 px-3 py-1 rounded" id="footer-diferencia-container" style="background: rgba(138,138,154,0.1);">
+                        <i class="ri-exchange-dollar-line" id="footer-diferencia-icon"></i>
+                        <div class="text-start">
+                            <small class="text-muted d-block" style="font-size: 0.7rem; line-height: 1;">Diferencia</small>
+                            <strong id="footer-diferencia" style="font-size: 0.95rem;">$0</strong>
+                        </div>
+                    </div>
+                    <span class="badge" id="footer-tipo-badge" style="font-size: 0.75rem;">-</span>
+                </div>
+                
+                <!-- Botones de acción -->
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="ri-close-line"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="btn-anterior" onclick="pasoAnterior()" style="display: none;">
+                        <i class="ri-arrow-left-line"></i> Anterior
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btn-siguiente" onclick="siguientePaso()" style="display: none;">
+                        Siguiente <i class="ri-arrow-right-line"></i>
+                    </button>
+                    <button type="button" class="btn btn-success" id="btn-crear-cambio" onclick="crearCambioDevolucion()" style="display: none;">
+                        <i class="ri-save-line"></i> Crear Solicitud
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1644,8 +2460,10 @@ function resetResumenLateral() {
     $('#chip-diferencia').removeClass('bg-success badge-pending bg-danger text-white').addClass('bg-secondary').text('Sin diferencia');
     $('#badge-productos-seleccionados').text('0 seleccionados');
     $('#badge-productos-nuevos').text('0 agregados');
-    $('#panel-notas').html('<li><i class="ri-checkbox-circle-line text-success me-1"></i> Marca los productos del ticket que el cliente devuelve.</li><li><i class="ri-checkbox-circle-line text-success me-1"></i> Agrega productos nuevos si entregarás un reemplazo.</li>');
     actualizarChipTipoOperacion();
+    
+    // Resetear footer también
+    actualizarResumenFooter(0, 0, 0);
 }
 
 function actualizarChipTipoOperacion() {
@@ -1719,6 +2537,48 @@ function configurarEventos() {
             toggleProductoOriginal(index);
         });
     });
+}
+
+// ========== SELECCIÓN DE TIPO DE DOCUMENTO NEXO ==========
+
+function seleccionarTipoDocumento(tipo) {
+    // Actualizar UI de selección
+    $('.doc-type-option').removeClass('active');
+    $(`.doc-type-option[data-tipo="${tipo}"]`).addClass('active');
+    
+    // Guardar tipo seleccionado
+    $('#tipo-documento-seleccionado').val(tipo);
+    
+    // Actualizar textos según el tipo
+    const configuraciones = {
+        'DTE': {
+            label: 'Número de DTE',
+            placeholder: 'Ej: 12345',
+            helpText: 'Número del documento tributario electrónico',
+            icono: 'ri-file-text-line'
+        },
+        'TICKET_CAMBIO': {
+            label: 'Número de Ticket de Cambio',
+            placeholder: 'Ej: TC-00123',
+            helpText: 'Número del ticket de cambio impreso en venta anterior',
+            icono: 'ri-exchange-line'
+        },
+        'TICKET': {
+            label: 'Correlativo de Ticket',
+            placeholder: 'Ej: 456',
+            helpText: 'Correlativo interno del ticket en el sistema',
+            icono: 'ri-ticket-2-line'
+        }
+    };
+    
+    const config = configuraciones[tipo];
+    $('#label-numero-documento').text(config.label);
+    $('#input-ticket-correlativo').attr('placeholder', config.placeholder);
+    $('#help-text-documento').text(config.helpText);
+    $('#icono-tipo-documento').attr('class', config.icono);
+    
+    // Limpiar campos
+    $('#input-ticket-correlativo').val('').focus();
 }
 
 // ========== SISTEMA DE ESCANEO DE PRODUCTOS ==========
@@ -1919,7 +2779,7 @@ function verDetalleDocumento() {
     // Llenar información del documento
     $('#detalle-doc-numero').text(ticketActual.correlativo || '-');
     $('#detalle-doc-fecha').text(ticketActual.fecha || '-');
-    $('#detalle-doc-cliente').text(ticketActual.cliente || 'Cliente General');
+    $('#detalle-doc-cliente').text(ticketActual.cliente_nombre || ticketActual.cliente || 'Cliente General');
     $('#detalle-doc-total').text('$' + formatearNumero(ticketActual.total || 0));
     $('#detalle-doc-vendedor').text(ticketActual.vendedor || '-');
     $('#detalle-doc-dias').text(ticketActual.dias_transcurridos || '0');
@@ -1939,12 +2799,26 @@ function verDetalleDocumento() {
     } else {
         ticketActual.productos.forEach(producto => {
             const subtotal = (producto.precio_unitario || 0) * (producto.cantidad_original || 0);
+            const yaCambiado = producto.ya_cambiado || producto.cantidad_disponible === 0;
+            const cantidadCambiada = producto.cantidad_ya_cambiada || 0;
+            
+            // Estilos para productos ya cambiados
+            const rowClass = yaCambiado ? 'table-secondary text-decoration-line-through opacity-50' : '';
+            const badge = yaCambiado ? `<span class="badge bg-warning text-dark ms-1">Ya cambiado</span>` : 
+                         (cantidadCambiada > 0 ? `<span class="badge bg-info ms-1">Parcial: ${cantidadCambiada} cambiado</span>` : '');
+            
             tbody.append(`
-                <tr>
+                <tr class="${rowClass}">
                     <td><code>${producto.sku || '-'}</code></td>
-                    <td>${producto.articulo || '-'}</td>
+                    <td>
+                        ${producto.articulo || '-'}
+                        ${badge}
+                    </td>
                     <td>${producto.talla || '-'}</td>
-                    <td class="text-center">${producto.cantidad_original || 0}</td>
+                    <td class="text-center">
+                        ${producto.cantidad_original || 0}
+                        ${cantidadCambiada > 0 && !yaCambiado ? `<br><small class="text-success">Disp: ${producto.cantidad_disponible}</small>` : ''}
+                    </td>
                     <td class="text-end">$${formatearNumero(producto.precio_unitario || 0)}</td>
                     <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
                 </tr>
@@ -2327,6 +3201,10 @@ function resetearFormularioNuevoCambio() {
     $('#input-ticket-correlativo').val('').prop('disabled', false);
     $('#input-fecha-compra').val('').prop('disabled', false);
     $('.btn-primary:contains("Buscar")').prop('disabled', false);
+    
+    // Mostrar secciones de búsqueda y ocultar info del documento
+    $('#seccion-tipo-documento').show();
+    $('#seccion-datos-documento').show();
     $('#info-ticket').hide();
     $('#paso-seleccionar-productos').hide();
     $('#paso-resumen').hide();
@@ -2366,13 +3244,32 @@ function buscarDocumentoParaCambio() {
     
     const numero = $('#input-ticket-correlativo').val().trim();
     const fecha = $('#input-fecha-compra').val();
+    const tipoDocumento = $('#tipo-documento-seleccionado').val() || 'DTE';
+    
+    // Textos según tipo de documento
+    const mensajesPorTipo = {
+        'DTE': {
+            numeroRequerido: 'Ingrese el número del DTE (Factura o Boleta)',
+            buscando: 'Buscando DTE...'
+        },
+        'TICKET_CAMBIO': {
+            numeroRequerido: 'Ingrese el número del Ticket de Cambio',
+            buscando: 'Buscando Ticket de Cambio...'
+        },
+        'TICKET': {
+            numeroRequerido: 'Ingrese el correlativo del Ticket',
+            buscando: 'Buscando Ticket...'
+        }
+    };
+    
+    const mensajes = mensajesPorTipo[tipoDocumento] || mensajesPorTipo['DTE'];
     
     // Validar campos obligatorios
     if (!numero) {
         Swal.fire({
             icon: 'warning',
             title: 'Número requerido',
-            text: 'Ingrese el número del DTE (Factura o Boleta)'
+            text: mensajes.numeroRequerido
         });
         $('#input-ticket-correlativo').focus();
         return;
@@ -2389,11 +3286,19 @@ function buscarDocumentoParaCambio() {
         return;
     }
     
-    mostrarLoading('Buscando DTE...');
+    mostrarLoading(mensajes.buscando);
+    
+    // Mapear tipo de documento para el backend
+    let tipoBackend = 'dte';
+    if (tipoDocumento === 'TICKET_CAMBIO') {
+        tipoBackend = 'ticket_cambio';
+    } else if (tipoDocumento === 'TICKET') {
+        tipoBackend = 'ticket';
+    }
     
     const params = {
         numero: numero,
-        tipo_documento: 'dte',  // Siempre buscar por DTE
+        tipo_documento: tipoBackend,
         fecha_compra: fecha
     };
     
@@ -2590,7 +3495,11 @@ function limpiarBusqueda() {
     $('#input-fecha-compra').val('').prop('disabled', false);
     $('.btn-primary:contains("Buscar")').prop('disabled', false);
     
-    $('#info-ticket').hide();
+    // Mostrar secciones de búsqueda y ocultar info del documento
+    $('#seccion-tipo-documento').slideDown(200);
+    $('#seccion-datos-documento').slideDown(200);
+    $('#info-ticket').slideUp(200);
+    
     $('#paso-seleccionar-productos').hide();
     $('#btn-siguiente').hide();
     ticketActual = null;
@@ -2658,7 +3567,10 @@ function mostrarInformacionDocumento(documento) {
     
     $('#ticket-cambios-anteriores').html(cambiosHtml);
     
-    $('#info-ticket').show();
+    // Ocultar secciones de búsqueda y mostrar info del documento
+    $('#seccion-tipo-documento').slideUp(200);
+    $('#seccion-datos-documento').slideUp(200);
+    $('#info-ticket').slideDown(300);
     
     console.log('✅ Información del documento mostrada, productos:', documento.productos?.length || 0);
 }
@@ -2962,18 +3874,51 @@ function actualizarVistaPreviaTotales() {
     tipoOperacionDetectada = determinarTipoOperacion(productosSeleccionadosCount, cantidadProductosNuevos, diferencia);
     actualizarChipTipoOperacion();
 
-    const notas = [
-        '<li><i class="ri-checkbox-circle-line text-success me-1"></i> Marca los productos del ticket que el cliente devuelve.</li>',
-        '<li><i class="ri-checkbox-circle-line text-success me-1"></i> Agrega productos nuevos si entregarás un reemplazo.</li>'
-    ];
+    // ✅ ACTUALIZAR RESUMEN DEL FOOTER
+    actualizarResumenFooter(montoOriginal, montoNuevo, diferencia);
+}
 
+// Función para actualizar el resumen del footer
+function actualizarResumenFooter(montoOriginal, montoNuevo, diferencia) {
+    $('#footer-monto-original').text('$' + formatearNumero(montoOriginal));
+    $('#footer-monto-nuevo').text('$' + formatearNumero(montoNuevo));
+    
+    const $footerDiferencia = $('#footer-diferencia');
+    const $footerContainer = $('#footer-diferencia-container');
+    const $footerIcon = $('#footer-diferencia-icon');
+    const $footerTipoBadge = $('#footer-tipo-badge');
+    
+    // Resetear clases
+    $footerContainer.css('background', '');
+    $footerDiferencia.removeClass('text-success text-danger text-muted');
+    $footerIcon.removeClass('text-success text-danger text-warning');
+    $footerTipoBadge.removeClass('bg-primary bg-success bg-danger bg-warning bg-secondary text-dark');
+    
     if (diferencia > 0) {
-        notas.push('<li><i class="ri-alert-line text-danger me-1"></i> Registra el pago de la diferencia antes de completar.</li>');
+        // Cliente debe pagar más
+        $footerContainer.css('background', 'rgba(255,176,32,0.15)');
+        $footerDiferencia.addClass('text-warning').text('+$' + formatearNumero(diferencia));
+        $footerIcon.addClass('text-warning');
+        $footerTipoBadge.addClass('bg-warning text-dark').text('Cliente paga');
     } else if (diferencia < 0) {
-        notas.push('<li><i class="ri-cash-line text-success me-1"></i> Recuerda devolver el saldo al cliente.</li>');
+        // Devolver al cliente
+        $footerContainer.css('background', 'rgba(0,212,170,0.15)');
+        $footerDiferencia.addClass('text-success').text('-$' + formatearNumero(Math.abs(diferencia)));
+        $footerIcon.addClass('text-success');
+        $footerTipoBadge.addClass('bg-success').text('A favor cliente');
+    } else {
+        // Sin diferencia
+        $footerContainer.css('background', 'rgba(138,138,154,0.1)');
+        $footerDiferencia.addClass('text-muted').text('$0');
+        $footerIcon.addClass('text-muted');
+        $footerTipoBadge.addClass('bg-secondary').text('Sin diferencia');
     }
-
-    $('#panel-notas').html(notas.join(''));
+    
+    // Actualizar tipo de operación en el badge
+    if (tipoOperacionDetectada) {
+        const texto = TIPO_OPERACION_LABELS[tipoOperacionDetectada] || tipoOperacionDetectada.replace(/_/g, ' ');
+        $footerTipoBadge.text(texto);
+    }
 }
 
 function buscarProductosParaCambio() {
@@ -3002,61 +3947,135 @@ function buscarProductosParaCambio() {
         });
 }
 
+// Variable global para la instancia de DataTable de búsqueda
+let tablaBusquedaProductos = null;
+
 function mostrarResultadosBusquedaProductos(productos) {
-    const container = $('#tbody-productos-busqueda');
-    
     if (!productos || productos.length === 0) {
         Swal.fire({
             icon: 'info',
             title: 'Sin resultados',
-            text: 'No se encontraron productos con ese término'
+            text: 'No se encontraron productos con ese término',
+            timer: 2500,
+            showConfirmButton: false
         });
         return;
     }
     
-    // Mostrar modal con los productos encontrados
-    Swal.fire({
-        title: 'Seleccionar Producto',
-        html: `
-            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                <table class="table table-sm table-hover">
-                    <thead class="table-light sticky-top">
-                        <tr>
-                            <th>SKU</th>
-                            <th>Producto</th>
-                            <th>Talla</th>
-                            <th>Stock</th>
-                            <th>Precio</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${productos.map(p => `
-                            <tr>
-                                <td><code>${p.sku}</code></td>
-                                <td>
-                                    <div><strong>${p.articulo}</strong></div>
-                                    <small class="text-muted">${p.descripcion || ''}</small>
-                                </td>
-                                <td><span class="badge bg-info">${p.talla}</span></td>
-                                <td><span class="badge bg-success">${p.stock_disponible}</span></td>
-                                <td><strong>$${formatearNumero(p.precio_venta)}</strong></td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" 
-                                            onclick='agregarProductoNuevo(${JSON.stringify(p).replace(/"/g, "&quot;")})'>
-                                        <i class="ri-add-line"></i> Agregar
-                                    </button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `,
-        width: '800px',
-        showConfirmButton: false,
-        showCloseButton: true
+    // Mostrar el panel de resultados
+    $('#panel-resultados-busqueda').slideDown(300);
+    $('#contador-resultados').text(`${productos.length} producto${productos.length > 1 ? 's' : ''}`);
+    
+    // Destruir DataTable existente si existe
+    if (tablaBusquedaProductos) {
+        tablaBusquedaProductos.destroy();
+        tablaBusquedaProductos = null;
+    }
+    
+    // Limpiar el tbody
+    const tbody = $('#tbody-resultados-busqueda');
+    tbody.empty();
+    
+    // Agregar filas
+    productos.forEach((p, index) => {
+        // Guardar el producto en window para acceso posterior
+        window[`producto_busqueda_${index}`] = p;
+        
+        const stockBadgeClass = p.stock_disponible > 10 ? 'bg-success' : (p.stock_disponible > 0 ? 'bg-warning' : 'bg-danger');
+        
+        const row = `
+            <tr class="producto-resultado" data-index="${index}">
+                <td>
+                    <code class="bg-light px-2 py-1 rounded">${p.sku}</code>
+                </td>
+                <td>
+                    <div class="fw-semibold">${p.articulo || p.nombre || ''}</div>
+                    <small class="text-muted">${p.descripcion || ''}</small>
+                </td>
+                <td>
+                    <span class="text-muted">${p.marca || '-'}</span>
+                </td>
+                <td>
+                    <span class="badge bg-info">${p.talla}</span>
+                </td>
+                <td class="text-center">
+                    <span class="badge ${stockBadgeClass}">${p.stock_disponible}</span>
+                </td>
+                <td class="text-end fw-bold">
+                    $${formatearNumero(p.precio_venta)}
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-success" 
+                            onclick="agregarProductoDesdeTabla(${index})"
+                            title="Agregar producto">
+                        <i class="ri-add-line"></i> Agregar
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(row);
     });
+    
+    // Inicializar DataTable con búsqueda
+    tablaBusquedaProductos = $('#tabla-busqueda-productos').DataTable({
+        language: {
+            search: "Filtrar:",
+            lengthMenu: "Mostrar _MENU_ productos",
+            info: "Mostrando _START_ a _END_ de _TOTAL_ productos",
+            infoEmpty: "Sin productos",
+            infoFiltered: "(filtrado de _MAX_ total)",
+            zeroRecords: "No se encontraron coincidencias",
+            paginate: {
+                first: "Primero",
+                last: "Último",
+                next: "Sig.",
+                previous: "Ant."
+            }
+        },
+        pageLength: 10,
+        lengthMenu: [[5, 10, 25, 50], [5, 10, 25, 50]],
+        dom: '<"row align-items-center"<"col-md-6"l><"col-md-6"f>>rt<"row"<"col-md-6"i><"col-md-6"p>>',
+        ordering: true,
+        order: [[1, 'asc']], // Ordenar por artículo
+        responsive: true,
+        columnDefs: [
+            { orderable: false, targets: [6] } // No ordenar columna de acción
+        ]
+    });
+    
+    // Scroll suave hacia la tabla
+    $('html, body').animate({
+        scrollTop: $('#panel-resultados-busqueda').offset().top - 100
+    }, 500);
+    
+    mostrarToast('success', `Se encontraron ${productos.length} productos`);
+}
+
+// Función para agregar producto desde la tabla de búsqueda
+function agregarProductoDesdeTabla(index) {
+    const producto = window[`producto_busqueda_${index}`];
+    if (producto) {
+        agregarProductoNuevo(producto);
+        
+        // Marcar la fila como agregada visualmente
+        $(`tr[data-index="${index}"]`).addClass('table-success').find('button')
+            .removeClass('btn-success').addClass('btn-secondary')
+            .html('<i class="ri-check-line"></i> Agregado');
+    }
+}
+
+// Función para cerrar el panel de resultados
+function cerrarResultadosBusqueda() {
+    $('#panel-resultados-busqueda').slideUp(300);
+    
+    // Destruir DataTable
+    if (tablaBusquedaProductos) {
+        tablaBusquedaProductos.destroy();
+        tablaBusquedaProductos = null;
+    }
+    
+    // Limpiar la tabla
+    $('#tbody-resultados-busqueda').empty();
 }
 
 function agregarProductoNuevo(producto) {
@@ -3099,11 +4118,10 @@ function actualizarTablaProductosNuevos() {
     
     if (productosNuevos.length === 0) {
         tbody.append(`
-            <tr>
+            <tr id="fila-sin-productos-nuevos">
                 <td colspan="8" class="text-center text-muted py-4">
-                    <i class="ri-shopping-cart-line" style="font-size: 2rem; opacity: 0.3;"></i>
-                    <p class="mb-0 mt-2">No hay productos nuevos seleccionados</p>
-                    <small>Use el buscador para agregar productos</small>
+                    <i class="ri-inbox-2-line fs-2 d-block mb-2 opacity-50"></i>
+                    <span>Busca y agrega productos para entregar al cliente</span>
                 </td>
             </tr>
         `);
@@ -3408,6 +4426,7 @@ function generarResumen() {
 
 function crearCambioDevolucion() {
     console.log('📋 DEBUG crearCambioDevolucion - ticketActual completo:', ticketActual);
+    console.log('📦 DEBUG - productosNuevos:', productosNuevos);
     
     // Determinar el tipo de documento y número
     // Si es DTE, usar el correlativo del ticket de referencia que se creó al buscar
@@ -3438,31 +4457,89 @@ function crearCambioDevolucion() {
     
     console.log('📋 DEBUG - Datos a enviar:', datos);
     
-    // Recopilar productos originales seleccionados
+    // ✅ CORREGIDO: Recopilar productos originales seleccionados
+    const productosOriginalesSeleccionados = [];
     ticketActual.productos.forEach((producto, index) => {
         if ($(`#check-producto-${index}`).is(':checked')) {
-            const productoData = {
-                ticket_producto_id: producto.id,
+            productosOriginalesSeleccionados.push({
+                producto: producto,
+                index: index,
                 cantidad: parseInt($(`#cantidad-producto-${index}`).val()),
-                condicion_producto: $(`#condicion-${index}`).val(),
-                apto_para_venta: $(`#condicion-${index}`).val() !== 'NO_APTO'
+                condicion: $(`#condicion-${index}`).val()
+            });
+        }
+    });
+    
+    console.log('📦 Productos originales seleccionados:', productosOriginalesSeleccionados.length);
+    console.log('📦 Productos nuevos a entregar:', productosNuevos.length);
+    
+    // Si es cambio, necesitamos enviar todos los productos nuevos
+    if (datos.tipo_operacion === 'CAMBIO_SIMPLE' || datos.tipo_operacion === 'CAMBIO_CON_DIFERENCIA') {
+        if (productosNuevos.length === 0) {
+            mostrarError('Para un cambio debe seleccionar al menos un producto nuevo a entregar');
+            return;
+        }
+        
+        // ✅ CORREGIDO V2: Crear entradas separadas
+        // 1. Productos DEVUELTOS (originales) - cada uno con su primer producto nuevo correspondiente
+        // 2. Productos NUEVOS ADICIONALES - sin vincular a ningún original
+        
+        productosOriginalesSeleccionados.forEach((origData, origIndex) => {
+            // El primer producto nuevo para este original (si existe)
+            const productoNuevoCorrespondiente = productosNuevos[origIndex];
+            
+            const productoData = {
+                ticket_producto_id: origData.producto.id,
+                cantidad: origData.cantidad,
+                condicion_producto: origData.condicion,
+                apto_para_venta: origData.condicion !== 'NO_APTO'
             };
             
-            // Si es cambio, buscar el producto nuevo correspondiente
-            if (datos.tipo_operacion === 'CAMBIO_SIMPLE' || datos.tipo_operacion === 'CAMBIO_CON_DIFERENCIA') {
-                // Por ahora, asignar el primer producto nuevo si existe
-                // TODO: Mejorar para permitir mapeo específico 1 a 1
-                if (productosNuevos.length > 0) {
-                    const productoNuevo = productosNuevos[index % productosNuevos.length];
-                    productoData.producto_nuevo_id = productoNuevo.id;
-                    productoData.cantidad_nueva = productoNuevo.cantidad;
-                    productoData.precio_nuevo = productoNuevo.precio_venta;
-                }
+            // Solo agregar producto nuevo si hay uno correspondiente
+            if (productoNuevoCorrespondiente) {
+                productoData.producto_nuevo_id = productoNuevoCorrespondiente.id;
+                productoData.cantidad_nueva = productoNuevoCorrespondiente.cantidad;
+                productoData.precio_nuevo = productoNuevoCorrespondiente.precio_venta;
+                console.log(`  📦 Par: Devuelve ${origData.producto.articulo} → Recibe ${productoNuevoCorrespondiente.articulo}`);
             }
             
             datos.productos.push(productoData);
+        });
+        
+        // ✅ NUEVO: Productos nuevos ADICIONALES (más productos nuevos que devueltos)
+        // Estos van vinculados al primer producto original para mantener la referencia
+        if (productosNuevos.length > productosOriginalesSeleccionados.length) {
+            const productosAdicionales = productosNuevos.slice(productosOriginalesSeleccionados.length);
+            const primerOriginal = productosOriginalesSeleccionados[0];
+            
+            productosAdicionales.forEach((productoNuevo) => {
+                datos.productos.push({
+                    ticket_producto_id: primerOriginal.producto.id,
+                    cantidad: 0,  // No devuelve nada adicional
+                    condicion_producto: 'PERFECTO',
+                    apto_para_venta: true,
+                    producto_nuevo_id: productoNuevo.id,
+                    cantidad_nueva: productoNuevo.cantidad,
+                    precio_nuevo: productoNuevo.precio_venta,
+                    es_producto_adicional: true  // Marcador para el backend
+                });
+                console.log(`  📦 Adicional: Recibe ${productoNuevo.articulo} (sin devolución asociada)`);
+            });
         }
-    });
+    } else {
+        // DEVOLUCIÓN: Solo productos originales, sin nuevos
+        productosOriginalesSeleccionados.forEach((origData) => {
+            datos.productos.push({
+                ticket_producto_id: origData.producto.id,
+                cantidad: origData.cantidad,
+                condicion_producto: origData.condicion,
+                apto_para_venta: origData.condicion !== 'NO_APTO'
+            });
+        });
+    }
+    
+    console.log('📦 Total productos en payload:', datos.productos.length);
+    console.log('📦 Payload completo:', JSON.stringify(datos, null, 2));
     
     mostrarLoading('Creando solicitud de cambio...');
     
@@ -3847,11 +4924,18 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
                 tbodyDevueltos.empty();
                 
                 let totalDevueltos = 0;
+                let productosDevueltosCount = 0;
+                
                 if (productos.length > 0) {
                     productos.forEach(producto => {
-                        if (producto.producto_original) {
-                            const subtotal = (producto.cantidad_cambio || producto.cantidad) * (producto.precio_original_unitario || producto.precio_unitario || 0);
+                        // ✅ CORREGIDO: Solo mostrar si hay cantidad > 0 y precio válido
+                        const cantidad = parseInt(producto.cantidad_cambio || producto.cantidad || 0);
+                        const precio = parseFloat(producto.precio_original_unitario || producto.precio_unitario || 0);
+                        
+                        if (producto.producto_original && cantidad > 0 && precio > 0) {
+                            const subtotal = cantidad * precio;
                             totalDevueltos += subtotal;
+                            productosDevueltosCount++;
                             
                             tbodyDevueltos.append(`
                                 <tr>
@@ -3860,7 +4944,7 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
                                         <br><small class="text-muted">${producto.producto_original.sku || '-'}</small>
                                     </td>
                                     <td><span class="badge bg-secondary">${producto.producto_original.talla || '-'}</span></td>
-                                    <td class="text-center"><span class="badge bg-danger">${producto.cantidad_cambio || producto.cantidad || 0}</span></td>
+                                    <td class="text-center"><span class="badge bg-danger">${cantidad}</span></td>
                                     <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
                                 </tr>
                             `);
@@ -3868,7 +4952,7 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
                     });
                 }
                 
-                if (totalDevueltos === 0) {
+                if (productosDevueltosCount === 0) {
                     tbodyDevueltos.append(`
                         <tr>
                             <td colspan="4" class="text-center text-muted py-2">
@@ -3883,30 +4967,40 @@ function aprobarCambioConDatos(cambioId, tipo, montoDevuelto, montoNuevo) {
                 tbodyNuevos.empty();
                 
                 let totalNuevos = 0;
+                let productosNuevosCount = 0;
+                
                 if (productos.length > 0) {
                     productos.forEach(producto => {
                         if (producto.producto_nuevo) {
-                            const cantidad = producto.cantidad_nueva || producto.cantidad || 0;
-                            const precio = producto.producto_nuevo.precio_unitario || 0;
+                            const cantidad = parseInt(producto.cantidad_nueva || producto.cantidad || 0) || 1;
+                            const precio = parseFloat(producto.producto_nuevo.precio_unitario || producto.precio_nuevo || 0);
                             const subtotal = cantidad * precio;
-                            totalNuevos += subtotal;
                             
-                            tbodyNuevos.append(`
-                                <tr>
-                                    <td>
-                                        <strong>${producto.producto_nuevo.articulo || producto.producto_nuevo.nombre || '-'}</strong>
-                                        <br><small class="text-muted">${producto.producto_nuevo.sku || '-'}</small>
-                                    </td>
-                                    <td><span class="badge bg-info">${producto.producto_nuevo.talla || '-'}</span></td>
-                                    <td class="text-center"><span class="badge bg-success">${cantidad}</span></td>
-                                    <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
-                                </tr>
-                            `);
+                            if (subtotal > 0) {
+                                totalNuevos += subtotal;
+                                productosNuevosCount++;
+                                
+                                // ✅ Detectar si es producto adicional
+                                const esAdicional = (producto.cantidad_cambio || producto.cantidad || 0) == 0;
+                                
+                                tbodyNuevos.append(`
+                                    <tr class="${esAdicional ? 'table-info' : ''}">
+                                        <td>
+                                            <strong>${producto.producto_nuevo.articulo || producto.producto_nuevo.nombre || '-'}</strong>
+                                            ${esAdicional ? '<span class="badge bg-warning text-dark ms-1">Adicional</span>' : ''}
+                                            <br><small class="text-muted">${producto.producto_nuevo.sku || '-'}</small>
+                                        </td>
+                                        <td><span class="badge bg-info">${producto.producto_nuevo.talla || '-'}</span></td>
+                                        <td class="text-center"><span class="badge bg-success">${cantidad}</span></td>
+                                        <td class="text-end fw-bold">$${formatearNumero(subtotal)}</td>
+                                    </tr>
+                                `);
+                            }
                         }
                     });
                 }
                 
-                if (totalNuevos === 0) {
+                if (productosNuevosCount === 0) {
                     tbodyNuevos.append(`
                         <tr>
                             <td colspan="4" class="text-center text-muted py-2">

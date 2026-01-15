@@ -33,8 +33,12 @@ def gestion_sucursales(request):
         
         empresa = empresa_user.empresa
         
+        # Obtener TODAS las empresas para el selector
+        empresas = Empresa.objects.all().order_by('nombre')
+        
         context = {
             'empresa': empresa,
+            'empresas': empresas,
             'titulo': 'Gestión de Sucursales',
             'puede_crear': True,  # Aquí podrías agregar permisos específicos
         }
@@ -68,11 +72,7 @@ def listar_sucursales_tabla(request):
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 10))
         
-        # Construir query
-        # Opción 1: Solo sucursales de tu empresa (más seguro)
-        # sucursales = Sucursal.objects.filter(empresa=empresa_user.empresa).select_related('empresa')
-        
-        # Opción 2: Todas las sucursales (modo administrador)
+        # Construir query - TODAS las sucursales
         sucursales = Sucursal.objects.all().select_related('empresa')
         
         # Aplicar búsqueda (solo alias y dirección)
@@ -194,23 +194,8 @@ def crear_sucursal(request):
 def obtener_sucursal(request, sucursal_id):
     """Obtener detalles de una sucursal específica"""
     try:
-        # Obtener empresa del usuario
-        empresa_user = EmpresaUser.objects.select_related('empresa').filter(
-            user=request.user
-        ).first()
-        
-        if not empresa_user:
-            return JsonResponse({
-                'success': False,
-                'error': 'No tienes una empresa asignada'
-            })
-        
-        # Obtener sucursal
-        sucursal = get_object_or_404(
-            Sucursal,
-            id=sucursal_id,
-            empresa=empresa_user.empresa
-        )
+        # Obtener sucursal (sin restricción por empresa)
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
         return JsonResponse({
             'success': True,
@@ -218,6 +203,8 @@ def obtener_sucursal(request, sucursal_id):
                 'id': sucursal.id,
                 'alias': sucursal.alias,
                 'direccion': sucursal.direccion,
+                'empresa_id': sucursal.empresa_id,
+                'empresa_nombre': sucursal.empresa.nombre if sucursal.empresa else 'N/A',
             }
         })
         
@@ -234,23 +221,8 @@ def obtener_sucursal(request, sucursal_id):
 def editar_sucursal(request, sucursal_id):
     """Editar una sucursal existente"""
     try:
-        # Obtener empresa del usuario
-        empresa_user = EmpresaUser.objects.select_related('empresa').filter(
-            user=request.user
-        ).first()
-        
-        if not empresa_user:
-            return JsonResponse({
-                'success': False,
-                'error': 'No tienes una empresa asignada'
-            })
-        
-        # Obtener sucursal
-        sucursal = get_object_or_404(
-            Sucursal,
-            id=sucursal_id,
-            empresa=empresa_user.empresa
-        )
+        # Obtener sucursal (sin restricción por empresa)
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
         # Obtener datos del formulario
         data = request.POST
@@ -268,20 +240,28 @@ def editar_sucursal(request, sucursal_id):
                 'error': 'La dirección es obligatoria'
             })
         
-        # Verificar si el alias ya existe en otra sucursal
+        # Si se proporciona empresa_id, obtener la nueva empresa
+        nueva_empresa_id = data.get('empresa_id')
+        if nueva_empresa_id:
+            nueva_empresa = get_object_or_404(Empresa, id=nueva_empresa_id)
+        else:
+            nueva_empresa = sucursal.empresa
+        
+        # Verificar si el alias ya existe en otra sucursal de la misma empresa
         if Sucursal.objects.filter(
-            empresa=empresa_user.empresa,
+            empresa=nueva_empresa,
             alias=data.get('alias')
         ).exclude(id=sucursal_id).exists():
             return JsonResponse({
                 'success': False,
-                'error': f'Ya existe otra sucursal con el alias "{data.get("alias")}"'
+                'error': f'Ya existe otra sucursal con el alias "{data.get("alias")}" en esa empresa'
             })
         
         with transaction.atomic():
             # Actualizar sucursal
             sucursal.alias = data.get('alias')
             sucursal.direccion = data.get('direccion')
+            sucursal.empresa = nueva_empresa
             sucursal.save()
             
             logger.info(f"Sucursal actualizada: {sucursal.alias} (ID: {sucursal.id}) por usuario {request.user.username}")
@@ -309,23 +289,8 @@ def editar_sucursal(request, sucursal_id):
 def eliminar_sucursal(request, sucursal_id):
     """Eliminar (desactivar) una sucursal"""
     try:
-        # Obtener empresa del usuario
-        empresa_user = EmpresaUser.objects.select_related('empresa').filter(
-            user=request.user
-        ).first()
-        
-        if not empresa_user:
-            return JsonResponse({
-                'success': False,
-                'error': 'No tienes una empresa asignada'
-            })
-        
-        # Obtener sucursal
-        sucursal = get_object_or_404(
-            Sucursal,
-            id=sucursal_id,
-            empresa=empresa_user.empresa
-        )
+        # Obtener sucursal (sin restricción por empresa)
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
         # Verificar si la sucursal tiene datos relacionados importantes
         # (Esto es para decidir si se desactiva o se elimina físicamente)

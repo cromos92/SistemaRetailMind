@@ -7,168 +7,476 @@
     <div class="container-fluid">
 
 <style>
-    .reporte-marca-container {
+    /* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
+    :root {
+        --nexo-primary: #0066FF;
+        --nexo-primary-dark: #0052CC;
+        --nexo-primary-light: #E6F0FF;
+        --nexo-secondary: #1A1A2E;
+        --nexo-accent: #00D4AA;
+        --nexo-success: #00D4AA;
+        --nexo-warning: #FFB020;
+        --nexo-error: #FF4D4D;
+        --nexo-info: #0066FF;
+        --nexo-gray-900: #1A1A2E;
+        --nexo-gray-700: #4A4A5A;
+        --nexo-gray-500: #8A8A9A;
+        --nexo-gray-300: #D1D1D9;
+        --nexo-gray-100: #F5F5F7;
+        --nexo-white: #FFFFFF;
+        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+        --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+        --nexo-radius-sm: 4px;
+        --nexo-radius-md: 8px;
+        --nexo-radius-lg: 12px;
+        --nexo-radius-xl: 16px;
+        --nexo-transition-fast: 150ms ease;
+        --nexo-transition-normal: 250ms ease;
+    }
+
+    /* ========== CONTENEDOR PRINCIPAL ========== */
+    .nexo-container {
         max-width: 100%;
         margin: 0 auto;
-        background: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        background: var(--nexo-gray-100);
+        min-height: calc(100vh - 70px);
+        padding-bottom: 40px;
+    }
+
+    /* ========== HEADER DEL MÓDULO ========== */
+    .nexo-header {
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+        padding: 32px 40px;
+        position: relative;
         overflow: hidden;
     }
 
-    .header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 30px;
-        text-align: center;
+    .nexo-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 400px;
+        height: 100%;
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, transparent 70%);
+        opacity: 0.15;
     }
 
-    .header h1 {
-        font-size: 2.5em;
-        margin-bottom: 10px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-    }
-
-    .controls {
-        padding: 25px 30px;
-        background: #f8f9fa;
-        border-bottom: 2px solid #e9ecef;
-        display: flex;
-        gap: 15px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-
-    .control-group {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-    }
-
-    .control-group label {
-        font-weight: 600;
-        color: #495057;
-        font-size: 0.9em;
-    }
-
-    .control-group select {
-        padding: 10px 15px;
-        border: 2px solid #dee2e6;
-        border-radius: 8px;
-        font-size: 1em;
-        transition: all 0.3s ease;
-        min-width: 200px;
-    }
-
-    .control-group select:focus,
-    .control-group input:focus {
-        outline: none;
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .control-group input[type="text"] {
-        background: white;
-        font-family: inherit;
-    }
-
-    .control-group input[type="text"]::placeholder {
-        color: #adb5bd;
-        font-style: italic;
-    }
-
-    .btn {
-        padding: 12px 25px;
-        border: none;
-        border-radius: 8px;
-        font-size: 1em;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        align-self: flex-end;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-success {
-        background: #28a745;
-        color: white;
-    }
-
-    .btn-success:hover {
-        background: #218838;
-    }
-
-    .loading {
-        text-align: center;
-        padding: 40px;
-        font-size: 1.2em;
-        color: #667eea;
-    }
-
-    .marca-section {
-        margin: 20px 0;
-        border: 2px solid #dee2e6;
-        border-radius: 10px;
-        overflow: hidden;
-    }
-
-    .marca-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 15px 20px;
-        font-size: 1.3em;
-        font-weight: 700;
+    .nexo-header-content {
+        position: relative;
+        z-index: 1;
         display: flex;
         justify-content: space-between;
         align-items: center;
     }
 
-    .tabla-lotes {
+    .nexo-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0 0 4px 0;
+        letter-spacing: -0.5px;
+    }
+
+    .nexo-header p {
+        font-size: 0.875rem;
+        color: var(--nexo-gray-300);
+        margin: 0;
+    }
+
+    .nexo-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(0, 212, 170, 0.15);
+        border: 1px solid rgba(0, 212, 170, 0.3);
+        color: var(--nexo-accent);
+        padding: 8px 16px;
+        border-radius: var(--nexo-radius-full, 9999px);
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    /* ========== KPI DASHBOARD ========== */
+    .nexo-kpi-dashboard {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+        padding: 24px 40px;
+        background: var(--nexo-white);
+        border-bottom: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-kpi-card {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        padding: 20px;
+        position: relative;
+        transition: var(--nexo-transition-fast);
+        overflow: hidden;
+    }
+
+    .nexo-kpi-card:hover {
+        box-shadow: var(--nexo-shadow-md);
+        transform: translateY(-2px);
+    }
+
+    .nexo-kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        border-radius: var(--nexo-radius-lg) 0 0 var(--nexo-radius-lg);
+    }
+
+    .nexo-kpi-card.kpi-primary::before { background: var(--nexo-primary); }
+    .nexo-kpi-card.kpi-success::before { background: var(--nexo-success); }
+    .nexo-kpi-card.kpi-warning::before { background: var(--nexo-warning); }
+    .nexo-kpi-card.kpi-error::before { background: var(--nexo-error); }
+
+    .nexo-kpi-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: var(--nexo-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        margin-bottom: 12px;
+    }
+
+    .nexo-kpi-icon.icon-primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+    .nexo-kpi-icon.icon-success { background: rgba(0, 212, 170, 0.1); color: var(--nexo-success); }
+    .nexo-kpi-icon.icon-warning { background: rgba(255, 176, 32, 0.1); color: var(--nexo-warning); }
+    .nexo-kpi-icon.icon-error { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
+
+    .nexo-kpi-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--nexo-gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+
+    .nexo-kpi-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        line-height: 1.2;
+    }
+
+    .nexo-kpi-meta {
+        font-size: 0.75rem;
+        color: var(--nexo-gray-500);
+        margin-top: 4px;
+    }
+
+    .nexo-kpi-trend {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: var(--nexo-radius-sm);
+    }
+
+    .nexo-kpi-trend.trend-up { background: rgba(0, 212, 170, 0.1); color: var(--nexo-success); }
+    .nexo-kpi-trend.trend-down { background: rgba(255, 77, 77, 0.1); color: var(--nexo-error); }
+
+    /* ========== CONTROLES/FILTROS ========== */
+    .nexo-controls {
+        padding: 20px 40px;
+        background: var(--nexo-white);
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
+
+    .nexo-control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 200px;
+        max-width: 280px;
+    }
+
+    .nexo-control-group.control-search {
+        min-width: 300px;
+        max-width: 400px;
+    }
+
+    .nexo-control-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .nexo-input,
+    .nexo-select {
+        padding: 10px 14px;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.875rem;
+        color: var(--nexo-gray-900);
+        background: var(--nexo-white);
+        transition: var(--nexo-transition-fast);
+        width: 100%;
+    }
+
+    .nexo-input:focus,
+    .nexo-select:focus {
+        outline: none;
+        border-color: var(--nexo-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    .nexo-input::placeholder {
+        color: var(--nexo-gray-500);
+    }
+
+    /* ========== BOTONES NEXO ========== */
+    .nexo-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: var(--nexo-radius-md);
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .nexo-btn-primary {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+    }
+
+    .nexo-btn-primary:hover {
+        background: var(--nexo-primary-dark);
+        transform: translateY(-1px);
+        box-shadow: var(--nexo-shadow-md);
+    }
+
+    .nexo-btn-success {
+        background: var(--nexo-success);
+        color: var(--nexo-white);
+    }
+
+    .nexo-btn-success:hover {
+        background: #00b894;
+        transform: translateY(-1px);
+        box-shadow: var(--nexo-shadow-md);
+    }
+
+    .nexo-btn-outline {
+        background: transparent;
+        color: var(--nexo-primary);
+        border: 1px solid var(--nexo-primary);
+    }
+
+    .nexo-btn-outline:hover {
+        background: var(--nexo-primary-light);
+    }
+
+    .nexo-btn-secondary {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-700);
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-btn-secondary:hover {
+        background: var(--nexo-gray-300);
+    }
+
+    .nexo-btn-group {
+        display: flex;
+        gap: 8px;
+        margin-left: auto;
+    }
+
+    /* ========== ÁREA DE CONTENIDO ========== */
+    .nexo-content {
+        padding: 24px 40px;
+    }
+
+    /* ========== SECCIÓN DE MARCA ========== */
+    .nexo-marca-section {
+        margin-bottom: 24px;
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
+        box-shadow: var(--nexo-shadow-sm);
+        overflow: hidden;
+        border: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-marca-header {
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+    }
+
+    .nexo-marca-header:hover {
+        background: #252540;
+    }
+
+    .nexo-marca-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .nexo-marca-title h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .nexo-marca-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: var(--nexo-radius-full, 9999px);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .nexo-marca-stats {
+        display: flex;
+        gap: 24px;
+        font-size: 0.875rem;
+    }
+
+    .nexo-marca-stat {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    .nexo-marca-stat-label {
+        font-size: 0.7rem;
+        color: var(--nexo-gray-300);
+        text-transform: uppercase;
+    }
+
+    .nexo-marca-stat-value {
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .nexo-marca-stat-value.text-success { color: var(--nexo-success); }
+    .nexo-marca-stat-value.text-warning { color: var(--nexo-warning); }
+    .nexo-marca-stat-value.text-error { color: var(--nexo-error); }
+
+    /* ========== INDICADORES DE MARCA (MINI DASHBOARD) ========== */
+    .nexo-marca-indicators {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1px;
+        background: var(--nexo-gray-300);
+        border-bottom: 1px solid var(--nexo-gray-300);
+    }
+
+    .nexo-indicator {
+        background: var(--nexo-gray-100);
+        padding: 12px 16px;
+        text-align: center;
+    }
+
+    .nexo-indicator-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: var(--nexo-gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .nexo-indicator-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+    }
+
+    /* ========== TABLA DE PRODUCTOS ========== */
+    .nexo-table-container {
+        overflow-x: auto;
+    }
+
+    .nexo-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.9em;
+        font-size: 0.8rem;
     }
 
-    .tabla-lotes thead {
-        background: #f8f9fa;
+    .nexo-table thead {
+        background: var(--nexo-gray-100);
+        position: sticky;
+        top: 0;
+        z-index: 10;
     }
 
-    .tabla-lotes th {
-        padding: 12px 8px;
+    .nexo-table th {
+        padding: 12px 10px;
         text-align: center;
         font-weight: 700;
-        border: 1px solid #dee2e6;
-        color: #495057;
-        font-size: 0.85em;
+        color: var(--nexo-gray-700);
+        border-bottom: 2px solid var(--nexo-gray-300);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
     }
 
-    .tabla-lotes td {
-        padding: 10px 8px;
+    .nexo-table td {
+        padding: 10px;
         text-align: center;
-        border: 1px solid #dee2e6;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        vertical-align: middle;
     }
 
-    .tabla-lotes tbody tr:hover {
-        background: #f1f3f5;
+    .nexo-table tbody tr {
+        transition: var(--nexo-transition-fast);
     }
 
-    .tabla-lotes tbody tr:nth-child(even) {
-        background: #f8f9fa;
+    .nexo-table tbody tr:hover {
+        background: var(--nexo-primary-light);
+    }
+
+    .nexo-table tbody tr:nth-child(even) {
+        background: var(--nexo-gray-100);
+    }
+
+    .nexo-table tbody tr:nth-child(even):hover {
+        background: var(--nexo-primary-light);
     }
 
     .td-articulo {
         text-align: left !important;
         font-weight: 600;
-        color: #212529;
+        color: var(--nexo-gray-900);
+        max-width: 250px;
     }
 
     .td-color {
@@ -177,159 +485,834 @@
 
     .td-numero {
         text-align: right !important;
-        font-family: 'Courier New', monospace;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 0.8rem;
     }
 
-    .lote-header {
-        background: #e7f1ff;
-        font-weight: 700;
-        color: #004085;
+    .td-precio {
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        color: var(--nexo-gray-700);
     }
 
-    .stock-bajo {
-        color: #dc3545;
+    /* ========== ESTADOS DE STOCK ========== */
+    .stock-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 48px;
+        padding: 4px 8px;
+        border-radius: var(--nexo-radius-sm);
         font-weight: 700;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
     }
 
     .stock-ok {
-        color: #28a745;
-        font-weight: 600;
+        background: rgba(0, 212, 170, 0.15);
+        color: var(--nexo-success);
     }
 
-    .total-row {
-        background: #e9ecef !important;
+    .stock-warning {
+        background: rgba(255, 176, 32, 0.15);
+        color: #996B00;
+    }
+
+    .stock-critical {
+        background: rgba(255, 77, 77, 0.15);
+        color: var(--nexo-error);
+    }
+
+    .stock-out {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-500);
+    }
+
+    /* ========== SUCURSAL HEADERS ========== */
+    .th-sucursal {
+        background: var(--nexo-primary-light) !important;
+        color: var(--nexo-primary-dark) !important;
+    }
+
+    .th-total {
+        background: rgba(255, 176, 32, 0.2) !important;
+        color: #996B00 !important;
+    }
+
+    /* ========== FILA DE TOTALES ========== */
+    .nexo-table .total-row {
+        background: var(--nexo-secondary) !important;
+        color: var(--nexo-white);
         font-weight: 700;
-        font-size: 1.05em;
     }
 
-    .empty-state {
+    .nexo-table .total-row td {
+        border-bottom: none;
+        padding: 14px 10px;
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .nexo-empty-state {
         text-align: center;
-        padding: 60px 20px;
-        color: #6c757d;
+        padding: 80px 20px;
+        color: var(--nexo-gray-500);
     }
 
-    .empty-state i {
-        font-size: 4em;
-        color: #dee2e6;
+    .nexo-empty-icon {
+        font-size: 4rem;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .nexo-empty-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--nexo-gray-700);
+        margin-bottom: 8px;
+    }
+
+    .nexo-empty-text {
+        font-size: 0.875rem;
+        color: var(--nexo-gray-500);
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    /* ========== LOADING STATE - FULLSCREEN ========== */
+    .nexo-loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(26, 26, 46, 0.85);
+        backdrop-filter: blur(4px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+
+    .nexo-loading-content {
+        background: var(--nexo-white);
+        padding: 40px 60px;
+        border-radius: var(--nexo-radius-xl);
+        text-align: center;
+        box-shadow: var(--nexo-shadow-xl);
+    }
+
+    .nexo-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid var(--nexo-gray-300);
+        border-top-color: var(--nexo-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
         margin-bottom: 20px;
     }
 
-    @media print {
-        .controls, .btn {
+    .nexo-loading-text {
+        font-size: 1rem;
+        color: var(--nexo-gray-700);
+        font-weight: 600;
+    }
+
+    .nexo-loading-subtext {
+        font-size: 0.8rem;
+        color: var(--nexo-gray-500);
+        margin-top: 8px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ========== DISEÑO COMPACTO DE PRODUCTOS ========== */
+    .nexo-productos-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px;
+        padding: 0;
+    }
+
+    .nexo-producto-card {
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        padding: 12px;
+        transition: var(--nexo-transition-fast);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .nexo-producto-card:hover {
+        border-color: var(--nexo-primary);
+        box-shadow: var(--nexo-shadow-sm);
+    }
+
+    .nexo-producto-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .nexo-producto-nombre {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+        line-height: 1.3;
+        flex: 1;
+        word-break: break-word;
+    }
+
+    .nexo-producto-stock-badge {
+        padding: 4px 10px;
+        border-radius: var(--nexo-radius-full, 9999px);
+        font-size: 0.75rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .nexo-producto-meta {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 0.7rem;
+    }
+
+    .nexo-producto-tag {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-700);
+        padding: 2px 8px;
+        border-radius: var(--nexo-radius-sm);
+    }
+
+    .nexo-producto-precios {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 8px;
+        border-top: 1px solid var(--nexo-gray-100);
+        font-size: 0.75rem;
+    }
+
+    .nexo-producto-costo {
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-producto-precio {
+        font-weight: 700;
+        color: var(--nexo-primary);
+        font-size: 0.85rem;
+    }
+
+    .nexo-producto-sucursal {
+        font-size: 0.65rem;
+        color: var(--nexo-gray-500);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ========== VISTA LISTA COMPACTA ========== */
+    .nexo-productos-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .nexo-producto-row {
+        display: grid;
+        grid-template-columns: 1fr 100px 80px 80px 70px;
+        gap: 12px;
+        align-items: center;
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-sm);
+        padding: 8px 12px;
+        font-size: 0.8rem;
+        transition: var(--nexo-transition-fast);
+    }
+
+    .nexo-producto-row:hover {
+        background: var(--nexo-primary-light);
+        border-color: var(--nexo-primary);
+    }
+
+    .nexo-producto-row .producto-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .nexo-producto-row .producto-articulo {
+        font-weight: 600;
+        color: var(--nexo-gray-900);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nexo-producto-row .producto-detalle {
+        font-size: 0.7rem;
+        color: var(--nexo-gray-500);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nexo-producto-row .producto-precio {
+        text-align: right;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+    }
+
+    .nexo-producto-row .producto-stock {
+        text-align: center;
+    }
+
+    /* ========== HEADER DE LISTA ========== */
+    .nexo-list-header {
+        display: grid;
+        grid-template-columns: 1fr 100px 80px 80px 70px;
+        gap: 12px;
+        padding: 8px 12px;
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-radius: var(--nexo-radius-sm);
+        margin-bottom: 4px;
+    }
+
+    .nexo-list-header span:not(:first-child) {
+        text-align: center;
+    }
+
+    .nexo-list-header span:nth-child(2),
+    .nexo-list-header span:nth-child(3) {
+        text-align: right;
+    }
+
+    /* ========== TOGGLE VISTA ========== */
+    .nexo-view-toggle {
+        display: flex;
+        gap: 4px;
+        background: var(--nexo-gray-100);
+        padding: 4px;
+        border-radius: var(--nexo-radius-md);
+    }
+
+    .nexo-view-btn {
+        padding: 6px 12px;
+        border: none;
+        background: transparent;
+        color: var(--nexo-gray-500);
+        border-radius: var(--nexo-radius-sm);
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: var(--nexo-transition-fast);
+    }
+
+    .nexo-view-btn:hover {
+        color: var(--nexo-gray-700);
+    }
+
+    .nexo-view-btn.active {
+        background: var(--nexo-white);
+        color: var(--nexo-primary);
+        box-shadow: var(--nexo-shadow-sm);
+    }
+
+    /* ========== RESUMEN TOTALES MARCA ========== */
+    .nexo-marca-totals {
+        display: flex;
+        gap: 16px;
+        padding: 12px 16px;
+        background: var(--nexo-gray-100);
+        border-top: 1px solid var(--nexo-gray-300);
+        font-size: 0.8rem;
+    }
+
+    .nexo-marca-total-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .nexo-marca-total-label {
+        color: var(--nexo-gray-500);
+    }
+
+    .nexo-marca-total-value {
+        font-weight: 700;
+        color: var(--nexo-gray-900);
+    }
+
+    /* ========== QUICK FILTERS (CHIPS) ========== */
+    .nexo-quick-filters {
+        padding: 12px 40px;
+        background: var(--nexo-white);
+        border-bottom: 1px solid var(--nexo-gray-300);
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .nexo-quick-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--nexo-gray-500);
+        margin-right: 8px;
+    }
+
+    .nexo-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: var(--nexo-radius-full, 9999px);
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--nexo-transition-fast);
+        border: 1px solid var(--nexo-gray-300);
+        background: var(--nexo-white);
+        color: var(--nexo-gray-700);
+    }
+
+    .nexo-chip:hover {
+        border-color: var(--nexo-primary);
+        color: var(--nexo-primary);
+    }
+
+    .nexo-chip.active {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        border-color: var(--nexo-primary);
+    }
+
+    .nexo-chip-count {
+        background: rgba(0,0,0,0.1);
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-size: 0.65rem;
+    }
+
+    .nexo-chip.active .nexo-chip-count {
+        background: rgba(255,255,255,0.2);
+    }
+
+    /* ========== TOOLTIP STYLES ========== */
+    .nexo-tooltip {
+        position: relative;
+    }
+
+    .nexo-tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--nexo-secondary);
+        color: var(--nexo-white);
+        padding: 6px 10px;
+        border-radius: var(--nexo-radius-sm);
+        font-size: 0.7rem;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: var(--nexo-transition-fast);
+        z-index: 100;
+    }
+
+    .nexo-tooltip:hover::after {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 1200px) {
+        .nexo-header,
+        .nexo-kpi-dashboard,
+        .nexo-controls,
+        .nexo-quick-filters,
+        .nexo-content {
+            padding-left: 24px;
+            padding-right: 24px;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .nexo-header-content {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .nexo-btn-group {
+            margin-left: 0;
+            width: 100%;
+        }
+
+        .nexo-btn-group .nexo-btn {
+            flex: 1;
+        }
+
+        .nexo-kpi-dashboard {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .nexo-marca-stats {
             display: none;
         }
-        
-        .marca-section {
+    }
+
+    /* ========== PRINT STYLES ========== */
+    @media print {
+        .nexo-controls,
+        .nexo-quick-filters,
+        .nexo-btn-group {
+            display: none !important;
+        }
+
+        .nexo-marca-section {
             page-break-inside: avoid;
+            box-shadow: none;
+            border: 1px solid #000;
+        }
+
+        .nexo-kpi-dashboard {
+            display: none;
         }
     }
 </style>
 
-<div class="reporte-marca-container">
-    <div class="header">
-        <h1>📊 Reporte de Existencias por Marca</h1>
-        <p>Detalle de lotes y stock disponible agrupado por marca</p>
+<!-- ========== LOADING OVERLAY ========== -->
+<div class="nexo-loading-overlay" id="loading-overlay" style="display: none;">
+    <div class="nexo-loading-content">
+        <div class="nexo-spinner"></div>
+        <div class="nexo-loading-text" id="loading-text">Cargando inventario...</div>
+        <div class="nexo-loading-subtext" id="loading-subtext">Esto puede tomar unos segundos</div>
+    </div>
+</div>
+
+<div class="nexo-container">
+    <!-- ========== HEADER ========== -->
+    <div class="nexo-header">
+        <div class="nexo-header-content">
+            <div>
+                <h1>📊 Existencias por Marca</h1>
+                <p>Análisis de inventario agrupado por marca con indicadores de retail</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                {% if sucursal_actual %}
+                <div class="nexo-header-badge" style="background: rgba(255, 176, 32, 0.2); border-color: rgba(255, 176, 32, 0.4); color: #FFB020;">
+                    <i class="ri-map-pin-line"></i>
+                    <span>{{ sucursal_actual.alias }}</span>
+                </div>
+                {% endif %}
+                <a href="{% url 'ver_reporte_movimientos_sucursal' %}" class="nexo-header-badge" style="text-decoration: none; cursor: pointer;">
+                    <i class="ri-exchange-line"></i>
+                    <span>Ver Inicial vs Restante</span>
+                </a>
+            </div>
+        </div>
     </div>
 
-    <div class="controls">
-        <div class="control-group">
-            <label for="search-marca">Buscar Marca:</label>
-            <input type="text" id="search-marca" placeholder="🔍 Escribe para buscar (ej: nike, adidas, puma...)" 
-                   oninput="filtrarMarcas()" style="min-width: 300px;">
+    <!-- ========== KPI DASHBOARD ========== -->
+    <div class="nexo-kpi-dashboard" id="kpi-dashboard">
+        <div class="nexo-kpi-card kpi-primary">
+            <div class="nexo-kpi-icon icon-primary">
+                <i class="ri-price-tag-3-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Total SKUs Activos</div>
+            <div class="nexo-kpi-value" id="kpi-skus">-</div>
+            <div class="nexo-kpi-meta">Productos únicos con stock</div>
         </div>
 
-        <div class="control-group">
-            <label for="filtro-marca">Filtrar por Marca:</label>
-            <select id="filtro-marca" size="1">
-                <option value="">Todas las marcas</option>
+        <div class="nexo-kpi-card kpi-success">
+            <div class="nexo-kpi-icon icon-success">
+                <i class="ri-stack-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Unidades Totales</div>
+            <div class="nexo-kpi-value" id="kpi-unidades">-</div>
+            <div class="nexo-kpi-meta">Stock disponible total</div>
+        </div>
+
+        <div class="nexo-kpi-card kpi-primary">
+            <div class="nexo-kpi-icon icon-primary">
+                <i class="ri-money-dollar-circle-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Valor Inventario (Costo)</div>
+            <div class="nexo-kpi-value" id="kpi-valor-costo">-</div>
+            <div class="nexo-kpi-meta">Inversión total en inventario</div>
+        </div>
+
+        <div class="nexo-kpi-card kpi-success">
+            <div class="nexo-kpi-icon icon-success">
+                <i class="ri-funds-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Valor Venta Potencial</div>
+            <div class="nexo-kpi-value" id="kpi-valor-venta">-</div>
+            <div class="nexo-kpi-meta">Valor de mercado del inventario</div>
+        </div>
+
+        <div class="nexo-kpi-card kpi-warning">
+            <div class="nexo-kpi-icon icon-warning">
+                <i class="ri-alert-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Stock Bajo</div>
+            <div class="nexo-kpi-value" id="kpi-bajo">-</div>
+            <div class="nexo-kpi-meta">SKUs con 5-10 unidades</div>
+        </div>
+
+        <div class="nexo-kpi-card kpi-error">
+            <div class="nexo-kpi-icon icon-error">
+                <i class="ri-error-warning-line"></i>
+            </div>
+            <div class="nexo-kpi-label">Stock Crítico</div>
+            <div class="nexo-kpi-value" id="kpi-critico">-</div>
+            <div class="nexo-kpi-meta">SKUs con &lt;5 unidades</div>
+        </div>
+    </div>
+
+    <!-- ========== CONTROLES ========== -->
+    <div class="nexo-controls">
+        <div class="nexo-control-group control-search">
+            <label class="nexo-control-label">🔍 Buscar Artículo (mín. 3 caracteres)</label>
+            <input type="text" 
+                   id="busqueda-articulo" 
+                   class="nexo-input" 
+                   placeholder="Ej: AIR MAX, ZAPATILLA, SKU-12345..."
+                   onkeyup="if(event.key === 'Enter') cargarReporte()">
+        </div>
+
+        <div class="nexo-control-group">
+            <label class="nexo-control-label">Buscar Marca</label>
+            <input type="text" 
+                   id="search-marca" 
+                   class="nexo-input" 
+                   placeholder="Escribe para filtrar marcas..."
+                   oninput="filtrarMarcas()">
+        </div>
+
+        <div class="nexo-control-group">
+            <label class="nexo-control-label">Filtrar por Marca</label>
+            <select id="filtro-marca" class="nexo-select">
+                <option value="">-- Selecciona una marca --</option>
             </select>
         </div>
 
-        <div class="control-group">
-            <label for="filtro-departamento">Departamento:</label>
-            <select id="filtro-departamento">
-                <option value="">Todos</option>
+        <div class="nexo-control-group">
+            <label class="nexo-control-label">Departamento</label>
+            <select id="filtro-departamento" class="nexo-select">
+                <option value="">Todos los departamentos</option>
             </select>
         </div>
 
-        <button class="btn btn-primary" onclick="cargarReporte()">
-            🔄 Actualizar Reporte
-        </button>
+        <div class="nexo-control-group">
+            <label class="nexo-control-label">Sucursal</label>
+            <select id="filtro-sucursal" class="nexo-select">
+                <option value="">Sucursal actual</option>
+            </select>
+        </div>
 
-        <button class="btn btn-success" onclick="exportarExcel()">
-            📥 Exportar a Excel
-        </button>
+        <div class="nexo-control-group" style="min-width: 120px; max-width: 140px;">
+            <label class="nexo-control-label">Límite</label>
+            <select id="filtro-limite" class="nexo-select">
+                <option value="100">100 productos</option>
+                <option value="250">250 productos</option>
+                <option value="500" selected>500 productos</option>
+                <option value="1000">1000 productos</option>
+                <option value="2000">2000 productos</option>
+            </select>
+        </div>
+
+        <div class="nexo-btn-group">
+            <button class="nexo-btn nexo-btn-secondary" onclick="limpiarFiltros()">
+                <i class="ri-delete-bin-line"></i> Limpiar
+            </button>
+            <button class="nexo-btn nexo-btn-primary" onclick="cargarReporte()">
+                <i class="ri-search-line"></i> Buscar
+            </button>
+            <button class="nexo-btn nexo-btn-success" onclick="exportarExcel()" id="btn-exportar" disabled>
+                <i class="ri-file-excel-2-line"></i> Exportar
+            </button>
+        </div>
+    </div>
+    
+    <!-- ========== INFO DE FILTROS ========== -->
+    <div class="nexo-alert-container" id="alerta-filtro" style="display: none;">
+        <div style="background: rgba(0, 102, 255, 0.05); border: 1px solid var(--nexo-primary); border-radius: var(--nexo-radius-md); padding: 12px 24px; margin: 0 40px 16px 40px; display: flex; align-items: center; gap: 12px;">
+            <i class="ri-lightbulb-line" style="font-size: 1.25rem; color: var(--nexo-primary);"></i>
+            <p style="margin: 0; color: var(--nexo-gray-700); font-size: 0.8rem;">
+                <strong>Tip:</strong> Usa los filtros de <strong>Marca</strong> o <strong>Departamento</strong> para búsquedas más rápidas, o escribe en <strong>Buscar Artículo</strong> (mín. 3 caracteres).
+            </p>
+        </div>
     </div>
 
-    <div id="contenido-reporte" class="p-4">
-        <div class="loading">
-            ⏳ Cargando datos del reporte...
+    <!-- ========== QUICK FILTERS ========== -->
+    <div class="nexo-quick-filters">
+        <span class="nexo-quick-label">Filtros rápidos:</span>
+        <div class="nexo-chip active" onclick="filtroRapido('todos')" data-filter="todos">
+            <i class="ri-apps-line"></i> Todos
+        </div>
+        <div class="nexo-chip" onclick="filtroRapido('critico')" data-filter="critico">
+            <i class="ri-error-warning-line"></i> Stock Crítico
+            <span class="nexo-chip-count" id="chip-count-critico">0</span>
+        </div>
+        <div class="nexo-chip" onclick="filtroRapido('bajo')" data-filter="bajo">
+            <i class="ri-alert-line"></i> Stock Bajo
+            <span class="nexo-chip-count" id="chip-count-bajo">0</span>
+        </div>
+        <div class="nexo-chip" onclick="filtroRapido('ok')" data-filter="ok">
+            <i class="ri-checkbox-circle-line"></i> Stock OK
+            <span class="nexo-chip-count" id="chip-count-ok">0</span>
+        </div>
+        
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+            <span class="nexo-quick-label">Vista:</span>
+            <div class="nexo-view-toggle">
+                <button class="nexo-view-btn active" onclick="cambiarVista('lista')" data-view="lista">
+                    <i class="ri-list-check"></i> Lista
+                </button>
+                <button class="nexo-view-btn" onclick="cambiarVista('cards')" data-view="cards">
+                    <i class="ri-layout-grid-line"></i> Cards
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== CONTENIDO REPORTE ========== -->
+    <div class="nexo-content" id="contenido-reporte">
+        <div class="nexo-empty-state">
+            <div class="nexo-empty-icon">📊</div>
+            <div class="nexo-empty-title">Reporte de Existencias</div>
+            <div class="nexo-empty-text">
+                Haz clic en <strong>"Buscar"</strong> para cargar los productos de tu sucursal.<br>
+                <small style="color: var(--nexo-gray-500);">Puedes filtrar por marca, departamento o buscar un artículo específico.</small>
+            </div>
+            <button class="nexo-btn nexo-btn-primary" onclick="cargarReporte()" style="margin-top: 20px;">
+                <i class="ri-search-line"></i> Cargar Productos
+            </button>
         </div>
     </div>
 </div>
 
 <script>
 let datosCompletos = [];
-let todasLasMarcas = []; // Guardar todas las marcas para el filtrado
-let sucursalesDisponibles = []; // Guardar sucursales del sistema
+let todasLasMarcas = [];
+let sucursalesDisponibles = [];
+let filtroActivo = 'todos';
+let vistaActual = 'lista';
+const SUCURSAL_ACTUAL_ID = '{{ sucursal_actual_id|default:"" }}';
+const SUCURSAL_ACTUAL_ALIAS = '{{ sucursal_actual.alias|default:"" }}';
 
-// Cargar filtros al iniciar
+// ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
     cargarMarcas();
     cargarDepartamentos();
-    // NO cargar reporte automáticamente - solo cuando usuario haga clic
-    document.getElementById('contenido-reporte').innerHTML = `
-        <div class="empty-state">
-            <i>🔍</i>
-            <p><strong>Selecciona filtros y haz clic en "Actualizar Reporte"</strong></p>
-            <p style="color: #6c757d; font-size: 0.9em;">Puedes filtrar por marca, departamento o ver todas las marcas</p>
-        </div>
-    `;
+    cargarSucursales();
+    mostrarAlertaFiltro(false);
 });
 
-// Cargar marcas para el filtro
+// ========== LOADING OVERLAY ==========
+function mostrarLoading(mostrar, texto = 'Cargando inventario...', subtexto = 'Esto puede tomar unos segundos') {
+    const overlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    const loadingSubtext = document.getElementById('loading-subtext');
+    
+    if (overlay) {
+        overlay.style.display = mostrar ? 'flex' : 'none';
+        if (loadingText) loadingText.textContent = texto;
+        if (loadingSubtext) loadingSubtext.textContent = subtexto;
+    }
+}
+
+// ========== VALIDACIÓN DE FILTROS ==========
+function tieneFiltroValido() {
+    const marca = document.getElementById('filtro-marca').value;
+    const depto = document.getElementById('filtro-departamento').value;
+    const busqueda = document.getElementById('busqueda-articulo').value.trim();
+    
+    return marca || depto || busqueda.length >= 3;
+}
+
+function mostrarAlertaFiltro(mostrar) {
+    const alerta = document.getElementById('alerta-filtro');
+    if (alerta) {
+        alerta.style.display = mostrar ? 'block' : 'none';
+    }
+}
+
+// ========== CAMBIAR VISTA ==========
+function cambiarVista(vista) {
+    vistaActual = vista;
+    
+    // Actualizar botones
+    document.querySelectorAll('.nexo-view-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.view === vista) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Re-renderizar si hay datos
+    if (datosCompletos.length > 0) {
+        renderizarReporte(datosCompletos);
+    }
+}
+
+// ========== CARGAR FILTROS ==========
 async function cargarMarcas() {
     try {
         const response = await fetch('/app/obtener_marcas/');
         const data = await response.json();
+        todasLasMarcas = data;
         
-        todasLasMarcas = data; // Guardar todas las marcas
-        
-        // NO llenar el select al inicio - el usuario debe buscar
         const select = document.getElementById('filtro-marca');
-        
-        // Agregar opción informativa
         const optionInfo = document.createElement('option');
         optionInfo.value = '';
-        optionInfo.textContent = `💡 Usa el buscador arriba (${data.length} marcas disponibles)`;
+        optionInfo.textContent = `💡 ${data.length} marcas - usa el buscador`;
         optionInfo.disabled = true;
         select.appendChild(optionInfo);
-        
     } catch (error) {
         console.error('Error al cargar marcas:', error);
     }
 }
 
-// Filtrar marcas en el select según búsqueda
 function filtrarMarcas() {
     const searchInput = document.getElementById('search-marca');
     const select = document.getElementById('filtro-marca');
     const searchText = searchInput.value.toLowerCase().trim();
     
-    // Limpiar select
-    select.innerHTML = '<option value="">Todas las marcas</option>';
+    select.innerHTML = '<option value="">-- Selecciona una marca --</option>';
     
-    // Si no hay búsqueda, mostrar mensaje informativo
     if (!searchText) {
         const optionInfo = document.createElement('option');
         optionInfo.value = '';
-        optionInfo.textContent = `💡 Usa el buscador arriba (${todasLasMarcas.length} marcas disponibles)`;
+        optionInfo.textContent = `💡 ${todasLasMarcas.length} marcas disponibles`;
         optionInfo.disabled = true;
         select.appendChild(optionInfo);
         return;
     }
     
-    // Filtrar y agregar opciones (mínimo 2 caracteres para buscar)
     if (searchText.length < 2) {
         const option = document.createElement('option');
         option.value = '';
@@ -343,40 +1326,37 @@ function filtrarMarcas() {
         marca.valor.toLowerCase().includes(searchText)
     );
     
-    // Agregar opciones filtradas
+    // Agregar contador
+    if (marcasFiltradas.length > 0) {
+        const optCount = document.createElement('option');
+        optCount.value = '';
+        optCount.textContent = `── ${marcasFiltradas.length} resultado(s) ──`;
+        optCount.disabled = true;
+        select.appendChild(optCount);
+    }
+    
     marcasFiltradas.forEach(marca => {
         const option = document.createElement('option');
         option.value = marca.id;
         option.textContent = marca.valor;
-        option.dataset.nombre = marca.valor.toLowerCase();
         select.appendChild(option);
     });
     
-    // Mostrar mensaje si no hay resultados
     if (marcasFiltradas.length === 0) {
         const option = document.createElement('option');
         option.value = '';
-        option.textContent = `❌ No se encontraron marcas con "${searchInput.value}"`;
+        option.textContent = `❌ Sin resultados para "${searchInput.value}"`;
         option.disabled = true;
         select.appendChild(option);
-    } else {
-        // Mostrar contador de resultados
-        const optionCount = document.createElement('option');
-        optionCount.value = '';
-        optionCount.textContent = `─────── ${marcasFiltradas.length} resultado(s) ───────`;
-        optionCount.disabled = true;
-        select.insertBefore(optionCount, select.children[1]);
     }
 }
 
-// Cargar departamentos (categorías)
 async function cargarDepartamentos() {
     try {
         const response = await fetch('/app/obtener_categorias/');
         const data = await response.json();
         
         const select = document.getElementById('filtro-departamento');
-        // La respuesta es un array directo
         data.forEach(cat => {
             const option = document.createElement('option');
             option.value = cat.id;
@@ -388,80 +1368,231 @@ async function cargarDepartamentos() {
     }
 }
 
-// Cargar reporte principal
-async function cargarReporte() {
+async function cargarSucursales() {
+    try {
+        const response = await fetch('/app/api/sucursales-usuario/');
+        const data = await response.json();
+        
+        if (data.success && data.sucursales) {
+            const select = document.getElementById('filtro-sucursal');
+            
+            // Opción por defecto: sucursal actual
+            if (SUCURSAL_ACTUAL_ALIAS) {
+                select.innerHTML = `<option value="">${SUCURSAL_ACTUAL_ALIAS} (actual)</option>`;
+            }
+            
+            // Agregar opción "Todas mis sucursales"
+            const optTodas = document.createElement('option');
+            optTodas.value = 'todas';
+            optTodas.textContent = '📍 Todas mis sucursales';
+            select.appendChild(optTodas);
+            
+            // Agregar cada sucursal
+            data.sucursales.forEach(suc => {
+                if (suc.sucursal_id != SUCURSAL_ACTUAL_ID) {
+                    const option = document.createElement('option');
+                    option.value = suc.sucursal_id;
+                    option.textContent = `${suc.sucursal_alias} - ${suc.empresa_nombre}`;
+                    select.appendChild(option);
+                }
+            });
+            
+            sucursalesDisponibles = data.sucursales;
+        }
+    } catch (error) {
+        console.error('Error al cargar sucursales:', error);
+    }
+}
+
+// ========== FILTRO RÁPIDO ==========
+function filtroRapido(tipo) {
+    filtroActivo = tipo;
+    
+    // Actualizar chips
+    document.querySelectorAll('.nexo-chip').forEach(chip => {
+        chip.classList.remove('active');
+        if (chip.dataset.filter === tipo) {
+            chip.classList.add('active');
+        }
+    });
+    
+    // Re-renderizar con filtro
+    if (datosCompletos.length > 0) {
+        renderizarReporte(datosCompletos);
+    }
+}
+
+// ========== CARGAR REPORTE ==========
+async function cargarReporte(forzarSinFiltro = false) {
     const contenido = document.getElementById('contenido-reporte');
-    contenido.innerHTML = '<div class="loading">⏳ Cargando datos del reporte...</div>';
+    const limite = document.getElementById('filtro-limite').value;
+    
+    // Validar filtros (pero permitir sin filtro con confirmación)
+    if (!tieneFiltroValido() && !forzarSinFiltro) {
+        // Preguntar si quiere cargar sin filtro
+        const confirmar = confirm(
+            '⚠️ No has seleccionado ningún filtro.\n\n' +
+            `Se cargarán los primeros ${limite} productos de tu sucursal.\n` +
+            'Esto puede tomar unos segundos.\n\n' +
+            '¿Deseas continuar?'
+        );
+        
+        if (!confirmar) return;
+    }
+    
+    mostrarAlertaFiltro(false);
+    
+    // Mostrar loading de pantalla completa
+    const sinFiltro = !tieneFiltroValido();
+    mostrarLoading(
+        true, 
+        sinFiltro ? 'Cargando productos...' : 'Buscando productos...', 
+        sinFiltro ? `Obteniendo ${limite} productos de tu sucursal` : 'Aplicando filtros seleccionados'
+    );
     
     try {
         const marcaId = document.getElementById('filtro-marca').value;
         const deptId = document.getElementById('filtro-departamento').value;
+        const busqueda = document.getElementById('busqueda-articulo').value.trim();
+        const sucursalId = document.getElementById('filtro-sucursal').value;
         
         let url = '/app/api/reporte-existencias-marca/';
         const params = new URLSearchParams();
+        
         if (marcaId) params.append('marca_id', marcaId);
         if (deptId) params.append('departamento_id', deptId);
+        if (busqueda.length >= 3) params.append('busqueda', busqueda);
+        if (sucursalId && sucursalId !== 'todas') params.append('sucursal_id', sucursalId);
+        params.append('limite', limite);
+        
+        // Si no hay filtros, indicar al backend que permita sin filtro
+        if (!tieneFiltroValido()) {
+            params.append('sin_filtro', 'true');
+        }
+        
         if (params.toString()) url += '?' + params.toString();
+        
+        console.log('📊 Consultando:', url);
         
         const response = await fetch(url);
         const data = await response.json();
         
+        mostrarLoading(false);
+        
         if (data.success) {
             datosCompletos = data.datos;
             sucursalesDisponibles = data.sucursales || [];
-            renderizarReporte(data.datos, data.debug);
             
-            // Mostrar info de debug en consola
+            actualizarKPIs(data.datos);
+            renderizarReporte(data.datos);
+            
+            // Habilitar exportación
+            document.getElementById('btn-exportar').disabled = data.datos.length === 0;
+            
+            // Mostrar info de debug
             if (data.debug) {
-                console.log('📊 Debug Info:', data.debug);
-                console.log('🏪 Sucursales disponibles:', sucursalesDisponibles);
+                console.log('📊 Reporte cargado:', data.debug);
             }
-        } else {
-            contenido.innerHTML = `<div class="empty-state"><i>⚠️</i><p>${data.error || 'Error al cargar datos'}</p></div>`;
-        }
-    } catch (error) {
-        console.error('Error al cargar reporte:', error);
-        contenido.innerHTML = '<div class="empty-state"><i>⚠️</i><p>Error al cargar el reporte</p></div>';
-    }
-}
-
-// Renderizar reporte
-function renderizarReporte(datos, debugInfo = null) {
-    const contenido = document.getElementById('contenido-reporte');
-    
-    if (!datos || datos.length === 0) {
-        let mensaje = '<div class="empty-state"><i>📦</i>';
-        
-        if (debugInfo) {
-            mensaje += `
-                <p><strong>No se encontraron productos con lotes activos</strong></p>
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; text-align: left;">
-                    <h4 style="margin-top: 0; color: #667eea;">ℹ️ Información de Debug:</h4>
-                    <ul style="line-height: 1.8;">
-                        <li>📦 <strong>Total productos encontrados:</strong> ${debugInfo.total_productos}</li>
-                        <li>✅ <strong>Productos con lotes activos:</strong> ${debugInfo.productos_con_lotes}</li>
-                        <li>❌ <strong>Productos sin lotes/stock:</strong> ${debugInfo.productos_sin_lotes}</li>
-                    </ul>
-                    <p style="margin-bottom: 0; color: #6c757d; font-size: 0.9em;">
-                        💡 <strong>Posibles causas:</strong><br>
-                        • Los productos no tienen lotes creados<br>
-                        • Los lotes tienen stock 0 (cantidad_disponible = 0)<br>
-                        • Los lotes están marcados como inactivos
-                    </p>
+        } else if (data.requiere_filtro) {
+            mostrarAlertaFiltro(true);
+            contenido.innerHTML = `
+                <div class="nexo-empty-state">
+                    <div class="nexo-empty-icon">⚙️</div>
+                    <div class="nexo-empty-title">Filtro Requerido</div>
+                    <div class="nexo-empty-text">${data.error || 'Selecciona al menos un filtro'}</div>
                 </div>
             `;
         } else {
-            mensaje += '<p>No se encontraron productos con stock para mostrar</p>';
+            contenido.innerHTML = `
+                <div class="nexo-empty-state">
+                    <div class="nexo-empty-icon">⚠️</div>
+                    <div class="nexo-empty-title">Error al cargar</div>
+                    <div class="nexo-empty-text">${data.error || 'Error desconocido'}</div>
+                </div>
+            `;
         }
+    } catch (error) {
+        mostrarLoading(false);
+        console.error('Error:', error);
+        contenido.innerHTML = `
+            <div class="nexo-empty-state">
+                <div class="nexo-empty-icon">❌</div>
+                <div class="nexo-empty-title">Error de conexión</div>
+                <div class="nexo-empty-text">No se pudo conectar con el servidor</div>
+            </div>
+        `;
+    }
+}
+
+// ========== ACTUALIZAR KPIs ==========
+function actualizarKPIs(datos) {
+    let totalSKUs = datos.length;
+    let totalUnidades = 0;
+    let valorCosto = 0;
+    let valorVenta = 0;
+    let stockBajo = 0;
+    let stockCritico = 0;
+    let stockOK = 0;
+    
+    datos.forEach(item => {
+        totalUnidades += item.total_stock;
+        valorCosto += item.costo * item.total_stock;
+        valorVenta += item.precio_venta * item.total_stock;
         
-        mensaje += '</div>';
-        contenido.innerHTML = mensaje;
+        if (item.total_stock < 5) {
+            stockCritico++;
+        } else if (item.total_stock < 10) {
+            stockBajo++;
+        } else {
+            stockOK++;
+        }
+    });
+    
+    // Actualizar valores en UI
+    document.getElementById('kpi-skus').textContent = formatearNumero(totalSKUs);
+    document.getElementById('kpi-unidades').textContent = formatearNumero(totalUnidades);
+    document.getElementById('kpi-valor-costo').textContent = '$' + formatearNumero(valorCosto);
+    document.getElementById('kpi-valor-venta').textContent = '$' + formatearNumero(valorVenta);
+    document.getElementById('kpi-bajo').textContent = stockBajo;
+    document.getElementById('kpi-critico').textContent = stockCritico;
+    
+    // Actualizar contadores de chips
+    document.getElementById('chip-count-critico').textContent = stockCritico;
+    document.getElementById('chip-count-bajo').textContent = stockBajo;
+    document.getElementById('chip-count-ok').textContent = stockOK;
+}
+
+// ========== RENDERIZAR REPORTE ==========
+function renderizarReporte(datos) {
+    const contenido = document.getElementById('contenido-reporte');
+    
+    // Aplicar filtro activo
+    let datosFiltrados = datos;
+    if (filtroActivo === 'critico') {
+        datosFiltrados = datos.filter(d => d.total_stock < 5);
+    } else if (filtroActivo === 'bajo') {
+        datosFiltrados = datos.filter(d => d.total_stock >= 5 && d.total_stock < 10);
+    } else if (filtroActivo === 'ok') {
+        datosFiltrados = datos.filter(d => d.total_stock >= 10);
+    }
+    
+    if (!datosFiltrados || datosFiltrados.length === 0) {
+        contenido.innerHTML = `
+            <div class="nexo-empty-state">
+                <div class="nexo-empty-icon">📦</div>
+                <div class="nexo-empty-title">Sin resultados</div>
+                <div class="nexo-empty-text">
+                    No se encontraron productos ${filtroActivo !== 'todos' ? 'con el filtro aplicado' : 'con stock'}.
+                    Intenta cambiar los filtros o verifica el inventario.
+                </div>
+            </div>
+        `;
         return;
     }
     
     // Agrupar por marca
     const porMarca = {};
-    datos.forEach(item => {
+    datosFiltrados.forEach(item => {
         const marca = item.marca || 'Sin Marca';
         if (!porMarca[marca]) {
             porMarca[marca] = [];
@@ -469,152 +1600,208 @@ function renderizarReporte(datos, debugInfo = null) {
         porMarca[marca].push(item);
     });
     
-    // Renderizar cada marca
+    // Renderizar según vista
     let html = '';
     Object.keys(porMarca).sort().forEach(marca => {
-        const productos = porMarca[marca];
-        html += renderizarMarca(marca, productos, sucursalesDisponibles);
+        if (vistaActual === 'cards') {
+            html += renderizarMarcaCards(marca, porMarca[marca]);
+        } else {
+            html += renderizarMarcaLista(marca, porMarca[marca]);
+        }
     });
     
     contenido.innerHTML = html;
 }
 
-// Renderizar sección de marca
-function renderizarMarca(marca, productos, sucursalesDisponibles) {
-    // Filtrar solo sucursales que tienen stock en esta marca
-    const sucursalesConStock = sucursalesDisponibles.filter(suc => {
-        return productos.some(p => p.sucursales[suc.alias] && p.sucursales[suc.alias].stock > 0);
+// ========== CALCULAR STATS DE MARCA ==========
+function calcularStatsMarca(productos) {
+    let totalStock = 0;
+    let totalSKUs = productos.length;
+    let valorInventario = 0;
+    let valorVenta = 0;
+    let stockCritico = 0;
+    let stockBajo = 0;
+    
+    productos.forEach(p => {
+        totalStock += p.total_stock;
+        valorInventario += p.costo * p.total_stock;
+        valorVenta += p.precio_venta * p.total_stock;
+        if (p.total_stock < 5) stockCritico++;
+        else if (p.total_stock < 10) stockBajo++;
     });
     
-    // Calcular total de stock de la marca
-    let totalStock = 0;
-    productos.forEach(p => totalStock += p.total_stock);
+    const margenPromedio = valorInventario > 0 ? ((valorVenta - valorInventario) / valorInventario * 100).toFixed(1) : 0;
+    
+    let estadoMarca = 'Óptimo';
+    let estadoColor = 'text-success';
+    if (stockCritico > totalSKUs * 0.3) {
+        estadoMarca = 'Crítico';
+        estadoColor = 'text-error';
+    } else if (stockBajo + stockCritico > totalSKUs * 0.2) {
+        estadoMarca = 'Atención';
+        estadoColor = 'text-warning';
+    }
+    
+    return { totalStock, totalSKUs, valorInventario, valorVenta, stockCritico, stockBajo, margenPromedio, estadoMarca, estadoColor };
+}
+
+// ========== RENDERIZAR MARCA - VISTA LISTA (COMPACTA) ==========
+function renderizarMarcaLista(marca, productos) {
+    const stats = calcularStatsMarca(productos);
     
     let html = `
-        <div class="marca-section">
-            <div class="marca-header">
-                <span>${marca}</span>
-                <span>Total Stock: ${totalStock.toLocaleString()} unidades</span>
+        <div class="nexo-marca-section">
+            <div class="nexo-marca-header">
+                <div class="nexo-marca-title">
+                    <h3>${marca}</h3>
+                    <span class="nexo-marca-badge" style="background: rgba(0,102,255,0.2); color: var(--nexo-primary);">
+                        ${stats.totalSKUs} SKUs
+                    </span>
+                </div>
+                <div class="nexo-marca-stats">
+                    <div class="nexo-marca-stat">
+                        <span class="nexo-marca-stat-label">Stock</span>
+                        <span class="nexo-marca-stat-value">${formatearNumero(stats.totalStock)}</span>
+                    </div>
+                    <div class="nexo-marca-stat">
+                        <span class="nexo-marca-stat-label">Valor</span>
+                        <span class="nexo-marca-stat-value">$${formatearNumero(stats.valorInventario)}</span>
+                    </div>
+                    <div class="nexo-marca-stat">
+                        <span class="nexo-marca-stat-label">Estado</span>
+                        <span class="nexo-marca-stat-value ${stats.estadoColor}">${stats.estadoMarca}</span>
+                    </div>
+                </div>
             </div>
-            <table class="tabla-lotes">
-                <thead>
-                    <tr>
-                        <th rowspan="2">Artículo</th>
-                        <th rowspan="2">Color</th>
-                        <th rowspan="2">Depart</th>
-                        <th rowspan="2">Costo</th>
-                        <th rowspan="2">PrecioV.</th>
-    `;
-    
-    // Encabezados solo de sucursales con stock
-    sucursalesConStock.forEach(suc => {
-        html += `<th colspan="2" class="lote-header">${suc.alias}</th>`;
-    });
-    
-    html += `
-                        <th colspan="2" class="lote-header">TT (TOTAL)</th>
-                    </tr>
-                    <tr>
-    `;
-    
-    // Sub-encabezados (Inicial / Stk) para cada sucursal con stock
-    sucursalesConStock.forEach(() => {
-        html += `
-            <th>Inicial</th>
-            <th>Stk</th>
-        `;
-    });
-    
-    html += `
-                        <th>Inicial</th>
-                        <th>Stk</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-    
-    // Inicializar totales por columna
-    const totalesPorSucursal = {};
-    sucursalesConStock.forEach(suc => {
-        totalesPorSucursal[suc.alias] = { inicial: 0, stock: 0 };
-    });
-    let granTotalInicial = 0;
-    let granTotalStock = 0;
-    
-    // Filas de productos
-    productos.forEach(producto => {
-        html += `
-            <tr>
-                <td class="td-articulo">${producto.articulo}</td>
-                <td class="td-color">${producto.color}</td>
-                <td>${producto.departamento}</td>
-                <td class="td-numero">$${formatearNumero(producto.costo)}</td>
-                <td class="td-numero">$${formatearNumero(producto.precio_venta)}</td>
-        `;
-        
-        // Datos de cada sucursal con stock
-        sucursalesConStock.forEach(suc => {
-            const stockSuc = producto.sucursales[suc.alias];
             
-            if (stockSuc) {
-                const claseStock = stockSuc.stock < 5 ? 'stock-bajo' : 'stock-ok';
-                html += `
-                    <td class="td-numero">${stockSuc.inicial}</td>
-                    <td class="td-numero ${claseStock}">${stockSuc.stock}</td>
-                `;
-                // Sumar a totales
-                totalesPorSucursal[suc.alias].inicial += stockSuc.inicial;
-                totalesPorSucursal[suc.alias].stock += stockSuc.stock;
-            } else {
-                html += `
-                    <td class="td-numero">-</td>
-                    <td class="td-numero">-</td>
-                `;
-            }
-        });
-        
-        // Totales del producto
-        const claseStockTotal = producto.total_stock < 10 ? 'stock-bajo' : 'stock-ok';
-        html += `
-                <td class="td-numero" style="background: #fff3cd; font-weight: 700;">${producto.total_inicial}</td>
-                <td class="td-numero ${claseStockTotal}" style="background: #fff3cd; font-weight: 700;">${producto.total_stock}</td>
-            </tr>
-        `;
-        
-        granTotalInicial += producto.total_inicial;
-        granTotalStock += producto.total_stock;
-    });
-    
-    // Fila de TOTALES por columna
-    html += `
-            <tr class="total-row">
-                <td colspan="5" style="text-align: right; padding-right: 15px;"><strong>TOTALES:</strong></td>
+            <div style="padding: 12px;">
+                <div class="nexo-list-header">
+                    <span>Artículo / Color</span>
+                    <span>Costo</span>
+                    <span>Precio</span>
+                    <span>Sucursal</span>
+                    <span>Stock</span>
+                </div>
+                <div class="nexo-productos-list">
     `;
     
-    sucursalesConStock.forEach(suc => {
-        const total = totalesPorSucursal[suc.alias];
+    productos.forEach(p => {
+        const stockClass = getStockClass(p.total_stock);
+        const sucursalNombre = Object.keys(p.sucursales)[0] || '-';
+        
         html += `
-                <td class="td-numero"><strong>${total.inicial}</strong></td>
-                <td class="td-numero"><strong>${total.stock}</strong></td>
+            <div class="nexo-producto-row">
+                <div class="producto-info">
+                    <span class="producto-articulo">${p.articulo}</span>
+                    <span class="producto-detalle">${p.color} · ${p.departamento}</span>
+                </div>
+                <div class="producto-precio">$${formatearNumero(p.costo)}</div>
+                <div class="producto-precio" style="color: var(--nexo-primary); font-weight: 600;">$${formatearNumero(p.precio_venta)}</div>
+                <div class="producto-detalle" style="text-align: center;">${sucursalNombre}</div>
+                <div class="producto-stock"><span class="stock-badge ${stockClass}">${p.total_stock}</span></div>
+            </div>
         `;
     });
     
     html += `
-                <td class="td-numero" style="background: #ffc107; font-weight: 700;">${granTotalInicial}</td>
-                <td class="td-numero" style="background: #ffc107; font-weight: 700;">${granTotalStock}</td>
-            </tr>
-    `;
-    
-    html += `
-                </tbody>
-            </table>
+                </div>
+            </div>
+            
+            <div class="nexo-marca-totals">
+                <div class="nexo-marca-total-item">
+                    <span class="nexo-marca-total-label">Total:</span>
+                    <span class="nexo-marca-total-value">${formatearNumero(stats.totalStock)} uds</span>
+                </div>
+                <div class="nexo-marca-total-item">
+                    <span class="nexo-marca-total-label">Inversión:</span>
+                    <span class="nexo-marca-total-value">$${formatearNumero(stats.valorInventario)}</span>
+                </div>
+                <div class="nexo-marca-total-item">
+                    <span class="nexo-marca-total-label">Valor Venta:</span>
+                    <span class="nexo-marca-total-value" style="color: var(--nexo-success);">$${formatearNumero(stats.valorVenta)}</span>
+                </div>
+                <div class="nexo-marca-total-item">
+                    <span class="nexo-marca-total-label">Margen:</span>
+                    <span class="nexo-marca-total-value">${stats.margenPromedio}%</span>
+                </div>
+            </div>
         </div>
     `;
     
     return html;
 }
 
-// Formatear números
+// ========== RENDERIZAR MARCA - VISTA CARDS ==========
+function renderizarMarcaCards(marca, productos) {
+    const stats = calcularStatsMarca(productos);
+    
+    let html = `
+        <div class="nexo-marca-section">
+            <div class="nexo-marca-header">
+                <div class="nexo-marca-title">
+                    <h3>${marca}</h3>
+                    <span class="nexo-marca-badge" style="background: rgba(0,102,255,0.2); color: var(--nexo-primary);">
+                        ${stats.totalSKUs} SKUs · ${formatearNumero(stats.totalStock)} uds
+                    </span>
+                </div>
+                <div class="nexo-marca-stats">
+                    <div class="nexo-marca-stat">
+                        <span class="nexo-marca-stat-label">Valor</span>
+                        <span class="nexo-marca-stat-value">$${formatearNumero(stats.valorInventario)}</span>
+                    </div>
+                    <div class="nexo-marca-stat">
+                        <span class="nexo-marca-stat-label">Margen</span>
+                        <span class="nexo-marca-stat-value ${stats.margenPromedio >= 30 ? 'text-success' : 'text-warning'}">${stats.margenPromedio}%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="padding: 12px;">
+                <div class="nexo-productos-grid">
+    `;
+    
+    productos.forEach(p => {
+        const stockClass = getStockClass(p.total_stock);
+        const sucursalNombre = Object.keys(p.sucursales)[0] || '-';
+        
+        html += `
+            <div class="nexo-producto-card">
+                <div class="nexo-producto-header">
+                    <span class="nexo-producto-nombre">${p.articulo}</span>
+                    <span class="nexo-producto-stock-badge ${stockClass}">${p.total_stock}</span>
+                </div>
+                <div class="nexo-producto-meta">
+                    <span class="nexo-producto-tag">${p.color}</span>
+                    <span class="nexo-producto-tag">${p.departamento}</span>
+                </div>
+                <div class="nexo-producto-precios">
+                    <span class="nexo-producto-costo">Costo: $${formatearNumero(p.costo)}</span>
+                    <span class="nexo-producto-precio">$${formatearNumero(p.precio_venta)}</span>
+                </div>
+                <div class="nexo-producto-sucursal">
+                    <i class="ri-map-pin-2-line"></i> ${sucursalNombre}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return html;
+}
+
+// ========== HELPERS ==========
+function getStockClass(stock) {
+    if (stock === 0) return 'stock-out';
+    if (stock < 5) return 'stock-critical';
+    if (stock < 10) return 'stock-warning';
+    return 'stock-ok';
+}
+
 function formatearNumero(num) {
     if (!num) return '0';
     return parseFloat(num).toLocaleString('es-CL', {
@@ -623,16 +1810,29 @@ function formatearNumero(num) {
     });
 }
 
-// Exportar a Excel
+// ========== EXPORTAR EXCEL ==========
 async function exportarExcel() {
+    if (!tieneFiltroValido()) {
+        alert('⚠️ Selecciona al menos un filtro antes de exportar');
+        return;
+    }
+    
     try {
         const marcaId = document.getElementById('filtro-marca').value;
         const deptId = document.getElementById('filtro-departamento').value;
+        const busqueda = document.getElementById('busqueda-articulo').value.trim();
+        const sucursalId = document.getElementById('filtro-sucursal').value;
+        const limite = document.getElementById('filtro-limite').value;
         
         let url = '/app/api/exportar-existencias-marca-excel/';
         const params = new URLSearchParams();
+        
         if (marcaId) params.append('marca_id', marcaId);
         if (deptId) params.append('departamento_id', deptId);
+        if (busqueda.length >= 3) params.append('busqueda', busqueda);
+        if (sucursalId && sucursalId !== 'todas') params.append('sucursal_id', sucursalId);
+        params.append('limite', limite);
+        
         if (params.toString()) url += '?' + params.toString();
         
         window.location.href = url;
@@ -641,10 +1841,32 @@ async function exportarExcel() {
         alert('Error al exportar a Excel');
     }
 }
+
+// ========== LIMPIAR FILTROS ==========
+function limpiarFiltros() {
+    document.getElementById('filtro-marca').value = '';
+    document.getElementById('filtro-departamento').value = '';
+    document.getElementById('busqueda-articulo').value = '';
+    document.getElementById('search-marca').value = '';
+    document.getElementById('filtro-sucursal').value = '';
+    filtrarMarcas();
+    mostrarAlertaFiltro(true);
+    datosCompletos = [];
+    document.getElementById('btn-exportar').disabled = true;
+    
+    document.getElementById('contenido-reporte').innerHTML = `
+        <div class="nexo-empty-state">
+            <div class="nexo-empty-icon">🔍</div>
+            <div class="nexo-empty-title">Listo para Analizar</div>
+            <div class="nexo-empty-text">
+                Selecciona filtros y haz clic en "Buscar" para cargar el reporte de existencias por marca.
+            </div>
+        </div>
+    `;
+}
 </script>
 
     </div>
 </div>
 
 {% include 'layout/footer.html' %}
-

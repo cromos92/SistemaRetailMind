@@ -1,0 +1,737 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+
+{% csrf_token %}
+{% include 'layout/menu.html' %}
+{% include 'layout/footer.html' %}
+
+<style>
+/* ========== NEXO DESIGN SYSTEM - Dashboard Clientes ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-transition-fast: 150ms ease;
+}
+
+/* Cards de estadísticas */
+.nexo-stat-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    padding: 1.5rem;
+    transition: all var(--nexo-transition-fast);
+    border: 1px solid var(--nexo-gray-300);
+    height: 100%;
+}
+
+.nexo-stat-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+    transform: translateY(-2px);
+}
+
+.nexo-stat-card .stat-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.nexo-stat-card .stat-icon.primary {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.nexo-stat-card .stat-icon.success {
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--nexo-success);
+}
+
+.nexo-stat-card .stat-icon.warning {
+    background: rgba(255, 176, 32, 0.1);
+    color: var(--nexo-warning);
+}
+
+.nexo-stat-card .stat-icon.error {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+.nexo-stat-card .stat-icon.info {
+    background: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-info);
+}
+
+.nexo-stat-card .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--nexo-gray-900);
+    line-height: 1.2;
+}
+
+.nexo-stat-card .stat-label {
+    font-size: 0.875rem;
+    color: var(--nexo-gray-500);
+    margin-top: 0.25rem;
+}
+
+.nexo-stat-card .stat-trend {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+}
+
+.nexo-stat-card .stat-trend.up {
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--nexo-success);
+}
+
+.nexo-stat-card .stat-trend.down {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+/* Cards de contenido */
+.nexo-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
+    overflow: hidden;
+}
+
+.nexo-card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nexo-card-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+}
+
+.nexo-card-body {
+    padding: 1.5rem;
+}
+
+/* Lista de empresas */
+.nexo-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--nexo-gray-100);
+}
+
+.nexo-list-item:last-child {
+    border-bottom: none;
+}
+
+.nexo-list-item .item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.nexo-list-item .item-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--nexo-radius-md);
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.nexo-list-item .item-name {
+    font-weight: 500;
+    color: var(--nexo-gray-900);
+}
+
+.nexo-list-item .item-subtitle {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+}
+
+.nexo-list-item .item-badge {
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* Barras de progreso */
+.nexo-progress-bar {
+    height: 8px;
+    background: var(--nexo-gray-100);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.nexo-progress-bar .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.nexo-progress-bar .progress-fill.primary { background: var(--nexo-primary); }
+.nexo-progress-bar .progress-fill.success { background: var(--nexo-success); }
+.nexo-progress-bar .progress-fill.warning { background: var(--nexo-warning); }
+.nexo-progress-bar .progress-fill.error { background: var(--nexo-error); }
+
+/* Gráficos de distribución */
+.nexo-distribution-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+}
+
+.nexo-distribution-item .dist-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nexo-distribution-item .dist-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.nexo-distribution-item .dist-name {
+    font-size: 0.875rem;
+    color: var(--nexo-gray-700);
+}
+
+.nexo-distribution-item .dist-value {
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+}
+
+.nexo-distribution-item .dist-percent {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    margin-left: 0.5rem;
+}
+
+/* Badges */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.nexo-badge.success {
+    background: rgba(0, 212, 170, 0.1);
+    color: var(--nexo-success);
+}
+
+.nexo-badge.warning {
+    background: rgba(255, 176, 32, 0.1);
+    color: #996B00;
+}
+
+.nexo-badge.error {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+.nexo-badge.info {
+    background: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-info);
+}
+
+/* Botones */
+.nexo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all var(--nexo-transition-fast);
+    border: none;
+    cursor: pointer;
+}
+
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-outline {
+    background: transparent;
+    color: var(--nexo-primary);
+    border: 2px solid var(--nexo-primary);
+}
+
+.nexo-btn-outline:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+/* Título de página */
+.nexo-page-header {
+    margin-bottom: 2rem;
+}
+
+.nexo-page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--nexo-gray-900);
+    margin-bottom: 0.25rem;
+}
+
+.nexo-page-subtitle {
+    color: var(--nexo-gray-500);
+    font-size: 0.9375rem;
+}
+
+/* Alertas de calidad de datos */
+.nexo-alert {
+    padding: 1rem 1.25rem;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.nexo-alert.warning {
+    background: rgba(255, 176, 32, 0.1);
+    border-left: 4px solid var(--nexo-warning);
+}
+
+.nexo-alert.error {
+    background: rgba(255, 77, 77, 0.1);
+    border-left: 4px solid var(--nexo-error);
+}
+
+.nexo-alert .alert-icon {
+    font-size: 1.25rem;
+}
+
+.nexo-alert.warning .alert-icon { color: var(--nexo-warning); }
+.nexo-alert.error .alert-icon { color: var(--nexo-error); }
+
+.nexo-alert .alert-content strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--nexo-gray-900);
+}
+
+.nexo-alert .alert-content p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--nexo-gray-700);
+}
+</style>
+
+<div class="main-content">
+    <div class="page-content">
+        <div class="container-fluid">
+            
+            <!-- ========== HEADER ========== -->
+            <div class="nexo-page-header">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h1 class="nexo-page-title">
+                            <i class="bi bi-pie-chart-fill me-2" style="color: var(--nexo-primary);"></i>
+                            Dashboard de Clientes
+                        </h1>
+                        <p class="nexo-page-subtitle">Análisis y métricas de tu base de clientes</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'empresa_management:lista_clientes' %}" class="nexo-btn nexo-btn-outline">
+                            <i class="bi bi-list-ul"></i>
+                            Ver Lista
+                        </a>
+                        <button class="nexo-btn nexo-btn-primary" onclick="window.print()">
+                            <i class="bi bi-printer"></i>
+                            Imprimir
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== ESTADÍSTICAS PRINCIPALES ========== -->
+            <div class="row mb-4">
+                <!-- Total Clientes -->
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value">{{ total_clientes|default:0 }}</div>
+                                <div class="stat-label">Total de Clientes</div>
+                            </div>
+                            <div class="stat-icon primary">
+                                <i class="bi bi-people-fill"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clientes Activos -->
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" style="color: var(--nexo-success);">{{ clientes_activos|default:0 }}</div>
+                                <div class="stat-label">Clientes Activos</div>
+                                {% if total_clientes > 0 %}
+                                <span class="stat-trend up mt-2 d-inline-block">
+                                    <i class="bi bi-check-circle me-1"></i>
+                                    {% widthratio clientes_activos total_clientes 100 %}% del total
+                                </span>
+                                {% endif %}
+                            </div>
+                            <div class="stat-icon success">
+                                <i class="bi bi-person-check-fill"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clientes Inactivos -->
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" style="color: var(--nexo-gray-500);">{{ clientes_inactivos|default:0 }}</div>
+                                <div class="stat-label">Clientes Inactivos</div>
+                            </div>
+                            <div class="stat-icon warning">
+                                <i class="bi bi-person-dash-fill"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clientes Nuevos (Últimos 30 días) -->
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="nexo-stat-card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="stat-value" style="color: var(--nexo-primary);">{{ clientes_recientes|default:0 }}</div>
+                                <div class="stat-label">Nuevos (30 días)</div>
+                                <span class="stat-trend up mt-2 d-inline-block">
+                                    <i class="bi bi-graph-up-arrow me-1"></i>
+                                    Últimos 30 días
+                                </span>
+                            </div>
+                            <div class="stat-icon info">
+                                <i class="bi bi-person-plus-fill"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== ALERTAS DE CALIDAD DE DATOS ========== -->
+            {% if clientes_sin_email > 0 or clientes_sin_telefono > 0 %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="nexo-card">
+                        <div class="nexo-card-header">
+                            <h5><i class="bi bi-exclamation-triangle me-2" style="color: var(--nexo-warning);"></i>Calidad de Datos</h5>
+                        </div>
+                        <div class="nexo-card-body">
+                            <div class="row">
+                                {% if clientes_sin_email > 0 %}
+                                <div class="col-md-6">
+                                    <div class="nexo-alert warning">
+                                        <i class="bi bi-envelope-x alert-icon"></i>
+                                        <div class="alert-content">
+                                            <strong>{{ clientes_sin_email }} clientes sin email</strong>
+                                            <p>Estos clientes no pueden recibir notificaciones por correo electrónico.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                {% if clientes_sin_telefono > 0 %}
+                                <div class="col-md-6">
+                                    <div class="nexo-alert warning">
+                                        <i class="bi bi-telephone-x alert-icon"></i>
+                                        <div class="alert-content">
+                                            <strong>{{ clientes_sin_telefono }} clientes sin teléfono</strong>
+                                            <p>No es posible contactar a estos clientes por teléfono.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="row mb-4">
+                <!-- ========== DISTRIBUCIÓN POR TIPO ========== -->
+                <div class="col-xl-4 col-lg-6 mb-4">
+                    <div class="nexo-card h-100">
+                        <div class="nexo-card-header">
+                            <h5><i class="bi bi-diagram-3 me-2" style="color: var(--nexo-primary);"></i>Distribución por Tipo</h5>
+                        </div>
+                        <div class="nexo-card-body">
+                            {% if por_tipo %}
+                                {% for tipo in por_tipo %}
+                                <div class="nexo-distribution-item">
+                                    <div class="dist-label">
+                                        <span class="dist-dot" style="background: {% cycle '#0066FF' '#00D4AA' '#FFB020' '#FF4D4D' '#8A8A9A' %};"></span>
+                                        <span class="dist-name">
+                                            {% if tipo.tipo_cliente == 'natural' %}Persona Natural
+                                            {% elif tipo.tipo_cliente == 'empresa' %}Empresa
+                                            {% else %}{{ tipo.tipo_cliente|default:"Sin especificar" }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span class="dist-value">{{ tipo.count }}</span>
+                                        {% if total_clientes > 0 %}
+                                        <span class="dist-percent">({% widthratio tipo.count total_clientes 100 %}%)</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="nexo-progress-bar mb-3">
+                                    <div class="progress-fill primary" style="width: {% widthratio tipo.count total_clientes 100 %}%;"></div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                    <p class="mt-2 mb-0">No hay datos de tipos de cliente</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== DISTRIBUCIÓN POR GÉNERO ========== -->
+                <div class="col-xl-4 col-lg-6 mb-4">
+                    <div class="nexo-card h-100">
+                        <div class="nexo-card-header">
+                            <h5><i class="bi bi-gender-ambiguous me-2" style="color: var(--nexo-accent);"></i>Distribución por Género</h5>
+                        </div>
+                        <div class="nexo-card-body">
+                            {% if por_genero %}
+                                {% for genero in por_genero %}
+                                <div class="nexo-distribution-item">
+                                    <div class="dist-label">
+                                        <span class="dist-dot" style="background: {% if genero.genero == 'M' %}#0066FF{% elif genero.genero == 'F' %}#FF69B4{% else %}#8A8A9A{% endif %};"></span>
+                                        <span class="dist-name">
+                                            {% if genero.genero == 'M' %}Masculino
+                                            {% elif genero.genero == 'F' %}Femenino
+                                            {% else %}{{ genero.genero|default:"Otro" }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span class="dist-value">{{ genero.count }}</span>
+                                        {% if total_clientes > 0 %}
+                                        <span class="dist-percent">({% widthratio genero.count total_clientes 100 %}%)</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="nexo-progress-bar mb-3">
+                                    <div class="progress-fill {% if genero.genero == 'M' %}primary{% elif genero.genero == 'F' %}{% else %}warning{% endif %}" 
+                                         style="width: {% widthratio genero.count total_clientes 100 %}%; {% if genero.genero == 'F' %}background: #FF69B4;{% endif %}"></div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                    <p class="mt-2 mb-0">No hay datos de género disponibles</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== ESTADÍSTICAS ADICIONALES ========== -->
+                <div class="col-xl-4 col-lg-12 mb-4">
+                    <div class="nexo-card h-100">
+                        <div class="nexo-card-header">
+                            <h5><i class="bi bi-graph-up me-2" style="color: var(--nexo-success);"></i>Resumen Rápido</h5>
+                        </div>
+                        <div class="nexo-card-body">
+                            <div class="nexo-list-item">
+                                <div class="item-info">
+                                    <div class="item-avatar" style="background: rgba(0, 212, 170, 0.1); color: var(--nexo-success);">
+                                        <i class="bi bi-building"></i>
+                                    </div>
+                                    <div>
+                                        <div class="item-name">Con Empresa Asignada</div>
+                                        <div class="item-subtitle">Clientes vinculados</div>
+                                    </div>
+                                </div>
+                                <span class="item-badge" style="background: var(--nexo-success);">{{ total_clientes|add:clientes_sin_empresa|default:0 }}</span>
+                            </div>
+                            
+                            <div class="nexo-list-item">
+                                <div class="item-info">
+                                    <div class="item-avatar" style="background: rgba(255, 176, 32, 0.1); color: var(--nexo-warning);">
+                                        <i class="bi bi-question-circle"></i>
+                                    </div>
+                                    <div>
+                                        <div class="item-name">Sin Empresa</div>
+                                        <div class="item-subtitle">Clientes independientes</div>
+                                    </div>
+                                </div>
+                                <span class="item-badge" style="background: var(--nexo-warning);">{{ clientes_sin_empresa|default:0 }}</span>
+                            </div>
+                            
+                            <div class="nexo-list-item">
+                                <div class="item-info">
+                                    <div class="item-avatar" style="background: rgba(255, 77, 77, 0.1); color: var(--nexo-error);">
+                                        <i class="bi bi-envelope-x"></i>
+                                    </div>
+                                    <div>
+                                        <div class="item-name">Sin Email</div>
+                                        <div class="item-subtitle">Datos incompletos</div>
+                                    </div>
+                                </div>
+                                <span class="item-badge" style="background: var(--nexo-error);">{{ clientes_sin_email|default:0 }}</span>
+                            </div>
+                            
+                            <div class="nexo-list-item">
+                                <div class="item-info">
+                                    <div class="item-avatar" style="background: rgba(138, 138, 154, 0.1); color: var(--nexo-gray-500);">
+                                        <i class="bi bi-telephone-x"></i>
+                                    </div>
+                                    <div>
+                                        <div class="item-name">Sin Teléfono</div>
+                                        <div class="item-subtitle">Sin contacto telefónico</div>
+                                    </div>
+                                </div>
+                                <span class="item-badge" style="background: var(--nexo-gray-500);">{{ clientes_sin_telefono|default:0 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== TOP EMPRESAS CON MÁS CLIENTES ========== -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="nexo-card">
+                        <div class="nexo-card-header">
+                            <h5><i class="bi bi-trophy me-2" style="color: var(--nexo-warning);"></i>Top 5 Empresas con más Clientes</h5>
+                            <span class="nexo-badge info">Top 5</span>
+                        </div>
+                        <div class="nexo-card-body">
+                            {% if top_empresas_clientes %}
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead style="background: var(--nexo-gray-100);">
+                                        <tr>
+                                            <th style="border: none; padding: 1rem;">#</th>
+                                            <th style="border: none; padding: 1rem;">Empresa</th>
+                                            <th style="border: none; padding: 1rem;">RUT</th>
+                                            <th style="border: none; padding: 1rem;" class="text-center">Clientes</th>
+                                            <th style="border: none; padding: 1rem;">Participación</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for empresa in top_empresas_clientes %}
+                                        <tr>
+                                            <td style="padding: 1rem; vertical-align: middle;">
+                                                <span class="nexo-badge {% if forloop.counter == 1 %}warning{% elif forloop.counter == 2 %}info{% else %}success{% endif %}">
+                                                    {{ forloop.counter }}°
+                                                </span>
+                                            </td>
+                                            <td style="padding: 1rem; vertical-align: middle;">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="item-avatar" style="width: 36px; height: 36px; font-size: 0.75rem;">
+                                                        {{ empresa.nombre|slice:":2"|upper }}
+                                                    </div>
+                                                    <strong style="color: var(--nexo-gray-900);">{{ empresa.nombre }}</strong>
+                                                </div>
+                                            </td>
+                                            <td style="padding: 1rem; vertical-align: middle; color: var(--nexo-gray-700);">
+                                                {{ empresa.rut|default:"-" }}
+                                            </td>
+                                            <td style="padding: 1rem; vertical-align: middle;" class="text-center">
+                                                <span class="item-badge">{{ empresa.num_clientes }}</span>
+                                            </td>
+                                            <td style="padding: 1rem; vertical-align: middle; width: 200px;">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="nexo-progress-bar flex-grow-1">
+                                                        <div class="progress-fill success" style="width: {% widthratio empresa.num_clientes total_clientes 100 %}%;"></div>
+                                                    </div>
+                                                    <span class="text-muted" style="min-width: 40px; font-size: 0.75rem;">
+                                                        {% widthratio empresa.num_clientes total_clientes 100 %}%
+                                                    </span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-building" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
+                                <h6 class="mt-3" style="color: var(--nexo-gray-700);">Sin datos disponibles</h6>
+                                <p class="mb-0" style="color: var(--nexo-gray-500);">No hay empresas con clientes registrados todavía.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <!-- container-fluid -->
+    </div>
+    <!-- page-content -->
+</div>
+<!-- main-content -->
+
+<script>
+$(document).ready(function() {
+    console.log('📊 Dashboard de Clientes NEXO cargado');
+});
+</script>

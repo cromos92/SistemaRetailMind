@@ -1,0 +1,1297 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+/* ========== NEXO DESIGN SYSTEM - Variables ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
+
+/* ========== PAGE CONTAINER ========== */
+.nexo-page {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+    min-height: calc(100vh - 60px);
+    padding: 1.5rem;
+}
+
+/* ========== HEADER SECTION ========== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-title i {
+    color: var(--nexo-primary);
+}
+
+/* ========== KPI CARDS ========== */
+.kpi-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.25rem;
+    border: 1px solid var(--nexo-gray-300);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-normal);
+}
+
+.kpi-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+    transform: translateY(-2px);
+}
+
+.kpi-card .kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.kpi-card .kpi-icon.primary { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.kpi-card .kpi-icon.success { background: rgba(0, 212, 170, 0.15); color: var(--nexo-success); }
+.kpi-card .kpi-icon.warning { background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); }
+.kpi-card .kpi-icon.error { background: rgba(255, 77, 77, 0.15); color: var(--nexo-error); }
+
+.kpi-card .kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.kpi-card .kpi-label {
+    font-size: 0.8rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ========== CARD COMPONENT ========== */
+.nexo-card {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    overflow: hidden;
+}
+
+.nexo-card-header {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
+    color: var(--nexo-white);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nexo-card-header h5 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nexo-card-header h5 i { color: var(--nexo-accent); }
+
+.nexo-card-body { padding: 1.5rem; }
+
+/* ========== FILTERS SECTION ========== */
+.nexo-filters {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-filters .form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.nexo-filters .form-control,
+.nexo-filters .form-select {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-sm);
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    background: var(--nexo-white);
+}
+
+.nexo-filters .form-control:focus,
+.nexo-filters .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px var(--nexo-primary-light);
+}
+
+/* ========== TABLE STYLES ========== */
+.nexo-table-container {
+    border-radius: var(--nexo-radius-md);
+    overflow: hidden;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-table {
+    margin-bottom: 0;
+    font-size: 0.875rem;
+}
+
+.nexo-table thead {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+}
+
+.nexo-table thead th {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-700);
+    padding: 12px 10px;
+    border-bottom: 2px solid var(--nexo-gray-300);
+    white-space: nowrap;
+}
+
+.nexo-table tbody tr {
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+}
+
+.nexo-table tbody tr:hover {
+    background: var(--nexo-primary-light);
+}
+
+.nexo-table tbody td {
+    padding: 10px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+
+/* ========== STATUS BADGES ========== */
+.nexo-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.nexo-badge-borrador { background: rgba(138, 138, 154, 0.15); color: var(--nexo-gray-700); }
+.nexo-badge-en_conteo { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.nexo-badge-conteo_finalizado { background: rgba(0, 212, 170, 0.15); color: #00a883; }
+.nexo-badge-en_revision { background: rgba(255, 176, 32, 0.15); color: #cc8c00; }
+.nexo-badge-pendiente_aprobacion { background: rgba(255, 176, 32, 0.3); color: #996600; }
+.nexo-badge-aprobado { background: rgba(0, 212, 170, 0.25); color: #008866; }
+.nexo-badge-aplicando { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.nexo-badge-completado { background: rgba(0, 212, 170, 0.4); color: #006644; }
+.nexo-badge-cancelado { background: rgba(255, 77, 77, 0.15); color: #cc3d3d; }
+
+/* ========== PROGRESS BAR ========== */
+.progress-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-bar-nexo {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--nexo-gray-300);
+    flex: 1;
+    overflow: hidden;
+}
+
+.progress-bar-nexo .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--nexo-primary), var(--nexo-accent));
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    min-width: 40px;
+}
+
+/* ========== BUTTONS ========== */
+.nexo-btn {
+    padding: 10px 20px;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    font-size: 0.9rem;
+    border: none;
+    transition: var(--nexo-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.nexo-btn-primary { background: var(--nexo-primary); color: var(--nexo-white); }
+.nexo-btn-primary:hover { background: var(--nexo-primary-dark); color: var(--nexo-white); }
+.nexo-btn-success { background: var(--nexo-success); color: var(--nexo-white); }
+.nexo-btn-success:hover { background: #00b894; color: var(--nexo-white); }
+.nexo-btn-warning { background: var(--nexo-warning); color: var(--nexo-white); }
+.nexo-btn-warning:hover { background: #e69d00; color: var(--nexo-white); }
+.nexo-btn-outline { background: transparent; border: 1px solid var(--nexo-gray-300); color: var(--nexo-gray-700); }
+.nexo-btn-outline:hover { background: var(--nexo-gray-100); }
+
+.nexo-btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+/* ========== PAGINATION ========== */
+.nexo-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    border-top: 1px solid var(--nexo-gray-300);
+    margin-top: 1rem;
+}
+
+.nexo-pagination-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--nexo-gray-700);
+    font-size: 0.875rem;
+}
+
+.nexo-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.nexo-pagination-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-sm);
+    color: var(--nexo-gray-700);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nexo-pagination-btn:hover:not(.disabled) {
+    background: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-pagination-btn.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.nexo-pagination-page {
+    padding: 8px 16px;
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    min-width: 140px;
+    text-align: center;
+}
+
+/* ========== EMPTY STATE ========== */
+.nexo-empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--nexo-gray-500);
+}
+
+.nexo-empty-state i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: var(--nexo-gray-300);
+}
+
+/* ========== DIFERENCIA STYLES ========== */
+.diferencia-positiva {
+    color: var(--nexo-success);
+    font-weight: 600;
+}
+
+.diferencia-negativa {
+    color: var(--nexo-error);
+    font-weight: 600;
+}
+
+/* ========== MODAL STYLES ========== */
+.modal-header-nexo {
+    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
+    color: var(--nexo-white);
+}
+
+.modal-header-nexo .btn-close {
+    filter: invert(1);
+}
+
+/* ========== ANALYSIS CARD ========== */
+.analysis-section {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.analysis-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.analysis-title i {
+    color: var(--nexo-primary);
+}
+
+/* ========== ALERT STYLES ========== */
+.nexo-alert {
+    padding: 0.75rem 1rem;
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.875rem;
+}
+
+.nexo-alert-warning {
+    background: rgba(255, 176, 32, 0.15);
+    border: 1px solid rgba(255, 176, 32, 0.3);
+    color: #996600;
+}
+
+.nexo-alert-error {
+    background: rgba(255, 77, 77, 0.15);
+    border: 1px solid rgba(255, 77, 77, 0.3);
+    color: #cc3d3d;
+}
+
+.nexo-alert-info {
+    background: var(--nexo-primary-light);
+    border: 1px solid rgba(0, 102, 255, 0.3);
+    color: var(--nexo-primary);
+}
+
+/* ========== FILTER CHIPS ========== */
+.filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 1rem;
+}
+
+.filter-chip {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.filter-chip .remove-chip {
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.filter-chip .remove-chip:hover {
+    opacity: 1;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .kpi-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .page-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .nexo-pagination {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
+</style>
+
+<div class="page-content nexo-page">
+    <div class="container-fluid">
+        
+        <!-- === HEADER === -->
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-clipboard-check"></i> Gestión de Inventarios
+            </h1>
+            <button class="nexo-btn nexo-btn-primary" onclick="abrirModalNuevoInventario()">
+                <i class="bi bi-plus-lg"></i> Nuevo Inventario
+            </button>
+        </div>
+        
+        <!-- === KPI CARDS === -->
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <div class="kpi-icon primary"><i class="bi bi-list-check"></i></div>
+                <div class="kpi-value" id="kpiTotalInventarios">0</div>
+                <div class="kpi-label">Total Inventarios</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon warning"><i class="bi bi-hourglass-split"></i></div>
+                <div class="kpi-value" id="kpiEnProceso">0</div>
+                <div class="kpi-label">En Proceso</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon success"><i class="bi bi-check-circle"></i></div>
+                <div class="kpi-value" id="kpiCompletados">0</div>
+                <div class="kpi-label">Completados</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon error"><i class="bi bi-exclamation-triangle"></i></div>
+                <div class="kpi-value" id="kpiPendientesAprobacion">0</div>
+                <div class="kpi-label">Pendientes Aprobación</div>
+            </div>
+        </div>
+        
+        <!-- === LISTADO DE INVENTARIOS === -->
+        <div class="nexo-card">
+            <div class="nexo-card-header">
+                <h5><i class="bi bi-table"></i> Inventarios</h5>
+            </div>
+            <div class="nexo-card-body">
+                <!-- Filtros -->
+                <div class="nexo-filters">
+                    <div class="row g-3">
+                        <div class="col-lg-3 col-md-4">
+                            <label class="form-label">Buscar</label>
+                            <input type="text" class="form-control" id="filtroSearch" placeholder="Número o nombre...">
+                        </div>
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Estado</label>
+                            <select class="form-select" id="filtroEstado">
+                                <option value="">Todos</option>
+                                <option value="BORRADOR">Borrador</option>
+                                <option value="EN_CONTEO">En Conteo</option>
+                                <option value="CONTEO_FINALIZADO">Conteo Finalizado</option>
+                                <option value="EN_REVISION">En Revisión</option>
+                                <option value="PENDIENTE_APROBACION">Pendiente Aprobación</option>
+                                <option value="APROBADO">Aprobado</option>
+                                <option value="COMPLETADO">Completado</option>
+                                <option value="CANCELADO">Cancelado</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" id="filtroTipo">
+                                <option value="">Todos</option>
+                                <option value="COMPLETO">Completo</option>
+                                <option value="POR_MARCA">Por Marca</option>
+                                <option value="POR_CATEGORIA">Por Categoría</option>
+                                <option value="POR_ATRIBUTO">Por Atributo</option>
+                                <option value="SELECTIVO">Selectivo</option>
+                                <option value="CICLICO">Cíclico</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Desde</label>
+                            <input type="date" class="form-control" id="filtroFechaDesde">
+                        </div>
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label">Hasta</label>
+                            <input type="date" class="form-control" id="filtroFechaHasta">
+                        </div>
+                        <div class="col-lg-1 col-md-4 d-flex align-items-end">
+                            <button class="nexo-btn nexo-btn-outline w-100" onclick="limpiarFiltros()">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabla -->
+                <div class="nexo-table-container">
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table nexo-table" id="tablaInventarios">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Nombre</th>
+                                    <th>Tipo</th>
+                                    <th>Fecha Corte</th>
+                                    <th>Estado</th>
+                                    <th>Progreso</th>
+                                    <th>Productos</th>
+                                    <th>Diferencias</th>
+                                    <th>Creado Por</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyInventarios">
+                                <tr>
+                                    <td colspan="10">
+                                        <div class="nexo-empty-state">
+                                            <i class="bi bi-hourglass-split"></i>
+                                            <p>Cargando inventarios...</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Paginación -->
+                <div class="nexo-pagination">
+                    <div class="nexo-pagination-info">
+                        <span>Mostrando <strong id="paginacionInfo">0</strong> inventarios</span>
+                    </div>
+                    <div class="nexo-pagination-controls">
+                        <button class="nexo-pagination-btn" id="btnPrevPage">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <span class="nexo-pagination-page" id="pageInfo">Página 1 de 1</span>
+                        <button class="nexo-pagination-btn" id="btnNextPage">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- === MODAL NUEVO INVENTARIO === -->
+<div class="modal fade" id="modalNuevoInventario" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header modal-header-nexo">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Nuevo Inventario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNuevoInventario">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Nombre del Inventario *</label>
+                            <input type="text" class="form-control" id="nombreInventario" placeholder="Ej: Inventario Mensual Enero 2026" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo de Inventario *</label>
+                            <select class="form-select" id="tipoInventario" required>
+                                <option value="COMPLETO">Inventario Completo</option>
+                                <option value="POR_MARCA">Por Marca</option>
+                                <option value="POR_CATEGORIA">Por Categoría/Departamento</option>
+                                <option value="POR_ATRIBUTO">Por Atributo</option>
+                                <option value="SELECTIVO">Selectivo</option>
+                                <option value="CICLICO">Cíclico (ABC)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fecha de Corte *</label>
+                            <input type="datetime-local" class="form-control" id="fechaCorteInventario" required>
+                            <small class="text-muted">Momento en que se congela el stock del sistema para comparación</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observacionesInventario" rows="2" placeholder="Observaciones adicionales..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtros dinámicos según tipo -->
+                    <div id="seccionFiltros" class="mt-4" style="display: none;">
+                        <h6 class="mb-3"><i class="bi bi-funnel me-2"></i>Filtros de Segmentación</h6>
+                        
+                        <!-- Por Marca -->
+                        <div id="filtrosMarca" style="display: none;">
+                            <label class="form-label">Seleccionar Marcas</label>
+                            <select class="form-select" id="selectMarcas" multiple>
+                            </select>
+                        </div>
+                        
+                        <!-- Por Categoría -->
+                        <div id="filtrosCategorias" style="display: none;">
+                            <label class="form-label">Seleccionar Categorías</label>
+                            <select class="form-select" id="selectCategorias" multiple>
+                            </select>
+                        </div>
+                        
+                        <!-- Por Atributo -->
+                        <div id="filtrosAtributos" style="display: none;">
+                            <div id="contenedorAtributos"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="nexo-btn nexo-btn-primary" onclick="crearInventario()">
+                    <i class="bi bi-check-lg me-1"></i> Crear Inventario
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- === MODAL ANÁLISIS Y APROBACIÓN === -->
+<div class="modal fade" id="modalAnalisis" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header modal-header-nexo">
+                <h5 class="modal-title"><i class="bi bi-graph-up me-2"></i>Análisis de Inventario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="contenidoAnalisis">
+                <!-- Se llena dinámicamente -->
+            </div>
+            <div class="modal-footer" id="footerAnalisis">
+                <!-- Botones dinámicos según estado -->
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<!-- Select2 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// === VARIABLES GLOBALES ===
+let currentPage = 1;
+let perPage = 20;
+let inventarioActual = null;
+let filtrosDisponibles = null;
+
+// === FUNCIONES DE CARGA ===
+
+function cargarInventarios(page = 1) {
+    const params = new URLSearchParams({
+        page: page,
+        per_page: perPage,
+        search: $('#filtroSearch').val() || '',
+        estado: $('#filtroEstado').val() || '',
+        tipo: $('#filtroTipo').val() || '',
+        fecha_desde: $('#filtroFechaDesde').val() || '',
+        fecha_hasta: $('#filtroFechaHasta').val() || ''
+    });
+    
+    $('#tbodyInventarios').html(`
+        <tr><td colspan="10">
+            <div class="nexo-empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Cargando inventarios...</p>
+            </div>
+        </td></tr>
+    `);
+    
+    $.get(`/app/gestion-inventarios/api/inventarios/?${params}`, function(response) {
+        if (!response.success) {
+            Swal.fire('Error', response.error, 'error');
+            return;
+        }
+        
+        const tbody = $('#tbodyInventarios');
+        tbody.empty();
+        
+        if (response.inventarios.length === 0) {
+            tbody.html(`
+                <tr><td colspan="10">
+                    <div class="nexo-empty-state">
+                        <i class="bi bi-clipboard-x"></i>
+                        <p>No hay inventarios registrados</p>
+                    </div>
+                </td></tr>
+            `);
+        } else {
+            response.inventarios.forEach(inv => {
+                const badgeClass = getBadgeClass(inv.estado);
+                const diferenciasHtml = formatearDiferencias(inv.total_diferencias_positivas, inv.total_diferencias_negativas);
+                
+                tbody.append(`
+                    <tr onclick="verDetalleInventario(${inv.id})" style="cursor: pointer;">
+                        <td><strong>${inv.numero_inventario}</strong></td>
+                        <td>${inv.nombre}</td>
+                        <td><small>${inv.tipo_inventario_display}</small></td>
+                        <td>${inv.fecha_corte}</td>
+                        <td><span class="nexo-badge ${badgeClass}">${inv.estado_display}</span></td>
+                        <td>
+                            <div class="progress-wrapper">
+                                <div class="progress-bar-nexo">
+                                    <div class="progress-fill" style="width: ${inv.progreso_conteo}%"></div>
+                                </div>
+                                <span class="progress-text">${inv.progreso_conteo}%</span>
+                            </div>
+                        </td>
+                        <td>${inv.total_productos_contados}/${inv.total_productos_esperados}</td>
+                        <td>${diferenciasHtml}</td>
+                        <td><small>${inv.creado_por}</small></td>
+                        <td>
+                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="event.stopPropagation(); verAnalisis(${inv.id})" title="Ver análisis">
+                                <i class="bi bi-graph-up"></i>
+                            </button>
+                            ${getAccionesRapidas(inv)}
+                        </td>
+                    </tr>
+                `);
+            });
+        }
+        
+        // Actualizar paginación
+        const pagination = response.pagination;
+        $('#pageInfo').text(`Página ${pagination.current_page} de ${pagination.total_pages}`);
+        $('#paginacionInfo').text(response.inventarios.length);
+        $('#btnPrevPage').toggleClass('disabled', !pagination.has_previous);
+        $('#btnNextPage').toggleClass('disabled', !pagination.has_next);
+        currentPage = pagination.current_page;
+        
+        // Actualizar KPIs (simplificado)
+        actualizarKPIs(response.inventarios);
+    }).fail(function() {
+        Swal.fire('Error', 'No se pudieron cargar los inventarios', 'error');
+    });
+}
+
+function getBadgeClass(estado) {
+    const clases = {
+        'BORRADOR': 'nexo-badge-borrador',
+        'EN_CONTEO': 'nexo-badge-en_conteo',
+        'CONTEO_FINALIZADO': 'nexo-badge-conteo_finalizado',
+        'EN_REVISION': 'nexo-badge-en_revision',
+        'PENDIENTE_APROBACION': 'nexo-badge-pendiente_aprobacion',
+        'APROBADO': 'nexo-badge-aprobado',
+        'APLICANDO': 'nexo-badge-aplicando',
+        'COMPLETADO': 'nexo-badge-completado',
+        'CANCELADO': 'nexo-badge-cancelado'
+    };
+    return clases[estado] || 'nexo-badge-borrador';
+}
+
+function formatearDiferencias(positivas, negativas) {
+    let html = '';
+    if (positivas > 0) {
+        html += `<span class="diferencia-positiva">+${positivas}</span> `;
+    }
+    if (negativas > 0) {
+        html += `<span class="diferencia-negativa">-${negativas}</span>`;
+    }
+    if (!positivas && !negativas) {
+        html = '<span class="text-muted">-</span>';
+    }
+    return html;
+}
+
+function getAccionesRapidas(inv) {
+    if (inv.estado === 'PENDIENTE_APROBACION') {
+        return `<button class="nexo-btn nexo-btn-sm nexo-btn-success ms-1" onclick="event.stopPropagation(); aprobarInventario(${inv.id})" title="Aprobar">
+            <i class="bi bi-check-lg"></i>
+        </button>`;
+    }
+    if (inv.estado === 'APROBADO') {
+        return `<button class="nexo-btn nexo-btn-sm nexo-btn-warning ms-1" onclick="event.stopPropagation(); aplicarAjustes(${inv.id})" title="Aplicar Ajustes">
+            <i class="bi bi-arrow-right-circle"></i>
+        </button>`;
+    }
+    return '';
+}
+
+function actualizarKPIs(inventarios) {
+    // Actualización simple de KPIs basada en la lista actual
+    $('#kpiTotalInventarios').text(inventarios.length);
+    $('#kpiEnProceso').text(inventarios.filter(i => ['EN_CONTEO', 'EN_REVISION'].includes(i.estado)).length);
+    $('#kpiCompletados').text(inventarios.filter(i => i.estado === 'COMPLETADO').length);
+    $('#kpiPendientesAprobacion').text(inventarios.filter(i => i.estado === 'PENDIENTE_APROBACION').length);
+}
+
+// === MODAL NUEVO INVENTARIO ===
+
+function abrirModalNuevoInventario() {
+    // Resetear formulario
+    $('#formNuevoInventario')[0].reset();
+    $('#seccionFiltros').hide();
+    
+    // Establecer fecha de corte por defecto (ahora)
+    const now = new Date();
+    const fechaCorte = now.toISOString().slice(0, 16);
+    $('#fechaCorteInventario').val(fechaCorte);
+    
+    // Cargar filtros disponibles
+    cargarFiltrosDisponibles();
+    
+    // Mostrar modal
+    new bootstrap.Modal(document.getElementById('modalNuevoInventario')).show();
+}
+
+function cargarFiltrosDisponibles() {
+    $.get('/app/gestion-inventarios/api/filtros/', function(response) {
+        if (response.success) {
+            filtrosDisponibles = response.filtros;
+            
+            // Poblar select de marcas
+            const selectMarcas = $('#selectMarcas');
+            selectMarcas.empty();
+            response.filtros.marcas.forEach(m => {
+                selectMarcas.append(`<option value="${m.id}">${m.valor}</option>`);
+            });
+            
+            // Poblar select de categorías
+            const selectCategorias = $('#selectCategorias');
+            selectCategorias.empty();
+            response.filtros.categorias.forEach(c => {
+                selectCategorias.append(`<option value="${c.id}">${c.nombre}</option>`);
+            });
+            
+            // Inicializar Select2
+            $('#selectMarcas, #selectCategorias').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Seleccionar...',
+                allowClear: true,
+                dropdownParent: $('#modalNuevoInventario')
+            });
+        }
+    });
+}
+
+// Mostrar/ocultar filtros según tipo
+$('#tipoInventario').on('change', function() {
+    const tipo = $(this).val();
+    
+    $('#seccionFiltros, #filtrosMarca, #filtrosCategorias, #filtrosAtributos').hide();
+    
+    if (tipo === 'POR_MARCA') {
+        $('#seccionFiltros, #filtrosMarca').show();
+    } else if (tipo === 'POR_CATEGORIA') {
+        $('#seccionFiltros, #filtrosCategorias').show();
+    } else if (tipo === 'POR_ATRIBUTO') {
+        $('#seccionFiltros, #filtrosAtributos').show();
+    }
+});
+
+function crearInventario() {
+    const nombre = $('#nombreInventario').val();
+    const tipo = $('#tipoInventario').val();
+    const fechaCorte = $('#fechaCorteInventario').val();
+    
+    if (!nombre || !fechaCorte) {
+        Swal.fire('Error', 'Complete los campos requeridos', 'warning');
+        return;
+    }
+    
+    // Construir filtros
+    const filtros = {};
+    if (tipo === 'POR_MARCA') {
+        filtros.marcas = $('#selectMarcas').val() || [];
+    } else if (tipo === 'POR_CATEGORIA') {
+        filtros.categorias = $('#selectCategorias').val() || [];
+    }
+    
+    const datos = {
+        nombre: nombre,
+        tipo_inventario: tipo,
+        fecha_corte: fechaCorte,
+        filtros: filtros,
+        observaciones: $('#observacionesInventario').val()
+    };
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Creando inventario...',
+        text: 'Esto puede tomar unos segundos',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    $.ajax({
+        url: '/app/gestion-inventarios/api/crear/',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(datos),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(response) {
+            if (response.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Inventario Creado',
+                    html: `<p>Se creó el inventario <strong>${response.numero_inventario}</strong></p>
+                           <p>Total de productos a contar: <strong>${response.total_productos}</strong></p>`,
+                    confirmButtonText: 'Ir al Inventario'
+                }).then(() => {
+                    bootstrap.Modal.getInstance(document.getElementById('modalNuevoInventario')).hide();
+                    window.location.href = `/app/gestion-inventarios/detalle/${response.inventario_id}/`;
+                });
+            } else {
+                Swal.fire('Error', response.error, 'error');
+            }
+        },
+        error: function() {
+            Swal.fire('Error', 'No se pudo crear el inventario', 'error');
+        }
+    });
+}
+
+// === ANÁLISIS ===
+
+function verAnalisis(inventarioId) {
+    inventarioActual = inventarioId;
+    
+    Swal.fire({
+        title: 'Cargando análisis...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    $.get(`/app/gestion-inventarios/api/analisis/${inventarioId}/`, function(response) {
+        Swal.close();
+        
+        if (!response.success) {
+            Swal.fire('Error', response.error, 'error');
+            return;
+        }
+        
+        const analisis = response.analisis;
+        
+        // Construir contenido del modal
+        let html = `
+            <!-- Alertas -->
+            <div id="alertasAnalisis">
+                ${analisis.alertas.map(a => `
+                    <div class="nexo-alert nexo-alert-${a.tipo}">
+                        <i class="bi bi-${a.tipo === 'error' ? 'exclamation-triangle' : a.tipo === 'warning' ? 'exclamation-circle' : 'info-circle'}"></i>
+                        ${a.mensaje}
+                    </div>
+                `).join('')}
+            </div>
+            
+            <!-- Resumen -->
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="analysis-section">
+                        <div class="analysis-title"><i class="bi bi-bar-chart"></i> Resumen de Conteo</div>
+                        <p><strong>Total esperados:</strong> ${analisis.resumen.total_esperados}</p>
+                        <p><strong>Total contados:</strong> ${analisis.resumen.total_contados}</p>
+                        <p><strong>Progreso:</strong> ${analisis.resumen.progreso}%</p>
+                        <p><strong>Precisión:</strong> ${analisis.resumen.precision_inventario}%</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="analysis-section">
+                        <div class="analysis-title"><i class="bi bi-plus-slash-minus"></i> Diferencias</div>
+                        <p><strong>Con diferencia:</strong> ${analisis.resumen.con_diferencia}</p>
+                        <p><strong>Sin diferencia:</strong> ${analisis.resumen.sin_diferencia}</p>
+                        <p class="diferencia-positiva"><strong>Sobrantes:</strong> ${analisis.resumen.sobrantes}</p>
+                        <p class="diferencia-negativa"><strong>Faltantes:</strong> ${analisis.resumen.faltantes}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="analysis-section">
+                        <div class="analysis-title"><i class="bi bi-currency-dollar"></i> Impacto Financiero</div>
+                        <p><strong>Valor sistema:</strong> $${formatNumber(analisis.resumen_financiero.valor_inventario_sistema)}</p>
+                        <p><strong>Valor físico:</strong> $${formatNumber(analisis.resumen_financiero.valor_inventario_fisico)}</p>
+                        <p><strong>Diferencia:</strong> $${formatNumber(analisis.resumen_financiero.diferencia_total)}</p>
+                        <p><strong>Impacto neto:</strong> <span class="${analisis.resumen_financiero.impacto_neto >= 0 ? 'diferencia-positiva' : 'diferencia-negativa'}">$${formatNumber(analisis.resumen_financiero.impacto_neto)}</span></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Top Faltantes y Sobrantes -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="analysis-section">
+                        <div class="analysis-title"><i class="bi bi-arrow-down-circle text-danger"></i> Top 10 Faltantes</div>
+                        ${analisis.top_faltantes.length > 0 ? `
+                            <table class="table table-sm">
+                                <thead><tr><th>SKU</th><th>Producto</th><th>Dif.</th><th>Valor</th></tr></thead>
+                                <tbody>
+                                    ${analisis.top_faltantes.map(f => `
+                                        <tr>
+                                            <td><code>${f.sku}</code></td>
+                                            <td>${f.producto}</td>
+                                            <td class="diferencia-negativa">${f.diferencia}</td>
+                                            <td>$${formatNumber(Math.abs(f.valor))}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        ` : '<p class="text-muted">No hay faltantes</p>'}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="analysis-section">
+                        <div class="analysis-title"><i class="bi bi-arrow-up-circle text-success"></i> Top 10 Sobrantes</div>
+                        ${analisis.top_sobrantes.length > 0 ? `
+                            <table class="table table-sm">
+                                <thead><tr><th>SKU</th><th>Producto</th><th>Dif.</th><th>Valor</th></tr></thead>
+                                <tbody>
+                                    ${analisis.top_sobrantes.map(s => `
+                                        <tr>
+                                            <td><code>${s.sku}</code></td>
+                                            <td>${s.producto}</td>
+                                            <td class="diferencia-positiva">+${s.diferencia}</td>
+                                            <td>$${formatNumber(s.valor)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        ` : '<p class="text-muted">No hay sobrantes</p>'}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $('#contenidoAnalisis').html(html);
+        
+        // Botones del footer según si puede aprobar
+        let footerHtml = `
+            <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cerrar</button>
+            <button type="button" class="nexo-btn nexo-btn-primary" onclick="exportarInventario(${inventarioId})">
+                <i class="bi bi-download me-1"></i> Exportar Excel
+            </button>
+        `;
+        
+        if (analisis.puede_aprobar) {
+            footerHtml += `
+                <button type="button" class="nexo-btn nexo-btn-success" onclick="aprobarInventario(${inventarioId})">
+                    <i class="bi bi-check-lg me-1"></i> Aprobar Inventario
+                </button>
+            `;
+        }
+        
+        $('#footerAnalisis').html(footerHtml);
+        
+        new bootstrap.Modal(document.getElementById('modalAnalisis')).show();
+    }).fail(function() {
+        Swal.fire('Error', 'No se pudo cargar el análisis', 'error');
+    });
+}
+
+// === ACCIONES ===
+
+function aprobarInventario(inventarioId) {
+    Swal.fire({
+        title: '¿Aprobar Inventario?',
+        html: `<p>Una vez aprobado, podrá aplicar los ajustes de stock.</p>
+               <textarea id="observacionesAprobacion" class="form-control mt-3" placeholder="Observaciones (opcional)" rows="2"></textarea>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, Aprobar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#00D4AA',
+        preConfirm: () => {
+            return { observaciones: document.getElementById('observacionesAprobacion').value };
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/app/gestion-inventarios/api/aprobar/${inventarioId}/`,
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ observaciones: result.value.observaciones }),
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire('Aprobado', response.message, 'success');
+                        bootstrap.Modal.getInstance(document.getElementById('modalAnalisis'))?.hide();
+                        cargarInventarios(currentPage);
+                    } else {
+                        Swal.fire('Error', response.error, 'error');
+                    }
+                }
+            });
+        }
+    });
+}
+
+function aplicarAjustes(inventarioId) {
+    Swal.fire({
+        title: '¿Aplicar Ajustes de Inventario?',
+        html: `<p class="text-danger"><strong>¡ATENCIÓN!</strong></p>
+               <p>Esta acción modificará el stock real del sistema según las diferencias encontradas.</p>
+               <p>Se crearán movimientos de ajuste para cada diferencia.</p>
+               <p><strong>Esta acción no se puede deshacer.</strong></p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, Aplicar Ajustes',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FFB020'
+    }).then(result => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Aplicando ajustes...',
+                text: 'Esto puede tomar varios minutos para inventarios grandes',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+            
+            $.ajax({
+                url: `/app/gestion-inventarios/api/aplicar-ajustes/${inventarioId}/`,
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                timeout: 300000, // 5 minutos
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Ajustes Aplicados',
+                            html: `<p>${response.message}</p>
+                                   ${response.errores ? `<p class="text-warning">Errores: ${response.errores.length}</p>` : ''}`
+                        });
+                        cargarInventarios(currentPage);
+                    } else {
+                        Swal.fire('Error', response.error, 'error');
+                    }
+                },
+                error: function() {
+                    Swal.fire('Error', 'No se pudieron aplicar los ajustes', 'error');
+                }
+            });
+        }
+    });
+}
+
+function exportarInventario(inventarioId) {
+    window.open(`/app/gestion-inventarios/api/exportar/${inventarioId}/`, '_blank');
+}
+
+function verDetalleInventario(inventarioId) {
+    window.location.href = `/app/gestion-inventarios/detalle/${inventarioId}/`;
+}
+
+// === UTILIDADES ===
+
+function formatNumber(num) {
+    return new Intl.NumberFormat('es-CL').format(Math.round(num));
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function limpiarFiltros() {
+    $('#filtroSearch, #filtroEstado, #filtroTipo, #filtroFechaDesde, #filtroFechaHasta').val('');
+    cargarInventarios(1);
+}
+
+// === EVENTOS ===
+
+$(document).ready(function() {
+    cargarInventarios();
+    
+    // Eventos de filtros
+    $('#filtroSearch').on('input', debounce(function() {
+        cargarInventarios(1);
+    }, 500));
+    
+    $('#filtroEstado, #filtroTipo, #filtroFechaDesde, #filtroFechaHasta').on('change', function() {
+        cargarInventarios(1);
+    });
+    
+    // Paginación
+    $('#btnPrevPage').on('click', function() {
+        if (!$(this).hasClass('disabled') && currentPage > 1) {
+            cargarInventarios(currentPage - 1);
+        }
+    });
+    
+    $('#btnNextPage').on('click', function() {
+        if (!$(this).hasClass('disabled')) {
+            cargarInventarios(currentPage + 1);
+        }
+    });
+});
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+</script>

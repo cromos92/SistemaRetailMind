@@ -9,6 +9,8 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Count, Q, Avg
+from django.db.models.functions import Abs
+from django.db import models
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -1359,8 +1361,8 @@ def exportar_dashboard_compras(request):
 
 @login_required
 def verDashboardCompras(request):
-    """Vista principal del dashboard de compras"""
-    return render(request, 'vistas/modulo_dashboards/dashboard_compras_estrategico.html')
+    """Vista principal del dashboard de compras - Redirige al dashboard mejorado"""
+    return render(request, 'vistas/modulo_dashboards/dashboard_compras_mejorado.html')
 
 
 @login_required
@@ -2736,3 +2738,1215 @@ def exportar_dtes_excel(request):
             'success': False,
             'error': f'Error al exportar a Excel: {str(e)}'
         })
+
+
+# ========== DASHBOARD COMPRAS MEJORADO ==========
+
+@login_required
+def verDashboardComprasMejorado(request):
+    """Vista principal del dashboard de compras mejorado"""
+    return render(request, 'vistas/modulo_dashboards/dashboard_compras_mejorado.html')
+
+
+@login_required
+@require_GET
+def dashboard_compras_mejorado_api(request):
+    """
+    API completa para el dashboard de compras mejorado.
+    Proporciona métricas estratégicas, gráficos y análisis para toma de decisiones.
+    """
+    try:
+        from datetime import datetime, timedelta
+        from django.db.models.functions import TruncMonth, ExtractMonth
+        
+        # Parámetros de filtro
+        anio = int(request.GET.get('anio', datetime.now().year))
+        periodo = request.GET.get('periodo', 'anual')
+        temporada = request.GET.get('temporada', '')
+        proveedor_id = request.GET.get('proveedor', '')
+        
+        # Calcular rango de fechas según período
+        hoy = datetime.now()
+        if periodo == 'mes':
+            fecha_inicio = hoy - timedelta(days=30)
+        elif periodo == 'trimestre':
+            fecha_inicio = hoy - timedelta(days=90)
+        elif periodo == 'semana':
+            fecha_inicio = hoy - timedelta(days=7)
+        else:  # anual
+            fecha_inicio = datetime(anio, 1, 1)
+        
+        fecha_fin = hoy
+        
+        # Query base para compras
+        compras_query = Compras.objects.filter(fecha__year=anio)
+        
+        if temporada:
+            compras_query = compras_query.filter(temporada__icontains=temporada)
+        if proveedor_id:
+            compras_query = compras_query.filter(empresa_id=proveedor_id)
+        
+        # IDs de compras para filtrar relaciones
+        compras_ids = list(compras_query.values_list('id', flat=True))
+        
+        # ===== MÉTRICAS PRINCIPALES =====
+        metricas = calcular_metricas_principales_mejorado(compras_query, compras_ids, anio)
+        
+        # ===== EVOLUCIÓN MENSUAL =====
+        evolucion_mensual = calcular_evolucion_mensual_mejorado(anio, temporada, proveedor_id)
+        
+        # ===== PARETO PROVEEDORES =====
+        pareto_proveedores = calcular_pareto_proveedores_mejorado(compras_query, compras_ids)
+        
+        # ===== COMPARATIVA ANUAL =====
+        comparativa_anual = calcular_comparativa_anual_mejorado(anio, temporada, proveedor_id)
+        
+        # ===== ROI POR TEMPORADA =====
+        roi_temporadas = calcular_roi_temporadas_mejorado(compras_query, compras_ids)
+        
+        # ===== TOP PROVEEDORES =====
+        top_proveedores = calcular_top_proveedores_mejorado(compras_query, compras_ids)
+        
+        # ===== TOP PRODUCTOS =====
+        top_productos = calcular_top_productos_mejorado(compras_ids)
+        
+        # ===== CUMPLIMIENTO PROVEEDORES =====
+        cumplimiento_proveedores = calcular_cumplimiento_proveedores_mejorado(compras_query, compras_ids)
+        
+        # ===== RENDIMIENTO DETALLADO =====
+        rendimiento_detallado = calcular_rendimiento_detallado_mejorado(compras_query, compras_ids)
+        
+        # ===== ALERTAS INTELIGENTES =====
+        alertas = generar_alertas_compras_mejorado(metricas, cumplimiento_proveedores, roi_temporadas)
+        
+        # ===== INSIGHTS ESTRATÉGICOS =====
+        insights = generar_insights_compras_mejorado(metricas, pareto_proveedores, comparativa_anual)
+        
+        # ===== MÉTRICAS DE DISTRIBUCIÓN (CENTRO DE COMPRAS) =====
+        # Estas funciones pueden fallar si no se ha aplicado la migración de nuevos campos
+        try:
+            distribucion = calcular_metricas_distribucion(anio, compras_ids)
+        except:
+            distribucion = {'unidades_compradas': 0, 'unidades_despachadas': 0, 'stock_centro_distribucion': 0, 'eficiencia_distribucion': 0}
+        
+        try:
+            despachos_sucursal = calcular_despachos_por_sucursal(anio)
+        except:
+            despachos_sucursal = []
+        
+        try:
+            sucursales_destino = calcular_rendimiento_sucursales_destino(anio)
+        except:
+            sucursales_destino = []
+        
+        try:
+            flujo_distribucion = calcular_flujo_distribucion_mensual(anio)
+        except:
+            flujo_distribucion = []
+        
+        # ===== MÁRGENES CENTRO DE DISTRIBUCIÓN =====
+        try:
+            margenes_cd = calcular_margenes_centro_distribucion(anio)
+        except:
+            margenes_cd = {'margen_total_cd': 0, 'costo_proveedor_total': 0, 'costo_destino_total': 0, 'margen_promedio_pct': 0, 'unidades_despachadas': 0, 'detalle_por_sucursal': [], 'centros_distribucion': []}
+        
+        try:
+            comparativa_costos = calcular_comparativa_costos_cd_vs_sucursales(anio)
+        except:
+            comparativa_costos = []
+        
+        try:
+            rentabilidad_tipo = calcular_rentabilidad_por_tipo_sucursal(anio)
+        except:
+            rentabilidad_tipo = {'centros_distribucion': [], 'sucursales_vendedoras': []}
+        
+        return JsonResponse({
+            'success': True,
+            'metricas': metricas,
+            'evolucion_mensual': evolucion_mensual,
+            'pareto_proveedores': pareto_proveedores,
+            'comparativa_anual': comparativa_anual,
+            'roi_temporadas': roi_temporadas,
+            'top_proveedores': top_proveedores,
+            'top_productos': top_productos,
+            'cumplimiento_proveedores': cumplimiento_proveedores,
+            'rendimiento_detallado': rendimiento_detallado,
+            'alertas': alertas,
+            'insights': insights,
+            # Datos de distribución (Centro de Compras)
+            'distribucion': distribucion,
+            'despachos_sucursal': despachos_sucursal,
+            'sucursales_destino': sucursales_destino,
+            'flujo_distribucion': flujo_distribucion,
+            # Datos de márgenes Centro de Distribución
+            'margenes_cd': margenes_cd,
+            'comparativa_costos': comparativa_costos,
+            'rentabilidad_tipo_sucursal': rentabilidad_tipo,
+            'filtros_aplicados': {
+                'anio': anio,
+                'periodo': periodo,
+                'temporada': temporada,
+                'proveedor_id': proveedor_id
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al generar dashboard: {str(e)}',
+            'traceback': traceback.format_exc()
+        }, status=500)
+
+
+def calcular_metricas_principales_mejorado(compras_query, compras_ids, anio):
+    """Calcula las métricas principales del dashboard"""
+    
+    # Total compras
+    total_compras = compras_query.count()
+    
+    # Productos y tallas
+    productos_compras = Compras_Producto.objects.filter(compras__in=compras_ids)
+    tallas_compras = Compras_Producto_Talla.objects.filter(
+        compra_producto__compras__in=compras_ids
+    )
+    
+    # Unidades esperadas y recepcionadas
+    unidades_esperadas = tallas_compras.aggregate(
+        total=Sum('stock')
+    )['total'] or 0
+    
+    recepciones = Productos_Recepcionados.objects.filter(
+        compra_producto_talla__compra_producto__compras__in=compras_ids
+    )
+    unidades_recepcionadas = recepciones.aggregate(
+        total=Sum('stockArribado')
+    )['total'] or 0
+    
+    # Cumplimiento general
+    cumplimiento_general = 0
+    if unidades_esperadas > 0:
+        cumplimiento_general = round((unidades_recepcionadas / unidades_esperadas) * 100, 1)
+    
+    # Inversión total
+    inversion_total = productos_compras.aggregate(
+        total=Sum(F('costo') * F('compras_producto_talla__stock'))
+    )['total'] or 0
+    
+    # Valor de venta esperado
+    valor_venta = productos_compras.aggregate(
+        total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+    )['total'] or 0
+    
+    # ROI promedio
+    roi_promedio = 0
+    if inversion_total > 0:
+        roi_promedio = round(((valor_venta - inversion_total) / inversion_total) * 100, 1)
+    
+    # ===== TENDENCIAS vs AÑO ANTERIOR =====
+    compras_anterior = Compras.objects.filter(fecha__year=anio-1)
+    total_anterior = compras_anterior.count()
+    
+    compras_anterior_ids = list(compras_anterior.values_list('id', flat=True))
+    productos_anterior = Compras_Producto.objects.filter(compras__in=compras_anterior_ids)
+    inversion_anterior = productos_anterior.aggregate(
+        total=Sum(F('costo') * F('compras_producto_talla__stock'))
+    )['total'] or 1  # Evitar división por cero
+    
+    trend_compras = 0
+    if total_anterior > 0:
+        trend_compras = round(((total_compras - total_anterior) / total_anterior) * 100, 1)
+    
+    trend_inversion = 0
+    if inversion_anterior > 0:
+        trend_inversion = round(((float(inversion_total) - float(inversion_anterior)) / float(inversion_anterior)) * 100, 1)
+    
+    # ROI anterior para tendencia
+    valor_anterior = productos_anterior.aggregate(
+        total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+    )['total'] or 0
+    roi_anterior = 0
+    if inversion_anterior > 0:
+        roi_anterior = ((valor_anterior - inversion_anterior) / inversion_anterior) * 100
+    
+    trend_roi = round(roi_promedio - roi_anterior, 1)
+    
+    return {
+        'total_compras': total_compras,
+        'inversion_total': float(inversion_total) if inversion_total else 0,
+        'valor_venta': float(valor_venta) if valor_venta else 0,
+        'unidades_esperadas': int(unidades_esperadas),
+        'unidades_recepcionadas': int(unidades_recepcionadas),
+        'cumplimiento_general': cumplimiento_general,
+        'roi_promedio': roi_promedio,
+        'productos_distintos': productos_compras.values('nombre').distinct().count(),
+        'proveedores_activos': compras_query.values('empresa').distinct().count(),
+        'trend_compras': trend_compras,
+        'trend_inversion': trend_inversion,
+        'trend_roi': trend_roi
+    }
+
+
+def calcular_evolucion_mensual_mejorado(anio, temporada='', proveedor_id=''):
+    """Calcula la evolución mensual de compras vs ventas"""
+    from .models import Ticket
+    
+    meses_nombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    
+    resultado = []
+    
+    for mes in range(1, 13):
+        # Query de compras del mes
+        compras_mes = Compras.objects.filter(fecha__year=anio, fecha__month=mes)
+        
+        if temporada:
+            compras_mes = compras_mes.filter(temporada__icontains=temporada)
+        if proveedor_id:
+            compras_mes = compras_mes.filter(empresa_id=proveedor_id)
+        
+        compras_mes_ids = list(compras_mes.values_list('id', flat=True))
+        
+        # Inversión del mes
+        productos_mes = Compras_Producto.objects.filter(compras__in=compras_mes_ids)
+        inversion_mes = productos_mes.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        # Ventas relacionadas del mes (simplificado - ventas totales del mes)
+        try:
+            ventas_mes = Ticket.objects.filter(
+                created_at__year=anio,
+                created_at__month=mes,
+                estado='PAGADO'
+            ).aggregate(total=Sum('total'))['total'] or 0
+        except:
+            ventas_mes = 0
+        
+        resultado.append({
+            'mes': mes,
+            'mes_nombre': meses_nombres[mes - 1],
+            'inversion': float(inversion_mes),
+            'ventas': float(ventas_mes),
+            'total_compras': compras_mes.count()
+        })
+    
+    return resultado
+
+
+def calcular_pareto_proveedores_mejorado(compras_query, compras_ids):
+    """Calcula el análisis Pareto (80/20) de proveedores"""
+    
+    proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
+    
+    inversiones = []
+    for prov in proveedores:
+        if not prov['empresa__id']:
+            continue
+            
+        compras_prov = compras_query.filter(empresa_id=prov['empresa__id'])
+        compras_prov_ids = list(compras_prov.values_list('id', flat=True))
+        
+        productos_prov = Compras_Producto.objects.filter(compras__in=compras_prov_ids)
+        inversion = productos_prov.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        if inversion > 0:
+            inversiones.append({
+                'proveedor': prov['empresa__nombre'] or 'Sin nombre',
+                'inversion': float(inversion)
+            })
+    
+    # Ordenar por inversión descendente
+    inversiones.sort(key=lambda x: x['inversion'], reverse=True)
+    
+    return inversiones[:15]  # Top 15 para el gráfico
+
+
+def calcular_comparativa_anual_mejorado(anio, temporada='', proveedor_id=''):
+    """Calcula comparativa de inversión mes a mes: año actual vs anterior"""
+    
+    resultado = {
+        'actual': [],
+        'anterior': []
+    }
+    
+    for mes in range(1, 13):
+        # Año actual
+        compras_actual = Compras.objects.filter(fecha__year=anio, fecha__month=mes)
+        if temporada:
+            compras_actual = compras_actual.filter(temporada__icontains=temporada)
+        if proveedor_id:
+            compras_actual = compras_actual.filter(empresa_id=proveedor_id)
+        
+        compras_actual_ids = list(compras_actual.values_list('id', flat=True))
+        productos_actual = Compras_Producto.objects.filter(compras__in=compras_actual_ids)
+        inversion_actual = productos_actual.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        # Año anterior
+        compras_anterior = Compras.objects.filter(fecha__year=anio-1, fecha__month=mes)
+        if temporada:
+            compras_anterior = compras_anterior.filter(temporada__icontains=temporada)
+        if proveedor_id:
+            compras_anterior = compras_anterior.filter(empresa_id=proveedor_id)
+        
+        compras_anterior_ids = list(compras_anterior.values_list('id', flat=True))
+        productos_anterior = Compras_Producto.objects.filter(compras__in=compras_anterior_ids)
+        inversion_anterior = productos_anterior.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        resultado['actual'].append(float(inversion_actual))
+        resultado['anterior'].append(float(inversion_anterior))
+    
+    return resultado
+
+
+def calcular_roi_temporadas_mejorado(compras_query, compras_ids):
+    """Calcula ROI por temporada"""
+    
+    temporadas = compras_query.values('temporada').distinct()
+    resultado = []
+    
+    for temp in temporadas:
+        temporada_nombre = temp['temporada']
+        if not temporada_nombre:
+            continue
+        
+        compras_temp = compras_query.filter(temporada=temporada_nombre)
+        compras_temp_ids = list(compras_temp.values_list('id', flat=True))
+        
+        productos_temp = Compras_Producto.objects.filter(compras__in=compras_temp_ids)
+        
+        inversion = productos_temp.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        valor_venta = productos_temp.aggregate(
+            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        roi = 0
+        if inversion > 0:
+            roi = round(((valor_venta - inversion) / inversion) * 100, 1)
+        
+        resultado.append({
+            'temporada': temporada_nombre,
+            'roi': roi,
+            'inversion': float(inversion),
+            'valor_venta': float(valor_venta)
+        })
+    
+    return resultado
+
+
+def calcular_top_proveedores_mejorado(compras_query, compras_ids):
+    """Calcula top 10 proveedores por inversión con cumplimiento"""
+    
+    proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
+    
+    resultado = []
+    for prov in proveedores:
+        if not prov['empresa__id']:
+            continue
+        
+        compras_prov = compras_query.filter(empresa_id=prov['empresa__id'])
+        compras_prov_ids = list(compras_prov.values_list('id', flat=True))
+        
+        productos_prov = Compras_Producto.objects.filter(compras__in=compras_prov_ids)
+        inversion = productos_prov.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        # Cumplimiento
+        tallas_prov = Compras_Producto_Talla.objects.filter(
+            compra_producto__compras__in=compras_prov_ids
+        )
+        esperadas = tallas_prov.aggregate(total=Sum('stock'))['total'] or 0
+        
+        recepciones = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__compra_producto__compras__in=compras_prov_ids
+        )
+        recibidas = recepciones.aggregate(total=Sum('stockArribado'))['total'] or 0
+        
+        cumplimiento = 0
+        if esperadas > 0:
+            cumplimiento = round((recibidas / esperadas) * 100, 1)
+        
+        if inversion > 0:
+            resultado.append({
+                'proveedor': prov['empresa__nombre'] or 'Sin nombre',
+                'inversion': float(inversion),
+                'total_compras': compras_prov.count(),
+                'cumplimiento': cumplimiento
+            })
+    
+    # Ordenar y limitar
+    resultado.sort(key=lambda x: x['inversion'], reverse=True)
+    return resultado[:10]
+
+
+def calcular_top_productos_mejorado(compras_ids):
+    """Calcula top 10 productos por inversión"""
+    
+    productos = Compras_Producto.objects.filter(
+        compras__in=compras_ids
+    ).values(
+        'nombre', 'atributo1'  # atributo1 = marca
+    ).annotate(
+        inversion_total=Sum(F('costo') * F('compras_producto_talla__stock')),
+        unidades_total=Sum('compras_producto_talla__stock')
+    ).order_by('-inversion_total')[:10]
+    
+    resultado = []
+    for prod in productos:
+        resultado.append({
+            'nombre': prod['nombre'] or 'Sin nombre',
+            'marca': prod['atributo1'] or '-',
+            'inversion': float(prod['inversion_total'] or 0),
+            'unidades': int(prod['unidades_total'] or 0)
+        })
+    
+    return resultado
+
+
+def calcular_cumplimiento_proveedores_mejorado(compras_query, compras_ids):
+    """Calcula cumplimiento detallado por proveedor"""
+    
+    proveedores = compras_query.values('empresa__id', 'empresa__nombre').distinct()
+    
+    resultado = []
+    for prov in proveedores:
+        if not prov['empresa__id']:
+            continue
+        
+        compras_prov = compras_query.filter(empresa_id=prov['empresa__id'])
+        compras_prov_ids = list(compras_prov.values_list('id', flat=True))
+        
+        tallas_prov = Compras_Producto_Talla.objects.filter(
+            compra_producto__compras__in=compras_prov_ids
+        )
+        esperadas = tallas_prov.aggregate(total=Sum('stock'))['total'] or 0
+        
+        recepciones = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__compra_producto__compras__in=compras_prov_ids
+        )
+        recibidas = recepciones.aggregate(total=Sum('stockArribado'))['total'] or 0
+        
+        cumplimiento = 0
+        if esperadas > 0:
+            cumplimiento = round((recibidas / esperadas) * 100, 1)
+        
+        if esperadas > 0:
+            resultado.append({
+                'proveedor': prov['empresa__nombre'] or 'Sin nombre',
+                'cumplimiento': cumplimiento,
+                'esperadas': int(esperadas),
+                'recibidas': int(recibidas)
+            })
+    
+    resultado.sort(key=lambda x: x['cumplimiento'], reverse=True)
+    return resultado[:12]
+
+
+def calcular_rendimiento_detallado_mejorado(compras_query, compras_ids):
+    """Calcula rendimiento detallado por compra para la tabla"""
+    
+    resultado = []
+    
+    for compra in compras_query.select_related('empresa')[:20]:
+        productos_compra = Compras_Producto.objects.filter(compras=compra)
+        
+        inversion = productos_compra.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        valor_venta = productos_compra.aggregate(
+            total=Sum(F('precioSugerido') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        tallas_compra = Compras_Producto_Talla.objects.filter(
+            compra_producto__compras=compra
+        )
+        unidades_esperadas = tallas_compra.aggregate(total=Sum('stock'))['total'] or 0
+        
+        recepciones = Productos_Recepcionados.objects.filter(
+            compra_producto_talla__compra_producto__compras=compra
+        )
+        unidades_recibidas = recepciones.aggregate(total=Sum('stockArribado'))['total'] or 0
+        
+        cumplimiento = 0
+        if unidades_esperadas > 0:
+            cumplimiento = round((unidades_recibidas / unidades_esperadas) * 100, 1)
+        
+        roi = 0
+        if inversion > 0:
+            roi = round(((valor_venta - inversion) / inversion) * 100, 1)
+        
+        if cumplimiento >= 100:
+            estado = 'Completado'
+        elif cumplimiento >= 80:
+            estado = 'Pendiente'
+        else:
+            estado = 'Retrasado'
+        
+        resultado.append({
+            'nombre': compra.nombre if hasattr(compra, 'nombre') and compra.nombre else f'Compra #{compra.id}',
+            'proveedor': compra.empresa.nombre if compra.empresa else 'Sin proveedor',
+            'temporada': compra.temporada if hasattr(compra, 'temporada') and compra.temporada else 'N/A',
+            'inversion': float(inversion),
+            'cumplimiento': cumplimiento,
+            'roi': roi,
+            'unidades_esperadas': int(unidades_esperadas),
+            'unidades_recibidas': int(unidades_recibidas),
+            'estado': estado
+        })
+    
+    return resultado
+
+
+def generar_alertas_compras_mejorado(metricas, cumplimiento_proveedores, roi_temporadas):
+    """Genera alertas inteligentes basadas en métricas"""
+    
+    alertas = []
+    
+    if metricas['cumplimiento_general'] < 80:
+        alertas.append({
+            'tipo': 'warning',
+            'titulo': 'Cumplimiento Bajo',
+            'mensaje': f"El cumplimiento general ({metricas['cumplimiento_general']}%) está por debajo del objetivo del 80%."
+        })
+    
+    proveedores_criticos = [p for p in cumplimiento_proveedores if p['cumplimiento'] < 70]
+    if proveedores_criticos:
+        alertas.append({
+            'tipo': 'danger',
+            'titulo': 'Proveedores Críticos',
+            'mensaje': f"{len(proveedores_criticos)} proveedor(es) tienen cumplimiento inferior al 70%."
+        })
+    
+    temporadas_bajo_roi = [t for t in roi_temporadas if t['roi'] < 15]
+    if temporadas_bajo_roi:
+        temp_nombres = ', '.join([t['temporada'] for t in temporadas_bajo_roi])
+        alertas.append({
+            'tipo': 'warning',
+            'titulo': 'ROI Bajo por Temporada',
+            'mensaje': f"Las temporadas {temp_nombres} tienen ROI inferior al 15%."
+        })
+    
+    diferencia = metricas['unidades_esperadas'] - metricas['unidades_recepcionadas']
+    if diferencia > 0 and metricas['unidades_esperadas'] > 0:
+        porcentaje_pendiente = (diferencia / metricas['unidades_esperadas']) * 100
+        if porcentaje_pendiente > 20:
+            alertas.append({
+                'tipo': 'info',
+                'titulo': 'Recepciones Pendientes',
+                'mensaje': f"Faltan {diferencia:,} unidades por recepcionar ({porcentaje_pendiente:.1f}%)."
+            })
+    
+    if len(alertas) == 0 and metricas['total_compras'] > 0:
+        alertas.append({
+            'tipo': 'success',
+            'titulo': 'Excelente Desempeño',
+            'mensaje': 'Todos los indicadores están dentro de los parámetros esperados.'
+        })
+    
+    return alertas
+
+
+def generar_insights_compras_mejorado(metricas, pareto_proveedores, comparativa_anual):
+    """Genera insights estratégicos para toma de decisiones"""
+    
+    insights = []
+    
+    if len(pareto_proveedores) >= 2:
+        total_inversion = sum(p['inversion'] for p in pareto_proveedores)
+        if total_inversion > 0:
+            top_2 = pareto_proveedores[:2]
+            concentracion = sum(p['inversion'] for p in top_2) / total_inversion * 100
+            
+            if concentracion > 60:
+                insights.append({
+                    'titulo': 'Alta Concentración',
+                    'descripcion': f'Los 2 principales proveedores representan {concentracion:.1f}% de la inversión.',
+                    'valor': f'{concentracion:.0f}%',
+                    'icono': 'bi-building',
+                    'color': 'warning'
+                })
+    
+    total_actual = sum(comparativa_anual.get('actual', []))
+    total_anterior = sum(comparativa_anual.get('anterior', []))
+    
+    if total_anterior > 0:
+        crecimiento = ((total_actual - total_anterior) / total_anterior) * 100
+        
+        if crecimiento > 10:
+            insights.append({
+                'titulo': 'Crecimiento Positivo',
+                'descripcion': 'La inversión en compras ha aumentado respecto al año anterior.',
+                'valor': f'+{crecimiento:.1f}%',
+                'icono': 'bi-graph-up-arrow',
+                'color': 'success'
+            })
+        elif crecimiento < -10:
+            insights.append({
+                'titulo': 'Reducción de Inversión',
+                'descripcion': 'La inversión en compras ha disminuido respecto al año anterior.',
+                'valor': f'{crecimiento:.1f}%',
+                'icono': 'bi-graph-down-arrow',
+                'color': 'danger'
+            })
+    
+    if metricas['roi_promedio'] >= 25:
+        insights.append({
+            'titulo': 'ROI Excelente',
+            'descripcion': 'El retorno sobre inversión supera el 25%.',
+            'valor': f"{metricas['roi_promedio']}%",
+            'icono': 'bi-trophy',
+            'color': 'success'
+        })
+    
+    return insights
+
+
+# ========== FUNCIONES DE DISTRIBUCIÓN (CENTRO DE COMPRAS) ==========
+
+def calcular_metricas_distribucion(anio, compras_ids):
+    """
+    Calcula métricas de distribución desde el centro de compras hacia sucursales vendedoras.
+    Analiza el flujo: Compras → Recepciones → Despachos → Ventas
+    """
+    from .models import Movimientos_Producto, Traspaso, Traspaso_Detalle, Ticket, Ticket_Productos
+    
+    # Unidades compradas (recepcionadas de proveedores)
+    unidades_compradas = Productos_Recepcionados.objects.filter(
+        compra_producto_talla__compra_producto__compras__in=compras_ids
+    ).aggregate(total=Sum('stockArribado'))['total'] or 0
+    
+    # Unidades despachadas a otras sucursales (traspasos salida)
+    unidades_despachadas = Movimientos_Producto.objects.filter(
+        fecha__year=anio,
+        concepto='TRASPASO_SALIDA',
+        estado='COMPLETADO'
+    ).aggregate(total=Sum('cantidad'))['total'] or 0
+    
+    # También contar desde Traspasos completados
+    traspasos_despachados = Traspaso_Detalle.objects.filter(
+        traspaso__fecha_solicitud__year=anio,
+        traspaso__estado__in=['EN_TRANSITO', 'RECIBIDO']
+    ).aggregate(total=Sum('cantidad_enviada'))['total'] or 0
+    
+    unidades_despachadas = max(unidades_despachadas, traspasos_despachados)
+    
+    # Stock en centro de distribución (comprado - despachado)
+    stock_centro = max(0, unidades_compradas - unidades_despachadas)
+    
+    # Eficiencia de distribución
+    eficiencia = 0
+    if unidades_compradas > 0:
+        eficiencia = round((unidades_despachadas / unidades_compradas) * 100, 1)
+    
+    return {
+        'unidades_compradas': int(unidades_compradas),
+        'unidades_despachadas': int(unidades_despachadas),
+        'stock_centro_distribucion': int(stock_centro),
+        'eficiencia_distribucion': eficiencia
+    }
+
+
+def calcular_despachos_por_sucursal(anio):
+    """Calcula los despachos realizados a cada sucursal destino"""
+    from .models import Movimientos_Producto, Traspaso, Traspaso_Detalle
+    
+    # Desde movimientos de producto
+    despachos = Movimientos_Producto.objects.filter(
+        fecha__year=anio,
+        concepto='TRASPASO_SALIDA',
+        estado='COMPLETADO',
+        sucursal_destino__isnull=False
+    ).values(
+        'sucursal_destino__id',
+        'sucursal_destino__alias',
+        'sucursal_destino__empresa__nombre'
+    ).annotate(
+        unidades=Sum('cantidad')
+    ).order_by('-unidades')
+    
+    resultado = []
+    for d in despachos:
+        resultado.append({
+            'sucursal_id': d['sucursal_destino__id'],
+            'sucursal': d['sucursal_destino__alias'] or 'Sin nombre',
+            'empresa': d['sucursal_destino__empresa__nombre'] or '-',
+            'unidades': int(abs(d['unidades'] or 0))  # abs porque los egresos son negativos
+        })
+    
+    # Si no hay datos en movimientos, intentar con Traspasos
+    if not resultado:
+        traspasos = Traspaso.objects.filter(
+            fecha_solicitud__year=anio,
+            estado__in=['EN_TRANSITO', 'RECIBIDO']
+        ).values(
+            'sucursal_destino__id',
+            'sucursal_destino__alias',
+            'sucursal_destino__empresa__nombre'
+        ).annotate(
+            unidades=Sum('detalles__cantidad_enviada')
+        ).order_by('-unidades')
+        
+        for t in traspasos:
+            if t['unidades']:
+                resultado.append({
+                    'sucursal_id': t['sucursal_destino__id'],
+                    'sucursal': t['sucursal_destino__alias'] or 'Sin nombre',
+                    'empresa': t['sucursal_destino__empresa__nombre'] or '-',
+                    'unidades': int(t['unidades'] or 0)
+                })
+    
+    return resultado[:10]
+
+
+def calcular_rendimiento_sucursales_destino(anio):
+    """
+    Calcula el rendimiento de cada sucursal destino:
+    - Unidades despachadas recibidas
+    - Unidades vendidas
+    - Ventas en dinero
+    - Margen estimado
+    """
+    from .models import Movimientos_Producto, Traspaso, Ticket, Ticket_Productos, Sucursal
+    
+    resultado = []
+    
+    try:
+        # Obtener sucursales que han recibido mercadería
+        sucursales_destino = Movimientos_Producto.objects.filter(
+            fecha__year=anio,
+            concepto='TRASPASO_ENTRADA',
+            estado='COMPLETADO'
+        ).values('sucursal_destino__id').distinct()
+        
+        sucursal_ids = [s['sucursal_destino__id'] for s in sucursales_destino if s['sucursal_destino__id']]
+    except:
+        return resultado
+    
+    for suc_id in sucursal_ids:
+        try:
+            # Solo obtener campos básicos para evitar error si hay campos nuevos no migrados
+            sucursal = Sucursal.objects.only('id', 'alias', 'direccion', 'empresa_id').select_related('empresa').get(id=suc_id)
+            
+            # Unidades despachadas (recibidas en esta sucursal)
+            despachado = Movimientos_Producto.objects.filter(
+                fecha__year=anio,
+                sucursal_destino_id=suc_id,
+                concepto='TRASPASO_ENTRADA',
+                estado='COMPLETADO'
+            ).aggregate(total=Sum('cantidad'))['total'] or 0
+            
+            # Ventas de esta sucursal
+            tickets = Ticket.objects.filter(
+                sucursal_id=suc_id,
+                created_at__year=anio,
+                estado='PAGADO'
+            )
+            
+            ventas_monto = tickets.aggregate(total=Sum('total'))['total'] or 0
+            
+            # Unidades vendidas
+            vendido = Ticket_Productos.objects.filter(
+                ticket__in=tickets
+            ).aggregate(total=Sum('cantidad'))['total'] or 0
+            
+            # Costo estimado (basado en promedio de compras)
+            costo_estimado = despachado * 10000  # Placeholder - se debería calcular con FIFO
+            
+            resultado.append({
+                'sucursal_id': suc_id,
+                'sucursal': sucursal.alias or sucursal.nombre or 'Sin nombre',
+                'empresa': sucursal.empresa.nombre if sucursal.empresa else '-',
+                'despachado': int(despachado),
+                'vendido': int(vendido),
+                'ventas_monto': float(ventas_monto),
+                'costo': float(costo_estimado)
+            })
+        except Sucursal.DoesNotExist:
+            continue
+    
+    # Ordenar por ventas
+    resultado.sort(key=lambda x: x['ventas_monto'], reverse=True)
+    
+    return resultado[:15]
+
+
+def calcular_flujo_distribucion_mensual(anio):
+    """
+    Calcula el flujo mensual: Compras → Despachos → Ventas
+    Para visualizar la cadena de suministro
+    """
+    from .models import Movimientos_Producto, Ticket
+    
+    meses_nombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    
+    resultado = []
+    
+    for mes in range(1, 13):
+        # Compras del mes (inversión)
+        compras_mes = Compras.objects.filter(fecha__year=anio, fecha__month=mes)
+        compras_ids = list(compras_mes.values_list('id', flat=True))
+        
+        productos_mes = Compras_Producto.objects.filter(compras__in=compras_ids)
+        inversion = productos_mes.aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        # Despachos del mes
+        despachos_mes = Movimientos_Producto.objects.filter(
+            fecha__year=anio,
+            fecha__month=mes,
+            concepto='TRASPASO_SALIDA',
+            estado='COMPLETADO'
+        ).aggregate(total=Sum(F('cantidad') * F('costo')))['total'] or 0
+        
+        # Ventas del mes
+        try:
+            ventas_mes = Ticket.objects.filter(
+                created_at__year=anio,
+                created_at__month=mes,
+                estado='PAGADO'
+            ).aggregate(total=Sum('total'))['total'] or 0
+        except:
+            ventas_mes = 0
+        
+        resultado.append({
+            'mes': mes,
+            'mes_nombre': meses_nombres[mes - 1],
+            'inversion': float(inversion),
+            'despachos': abs(float(despachos_mes)),  # abs porque egresos son negativos
+            'ventas': float(ventas_mes)
+        })
+    
+    return resultado
+
+
+# ========== FUNCIONES DE ANÁLISIS DE MÁRGENES CENTRO DE DISTRIBUCIÓN ==========
+
+def calcular_margenes_centro_distribucion(anio, sucursal_cd_id=None):
+    """
+    Calcula los márgenes que aplica el Centro de Distribución (EDEL, GILD) 
+    al despachar productos a sucursales vendedoras.
+    
+    El costo para las sucursales vendedoras = Costo proveedor + Sobreprecio CD
+    
+    Retorna:
+    - Margen bruto del CD (sobreprecio total)
+    - Margen % promedio aplicado
+    - Desglose por sucursal destino
+    - Comparativa costo proveedor vs costo sucursal
+    """
+    from .models import Movimientos_Producto, Traspaso, Traspaso_Detalle, Sucursal
+    
+    # Identificar sucursales que son Centros de Distribución
+    if sucursal_cd_id:
+        sucursales_cd = Sucursal.objects.filter(id=sucursal_cd_id)
+    else:
+        # Intentar buscar por los nuevos campos (pueden no existir si no se aplicó migración)
+        try:
+            sucursales_cd = Sucursal.objects.filter(
+                models.Q(es_centro_distribucion=True) | 
+                models.Q(tipo_sucursal='CENTRO_DISTRIBUCION')
+            )
+            if not sucursales_cd.exists():
+                raise Exception("No hay CD marcados")
+        except:
+            # Fallback: identificar por empresa proveedora
+            sucursales_cd = Sucursal.objects.filter(empresa__esProveedor=True)
+    
+    sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
+    
+    # 1. Desde Traspasos (tienen sobreprecio, costo, costo_destino)
+    traspasos_detalles = Traspaso_Detalle.objects.filter(
+        traspaso__fecha_solicitud__year=anio,
+        traspaso__sucursal_origen__in=sucursales_cd_ids,
+        traspaso__estado__in=['EN_TRANSITO', 'RECIBIDO']
+    ).select_related('traspaso__sucursal_destino', 'traspaso__sucursal_origen')
+    
+    margen_total_cd = 0
+    costo_proveedor_total = 0
+    unidades_total = 0
+    detalle_por_sucursal = {}
+    
+    for detalle in traspasos_detalles:
+        cantidad = detalle.cantidad_enviada or 0
+        costo_unitario = detalle.costo or 0
+        sobreprecio = detalle.sobreprecio if hasattr(detalle, 'sobreprecio') and detalle.sobreprecio else 0
+        costo_destino = detalle.costo_destino if hasattr(detalle, 'costo_destino') and detalle.costo_destino else (costo_unitario + sobreprecio)
+        
+        # Calcular margen
+        margen_cd = sobreprecio * cantidad
+        costo_prov = costo_unitario * cantidad
+        
+        margen_total_cd += margen_cd
+        costo_proveedor_total += costo_prov
+        unidades_total += cantidad
+        
+        # Agrupar por sucursal destino
+        suc_destino = detalle.traspaso.sucursal_destino
+        suc_key = suc_destino.id
+        
+        if suc_key not in detalle_por_sucursal:
+            detalle_por_sucursal[suc_key] = {
+                'sucursal_id': suc_destino.id,
+                'sucursal': suc_destino.alias,
+                'empresa': suc_destino.empresa.nombre if suc_destino.empresa else '-',
+                'unidades': 0,
+                'costo_proveedor_total': 0,
+                'sobreprecio_total': 0,
+                'costo_destino_total': 0
+            }
+        
+        detalle_por_sucursal[suc_key]['unidades'] += cantidad
+        detalle_por_sucursal[suc_key]['costo_proveedor_total'] += costo_prov
+        detalle_por_sucursal[suc_key]['sobreprecio_total'] += margen_cd
+        detalle_por_sucursal[suc_key]['costo_destino_total'] += costo_destino * cantidad
+    
+    # 2. Si no hay datos en Traspasos, intentar con Movimientos_Producto
+    if unidades_total == 0:
+        movimientos = Movimientos_Producto.objects.filter(
+            fecha__year=anio,
+            concepto='TRASPASO_SALIDA',
+            sucursal_origen__in=sucursales_cd_ids,
+            estado='COMPLETADO'
+        ).select_related('sucursal_destino', 'sucursal_origen')
+        
+        for mov in movimientos:
+            cantidad = abs(mov.cantidad or 0)
+            costo_unitario = mov.costo or 0
+            sobreprecio = mov.sobreprecio or 0
+            precio = mov.precio or 0
+            
+            margen_cd = sobreprecio * cantidad
+            costo_prov = costo_unitario * cantidad
+            
+            margen_total_cd += margen_cd
+            costo_proveedor_total += costo_prov
+            unidades_total += cantidad
+            
+            if mov.sucursal_destino:
+                suc_key = mov.sucursal_destino.id
+                
+                if suc_key not in detalle_por_sucursal:
+                    detalle_por_sucursal[suc_key] = {
+                        'sucursal_id': mov.sucursal_destino.id,
+                        'sucursal': mov.sucursal_destino.alias,
+                        'empresa': mov.sucursal_destino.empresa.nombre if mov.sucursal_destino.empresa else '-',
+                        'unidades': 0,
+                        'costo_proveedor_total': 0,
+                        'sobreprecio_total': 0,
+                        'costo_destino_total': 0
+                    }
+                
+                detalle_por_sucursal[suc_key]['unidades'] += cantidad
+                detalle_por_sucursal[suc_key]['costo_proveedor_total'] += costo_prov
+                detalle_por_sucursal[suc_key]['sobreprecio_total'] += margen_cd
+                detalle_por_sucursal[suc_key]['costo_destino_total'] += (costo_unitario + sobreprecio) * cantidad
+    
+    # Calcular margen promedio %
+    margen_promedio_pct = 0
+    if costo_proveedor_total > 0:
+        margen_promedio_pct = round((margen_total_cd / costo_proveedor_total) * 100, 2)
+    
+    # Ordenar detalle por unidades
+    detalle_lista = sorted(detalle_por_sucursal.values(), key=lambda x: x['unidades'], reverse=True)
+    
+    # Calcular margen % para cada sucursal
+    for item in detalle_lista:
+        if item['costo_proveedor_total'] > 0:
+            item['margen_pct'] = round((item['sobreprecio_total'] / item['costo_proveedor_total']) * 100, 2)
+        else:
+            item['margen_pct'] = 0
+    
+    return {
+        'centros_distribucion': [{'id': s.id, 'alias': s.alias} for s in sucursales_cd],
+        'margen_total_cd': float(margen_total_cd),
+        'costo_proveedor_total': float(costo_proveedor_total),
+        'costo_destino_total': float(costo_proveedor_total + margen_total_cd),
+        'margen_promedio_pct': margen_promedio_pct,
+        'unidades_despachadas': int(unidades_total),
+        'detalle_por_sucursal': detalle_lista[:10]
+    }
+
+
+def calcular_comparativa_costos_cd_vs_sucursales(anio):
+    """
+    Compara el costo de productos según origen:
+    - Costo proveedor externo (lo que paga EDEL/GILD)
+    - Costo interno (lo que pagan las sucursales vendedoras a EDEL/GILD)
+    
+    Muestra el incremento de costo por pasar por el CD.
+    """
+    from .models import Movimientos_Producto, Sucursal, LoteProducto
+    
+    # Sucursales CD (con fallback si no existe el campo nuevo)
+    try:
+        sucursales_cd = Sucursal.objects.filter(
+            models.Q(es_centro_distribucion=True) | 
+            models.Q(tipo_sucursal='CENTRO_DISTRIBUCION') |
+            models.Q(empresa__esProveedor=True)
+        )
+    except:
+        sucursales_cd = Sucursal.objects.filter(empresa__esProveedor=True)
+    sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
+    
+    # Sucursales vendedoras (no son CD)
+    sucursales_vendedoras = Sucursal.objects.exclude(id__in=sucursales_cd_ids)
+    
+    comparativa = []
+    
+    for suc_vendedora in sucursales_vendedoras[:10]:
+        # Lotes recibidos en la sucursal vendedora
+        lotes = LoteProducto.objects.filter(
+            sucursal=suc_vendedora,
+            fecha_ingreso__year=anio
+        )
+        
+        total_costo = 0
+        total_sobreprecio = 0
+        total_unidades = 0
+        
+        for lote in lotes:
+            total_costo += lote.costo_unitario * lote.cantidad_inicial
+            total_sobreprecio += (lote.sobreprecio_unitario or 0) * lote.cantidad_inicial
+            total_unidades += lote.cantidad_inicial
+        
+        costo_promedio = 0
+        sobreprecio_promedio = 0
+        
+        if total_unidades > 0:
+            costo_promedio = round(total_costo / total_unidades)
+            sobreprecio_promedio = round(total_sobreprecio / total_unidades)
+        
+        comparativa.append({
+            'sucursal_id': suc_vendedora.id,
+            'sucursal': suc_vendedora.alias,
+            'empresa': suc_vendedora.empresa.nombre if suc_vendedora.empresa else '-',
+            'unidades_recibidas': int(total_unidades),
+            'costo_promedio': costo_promedio,
+            'sobreprecio_promedio': sobreprecio_promedio,
+            'costo_total_promedio': costo_promedio + sobreprecio_promedio,
+            'incremento_pct': round((sobreprecio_promedio / costo_promedio * 100), 2) if costo_promedio > 0 else 0
+        })
+    
+    return sorted(comparativa, key=lambda x: x['unidades_recibidas'], reverse=True)
+
+
+def calcular_rentabilidad_por_tipo_sucursal(anio):
+    """
+    Calcula la rentabilidad diferenciada:
+    - CD: Compra a proveedor → Vende a sucursales con sobreprecio
+    - Sucursales vendedoras: Compra al CD → Vende a cliente final
+    
+    Analiza márgenes en cada etapa de la cadena.
+    """
+    from .models import Sucursal, Ticket, Ticket_Productos, Movimientos_Producto
+    
+    resultado = {
+        'centros_distribucion': [],
+        'sucursales_vendedoras': []
+    }
+    
+    # Sucursales CD (con fallback si no existe el campo nuevo)
+    try:
+        sucursales_cd = Sucursal.objects.filter(
+            models.Q(es_centro_distribucion=True) | 
+            models.Q(tipo_sucursal='CENTRO_DISTRIBUCION') |
+            models.Q(empresa__esProveedor=True)
+        )
+    except:
+        sucursales_cd = Sucursal.objects.filter(empresa__esProveedor=True)
+    
+    for suc_cd in sucursales_cd:
+        # Inversión en compras a proveedores
+        compras_cd = Compras.objects.filter(
+            responsable__sucursales=suc_cd,
+            fecha__year=anio
+        )
+        compras_ids = list(compras_cd.values_list('id', flat=True))
+        
+        inversion = Compras_Producto.objects.filter(
+            compras__in=compras_ids
+        ).aggregate(
+            total=Sum(F('costo') * F('compras_producto_talla__stock'))
+        )['total'] or 0
+        
+        # Ingresos por despachos (sobreprecio)
+        despachos = Movimientos_Producto.objects.filter(
+            fecha__year=anio,
+            sucursal_origen=suc_cd,
+            concepto='TRASPASO_SALIDA',
+            estado='COMPLETADO'
+        ).aggregate(
+            total_sobreprecio=Sum(F('sobreprecio') * Abs(F('cantidad'))),
+            total_costo=Sum(F('costo') * Abs(F('cantidad')))
+        )
+        
+        sobreprecio_generado = despachos['total_sobreprecio'] or 0
+        costo_despachado = despachos['total_costo'] or 0
+        
+        rentabilidad_cd = 0
+        if costo_despachado > 0:
+            rentabilidad_cd = round((sobreprecio_generado / costo_despachado) * 100, 2)
+        
+        resultado['centros_distribucion'].append({
+            'sucursal_id': suc_cd.id,
+            'sucursal': suc_cd.alias,
+            'empresa': suc_cd.empresa.nombre if suc_cd.empresa else '-',
+            'inversion_proveedores': float(inversion),
+            'costo_despachado': float(costo_despachado),
+            'sobreprecio_generado': float(sobreprecio_generado),
+            'rentabilidad_pct': rentabilidad_cd
+        })
+    
+    # Sucursales vendedoras
+    sucursales_cd_ids = list(sucursales_cd.values_list('id', flat=True))
+    sucursales_vendedoras = Sucursal.objects.exclude(id__in=sucursales_cd_ids)[:10]
+    
+    for suc_vend in sucursales_vendedoras:
+        # Ventas realizadas
+        try:
+            ventas = Ticket.objects.filter(
+                sucursal=suc_vend,
+                created_at__year=anio,
+                estado='PAGADO'
+            )
+            
+            total_ventas = ventas.aggregate(total=Sum('total'))['total'] or 0
+            
+            # Costo de lo vendido (incluyendo sobreprecio del CD)
+            costo_ventas = Ticket_Productos.objects.filter(
+                ticket__in=ventas
+            ).aggregate(
+                total=Sum(F('costo') * F('cantidad'))
+            )['total'] or 0
+            
+            margen_bruto = total_ventas - costo_ventas
+            rentabilidad_vend = 0
+            if total_ventas > 0:
+                rentabilidad_vend = round((margen_bruto / total_ventas) * 100, 2)
+            
+            resultado['sucursales_vendedoras'].append({
+                'sucursal_id': suc_vend.id,
+                'sucursal': suc_vend.alias,
+                'empresa': suc_vend.empresa.nombre if suc_vend.empresa else '-',
+                'ventas_total': float(total_ventas),
+                'costo_ventas': float(costo_ventas),
+                'margen_bruto': float(margen_bruto),
+                'rentabilidad_pct': rentabilidad_vend
+            })
+        except Exception as e:
+            continue
+    
+    return resultado

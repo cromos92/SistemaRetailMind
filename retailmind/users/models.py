@@ -12,6 +12,7 @@ class Usuario(AbstractUser):
     # Definición de roles
     ROLES = [
         ('administrador', 'Administrador'),
+        ('administracion', 'Administración'),
         ('jefe_local', 'Jefe Local'),
         ('cajero', 'Cajero'),
         ('vendedor', 'Vendedor'),

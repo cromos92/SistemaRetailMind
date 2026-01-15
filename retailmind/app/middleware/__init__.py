@@ -1,0 +1,1 @@
+# Middleware personalizado para RetailMind

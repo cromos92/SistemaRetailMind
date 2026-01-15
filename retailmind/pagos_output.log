@@ -1,0 +1,86 @@
+[*] Conectando a MySQL...
+  [OK] Conectado a MySQL
+
+======================================================================
+[PAGOS] MIGRANDO PAGOS DE VENTAS (CUADRATURA)...
+======================================================================
+  [+] Cargando sucursales por direccion...
+  [OK] 8 sucursales en cache
+     Direcciones: ['Maipu 676', 'Matta 2479', 'Matta 2438', 'Matta 2418', 'Maipu 668', 'Matta 2422', 'Matta 2432', 'Matta 2458']
+  [+] Cargando DTEs...
+  [OK] 455718 DTEs en cache
+  [+] Cargando pagos existentes...
+  [OK] 700171 pagos ya existen
+  [i] Ventas en MySQL: 805,249
+  [!] DTE no encontrado: n_doc=20062, tipo=Boleta
+  [!] DTE no encontrado: n_doc=61, tipo=Factura Electronica
+  [!] DTE no encontrado: n_doc=0, tipo=Boleta
+  [!] DTE no encontrado: n_doc=20063, tipo=Boleta
+  [!] DTE no encontrado: n_doc=20063, tipo=Boleta
+  Procesados: 37,493/805,249 (1,000 migrados)
+  Procesados: 55,000/805,249...
+  Procesados: 67,286/805,249 (2,000 migrados)
+  Procesados: 162,437/805,249 (3,000 migrados)
+  Procesados: 165,000/805,249...
+  Procesados: 175,000/805,249...
+  Procesados: 669,589/805,249 (4,000 migrados)
+  Procesados: 671,749/805,249 (5,000 migrados)
+  Procesados: 673,723/805,249 (6,000 migrados)
+  Procesados: 675,844/805,249 (7,000 migrados)
+  Procesados: 677,786/805,249 (8,000 migrados)
+  Procesados: 680,000/805,249...
+  Procesados: 680,030/805,249 (9,000 migrados)
+  Procesados: 682,933/805,249 (10,000 migrados)
+  Procesados: 685,884/805,249 (11,000 migrados)
+  Procesados: 688,956/805,249 (12,000 migrados)
+  Procesados: 691,775/805,249 (13,000 migrados)
+  Procesados: 694,742/805,249 (14,000 migrados)
+  Procesados: 697,876/805,249 (15,000 migrados)
+  Procesados: 700,000/805,249...
+  Procesados: 700,617/805,249 (16,000 migrados)
+  Procesados: 703,487/805,249 (17,000 migrados)
+  Procesados: 705,000/805,249...
+  Procesados: 706,207/805,249 (18,000 migrados)
+  Procesados: 708,565/805,249 (19,000 migrados)
+  Procesados: 710,000/805,249...
+  Procesados: 710,728/805,249 (20,000 migrados)
+  Procesados: 714,558/805,249 (21,000 migrados)
+  Procesados: 719,784/805,249 (22,000 migrados)
+  Procesados: 723,897/805,249 (23,000 migrados)
+  Procesados: 728,277/805,249 (24,000 migrados)
+  Procesados: 733,581/805,249 (25,000 migrados)
+  Procesados: 737,094/805,249 (26,000 migrados)
+  Procesados: 740,257/805,249 (27,000 migrados)
+  Procesados: 742,855/805,249 (28,000 migrados)
+  Procesados: 745,000/805,249...
+  Procesados: 745,061/805,249 (29,000 migrados)
+  Procesados: 747,584/805,249 (30,000 migrados)
+  Procesados: 749,761/805,249 (31,000 migrados)
+  Procesados: 751,953/805,249 (32,000 migrados)
+  Procesados: 753,911/805,249 (33,000 migrados)
+  Procesados: 755,000/805,249...
+  Procesados: 756,218/805,249 (34,000 migrados)
+  Procesados: 758,577/805,249 (35,000 migrados)
+  Procesados: 760,973/805,249 (36,000 migrados)
+  Procesados: 763,257/805,249 (37,000 migrados)
+  Procesados: 765,000/805,249...
+  Procesados: 765,463/805,249 (38,000 migrados)
+  Procesados: 767,930/805,249 (39,000 migrados)
+  Procesados: 771,117/805,249 (40,000 migrados)
+  Procesados: 774,754/805,249 (41,000 migrados)
+  Procesados: 778,399/805,249 (42,000 migrados)
+  Procesados: 782,785/805,249 (43,000 migrados)
+  Procesados: 786,361/805,249 (44,000 migrados)
+  Procesados: 788,960/805,249 (45,000 migrados)
+  Procesados: 791,889/805,249 (46,000 migrados)
+  Procesados: 794,422/805,249 (47,000 migrados)
+  Procesados: 795,000/805,249...
+  Procesados: 797,032/805,249 (48,000 migrados)
+  Procesados: 799,429/805,249 (49,000 migrados)
+  Procesados: 802,333/805,249 (50,000 migrados)
+
+  [OK] Pagos migrados: 50,793
+  [!] DTE no encontrado: 259,874
+  [!] Duplicados omitidos: 494,582
+
+[COMPLETADO] Migracion de pagos finalizada
