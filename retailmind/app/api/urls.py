@@ -23,6 +23,9 @@ urlpatterns = [
     # Desktop auth y config
     path('desktop/', include('app.api.desktop.urls', namespace='desktop')),
     
+    # API móvil (JWT)
+    path('mobile/', include('app.api.mobile.urls', namespace='mobile')),
+
     # Sincronización
     path('sync/', include('app.api.sync.urls', namespace='sync')),
 ]

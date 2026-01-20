@@ -3943,11 +3943,11 @@ class HistorialCambioPrecio(models.Model):
 # ========== MÓDULO DE REQUERIMIENTOS DE GARANTÍAS ==========
 
 TIPO_REQUERIMIENTO_CHOICES = [
-    ('GARANTIA', 'Garantía'),
-    ('DEVOLUCION', 'Devolución'),
-    ('CAMBIO', 'Cambio de Producto'),
+    ('GARANTIA', 'Garantia Producto'),
+    ('DEVOLUCION', 'Procedimiento Devolucion Proveedor'),
     ('RECLAMO', 'Reclamo'),
-    ('CONSULTA', 'Consulta Técnica'),
+    ('CONSULTA', 'Consulta Tecnica'),
+    ('OTROS', 'Otros'),
 ]
 
 ESTADO_REQUERIMIENTO_CHOICES = [
@@ -5260,11 +5260,16 @@ class TomaInventario(models.Model):
         from decimal import Decimal
         
         detalles = self.detalles.all()
+        detalles_analisis = detalles.filter(excluir_de_analisis=False)
         
-        self.total_productos_contados = detalles.filter(contado=True).count()
+        self.total_productos_esperados = detalles_analisis.count()
+        productos_contados = detalles_analisis.filter(contado=True).count()
+        self.total_productos_contados = detalles_analisis.filter(contado=True).aggregate(
+            total=Sum('stock_fisico')
+        )['total'] or 0
         
         # Diferencias
-        diferencias = detalles.filter(contado=True).aggregate(
+        diferencias = detalles_analisis.filter(contado=True).aggregate(
             positivas=Sum(Case(
                 When(diferencia__gt=0, then=F('diferencia')),
                 default=0
@@ -5281,7 +5286,7 @@ class TomaInventario(models.Model):
                 When(diferencia__lt=0, then=F('diferencia') * F('costo_unitario_sistema')),
                 default=Decimal('0')
             )),
-            valor_sistema=Sum(F('stock_sistema') * F('costo_unitario_sistema')),
+            valor_sistema=Sum(F('stock_sistema_ajustado') * F('costo_unitario_sistema')),
             valor_fisico=Sum(F('stock_fisico') * F('costo_unitario_sistema'))
         )
         
@@ -5294,7 +5299,7 @@ class TomaInventario(models.Model):
         
         # Progreso
         if self.total_productos_esperados > 0:
-            self.progreso_conteo = (self.total_productos_contados / self.total_productos_esperados) * 100
+            self.progreso_conteo = (productos_contados / self.total_productos_esperados) * 100
         
         self.save()
     
@@ -5340,6 +5345,16 @@ class TomaInventarioDetalle(models.Model):
         verbose_name='Stock Sistema',
         help_text='Stock según el sistema en la fecha de corte'
     )
+    stock_movimientos_post_corte = models.IntegerField(
+        default=0,
+        verbose_name='Movimientos Post Corte',
+        help_text='Suma neta de movimientos después de la fecha de corte'
+    )
+    stock_sistema_ajustado = models.IntegerField(
+        default=0,
+        verbose_name='Stock Sistema Ajustado',
+        help_text='Stock sistema + movimientos post corte (base para comparar)'
+    )
     costo_unitario_sistema = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -5355,6 +5370,11 @@ class TomaInventarioDetalle(models.Model):
     )
     
     # === CONTEO FÍSICO ===
+    excluir_de_analisis = models.BooleanField(
+        default=False,
+        verbose_name='Excluir de análisis',
+        help_text='No considerar este producto en métricas y análisis'
+    )
     stock_fisico = models.IntegerField(
         default=0,
         verbose_name='Stock Físico',
@@ -5453,10 +5473,11 @@ class TomaInventarioDetalle(models.Model):
     def save(self, *args, **kwargs):
         # Calcular diferencia automáticamente
         if self.contado:
-            self.diferencia = self.stock_fisico - self.stock_sistema
+            base_stock = self.stock_sistema_ajustado if self.stock_sistema_ajustado is not None else self.stock_sistema
+            self.diferencia = self.stock_fisico - base_stock
             
             # Marcar para reconteo si diferencia > 10% o > 5 unidades
-            if abs(self.diferencia) > 5 or (self.stock_sistema > 0 and abs(self.diferencia) / self.stock_sistema > 0.1):
+            if abs(self.diferencia) > 5 or (base_stock > 0 and abs(self.diferencia) / base_stock > 0.1):
                 if not self.reconteo_requerido and self.stock_reconteo is None:
                     self.reconteo_requerido = True
         
@@ -5465,8 +5486,9 @@ class TomaInventarioDetalle(models.Model):
     @property
     def porcentaje_diferencia(self):
         """Calcula el porcentaje de diferencia"""
-        if self.stock_sistema > 0:
-            return (self.diferencia / self.stock_sistema) * 100
+        base_stock = self.stock_sistema_ajustado if self.stock_sistema_ajustado is not None else self.stock_sistema
+        if base_stock > 0:
+            return (self.diferencia / base_stock) * 100
         return 0 if self.diferencia == 0 else 100
     
     @property

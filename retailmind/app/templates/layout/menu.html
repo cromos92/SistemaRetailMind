@@ -1614,6 +1614,12 @@
                                     <i class="ri-user-settings-line fs-16 align-middle me-2" style="color: #0066FF;"></i>
                                     <span class="align-middle">Mi Perfil</span>
                                 </a>
+
+                                <!-- Ajuste de Stock -->
+                                <a class="dropdown-item" href="{% url 'ajuste_stock_rapido' %}">
+                                    <i class="ri-inbox-line fs-16 align-middle me-2" style="color: #FFB020;"></i>
+                                    <span class="align-middle">Ajuste de Stock</span>
+                                </a>
                                 
                                 <!-- Cambiar Sucursal / Ver Centro de Trabajo -->
                                 {% if user.is_superuser or user.rol == 'administrador' %}
@@ -1920,17 +1926,7 @@
                                 <ul class="nav nav-sm flex-column">
                                     <li class="nav-item">
                                         <a href="{% url 'modulo_requerimientos' %}" class="nav-link" data-key="t-lista-requerimientos">
-                                            <i class="ri-list-check"></i> Lista de Requerimientos
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link" data-key="t-crear-requerimiento">
-                                            <i class="ri-add-circle-line"></i> Crear Requerimiento
-                                        </a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a href="{% url 'gestionar_requerimientos_vista' %}" class="nav-link" data-key="t-gestionar-requerimientos">
-                                            <i class="ri-settings-3-line"></i> Gestionar Requerimientos
+                                            <i class="ri-list-check"></i> Requerimientos
                                         </a>
                                     </li>
                                 </ul>

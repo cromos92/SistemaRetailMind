@@ -394,6 +394,7 @@ urlpatterns = [
      
      # === AJUSTES DE INVENTARIO ===
      path('crear_ajuste_inventario/', views.crear_ajuste_inventario, name='crear_ajuste_inventario'),
+    path('ajuste-stock-rapido/', views.ajuste_stock_rapido, name='ajuste_stock_rapido'),
      
      # === REPORTES ===
      path('reporte_movimientos_kardex/', views.reporte_movimientos_kardex, name='reporte_movimientos_kardex'),
@@ -892,10 +893,14 @@ urlpatterns = [
     path('gestion-inventarios/api/productos-conteo/<int:inventario_id>/', views_gestion_inventarios.obtener_productos_conteo, name='api_productos_conteo'),
     path('gestion-inventarios/api/registrar-conteo/<int:inventario_id>/', views_gestion_inventarios.registrar_conteo, name='api_registrar_conteo'),
     path('gestion-inventarios/api/registrar-reconteo/<int:inventario_id>/', views_gestion_inventarios.registrar_reconteo, name='api_registrar_reconteo'),
+    path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', views_gestion_inventarios.importar_conteo_pistola, name='api_importar_conteo_pistola'),
+    path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', views_gestion_inventarios.preview_conteo_pistola, name='api_preview_conteo_pistola'),
+    path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', views_gestion_inventarios.actualizar_exclusion_detalle, name='api_excluir_detalle_inventario'),
     
     # APIs de análisis
     path('gestion-inventarios/api/analisis/<int:inventario_id>/', views_gestion_inventarios.obtener_analisis_inventario, name='api_analisis_inventario'),
     path('gestion-inventarios/api/exportar/<int:inventario_id>/', views_gestion_inventarios.exportar_inventario, name='api_exportar_inventario'),
+    path('gestion-inventarios/api/exportar-diferencias/<int:inventario_id>/', views_gestion_inventarios.exportar_diferencias_inventario, name='api_exportar_diferencias_inventario'),
     path('gestion-inventarios/api/historial/<int:inventario_id>/', views_gestion_inventarios.obtener_historial_inventario, name='api_historial_inventario'),
     
     # APIs de flujo de aprobación

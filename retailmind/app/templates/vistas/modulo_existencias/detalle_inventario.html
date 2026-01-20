@@ -225,6 +225,7 @@
 /* Diferencias */
 .diferencia-positiva { color: var(--nexo-success); font-weight: 700; }
 .diferencia-negativa { color: var(--nexo-error); font-weight: 700; }
+.row-excluido { opacity: 0.6; background: #f5f5f7; }
 
 /* Botones */
 .nexo-btn {
@@ -413,6 +414,12 @@
             <div class="nexo-card-header">
                 <h5><i class="bi bi-list-check"></i> Conteo de Productos</h5>
                 <div class="d-flex gap-2">
+                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="exportarDiferencias()">
+                        <i class="bi bi-filter-circle"></i> Exportar Diferencias
+                    </button>
+                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="abrirModalImportarConteo()">
+                        <i class="bi bi-upload"></i> Importar Pistola
+                    </button>
                     <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="exportarInventario()">
                         <i class="bi bi-download"></i> Exportar
                     </button>
@@ -510,7 +517,65 @@
     </button>
 </div>
 
-{% include '../../layout/footer.html' %}
+<!-- Modal Importar Conteo Pistola -->
+<div class="modal fade" id="modalImportarConteo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header modal-header-nexo">
+                <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Importar Conteo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Archivo (CSV/TXT/XLSX)</label>
+                    <input type="file" class="form-control" id="archivoConteo" accept=".csv,.txt,.xlsx" />
+                    <small class="text-muted d-block mt-2">
+                        Formato esperado: <code>sku,cantidad</code> (con o sin encabezados).
+                    </small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Nombre de hoja (opcional)</label>
+                    <input type="text" class="form-control" id="nombreHojaConteo" placeholder="Ej: Conteo Enero" />
+                    <small class="text-muted d-block mt-2">
+                        Si se deja vacío se usa la primera hoja.
+                    </small>
+                </div>
+                <div class="mb-3" id="previewSection" style="display: none;">
+                    <label class="form-label">Preview</label>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Cantidad</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="text-muted small" id="previewInfo"></div>
+                </div>
+                <div class="progress mt-2" id="importProgress" style="display: none;">
+                    <div class="progress-bar" id="importProgressBar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div class="text-muted small mt-2" id="importStatus"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="nexo-btn nexo-btn-outline" onclick="previsualizarConteoPistola()">
+                    <i class="bi bi-search me-1"></i> Previsualizar
+                </button>
+                <button type="button" class="nexo-btn nexo-btn-primary" onclick="importarConteoPistola()">
+                    <i class="bi bi-upload me-1"></i> Importar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- jQuery (required for this page scripts) -->
+<script src="{% static 'js/jquery-3.5.1.min.js' %}"></script>
 
 <script>
 // === VARIABLES GLOBALES ===
@@ -567,8 +632,9 @@ function cargarProductos(page = 1) {
                     estadoHtml = '<span class="badge bg-secondary">Pendiente</span>';
                 }
                 
+                const excluidoClass = p.excluido ? 'row-excluido' : '';
                 tbody.append(`
-                    <tr class="${rowClass}" data-id="${p.id}">
+                    <tr class="${rowClass} ${excluidoClass}" data-id="${p.id}">
                         <td><code>${p.sku}</code></td>
                         <td><strong>${p.producto_nombre}</strong></td>
                         <td>${p.talla_nombre || '-'}</td>
@@ -585,7 +651,7 @@ function cargarProductos(page = 1) {
                                    onchange="registrarConteo(this)">
                         </td>
                         <td class="text-center">${diferenciaHtml}</td>
-                        <td class="text-center">${estadoHtml}</td>
+                        <td class="text-center">${p.excluido ? '<span class="badge bg-dark">Excluido</span>' : estadoHtml}</td>
                         <td>
                             <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
@@ -595,6 +661,9 @@ function cargarProductos(page = 1) {
                                     <i class="bi bi-arrow-repeat"></i>
                                 </button>
                             ` : ''}
+                            <button class="nexo-btn nexo-btn-sm ${p.excluido ? 'nexo-btn-outline' : 'nexo-btn-warning'}" onclick="toggleExclusion(${p.id}, ${p.excluido})" title="${p.excluido ? 'Incluir' : 'Excluir'}">
+                                <i class="bi bi-slash-circle"></i>
+                            </button>
                         </td>
                     </tr>
                 `);
@@ -806,8 +875,177 @@ function verDetalleProducto(detalleId) {
     });
 }
 
+function toggleExclusion(detalleId, estaExcluido) {
+    const nuevoEstado = !estaExcluido;
+    $.ajax({
+        url: `/app/gestion-inventarios/api/excluir-detalle/${inventarioId}/${detalleId}/`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ excluir: nuevoEstado }),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(response) {
+            if (response.success) {
+                cargarProductos(currentPage);
+            } else {
+                Swal.fire('Error', response.error, 'error');
+            }
+        },
+        error: function() {
+            Swal.fire('Error', 'No se pudo actualizar el estado', 'error');
+        }
+    });
+}
+
 function exportarInventario() {
     window.open(`/app/gestion-inventarios/api/exportar/${inventarioId}/`, '_blank');
+}
+
+function exportarDiferencias() {
+    window.open(`/app/gestion-inventarios/api/exportar-diferencias/${inventarioId}/`, '_blank');
+}
+
+function abrirModalImportarConteo() {
+    $('#archivoConteo').val('');
+    $('#nombreHojaConteo').val('');
+    $('#previewSection').hide();
+    $('#previewBody').empty();
+    $('#previewInfo').text('');
+    $('#importStatus').text('');
+    $('#importProgress').hide();
+    $('#importProgressBar').css('width', '0%');
+    new bootstrap.Modal(document.getElementById('modalImportarConteo')).show();
+}
+
+function previsualizarConteoPistola() {
+    const archivo = document.getElementById('archivoConteo').files[0];
+    const nombreHoja = document.getElementById('nombreHojaConteo').value.trim();
+    if (!archivo) {
+        Swal.fire('Error', 'Selecciona un archivo', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    if (nombreHoja) {
+        formData.append('nombre_hoja', nombreHoja);
+    }
+
+    $('#importStatus').text('Generando preview...');
+    $('#importProgress').show();
+    $('#importProgressBar').css('width', '0%');
+
+    $.ajax({
+        url: `/app/gestion-inventarios/api/importar-conteo/preview/${inventarioId}/`,
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        xhr: function() {
+            const xhr = $.ajaxSettings.xhr();
+            if (xhr.upload) {
+                xhr.upload.addEventListener('progress', function(evt) {
+                    if (evt.lengthComputable) {
+                        const percent = Math.round((evt.loaded / evt.total) * 100);
+                        $('#importProgressBar').css('width', `${percent}%`);
+                    }
+                }, false);
+            }
+            return xhr;
+        },
+        success: function(response) {
+            if (!response.success) {
+                Swal.fire('Error', response.error, 'error');
+                return;
+            }
+
+            const tbody = $('#previewBody');
+            tbody.empty();
+            response.preview.forEach(row => {
+                const estado = row.valido ? 'OK' : 'Error';
+                const badgeClass = row.valido ? 'bg-success' : 'bg-danger';
+                tbody.append(`
+                    <tr>
+                        <td><code>${row.sku}</code></td>
+                        <td>${row.cantidad}</td>
+                        <td><span class="badge ${badgeClass}">${estado}</span></td>
+                    </tr>
+                `);
+            });
+
+            $('#previewInfo').text(`Total filas: ${response.total_filas}`);
+            $('#previewSection').show();
+            $('#importStatus').text('Preview listo.');
+        },
+        error: function() {
+            Swal.fire('Error', 'No se pudo generar el preview', 'error');
+        },
+        complete: function() {
+            $('#importProgress').hide();
+        }
+    });
+}
+
+function importarConteoPistola() {
+    const archivo = document.getElementById('archivoConteo').files[0];
+    const nombreHoja = document.getElementById('nombreHojaConteo').value.trim();
+    if (!archivo) {
+        Swal.fire('Error', 'Selecciona un archivo', 'warning');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    if (nombreHoja) {
+        formData.append('nombre_hoja', nombreHoja);
+    }
+
+    $('#importStatus').text('Subiendo archivo...');
+    $('#importProgress').show();
+    $('#importProgressBar').css('width', '0%');
+
+    $.ajax({
+        url: `/app/gestion-inventarios/api/importar-conteo/${inventarioId}/`,
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        xhr: function() {
+            const xhr = $.ajaxSettings.xhr();
+            if (xhr.upload) {
+                xhr.upload.addEventListener('progress', function(evt) {
+                    if (evt.lengthComputable) {
+                        const percent = Math.round((evt.loaded / evt.total) * 100);
+                        $('#importProgressBar').css('width', `${percent}%`);
+                    }
+                }, false);
+            }
+            return xhr;
+        },
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(response) {
+            if (response.success) {
+                const noEncontrados = response.no_encontrados?.length || 0;
+                $('#importStatus').text('Procesando datos... ok');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Conteo Importado',
+                    html: `<p>Actualizados: <strong>${response.actualizados}</strong></p>
+                           <p>No encontrados: <strong>${noEncontrados}</strong></p>`
+                });
+                bootstrap.Modal.getInstance(document.getElementById('modalImportarConteo'))?.hide();
+                cargarProductos(currentPage);
+            } else {
+                Swal.fire('Error', response.error, 'error');
+            }
+        },
+        error: function() {
+            Swal.fire('Error', 'No se pudo importar el conteo', 'error');
+        },
+        complete: function() {
+            $('#importProgress').hide();
+        }
+    });
 }
 
 // === UTILIDADES ===
@@ -837,6 +1075,11 @@ function limpiarFiltros() {
 
 $(document).ready(function() {
     cargarProductos();
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('importar') === '1') {
+        setTimeout(() => abrirModalImportarConteo(), 300);
+    }
     
     // Filtros
     $('#filtroSearch').on('input', debounce(function() {
@@ -888,3 +1131,5 @@ function debounce(func, wait) {
     };
 }
 </script>
+
+{% include '../../layout/footer.html' %}

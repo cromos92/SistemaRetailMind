@@ -3050,6 +3050,24 @@ def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsabl
     if not sucursal_destino:
         sucursal_destino = producto_talla.producto.sucursal
     
+    # Si no hay movimientos previos, crear saldo inicial con el stock legacy
+    if not producto_talla.movimientos_productos_talla.exists() and producto_talla.stock > 0:
+        Movimientos_Producto.objects.create(
+            ProductoTalla=producto_talla,
+            dte=None,
+            ticket=None,
+            sucursal_origen=sucursal_origen,
+            sucursal_destino=sucursal_destino,
+            cantidad=producto_talla.stock,
+            costo=producto_talla.producto.costo,
+            sobreprecio=producto_talla.producto.sobreprecio,
+            precio=producto_talla.producto.precioventa,
+            concepto='INGRESO_INICIAL',
+            responsable='Sistema',
+            observaciones='Saldo inicial legacy',
+            referencia_externa='SALDO_INICIAL'
+        )
+
     # Crear el movimiento
     movimiento = Movimientos_Producto.objects.create(
         ProductoTalla=producto_talla,
@@ -3619,6 +3637,120 @@ def crear_ajuste_inventario(request):
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def ajuste_stock_rapido(request):
+    """
+    Ajuste rápido de stock por SKU y concepto.
+    Útil para corregir stock cuando hay stock físico pero no en sistema.
+    """
+    from .models import Producto_Talla, CONCEPTO_MOVIMIENTO_CHOICES
+
+    conceptos_permitidos = [
+        'INGRESO_INICIAL',
+        'DEVOLUCION_CLIENTE',
+        'DEVOLUCION_PROVEEDOR',
+        'REGULARIZACION_TRASPASO',
+        'AJUSTE_POSITIVO',
+        'AJUSTE_NEGATIVO',
+        'PERDIDA_ROBO',
+        'PERDIDA_DETERIORO',
+        'DONACION_RECIBIDA',
+        'DONACION_ENTREGADA',
+        'CAMBIO_PRODUCTO_ENTRADA',
+        'CAMBIO_PRODUCTO_SALIDA',
+    ]
+    conceptos_egreso = {
+        'AJUSTE_NEGATIVO',
+        'PERDIDA_ROBO',
+        'PERDIDA_DETERIORO',
+        'DONACION_ENTREGADA',
+        'DEVOLUCION_PROVEEDOR',
+        'CAMBIO_PRODUCTO_SALIDA',
+    }
+
+    if request.method == "GET":
+        conceptos_form = [c for c in CONCEPTO_MOVIMIENTO_CHOICES if c[0] in conceptos_permitidos]
+        return render(request, 'vistas/modulo_existencias/ajuste_stock_rapido.html', {
+            'conceptos': conceptos_form
+        })
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        data = request.POST
+
+    sku_raw = str(data.get('sku', '')).strip()
+    concepto = str(data.get('concepto', '')).strip()
+    observaciones = str(data.get('observaciones', '')).strip()
+
+    try:
+        cantidad = int(data.get('cantidad', 0))
+    except (TypeError, ValueError):
+        cantidad = 0
+
+    if not sku_raw:
+        return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU'}, status=400)
+    if not concepto or concepto not in conceptos_permitidos:
+        return JsonResponse({'success': False, 'error': 'Seleccione un concepto válido'}, status=400)
+    if cantidad <= 0:
+        return JsonResponse({'success': False, 'error': 'La cantidad debe ser mayor a 0'}, status=400)
+    if observaciones is None:
+        observaciones = ''
+
+    try:
+        sku = int(sku_raw)
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'SKU inválido'}, status=400)
+
+    sucursal_id = request.session.get('idSucursalActual')
+    if sucursal_id:
+        producto_talla = Producto_Talla.objects.select_related('producto', 'producto__sucursal').filter(
+            sku=sku,
+            producto__sucursal_id=sucursal_id
+        ).first()
+        if not producto_talla:
+            return JsonResponse({'success': False, 'error': f'No se encontró SKU {sku} en la sucursal actual'}, status=404)
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+    else:
+        producto_talla = Producto_Talla.objects.select_related('producto', 'producto__sucursal').filter(sku=sku).first()
+        if not producto_talla:
+            return JsonResponse({'success': False, 'error': f'No se encontró SKU {sku}'}, status=404)
+        sucursal = producto_talla.producto.sucursal
+
+    es_egreso = concepto in conceptos_egreso
+    cantidad_mov = -cantidad if es_egreso else cantidad
+
+    if es_egreso:
+        stock_disponible = producto_talla.stock_sucursal(sucursal.id)
+        if stock_disponible < cantidad:
+            return JsonResponse({
+                'success': False,
+                'error': f'Stock insuficiente. Disponible: {stock_disponible}'
+            }, status=400)
+
+    responsable = request.user.get_full_name() or request.user.username
+    movimiento = registrar_movimiento_producto(
+        producto_talla=producto_talla,
+        concepto=concepto,
+        cantidad=cantidad_mov,
+        responsable=responsable,
+        sucursal_origen=sucursal,
+        sucursal_destino=sucursal,
+        observaciones=observaciones,
+        referencia_externa='AJUSTE_STOCK_RAPIDO'
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Ajuste registrado correctamente',
+        'movimiento_id': movimiento.id,
+        'sku': producto_talla.sku,
+        'producto': producto_talla.producto.articulo,
+        'nuevo_stock': producto_talla.stock_sucursal(sucursal.id)
+    })
 
 # ========== VISTAS MEJORADAS PARA MOVIMIENTOS ==========
 

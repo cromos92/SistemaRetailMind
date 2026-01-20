@@ -1,0 +1,196 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+<style>
+    .ajuste-card {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 12px 28px rgba(26, 26, 46, 0.12);
+    }
+    .ajuste-header {
+        background: linear-gradient(135deg, #1A1A2E 0%, #2a2a4e 100%);
+        color: #fff;
+        padding: 1.2rem 1.5rem;
+    }
+    .ajuste-header h5 {
+        margin: 0;
+        font-weight: 600;
+    }
+    .ajuste-actions .btn {
+        min-height: 44px;
+    }
+    .tipo-ajuste {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .tipo-ajuste .form-check {
+        background: #f5f5f7;
+        border-radius: 12px;
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    @media (max-width: 768px) {
+        .page-title-box {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        .ajuste-header {
+            padding: 1rem;
+        }
+        .ajuste-actions {
+            flex-direction: column;
+            width: 100%;
+        }
+        .ajuste-actions .btn,
+        .ajuste-actions a {
+            width: 100%;
+        }
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Ajuste de Stock Rápido</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
+                            <li class="breadcrumb-item active">Ajuste Stock</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-xl-8 col-lg-10">
+                <div class="card ajuste-card">
+                    <div class="ajuste-header">
+                        <h5 class="card-title mb-0">
+                            <i class="ri-stock-line me-2"></i>Registrar Ajuste
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="form-ajuste-stock">
+                            {% csrf_token %}
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="sku" class="form-label">SKU <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="sku" name="sku"
+                                           placeholder="Ingrese el SKU" required>
+                                    <div class="form-text">SKU exacto del producto.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="cantidad" name="cantidad"
+                                           min="1" step="1" required>
+                                    <div class="form-text">Ingrese cantidad positiva.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Tipo de ajuste <span class="text-danger">*</span></label>
+                                    <div class="tipo-ajuste">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="tipo_ajuste" id="ajusteSumar" value="sumar" checked>
+                                            <label class="form-check-label" for="ajusteSumar">Sumar stock</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="tipo_ajuste" id="ajusteRestar" value="restar">
+                                            <label class="form-check-label" for="ajusteRestar">Restar stock</label>
+                                        </div>
+                                    </div>
+                                    <div class="form-text">Define si es entrada o salida.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="concepto" class="form-label">Concepto <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="concepto" name="concepto" required>
+                                        <option value="">Seleccione...</option>
+                                        {% for concepto in conceptos %}
+                                        <option value="{{ concepto.0 }}">{{ concepto.1 }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">Define si es entrada o salida.</div>
+                                </div>
+                                <div class="col-12">
+                                    <label for="observaciones" class="form-label">Observaciones</label>
+                                    <textarea class="form-control" id="observaciones" name="observaciones" rows="3"
+                                              placeholder="Motivo del ajuste (opcional)"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 d-flex gap-2 ajuste-actions">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="ri-check-line me-1"></i> Registrar ajuste
+                                </button>
+                                <a href="{% url 'verHome' %}" class="btn btn-soft-secondary">
+                                    <i class="ri-arrow-left-line me-1"></i> Volver
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+        <div class="alert alert-info mt-3">
+                    <i class="ri-information-line me-1"></i>
+                    Usa este ajuste cuando el stock físico no coincida con el sistema.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('form-ajuste-stock').addEventListener('submit', function (event) {
+    event.preventDefault();
+    const csrfToken = document.querySelector('#form-ajuste-stock [name=csrfmiddlewaretoken]').value;
+
+    const tipoAjuste = document.querySelector('input[name="tipo_ajuste"]:checked')?.value || 'sumar';
+    let cantidad = parseInt(document.getElementById('cantidad').value, 10);
+    if (tipoAjuste === 'restar') {
+        cantidad = -Math.abs(cantidad);
+    }
+
+    const payload = {
+        sku: document.getElementById('sku').value.trim(),
+        cantidad: cantidad,
+        concepto: document.getElementById('concepto').value,
+        observaciones: document.getElementById('observaciones').value.trim()
+    };
+
+    fetch("{% url 'ajuste_stock_rapido' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json().then(data => ({ ok: response.ok, data })))
+    .then(({ ok, data }) => {
+        if (!ok || !data.success) {
+            const msg = data.error || 'No se pudo registrar el ajuste';
+            Swal.fire('Error', msg, 'error');
+            return;
+        }
+        Swal.fire(
+            'Ajuste registrado',
+            `SKU ${data.sku} - ${data.producto}. Nuevo stock: ${data.nuevo_stock}`,
+            'success'
+        );
+        document.getElementById('form-ajuste-stock').reset();
+    })
+    .catch(() => {
+        Swal.fire('Error', 'Error de conexión', 'error');
+    });
+});
+</script>
+
+{% include '../../layout/footer.html' %}

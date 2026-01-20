@@ -20,13 +20,15 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
-from django.db.models import Sum, F, Q, Count, Case, When, Prefetch, Value, CharField
+from django.db.models import Sum, F, Q, Count, Case, When, Prefetch, Value, CharField, DecimalField, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.db import transaction, connection
 from django.core.exceptions import ValidationError
 from decimal import Decimal
+import csv
+import io
 import json
 import logging
 
@@ -365,44 +367,148 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
             elif attr_id == 'genero':
                 queryset = queryset.filter(producto__atributo3_id__in=opciones)
     
-    # Obtener productos y calcular stock
+    # Procesar productos en lotes para reducir consultas N+1
     detalles = []
-    
-    for pt in queryset.iterator(chunk_size=BATCH_SIZE):
-        # Calcular stock del sistema en la fecha de corte
-        stock_sistema = _calcular_stock_fecha_corte(pt, inventario.fecha_corte, sucursal_id)
-        
-        # Calcular costo promedio FIFO
-        costo_promedio = _calcular_costo_promedio_fifo(pt)
-        
-        # Obtener nombres desnormalizados
-        marca_nombre = pt.producto.atributo1.valor if pt.producto.atributo1 else ''
-        categoria_nombre = pt.producto.categoria.nombre if pt.producto.categoria else ''
-        
-        detalle = TomaInventarioDetalle(
-            toma_inventario=inventario,
-            producto_talla=pt,
-            sku=str(pt.sku),
-            producto_nombre=pt.producto.articulo,
-            talla_nombre=pt.talla if pt.talla else '',
-            marca_nombre=marca_nombre,
-            categoria_nombre=categoria_nombre,
-            stock_sistema=stock_sistema,
-            costo_unitario_sistema=costo_promedio,
-            precio_venta_sistema=Decimal(pt.producto.precioventa or 0)
-        )
-        detalles.append(detalle)
-        
-        # Insertar en lotes para optimizar
+    batch = []
+
+    def _procesar_batch(batch_items):
+        if not batch_items:
+            return
+
+        ids = [pt.id for pt in batch_items]
+        stock_map = _obtener_stock_batch(ids, inventario.fecha_corte, sucursal_id)
+        costo_map = _obtener_costo_promedio_batch(ids)
+
+        for pt in batch_items:
+            # Calcular stock del sistema en la fecha de corte
+            stock_sistema = stock_map.get(pt.id)
+            if stock_sistema is None:
+                stock_sistema = pt.stock or 0
+
+            # Calcular costo promedio FIFO
+            costo_promedio = costo_map.get(pt.id)
+            if costo_promedio is None:
+                costo_promedio = Decimal(pt.producto.costo or 0)
+
+            # Obtener nombres desnormalizados
+            marca_nombre = pt.producto.atributo1.valor if pt.producto.atributo1 else ''
+            categoria_nombre = pt.producto.categoria.nombre if pt.producto.categoria else ''
+
+            detalles.append(TomaInventarioDetalle(
+                toma_inventario=inventario,
+                producto_talla=pt,
+                sku=str(pt.sku),
+                producto_nombre=pt.producto.articulo,
+                talla_nombre=pt.talla if pt.talla else '',
+                marca_nombre=marca_nombre,
+                categoria_nombre=categoria_nombre,
+                stock_sistema=stock_sistema,
+                stock_movimientos_post_corte=0,
+                stock_sistema_ajustado=stock_sistema,
+                costo_unitario_sistema=costo_promedio,
+                precio_venta_sistema=Decimal(pt.producto.precioventa or 0)
+            ))
+
         if len(detalles) >= BATCH_SIZE:
             TomaInventarioDetalle.objects.bulk_create(detalles, ignore_conflicts=True)
-            detalles = []
-    
-    # Insertar detalles restantes
+            detalles.clear()
+
+    for pt in queryset.iterator(chunk_size=BATCH_SIZE):
+        batch.append(pt)
+        if len(batch) >= BATCH_SIZE:
+            _procesar_batch(batch)
+            batch = []
+
+    if batch:
+        _procesar_batch(batch)
+
     if detalles:
         TomaInventarioDetalle.objects.bulk_create(detalles, ignore_conflicts=True)
-    
+
     return inventario.detalles.count()
+
+
+def _obtener_stock_batch(producto_talla_ids, fecha_corte, sucursal_id):
+    """
+    Calcula stock por lote de productos en una fecha específica.
+    Evita N+1 consultando movimientos agregados.
+    """
+    movimientos = Movimientos_Producto.objects.filter(
+        ProductoTalla_id__in=producto_talla_ids,
+        fecha__lte=fecha_corte.date()
+    ).filter(
+        Q(sucursal_destino_id=sucursal_id) | Q(sucursal_origen_id=sucursal_id)
+    ).values('ProductoTalla_id').annotate(
+        total_cantidad=Coalesce(Sum('cantidad'), 0),
+        total_movimientos=Count('id')
+    )
+
+    stock_map = {}
+    for mov in movimientos:
+        if mov['total_movimientos'] > 0:
+            stock_map[mov['ProductoTalla_id']] = mov['total_cantidad']
+
+    return stock_map
+
+
+def _obtener_costo_promedio_batch(producto_talla_ids):
+    """
+    Calcula costo promedio ponderado FIFO por lote de productos.
+    Evita N+1 consultando lotes agregados.
+    """
+    lotes = LoteProducto.objects.filter(
+        producto_talla_id__in=producto_talla_ids,
+        cantidad_disponible__gt=0,
+        activo=True
+    ).values('producto_talla_id').annotate(
+        total_valor=Coalesce(
+            Sum(ExpressionWrapper(
+                F('cantidad_disponible') * F('costo_unitario'),
+                output_field=DecimalField(max_digits=18, decimal_places=6)
+            )),
+            Value(0),
+            output_field=DecimalField(max_digits=18, decimal_places=6)
+        ),
+        total_cantidad=Coalesce(Sum('cantidad_disponible'), 0)
+    )
+
+    costo_map = {}
+    for lote in lotes:
+        if lote['total_cantidad'] > 0:
+            costo_map[lote['producto_talla_id']] = lote['total_valor'] / lote['total_cantidad']
+
+    return costo_map
+
+
+def _obtener_movimientos_post_corte_batch(producto_talla_ids, fecha_corte, fecha_conteo, sucursal_id):
+    """
+    Obtiene la suma neta de movimientos entre fecha de corte y fecha de conteo.
+    Considera sucursal origen/destino y respeta fecha/hora.
+    """
+    fecha_corte_date = fecha_corte.date()
+    fecha_corte_time = fecha_corte.time()
+    fecha_conteo_date = fecha_conteo.date()
+    fecha_conteo_time = fecha_conteo.time()
+
+    movimientos = Movimientos_Producto.objects.filter(
+        ProductoTalla_id__in=producto_talla_ids
+    ).filter(
+        Q(sucursal_destino_id=sucursal_id) | Q(sucursal_origen_id=sucursal_id)
+    ).filter(
+        Q(fecha__gt=fecha_corte_date) |
+        Q(fecha=fecha_corte_date, hora__gt=fecha_corte_time)
+    ).filter(
+        Q(fecha__lt=fecha_conteo_date) |
+        Q(fecha=fecha_conteo_date, hora__lte=fecha_conteo_time)
+    ).values('ProductoTalla_id').annotate(
+        total_cantidad=Coalesce(Sum('cantidad'), 0)
+    )
+
+    movimientos_map = {}
+    for mov in movimientos:
+        movimientos_map[mov['ProductoTalla_id']] = mov['total_cantidad']
+
+    return movimientos_map
 
 
 def _calcular_stock_fecha_corte(producto_talla, fecha_corte, sucursal_id):
@@ -531,11 +637,14 @@ def obtener_productos_conteo(request, inventario_id):
                 'marca_nombre': det.marca_nombre,
                 'categoria_nombre': det.categoria_nombre,
                 'stock_sistema': det.stock_sistema,
+                'stock_movimientos_post_corte': det.stock_movimientos_post_corte,
+                'stock_sistema_ajustado': det.stock_sistema_ajustado,
                 'stock_fisico': det.stock_fisico,
                 'diferencia': det.diferencia,
                 'porcentaje_diferencia': round(det.porcentaje_diferencia, 2),
                 'valor_diferencia': float(det.valor_diferencia),
                 'contado': det.contado,
+                'excluido': det.excluir_de_analisis,
                 'fecha_conteo': det.fecha_conteo.strftime('%d/%m/%Y %H:%M') if det.fecha_conteo else None,
                 'reconteo_requerido': det.reconteo_requerido,
                 'stock_reconteo': det.stock_reconteo,
@@ -595,29 +704,43 @@ def registrar_conteo(request, inventario_id):
         # Procesar conteos
         conteos_realizados = 0
         errores = []
-        
-        for conteo in conteos:
-            detalle_id = conteo.get('detalle_id')
+        fecha_conteo = timezone.now()
+
+        conteos_map = {
+            c.get('detalle_id'): c for c in conteos if c.get('detalle_id') is not None
+        }
+        detalle_ids = list(conteos_map.keys())
+        detalles = inventario.detalles.filter(id__in=detalle_ids).select_related('producto_talla')
+
+        producto_talla_ids = [d.producto_talla_id for d in detalles]
+        movimientos_map = _obtener_movimientos_post_corte_batch(
+            producto_talla_ids, inventario.fecha_corte, fecha_conteo, inventario.sucursal_id
+        )
+
+        detalles_por_id = {d.id: d for d in detalles}
+
+        for detalle_id, conteo in conteos_map.items():
+            detalle = detalles_por_id.get(detalle_id)
+            if not detalle:
+                errores.append(f"Detalle {detalle_id} no encontrado")
+                continue
+
             stock_fisico = conteo.get('stock_fisico')
             ubicacion = conteo.get('ubicacion', '')
             observaciones = conteo.get('observaciones', '')
-            
+
             try:
-                detalle = inventario.detalles.get(id=detalle_id)
-                
-                # Actualizar detalle
+                movimientos_post_corte = movimientos_map.get(detalle.producto_talla_id, 0)
+                detalle.stock_movimientos_post_corte = movimientos_post_corte
+                detalle.stock_sistema_ajustado = detalle.stock_sistema + movimientos_post_corte
                 detalle.stock_fisico = int(stock_fisico)
                 detalle.contado = True
-                detalle.fecha_conteo = timezone.now()
+                detalle.fecha_conteo = fecha_conteo
                 detalle.usuario_conteo = request.user
                 detalle.ubicacion = ubicacion
                 detalle.observaciones = observaciones
                 detalle.save()  # El save() calcula diferencia automáticamente
-                
                 conteos_realizados += 1
-                
-            except TomaInventarioDetalle.DoesNotExist:
-                errores.append(f"Detalle {detalle_id} no encontrado")
             except Exception as e:
                 errores.append(f"Error en detalle {detalle_id}: {str(e)}")
         
@@ -646,6 +769,268 @@ def registrar_conteo(request, inventario_id):
     except Exception as e:
         logger.error(f"Error al registrar conteo: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+def _leer_archivo_conteo(archivo, nombre_hoja='', max_rows=None, read_only=False):
+    filas = []
+    total_leidas = 0
+
+    if archivo.name.lower().endswith('.xlsx'):
+        try:
+            import openpyxl
+        except ImportError:
+            return None, 'openpyxl no está instalado'
+
+        wb = openpyxl.load_workbook(archivo, data_only=True, read_only=read_only)
+        hoja = wb.active
+        if nombre_hoja:
+            if nombre_hoja not in wb.sheetnames:
+                return None, f'No existe la hoja "{nombre_hoja}"'
+            hoja = wb[nombre_hoja]
+
+        for row in hoja.iter_rows(values_only=True):
+            fila = [str(c).strip() if c is not None else '' for c in row]
+            if any(fila):
+                filas.append(fila)
+                total_leidas += 1
+                if max_rows and total_leidas >= max_rows:
+                    break
+    else:
+        sample = archivo.read(4096)
+        archivo.seek(0)
+        try:
+            sample_text = sample.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            sample_text = sample.decode('latin-1', errors='replace')
+
+        if not sample_text.strip():
+            return None, 'El archivo está vacío'
+
+        try:
+            dialect = csv.Sniffer().sniff(sample_text, delimiters=";,|\t,")
+        except csv.Error:
+            dialect = csv.excel
+
+        text_stream = io.TextIOWrapper(archivo, encoding='utf-8-sig', errors='replace')
+        reader = csv.reader(text_stream, dialect)
+        for fila in reader:
+            if any(c.strip() for c in fila):
+                filas.append(fila)
+                total_leidas += 1
+                if max_rows and total_leidas >= max_rows:
+                    break
+
+    if not filas:
+        return None, 'No se encontraron filas válidas'
+
+    return filas, None
+
+
+def _detectar_indices_conteo(filas):
+    encabezado = [str(c).strip().lower() for c in filas[0]]
+    tiene_encabezado = any('sku' in c or 'codigo' in c or 'cantidad' in c or 'stock' in c for c in encabezado)
+
+    sku_idx = 0
+    cantidad_idx = 1
+    if tiene_encabezado:
+        mapa = {c: i for i, c in enumerate(encabezado)}
+        for key in ['sku', 'codigo', 'codigo_barra', 'codigo_barras', 'barra', 'barcode']:
+            if key in mapa:
+                sku_idx = mapa[key]
+                break
+        for key in ['cantidad', 'conteo', 'stock', 'stock_fisico', 'cant', 'qty']:
+            if key in mapa:
+                cantidad_idx = mapa[key]
+                break
+
+    return sku_idx, cantidad_idx, tiene_encabezado
+
+
+def _extraer_preview_conteo(filas, sku_idx, cantidad_idx, limite=20):
+    preview = []
+    errores = []
+
+    for fila in filas:
+        if len(preview) >= limite:
+            break
+        if len(fila) <= max(sku_idx, cantidad_idx):
+            continue
+        sku = str(fila[sku_idx]).strip()
+        cantidad_raw = str(fila[cantidad_idx]).strip()
+        if not sku:
+            continue
+        try:
+            cantidad = int(float(cantidad_raw.replace(',', '.')))
+            preview.append({'sku': sku, 'cantidad': cantidad, 'valido': True})
+        except ValueError:
+            preview.append({'sku': sku, 'cantidad': cantidad_raw, 'valido': False})
+            errores.append(f"Cantidad inválida para SKU {sku}: {cantidad_raw}")
+
+    return preview, errores
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def importar_conteo_pistola(request, inventario_id):
+    """
+    Importa conteos desde archivo de pistola (CSV/TXT/XLSX).
+    Formato esperado: sku,cantidad (con o sin encabezados).
+    """
+    inventario = get_object_or_404(TomaInventario, id=inventario_id)
+
+    archivo = request.FILES.get('archivo')
+    if not archivo:
+        return JsonResponse({'success': False, 'error': 'Debe adjuntar un archivo'})
+
+    try:
+        # Actualizar estado si es el primer conteo
+        if inventario.estado == 'BORRADOR':
+            inventario.estado = 'EN_CONTEO'
+            inventario.fecha_inicio_conteo = inventario.fecha_inicio_conteo or timezone.now()
+            inventario.save()
+
+        nombre_hoja = request.POST.get('nombre_hoja', '').strip()
+
+        filas, error = _leer_archivo_conteo(archivo, nombre_hoja)
+        if error:
+            return JsonResponse({'success': False, 'error': error})
+
+        sku_idx, cantidad_idx, tiene_encabezado = _detectar_indices_conteo(filas)
+        if tiene_encabezado:
+            filas = filas[1:]
+
+        conteos_por_sku = {}
+        errores = []
+        for fila in filas:
+            if len(fila) <= max(sku_idx, cantidad_idx):
+                continue
+            sku = str(fila[sku_idx]).strip()
+            cantidad_raw = str(fila[cantidad_idx]).strip()
+            if not sku:
+                continue
+            try:
+                cantidad = int(float(cantidad_raw.replace(',', '.')))
+            except ValueError:
+                errores.append(f"Cantidad inválida para SKU {sku}: {cantidad_raw}")
+                continue
+            conteos_por_sku[sku] = conteos_por_sku.get(sku, 0) + cantidad
+
+        if not conteos_por_sku:
+            return JsonResponse({'success': False, 'error': 'No se encontraron conteos válidos'})
+
+        detalles = inventario.detalles.filter(sku__in=conteos_por_sku.keys()).select_related('producto_talla')
+        detalles_por_sku = {d.sku: d for d in detalles}
+
+        fecha_conteo = timezone.now()
+        movimientos_map = _obtener_movimientos_post_corte_batch(
+            [d.producto_talla_id for d in detalles],
+            inventario.fecha_corte,
+            fecha_conteo,
+            inventario.sucursal_id
+        )
+
+        actualizados = 0
+        no_encontrados = []
+        for sku, cantidad in conteos_por_sku.items():
+            detalle = detalles_por_sku.get(sku)
+            if not detalle:
+                no_encontrados.append(sku)
+                continue
+
+            movimientos_post_corte = movimientos_map.get(detalle.producto_talla_id, 0)
+            detalle.stock_movimientos_post_corte = movimientos_post_corte
+            detalle.stock_sistema_ajustado = detalle.stock_sistema + movimientos_post_corte
+            detalle.stock_fisico = cantidad
+            detalle.contado = True
+            detalle.fecha_conteo = fecha_conteo
+            detalle.usuario_conteo = request.user
+            detalle.save()
+            actualizados += 1
+
+        inventario.calcular_metricas()
+
+        _registrar_log(
+            inventario=inventario,
+            tipo_accion='REGISTRO_CONTEO',
+            descripcion=f'Importación de pistola: {actualizados} productos actualizados',
+            usuario=request.user,
+            datos={'actualizados': actualizados, 'no_encontrados': no_encontrados, 'errores': errores}
+        )
+
+        return JsonResponse({
+            'success': True,
+            'actualizados': actualizados,
+            'no_encontrados': no_encontrados,
+            'errores': errores if errores else None,
+            'progreso': float(inventario.progreso_conteo)
+        })
+    except Exception as e:
+        logger.error(f"Error al importar conteo: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def actualizar_exclusion_detalle(request, inventario_id, detalle_id):
+    """
+    Marca un detalle como excluido/incluido del análisis.
+    """
+    inventario = get_object_or_404(TomaInventario, id=inventario_id)
+    try:
+        data = json.loads(request.body)
+        excluir = bool(data.get('excluir'))
+        detalle = inventario.detalles.get(id=detalle_id)
+        detalle.excluir_de_analisis = excluir
+        detalle.save()
+        inventario.calcular_metricas()
+
+        _registrar_log(
+            inventario=inventario,
+            tipo_accion='MODIFICACION',
+            descripcion=f'Detalle {detalle.sku} {"excluido" if excluir else "incluido"} del análisis',
+            usuario=request.user,
+            datos={'detalle_id': detalle_id, 'excluir': excluir}
+        )
+
+        return JsonResponse({
+            'success': True,
+            'excluido': detalle.excluir_de_analisis,
+            'progreso': float(inventario.progreso_conteo)
+        })
+    except TomaInventarioDetalle.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Detalle no encontrado'})
+    except Exception as e:
+        logger.error(f"Error al excluir detalle: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_POST
+@login_required
+def preview_conteo_pistola(request, inventario_id):
+    """
+    Previsualiza los primeros registros del archivo de conteo.
+    """
+    archivo = request.FILES.get('archivo')
+    if not archivo:
+        return JsonResponse({'success': False, 'error': 'Debe adjuntar un archivo'})
+
+    nombre_hoja = request.POST.get('nombre_hoja', '').strip()
+    filas, error = _leer_archivo_conteo(archivo, nombre_hoja, max_rows=101, read_only=True)
+    if error:
+        return JsonResponse({'success': False, 'error': error})
+
+    sku_idx, cantidad_idx, tiene_encabezado = _detectar_indices_conteo(filas)
+    filas_data = filas[1:] if tiene_encabezado else filas
+    preview, errores = _extraer_preview_conteo(filas_data, sku_idx, cantidad_idx, limite=100)
+
+    return JsonResponse({
+        'success': True,
+        'preview': preview,
+        'errores': errores[:10],
+        'total_filas': len(filas_data)
+    })
 
 
 @require_POST
@@ -685,7 +1070,8 @@ def registrar_reconteo(request, inventario_id):
                 # Si es diferente, usar el reconteo
                 if detalle.stock_reconteo != detalle.stock_fisico:
                     detalle.stock_fisico = detalle.stock_reconteo
-                    detalle.diferencia = detalle.stock_fisico - detalle.stock_sistema
+                    base_stock = detalle.stock_sistema_ajustado if detalle.stock_sistema_ajustado is not None else detalle.stock_sistema
+                    detalle.diferencia = detalle.stock_fisico - base_stock
                     if observaciones:
                         detalle.observaciones = f"{detalle.observaciones or ''}\nReconteo: {observaciones}".strip()
                 
@@ -733,8 +1119,8 @@ def obtener_analisis_inventario(request, inventario_id):
     try:
         inventario = get_object_or_404(TomaInventario, id=inventario_id)
         
-        # Obtener detalles contados
-        detalles = inventario.detalles.filter(contado=True)
+        # Obtener detalles contados (solo los considerados en análisis)
+        detalles = inventario.detalles.filter(contado=True, excluir_de_analisis=False)
         
         # === ANÁLISIS DE DIFERENCIAS ===
         diferencias_positivas = detalles.filter(diferencia__gt=0)
@@ -788,7 +1174,8 @@ def obtener_analisis_inventario(request, inventario_id):
         # === PRODUCTOS QUE REQUIEREN RECONTEO ===
         requieren_reconteo = inventario.detalles.filter(
             reconteo_requerido=True,
-            stock_reconteo__isnull=True
+            stock_reconteo__isnull=True,
+            excluir_de_analisis=False
         ).count()
         
         # === INDICADORES DE PRECISIÓN ===
@@ -838,6 +1225,7 @@ def obtener_analisis_inventario(request, inventario_id):
                 'total_esperados': inventario.total_productos_esperados,
                 'total_contados': inventario.total_productos_contados,
                 'progreso': float(inventario.progreso_conteo),
+                'excluidos': inventario.detalles.filter(excluir_de_analisis=True).count(),
                 'con_diferencia': diferencias_positivas.count() + diferencias_negativas.count(),
                 'sin_diferencia': sin_diferencia.count(),
                 'sobrantes': diferencias_positivas.count(),
@@ -932,9 +1320,9 @@ def exportar_inventario(request, inventario_id):
         
         headers = [
             'SKU', 'Producto', 'Talla', 'Marca', 'Categoría',
-            'Stock Sistema', 'Stock Físico', 'Diferencia', '% Diferencia',
+            'Stock Sistema', 'Mov. Post Corte', 'Stock Ajustado', 'Stock Físico', 'Diferencia', '% Diferencia',
             'Costo Unit.', 'Valor Diferencia', 'Contado', 'Reconteo Req.',
-            'Ubicación', 'Observaciones'
+            'Ubicación', 'Observaciones', 'Excluido'
         ]
         
         ws_detalle.append(headers)
@@ -955,6 +1343,8 @@ def exportar_inventario(request, inventario_id):
                 det.marca_nombre or '',
                 det.categoria_nombre or '',
                 det.stock_sistema,
+                det.stock_movimientos_post_corte,
+                det.stock_sistema_ajustado,
                 det.stock_fisico,
                 det.diferencia,
                 round(det.porcentaje_diferencia, 2),
@@ -963,7 +1353,8 @@ def exportar_inventario(request, inventario_id):
                 'Sí' if det.contado else 'No',
                 'Sí' if det.reconteo_requerido else 'No',
                 det.ubicacion or '',
-                det.observaciones or ''
+                det.observaciones or '',
+                'Sí' if det.excluir_de_analisis else 'No'
             ])
         
         # Ajustar anchos de columna
@@ -981,6 +1372,75 @@ def exportar_inventario(request, inventario_id):
         
     except Exception as e:
         logger.error(f"Error al exportar inventario: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_GET
+@login_required
+def exportar_diferencias_inventario(request, inventario_id):
+    """
+    Exporta solo productos con diferencias (excluidos fuera).
+    """
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+
+        inventario = get_object_or_404(TomaInventario, id=inventario_id)
+        detalles = inventario.detalles.filter(
+            contado=True,
+            excluir_de_analisis=False
+        ).exclude(diferencia=0).order_by('producto_nombre', 'talla_nombre')
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Diferencias"
+
+        headers = [
+            'SKU', 'Producto', 'Talla', 'Marca', 'Categoría',
+            'Stock Sistema', 'Mov. Post Corte', 'Stock Ajustado', 'Stock Físico', 'Diferencia', '% Diferencia',
+            'Costo Unit.', 'Valor Diferencia'
+        ]
+        ws.append(headers)
+
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="4A90D9", end_color="4A90D9", fill_type="solid")
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+
+        for det in detalles:
+            ws.append([
+                det.sku,
+                det.producto_nombre,
+                det.talla_nombre or '',
+                det.marca_nombre or '',
+                det.categoria_nombre or '',
+                det.stock_sistema,
+                det.stock_movimientos_post_corte,
+                det.stock_sistema_ajustado,
+                det.stock_fisico,
+                det.diferencia,
+                round(det.porcentaje_diferencia, 2),
+                float(det.costo_unitario_sistema),
+                float(det.valor_diferencia),
+            ])
+
+        for col_num in range(1, len(headers) + 1):
+            ws.column_dimensions[get_column_letter(col_num)].width = 16
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="inventario_{inventario.numero_inventario}_diferencias.xlsx"'
+
+        wb.save(response)
+        return response
+
+    except Exception as e:
+        logger.error(f"Error al exportar diferencias: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 

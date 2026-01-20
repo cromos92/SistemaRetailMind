@@ -36,6 +36,7 @@ from app.models import (
     Producto, Producto_Talla, Movimientos_Producto, Dte, Dte_Productos,
     Dte_Detalle_Pago, Vendedor
 )
+from app.management.commands.importar_creditos_personal import Command as ImportCreditosCommand
 
 
 logger = logging.getLogger(__name__)
@@ -217,6 +218,7 @@ class Command(BaseCommand):
             ('corregir_sucursales_dte', self.corregir_sucursales_dte),  # ✅ Corregir sucursales
             ('ventas_pagos', self.migrate_ventas_pagos),  # ✅ Pagos de DTEs para cuadratura
             ('asignar_vendedores_dte', self.asignar_vendedores_a_dtes),  # ✅ Vendedores a DTEs
+            ('creditos_personal', self.migrate_creditos_personal),
         ]
 
         if specific_tables:
@@ -270,6 +272,26 @@ class Command(BaseCommand):
             autocommit=True,
             get_warnings=False,
             use_pure=False,  # ⚡ Usa C extension (más rápido)
+        )
+
+    def migrate_creditos_personal(self):
+        """Migrar créditos desde creditos_personal usando el comando dedicado"""
+        self.stdout.write(self.style.SUCCESS('🔹 Importando créditos desde creditos_personal'))
+        cmd = ImportCreditosCommand()
+        cmd.stdout = self.stdout
+        cmd.stderr = self.stderr
+        cmd.style = self.style
+        cmd.handle(
+            table='creditos_personal',
+            dry_run=self.dry_run,
+            externo_en_creditos=True,
+            user_id=None,
+            empresa_id=None,
+            crear_vendedor=False,
+            actualizar=False,
+            solo_internos=False,
+            solo_externos=False,
+            limit=None
         )
 
     def preload_caches(self):

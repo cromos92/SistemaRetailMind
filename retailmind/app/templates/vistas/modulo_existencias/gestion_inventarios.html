@@ -494,9 +494,6 @@
             <h1 class="page-title">
                 <i class="bi bi-clipboard-check"></i> Gestión de Inventarios
             </h1>
-            <button class="nexo-btn nexo-btn-primary" onclick="abrirModalNuevoInventario()">
-                <i class="bi bi-plus-lg"></i> Nuevo Inventario
-            </button>
         </div>
         
         <!-- === KPI CARDS === -->
@@ -527,6 +524,9 @@
         <div class="nexo-card">
             <div class="nexo-card-header">
                 <h5><i class="bi bi-table"></i> Inventarios</h5>
+                <button class="nexo-btn nexo-btn-primary" onclick="abrirModalNuevoInventario()">
+                    <i class="bi bi-plus-lg"></i> Crear Inventario
+                </button>
             </div>
             <div class="nexo-card-body">
                 <!-- Filtros -->
@@ -720,7 +720,8 @@
     </div>
 </div>
 
-{% include '../../layout/footer.html' %}
+<!-- jQuery (required for this page scripts) -->
+<script src="{% static 'js/jquery-3.5.1.min.js' %}"></script>
 
 <!-- Select2 -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -798,7 +799,13 @@ function cargarInventarios(page = 1) {
                         <td>${diferenciasHtml}</td>
                         <td><small>${inv.creado_por}</small></td>
                         <td>
-                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="event.stopPropagation(); verAnalisis(${inv.id})" title="Ver análisis">
+                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="event.stopPropagation(); verDetalleInventario(${inv.id})" title="Ir al inventario">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                            </button>
+                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline ms-1" onclick="event.stopPropagation(); verDetalleInventario(${inv.id}, true)" title="Importar pistola">
+                                <i class="bi bi-upc-scan"></i>
+                            </button>
+                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline ms-1" onclick="event.stopPropagation(); verAnalisis(${inv.id})" title="Ver análisis">
                                 <i class="bi bi-graph-up"></i>
                             </button>
                             ${getAccionesRapidas(inv)}
@@ -1225,8 +1232,9 @@ function exportarInventario(inventarioId) {
     window.open(`/app/gestion-inventarios/api/exportar/${inventarioId}/`, '_blank');
 }
 
-function verDetalleInventario(inventarioId) {
-    window.location.href = `/app/gestion-inventarios/detalle/${inventarioId}/`;
+function verDetalleInventario(inventarioId, abrirImportacion = false) {
+    const suffix = abrirImportacion ? '?importar=1' : '';
+    window.location.href = `/app/gestion-inventarios/detalle/${inventarioId}/${suffix}`;
 }
 
 // === UTILIDADES ===
@@ -1258,6 +1266,7 @@ function limpiarFiltros() {
 // === EVENTOS ===
 
 $(document).ready(function() {
+    setDefaultMonthFilters();
     cargarInventarios();
     
     // Eventos de filtros
@@ -1283,6 +1292,22 @@ $(document).ready(function() {
     });
 });
 
+function setDefaultMonthFilters() {
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    const toDateInput = (date) => {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    };
+
+    $('#filtroFechaDesde').val(toDateInput(firstDay));
+    $('#filtroFechaHasta').val(toDateInput(lastDay));
+}
+
 function debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
@@ -1295,3 +1320,5 @@ function debounce(func, wait) {
     };
 }
 </script>
+
+{% include '../../layout/footer.html' %}
