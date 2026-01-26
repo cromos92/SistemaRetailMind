@@ -1526,12 +1526,35 @@
                             .then(response => response.json())
                             .then(data => {
                                 if (data.success) {
+                                    // 🔄 SINCRONIZACIÓN ENTRE PESTAÑAS
+                                    // Notificar a otras pestañas que cambió la sucursal
+                                    try {
+                                        localStorage.setItem('sucursal_cambio', JSON.stringify({
+                                            sucursal_id: data.sucursal.id,
+                                            sucursal_alias: data.sucursal.alias,
+                                            empresa_id: data.empresa.id,
+                                            empresa_nombre: data.empresa.nombre,
+                                            timestamp: Date.now(),
+                                            sesiones_cerradas: data.sesiones_cerradas || 0
+                                        }));
+                                    } catch (e) {
+                                        console.warn('No se pudo sincronizar con otras pestañas:', e);
+                                    }
+                                    
+                                    // Mostrar mensaje y recargar
+                                    let mensajeExtra = '';
+                                    if (data.sesiones_cerradas && data.sesiones_cerradas > 0) {
+                                        mensajeExtra = `<div style="color: #F59E0B; font-size: 0.85rem; margin-top: 8px;">
+                                            <i class="ri-information-line"></i> Se cerraron ${data.sesiones_cerradas} sesión(es) en otros dispositivos
+                                        </div>`;
+                                    }
+                                    
                                     if (typeof Swal !== 'undefined') {
                                         Swal.fire({
                                             icon: 'success',
                                             title: '¡Listo!',
-                                            html: `<div style="color: #4A4A5A;">Ahora estás en <strong style="color: #00D4AA;">${sucursalAlias}</strong></div>`,
-                                            timer: 1500,
+                                            html: `<div style="color: #4A4A5A;">Ahora estás en <strong style="color: #00D4AA;">${sucursalAlias}</strong></div>${mensajeExtra}`,
+                                            timer: data.sesiones_cerradas > 0 ? 2500 : 1500,
                                             showConfirmButton: false
                                         }).then(() => {
                                             window.location.reload();
@@ -1561,6 +1584,62 @@
                                     });
                                 }
                             });
+                        }
+                        
+                        // 🔄 LISTENER PARA SINCRONIZACIÓN ENTRE PESTAÑAS
+                        // Detecta cuando otra pestaña cambia de sucursal
+                        window.addEventListener('storage', function(e) {
+                            if (e.key === 'sucursal_cambio' && e.newValue) {
+                                try {
+                                    const cambio = JSON.parse(e.newValue);
+                                    
+                                    // Verificar que el cambio es reciente (últimos 2 segundos)
+                                    const tiempoTranscurrido = Date.now() - cambio.timestamp;
+                                    if (tiempoTranscurrido > 2000) {
+                                        return; // Ignorar cambios antiguos
+                                    }
+                                    
+                                    // Mostrar notificación y recargar
+                                    console.log('🔄 Cambio de sucursal detectado en otra pestaña:', cambio.sucursal_alias);
+                                    
+                                    if (typeof Swal !== 'undefined') {
+                                        Swal.fire({
+                                            icon: 'info',
+                                            title: 'Sucursal actualizada',
+                                            html: `<div style="color: #4A4A5A;">
+                                                Se cambió a <strong style="color: #00D4AA;">${cambio.sucursal_alias}</strong> desde otra pestaña
+                                            </div>`,
+                                            timer: 1500,
+                                            showConfirmButton: false,
+                                            willClose: () => {
+                                                window.location.reload();
+                                            }
+                                        });
+                                    } else {
+                                        // Sin SweetAlert, recargar directamente
+                                        window.location.reload();
+                                    }
+                                } catch (error) {
+                                    console.error('Error al procesar cambio de sucursal:', error);
+                                    // Si hay error, recargar de todas formas para estar seguro
+                                    window.location.reload();
+                                }
+                            }
+                        });
+                        
+                        // Limpiar eventos antiguos al cargar la página
+                        try {
+                            const ultimoCambio = localStorage.getItem('sucursal_cambio');
+                            if (ultimoCambio) {
+                                const cambio = JSON.parse(ultimoCambio);
+                                const tiempoTranscurrido = Date.now() - cambio.timestamp;
+                                // Si el cambio tiene más de 5 segundos, limpiarlo
+                                if (tiempoTranscurrido > 5000) {
+                                    localStorage.removeItem('sucursal_cambio');
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('Error al limpiar eventos antiguos:', e);
                         }
                         </script>
                         

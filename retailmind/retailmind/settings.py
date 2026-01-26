@@ -223,20 +223,34 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'verHome'
 LOGOUT_REDIRECT_URL = 'login'
 
-# ========== CONFIGURACIÓN DE EMAIL - MAILERSEND ==========
+# ========== CONFIGURACIÓN DE EMAIL ==========
+# Ahora usa variables de entorno para mayor seguridad
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.mailersend.net'  # ⭐ Directo, sin variables de entorno
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'MS_hBDdVA@test-zkq340eke90gd796.mlsender.net'
-EMAIL_HOST_PASSWORD = 'mssp.6Ju4Glc.7dnvo4do7m6g5r86.ioWUg6N'
-DEFAULT_FROM_EMAIL = 'MS_hBDdVA@test-zkq340eke90gd796.mlsender.net'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
-# ===== ALTERNATIVA: GMAIL SMTP =====
-# Si prefieres Gmail, cambia a:
-# EMAIL_HOST = 'smtp.gmail.com'
-# EMAIL_HOST_USER = 'tu-email@gmail.com'
-# EMAIL_HOST_PASSWORD = 'tu-app-password'
+# ===== INSTRUCCIONES =====
+# Configura estas variables de entorno en tu servidor de producción:
+#
+# OPCIÓN 1 - MailerSend:
+#   EMAIL_HOST=smtp.mailersend.net
+#   EMAIL_PORT=587
+#   EMAIL_USE_TLS=True
+#   EMAIL_HOST_USER=MS_xxx@trial-xxx.mlsender.net
+#   EMAIL_HOST_PASSWORD=tu_token_mailersend
+#   DEFAULT_FROM_EMAIL=MS_xxx@trial-xxx.mlsender.net
+#
+# OPCIÓN 2 - Gmail (Recomendado):
+#   EMAIL_HOST=smtp.gmail.com
+#   EMAIL_PORT=587
+#   EMAIL_USE_TLS=True
+#   EMAIL_HOST_USER=tu-email@gmail.com
+#   EMAIL_HOST_PASSWORD=xxxx-xxxx-xxxx-xxxx  # App Password de Gmail
+#   DEFAULT_FROM_EMAIL=tu-email@gmail.com
 
 # Configuración de seguridad
 PASSWORD_RESET_TIMEOUT = 86400  # 24 horas

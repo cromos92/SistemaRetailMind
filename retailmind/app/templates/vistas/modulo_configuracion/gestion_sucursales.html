@@ -1170,13 +1170,23 @@ $(document).ready(function() {
             },
             success: function(response) {
                 if (response.success) {
+                    // Verificar si se cerraron sesiones por cambio de alias
+                    let mensajeExtra = '';
+                    let icono = 'success';
+                    
+                    if (response.alias_cambio && response.sesiones_cerradas > 0) {
+                        icono = 'warning';
+                        mensajeExtra = `<br><br><strong>⚠️ Seguridad:</strong> Se cerraron ${response.sesiones_cerradas} sesión(es) activa(s) por el cambio de alias.`;
+                    }
+                    
                     Swal.fire({
-                        icon: 'success',
+                        icon: icono,
                         title: '¡Guardado!',
-                        text: response.message,
-                        timer: 2000,
-                        showConfirmButton: false,
-                        timerProgressBar: true
+                        html: response.message + mensajeExtra,
+                        timer: response.sesiones_cerradas > 0 ? 4000 : 2000,
+                        showConfirmButton: response.sesiones_cerradas > 0,
+                        timerProgressBar: true,
+                        confirmButtonColor: '#0066FF'
                     });
                     $('#modalSucursal').modal('hide');
                     cargarSucursales();

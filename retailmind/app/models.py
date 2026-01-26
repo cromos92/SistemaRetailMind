@@ -398,8 +398,25 @@ class Dte(models.Model):
         return self.emisor_id == self.receptor_id if self.receptor else False
     
     def requiere_nota_credito_check(self):
-        """Determina si requiere NC para regularización (empresas diferentes)"""
-        return not self.es_misma_empresa_check() and self.tipo_transaccion == 'TRASPASO'
+        """
+        Determina si requiere NC para regularización.
+        Solo requiere NC si:
+        1. Son empresas diferentes (traspaso entre empresas)
+        2. El documento tiene valor monetario (FACTURA o BOLETA)
+        
+        GUÍAS DE DESPACHO no requieren NC porque no tienen valor monetario.
+        """
+        # Si es misma empresa, no requiere NC (es ajuste interno)
+        if self.es_misma_empresa_check():
+            return False
+        
+        # Si no es traspaso, no aplica
+        if self.tipo_transaccion != 'TRASPASO':
+            return False
+        
+        # Solo documentos con valor monetario requieren NC
+        documentos_con_valor = ['FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA']
+        return self.tipo_documento in documentos_con_valor
 class Dte_Detalle_Pago(models.Model):
     dte = models.ForeignKey(Dte, related_name='dte_asociado', on_delete=models.PROTECT)
     metodo_pago = models.CharField(max_length=100 )

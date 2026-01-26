@@ -36,6 +36,7 @@ from .models import (
     METODO_PAGO_TICKET_CHOICES,
 )
 from django.contrib.auth.decorators import login_required
+from django.contrib.sessions.models import Session
 from django.http import JsonResponse,Http404, HttpResponseBadRequest, HttpResponse
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.shortcuts import get_object_or_404
@@ -1700,11 +1701,24 @@ def regularizar_producto_api(request):
                         'error': 'No se encontró el DTE original'
                     }, status=400)
                 
+                dte_original = recepcion.dte
+                
+                # ✅ VALIDACIÓN: Solo se puede emitir NC si el documento original es FACTURA
+                if dte_original.tipo_documento == 'GUIA':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'No se puede emitir Nota de Crédito para una Guía de Despacho. Las guías no tienen valor monetario. Para regularizar, use "Ajuste Interno" o "Cambio de Producto".'
+                    }, status=400)
+                
+                if dte_original.tipo_documento not in ['FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA']:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'No se puede emitir Nota de Crédito para documento tipo "{dte_original.tipo_documento}". Solo se permite para facturas o boletas.'
+                    }, status=400)
+                
                 # Generar la NC automáticamente
                 try:
                     # obtener_siguiente_correlativo está en este mismo módulo (views.py)
-                    
-                    dte_original = recepcion.dte
                     
                     # Calcular montos
                     precio_unitario = recepcion.dte_producto.precio  # Este es NETO
@@ -2348,6 +2362,25 @@ def regularizar_dte_masivo(request):
             
             # Obtener DTE original (todos deberían ser del mismo DTE)
             dte_original = recepciones.first().dte
+            
+            # ✅ VALIDACIÓN: Solo se puede emitir NC si el documento original es FACTURA
+            if not dte_original:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se encontró el DTE original asociado'
+                }, status=404)
+            
+            if dte_original.tipo_documento == 'GUIA':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se puede emitir Nota de Crédito para una Guía de Despacho. Las guías no tienen valor monetario. Para regularizar productos de una guía, use "Ajuste Interno" o "Cambio de Producto" de forma individual.'
+                }, status=400)
+            
+            if dte_original.tipo_documento not in ['FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA']:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'No se puede emitir Nota de Crédito masiva para documento tipo "{dte_original.tipo_documento}". Solo se permite para facturas o boletas.'
+                }, status=400)
             
             # Calcular totales de la NC
             total_unidades = 0
@@ -14864,6 +14897,9 @@ def seleccionar_empresa_sucursal(request):
     Vista AJAX para cambiar la empresa y sucursal activa del usuario
     RESTRINGIDO: Solo usuarios con rol 'administrador' pueden cambiar sucursal
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         # Verificar que el usuario sea administrador
         if not es_administrador(request.user):
@@ -14887,6 +14923,50 @@ def seleccionar_empresa_sucursal(request):
             user=request.user,
             status=True
         )
+        
+        # 🔐 CERRAR OTRAS SESIONES DEL MISMO USUARIO (SEGURIDAD)
+        # Guardar la sesión actual para no cerrarla
+        session_key_actual = request.session.session_key
+        sesiones_cerradas = 0
+        
+        try:
+            # Obtener todas las sesiones activas
+            sesiones_activas = Session.objects.filter(expire_date__gte=timezone.now())
+            
+            for sesion in sesiones_activas:
+                try:
+                    # Saltar la sesión actual
+                    if sesion.session_key == session_key_actual:
+                        continue
+                    
+                    # Decodificar los datos de la sesión
+                    datos_sesion = sesion.get_decoded()
+                    
+                    # Verificar si esta sesión pertenece al mismo usuario
+                    user_id_sesion = datos_sesion.get('_auth_user_id')
+                    
+                    if user_id_sesion and str(user_id_sesion) == str(request.user.id):
+                        # Eliminar la sesión del mismo usuario en otro navegador/dispositivo
+                        sesion.delete()
+                        sesiones_cerradas += 1
+                        logger.info(
+                            f"🔐 Sesión cerrada por cambio de sucursal: "
+                            f"user={request.user.username}, "
+                            f"session_key={sesion.session_key[:8]}..."
+                        )
+                except Exception as e:
+                    logger.warning(f"Error al procesar sesión {sesion.session_key}: {str(e)}")
+                    continue
+            
+            if sesiones_cerradas > 0:
+                logger.warning(
+                    f"⚠️ CAMBIO DE SUCURSAL - Usuario: {request.user.username}, "
+                    f"Nueva sucursal: {empresa_user.sucursal.alias if empresa_user.sucursal else 'N/A'}, "
+                    f"Sesiones cerradas: {sesiones_cerradas}"
+                )
+        except Exception as e:
+            logger.error(f"Error al cerrar otras sesiones: {str(e)}")
+            # Continuar aunque falle el cierre de sesiones
         
         # Desactivar todas las empresas del usuario
         EmpresaUser.objects.filter(user=request.user).update(active=False)
@@ -14912,10 +14992,18 @@ def seleccionar_empresa_sucursal(request):
             request.session['alias'] = 'Sin sucursal'
             request.session['direccionSucursal'] = 'Sin dirección'
         
+        # Preparar mensaje de respuesta
+        mensaje = f'Cambiado a {empresa_user.empresa.nombre}'
+        if empresa_user.sucursal:
+            mensaje += f' - {empresa_user.sucursal.alias}'
+        
+        if sesiones_cerradas > 0:
+            mensaje += f' (Se cerraron {sesiones_cerradas} sesión(es) en otros dispositivos)'
+        
         return JsonResponse({
             'success': True,
-            'message': f'Cambiado a {empresa_user.empresa.nombre}' + 
-                      (f' - {empresa_user.sucursal.alias}' if empresa_user.sucursal else ''),
+            'message': mensaje,
+            'sesiones_cerradas': sesiones_cerradas,
             'empresa': {
                 'id': empresa_user.empresa.id,
                 'nombre': empresa_user.empresa.nombre,

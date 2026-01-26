@@ -13,6 +13,19 @@
     #fullscreenLoader .spinner-border {
         color: #405189 !important;
     }
+    
+    /* 🔧 Asegurar que SweetAlert esté por encima de TODO */
+    .swal2-container {
+        z-index: 99999 !important;
+    }
+    
+    .swal-on-top {
+        z-index: 99999 !important;
+    }
+    
+    .swal2-backdrop-show {
+        z-index: 99998 !important;
+    }
 </style>
 
 <!-- Loader con estilo del proyecto -->
@@ -217,14 +230,21 @@
                     <h5 class="modal-title">
                         <i class="ri-tools-line me-2"></i> Regularizar <span id="dteTipoDocumento">DTE</span> #<span id="dteTitulo">-</span>
                     </h5>
-                    <small style="opacity: 0.85;">Generar Nota de Crédito por productos con problemas</small>
+                    <small style="opacity: 0.85;" id="subtituloModal">Generar Nota de Crédito por productos con problemas</small>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="nexo-alert info mb-4">
+                <!-- Alerta para FACTURAS -->
+                <div class="nexo-alert info mb-4" id="alertaFactura" style="display:none;">
                     <i class="ri-information-line me-2"></i>
-                    <strong>Regularización:</strong> Se generará una Nota de Crédito automáticamente por los productos faltantes o dañados.
+                    <strong>Regularización con NC:</strong> Se generará una Nota de Crédito automáticamente por los productos faltantes o dañados.
+                </div>
+                
+                <!-- Alerta para GUÍAS -->
+                <div class="nexo-alert warning mb-4" id="alertaGuia" style="display:none;">
+                    <i class="ri-alert-line me-2"></i>
+                    <strong>Regularización sin NC:</strong> Las guías NO generan Nota de Crédito (sin valor monetario). Se hará ajuste interno de stock.
                 </div>
                 
                 <!-- Resumen de Productos -->
@@ -589,9 +609,10 @@
                                 </h6>
                                 <p class="mb-1"><strong>Se generará automáticamente:</strong></p>
                                 <ul class="mb-0 small">
-                                    <li>✅ Nota de Crédito por el producto original</li>
-                                    <li>✅ Nuevo DTE con el producto de cambio</li>
+                                    <li>✅ Devolución de stock del producto original</li>
+                                    <li>✅ Nuevo DTE (Guía/Factura según original) con el producto de cambio</li>
                                     <li>✅ Descuento de stock de tu sucursal</li>
+                                    <li class="text-muted"><small><i class="bi bi-info-circle"></i> NC solo si el documento original es FACTURA</small></li>
                                 </ul>
                             </div>
                         </div>
@@ -706,7 +727,8 @@
                                 </p>
                                 <ul class="small mb-3">
                                     <li>Aprobará y enviará el producto solicitado</li>
-                                    <li>Emitirá una Nota de Crédito por el producto original</li>
+                                    <li><strong>Si es FACTURA:</strong> Emitirá NC por el producto original</li>
+                                    <li><strong>Si es GUÍA:</strong> Solo hará ajuste interno (sin NC)</li>
                                     <li>Emitirá un nuevo DTE con el producto de cambio</li>
                                 </ul>
                                 
@@ -1587,6 +1609,75 @@ function abrirModalRegularizarDTE(dteNumero) {
     const tipoDocumento = productosDTE[0].tipo_documento_display || productosDTE[0].tipo_documento || 'DTE';
     $('#dteTipoDocumento').text(tipoDocumento);
     
+    // 🔍 DEBUG: Mostrar información en consola
+    console.log('🔍 DEBUG abrirModalRegularizarDTE:');
+    console.log('  - DTE:', dteNumero);
+    console.log('  - Tipo Documento:', tipoDocumento);
+    
+    // ✅ NORMALIZAR texto (quitar acentos/tildes) para comparar correctamente
+    const tipoDocumentoNormalizado = tipoDocumento
+        .toUpperCase()
+        .normalize("NFD")                    // Descomponer caracteres con acentos
+        .replace(/[\u0300-\u036f]/g, "");    // Eliminar marcas diacríticas (acentos)
+    
+    console.log('  - Tipo Documento (normalizado):', tipoDocumentoNormalizado);
+    console.log('  - ¿Incluye GUIA?:', tipoDocumentoNormalizado.includes('GUIA'));
+    
+    // ✅ VALIDAR SI ES GUÍA O FACTURA y ajustar mensajes
+    const esGuia = tipoDocumentoNormalizado.includes('GUIA');
+    console.log('  - esGuia:', esGuia);
+    
+    if (esGuia) {
+        // ❌ SI ES GUÍA: Bloquear directamente con mensaje claro
+        console.log('❌ BLOQUEANDO: Es GUÍA, NO se abrirá modal');
+        
+        // 🔧 CERRAR cualquier modal Bootstrap que esté abierto
+        $('.modal').modal('hide');
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open');
+        $('body').css('padding-right', '');
+        
+        // Esperar un momento para que se cierre el modal
+        setTimeout(() => {
+            Swal.fire({
+                title: 'No permitido para Guías',
+                html: `
+                    <div class="text-start">
+                        <div class="alert alert-danger">
+                            <strong>No se puede emitir Nota de Crédito para Guías de Despacho</strong>
+                        </div>
+                        <p>Las guías no tienen valor monetario (sin precio/IVA).</p>
+                        <p class="mb-2"><strong>Para regularizar esta Guía #${dteNumero} puedes:</strong></p>
+                        <ul class="mb-3">
+                            <li><strong>Opción 1:</strong> Usar "Ajuste Interno" - Solo devuelve el stock</li>
+                            <li><strong>Opción 2:</strong> Usar "Cambio de Producto" - Envía productos de reemplazo</li>
+                        </ul>
+                        <div class="alert alert-info mb-0">
+                            <strong>Nota:</strong> Contacta al administrador para regularizar productos individualmente.
+                        </div>
+                    </div>
+                `,
+                icon: 'error',
+                confirmButtonText: 'Entendido',
+                width: '650px',
+                customClass: {
+                    container: 'swal-on-top'
+                },
+                backdrop: true,
+                allowOutsideClick: true
+            });
+            console.log('✅ Swal.fire mostrado');
+        }, 100);
+        
+        return; // ✅ NO abre el modal
+    }
+    
+    // ✅ SI ES FACTURA: Mostrar modal normal con alertas correctas
+    console.log('✅ PERMITIENDO: Es FACTURA, abriendo modal con alerta de NC');
+    $('#subtituloModal').text('Generar Nota de Crédito por productos con problemas');
+    $('#alertaFactura').show();
+    $('#alertaGuia').hide();
+    
     // Renderizar tabla de productos
     const tbody = $('#tbodyProductosDTE');
     let totalUnidades = 0;
@@ -1802,9 +1893,42 @@ function procesarRegularizacionDTE(dteNumero, productosDTE) {
     // Obtener el tipo de documento
     const tipoDocumento = productosDTE[0]?.tipo_documento_display || productosDTE[0]?.tipo_documento || 'DTE';
     
+    // ✅ VALIDAR SI ES GUÍA O FACTURA (normalizar para quitar acentos/tildes)
+    const tipoDocumentoNormalizado = tipoDocumento
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    
+    const esGuia = tipoDocumentoNormalizado.includes('GUIA');
+    
     // Preparar lista de productos
     const productosIds = productosDTE.map(p => p.id);
     
+    // ❌ SI ES GUÍA, BLOQUEAR NC MASIVA
+    if (esGuia) {
+        Swal.fire({
+            title: 'No permitido para Guías',
+            html: `
+                <div class="text-start">
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>No se puede emitir Nota de Crédito para Guías de Despacho</strong>
+                    </div>
+                    <p>Las guías no tienen valor monetario (sin precio/IVA).</p>
+                    <p class="mb-0"><strong>Opciones disponibles:</strong></p>
+                    <ul>
+                        <li>Regularizar cada producto individualmente con <strong>Ajuste Interno</strong></li>
+                        <li>Regularizar cada producto individualmente con <strong>Cambio de Producto</strong></li>
+                    </ul>
+                </div>
+            `,
+            icon: 'error',
+            confirmButtonText: 'Entendido'
+        });
+        return;
+    }
+    
+    // ✅ SI ES FACTURA, PERMITIR NC MASIVA
     // Confirmar
     Swal.fire({
         title: '¿Generar Nota de Crédito?',

@@ -11,11 +11,59 @@ from django.db import transaction
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.contrib import messages
+from django.contrib.sessions.models import Session
+from django.utils import timezone
 
 from .models import Sucursal, Empresa, EmpresaUser
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def invalidar_sesiones_sucursal(sucursal_id, alias_anterior=None):
+    """
+    Invalida todas las sesiones activas de usuarios que tienen una sucursal específica.
+    
+    Args:
+        sucursal_id: ID de la sucursal cuyas sesiones se invalidarán
+        alias_anterior: Alias anterior de la sucursal (opcional, para logging)
+    
+    Returns:
+        Número de sesiones invalidadas
+    """
+    try:
+        sesiones_invalidadas = 0
+        sesiones_activas = Session.objects.filter(expire_date__gte=timezone.now())
+        
+        for sesion in sesiones_activas:
+            try:
+                # Decodificar los datos de la sesión
+                datos_sesion = sesion.get_decoded()
+                
+                # Verificar si esta sesión tiene la sucursal que cambió
+                sucursal_sesion = datos_sesion.get('idSucursalActual')
+                
+                if sucursal_sesion and int(sucursal_sesion) == int(sucursal_id):
+                    # Eliminar la sesión
+                    sesion.delete()
+                    sesiones_invalidadas += 1
+                    logger.info(
+                        f"Sesión invalidada: sucursal_id={sucursal_id}, "
+                        f"alias_anterior={alias_anterior}, session_key={sesion.session_key[:8]}..."
+                    )
+            except Exception as e:
+                logger.warning(f"Error al procesar sesión {sesion.session_key}: {str(e)}")
+                continue
+        
+        logger.info(
+            f"Total de sesiones invalidadas para sucursal {sucursal_id} "
+            f"(alias anterior: {alias_anterior}): {sesiones_invalidadas}"
+        )
+        return sesiones_invalidadas
+        
+    except Exception as e:
+        logger.error(f"Error al invalidar sesiones: {str(e)}")
+        return 0
 
 
 @login_required
@@ -224,6 +272,9 @@ def editar_sucursal(request, sucursal_id):
         # Obtener sucursal (sin restricción por empresa)
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
+        # Guardar el alias anterior para comparar
+        alias_anterior = sucursal.alias
+        
         # Obtener datos del formulario
         data = request.POST
         
@@ -257,18 +308,38 @@ def editar_sucursal(request, sucursal_id):
                 'error': f'Ya existe otra sucursal con el alias "{data.get("alias")}" en esa empresa'
             })
         
+        # Detectar si hubo cambio de alias
+        nuevo_alias = data.get('alias')
+        alias_cambio = alias_anterior != nuevo_alias
+        
         with transaction.atomic():
             # Actualizar sucursal
-            sucursal.alias = data.get('alias')
+            sucursal.alias = nuevo_alias
             sucursal.direccion = data.get('direccion')
             sucursal.empresa = nueva_empresa
             sucursal.save()
             
             logger.info(f"Sucursal actualizada: {sucursal.alias} (ID: {sucursal.id}) por usuario {request.user.username}")
             
+            # 🔐 INVALIDAR SESIONES SI CAMBIÓ EL ALIAS (SEGURIDAD)
+            sesiones_cerradas = 0
+            if alias_cambio:
+                sesiones_cerradas = invalidar_sesiones_sucursal(sucursal_id, alias_anterior)
+                logger.warning(
+                    f"⚠️ CAMBIO DE ALIAS DETECTADO: '{alias_anterior}' → '{nuevo_alias}'. "
+                    f"Sesiones cerradas: {sesiones_cerradas}"
+                )
+            
+            # Preparar mensaje de respuesta
+            mensaje = f'Sucursal "{sucursal.alias}" actualizada exitosamente'
+            if alias_cambio and sesiones_cerradas > 0:
+                mensaje += f' (Se cerraron {sesiones_cerradas} sesión(es) activa(s) por seguridad)'
+            
             return JsonResponse({
                 'success': True,
-                'message': f'Sucursal "{sucursal.alias}" actualizada exitosamente',
+                'message': mensaje,
+                'alias_cambio': alias_cambio,
+                'sesiones_cerradas': sesiones_cerradas,
                 'sucursal': {
                     'id': sucursal.id,
                     'alias': sucursal.alias,
