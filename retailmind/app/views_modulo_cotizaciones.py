@@ -8,6 +8,8 @@ from django.views.decorators.http import require_http_methods
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.conf import settings
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 import json
@@ -114,6 +116,70 @@ def listar_cotizaciones(request):
         # Serializar datos
         cotizaciones_data = []
         for cot in cotizaciones_paginadas:
+            # Contar items con y sin SKU asociado, y verificar stock
+            total_items = cot.items.count()
+            items_con_sku = 0
+            items_sin_sku = 0
+            items_sin_stock = 0  # Items con SKU pero sin stock suficiente
+            problemas_stock = []  # Detalle de problemas de stock
+            
+            for item in cot.items.all():
+                # Un item tiene SKU si tiene skus_asociados o producto_existente
+                skus_asociados = item.skus_asociados.all()
+                tiene_sku = skus_asociados.exists() or item.producto_existente is not None
+                
+                if tiene_sku:
+                    items_con_sku += 1
+                    
+                    # Verificar stock de cada SKU asociado (usando stock por sucursal)
+                    if skus_asociados.exists():
+                        for sku_rel in skus_asociados:
+                            if sku_rel.producto_talla:
+                                # Usar stock_sucursal para obtener stock real de la sucursal
+                                stock_actual = sku_rel.producto_talla.stock_sucursal(sucursal_id)
+                                cantidad_requerida = sku_rel.cantidad
+                                if stock_actual < cantidad_requerida:
+                                    items_sin_stock += 1
+                                    problemas_stock.append({
+                                        'sku': str(sku_rel.producto_talla.sku),
+                                        'descripcion': item.descripcion[:30],
+                                        'stock': stock_actual,
+                                        'requerido': cantidad_requerida
+                                    })
+                    elif item.producto_existente:
+                        # Compatibilidad con modelo anterior
+                        stock_actual = item.producto_existente.stock_sucursal(sucursal_id)
+                        if stock_actual < item.cantidad:
+                            items_sin_stock += 1
+                            problemas_stock.append({
+                                'sku': str(item.producto_existente.sku),
+                                'descripcion': item.descripcion[:30],
+                                'stock': stock_actual,
+                                'requerido': item.cantidad
+                            })
+                else:
+                    items_sin_sku += 1
+            
+            # Solo puede facturar si:
+            # - TODOS los items tienen SKU
+            # - TODOS tienen stock suficiente
+            # - NO está ya facturada
+            # - Está vigente
+            esta_facturada = cot.facturada or cot.estado == Cotizacion_Empresa.ESTADO_FACTURADA
+            esta_vigente = cot.estado == Cotizacion_Empresa.ESTADO_VIGENTE
+            puede_facturar = total_items > 0 and items_sin_sku == 0 and items_sin_stock == 0 and not esta_facturada and esta_vigente
+            
+            # Motivo por el que no puede facturar
+            motivo_no_facturar = None
+            if esta_facturada:
+                motivo_no_facturar = f'Ya facturada: {cot.numero_factura or "Sin número"}'
+            elif not esta_vigente:
+                motivo_no_facturar = f'Estado: {cot.get_estado_display()}'
+            elif items_sin_sku > 0:
+                motivo_no_facturar = f'{items_sin_sku} producto(s) sin SKU asociado'
+            elif items_sin_stock > 0:
+                motivo_no_facturar = f'{items_sin_stock} producto(s) sin stock suficiente'
+            
             cotizaciones_data.append({
                 'id': cot.id,
                 'numero_cotizacion': cot.numero_cotizacion,
@@ -124,8 +190,16 @@ def listar_cotizaciones(request):
                 'cliente_email': getattr(cot.cliente, 'correoIntercambio', ''),
                 'vendedor_nombre': cot.vendedor.nombre if cot.vendedor else 'Sin vendedor',
                 'estado': cot.estado,
+                'facturada': esta_facturada,
+                'numero_factura': cot.numero_factura or '',
                 'monto_total': float(cot.total),
-                'total_items': cot.items.count(),
+                'total_items': total_items,
+                'items_con_sku': items_con_sku,
+                'items_sin_sku': items_sin_sku,
+                'items_sin_stock': items_sin_stock,
+                'problemas_stock': problemas_stock,
+                'puede_facturar': puede_facturar,
+                'motivo_no_facturar': motivo_no_facturar,
                 'descripcion': cot.descripcion or '',
                 'dias_restantes': cot.dias_restantes,
             })
@@ -187,7 +261,7 @@ def detalle_cotizacion(request, cotizacion_id):
                         'marca': producto.atributo1.valor if producto and producto.atributo1 else '',
                         'costo': costo,
                         'precio': precio,
-                        'stock': pt.stock or 0,
+                        'stock': pt.stock_sucursal(sucursal_id),
                         'margen_porcentaje': margen,
                         'cantidad': sku_rel.cantidad  # Cantidad de este SKU específico
                     })
@@ -213,7 +287,7 @@ def detalle_cotizacion(request, cotizacion_id):
                     'marca': producto.atributo1.valor if producto and producto.atributo1 else '',
                     'costo': costo,
                     'precio': precio,
-                    'stock': pt.stock or 0,
+                    'stock': pt.stock_sucursal(sucursal_id),
                     'margen_porcentaje': margen,
                     'cantidad': item.cantidad
                 }
@@ -249,6 +323,7 @@ def detalle_cotizacion(request, cotizacion_id):
             'dias_validez': cotizacion.dias_validez,
             'descripcion': cotizacion.descripcion or '',
             'observaciones': cotizacion.observaciones or '',
+            'cliente_id': cotizacion.cliente.id,  # ID del cliente para selección directa
             'cliente_nombre': cotizacion.cliente.nombre,
             'cliente_rut': cotizacion.cliente.rut,
             'cliente_email': getattr(cotizacion.cliente, 'correoIntercambio', ''),
@@ -632,6 +707,194 @@ def convertir_cotizacion_factura(request):
         }, status=500)
 
 
+# ==================== API PARA INTEGRACIÓN CON POS ====================
+
+@login_required
+@require_http_methods(["GET"])
+def cargar_cotizacion_como_ticket(request, cotizacion_id):
+    """
+    API para cargar una cotización en formato compatible con el POS Dashboard.
+    Transforma los datos de la cotización al formato esperado por ticketActual.
+    """
+    try:
+        cotizacion = get_object_or_404(Cotizacion_Empresa, pk=cotizacion_id)
+        
+        # Verificar que pertenece a la sucursal del usuario
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para acceder a esta cotización'
+            }, status=403)
+        
+        # Verificar que está vigente
+        if not cotizacion.esta_vigente:
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo se pueden facturar cotizaciones vigentes'
+            })
+        
+        print(f"🔄 Cargando cotización {cotizacion.numero_cotizacion} como ticket para POS")
+        
+        # Obtener datos del cliente (Empresa)
+        cliente = cotizacion.cliente
+        cliente_data = {
+            'rut': cliente.rut or '',
+            'nombre': cliente.nombre or '',
+            'razon_social': cliente.razon_social or cliente.nombre or '',
+            'giro': cliente.giro or '',
+            'direccion': cliente.direccion or '',
+            'comuna': cliente.comuna or '',
+            'ciudad': cliente.ciudad or '',
+            'email': cliente.correoIntercambio or cliente.correoVendedor or '',
+            'email_facturacion': cliente.correoAdministrador or cliente.correoIntercambio or '',
+            'telefono': cliente.contacto1 or '',  # Usar contacto1 como teléfono principal
+            'telefono_secundario': cliente.contacto2 or '',
+        }
+        
+        # Construir lista de productos en formato POS
+        productos = []
+        items_sin_stock = []
+        
+        for item in cotizacion.items.all().order_by('numero_linea'):
+            # Intentar obtener el producto desde los SKUs asociados
+            sku_rel = item.skus_asociados.first()
+            
+            if sku_rel and sku_rel.producto_talla:
+                pt = sku_rel.producto_talla
+                producto = pt.producto
+                
+                # Verificar stock disponible en la sucursal actual
+                stock_actual = pt.stock_sucursal(sucursal_id)
+                cantidad_requerida = item.cantidad
+                
+                if stock_actual < cantidad_requerida:
+                    items_sin_stock.append({
+                        'descripcion': item.descripcion,
+                        'sku': str(pt.sku),
+                        'stock_actual': stock_actual,
+                        'cantidad_requerida': cantidad_requerida
+                    })
+                
+                productos.append({
+                    'sku': str(pt.sku),
+                    'producto_talla_id': pt.id,
+                    'articulo': producto.articulo if producto else item.descripcion,
+                    'descripcion': producto.descripcion if producto else '',
+                    'marca': producto.atributo1.valor if producto and producto.atributo1 else '',
+                    'talla': pt.talla or 'N/A',
+                    'cantidad': item.cantidad,
+                    'precio': float(item.precio_unitario),
+                    'precio_unitario': float(item.precio_unitario),
+                    'subtotal': float(item.subtotal),
+                    'stock': stock_actual,
+                    'descuento_unitario': 0,
+                    'costo': float(producto.costo) if producto and producto.costo else 0,
+                    # Información adicional de cotización
+                    'cotizacion_item_id': item.id,
+                })
+            elif item.producto_existente:
+                # Compatibilidad con modelo anterior
+                pt = item.producto_existente
+                producto = pt.producto
+                stock_actual = pt.stock_sucursal(sucursal_id)
+                
+                if stock_actual < item.cantidad:
+                    items_sin_stock.append({
+                        'descripcion': item.descripcion,
+                        'sku': str(pt.sku),
+                        'stock_actual': stock_actual,
+                        'cantidad_requerida': item.cantidad
+                    })
+                
+                productos.append({
+                    'sku': str(pt.sku),
+                    'producto_talla_id': pt.id,
+                    'articulo': producto.articulo if producto else item.descripcion,
+                    'descripcion': producto.descripcion if producto else '',
+                    'marca': producto.atributo1.valor if producto and producto.atributo1 else '',
+                    'talla': pt.talla or 'N/A',
+                    'cantidad': item.cantidad,
+                    'precio': float(item.precio_unitario),
+                    'precio_unitario': float(item.precio_unitario),
+                    'subtotal': float(item.subtotal),
+                    'stock': stock_actual,
+                    'descuento_unitario': 0,
+                    'costo': float(producto.costo) if producto and producto.costo else 0,
+                    'cotizacion_item_id': item.id,
+                })
+            else:
+                # Producto pendiente o manual - no se puede facturar directamente
+                items_sin_stock.append({
+                    'descripcion': item.descripcion,
+                    'sku': 'N/A',
+                    'stock_actual': 0,
+                    'cantidad_requerida': item.cantidad,
+                    'es_producto_pendiente': True
+                })
+        
+        # Calcular totales
+        total_items = sum(p['cantidad'] for p in productos)
+        subtotal = sum(p['subtotal'] for p in productos)
+        
+        totales = {
+            'items': total_items,
+            'subtotal': subtotal,
+            'descuento': float(cotizacion.descuento),
+            'total': float(cotizacion.total)
+        }
+        
+        # Construir objeto ticket compatible con POS
+        # Nota: numero_cotizacion ya tiene formato "COT-202601-0001", no duplicar prefijo
+        ticket_data = {
+            'correlativo': cotizacion.numero_cotizacion,
+            'cotizacion_id': cotizacion.id,
+            'numero_cotizacion': cotizacion.numero_cotizacion,
+            'es_cotizacion': True,
+            'cliente': cliente_data,
+            'productos': productos,
+            'totales': totales,
+            'observaciones': cotizacion.observaciones or '',
+            'observaciones_adicionales': cotizacion.descripcion or '',
+            'vendedor_nombre': cotizacion.vendedor.nombre if cotizacion.vendedor else '',
+            'fecha_emision': cotizacion.fecha_emision.strftime('%Y-%m-%d'),
+            'fecha_validez': cotizacion.fecha_validez.strftime('%Y-%m-%d'),
+            'dias_restantes': cotizacion.dias_restantes,
+        }
+        
+        # Advertencias si hay productos sin stock
+        advertencias = []
+        if items_sin_stock:
+            for item in items_sin_stock:
+                if item.get('es_producto_pendiente'):
+                    advertencias.append(f"Producto pendiente '{item['descripcion']}' no tiene SKU asignado")
+                else:
+                    advertencias.append(
+                        f"'{item['descripcion']}' (SKU: {item['sku']}): "
+                        f"Stock actual {item['stock_actual']}, requerido {item['cantidad_requerida']}"
+                    )
+        
+        print(f"✅ Cotización cargada: {len(productos)} productos, total ${totales['total']:,.0f}")
+        if advertencias:
+            print(f"⚠️ Advertencias: {len(advertencias)}")
+        
+        return JsonResponse({
+            'success': True,
+            'ticket': ticket_data,
+            'advertencias': advertencias,
+            'tiene_advertencias': len(advertencias) > 0
+        })
+        
+    except Exception as e:
+        print(f"❌ Error en cargar_cotizacion_como_ticket: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 # ==================== APIs DE BÚSQUEDA ====================
 
 @login_required
@@ -669,41 +932,56 @@ def buscar_productos_cotizacion(request):
         # Buscar por talla
         filtros |= Q(talla__icontains=query)
 
+        # ✅ FILTRAR SOLO PRODUCTOS DE LA SUCURSAL ACTIVA
+        if sucursal_id:
+            filtros &= Q(producto__sucursal_id=int(sucursal_id))
+
         # Ejecutar búsqueda base
-        productos = Producto_Talla.objects.filter(filtros).select_related(
+        productos_query = Producto_Talla.objects.filter(filtros).select_related(
             'producto',
             'producto__atributo1',  # Marca
             'producto__atributo2',  # Color
             'producto__categoria'
-        )
+        ).order_by('producto__articulo').distinct()
         
-        # Aplicar filtro de stock
+        # Convertir a lista y calcular stock por sucursal para cada producto
+        # Esto es necesario porque stock_sucursal() es un método de Python, no un campo de BD
+        productos_con_stock = []
+        for pt in productos_query:
+            stock_sucursal = pt.stock_sucursal(sucursal_id) if sucursal_id else (pt.stock or 0)
+            productos_con_stock.append({
+                'producto_talla': pt,
+                'stock_sucursal': stock_sucursal
+            })
+        
+        # Aplicar filtro de stock según la sucursal actual
         if filtro_stock == 'con_stock':
-            productos = productos.filter(stock__gt=0)
+            productos_con_stock = [p for p in productos_con_stock if p['stock_sucursal'] > 0]
         elif filtro_stock == 'sin_stock':
-            productos = productos.filter(stock__lte=0)
-
-        # Ordenar: primero los que tienen stock, luego por nombre
-        productos = productos.order_by('-stock', 'producto__articulo').distinct()
+            productos_con_stock = [p for p in productos_con_stock if p['stock_sucursal'] <= 0]
+        
+        # Ordenar: primero los que tienen stock en la sucursal, luego por nombre
+        productos_con_stock.sort(key=lambda x: (-x['stock_sucursal'], x['producto_talla'].producto.articulo if x['producto_talla'].producto else ''))
         
         # Paginación
         pagina = int(request.GET.get('pagina', 1))
         por_pagina = int(request.GET.get('por_pagina', 12))  # 12 por página por defecto
         
-        total_productos = productos.count()
+        total_productos = len(productos_con_stock)
         total_paginas = (total_productos + por_pagina - 1) // por_pagina  # Redondeo hacia arriba
         
         # Calcular offset
         offset = (pagina - 1) * por_pagina
-        productos = productos[offset:offset + por_pagina]
+        productos_paginados = productos_con_stock[offset:offset + por_pagina]
 
-        print(f"✅ Productos encontrados: {total_productos} | Página {pagina}/{total_paginas}")
+        print(f"✅ Productos encontrados: {total_productos} | Página {pagina}/{total_paginas} | Sucursal: {sucursal_id}")
         
         # Serializar
         productos_data = []
-        for pt in productos:
-            # Obtener stock del producto
-            stock = pt.stock if pt.stock else 0
+        for item in productos_paginados:
+            pt = item['producto_talla']
+            # Stock ya calculado por sucursal
+            stock = item['stock_sucursal']
             
             # Obtener precios y costo
             costo = 0
@@ -1099,8 +1377,8 @@ def cotizacion_pdf(request, cotizacion_id):
         # ===== DETALLE DE ITEMS =====
         elements.append(Paragraph("🛒 DETALLE DE PRODUCTOS/SERVICIOS", style_section))
         
-        # Cabecera de tabla
-        items_header = ['#', 'Descripción', 'Cant.', 'Precio Unit.', 'Subtotal']
+        # Cabecera de tabla (nota: precios incluyen IVA)
+        items_header = ['#', 'Descripción', 'Cant.', 'P. Unit. (IVA)', 'Subtotal']
         items_data = [items_header]
         
         # Items
@@ -1145,8 +1423,9 @@ def cotizacion_pdf(request, cotizacion_id):
         elements.append(Spacer(1, 20))
         
         # ===== TOTALES =====
+        # Nota: subtotal = neto (sin IVA), impuesto = IVA, total = bruto (con IVA)
         totales_data = [
-            ['', '', '', 'Subtotal:', f"${cotizacion.subtotal:,.0f}"],
+            ['', '', '', 'Neto:', f"${cotizacion.subtotal:,.0f}"],
         ]
         
         if cotizacion.descuento > 0:
@@ -1210,4 +1489,282 @@ def cotizacion_pdf(request, cotizacion_id):
         import traceback
         traceback.print_exc()
         return HttpResponse(f"Error generando PDF: {str(e)}", status=500)
+
+
+# ==================== ENVÍO DE COTIZACIÓN POR CORREO ====================
+
+@login_required
+@require_http_methods(["POST"])
+def enviar_cotizacion_correo(request, cotizacion_id):
+    """
+    Envía la cotización por correo electrónico con formato profesional.
+    Solo muestra descripción, precio y validez (sin SKU ni talla).
+    """
+    try:
+        data = json.loads(request.body)
+        email_destino = data.get('email_destino', '').strip()
+        
+        if not email_destino:
+            return JsonResponse({
+                'success': False,
+                'error': 'Debe proporcionar un correo de destino'
+            })
+        
+        # Validar formato de email
+        import re
+        email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_regex, email_destino):
+            return JsonResponse({
+                'success': False,
+                'error': 'El formato del correo no es válido'
+            })
+        
+        cotizacion = get_object_or_404(Cotizacion_Empresa, pk=cotizacion_id)
+        
+        # Verificar que pertenece a la sucursal del usuario
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+            return JsonResponse({
+                'success': False,
+                'error': 'No tiene permisos para enviar esta cotización'
+            }, status=403)
+        
+        # Obtener datos de la cotización
+        items = cotizacion.items.all().order_by('numero_linea')
+        
+        # Formatear moneda
+        def formatear_moneda(valor):
+            return f"${valor:,.0f}".replace(",", ".")
+        
+        # Construir tabla de productos (solo descripción, cantidad, precio)
+        items_html = ""
+        for item in items:
+            subtotal = item.cantidad * item.precio_unitario
+            items_html += f"""
+            <tr>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; font-size: 14px; color: #374151;">
+                    {item.descripcion}
+                </td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; text-align: center; font-size: 14px; color: #374151;">
+                    {item.cantidad}
+                </td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; text-align: right; font-size: 14px; color: #374151;">
+                    {formatear_moneda(item.precio_unitario)}
+                </td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; text-align: right; font-size: 14px; font-weight: 600; color: #0066FF;">
+                    {formatear_moneda(subtotal)}
+                </td>
+            </tr>
+            """
+        
+        # Calcular días restantes de validez
+        dias_restantes = (cotizacion.fecha_validez - date.today()).days
+        validez_color = "#22c55e" if dias_restantes >= 0 else "#ef4444"
+        validez_texto = f"{dias_restantes} días restantes" if dias_restantes >= 0 else f"Vencida hace {abs(dias_restantes)} días"
+        
+        # Obtener nombre de la sucursal/empresa
+        nombre_empresa = cotizacion.sucursal.nombre if cotizacion.sucursal else "Nuestra Empresa"
+        
+        # HTML del correo profesional
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6;">
+            <div style="max-width: 650px; margin: 0 auto; padding: 20px;">
+                
+                <!-- Header -->
+                <div style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 16px 16px 0 0; padding: 32px; text-align: center;">
+                    <h1 style="color: white; margin: 0 0 8px 0; font-size: 28px; font-weight: 700;">COTIZACIÓN</h1>
+                    <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 18px; font-weight: 500;">{cotizacion.numero_cotizacion}</p>
+                </div>
+                
+                <!-- Contenido principal -->
+                <div style="background: white; padding: 32px; border-radius: 0 0 16px 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    
+                    <!-- Información de validez -->
+                    <div style="background: {validez_color}15; border-left: 4px solid {validez_color}; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                        <p style="margin: 0; color: {validez_color}; font-weight: 600; font-size: 14px;">
+                            ⏰ Válida hasta: {cotizacion.fecha_validez.strftime('%d/%m/%Y')} ({validez_texto})
+                        </p>
+                    </div>
+                    
+                    <!-- Información del cliente -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <h3 style="color: #374151; margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            📋 Datos del Cliente
+                        </h3>
+                        <p style="margin: 0 0 8px 0; font-size: 16px; color: #1f2937;"><strong>{cotizacion.cliente.nombre}</strong></p>
+                        <p style="margin: 0 0 4px 0; font-size: 14px; color: #6b7280;">RUT: {cotizacion.cliente.rut}</p>
+                        {f'<p style="margin: 0; font-size: 14px; color: #6b7280;">{cotizacion.cliente.direccion}, {cotizacion.cliente.comuna}</p>' if cotizacion.cliente.direccion else ''}
+                    </div>
+                    
+                    <!-- Descripción si existe -->
+                    {f'''
+                    <div style="background: #eff6ff; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                        <h4 style="color: #1e40af; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase;">📝 Descripción</h4>
+                        <p style="margin: 0; color: #374151; font-size: 14px;">{cotizacion.descripcion}</p>
+                    </div>
+                    ''' if cotizacion.descripcion else ''}
+                    
+                    <!-- Tabla de productos -->
+                    <h3 style="color: #374151; margin: 0 0 16px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        🛒 Detalle de Productos
+                    </h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                        <thead>
+                            <tr style="background: #1a1a2e;">
+                                <th style="padding: 14px 16px; text-align: left; color: white; font-size: 13px; font-weight: 600; border-radius: 8px 0 0 0;">Descripción</th>
+                                <th style="padding: 14px 16px; text-align: center; color: white; font-size: 13px; font-weight: 600;">Cant.</th>
+                                <th style="padding: 14px 16px; text-align: right; color: white; font-size: 13px; font-weight: 600;">P. Unit.</th>
+                                <th style="padding: 14px 16px; text-align: right; color: white; font-size: 13px; font-weight: 600; border-radius: 0 8px 0 0;">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {items_html}
+                        </tbody>
+                    </table>
+                    
+                    <!-- Totales -->
+                    <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <tr>
+                                <td style="padding: 8px 0; font-size: 14px; color: #6b7280;">Subtotal (Neto)</td>
+                                <td style="padding: 8px 0; text-align: right; font-size: 14px; color: #374151;">{formatear_moneda(cotizacion.subtotal)}</td>
+                            </tr>
+                            {f'''
+                            <tr>
+                                <td style="padding: 8px 0; font-size: 14px; color: #22c55e;">Descuento</td>
+                                <td style="padding: 8px 0; text-align: right; font-size: 14px; color: #22c55e;">-{formatear_moneda(cotizacion.descuento)}</td>
+                            </tr>
+                            ''' if cotizacion.descuento > 0 else ''}
+                            <tr>
+                                <td style="padding: 8px 0; font-size: 14px; color: #6b7280;">IVA (19%)</td>
+                                <td style="padding: 8px 0; text-align: right; font-size: 14px; color: #374151;">{formatear_moneda(cotizacion.impuesto)}</td>
+                            </tr>
+                            <tr style="border-top: 2px solid #0066FF;">
+                                <td style="padding: 16px 0 8px 0; font-size: 18px; font-weight: 700; color: #1a1a2e;">TOTAL</td>
+                                <td style="padding: 16px 0 8px 0; text-align: right; font-size: 22px; font-weight: 700; color: #0066FF;">{formatear_moneda(cotizacion.total)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Observaciones si existen -->
+                    {f'''
+                    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                        <h4 style="color: #92400e; margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase;">⚠️ Observaciones</h4>
+                        <p style="margin: 0; color: #78350f; font-size: 14px;">{cotizacion.observaciones}</p>
+                    </div>
+                    ''' if cotizacion.observaciones else ''}
+                    
+                    <!-- Nota final -->
+                    <div style="text-align: center; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+                        <p style="color: #9ca3af; font-size: 12px; margin: 0 0 8px 0;">
+                            Esta cotización tiene una validez de {cotizacion.dias_validez} días desde su emisión.
+                        </p>
+                        <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+                            Los precios incluyen IVA • Cotización generada el {cotizacion.fecha_emision.strftime('%d/%m/%Y')}
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div style="text-align: center; padding: 24px;">
+                    <p style="color: #6b7280; font-size: 13px; margin: 0 0 8px 0;">
+                        <strong>{nombre_empresa}</strong>
+                    </p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+                        Este correo fue enviado automáticamente • No responda a este mensaje
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Versión texto plano del correo
+        text_content = f"""
+COTIZACIÓN {cotizacion.numero_cotizacion}
+=========================================
+
+Válida hasta: {cotizacion.fecha_validez.strftime('%d/%m/%Y')} ({validez_texto})
+
+CLIENTE
+-------
+{cotizacion.cliente.nombre}
+RUT: {cotizacion.cliente.rut}
+
+{f"DESCRIPCIÓN: {cotizacion.descripcion}" if cotizacion.descripcion else ""}
+
+DETALLE DE PRODUCTOS
+--------------------
+"""
+        for item in items:
+            subtotal = item.cantidad * item.precio_unitario
+            text_content += f"• {item.descripcion}\n  Cantidad: {item.cantidad} | Precio: {formatear_moneda(item.precio_unitario)} | Subtotal: {formatear_moneda(subtotal)}\n\n"
+        
+        text_content += f"""
+TOTALES
+-------
+Subtotal (Neto): {formatear_moneda(cotizacion.subtotal)}
+{f"Descuento: -{formatear_moneda(cotizacion.descuento)}" if cotizacion.descuento > 0 else ""}
+IVA (19%): {formatear_moneda(cotizacion.impuesto)}
+TOTAL: {formatear_moneda(cotizacion.total)}
+
+{f"OBSERVACIONES: {cotizacion.observaciones}" if cotizacion.observaciones else ""}
+
+---
+Esta cotización tiene una validez de {cotizacion.dias_validez} días desde su emisión.
+Los precios incluyen IVA.
+        """
+        
+        # Enviar correo
+        try:
+            subject = f"Cotización {cotizacion.numero_cotizacion} - {nombre_empresa}"
+            
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text_content,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[email_destino]
+            )
+            msg.attach_alternative(html_content, "text/html")
+            msg.send(fail_silently=False)
+            
+            # Registrar en historial
+            Historial_Cotizacion.objects.create(
+                cotizacion=cotizacion,
+                usuario=request.user,
+                accion='ENVIADA_EMAIL',
+                descripcion=f'Cotización enviada por correo a {email_destino}',
+                ip_address=get_client_ip(request)
+            )
+            
+            print(f"✅ Cotización {cotizacion.numero_cotizacion} enviada a {email_destino}")
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Cotización enviada exitosamente a {email_destino}'
+            })
+            
+        except Exception as mail_error:
+            print(f"❌ Error enviando correo: {str(mail_error)}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({
+                'success': False,
+                'error': f'Error al enviar el correo: {str(mail_error)}'
+            }, status=500)
+        
+    except Exception as e:
+        print(f"❌ Error en enviar_cotizacion_correo: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 

@@ -957,6 +957,8 @@ div[style*="border: 1px solid #000"] {
                     </div>
                     <div class="col-md-3">
                         <label class="form-label mb-1"><small><i class="ri-price-tag-3-line me-1"></i>Filtrar por Marca</small></label>
+                        <input type="text" class="form-control form-control-sm mb-1" id="filtroMarcaTexto"
+                               placeholder="Buscar marca...">
                         <select class="form-select form-select-sm" id="selectMarca">
                             <option value="">Todas las marcas</option>
                             <!-- Se cargará dinámicamente -->
@@ -1010,20 +1012,35 @@ div[style*="border: 1px solid #000"] {
                     <table class="table table-hover table-sm mb-0">
                         <thead class="table-light text-center" id="theadBusquedaProductos">
                             <tr>
-                                <th>SKU</th>
-                                <th>Artículo</th>
-                                <th>Descripción</th>
-                                <th>Marca</th>
+                                <th class="sortable" data-sort="sku" style="cursor: pointer;">
+                                    SKU <i class="ri-arrow-up-down-line"></i>
+                                </th>
+                                <th class="sortable" data-sort="articulo" style="cursor: pointer;">
+                                    Artículo <i class="ri-arrow-up-down-line"></i>
+                                </th>
+                                <th class="sortable" data-sort="descripcion" style="cursor: pointer;">
+                                    Descripción <i class="ri-arrow-up-down-line"></i>
+                                </th>
+                                <th class="sortable" data-sort="marca" style="cursor: pointer;">
+                                    Marca <i class="ri-arrow-up-down-line"></i>
+                                </th>
+                                <th class="sortable" data-sort="color" style="cursor: pointer;">
+                                    Color <i class="ri-arrow-up-down-line"></i>
+                                </th>
                                 <th>Talla</th>
                                 <th class="col-sucursal" style="display: none;">Sucursal</th>
-                                <th>Stock</th>
-                                <th>Precio</th>
+                                <th class="sortable" data-sort="stock" style="cursor: pointer;">
+                                    Stock <i class="ri-arrow-up-down-line"></i>
+                                </th>
+                                <th class="sortable" data-sort="precio" style="cursor: pointer;">
+                                    Precio <i class="ri-arrow-up-down-line"></i>
+                                </th>
                                 <th>Acción</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyBusquedaProductos">
                             <tr>
-                                <td colspan="9" class="text-center text-muted py-4">
+                                <td colspan="10" class="text-center text-muted py-4">
                                     <i class="ri-filter-line" style="font-size: 2rem;"></i>
                                     <br>
                                     Ingresa un criterio de búsqueda y presiona "Buscar productos".
@@ -1048,9 +1065,11 @@ div[style*="border: 1px solid #000"] {
 $(document).ready(function() {
     let vendedorSeleccionado = null;
     const tieneCorrelativo = {{ tiene_correlativo|yesno:"true,false" }};
+    let marcasCache = [];
+    let filtroTablaTimer = null;
     const MENSAJE_BUSQUEDA_DEFAULT = `
         <tr>
-            <td colspan="9" class="text-center text-muted py-4">
+            <td colspan="10" class="text-center text-muted py-4">
                 <i class="ri-filter-line" style="font-size: 2rem;"></i>
                 <br>
                 Ingresa un criterio de búsqueda y presiona "Buscar productos".
@@ -1778,6 +1797,7 @@ $(document).ready(function() {
     function limpiarFiltrosModal() {
         $('#filtroBusqueda').val('');
         $('#selectMarca').val('');
+        $('#filtroMarcaTexto').val('');
         $('#chkSoloConStock').prop('checked', true);
         $('#chkBuscarTodasSucursales').prop('checked', false);
         $('#selectOrdenar').val('');
@@ -1793,43 +1813,95 @@ $(document).ready(function() {
             url: '{% url "obtener_marcas" %}',
             method: 'GET',
             success: function(response) {
-                if (response.success && response.marcas) {
-                    const select = $('#selectMarca');
-                    select.find('option:not(:first)').remove();
-                    response.marcas.forEach(function(marca) {
-                        select.append(`<option value="${marca.id}">${marca.nombre}</option>`);
-                    });
+                let marcas = [];
+                if (Array.isArray(response)) {
+                    marcas = response;
+                } else if (response && response.success && Array.isArray(response.marcas)) {
+                    marcas = response.marcas;
                 }
+                
+                marcasCache = marcas;
+                renderMarcas('');
             },
             error: function() {
                 console.warn('No se pudieron cargar las marcas');
             }
         });
     }
+
+    function renderMarcas(filtroTexto) {
+        const filtro = (filtroTexto || '').trim().toLowerCase();
+        const select = $('#selectMarca');
+        const seleccionActual = select.val();
+        select.find('option:not(:first)').remove();
+        
+        marcasCache.forEach(function(marca) {
+            const nombre = marca.nombre || marca.valor || '';
+            if (!nombre) {
+                return;
+            }
+            if (!filtro || nombre.toLowerCase().includes(filtro)) {
+                select.append(`<option value="${marca.id}">${nombre}</option>`);
+            }
+        });
+        
+        if (seleccionActual && select.find(`option[value="${seleccionActual}"]`).length) {
+            select.val(seleccionActual);
+        }
+    }
     
     // Cargar marcas al abrir el modal
     $('#modalBusquedaProductos').on('show.bs.modal', function() {
         cargarMarcas();
     });
+
+    $('#filtroMarcaTexto').on('input', function() {
+        renderMarcas($(this).val());
+    });
     
-    // Filtro de tabla en tiempo real (client-side)
-    $('#filtroTablaResultados').on('input', function() {
-        const filtro = $(this).val().toLowerCase().trim();
-        const filas = $('#tbodyBusquedaProductos tr');
+    // Ordenamiento de columnas al hacer clic en el encabezado
+    let ordenamientoActual = { campo: '', direccion: '' };
+    
+    $(document).on('click', '.sortable', function() {
+        const campo = $(this).data('sort');
         
-        if (!filtro) {
-            filas.show();
-            return;
+        // Alternar dirección
+        if (ordenamientoActual.campo === campo) {
+            ordenamientoActual.direccion = ordenamientoActual.direccion === 'asc' ? 'desc' : 'asc';
+        } else {
+            ordenamientoActual.campo = campo;
+            ordenamientoActual.direccion = 'asc';
         }
         
-        filas.each(function() {
-            const textoFila = $(this).text().toLowerCase();
-            if (textoFila.includes(filtro)) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
-        });
+        // Actualizar iconos visuales
+        $('.sortable i').removeClass('ri-arrow-up-line ri-arrow-down-line').addClass('ri-arrow-up-down-line');
+        const icono = ordenamientoActual.direccion === 'asc' ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
+        $(this).find('i').removeClass('ri-arrow-up-down-line').addClass(icono);
+        
+        // Mapear campos a valores del backend
+        const mapeo = {
+            'sku': 'articulo',
+            'articulo': ordenamientoActual.direccion === 'asc' ? 'articulo_asc' : 'articulo_desc',
+            'descripcion': 'articulo',
+            'marca': 'articulo',
+            'color': 'articulo',
+            'stock': ordenamientoActual.direccion === 'asc' ? 'stock_asc' : 'stock_desc',
+            'precio': ordenamientoActual.direccion === 'asc' ? 'precio_asc' : 'precio_desc'
+        };
+        
+        const valorOrden = mapeo[campo] || '';
+        $('#selectOrdenar').val(valorOrden);
+        
+        // Buscar con el nuevo orden
+        buscarProductosModal(1);
+    });
+    
+    // Filtro de tabla en tiempo real (server-side sobre todos los resultados)
+    $('#filtroTablaResultados').on('input', function() {
+        clearTimeout(filtroTablaTimer);
+        filtroTablaTimer = setTimeout(() => {
+            buscarProductosModal(1);
+        }, 300);
     });
 
     function buscarProductosModal(pagina = 1) {
@@ -1838,6 +1910,7 @@ $(document).ready(function() {
         const soloConStock = $('#chkSoloConStock').is(':checked');
         const buscarTodas = $('#chkBuscarTodasSucursales').is(':checked');
         const ordenar = $('#selectOrdenar').val();
+        const filtroTabla = ($('#filtroTablaResultados').val() || '').trim();
 
         // Obtener sucursal actual de la sesión
         const sucursalActualId = {% if sucursal_actual %}{{ sucursal_actual.id }}{% else %}null{% endif %};
@@ -1850,6 +1923,7 @@ $(document).ready(function() {
         console.log('Solo con stock:', soloConStock);
         console.log('Buscar en todas:', buscarTodas);
         console.log('Ordenar por:', ordenar || 'Sin orden');
+        console.log('Filtro tabla:', filtroTabla || 'Sin filtro');
 
         const filtros = {
             search: filtroBusqueda,
@@ -1866,6 +1940,12 @@ $(document).ready(function() {
         if (ordenar) {
             filtros.ordenar = ordenar;
         }
+        
+        // Agregar filtro de tabla si existe
+        if (filtroTabla) {
+            filtros.filtro_tabla = filtroTabla;
+            console.log('✓ Aplicando filtro de tabla:', filtroTabla);
+        }
 
         // Si NO está marcado "buscar en todas", filtrar por sucursal actual
         if (!buscarTodas && sucursalActualId) {
@@ -1876,11 +1956,11 @@ $(document).ready(function() {
         }
 
         // Validar que al menos tenga un criterio de búsqueda
-        if (!filtroBusqueda && !soloConStock && !marcaId) {
+        if (!filtroBusqueda && !soloConStock && !marcaId && !filtroTabla) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Criterio de búsqueda requerido',
-                text: 'Ingresa un término de búsqueda, selecciona una marca o activa el filtro de stock'
+                text: 'Ingresa un término de búsqueda, selecciona una marca, activa el filtro de stock o filtra en los resultados'
             }).then(() => {
                 $('#filtroBusqueda').focus();
             });
@@ -1890,7 +1970,7 @@ $(document).ready(function() {
         // Mostrar loading en la tabla
         $('#tbodyBusquedaProductos').html(`
             <tr>
-                <td colspan="9" class="text-center py-4">
+                <td colspan="10" class="text-center py-4">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Cargando...</span>
                     </div>
@@ -1912,7 +1992,7 @@ $(document).ready(function() {
                 } else {
                     $('#tbodyBusquedaProductos').html(`
                         <tr>
-                            <td colspan="9" class="text-center text-danger py-4">
+                            <td colspan="10" class="text-center text-danger py-4">
                                 <i class="ri-error-warning-line" style="font-size: 2rem;"></i>
                                 <br>
                                 ${response.error || 'Error al buscar productos'}
@@ -1924,7 +2004,7 @@ $(document).ready(function() {
             error: function() {
                 $('#tbodyBusquedaProductos').html(`
                     <tr>
-                        <td colspan="9" class="text-center text-danger py-4">
+                        <td colspan="10" class="text-center text-danger py-4">
                             <i class="ri-wifi-off-line" style="font-size: 2rem;"></i>
                             <br>
                             Error de conexión
@@ -1949,7 +2029,7 @@ $(document).ready(function() {
             $('#filtroTablaResultados').prop('disabled', true);
             tbody.html(`
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">
+                    <td colspan="10" class="text-center text-muted py-4">
                         <i class="ri-inbox-line" style="font-size: 2rem;"></i>
                         <br>
                         No se encontraron productos con los criterios especificados
@@ -1966,6 +2046,7 @@ $(document).ready(function() {
         productos.forEach(producto => {
             // La API ya devuelve 'marca' como string, no como objeto
             const marca = producto.marca || '-';
+            const color = producto.color || '-';
             
             // Obtener precio de venta del producto
             const precioVenta = producto.precio_venta || 0;
@@ -1989,6 +2070,7 @@ $(document).ready(function() {
                             <td>${producto.articulo || '-'}</td>
                             <td>${producto.descripcion || '-'}</td>
                             <td>${marca}</td>
+                            <td>${color}</td>
                             <td><span class="badge bg-info">${tallaStock.talla || '-'}</span></td>
                             ${colSucursal}
                             <td>
@@ -2018,7 +2100,7 @@ $(document).ready(function() {
             } else {
                 tbody.append(`
                     <tr>
-                        <td colspan="9" class="text-center text-muted py-2">
+                        <td colspan="10" class="text-center text-muted py-2">
                             <small>El producto ${producto.articulo || ''} no tiene tallas con stock en esta sucursal</small>
                         </td>
                     </tr>
@@ -2356,9 +2438,9 @@ $(document).ready(function() {
                     body {
                         font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
                         font-size: 12px;
-                        width: 76mm;
-                        max-width: 76mm;
-                        padding: 2mm;
+                        width: 72mm;
+                        max-width: 72mm;
+                        padding: 1mm 3mm;
                         margin: 0 auto;
                         background: #fff;
                         color: #000;
@@ -2375,33 +2457,32 @@ $(document).ready(function() {
                     /* Código de barras - Optimizado para pistola lectora 80mm */
                     .barcode-container {
                         text-align: center;
-                        margin: 10px 0 12px 0;
-                        padding: 12px 8px;
-                        background: #fff;
+                        margin: 8px 0 10px 0;
+                        padding: 8px 2px;
+                        background: #ffffff;
                     }
                     
                     .barcode-container svg {
                         max-width: 100%;
-                        width: 100%;
-                        height: 70px;
+                        height: auto;
                         display: block;
-                        margin: 6px auto;
+                        margin: 5px auto;
                     }
                     
                     .barcode-title {
-                        font-size: 11px;
-                        font-weight: 800;
-                        margin-bottom: 6px;
+                        font-size: 10px;
+                        font-weight: 700;
+                        margin-bottom: 5px;
                         color: #000;
                         text-transform: uppercase;
-                        letter-spacing: 1px;
+                        letter-spacing: 0.5px;
                     }
                     
                     /* Header - OPTIMIZADO PARA 80MM */
                     .header {
                         text-align: center;
                         margin-bottom: 8px;
-                        padding: 0 3px 8px 3px;
+                        padding: 0 2px 8px 2px;
                         border-bottom: 2px dashed #000;
                     }
                     
@@ -2427,7 +2508,7 @@ $(document).ready(function() {
                         font-size: 12px;
                         margin-bottom: 8px;
                         line-height: 1.5;
-                        padding: 0 3px;
+                        padding: 0 2px;
                     }
                     
                     .info-row {
@@ -2461,7 +2542,7 @@ $(document).ready(function() {
                     /* Items/Productos - OPTIMIZADO PARA 80MM */
                     .items {
                         margin: 8px 0;
-                        padding: 0 3px;
+                        padding: 0 2px;
                     }
                     
                     .item {
@@ -2551,7 +2632,7 @@ $(document).ready(function() {
                     /* Totales - OPTIMIZADO PARA LEGIBILIDAD */
                     .totales {
                         border-top: 3px solid #000;
-                        padding: 8px 3px 0 3px;
+                        padding: 8px 2px 0 2px;
                         margin-top: 8px;
                         font-size: 13px;
                     }
@@ -2588,7 +2669,7 @@ $(document).ready(function() {
                     .footer {
                         text-align: center;
                         margin-top: 10px;
-                        padding: 8px 3px 0 3px;
+                        padding: 8px 2px 0 2px;
                         border-top: 2px dashed #000;
                         font-size: 11px;
                         line-height: 1.6;
@@ -2608,9 +2689,9 @@ $(document).ready(function() {
                     /* Optimizaciones para impresión térmica 80mm */
                     @media print {
                         body { 
-                            width: 76mm;
-                            max-width: 76mm;
-                            padding: 2mm;
+                            width: 72mm;
+                            max-width: 72mm;
+                            padding: 1mm 2mm;
                             margin: 0 auto;
                             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
                             -webkit-font-smoothing: none;
@@ -2618,7 +2699,7 @@ $(document).ready(function() {
                         }
                         @page { 
                             size: 80mm auto; 
-                            margin: 2mm;
+                            margin: 0 4mm;
                         }
                         
                         /* Evitar saltos de página en elementos */
@@ -2659,16 +2740,15 @@ $(document).ready(function() {
                             overflow: hidden;
                         }
                         
-                        /* Optimizar código de barras para impresión */
+                        /* Código de barras para impresión */
                         .barcode-container {
                             background: #ffffff !important;
-                            padding: 10px 5px !important;
-                            margin: 8px 0 10px 0 !important;
+                            padding: 6px 2px !important;
                         }
                         
                         .barcode-container svg {
-                            height: 70px !important;
-                            margin: 5px auto !important;
+                            height: auto !important;
+                            max-height: 50px !important;
                         }
                     }
                 </style>
@@ -2744,26 +2824,21 @@ $(document).ready(function() {
                     function generarCodigoBarras() {
                         if (typeof JsBarcode !== "undefined") {
                             try {
-                                // Configuración optimizada para impresora térmica 80mm
+                                // Configuración para impresora térmica 80mm - LEGIBLE por pistola
                                 JsBarcode("#barcode", ticketId, {
-                                    format: "CODE128",      // Estándar más compatible con pistolas
-                                    width: 2.5,             // Barras anchas para mejor captura en térmica
-                                    height: 70,             // Altura óptima para lectura
-                                    displayValue: true,     // Mostrar número
-                                    fontSize: 20,           // Texto grande y claro
-                                    fontOptions: "bold",    // Negrita para legibilidad
-                                    font: "Consolas",       // Fuente monoespaciada
-                                    textMargin: 8,          // Espacio entre barras y texto
-                                    margin: 12,             // Márgenes laterales generosos (zona silenciosa)
-                                    marginTop: 4,           // Margen superior
-                                    marginBottom: 4,        // Margen inferior
-                                    background: "#ffffff",  // Fondo blanco puro
-                                    lineColor: "#000000",   // Negro puro para máximo contraste
-                                    valid: function(valid) {
-                                        if (valid) {
-                                            console.log("✓ Código de barras válido y listo para escanear");
-                                        }
-                                    }
+                                    format: "CODE128",      // Estándar compatible con pistolas
+                                    width: 1.8,             // Ancho de barra óptimo para térmica 80mm
+                                    height: 50,             // Altura compacta pero legible
+                                    displayValue: true,     // Mostrar número debajo
+                                    fontSize: 14,           // Tamaño texto legible
+                                    fontOptions: "bold",    // Negrita
+                                    font: "monospace",      // Fuente monoespaciada
+                                    textMargin: 5,          // Espacio entre barras y texto
+                                    margin: 10,             // Zona silenciosa (quiet zone)
+                                    marginTop: 5,
+                                    marginBottom: 5,
+                                    background: "#ffffff",  // Fondo blanco
+                                    lineColor: "#000000"    // Barras negras
                                 });
                             } catch (e) {
                                 console.error("Error generando código de barras:", e);

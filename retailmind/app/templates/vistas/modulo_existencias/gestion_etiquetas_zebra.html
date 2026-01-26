@@ -402,6 +402,12 @@
     color: #cc3d3d;
 }
 
+.nexo-alert-info {
+    background: rgba(0, 102, 255, 0.1);
+    border: 1px solid var(--nexo-primary);
+    color: #0052CC;
+}
+
 /* ========== LOADING OVERLAY ========== */
 .loading-overlay {
     position: fixed;
@@ -476,6 +482,52 @@
     <div class="row g-4">
         <!-- Panel Izquierdo: Documentos -->
         <div class="col-lg-5">
+            <!-- Búsqueda Rápida de SKU -->
+            <div class="nexo-card mb-4">
+                <div class="nexo-card-header" style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);">
+                    <h5><i class="ri-search-line"></i> Imprimir SKU Específico</h5>
+                </div>
+                <div class="nexo-card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-7">
+                            <label class="form-label small">Buscar por SKU o Artículo</label>
+                            <input type="text" id="busquedaSkuRapida" class="form-control" 
+                                placeholder="Ingrese SKU o nombre..." 
+                                onkeyup="debounceSkuSearch(event)">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small">Cantidad</label>
+                            <input type="number" id="cantidadSkuRapida" class="form-control" 
+                                value="1" min="1" max="999">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="nexo-btn nexo-btn-primary w-100" onclick="buscarSkuRapido()">
+                                <i class="ri-search-line"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Resultados de búsqueda rápida -->
+                    <div id="resultadosSkuRapido" class="mt-3" style="display: none;">
+                        <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                            <table class="nexo-table">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Artículo</th>
+                                        <th>Talla</th>
+                                        <th>Precio</th>
+                                        <th>Etiq.</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablaSkuRapido"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="nexo-card">
                 <div class="nexo-card-header">
                     <h5><i class="ri-file-list-3-line"></i> Documentos Disponibles</h5>
@@ -529,12 +581,13 @@
                                     <th>Fecha</th>
                                     <th>Origen</th>
                                     <th>Productos</th>
+                                    <th>Estado</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             <tbody id="tablaDocumentos">
                                 <tr>
-                                    <td colspan="6" class="text-center py-4">
+                                    <td colspan="7" class="text-center py-4">
                                         <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
                                         <p class="mt-2 mb-0 text-muted">Cargando documentos...</p>
                                     </td>
@@ -772,8 +825,31 @@ async function buscarImpresora() {
 
 // ========== GENERADOR ZPL ==========
 
+// Calcula la posición X para centrar el código de barras
+// Code128 con BY2: ancho = 70 + (22 × cantidad_caracteres)
+function calcularPosicionBarcode(sku, areaInicio, areaAncho) {
+    const skuLen = String(sku).length || 7;
+    const barcodeWidth = 70 + (22 * skuLen);  // Ancho del código de barras en dots
+    const posX = areaInicio + Math.floor((areaAncho - barcodeWidth) / 2);
+    return Math.max(areaInicio, posX);  // Asegurar que no sea menor al inicio
+}
+
+// Calcula la posición X para centrar el texto del SKU
+function calcularPosicionTextoSku(sku, areaInicio, areaAncho, fontSize) {
+    const skuLen = String(sku).length || 7;
+    const textoWidth = skuLen * fontSize;  // Aproximación: ancho = caracteres × tamaño
+    const posX = areaInicio + Math.floor((areaAncho - textoWidth) / 2);
+    return Math.max(areaInicio, posX);
+}
+
 function generarZPL(etiquetas) {
     let zpl = '';
+    
+    // Constantes de las áreas de etiquetas
+    const AREA_A_INICIO = 25;
+    const AREA_A_ANCHO = 375;
+    const AREA_B_INICIO = 456;
+    const AREA_B_ANCHO = 375;
 
     for (let i = 0; i < etiquetas.length; i += 2) {
         const e1 = etiquetas[i];      // Etiqueta A (izquierda)
@@ -783,15 +859,20 @@ function generarZPL(etiquetas) {
         zpl += '^PW856\n';  // Ancho total: 10.7cm = 856 dots
         zpl += '^LL240\n';  // Alto: 3cm = 240 dots
 
-        // ========== ETIQUETA A - IZQUIERDA (X: 25 a 400) ==========
+        // ========== ETIQUETA A - IZQUIERDA ==========
+        // Calcular posiciones centradas para el código de barras
+        const barcodeX_A = calcularPosicionBarcode(e1.sku, AREA_A_INICIO, AREA_A_ANCHO);
+        const textoSkuX_A = calcularPosicionTextoSku(e1.sku, AREA_A_INICIO, AREA_A_ANCHO, 16);
+        
         // Línea 1: Sucursal + Descripción + Marca
         zpl += `^FO25,5^A0N,24,24^FD${e1.sucursal}^FS\n`;
         zpl += `^FO110,5^A0N,24,24^FD${e1.desc}^FS\n`;
         zpl += `^FO260,5^A0N,24,24^FB140,1,0,R^FD${e1.marca}^FS\n`;
         
-        // Línea 2: Código de barras Code 128 + número grande debajo
-        zpl += `^FO70,32^BY2,3,75^BCN,75,N,N,N^FD${e1.sku}^FS\n`;
-        zpl += `^FO115,112^A0N,28,28^FD${e1.sku}^FS\n`;
+        // Línea 2: Código de barras CENTRADO dinámicamente
+        zpl += `^FO${barcodeX_A},32^BY2,3,75^BCN,75,N,N,N^FD${e1.sku}^FS\n`;
+        // SKU centrado debajo del código de barras
+        zpl += `^FO${textoSkuX_A},112^A0N,28,28^FD${e1.sku}^FS\n`;
         
         // Línea 3: Artículo + Precio
         zpl += `^FO25,145^A0N,28,28^FD${e1.art}^FS\n`;
@@ -806,29 +887,34 @@ function generarZPL(etiquetas) {
         // Línea 5: Fecha
         zpl += `^FO25,215^A0N,20,20^FD${e1.fecha}^FS\n`;
 
-        // ========== ETIQUETA B - DERECHA (X: 464 a 840) ==========
+        // ========== ETIQUETA B - DERECHA ==========
         if (e2) {
-            // Línea 1: Sucursal + Descripción + Marca
-            zpl += `^FO464,5^A0N,24,24^FD${e2.sucursal}^FS\n`;
-            zpl += `^FO549,5^A0N,24,24^FD${e2.desc}^FS\n`;
-            zpl += `^FO700,5^A0N,24,24^FB130,1,0,R^FD${e2.marca}^FS\n`;
+            // Calcular posiciones centradas para el código de barras
+            const barcodeX_B = calcularPosicionBarcode(e2.sku, AREA_B_INICIO, AREA_B_ANCHO);
+            const textoSkuX_B = calcularPosicionTextoSku(e2.sku, AREA_B_INICIO, AREA_B_ANCHO, 16);
             
-            // Línea 2: Código de barras Code 128 + número grande debajo
-            zpl += `^FO514,32^BY2,3,75^BCN,75,N,N,N^FD${e2.sku}^FS\n`;
-            zpl += `^FO559,112^A0N,28,28^FD${e2.sku}^FS\n`;
+            // Línea 1: Sucursal + Descripción + Marca
+            zpl += `^FO456,5^A0N,24,24^FD${e2.sucursal}^FS\n`;
+            zpl += `^FO541,5^A0N,24,24^FD${e2.desc}^FS\n`;
+            zpl += `^FO691,5^A0N,24,24^FB140,1,0,R^FD${e2.marca}^FS\n`;
+            
+            // Línea 2: Código de barras CENTRADO dinámicamente
+            zpl += `^FO${barcodeX_B},32^BY2,3,75^BCN,75,N,N,N^FD${e2.sku}^FS\n`;
+            // SKU centrado debajo del código de barras
+            zpl += `^FO${textoSkuX_B},112^A0N,28,28^FD${e2.sku}^FS\n`;
             
             // Línea 3: Artículo + Precio
-            zpl += `^FO464,145^A0N,28,28^FD${e2.art}^FS\n`;
-            zpl += `^FO680,140^A0N,32,32^FB150,1,0,R^FD${e2.precio}^FS\n`;
+            zpl += `^FO456,145^A0N,28,28^FD${e2.art}^FS\n`;
+            zpl += `^FO671,140^A0N,32,32^FB160,1,0,R^FD${e2.precio}^FS\n`;
             
             // Línea 4: G/F Factura + Talla + Color
-            zpl += `^FO464,180^A0N,20,20^FDG/F^FS\n`;
-            zpl += `^FO501,180^A0N,22,22^FD${e2.factura}^FS\n`;
-            zpl += `^FO619,175^A0N,36,36^FD${e2.talla}^FS\n`;
-            zpl += `^FO700,180^A0N,22,22^FB130,1,0,R^FD${e2.color}^FS\n`;
+            zpl += `^FO456,180^A0N,20,20^FDG/F^FS\n`;
+            zpl += `^FO493,180^A0N,22,22^FD${e2.factura}^FS\n`;
+            zpl += `^FO611,175^A0N,36,36^FD${e2.talla}^FS\n`;
+            zpl += `^FO691,180^A0N,22,22^FB140,1,0,R^FD${e2.color}^FS\n`;
             
             // Línea 5: Fecha
-            zpl += `^FO464,215^A0N,20,20^FD${e2.fecha}^FS\n`;
+            zpl += `^FO456,215^A0N,20,20^FD${e2.fecha}^FS\n`;
         }
 
         zpl += '^XZ\n';
@@ -896,7 +982,7 @@ function renderizarDocumentos(documentos) {
     if (!documentos || documentos.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="text-center py-4">
+                <td colspan="7" class="text-center py-4">
                     <i class="ri-file-search-line" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
                     <p class="mt-2 mb-0 text-muted">No se encontraron documentos</p>
                 </td>
@@ -917,6 +1003,17 @@ function renderizarDocumentos(documentos) {
             <td>${doc.fecha}</td>
             <td title="${doc.origen}">${doc.origen.substring(0, 15)}${doc.origen.length > 15 ? '...' : ''}</td>
             <td><span class="nexo-badge nexo-badge-warning">${doc.total_productos} uds</span></td>
+            <td>
+                ${doc.ya_impreso ? `
+                    <span class="nexo-badge nexo-badge-success" title="${doc.ultima_impresion || 'Impreso'}">
+                        <i class="ri-printer-fill"></i> ${doc.veces_impreso > 1 ? doc.veces_impreso + 'x' : 'Impreso'}
+                    </span>
+                ` : `
+                    <span class="nexo-badge" style="background: rgba(150,150,150,0.15); color: #666;">
+                        <i class="ri-printer-line"></i> Nuevo
+                    </span>
+                `}
+            </td>
             <td>
                 <button class="nexo-btn nexo-btn-primary" onclick="event.stopPropagation(); seleccionarDocumento('${doc.tipo}', ${doc.id})">
                     <i class="ri-arrow-right-line"></i>
@@ -945,6 +1042,186 @@ function debounceSearch() {
         paginaActual = 1;
         cargarDocumentos();
     }, 300);
+}
+
+// ========== BÚSQUEDA RÁPIDA DE SKU ==========
+let skuSearchTimeout = null;
+let productosSkuRapido = [];
+
+function debounceSkuSearch(event) {
+    if (event.key === 'Enter') {
+        buscarSkuRapido();
+        return;
+    }
+    if (skuSearchTimeout) clearTimeout(skuSearchTimeout);
+    skuSearchTimeout = setTimeout(() => {
+        const termino = document.getElementById('busquedaSkuRapida').value.trim();
+        if (termino.length >= 2) {
+            buscarSkuRapido();
+        }
+    }, 400);
+}
+
+async function buscarSkuRapido() {
+    const termino = document.getElementById('busquedaSkuRapida').value.trim();
+    const sucursalId = document.getElementById('filtroSucursal').value || '';
+    
+    if (termino.length < 2) {
+        document.getElementById('resultadosSkuRapido').style.display = 'none';
+        return;
+    }
+    
+    try {
+        const params = new URLSearchParams({
+            termino: termino,
+            sucursal_id: sucursalId
+        });
+        
+        const response = await fetch(`/app/etiquetas/buscar-producto/?${params}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            productosSkuRapido = data.productos;
+            renderizarResultadosSkuRapido(data.productos);
+            document.getElementById('resultadosSkuRapido').style.display = 'block';
+        } else {
+            console.error('Error en búsqueda:', data.error);
+        }
+    } catch (error) {
+        console.error('Error de conexión:', error);
+    }
+}
+
+function renderizarResultadosSkuRapido(productos) {
+    const tbody = document.getElementById('tablaSkuRapido');
+    const cantidadDefault = parseInt(document.getElementById('cantidadSkuRapida').value) || 1;
+    
+    if (!productos || productos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-3 text-muted">
+                    No se encontraron productos
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = productos.map((prod, index) => `
+        <tr>
+            <td><code style="font-size: 0.85rem;">${prod.sku}</code></td>
+            <td title="${prod.descripcion}">${prod.articulo.substring(0, 15)}</td>
+            <td><strong>${prod.talla}</strong></td>
+            <td>$${formatearPrecio(prod.precio)}</td>
+            <td style="width: 70px;">
+                <input type="number" class="quantity-input sku-rapido-cantidad" 
+                    data-index="${index}" value="${cantidadDefault}" min="1" max="999"
+                    style="width: 60px;">
+            </td>
+            <td>
+                <button class="nexo-btn nexo-btn-success" 
+                    onclick="imprimirSkuRapido(${index})" 
+                    title="Imprimir etiqueta">
+                    <i class="ri-printer-line"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function imprimirSkuRapido(index) {
+    if (!printerDevice) {
+        alert('No hay impresora conectada. Verifica que Zebra Browser Print esté ejecutándose.');
+        return;
+    }
+    
+    const producto = productosSkuRapido[index];
+    const cantidadInput = document.querySelector(`.sku-rapido-cantidad[data-index="${index}"]`);
+    const cantidad = parseInt(cantidadInput?.value) || 1;
+    
+    // Configurar producto con cantidad de etiquetas
+    producto.cantidad_etiquetas = cantidad;
+    producto.cantidad = cantidad;
+    producto.seleccionado = true;
+    
+    mostrarLoading(`Imprimiendo ${cantidad} etiqueta(s)...`);
+    
+    try {
+        const fechaInput = document.getElementById('fechaImpresion');
+        const fecha = fechaInput.value ? formatearFecha(fechaInput.value) : new Date().toLocaleDateString('es-CL');
+        const sucursal = document.getElementById('sucursalEtiqueta').value || producto.sucursal || '';
+        
+        const response = await fetch('/app/etiquetas/generar-datos/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                productos: [{
+                    ...producto,
+                    sucursal: sucursal,
+                    cantidad_etiquetas: cantidad
+                }],
+                fecha_impresion: fecha,
+                numero_documento: '',
+                sucursal: sucursal,
+                tipo_origen: 'MANUAL',
+                documento_id: null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Error al generar etiqueta');
+        }
+        
+        // Generar y enviar ZPL
+        const zpl = generarZPL(data.etiquetas);
+        
+        const printResponse = await fetch(ZEBRA_URL + '/write', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                device: {
+                    uid: printerDevice.uid,
+                    connection: printerDevice.connection,
+                    deviceType: printerDevice.deviceType,
+                    provider: printerDevice.provider,
+                    manufacturer: printerDevice.manufacturer,
+                    name: printerDevice.name,
+                    version: printerDevice.version
+                },
+                data: zpl
+            })
+        });
+        
+        if (printResponse.ok) {
+            ocultarLoading();
+            
+            // Mostrar mensaje de éxito
+            Swal.fire({
+                icon: 'success',
+                title: '¡Impreso!',
+                text: `${cantidad} etiqueta(s) de SKU ${producto.sku} enviadas a la impresora`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            throw new Error('Error en respuesta de impresora');
+        }
+        
+    } catch (error) {
+        console.error('Error al imprimir:', error);
+        ocultarLoading();
+        
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: `Error al imprimir: ${error.message}`
+        });
+    }
 }
 
 // ========== FUNCIONES DE PRODUCTOS ==========
@@ -977,8 +1254,22 @@ async function seleccionarDocumento(tipo, id) {
             renderizarProductos();
             actualizarEstadisticas();
             
-            // Mostrar alertas si hay
-            mostrarAlertas([]);
+            // Mostrar historial de impresiones previas si existe
+            if (data.ya_impreso && data.impresiones_previas && data.impresiones_previas.length > 0) {
+                const impresionesHtml = data.impresiones_previas.map(imp => 
+                    `<span class="nexo-badge nexo-badge-info me-2 mb-1">
+                        <i class="ri-printer-fill"></i> ${imp.fecha} - ${imp.usuario} (${imp.total_etiquetas} etiq.)
+                    </span>`
+                ).join('');
+                
+                mostrarAlertas([{
+                    tipo: 'info',
+                    mensaje: `<strong><i class="ri-history-line"></i> Este documento ya fue impreso ${data.impresiones_previas.length} vez(es):</strong><br>
+                        <div class="mt-2">${impresionesHtml}</div>`
+                }]);
+            } else {
+                mostrarAlertas([]);
+            }
         } else {
             alert(data.error || 'Error al cargar productos');
         }
@@ -1108,10 +1399,17 @@ function mostrarAlertas(alertas) {
         return;
     }
     
+    const iconMap = {
+        'warning': 'alert-line',
+        'info': 'information-line',
+        'success': 'check-line',
+        'error': 'error-warning-line'
+    };
+    
     container.innerHTML = alertas.map(alerta => `
         <div class="nexo-alert nexo-alert-${alerta.tipo}">
-            <i class="ri-${alerta.tipo === 'warning' ? 'alert-line' : 'information-line'}"></i>
-            <span>${alerta.mensaje}</span>
+            <i class="ri-${iconMap[alerta.tipo] || 'information-line'}"></i>
+            <div>${alerta.mensaje}</div>
         </div>
     `).join('');
 }
@@ -1157,7 +1455,9 @@ async function imprimirEtiquetas() {
                 productos: productosParaEnviar,
                 fecha_impresion: fecha,
                 numero_documento: numeroDoc,
-                sucursal: sucursal
+                sucursal: sucursal,
+                tipo_origen: documentoSeleccionado?.tipo || 'MANUAL',
+                documento_id: documentoSeleccionado?.id || null
             })
         });
         

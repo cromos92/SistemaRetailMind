@@ -775,6 +775,26 @@
         to { opacity: 1; transform: translateY(0); }
     }
     
+    /* Input de cantidad recibida deshabilitado */
+    .cantidad-recepcionada:disabled {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+    
+    /* Filas de productos según estado */
+    .table-success {
+        background-color: rgba(40, 167, 69, 0.1) !important;
+    }
+    
+    .table-warning {
+        background-color: rgba(255, 193, 7, 0.15) !important;
+    }
+    
+    .table-danger {
+        background-color: rgba(220, 53, 69, 0.15) !important;
+    }
+    
     /* Barra de progreso de verificación */
     #barraProgreso {
         transition: width 0.3s ease;
@@ -801,6 +821,26 @@
         border-color: var(--nexo-primary) !important;
     }
     
+    /* Sugerencias de rechazo */
+    .sugerencia-rechazo {
+        font-size: 11px;
+        transition: var(--nexo-transition-fast);
+        cursor: pointer;
+    }
+    
+    .sugerencia-rechazo:hover {
+        background-color: var(--nexo-error) !important;
+        color: white !important;
+        border-color: var(--nexo-error) !important;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+    }
+    
+    .sugerencia-rechazo:active {
+        transform: translateY(0);
+        box-shadow: none;
+    }
+    
     /* Modal de problema - mejoras */
     #modalDetalleProblema .alert-info {
         background: var(--nexo-primary-light);
@@ -822,7 +862,85 @@
             display: none;
         }
     }
+    
+    /* ============================================== */
+    /* CORRECCIÓN CRÍTICA: Textareas en SweetAlert2 */
+    /* ============================================== */
+    
+    /* Forzar que los textareas en SweetAlert2 sean editables */
+    .swal2-container .swal2-input,
+    .swal2-container .swal2-textarea,
+    .swal2-container textarea {
+        pointer-events: auto !important;
+        user-select: text !important;
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        cursor: text !important;
+        background-color: #ffffff !important;
+        opacity: 1 !important;
+    }
+    
+    /* Asegurar que el textarea sea interactivo */
+    .swal2-popup .swal2-textarea,
+    .swal2-popup textarea {
+        pointer-events: auto !important;
+        cursor: text !important;
+        user-select: text !important;
+        -webkit-user-select: text !important;
+    }
+    
+    /* Remover cualquier overlay que bloquee */
+    .swal2-container::after,
+    .swal2-container::before {
+        pointer-events: none !important;
+    }
+    
+    /* Forzar z-index correcto */
+    .swal2-popup {
+        pointer-events: auto !important;
+    }
+    
+    .swal2-popup textarea:focus,
+    .swal2-popup .swal2-textarea:focus {
+        outline: 2px solid #0066FF !important;
+        outline-offset: 2px;
+        border-color: #0066FF !important;
+    }
+    
+    /* Loader con estilo del proyecto */
+    #fullscreenLoader {
+        backdrop-filter: blur(4px);
+    }
+    
+    #fullscreenLoader .spinner-border {
+        color: #405189 !important;
+    }
 </style>
+
+<!-- Loader con estilo del proyecto -->
+<div id="fullscreenLoader" style="
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
+    backdrop-filter: blur(8px);
+    text-align: center;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
+        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
+            <i class="bi bi-box-arrow-in-down fs-3 text-white"></i>
+        </div>
+        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mb-0 fw-bold" style="color: #405189;">Cargando información...</p>
+        <small class="text-muted">Por favor espera un momento</small>
+    </div>
+</div>
 
 <div class="page-content">
     <div class="container-fluid">
@@ -1056,8 +1174,8 @@
                             <strong>¿Cómo verificar?</strong>
                             <span class="text-muted ms-2">
                                 <span class="badge bg-success me-1">1</span>Si todo llegó bien → <strong>Marcar todos OK</strong> |
-                                <span class="badge bg-warning text-dark me-1">2</span>Si hay problemas → Desmarca productos y usa <strong>⚠️</strong> para detallar |
-                                <span class="badge bg-primary me-1">3</span>Agrega observación a todos los problemas con <strong>Obs. Masiva</strong>
+                                <span class="badge bg-warning text-dark me-1">2</span>Si hay problemas → <strong>Desmarca</strong> productos y ajusta cantidad en <strong>"Recibido"</strong> |
+                                <span class="badge bg-primary me-1">3</span>Usa <strong>⚠️</strong> o <strong>Obs. Masiva</strong> para agregar observaciones a productos desmarcados
                             </span>
                         </div>
                         <button type="button" class="btn-close btn-close-sm" onclick="$('#guiaVerificacion').slideUp(200)"></button>
@@ -1073,16 +1191,11 @@
                             </button>
                         </div>
                         <div class="d-none d-md-flex gap-2 align-items-center">
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-success" id="btnMarcarTodosOK" title="Todos los productos llegaron en perfecto estado">
-                                    <i class="bi bi-check-all me-1"></i>✅ Marcar todos OK
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary" id="btnDesmarcarTodos" title="Quitar verificación de todos">
-                                    <i class="bi bi-x-lg me-1"></i>Limpiar
-                                </button>
-                            </div>
+                            <button type="button" class="btn btn-success" id="btnMarcarTodosOK" title="Todos los productos llegaron en perfecto estado">
+                                <i class="bi bi-check-all me-1"></i>✅ Marcar todos OK
+                            </button>
                             <div class="vr mx-2"></div>
-                            <button type="button" class="btn btn-outline-warning" id="btnObservacionMasiva" title="Agregar la misma observación a todos los productos con problemas">
+                            <button type="button" class="btn btn-outline-warning" id="btnObservacionMasiva" title="Agregar la misma observación a todos los productos desmarcados">
                                 <i class="bi bi-chat-left-text me-1"></i>📝 Observación Masiva
                                 <span class="badge bg-danger ms-1 d-none" id="badgeProductosSinObs">0</span>
                             </button>
@@ -1106,8 +1219,8 @@
                     <div class="d-flex align-items-center justify-content-between">
                         <div>
                             <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            <strong><span id="cantSinObs">0</span> producto(s)</strong> con problemas no tienen observación.
-                            <span class="text-muted">Usa "Observación Masiva" para agregarlas rápidamente.</span>
+                            <strong><span id="cantSinObs">0</span> producto(s) desmarcados</strong> no tienen observación.
+                            <span class="text-muted">Usa "Observación Masiva" o el botón "⚠️" para agregarlas.</span>
                         </div>
                         <button type="button" class="btn btn-warning btn-sm" onclick="$('#btnObservacionMasiva').click()">
                             <i class="bi bi-pencil-square me-1"></i>Agregar ahora
@@ -1527,7 +1640,6 @@ $(document).ready(function() {
     
     // Nuevos eventos para verificación
     $('#btnMarcarTodosOK, #btnMarcarTodosOKMobile').on('click', marcarTodosOK);
-    $('#btnDesmarcarTodos').on('click', desmarcarTodos);
     $('#btnObservacionMasiva').on('click', abrirObservacionMasiva);
     $('#buscarProductoModal').on('input', filtrarProductosModal);
     $('#btnLimpiarBusqueda').on('click', limpiarBusqueda);
@@ -1857,7 +1969,25 @@ function renderizarProductosVerificacion() {
     
     const busqueda = $('#buscarProductoModal').val().toLowerCase().trim();
     
+    // ✅ DEBUG: Log para verificar búsqueda
+    console.log('🔍 Búsqueda activa:', busqueda || '(sin filtro)');
+    console.log('📦 Total productos:', productosVerificacion.length);
+    
+    let productosVisibles = 0;
+    
     productosVerificacion.forEach((prod, index) => {
+        // ✅ DEBUG: Log detallado de cada producto
+        if (busqueda) {
+            console.log(`Producto ${index}:`, {
+                sku: prod.sku,
+                descripcion: prod.descripcion,
+                articulo: prod.articulo,
+                marca: prod.marca,
+                color: prod.color,
+                talla: prod.talla
+            });
+        }
+        
         // Filtrar por búsqueda (incluye SKU, descripción, artículo, color, marca y talla)
         const coincide = !busqueda || 
             (prod.sku && prod.sku.toLowerCase().includes(busqueda)) ||
@@ -1869,18 +1999,34 @@ function renderizarProductosVerificacion() {
         
         if (!coincide) return;
         
-        const tieneProblemas = prod.estado !== 'RECEPCIONADO_OK' || 
-                              prod.cantidad_danada > 0 || 
-                              prod.cantidad_faltante > 0 ||
-                              prod.cantidad_recepcionada !== prod.cantidad_esperada;
+        productosVisibles++;
         
-        const sinObservaciones = tieneProblemas && (!prod.observaciones || prod.observaciones.trim() === '');
-        const rowClass = tieneProblemas ? 'table-warning' : (prod.marcado_ok ? 'table-success' : '');
+        // ✅ MEJORADO: Determinar color de fila basado en checkbox y observaciones
+        const estaDesmarcado = !prod.marcado_ok;
+        const sinObservaciones = estaDesmarcado && (!prod.observaciones || prod.observaciones.trim() === '');
+        
+        let rowClass = '';
+        if (prod.marcado_ok) {
+            rowClass = 'table-success';  // Verde si está marcado OK
+        } else if (sinObservaciones) {
+            rowClass = 'table-danger';   // Rojo si está desmarcado SIN observaciones
+        } else {
+            rowClass = 'table-warning';  // Amarillo si está desmarcado CON observaciones
+        }
+        
         const estadoBadge = getEstadoBadge(prod.estado);
         
         // Indicador de observaciones faltantes
         const alertaObservaciones = sinObservaciones ? 
             '<i class="bi bi-exclamation-triangle-fill text-danger" title="Falta agregar observaciones"></i>' : '';
+        
+        // ✅ MEJORADO: Asegurar que los valores no sean undefined/null
+        const skuMostrar = prod.sku || 'N/A';
+        const descripcionMostrar = prod.descripcion || 'Sin descripción';
+        const articuloMostrar = prod.articulo || '-';
+        const colorMostrar = prod.color || '-';
+        const marcaMostrar = prod.marca || '-';
+        const tallaMostrar = prod.talla || 'N/A';
         
         tbody.append(`
             <tr class="${rowClass}" data-index="${index}">
@@ -1888,17 +2034,18 @@ function renderizarProductosVerificacion() {
                     <input type="checkbox" class="form-check-input producto-checkbox" 
                            data-index="${index}" ${prod.marcado_ok ? 'checked' : ''}>
                 </td>
-                <td><small class="font-monospace">${prod.sku}</small></td>
-                <td><small>${prod.descripcion}</small></td>
-                <td><small>${prod.articulo || '-'}</small></td>
-                <td><small>${prod.color || '-'}</small></td>
-                <td><small>${prod.marca || '-'}</small></td>
-                <td class="text-center"><span class="badge bg-secondary">${prod.talla}</span></td>
+                <td><small class="font-monospace">${skuMostrar}</small></td>
+                <td><small>${descripcionMostrar}</small></td>
+                <td><small>${articuloMostrar}</small></td>
+                <td><small>${colorMostrar}</small></td>
+                <td><small>${marcaMostrar}</small></td>
+                <td class="text-center"><span class="badge bg-secondary">${tallaMostrar}</span></td>
                 <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm text-center cantidad-recepcionada" 
                            data-index="${index}" value="${prod.cantidad_recepcionada}" 
-                           min="0" max="${prod.cantidad_esperada}" style="width: 70px;">
+                           min="0" max="${prod.cantidad_esperada}" style="width: 70px;"
+                           ${prod.marcado_ok ? 'disabled' : ''}>
                 </td>
                 <td>${estadoBadge}</td>
                 <td class="text-center">
@@ -1911,6 +2058,9 @@ function renderizarProductosVerificacion() {
             </tr>
         `);
     });
+    
+    // ✅ DEBUG: Log de resultados
+    console.log('✅ Productos visibles:', productosVisibles);
     
     if (tbody.children().length === 0) {
         tbody.html('<tr><td colspan="11" class="text-center text-muted">No se encontraron productos</td></tr>');
@@ -1946,23 +2096,25 @@ function getEstadoBadge(estado) {
 }
 
 function toggleProductoOK(index) {
-    productosVerificacion[index].marcado_ok = !productosVerificacion[index].marcado_ok;
+    const prod = productosVerificacion[index];
+    prod.marcado_ok = !prod.marcado_ok;
     
-    if (!productosVerificacion[index].marcado_ok) {
-        // Si se desmarca, marcarlo como faltante (sin abrir modal)
-        // El usuario puede hacer clic en "Detallar" si quiere especificar más
-        productosVerificacion[index].cantidad_recepcionada = 0;
-        productosVerificacion[index].cantidad_danada = 0;
-        productosVerificacion[index].cantidad_faltante = productosVerificacion[index].cantidad_esperada;
-        productosVerificacion[index].estado = 'FALTANTE';
-        productosVerificacion[index].observaciones = '';
+    if (!prod.marcado_ok) {
+        // ✅ MEJORADO: Si se desmarca, NO limpiar observaciones previas
+        // Solo ajustar estado a FALTANTE si cantidad_recepcionada es 0
+        if (prod.cantidad_recepcionada === 0 || prod.cantidad_recepcionada === prod.cantidad_esperada) {
+            prod.cantidad_recepcionada = 0;
+            prod.cantidad_faltante = prod.cantidad_esperada;
+            prod.estado = 'FALTANTE';
+        }
+        // Si ya tenía una cantidad parcial, mantenerla
     } else {
         // Si se marca OK, resetear a valores correctos
-        productosVerificacion[index].cantidad_recepcionada = productosVerificacion[index].cantidad_esperada;
-        productosVerificacion[index].cantidad_danada = 0;
-        productosVerificacion[index].cantidad_faltante = 0;
-        productosVerificacion[index].estado = 'RECEPCIONADO_OK';
-        productosVerificacion[index].observaciones = '';
+        prod.cantidad_recepcionada = prod.cantidad_esperada;
+        prod.cantidad_danada = 0;
+        prod.cantidad_faltante = 0;
+        prod.estado = 'RECEPCIONADO_OK';
+        prod.observaciones = '';  // Solo limpiar observaciones al marcar OK
     }
     
     renderizarProductosVerificacion();
@@ -1987,19 +2139,36 @@ function actualizarCantidadRecepcionada(index, cantidad) {
     
     prod.cantidad_recepcionada = cantidad;
     
-    // Auto-calcular faltante
-    prod.cantidad_faltante = Math.max(0, prod.cantidad_esperada - cantidad - prod.cantidad_danada);
+    // Auto-calcular faltante (considerando dañadas)
+    prod.cantidad_faltante = Math.max(0, prod.cantidad_esperada - cantidad);
     
-    // Auto-determinar estado
+    // Auto-determinar estado basándose en la cantidad recibida y dañadas
     if (cantidad === prod.cantidad_esperada && prod.cantidad_danada === 0) {
+        // Todo llegó completo y sin daños
         prod.estado = 'RECEPCIONADO_OK';
         prod.marcado_ok = true;
     } else if (cantidad === 0) {
+        // Nada llegó
         prod.estado = 'FALTANTE';
         prod.marcado_ok = false;
-    } else {
+    } else if (prod.cantidad_danada > 0) {
+        // Hay productos dañados
+        prod.estado = 'RECEPCIONADO_DANADO';
+        prod.marcado_ok = false;
+    } else if (cantidad < prod.cantidad_esperada) {
+        // Llegó menos de lo esperado
         prod.estado = 'RECEPCIONADO_PARCIAL';
         prod.marcado_ok = false;
+    } else {
+        // Por defecto
+        prod.estado = 'RECEPCIONADO_OK';
+        prod.marcado_ok = true;
+    }
+    
+    // ✅ IMPORTANTE: Si cambió de estado, mantener observaciones existentes
+    // Solo limpiar observaciones si pasa a OK
+    if (prod.estado === 'RECEPCIONADO_OK') {
+        prod.observaciones = '';
     }
     
     renderizarProductosVerificacion();
@@ -2040,46 +2209,20 @@ function marcarTodosOK() {
     $('#badgeProductosSinObs').addClass('d-none');
 }
 
-function desmarcarTodos() {
-    productosVerificacion.forEach(prod => {
-        prod.marcado_ok = false;
-        prod.cantidad_recepcionada = prod.cantidad_esperada; // Mantener cantidades pero desmarcar
-        prod.cantidad_danada = 0;
-        prod.cantidad_faltante = 0;
-        prod.estado = 'RECEPCIONADO_OK'; // Estado inicial
-        prod.observaciones = '';
-    });
-    renderizarProductosVerificacion();
-    actualizarResumenVerificacion();
-    
-    // Feedback visual
-    const Toast = Swal.mixin({
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 1500,
-        timerProgressBar: true
-    });
-    Toast.fire({
-        icon: 'info',
-        title: 'Verificación limpiada'
-    });
-}
-
 function abrirObservacionMasiva() {
-    // Obtener productos con problemas
-    const productosConProblemas = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK');
-    const productosSinObs = productosConProblemas.filter(p => !p.observaciones || p.observaciones.trim() === '');
+    // ✅ MEJORADO: Solo obtener productos DESMARCADOS (no marcado_ok)
+    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok);
+    const productosSinObs = productosDesmarcados.filter(p => !p.observaciones || p.observaciones.trim() === '');
     
-    if (productosConProblemas.length === 0) {
+    if (productosDesmarcados.length === 0) {
         Swal.fire({
             icon: 'info',
-            title: '✅ Sin productos con problemas',
+            title: '✅ Todos los productos están marcados OK',
             html: `
                 <div class="text-center">
                     <i class="bi bi-box-seam text-success display-4 mb-3"></i>
                     <p class="mb-0">Todos los productos están marcados como <strong>OK</strong>.</p>
-                    <p class="text-muted">No hay productos a los que aplicar observaciones.</p>
+                    <p class="text-muted">Para aplicar observaciones, primero desmarca los productos con problemas.</p>
                 </div>
             `,
             confirmButtonText: 'Entendido'
@@ -2087,16 +2230,18 @@ function abrirObservacionMasiva() {
         return;
     }
     
-    // Clasificar productos por tipo de problema
-    const parciales = productosConProblemas.filter(p => p.estado === 'RECEPCIONADO_PARCIAL');
-    const danados = productosConProblemas.filter(p => p.estado === 'RECEPCIONADO_DANADO');
-    const faltantes = productosConProblemas.filter(p => p.estado === 'FALTANTE');
+    // Clasificar productos desmarcados por estado
+    const parciales = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_PARCIAL');
+    const danados = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_DANADO');
+    const faltantes = productosDesmarcados.filter(p => p.estado === 'FALTANTE');
+    const sinEstado = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_OK');
     
     // Crear lista resumen por tipo
     let resumenHtml = '<div class="row text-center mb-3">';
+    if (faltantes.length > 0) resumenHtml += `<div class="col"><span class="badge bg-secondary fs-6">${faltantes.length} faltantes</span></div>`;
     if (parciales.length > 0) resumenHtml += `<div class="col"><span class="badge bg-warning text-dark fs-6">${parciales.length} parciales</span></div>`;
     if (danados.length > 0) resumenHtml += `<div class="col"><span class="badge bg-danger fs-6">${danados.length} dañados</span></div>`;
-    if (faltantes.length > 0) resumenHtml += `<div class="col"><span class="badge bg-secondary fs-6">${faltantes.length} faltantes</span></div>`;
+    if (sinEstado.length > 0) resumenHtml += `<div class="col"><span class="badge bg-info fs-6">${sinEstado.length} sin revisar</span></div>`;
     resumenHtml += '</div>';
     
     // Observaciones sugeridas comunes
@@ -2118,15 +2263,20 @@ function abrirObservacionMasiva() {
             <div class="text-start">
                 ${resumenHtml}
                 
-                <div class="alert alert-warning py-2 mb-3">
+                <div class="alert alert-info py-2 mb-3">
                     <i class="bi bi-lightbulb me-2"></i>
-                    <strong>${productosSinObs.length}</strong> de ${productosConProblemas.length} productos ${productosSinObs.length === productosConProblemas.length ? 'NO tienen' : 'aún no tienen'} observación.
-                    <br><small class="text-muted">Esta observación se aplicará a <strong>TODOS</strong> los productos con problemas.</small>
+                    Se aplicará a <strong>${productosDesmarcados.length} productos desmarcados</strong>.
+                    ${productosSinObs.length > 0 ? `<br><small class="text-muted">${productosSinObs.length} aún no tienen observación.</small>` : ''}
                 </div>
                 
                 <label class="form-label fw-bold">Escribe o selecciona una observación:</label>
-                <textarea id="observacionMasivaTexto" class="form-control mb-2" rows="3" 
-                          placeholder="Describe el problema común de estos productos..."></textarea>
+                <textarea 
+                    id="observacionMasivaTexto" 
+                    class="swal2-input swal2-textarea" 
+                    rows="4" 
+                    placeholder="Describe el problema común de estos productos..."
+                    style="width: 100%; display: block; box-sizing: border-box; resize: vertical; margin-bottom: 8px;"
+                ></textarea>
                 
                 <div class="mb-2">
                     <small class="text-muted">💡 Sugerencias rápidas:</small>
@@ -2136,9 +2286,9 @@ function abrirObservacionMasiva() {
                 </div>
                 
                 <div class="border rounded p-2 bg-light" style="max-height: 120px; overflow-y: auto;">
-                    <small class="text-muted d-block mb-1"><strong>Productos afectados:</strong></small>
+                    <small class="text-muted d-block mb-1"><strong>Productos afectados (desmarcados):</strong></small>
                     <small>
-                        ${productosConProblemas.map(p => {
+                        ${productosDesmarcados.map(p => {
                             const tieneObs = p.observaciones && p.observaciones.trim() !== '';
                             const icon = tieneObs ? '✅' : '⚠️';
                             return `${icon} ${p.descripcion} (${p.sku}) - Talla ${p.talla}`;
@@ -2149,15 +2299,31 @@ function abrirObservacionMasiva() {
         `,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: '<i class="bi bi-check-all me-1"></i>Aplicar a los ' + productosConProblemas.length + ' productos',
+        confirmButtonText: '<i class="bi bi-check-all me-1"></i>Aplicar a ' + productosDesmarcados.length + ' productos',
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#ffc107',
         width: '700px',
+        focusConfirm: false, // ✅ No enfocar el botón confirmar automáticamente
         didOpen: () => {
+            // ✅ Enfocar el textarea cuando se abre
+            const textarea = document.getElementById('observacionMasivaTexto');
+            if (textarea) {
+                // Remover cualquier atributo disabled que pueda existir
+                textarea.removeAttribute('disabled');
+                textarea.removeAttribute('readonly');
+                setTimeout(() => {
+                    textarea.focus();
+                    textarea.click(); // Forzar click para activar
+                    console.log('✅ Textarea Observación Masiva enfocado:', textarea);
+                }, 150);
+            }
+            
             // Agregar eventos a las sugerencias
             document.querySelectorAll('.sugerencia-obs').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    document.getElementById('observacionMasivaTexto').value = btn.dataset.texto;
+                    const txtArea = document.getElementById('observacionMasivaTexto');
+                    txtArea.value = btn.dataset.texto;
+                    txtArea.focus(); // ✅ Mantener foco después de seleccionar sugerencia
                 });
             });
         },
@@ -2173,10 +2339,10 @@ function abrirObservacionMasiva() {
         if (result.isConfirmed) {
             const observacion = result.value;
             
-            // Aplicar observación a todos los productos con problemas
+            // ✅ Aplicar observación SOLO a productos DESMARCADOS
             let contador = 0;
             productosVerificacion.forEach(prod => {
-                if (prod.estado !== 'RECEPCIONADO_OK') {
+                if (!prod.marcado_ok) {
                     prod.observaciones = observacion;
                     contador++;
                 }
@@ -2195,7 +2361,7 @@ function abrirObservacionMasiva() {
                 title: '✅ Observación Aplicada',
                 html: `
                     <div class="text-center">
-                        <p>Se aplicó la observación a <strong>${contador}</strong> producto(s):</p>
+                        <p>Se aplicó la observación a <strong>${contador}</strong> producto(s) desmarcados:</p>
                         <div class="alert alert-success mb-3">
                             <i class="bi bi-chat-left-text me-2"></i>
                             <em>"${observacion}"</em>
@@ -2231,8 +2397,8 @@ function actualizarResumenVerificacion() {
     productosVerificacion.forEach(prod => {
         if (prod.marcado_ok) verificados++;
         
-        // Contar productos con problemas sin observaciones
-        if (prod.estado !== 'RECEPCIONADO_OK' && (!prod.observaciones || prod.observaciones.trim() === '')) {
+        // ✅ MEJORADO: Contar productos DESMARCADOS sin observaciones
+        if (!prod.marcado_ok && (!prod.observaciones || prod.observaciones.trim() === '')) {
             productosSinObservaciones++;
         }
         
@@ -2276,11 +2442,12 @@ function actualizarResumenVerificacion() {
     const porcentaje = productosVerificacion.length > 0 ? (verificados / productosVerificacion.length) * 100 : 0;
     $('#barraProgreso').css('width', `${porcentaje}%`);
     
-    // Mostrar/ocultar alerta de productos sin observaciones
-    const hayProblemas = parcial > 0 || danado > 0 || faltante > 0;
-    const hayProductosConProblemasSinObs = productosSinObservaciones > 0;
+    // ✅ MEJORADO: Detectar productos desmarcados (con problemas)
+    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok).length;
+    const hayProductosDesmarcados = productosDesmarcados > 0;
+    const hayProductosDesmarcadosSinObs = productosSinObservaciones > 0;
     
-    if (hayProductosConProblemasSinObs) {
+    if (hayProductosDesmarcadosSinObs) {
         $('#alertaSinObservaciones').removeClass('d-none');
         $('#cantSinObs').text(productosSinObservaciones);
         $('#badgeProductosSinObs').removeClass('d-none').text(productosSinObservaciones);
@@ -2290,18 +2457,18 @@ function actualizarResumenVerificacion() {
     }
     
     // Cambiar el texto y estado del botón según la situación
-    if (hayProblemas) {
+    if (hayProductosDesmarcados) {
         $('#btnRecepcionarParcial').hide();
         
-        if (hayProductosConProblemasSinObs) {
-            // HAY problemas PERO faltan observaciones - DESHABILITAR botón
+        if (hayProductosDesmarcadosSinObs) {
+            // HAY productos desmarcados PERO faltan observaciones - DESHABILITAR botón
             $('#btnConfirmarRecepcion')
                 .removeClass('btn-success btn-warning')
                 .addClass('btn-secondary')
                 .prop('disabled', true)
-                .html('<i class="bi bi-lock me-1"></i>Agregar observaciones primero');
+                .html('<i class="bi bi-lock me-1"></i>Agregar observaciones a productos desmarcados');
         } else {
-            // HAY problemas Y todas tienen observaciones - HABILITAR botón
+            // HAY productos desmarcados Y todas tienen observaciones - HABILITAR botón
             $('#btnConfirmarRecepcion')
                 .removeClass('btn-success btn-secondary')
                 .addClass('btn-warning')
@@ -2309,7 +2476,7 @@ function actualizarResumenVerificacion() {
                 .html('<i class="bi bi-exclamation-triangle me-1"></i>Confirmar con Problemas');
         }
     } else {
-        // NO hay problemas - todo OK
+        // NO hay productos desmarcados - todo OK
         $('#btnRecepcionarParcial').hide();
         $('#btnConfirmarRecepcion')
             .removeClass('btn-warning btn-secondary')
@@ -2434,14 +2601,14 @@ function confirmarRecepcion() {
         return;
     }
     
-    // Filtrar productos por estado
-    const productosOK = productosVerificacion.filter(p => p.estado === 'RECEPCIONADO_OK');
-    const conProblemas = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK');
-    const hayProblemas = conProblemas.length > 0;
+    // ✅ MEJORADO: Filtrar productos por marcado_ok (no por estado)
+    const productosMarcadosOK = productosVerificacion.filter(p => p.marcado_ok);
+    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok);
+    const hayProductosDesmarcados = productosDesmarcados.length > 0;
     
-    // 🔍 VALIDACIÓN: Verificar que productos con problemas tengan observaciones
-    if (hayProblemas) {
-        const sinObservaciones = conProblemas.filter(p => !p.observaciones || p.observaciones.trim() === '');
+    // 🔍 VALIDACIÓN: Verificar que productos DESMARCADOS tengan observaciones
+    if (hayProductosDesmarcados) {
+        const sinObservaciones = productosDesmarcados.filter(p => !p.observaciones || p.observaciones.trim() === '');
         
         if (sinObservaciones.length > 0) {
             const productosSinObs = sinObservaciones.map(p => 
@@ -2453,13 +2620,13 @@ function confirmarRecepcion() {
                 title: '⚠️ Faltan Observaciones',
                 html: `
                     <div class="text-start">
-                        <p>Los siguientes productos tienen problemas pero <strong>no tienen observaciones</strong>:</p>
+                        <p>Los siguientes productos están <strong>desmarcados</strong> pero <strong>no tienen observaciones</strong>:</p>
                         <div class="alert alert-warning mt-2 mb-3" style="max-height: 200px; overflow-y: auto;">
                             ${productosSinObs}
                         </div>
                         <p class="text-muted small">
                             <i class="bi bi-info-circle me-1"></i>
-                            Por favor, usa el botón <strong>"⚠️"</strong> para detallar qué pasó con cada producto problemático.
+                            Por favor, usa el botón <strong>"⚠️"</strong> o <strong>"Observación Masiva"</strong> para indicar qué pasó con estos productos.
                         </p>
                     </div>
                 `,
@@ -2470,28 +2637,28 @@ function confirmarRecepcion() {
         }
     }
     
-    // Si hay productos con problemas, solo permitir recepcionar TODO según cantidades ingresadas
-    if (hayProblemas) {
-        // Desglosar los problemas
-        const parciales = conProblemas.filter(p => p.estado === 'RECEPCIONADO_PARCIAL').length;
-        const danados = conProblemas.filter(p => p.estado === 'RECEPCIONADO_DANADO').length;
-        const faltantes = conProblemas.filter(p => p.estado === 'FALTANTE').length;
+    // Si hay productos desmarcados con observaciones, procesarlos
+    if (hayProductosDesmarcados) {
+        // Clasificar productos desmarcados por estado
+        const parciales = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_PARCIAL').length;
+        const danados = productosDesmarcados.filter(p => p.estado === 'RECEPCIONADO_DANADO').length;
+        const faltantes = productosDesmarcados.filter(p => p.estado === 'FALTANTE').length;
         
         let detalleProblemas = '';
+        if (faltantes > 0) detalleProblemas += `<li>${faltantes} faltante(s) completo(s)</li>`;
         if (parciales > 0) detalleProblemas += `<li>${parciales} parcial(es)</li>`;
         if (danados > 0) detalleProblemas += `<li>${danados} con productos dañados</li>`;
-        if (faltantes > 0) detalleProblemas += `<li>${faltantes} faltante(s) completo(s)</li>`;
         
         // Calcular totales de stock que se actualizará
-        const totalOK = productosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
-        const totalProblemas = conProblemas.reduce((sum, p) => sum + (p.cantidad_recepcionada - p.cantidad_danada), 0);
-        const totalNoIngresa = conProblemas.reduce((sum, p) => sum + p.cantidad_faltante + p.cantidad_danada, 0);
+        const totalOK = productosMarcadosOK.reduce((sum, p) => sum + p.cantidad_recepcionada, 0);
+        const totalBuenasDesmarcados = productosDesmarcados.reduce((sum, p) => sum + Math.max(0, p.cantidad_recepcionada - p.cantidad_danada), 0);
+        const totalNoIngresa = productosDesmarcados.reduce((sum, p) => sum + p.cantidad_faltante + p.cantidad_danada, 0);
         
         Swal.fire({
-            title: '⚠️ Recepción con Problemas Detectados',
+            title: '⚠️ Recepción con Productos Desmarcados',
             html: `
                 <div class="text-start">
-                    <p>Se detectaron <strong>${conProblemas.length}</strong> producto(s) con problemas:</p>
+                    <p>Se detectaron <strong>${productosDesmarcados.length}</strong> producto(s) desmarcados con problemas:</p>
                     <ul class="mb-2">
                         ${detalleProblemas}
                     </ul>
@@ -2499,8 +2666,8 @@ function confirmarRecepcion() {
                         <i class="bi bi-info-circle me-2"></i>
                         <strong>📦 ¿Qué stock se actualizará?</strong>
                         <ul class="mt-2 mb-0">
-                            <li>✅ <strong>${totalOK}</strong> unidades de productos OK</li>
-                            ${totalProblemas > 0 ? `<li>⚠️ <strong>${totalProblemas}</strong> unidades parciales (recibidas - dañadas)</li>` : ''}
+                            <li>✅ <strong>${totalOK}</strong> unidades de productos marcados OK</li>
+                            ${totalBuenasDesmarcados > 0 ? `<li>⚠️ <strong>${totalBuenasDesmarcados}</strong> unidades parciales (recibidas en buen estado)</li>` : ''}
                             <li>❌ <strong>${totalNoIngresa}</strong> unidades NO se agregarán al stock (faltantes + dañadas)</li>
                         </ul>
                     </div>
@@ -2524,12 +2691,12 @@ function confirmarRecepcion() {
             }
         });
     } else {
-        // No hay problemas, recepción normal completa
+        // No hay productos desmarcados, recepción normal completa
         Swal.fire({
             title: '✅ Confirmar Recepción Completa',
             html: `
                 <div class="text-start">
-                    <p>Vas a recepcionar <strong>${productosOK.length}</strong> productos en perfecto estado.</p>
+                    <p>Vas a recepcionar <strong>${productosMarcadosOK.length}</strong> productos en perfecto estado.</p>
                     <div class="alert alert-success">
                         <i class="bi bi-check-circle-fill me-2"></i>
                         Todos los productos están marcados como <strong>OK</strong>
@@ -2586,32 +2753,96 @@ function rechazarRecepcion() {
         return;
     }
     
+    // ✅ Sugerencias de motivos comunes
+    const sugerenciasRechazo = [
+        { texto: 'No llegó mercadería', icon: '📦' },
+        { texto: 'No corresponde a la tienda', icon: '🏪' },
+        { texto: 'Productos fallados', icon: '❌' },
+        { texto: 'Productos no corresponden', icon: '⚠️' },
+        { texto: 'Productos dañados en tránsito', icon: '📦' },
+        { texto: 'Cantidad incorrecta', icon: '🔢' }
+    ];
+    
+    const sugerenciasHtml = sugerenciasRechazo.map(s => 
+        `<button type="button" class="btn btn-outline-danger btn-sm me-1 mb-1 sugerencia-rechazo" data-texto="${s.texto}">
+            ${s.icon} ${s.texto}
+        </button>`
+    ).join('');
+    
     Swal.fire({
         title: '❌ Rechazar Recepción',
         html: `
-            <div class="text-start">
+            <div class="text-start mb-3">
                 <p><strong>¿Estás seguro que deseas rechazar esta recepción?</strong></p>
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle me-2"></i>
                     <strong>Atención:</strong> Esta acción implica:
                 </div>
-                <ul class="text-muted">
+                <ul class="text-muted small">
                     <li>El DTE <strong>#${documentoSeleccionado.numero_documento}</strong> será marcado como rechazado</li>
                     <li>El stock NO se incrementará en tu sucursal</li>
                     <li>Debes ingresar un motivo del rechazo</li>
                 </ul>
+                
+                <label class="form-label fw-bold mb-2">
+                    <i class="bi bi-pencil-square me-1"></i>Motivo del rechazo (obligatorio)
+                </label>
+                <textarea 
+                    id="motivoRechazoTextarea" 
+                    class="swal2-input swal2-textarea mb-2" 
+                    rows="3" 
+                    placeholder="Describe el motivo del rechazo..."
+                    style="width: 100%; display: block; resize: vertical;"
+                ></textarea>
+                
+                <div class="mb-2">
+                    <small class="text-muted">💡 Sugerencias rápidas:</small>
+                    <div class="mt-1">
+                        ${sugerenciasHtml}
+                    </div>
+                </div>
             </div>
-            <textarea id="motivoRechazo" class="form-control mt-3" rows="3" placeholder="Ingresa el motivo del rechazo (obligatorio)"></textarea>
         `,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Sí, rechazar',
+        confirmButtonText: '<i class="bi bi-x-circle me-1"></i>Sí, rechazar',
         confirmButtonColor: '#dc3545',
         cancelButtonText: 'Cancelar',
+        width: '650px',
+        focusConfirm: false,
+        didOpen: () => {
+            const textarea = document.getElementById('motivoRechazoTextarea');
+            
+            if (textarea) {
+                // Enfocar el textarea
+                setTimeout(() => {
+                    textarea.focus();
+                }, 100);
+                
+                // Agregar eventos a las sugerencias
+                document.querySelectorAll('.sugerencia-rechazo').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const textoSugerido = this.dataset.texto;
+                        textarea.value = textoSugerido;
+                        textarea.focus(); // Mantener foco para que el usuario pueda editar
+                        
+                        // Feedback visual
+                        this.classList.remove('btn-outline-danger');
+                        this.classList.add('btn-danger');
+                        setTimeout(() => {
+                            this.classList.remove('btn-danger');
+                            this.classList.add('btn-outline-danger');
+                        }, 300);
+                    });
+                });
+            }
+        },
         preConfirm: () => {
-            const motivo = document.getElementById('motivoRechazo').value.trim();
+            const textarea = document.getElementById('motivoRechazoTextarea');
+            const motivo = textarea ? textarea.value.trim() : '';
+            
             if (!motivo) {
-                Swal.showValidationMessage('Debes ingresar un motivo del rechazo');
+                Swal.showValidationMessage('⚠️ Debes ingresar un motivo del rechazo');
                 return false;
             }
             return motivo;
@@ -2912,7 +3143,13 @@ function rehabilitarDTE(dteId, numeroDocumento) {
                     </ul>
                 </div>
                 <label class="form-label mt-3">Observación (opcional):</label>
-                <textarea id="observacionRehabilitacion" class="form-control" rows="2" placeholder="Ej: Se corrigió el problema, intentar recibir nuevamente..."></textarea>
+                <textarea 
+                    id="observacionRehabilitacion" 
+                    class="swal2-input swal2-textarea" 
+                    rows="3" 
+                    placeholder="Ej: Se corrigió el problema, intentar recibir nuevamente..."
+                    style="width: 100%; display: block; box-sizing: border-box; resize: vertical;"
+                ></textarea>
             </div>
         `,
         icon: 'question',
@@ -2920,7 +3157,22 @@ function rehabilitarDTE(dteId, numeroDocumento) {
         confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, rehabilitar',
         cancelButtonText: 'Cancelar',
         confirmButtonColor: '#28a745',
-        width: '550px'
+        width: '550px',
+        focusConfirm: false, // ✅ No enfocar el botón confirmar
+        didOpen: () => {
+            // ✅ Enfocar el textarea cuando se abre
+            const textarea = document.getElementById('observacionRehabilitacion');
+            if (textarea) {
+                // Remover cualquier atributo disabled que pueda existir
+                textarea.removeAttribute('disabled');
+                textarea.removeAttribute('readonly');
+                setTimeout(() => {
+                    textarea.focus();
+                    textarea.click(); // Forzar click para activar
+                    console.log('✅ Textarea Rehabilitación enfocado:', textarea);
+                }, 150);
+            }
+        }
     }).then(result => {
         if (!result.isConfirmed) return;
         
@@ -3066,6 +3318,15 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+// Funciones globales de loading
+function showGlobalLoader() {
+    $('#fullscreenLoader').fadeIn(100);
+}
+
+function hideGlobalLoader() {
+    $('#fullscreenLoader').fadeOut(100);
 }
 
 function verDTERecepcionado(dteId) {

@@ -485,9 +485,9 @@ def crear_empresa(request):
             rut=data.get('rut', ''),
             nombre_fantasia=data.get('nombre_fantasia', ''),
             razon_social=data.get('razon_social', ''),
-            giro=data.get('giro_comercial', ''),
+            giro=data.get('giro') or data.get('giro_comercial', ''),  # Aceptar ambos nombres
             direccion=data.get('direccion', ''),
-            comuna=data.get('ciudad', ''),  # Usar ciudad como comuna
+            comuna=data.get('comuna') or data.get('ciudad', ''),  # Aceptar comuna o ciudad
             ciudad=data.get('ciudad', ''),
             esProveedor=es_proveedor,
             correoVendedor=_clean_char_field(correo_vendedor),
@@ -511,6 +511,14 @@ def crear_empresa(request):
                 'nombre': empresa.nombre,
                 'rut': empresa.rut,
                 'razon_social': empresa.razon_social,
+                'nombre_fantasia': empresa.nombre_fantasia,
+                'giro': empresa.giro,
+                'direccion': empresa.direccion,
+                'comuna': empresa.comuna,
+                'ciudad': empresa.ciudad,
+                'telefono': empresa.contacto1 or '',
+                'email': empresa.correoVendedor or empresa.correoAdministrador or '',
+                'acteco': empresa.acteco or '',
                 'tipo_display': tipo_display,
                 'esProveedor': empresa.esProveedor,
             }

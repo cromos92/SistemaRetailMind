@@ -766,41 +766,101 @@ def actualizar_precio(request):
             lotes_afectados=lotes_actualizados
         )
         
-        # === NOTIFICAR A OTRAS SUCURSALES ===
+        # === SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ===
+        # Igual que en creación de producto: sincroniza Y crea alerta
         sucursales_notificadas = 0
         productos_sincronizados = 0
+        notificaciones_creadas = 0
         
         if sincronizar_sucursales:
-            # Buscar productos similares en OTRAS sucursales (mismo artículo, marca, color)
+            from django.db.models import Sum
+            from .models import EmpresaUser
+            
+            # Buscar productos similares en OTRAS sucursales QUE TENGAN STOCK
             productos_otras_sucursales = Producto.objects.filter(
                 articulo=producto.articulo,
                 atributo1=producto.atributo1,
                 atributo2=producto.atributo2
             ).exclude(
-                sucursal=sucursal_origen
+                sucursal=sucursal_origen  # Excluir sucursal donde se edita
+            ).annotate(
+                stock_total=Sum('producto_talla__stock')
+            ).filter(
+                stock_total__gt=0  # Solo productos con stock > 0
             ).select_related('sucursal')
             
-            from .models import EmpresaUser
+            print(f"🔍 [EdicionRapida] Buscando productos similares con stock: {productos_otras_sucursales.count()} encontrados")
             
             for prod_similar in productos_otras_sucursales:
-                # Crear cambio pendiente para la otra sucursal
-                primera_talla = prod_similar.producto_talla.first()
+                precio_anterior_sync = int(prod_similar.precioventa or 0)
+                
+                # Verificar que haya tallas con stock
+                primera_talla = Producto_Talla.objects.filter(
+                    producto=prod_similar,
+                    stock__gt=0
+                ).first()
+                
                 if not primera_talla:
+                    print(f"   ⏭️ {prod_similar.sucursal.alias}: sin tallas con stock, saltando")
                     continue
+                
+                print(f"   📦 {prod_similar.sucursal.alias}: stock={prod_similar.stock_total}, precio_actual=${precio_anterior_sync:,}")
+                
+                # Solo procesar si hay diferencia de precio
+                if precio_anterior_sync == nuevo_precio:
+                    print(f"   ⏭️ {prod_similar.sucursal.alias}: mismo precio, saltando")
+                    continue
+                
+                # === 1. SINCRONIZAR PRECIO ===
+                prod_similar.precioventa = nuevo_precio
+                prod_similar.save()
+                
+                # Actualizar lotes activos
+                LoteProducto.objects.filter(
+                    producto_talla__producto=prod_similar,
+                    cantidad_disponible__gt=0,
+                    activo=True
+                ).update(precio_venta_unitario=nuevo_precio)
+                
+                # Calcular diferencia para esta sucursal
+                diferencia_sync = nuevo_precio - precio_anterior_sync
+                porcentaje_sync = round((diferencia_sync / precio_anterior_sync * 100), 2) if precio_anterior_sync else 0
+                
+                # Registrar en historial de la otra sucursal
+                HistorialCambioPrecio.objects.create(
+                    producto=prod_similar,
+                    precio_anterior=precio_anterior_sync,
+                    precio_nuevo=nuevo_precio,
+                    diferencia=diferencia_sync,
+                    porcentaje_cambio=porcentaje_sync,
+                    tipo_cambio='SINCRONIZACION',
+                    motivo=f'Sincronización automática desde edición rápida en {sucursal_origen.alias}',
+                    usuario=request.user,
+                    ip_address=ip_address
+                )
+                
+                # === 2. CREAR ALERTA INFORMATIVA (ya aplicado) ===
+                # Determinar prioridad según la diferencia
+                prioridad = 'MEDIA'
+                if abs(porcentaje_sync) > 20:
+                    prioridad = 'ALTA'
+                if abs(porcentaje_sync) > 50:
+                    prioridad = 'URGENTE'
                 
                 cambio = CambioPrecioPendiente.objects.create(
                     producto_talla=primera_talla,
                     sucursal=prod_similar.sucursal,
-                    precio_anterior=prod_similar.precioventa,
+                    precio_anterior=precio_anterior_sync,
                     precio_nuevo=nuevo_precio,
-                    diferencia=nuevo_precio - prod_similar.precioventa,
-                    porcentaje_cambio=((nuevo_precio - prod_similar.precioventa) / prod_similar.precioventa * 100) if prod_similar.precioventa > 0 else 0,
+                    diferencia=diferencia_sync,
+                    porcentaje_cambio=porcentaje_sync,
                     tipo_cambio='SINCRONIZACION',
-                    estado='PENDIENTE',
-                    motivo=f'Sincronización desde {sucursal_origen.alias}: {motivo}',
+                    estado='APLICADO',  # APLICADO porque ya se sincronizó
+                    motivo=f'Precio sincronizado automáticamente desde {sucursal_origen.alias}',
                     creado_por=request.user,
-                    prioridad='MEDIA',
-                    fecha_vencimiento=timezone.now() + timedelta(days=7)
+                    prioridad=prioridad,
+                    fecha_vencimiento=timezone.now() + timedelta(days=7),
+                    notificado=True
                 )
                 
                 # Crear notificaciones para usuarios de esa sucursal
@@ -810,32 +870,26 @@ def actualizar_precio(request):
                 ).select_related('user')
                 
                 mensaje_notif = (
-                    f"💰 Cambio de precio desde {sucursal_origen.alias}: "
-                    f"{producto.articulo} | "
-                    f"${precio_anterior:,} → ${nuevo_precio:,} "
-                    f"({'+' if diferencia > 0 else ''}{porcentaje:.1f}%)"
+                    f"💰 Precio actualizado en {producto.articulo}: "
+                    f"${precio_anterior_sync:,} → ${nuevo_precio:,} "
+                    f"(desde {sucursal_origen.alias})"
                 )
                 
                 for empresa_user in usuarios_sucursal:
-                    # Evitar duplicados: verificar si ya existe notificación
-                    existe = NotificacionCambioPrecio.objects.filter(
+                    NotificacionCambioPrecio.objects.create(
                         cambio_precio=cambio,
                         usuario=empresa_user.user,
-                        tipo='NUEVA'
-                    ).exists()
-                    
-                    if not existe:
-                        NotificacionCambioPrecio.objects.create(
-                            cambio_precio=cambio,
-                            usuario=empresa_user.user,
-                            tipo='NUEVA',
-                            mensaje=mensaje_notif
-                        )
-                        sucursales_notificadas += 1
+                        tipo='NUEVA',
+                        mensaje=mensaje_notif
+                    )
+                    notificaciones_creadas += 1
                 
-                cambio.notificado = True
-                cambio.save()
                 productos_sincronizados += 1
+                sucursales_notificadas += 1
+                print(f"✅ Precio sincronizado en {prod_similar.sucursal.alias}: ${precio_anterior_sync:,} → ${nuevo_precio:,}. {usuarios_sucursal.count()} notificaciones")
+            
+            if productos_sincronizados > 0:
+                print(f"🔄 {productos_sincronizados} productos sincronizados. {notificaciones_creadas} notificaciones enviadas")
         
         return JsonResponse({
             'success': True,
@@ -1272,21 +1326,45 @@ def obtener_historial_precio(request, producto_id):
 @require_GET
 @login_required
 def obtener_historial_ediciones_recientes(request):
-    """Obtener historial general de las últimas ediciones de precios"""
+    """Obtener historial general de las últimas ediciones de precios
+    
+    Parámetros GET opcionales:
+    - search: Término de búsqueda para filtrar por nombre de artículo
+    - limit: Cantidad máxima de resultados (default: 20, máximo: 100)
+    """
     try:
-        # Obtener sucursal activa del usuario
-        sucursal_id = request.session.get('sucursal_id')
+        # Obtener sucursal activa del usuario (clave correcta)
+        sucursal_id = request.session.get('idSucursalActual')
         
-        # Obtener los últimos 20 cambios de precio
+        # Parámetros de búsqueda
+        search_term = request.GET.get('search', '').strip()
+        limit = min(int(request.GET.get('limit', 20)), 100)  # Máximo 100 resultados
+        
+        print(f"📋 [Historial] Sucursal actual: {sucursal_id}, búsqueda: '{search_term}', límite: {limit}")
+        
+        # Obtener cambios de precio
         query = HistorialCambioPrecio.objects.select_related(
             'producto', 'producto__sucursal', 'usuario'
         ).order_by('-fecha_cambio')
         
         # Si hay sucursal activa, filtrar por ella
+        # Incluye ediciones directas Y sincronizaciones hacia esta sucursal
         if sucursal_id:
-            query = query.filter(producto__sucursal_id=sucursal_id)
+            from django.db.models import Q
+            query = query.filter(
+                Q(producto__sucursal_id=sucursal_id) |  # Ediciones de esta sucursal
+                Q(tipo_cambio='SINCRONIZACION', producto__sucursal_id=sucursal_id)  # Sincronizaciones recibidas
+            )
         
-        historial = query[:20]
+        # Filtrar por término de búsqueda si existe
+        if search_term:
+            query = query.filter(producto__articulo__icontains=search_term)
+            # Si hay búsqueda, aumentar el límite para mostrar más resultados relevantes
+            limit = min(50, limit * 2)
+        
+        historial = query[:limit]
+        
+        print(f"📋 [Historial] Registros encontrados: {len(historial)}")
         
         historial_data = []
         for cambio in historial:
@@ -1294,7 +1372,7 @@ def obtener_historial_ediciones_recientes(request):
                 'id': cambio.id,
                 'producto_id': cambio.producto.id,
                 'producto_nombre': cambio.producto.articulo,
-                'producto_talla': cambio.producto.atributo1.alias if cambio.producto.atributo1 else '',
+                'producto_talla': cambio.producto.atributo1.valor if cambio.producto.atributo1 else '',
                 'sucursal': cambio.producto.sucursal.alias if cambio.producto.sucursal else 'N/A',
                 'precio_anterior': cambio.precio_anterior,
                 'precio_nuevo': cambio.precio_nuevo,
@@ -1310,10 +1388,14 @@ def obtener_historial_ediciones_recientes(request):
         return JsonResponse({
             'success': True,
             'historial': historial_data,
-            'total': len(historial_data)
+            'total': len(historial_data),
+            'search_term': search_term if search_term else None
         })
         
     except Exception as e:
+        import traceback
+        print(f"❌ [Historial] Error: {str(e)}")
+        print(traceback.format_exc())
         return JsonResponse({
             'success': False,
             'error': f'Error al obtener historial: {str(e)}'
@@ -1509,6 +1591,7 @@ def obtener_indicadores_precios_pendientes(request):
         
         # Contar por estado
         total_pendientes = queryset.filter(estado='PENDIENTE').count()
+        total_aplicados = queryset.filter(estado='APLICADO').count()
         total_revisados = queryset.filter(estado='REVISADO').count()
         total_aprobados = queryset.filter(estado='APROBADO').count()
         total_rechazados = queryset.filter(estado='RECHAZADO').count()
@@ -1555,6 +1638,7 @@ def obtener_indicadores_precios_pendientes(request):
             'success': True,
             'indicadores': {
                 'total_pendientes': total_pendientes,
+                'total_aplicados': total_aplicados,
                 'total_revisados': total_revisados,
                 'total_aprobados': total_aprobados,
                 'total_rechazados': total_rechazados,
@@ -1582,6 +1666,12 @@ def listar_cambios_pendientes(request):
         sucursal_id = request.GET.get('sucursal_id') or request.session.get('idSucursalActual')
         estado = request.GET.get('estado')
         prioridad = request.GET.get('prioridad')
+        tipo_cambio = request.GET.get('tipo_cambio')
+        busqueda = request.GET.get('busqueda', '').strip()
+        fecha_desde = request.GET.get('fecha_desde', '').strip()
+        fecha_hasta = request.GET.get('fecha_hasta', '').strip()
+        mostrar_descartados = request.GET.get('mostrar_descartados', 'false') == 'true'
+        solo_descartados = request.GET.get('solo_descartados', 'false') == 'true'
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 20))
         
@@ -1593,6 +1683,14 @@ def listar_cambios_pendientes(request):
             'aprobado_por'
         )
         
+        # Filtrar por descartados según parámetros
+        if solo_descartados:
+            # Mostrar SOLO los descartados
+            queryset = queryset.filter(descartado=True)
+        elif not mostrar_descartados:
+            # Por defecto NO mostrar descartados
+            queryset = queryset.filter(descartado=False)
+        
         # Filtros
         if sucursal_id:
             queryset = queryset.filter(sucursal_id=sucursal_id)
@@ -1602,6 +1700,43 @@ def listar_cambios_pendientes(request):
         
         if prioridad:
             queryset = queryset.filter(prioridad=prioridad)
+        
+        if tipo_cambio:
+            queryset = queryset.filter(tipo_cambio=tipo_cambio)
+        
+        if busqueda:
+            queryset = queryset.filter(
+                Q(producto_talla__producto__articulo__icontains=busqueda) |
+                Q(producto_talla__sku__icontains=busqueda) |
+                Q(motivo__icontains=busqueda)
+            )
+        
+        # Filtro de fechas
+        if fecha_desde:
+            from datetime import datetime
+            fecha_inicio = datetime.strptime(fecha_desde, '%Y-%m-%d')
+            queryset = queryset.filter(fecha_creacion__date__gte=fecha_inicio.date())
+        
+        if fecha_hasta:
+            from datetime import datetime
+            fecha_fin = datetime.strptime(fecha_hasta, '%Y-%m-%d')
+            queryset = queryset.filter(fecha_creacion__date__lte=fecha_fin.date())
+        
+        # Obtener resumen de contadores
+        base_queryset = CambioPrecioPendiente.objects.all()
+        if sucursal_id:
+            base_queryset = base_queryset.filter(sucursal_id=sucursal_id)
+        
+        # Contadores de activos (no descartados)
+        activos = base_queryset.filter(descartado=False)
+        resumen = {
+            'pendientes': activos.filter(estado='PENDIENTE').count(),
+            'revisados': activos.filter(estado='REVISADO').count(),
+            'aprobados': activos.filter(estado='APROBADO').count(),
+            'rechazados': activos.filter(estado='RECHAZADO').count(),
+            'aplicados': activos.filter(estado='APLICADO').count(),
+            'descartados': base_queryset.filter(descartado=True).count(),  # Total descartados
+        }
         
         queryset = queryset.order_by('-fecha_creacion')
         
@@ -1639,12 +1774,17 @@ def listar_cambios_pendientes(request):
                 'fecha_aprobacion': cambio.fecha_aprobacion.strftime('%d/%m/%Y %H:%M') if cambio.fecha_aprobacion else None,
                 'dias_pendiente': cambio.dias_pendiente,
                 'esta_vencido': cambio.esta_vencido,
-                'requiere_atencion': cambio.requiere_atencion
+                'requiere_atencion': cambio.requiere_atencion,
+                # Campos de descarte (para historial)
+                'descartado': cambio.descartado,
+                'fecha_descarte': cambio.fecha_descarte.strftime('%d/%m/%Y %H:%M') if cambio.fecha_descarte else None,
+                'descartado_por': cambio.descartado_por.username if cambio.descartado_por else None
             })
         
         return JsonResponse({
             'success': True,
             'cambios': cambios_data,
+            'resumen': resumen,
             'pagination': {
                 'current_page': page_obj.number,
                 'total_pages': paginator.num_pages,
@@ -1655,9 +1795,61 @@ def listar_cambios_pendientes(request):
         })
         
     except Exception as e:
+        import traceback
+        print(f"Error en listar_cambios_pendientes: {str(e)}")
+        print(traceback.format_exc())
         return JsonResponse({
             'success': False,
             'error': f'Error al listar cambios: {str(e)}'
+        })
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def eliminar_cambios_aplicados(request):
+    """
+    Descartar (archivar) registros de cambios - NO los elimina, solo los marca como descartados
+    para mantener el historial completo.
+    """
+    try:
+        data = json.loads(request.body)
+        cambio_ids = data.get('cambio_ids', [])
+        
+        if not cambio_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se especificaron cambios a descartar'
+            })
+        
+        # Marcar como descartados (NO eliminar)
+        descartados = CambioPrecioPendiente.objects.filter(
+            id__in=cambio_ids
+        ).update(
+            descartado=True,
+            fecha_descarte=timezone.now(),
+            descartado_por=request.user
+        )
+        
+        # Marcar las notificaciones como leídas
+        NotificacionCambioPrecio.objects.filter(
+            cambio_precio_id__in=cambio_ids,
+            leida=False
+        ).update(leida=True, fecha_lectura=timezone.now())
+        
+        return JsonResponse({
+            'success': True,
+            'eliminados': descartados,  # Mantener nombre para compatibilidad JS
+            'message': f'{descartados} registro(s) descartados correctamente'
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Error en eliminar_cambios_aplicados: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al eliminar: {str(e)}'
         })
 
 
@@ -1863,15 +2055,29 @@ def rechazar_cambio_precio(request):
 @login_required
 def obtener_notificaciones_precio(request):
     """
-    Obtener notificaciones de cambios de precio para el usuario actual
+    Obtener notificaciones de cambios de precio para el usuario actual.
+    Muestra notificaciones de cambios PENDIENTES y APLICADOS (informativas).
+    IMPORTANTE: Solo muestra alertas de la sucursal actual del usuario y NO descartadas.
     """
     try:
         solo_no_leidas = request.GET.get('solo_no_leidas', 'false') == 'true'
         limit = int(request.GET.get('limit', 10))
         
+        # Obtener la sucursal actual del usuario
+        sucursal_actual_id = request.session.get('idSucursalActual')
+        
+        # Mostrar notificaciones de cambios PENDIENTES y APLICADOS (no descartados)
+        # APLICADO = sincronización automática (informativa)
+        # PENDIENTE = requiere acción manual
         queryset = NotificacionCambioPrecio.objects.filter(
-            usuario=request.user
-        ).select_related('cambio_precio__producto_talla__producto')
+            usuario=request.user,
+            cambio_precio__estado__in=['PENDIENTE', 'APLICADO'],  # Ambos tipos
+            cambio_precio__descartado=False     # No mostrar descartados
+        ).select_related('cambio_precio__producto_talla__producto', 'cambio_precio__sucursal')
+        
+        # Filtrar por sucursal actual si está definida
+        if sucursal_actual_id:
+            queryset = queryset.filter(cambio_precio__sucursal_id=sucursal_actual_id)
         
         if solo_no_leidas:
             queryset = queryset.filter(leida=False)
@@ -1887,13 +2093,21 @@ def obtener_notificaciones_precio(request):
                 'mensaje': notif.mensaje,
                 'leida': notif.leida,
                 'fecha_creacion': notif.fecha_creacion.strftime('%d/%m/%Y %H:%M'),
-                'producto': notif.cambio_precio.producto_talla.producto.articulo
+                'producto': notif.cambio_precio.producto_talla.producto.articulo,
+                'estado': notif.cambio_precio.estado,  # PENDIENTE o APLICADO
+                'sucursal': notif.cambio_precio.sucursal.alias if notif.cambio_precio.sucursal else 'N/A'
             })
         
-        total_no_leidas = NotificacionCambioPrecio.objects.filter(
+        # Contar notificaciones no leídas (PENDIENTES y APLICADOS) de la sucursal actual
+        total_no_leidas_qs = NotificacionCambioPrecio.objects.filter(
             usuario=request.user,
-            leida=False
-        ).count()
+            leida=False,
+            cambio_precio__estado__in=['PENDIENTE', 'APLICADO'],  # Ambos tipos
+            cambio_precio__descartado=False     # No contar descartados
+        )
+        if sucursal_actual_id:
+            total_no_leidas_qs = total_no_leidas_qs.filter(cambio_precio__sucursal_id=sucursal_actual_id)
+        total_no_leidas = total_no_leidas_qs.count()
         
         return JsonResponse({
             'success': True,

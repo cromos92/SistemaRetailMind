@@ -77,6 +77,9 @@ window.abrirModalEdicionProducto = function(productoId) {
 window.cargarDatosProductoEnModal = function(producto, variaciones) {
     console.log('cargarDatosProductoEnModal llamada con:', producto, variaciones);
     
+    // Guardar producto para reinicialización
+    window.productoActualEdicion = producto;
+    
     // Datos del producto base
     $('#edit_producto_id').val(producto.id);
     $('#edit_articulo').val(producto.articulo);
@@ -86,56 +89,174 @@ window.cargarDatosProductoEnModal = function(producto, variaciones) {
     $('#edit_precioventa').val(producto.precioventa);
     $('#edit_precioSugerido').val(producto.precioSugerido);
     
-    // Seleccionar categoría
-    if (producto.categoria_id) {
-        $('#edit_categoria_id').val(producto.categoria_id).trigger('change');
-    }
-    
-    // Limpiar y cargar atributos dinámicamente
-    // MARCA (atributo1)
-    const select1 = $('#edit_atributo1_id');
-    select1.empty().append('<option value="">Seleccionar marca...</option>');
-    if (producto.atributo1_id && producto.atributo1_nombre) {
-        select1.append(`<option value="${producto.atributo1_id}" selected>${producto.atributo1_nombre}</option>`);
-        console.log('Marca cargada:', producto.atributo1_nombre);
-    } else {
-        console.log('Producto sin marca asignada');
-    }
-    
-    // COLOR (atributo2)
-    const select2 = $('#edit_atributo2_id');
-    select2.empty().append('<option value="">Seleccionar color...</option>');
-    if (producto.atributo2_id && producto.atributo2_nombre) {
-        select2.append(`<option value="${producto.atributo2_id}" selected>${producto.atributo2_nombre}</option>`);
-        console.log('Color cargado:', producto.atributo2_nombre);
-    } else {
-        console.log('Producto sin color asignado');
-    }
-    
-    // GÉNERO (atributo3)
-    const select3 = $('#edit_atributo3_id');
-    select3.empty().append('<option value="">Seleccionar género...</option>');
-    if (producto.atributo3_id && producto.atributo3_nombre) {
-        select3.append(`<option value="${producto.atributo3_id}" selected>${producto.atributo3_nombre}</option>`);
-        console.log('Género cargado:', producto.atributo3_nombre);
-    } else {
-        console.log('Producto sin género asignado');
-    }
-    
-    // OTRO ATRIBUTO (atributo4)
-    const select4 = $('#edit_atributo4_id');
-    select4.empty().append('<option value="">Seleccionar...</option>');
-    if (producto.atributo4_id && producto.atributo4_nombre) {
-        select4.append(`<option value="${producto.atributo4_id}" selected>${producto.atributo4_nombre}</option>`);
-        console.log('Otro atributo cargado:', producto.atributo4_nombre);
-    } else {
-        console.log('Producto sin otro atributo asignado');
-    }
+    // Cargar todas las opciones con Select2
+    cargarOpcionesConSelect2(producto);
     
     // Cargar variaciones en la tabla
     console.log('Llamando a cargarVariacionesEnTabla con', variaciones);
     cargarVariacionesEnTabla(variaciones);
 };
+
+/**
+ * Función auxiliar para inicializar Select2 en modal de edición
+ */
+function inicializarSelect2EnModalEdicion($select, placeholder) {
+    if ($select.hasClass('select2-hidden-accessible')) {
+        try {
+            $select.select2('destroy');
+        } catch(e) {
+            console.log('Select2 no pudo ser destruido:', e);
+        }
+    }
+    $select.select2({
+        dropdownParent: $('#modalEdicionProducto'),
+        width: '100%',
+        placeholder: placeholder || 'Seleccionar...',
+        allowClear: true,
+        language: {
+            noResults: function () {
+                return "Sin resultados";
+            }
+        }
+    });
+}
+
+/**
+ * Cargar todas las opciones con Select2 y búsqueda
+ */
+function cargarOpcionesConSelect2(producto) {
+    const $modal = $('#modalEdicionProducto');
+    console.log('🔄 Cargando opciones con Select2 para producto:', producto.articulo);
+    
+    // Obtener IDs de atributos desde variables globales o desde el DOM
+    const ID_ATRIBUTO_MARCA = window.ID_ATRIBUTO_MARCA || parseInt($('#id_atributo_marca').val()) || 1;
+    const ID_ATRIBUTO_COLOR = window.ID_ATRIBUTO_COLOR || parseInt($('#id_atributo_color').val()) || 2;
+    const ID_ATRIBUTO_GENERO = window.ID_ATRIBUTO_GENERO || parseInt($('#id_atributo_genero').val()) || 3;
+    const ID_ATRIBUTO_OTRO = window.ID_ATRIBUTO_OTRO || parseInt($('#id_atributo_otro').val()) || 0;
+    
+    console.log('📋 IDs de atributos:', { marca: ID_ATRIBUTO_MARCA, color: ID_ATRIBUTO_COLOR, genero: ID_ATRIBUTO_GENERO, otro: ID_ATRIBUTO_OTRO });
+    
+    // Cargar CATEGORÍAS
+    $.ajax({
+        url: '/app/api/categorias/listar/',
+        method: 'GET',
+        success: function(response) {
+            const $select = $('#edit_categoria_id');
+            $select.empty().append('<option value="">Seleccionar categoría...</option>');
+            
+            const categorias = response.categorias || response;
+            console.log('📦 Categorías cargadas:', Array.isArray(categorias) ? categorias.length : 0);
+            if (Array.isArray(categorias)) {
+                categorias.forEach(cat => {
+                    const selected = producto.categoria_id == cat.id ? 'selected' : '';
+                    $select.append(`<option value="${cat.id}" ${selected}>${cat.nombre}</option>`);
+                });
+            }
+            
+            inicializarSelect2EnModalEdicion($select, 'Buscar categoría...');
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error cargando categorías:', error);
+        }
+    });
+    
+    // Cargar MARCAS (atributo1)
+    $.ajax({
+        url: `/app/opciones_atributo/?atributo_id=${ID_ATRIBUTO_MARCA}`,
+        method: 'GET',
+        success: function(response) {
+            const $select = $('#edit_atributo1_id');
+            $select.empty().append('<option value="">Seleccionar marca...</option>');
+            
+            const opciones = Array.isArray(response) ? response : (response.opciones || []);
+            console.log('🏷️ Marcas cargadas:', opciones.length);
+            opciones.forEach(opt => {
+                const selected = producto.atributo1_id == opt.id ? 'selected' : '';
+                $select.append(`<option value="${opt.id}" ${selected}>${opt.valor}</option>`);
+            });
+            
+            inicializarSelect2EnModalEdicion($select, 'Buscar marca...');
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error cargando marcas:', error);
+        }
+    });
+    
+    // Cargar COLORES (atributo2)
+    $.ajax({
+        url: `/app/opciones_atributo/?atributo_id=${ID_ATRIBUTO_COLOR}`,
+        method: 'GET',
+        success: function(response) {
+            const $select = $('#edit_atributo2_id');
+            $select.empty().append('<option value="">Seleccionar color...</option>');
+            
+            const opciones = Array.isArray(response) ? response : (response.opciones || []);
+            console.log('🎨 Colores cargados:', opciones.length);
+            opciones.forEach(opt => {
+                const selected = producto.atributo2_id == opt.id ? 'selected' : '';
+                $select.append(`<option value="${opt.id}" ${selected}>${opt.valor}</option>`);
+            });
+            
+            inicializarSelect2EnModalEdicion($select, 'Buscar color...');
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error cargando colores:', error);
+        }
+    });
+    
+    // Cargar GÉNEROS (atributo3)
+    $.ajax({
+        url: `/app/opciones_atributo/?atributo_id=${ID_ATRIBUTO_GENERO}`,
+        method: 'GET',
+        success: function(response) {
+            const $select = $('#edit_atributo3_id');
+            $select.empty().append('<option value="">Seleccionar género...</option>');
+            
+            const opciones = Array.isArray(response) ? response : (response.opciones || []);
+            console.log('👤 Géneros cargados:', opciones.length);
+            opciones.forEach(opt => {
+                const selected = producto.atributo3_id == opt.id ? 'selected' : '';
+                $select.append(`<option value="${opt.id}" ${selected}>${opt.valor}</option>`);
+            });
+            
+            inicializarSelect2EnModalEdicion($select, 'Buscar género...');
+        },
+        error: function(xhr, status, error) {
+            console.error('❌ Error cargando géneros:', error);
+        }
+    });
+    
+    // Cargar OTRO ATRIBUTO (atributo4) - ocultar si no existe
+    const $select4Container = $('#edit_atributo4_id').closest('.form-group');
+    if (ID_ATRIBUTO_OTRO && ID_ATRIBUTO_OTRO > 0) {
+        $select4Container.show();
+        $.ajax({
+            url: `/app/opciones_atributo/?atributo_id=${ID_ATRIBUTO_OTRO}`,
+            method: 'GET',
+            success: function(response) {
+                const $select = $('#edit_atributo4_id');
+                $select.empty().append('<option value="">Seleccionar...</option>');
+                
+                const opciones = Array.isArray(response) ? response : (response.opciones || []);
+                console.log('📋 Otros atributos cargados:', opciones.length);
+                opciones.forEach(opt => {
+                    const selected = producto.atributo4_id == opt.id ? 'selected' : '';
+                    $select.append(`<option value="${opt.id}" ${selected}>${opt.valor}</option>`);
+                });
+                
+                inicializarSelect2EnModalEdicion($select, 'Buscar...');
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Error cargando otros atributos:', error);
+            }
+        });
+    } else {
+        $select4Container.hide();
+        console.log('ℹ️ Atributo 4 no configurado, ocultando campo');
+    }
+    
+    console.log('✅ Iniciando carga de opciones Select2');
+}
 
 /**
  * Cargar variaciones en la tabla
@@ -679,6 +800,47 @@ $(document).ready(function() {
         const sobreprecio = parseInt($('#edit_sobreprecio').val()) || 0;
         const precioCalculado = costo + sobreprecio;
         $('#edit_precioventa').val(precioCalculado);
+    });
+    
+    // Limpiar Select2 cuando se cierra el modal de edición
+    $('#modalEdicionProducto').on('hidden.bs.modal', function() {
+        const $modal = $(this);
+        
+        // Destruir TODAS las instancias de Select2 en el modal
+        $modal.find('select').each(function() {
+            if ($(this).hasClass('select2-hidden-accessible')) {
+                try {
+                    $(this).select2('destroy');
+                } catch(e) {
+                    console.warn('Error al destruir Select2:', e);
+                }
+            }
+        });
+        
+        // Limpiar dropdowns huérfanos de Select2
+        $('.select2-container--open').remove();
+        
+        // Limpiar formulario
+        $('#edit_producto_id').val('');
+        $('#edit_articulo').val('');
+        $('#edit_descripcion').val('');
+        $('#edit_costo').val('');
+        $('#edit_sobreprecio').val('');
+        $('#edit_precioventa').val('');
+        $('#edit_precioSugerido').val('');
+        $('#tablaVariacionesEdicion tbody').html('<tr><td colspan="5" class="text-center text-muted">Selecciona un producto para editar</td></tr>');
+        
+        console.log('🧹 Modal de edición limpiado');
+    });
+    
+    // Reinicializar Select2 cuando el modal de edición está completamente visible
+    $('#modalEdicionProducto').on('shown.bs.modal', function() {
+        // Si hay producto cargado, reinicializar Select2 después de un pequeño delay
+        if (window.productoActualEdicion) {
+            setTimeout(() => {
+                cargarOpcionesConSelect2(window.productoActualEdicion);
+            }, 100);
+        }
     });
 });
 

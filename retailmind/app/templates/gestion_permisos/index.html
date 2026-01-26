@@ -124,6 +124,25 @@
         font-weight: 600;
     }
 
+    /* ========== BADGE ROL USUARIO ========== */
+    .badge-usuario-rol {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: linear-gradient(135deg, #FFB020 0%, #FF8C00 100%);
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: 20px;
+        box-shadow: 0 2px 8px rgba(255, 176, 32, 0.35);
+        white-space: nowrap;
+    }
+
+    .badge-usuario-rol i {
+        font-size: 0.85rem;
+    }
+
     /* ========== MAIN CARD ========== */
     .permisos-card {
         background: var(--nexo-white);
@@ -286,6 +305,16 @@
     .limite-descuento-input:focus {
         box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.2);
         border-color: var(--nexo-primary-dark);
+    }
+
+    .limite-descuento-input.border-success {
+        border-color: var(--nexo-success) !important;
+        background-color: rgba(0, 212, 170, 0.05);
+    }
+
+    .limite-descuento-input.border-warning {
+        border-color: var(--nexo-warning) !important;
+        background-color: rgba(255, 176, 32, 0.05);
     }
 
     .limite-badge {
@@ -707,6 +736,20 @@
             </div>
         </div>
 
+        <!-- Tabs de navegación -->
+        <ul class="nav nav-tabs mb-4" id="permisosTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tab-roles" data-bs-toggle="tab" data-bs-target="#panel-roles" type="button" role="tab">
+                    <i class="ri-user-settings-line me-2"></i>Permisos por Rol
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-sucursales" data-bs-toggle="tab" data-bs-target="#panel-sucursales" type="button" role="tab">
+                    <i class="ri-building-line me-2"></i>Permisos por Sucursal
+                </button>
+            </li>
+        </ul>
+
         <!-- KPI Cards -->
         <div class="row mb-4">
             <div class="col-xl-3 col-md-6 mb-3">
@@ -771,19 +814,41 @@
             </div>
         </div>
 
-        <!-- Main Panel -->
+        <!-- Tab Content -->
+        <div class="tab-content" id="permisosTabContent">
+        
+        <!-- ========== PANEL PERMISOS POR ROL ========== -->
+        <div class="tab-pane fade show active" id="panel-roles" role="tabpanel">
         <div class="row">
             <div class="col-12">
                 <div class="permisos-card card">
                     <div class="permisos-card-header">
                         <div class="row align-items-center">
-                            <div class="col-lg-4 mb-3 mb-lg-0">
-                                <h5>
-                                    <i class="ri-settings-3-line me-2" style="color: var(--nexo-primary);"></i>
-                                    Configurar Permisos
+                            <div class="col-lg-5 mb-3 mb-lg-0">
+                                <h5 class="d-flex align-items-center flex-wrap gap-2">
+                                    <span>
+                                        <i class="ri-settings-3-line me-2" style="color: var(--nexo-primary);"></i>
+                                        Configurar Permisos
+                                    </span>
+                                    <!-- Badge del rol del usuario actual -->
+                                    <span class="badge-usuario-rol">
+                                        <i class="ri-user-star-fill me-1"></i>
+                                        Rol: 
+                                        {% if user.rol == 'administrador' %}
+                                            <strong>Administrador</strong>
+                                        {% elif user.rol == 'administracion' %}
+                                            <strong>Administración</strong>
+                                        {% elif user.rol == 'jefe_local' %}
+                                            <strong>Jefe Local</strong>
+                                        {% elif user.rol == 'cajero' %}
+                                            <strong>Cajero</strong>
+                                        {% else %}
+                                            <strong>Vendedor</strong>
+                                        {% endif %}
+                                    </span>
                                 </h5>
                             </div>
-                            <div class="col-lg-8">
+                            <div class="col-lg-7">
                                 <div class="d-flex justify-content-lg-end flex-wrap gap-2">
                                     <select id="rolSelector" class="form-select role-selector">
                                         <option value="">-- Seleccionar Rol --</option>
@@ -886,6 +951,108 @@
                 </div>
             </div>
         </div>
+        </div><!-- Fin panel-roles -->
+
+        <!-- ========== PANEL PERMISOS POR SUCURSAL ========== -->
+        <div class="tab-pane fade" id="panel-sucursales" role="tabpanel">
+        <div class="row">
+            <div class="col-12">
+                <div class="permisos-card card">
+                    <div class="permisos-card-header">
+                        <div class="row align-items-center">
+                            <div class="col-lg-5 mb-3 mb-lg-0">
+                                <h5 class="d-flex align-items-center flex-wrap gap-2">
+                                    <span>
+                                        <i class="ri-building-line me-2" style="color: var(--nexo-primary);"></i>
+                                        Permisos por Sucursal
+                                    </span>
+                                </h5>
+                            </div>
+                            <div class="col-lg-7">
+                                <div class="d-flex justify-content-lg-end flex-wrap gap-2">
+                                    <select id="sucursalSelector" class="form-select role-selector">
+                                        <option value="">-- Seleccionar Sucursal --</option>
+                                    </select>
+                                    <button class="btn btn-nexo-success" id="btnGuardarSucursal" disabled>
+                                        <i class="ri-save-line me-1"></i> Guardar Cambios
+                                    </button>
+                                    <button class="btn btn-nexo-outline" id="btnAplicarPlantilla" disabled>
+                                        <i class="ri-file-list-3-line me-1"></i> Aplicar Plantilla
+                                    </button>
+                                    <button class="btn btn-nexo-outline" id="btnCopiarPermisosSucursal" disabled>
+                                        <i class="ri-file-copy-line me-1"></i> Copiar de Otra
+                                    </button>
+                                    <button class="btn btn-outline-danger" id="btnRestablecerSucursal" disabled>
+                                        <i class="ri-refresh-line me-1"></i> Restablecer
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Empty State Sucursales -->
+                        <div id="mensajeInicialSucursal" class="empty-state">
+                            <div class="empty-state-icon">
+                                <i class="ri-building-line"></i>
+                            </div>
+                            <h5>Selecciona una Sucursal</h5>
+                            <p>Elige una sucursal del menú desplegable para configurar sus permisos</p>
+                            <p class="text-muted small mt-2">
+                                <i class="ri-information-line me-1"></i>
+                                Los permisos de sucursal restringen qué funcionalidades están disponibles en cada ubicación.
+                            </p>
+                        </div>
+
+                        <!-- Info sucursal seleccionada -->
+                        <div id="infoSucursalSeleccionada" style="display: none;" class="mb-4">
+                            <div class="alert" style="background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #D9E8FF 100%); border: 2px solid var(--nexo-primary); border-radius: var(--nexo-radius-lg);">
+                                <div class="row align-items-center">
+                                    <div class="col-md-8">
+                                        <h5 class="mb-1" style="color: var(--nexo-primary-dark);">
+                                            <i class="ri-building-line me-2"></i>
+                                            <span id="nombreSucursalSeleccionada">-</span>
+                                        </h5>
+                                        <p class="mb-0 text-muted small" id="direccionSucursalSeleccionada">-</p>
+                                    </div>
+                                    <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                                        <span class="badge bg-primary" id="tipoSucursalBadge" style="font-size: 0.85rem; padding: 8px 16px;">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Permissions Container Sucursales -->
+                        <div id="permisosContainerSucursal" style="display: none;">
+                            <!-- Quick Actions Sucursal -->
+                            <div class="quick-actions mb-4">
+                                <span class="text-muted small me-2">Acciones rápidas:</span>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodosSucursal('habilitado', true)">
+                                    <i class="ri-check-line me-1"></i> Habilitar todos
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodosSucursal('habilitado', false)">
+                                    <i class="ri-close-line me-1"></i> Deshabilitar todos
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodosSucursal('puede_crear', true)">
+                                    <i class="ri-add-line me-1"></i> Permitir Crear
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodosSucursal('puede_crear', false)">
+                                    <i class="ri-subtract-line me-1"></i> Bloquear Crear
+                                </button>
+                            </div>
+
+                            <!-- Modules & Permissions Sucursales -->
+                            <div id="modulosPermisosSucursalContainer">
+                                <!-- Permissions will be loaded dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div><!-- Fin panel-sucursales -->
+
+        </div><!-- Fin tab-content -->
     </div>
 </div>
 
@@ -979,6 +1146,146 @@
     </div>
 </div>
 
+<!-- Modal: Copiar Permisos Sucursal -->
+<div class="modal fade" id="modalCopiarPermisosSucursal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-file-copy-line me-2"></i>
+                    Copiar Permisos de Sucursal
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Copiar permisos desde:</label>
+                    <select id="sucursalOrigenCopiar" class="form-select role-selector w-100">
+                        <option value="">-- Seleccionar Sucursal Origen --</option>
+                    </select>
+                </div>
+                <div class="alert" style="background: var(--nexo-primary-light); border: 1px solid var(--nexo-primary); border-radius: var(--nexo-radius-md);">
+                    <div class="d-flex align-items-center">
+                        <i class="ri-arrow-right-circle-line me-2" style="color: var(--nexo-primary); font-size: 1.25rem;"></i>
+                        <div>
+                            <small class="text-muted">Hacia:</small>
+                            <strong class="d-block" id="sucursalDestinoCopiar" style="color: var(--nexo-primary);">-</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-check form-switch mt-3">
+                    <input class="form-check-input" type="checkbox" id="sobrescribirPermisosSucursal" style="width: 40px; height: 20px;">
+                    <label class="form-check-label ms-2" for="sobrescribirPermisosSucursal">
+                        Sobrescribir permisos existentes
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-nexo-primary" id="btnConfirmarCopiarSucursal">
+                    <i class="ri-checkbox-circle-line me-1"></i> Copiar Permisos
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Aplicar Plantilla Sucursal -->
+<div class="modal fade" id="modalAplicarPlantilla" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-file-list-3-line me-2"></i>
+                    Aplicar Plantilla de Permisos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Selecciona una plantilla predefinida según el tipo de sucursal:</p>
+                
+                <div class="d-grid gap-3">
+                    <div class="plantilla-opcion p-3 border rounded" data-plantilla="VENDEDORA" style="cursor: pointer;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="ri-shopping-cart-line" style="font-size: 2rem; color: var(--nexo-success);"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Sucursal Vendedora</h6>
+                                <small class="text-muted">Solo ventas. NO puede crear productos ni hacer compras.</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="plantilla-opcion p-3 border rounded" data-plantilla="CENTRO_DISTRIBUCION" style="cursor: pointer;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="ri-building-4-line" style="font-size: 2rem; color: var(--nexo-primary);"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Centro de Distribución</h6>
+                                <small class="text-muted">Gestión de productos y compras. NO puede hacer ventas POS.</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="plantilla-opcion p-3 border rounded" data-plantilla="MIXTA" style="cursor: pointer;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="ri-store-3-line" style="font-size: 2rem; color: var(--nexo-warning);"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Sucursal Mixta</h6>
+                                <small class="text-muted">Todas las funcionalidades habilitadas.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <input type="hidden" id="plantillaSeleccionada" value="">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-nexo-primary" id="btnConfirmarPlantilla" disabled>
+                    <i class="ri-check-line me-1"></i> Aplicar Plantilla
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .plantilla-opcion {
+        transition: all 0.2s ease;
+    }
+    .plantilla-opcion:hover {
+        background: var(--nexo-primary-light);
+        border-color: var(--nexo-primary) !important;
+    }
+    .plantilla-opcion.selected {
+        background: var(--nexo-primary-light);
+        border-color: var(--nexo-primary) !important;
+        box-shadow: 0 0 0 2px var(--nexo-primary);
+    }
+    .nav-tabs .nav-link {
+        color: var(--nexo-gray-700);
+        font-weight: 500;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 12px 24px;
+        transition: all 0.2s ease;
+    }
+    .nav-tabs .nav-link:hover {
+        color: var(--nexo-primary);
+        border-bottom-color: var(--nexo-gray-300);
+    }
+    .nav-tabs .nav-link.active {
+        color: var(--nexo-primary);
+        background: transparent;
+        border-bottom-color: var(--nexo-primary);
+    }
+</style>
+
 <script>
 let rolActual = null;
 let permisosModificados = {};
@@ -1017,9 +1324,23 @@ function cargarPermisosRol(rol) {
         .then(data => {
             Swal.close();
             if (data.success) {
-                const limiteDescuento = data.limite_descuento || 0;
-                document.getElementById('limiteDescuento').value = limiteDescuento;
-                document.getElementById('badgeLimite').textContent = limiteDescuento + '%';
+                // Cargar el límite de descuento - usar parseFloat para manejar valores decimales
+                const limiteDescuento = parseFloat(data.limite_descuento) || 0;
+                console.log('Límite de descuento cargado para rol', rol, ':', limiteDescuento);
+                
+                // Establecer valor en input y badge
+                const inputLimite = document.getElementById('limiteDescuento');
+                inputLimite.value = limiteDescuento.toFixed(2);
+                document.getElementById('badgeLimite').textContent = limiteDescuento.toFixed(2) + '%';
+                
+                // Mostrar indicador visual si hay límite configurado
+                if (limiteDescuento > 0) {
+                    inputLimite.classList.add('border-success');
+                    inputLimite.classList.remove('border-warning');
+                } else {
+                    inputLimite.classList.add('border-warning');
+                    inputLimite.classList.remove('border-success');
+                }
                 
                 renderizarPermisos(data.modulos);
                 document.getElementById('mensajeInicial').style.display = 'none';
@@ -1115,7 +1436,8 @@ document.getElementById('btnConfirmarCambioRol').addEventListener('click', funct
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify({
             user_id: userId,
@@ -1333,10 +1655,19 @@ function desmarcarTodos() {
     });
 }
 
-// Update discount badge
+// Update discount badge and visual indicator
 document.getElementById('limiteDescuento').addEventListener('input', function() {
     const valor = parseFloat(this.value) || 0;
-    document.getElementById('badgeLimite').textContent = valor + '%';
+    document.getElementById('badgeLimite').textContent = valor.toFixed(2) + '%';
+    
+    // Actualizar indicador visual
+    if (valor > 0) {
+        this.classList.add('border-success');
+        this.classList.remove('border-warning');
+    } else {
+        this.classList.add('border-warning');
+        this.classList.remove('border-success');
+    }
 });
 
 // Save all changes
@@ -1382,7 +1713,8 @@ function guardarConfiguracion(limiteDescuento) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify({
             rol: rolActual,
@@ -1390,14 +1722,44 @@ function guardarConfiguracion(limiteDescuento) {
             limite_descuento: limiteDescuento
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            // Si la respuesta no es exitosa, intentar obtener el mensaje de error
+            return response.json().then(data => {
+                throw new Error(data.mensaje || `Error del servidor: ${response.status}`);
+            }).catch(e => {
+                if (e.message.includes('Error del servidor') || e.message.includes('Error')) {
+                    throw e;
+                }
+                throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
+            });
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.success) {
+            console.log('Permisos guardados:', data);
+            
+            // Actualizar el badge para confirmar visualmente
+            if (data.limite_descuento_guardado !== undefined) {
+                const limiteGuardado = parseFloat(data.limite_descuento_guardado) || 0;
+                document.getElementById('badgeLimite').textContent = limiteGuardado.toFixed(2) + '%';
+                
+                const inputLimite = document.getElementById('limiteDescuento');
+                if (limiteGuardado > 0) {
+                    inputLimite.classList.add('border-success');
+                    inputLimite.classList.remove('border-warning');
+                } else {
+                    inputLimite.classList.add('border-warning');
+                    inputLimite.classList.remove('border-success');
+                }
+            }
+            
             Swal.fire({
                 icon: 'success',
                 title: '¡Guardado!',
-                text: data.mensaje,
-                timer: 2000,
+                html: `<p>${data.mensaje}</p><small class="text-muted">Permisos creados: ${data.creados || 0} | Actualizados: ${data.actualizados || 0}</small>`,
+                timer: 3000,
                 showConfirmButton: false
             });
             permisosModificados = {};
@@ -1407,7 +1769,7 @@ function guardarConfiguracion(limiteDescuento) {
     })
     .catch(error => {
         console.error('Error:', error);
-        Swal.fire('Error', 'Error al guardar permisos', 'error');
+        Swal.fire('Error', error.message || 'Error de conexión al guardar permisos', 'error');
     });
 }
 
@@ -1453,7 +1815,8 @@ document.getElementById('btnConfirmarCopiar').addEventListener('click', function
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify({
             rol_origen: rolOrigen,
@@ -1497,6 +1860,555 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// ========== PERMISOS POR SUCURSAL ==========
+let sucursalActual = null;
+let sucursalesDisponibles = [];
+let permisosSucursalModificados = {};
+
+// Cargar sucursales cuando se cambia a la pestaña de sucursales
+document.getElementById('tab-sucursales').addEventListener('shown.bs.tab', function() {
+    if (sucursalesDisponibles.length === 0) {
+        cargarSucursales();
+    }
+});
+
+function cargarSucursales() {
+    fetch('/app/permisos/sucursales/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                sucursalesDisponibles = data.sucursales;
+                const selector = document.getElementById('sucursalSelector');
+                selector.innerHTML = '<option value="">-- Seleccionar Sucursal --</option>';
+                
+                data.sucursales.forEach(suc => {
+                    const opcion = document.createElement('option');
+                    opcion.value = suc.id;
+                    opcion.textContent = `${suc.alias} (${suc.tipo_sucursal_display})`;
+                    if (suc.opciones_deshabilitadas > 0) {
+                        opcion.textContent += ` - ${suc.opciones_deshabilitadas} restringidas`;
+                    }
+                    selector.appendChild(opcion);
+                });
+                
+                // También actualizar el selector del modal de copiar
+                const selectorOrigen = document.getElementById('sucursalOrigenCopiar');
+                selectorOrigen.innerHTML = '<option value="">-- Seleccionar Sucursal Origen --</option>';
+                data.sucursales.forEach(suc => {
+                    const opcion = document.createElement('option');
+                    opcion.value = suc.id;
+                    opcion.textContent = suc.alias;
+                    selectorOrigen.appendChild(opcion);
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error al cargar sucursales:', error);
+            toastr.error('Error al cargar sucursales');
+        });
+}
+
+// Cargar permisos cuando se selecciona una sucursal
+document.getElementById('sucursalSelector').addEventListener('change', function() {
+    const sucursalId = this.value;
+    if (sucursalId) {
+        cargarPermisosSucursal(sucursalId);
+        document.getElementById('btnGuardarSucursal').disabled = false;
+        document.getElementById('btnAplicarPlantilla').disabled = false;
+        document.getElementById('btnCopiarPermisosSucursal').disabled = false;
+        document.getElementById('btnRestablecerSucursal').disabled = false;
+    } else {
+        document.getElementById('mensajeInicialSucursal').style.display = 'block';
+        document.getElementById('permisosContainerSucursal').style.display = 'none';
+        document.getElementById('infoSucursalSeleccionada').style.display = 'none';
+        document.getElementById('btnGuardarSucursal').disabled = true;
+        document.getElementById('btnAplicarPlantilla').disabled = true;
+        document.getElementById('btnCopiarPermisosSucursal').disabled = true;
+        document.getElementById('btnRestablecerSucursal').disabled = true;
+    }
+});
+
+function cargarPermisosSucursal(sucursalId) {
+    sucursalActual = sucursalId;
+    permisosSucursalModificados = {};
+    
+    Swal.fire({
+        title: 'Cargando permisos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    fetch(`/app/permisos/obtener-permisos-sucursal/?sucursal_id=${sucursalId}`)
+        .then(response => response.json())
+        .then(data => {
+            Swal.close();
+            if (data.success) {
+                // Mostrar info de la sucursal
+                document.getElementById('nombreSucursalSeleccionada').textContent = data.sucursal.alias;
+                document.getElementById('direccionSucursalSeleccionada').textContent = data.sucursal.direccion;
+                document.getElementById('tipoSucursalBadge').textContent = data.sucursal.tipo_sucursal;
+                document.getElementById('infoSucursalSeleccionada').style.display = 'block';
+                
+                renderizarPermisosSucursal(data.modulos);
+                document.getElementById('mensajeInicialSucursal').style.display = 'none';
+                document.getElementById('permisosContainerSucursal').style.display = 'block';
+            }
+        })
+        .catch(error => {
+            Swal.close();
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error al cargar permisos de sucursal', 'error');
+        });
+}
+
+function renderizarPermisosSucursal(modulos) {
+    const container = document.getElementById('modulosPermisosSucursalContainer');
+    container.innerHTML = '';
+    
+    modulos.forEach((modulo, index) => {
+        const moduloDiv = document.createElement('div');
+        moduloDiv.className = 'modulo-card animate-fadeIn';
+        moduloDiv.style.animationDelay = `${index * 0.05}s`;
+        
+        let opcionesHtml = '';
+        modulo.opciones.forEach(opcion => {
+            opcionesHtml += renderizarOpcionSucursal(opcion, false);
+            
+            if (opcion.subopciones && opcion.subopciones.length > 0) {
+                opcion.subopciones.forEach(subopcion => {
+                    opcionesHtml += renderizarOpcionSucursal(subopcion, true);
+                });
+            }
+        });
+        
+        moduloDiv.innerHTML = `
+            <div class="modulo-header" data-bs-toggle="collapse" data-bs-target="#modulo-suc-${modulo.id}">
+                <div class="modulo-title">
+                    <div class="modulo-icon">
+                        <i class="${modulo.icono || 'ri-folder-line'}"></i>
+                    </div>
+                    <h6 class="modulo-name">${modulo.nombre}</h6>
+                </div>
+                <div class="modulo-toggle">
+                    <i class="ri-arrow-down-s-line"></i>
+                </div>
+            </div>
+            <div class="collapse show" id="modulo-suc-${modulo.id}">
+                <div class="modulo-body">
+                    ${opcionesHtml}
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(moduloDiv);
+    });
+    
+    // Agregar event listeners
+    document.querySelectorAll('.permiso-check-suc').forEach(checkbox => {
+        checkbox.addEventListener('change', function(e) {
+            marcarCambioSucursal(e);
+            const parent = this.closest('.permiso-item');
+            if (this.checked) {
+                parent.classList.add('active');
+            } else {
+                parent.classList.remove('active');
+            }
+            
+            // Si es el checkbox de "habilitado" y se deshabilita, deshabilitar los demás
+            if (this.dataset.permiso === 'habilitado' && !this.checked) {
+                const row = this.closest('.opcion-row');
+                row.querySelectorAll('.permiso-check-suc').forEach(cb => {
+                    if (cb.dataset.permiso !== 'habilitado') {
+                        cb.checked = false;
+                        cb.disabled = true;
+                        cb.closest('.permiso-item').classList.remove('active');
+                        cb.closest('.permiso-item').classList.add('disabled-permiso');
+                    }
+                });
+            } else if (this.dataset.permiso === 'habilitado' && this.checked) {
+                const row = this.closest('.opcion-row');
+                row.querySelectorAll('.permiso-check-suc').forEach(cb => {
+                    if (cb.dataset.permiso !== 'habilitado') {
+                        cb.disabled = false;
+                        cb.closest('.permiso-item').classList.remove('disabled-permiso');
+                    }
+                });
+            }
+        });
+    });
+    
+    // Inicializar estados
+    document.querySelectorAll('.permiso-check-suc:checked').forEach(checkbox => {
+        checkbox.closest('.permiso-item').classList.add('active');
+    });
+    
+    // Deshabilitar checkboxes secundarios si habilitado está en false
+    document.querySelectorAll('.permiso-check-suc[data-permiso="habilitado"]').forEach(checkbox => {
+        if (!checkbox.checked) {
+            const row = checkbox.closest('.opcion-row');
+            row.querySelectorAll('.permiso-check-suc').forEach(cb => {
+                if (cb.dataset.permiso !== 'habilitado') {
+                    cb.disabled = true;
+                    cb.closest('.permiso-item').classList.add('disabled-permiso');
+                }
+            });
+        }
+    });
+}
+
+function renderizarOpcionSucursal(opcion, esSubopcion) {
+    const permisos = opcion.permisos;
+    const rowClass = esSubopcion ? 'opcion-row sub-opcion' : 'opcion-row';
+    const habilitadoClass = permisos.habilitado ? '' : 'opacity-50';
+    
+    return `
+        <div class="${rowClass} ${habilitadoClass}">
+            <div class="opcion-info">
+                <div class="opcion-icon">
+                    <i class="${opcion.icono || 'ri-file-line'}"></i>
+                </div>
+                <span class="opcion-nombre">${opcion.nombre}</span>
+            </div>
+            <div class="permisos-group">
+                <div class="permiso-item ${permisos.habilitado ? 'active' : ''}" style="background: ${permisos.habilitado ? 'rgba(0,212,170,0.15)' : 'rgba(255,77,77,0.15)'};">
+                    <input type="checkbox" class="permiso-check-suc" 
+                           id="suc-hab-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="habilitado"
+                           ${permisos.habilitado ? 'checked' : ''}>
+                    <label for="suc-hab-${opcion.id}">Habilitado</label>
+                </div>
+                <div class="permiso-item ${permisos.puede_crear ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check-suc" 
+                           id="suc-crear-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_crear"
+                           ${permisos.puede_crear ? 'checked' : ''}>
+                    <label for="suc-crear-${opcion.id}">Crear</label>
+                </div>
+                <div class="permiso-item ${permisos.puede_editar ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check-suc" 
+                           id="suc-editar-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_editar"
+                           ${permisos.puede_editar ? 'checked' : ''}>
+                    <label for="suc-editar-${opcion.id}">Editar</label>
+                </div>
+                <div class="permiso-item ${permisos.puede_eliminar ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check-suc" 
+                           id="suc-eliminar-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_eliminar"
+                           ${permisos.puede_eliminar ? 'checked' : ''}>
+                    <label for="suc-eliminar-${opcion.id}">Eliminar</label>
+                </div>
+                <div class="permiso-item ${permisos.puede_exportar ? 'active' : ''}">
+                    <input type="checkbox" class="permiso-check-suc" 
+                           id="suc-exportar-${opcion.id}"
+                           data-opcion-id="${opcion.id}" 
+                           data-permiso="puede_exportar"
+                           ${permisos.puede_exportar ? 'checked' : ''}>
+                    <label for="suc-exportar-${opcion.id}">Exportar</label>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function marcarCambioSucursal(event) {
+    const opcionId = event.target.dataset.opcionId;
+    const permiso = event.target.dataset.permiso;
+    const valor = event.target.checked;
+    
+    if (!permisosSucursalModificados[opcionId]) {
+        permisosSucursalModificados[opcionId] = {};
+    }
+    permisosSucursalModificados[opcionId][permiso] = valor;
+}
+
+function marcarTodosSucursal(tipo, valor) {
+    document.querySelectorAll(`.permiso-check-suc[data-permiso="${tipo}"]`).forEach(checkbox => {
+        if (!checkbox.disabled) {
+            checkbox.checked = valor;
+            const parent = checkbox.closest('.permiso-item');
+            if (valor) {
+                parent.classList.add('active');
+            } else {
+                parent.classList.remove('active');
+            }
+            
+            const opcionId = checkbox.dataset.opcionId;
+            if (!permisosSucursalModificados[opcionId]) {
+                permisosSucursalModificados[opcionId] = {};
+            }
+            permisosSucursalModificados[opcionId][tipo] = valor;
+            
+            // Si es habilitado, manejar los checkboxes secundarios
+            if (tipo === 'habilitado') {
+                const row = checkbox.closest('.opcion-row');
+                row.querySelectorAll('.permiso-check-suc').forEach(cb => {
+                    if (cb.dataset.permiso !== 'habilitado') {
+                        cb.disabled = !valor;
+                        if (!valor) {
+                            cb.checked = false;
+                            cb.closest('.permiso-item').classList.remove('active');
+                            cb.closest('.permiso-item').classList.add('disabled-permiso');
+                        } else {
+                            cb.closest('.permiso-item').classList.remove('disabled-permiso');
+                        }
+                    }
+                });
+            }
+        }
+    });
+    
+    toastr.info(`Se ${valor ? 'marcaron' : 'desmarcaron'} todos los permisos de "${tipo.replace('puede_', '')}"`, '', {timeOut: 2000});
+}
+
+// Guardar permisos de sucursal
+document.getElementById('btnGuardarSucursal').addEventListener('click', function() {
+    Swal.fire({
+        title: 'Guardando permisos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    // Recopilar todos los permisos
+    const todosPermisos = [];
+    const opcionesVistas = new Set();
+    
+    document.querySelectorAll('.permiso-check-suc').forEach(checkbox => {
+        const opcionId = checkbox.dataset.opcionId;
+        if (!opcionesVistas.has(opcionId)) {
+            const checks = document.querySelectorAll(`.permiso-check-suc[data-opcion-id="${opcionId}"]`);
+            const permisos = {};
+            checks.forEach(check => {
+                permisos[check.dataset.permiso] = check.checked;
+            });
+            todosPermisos.push({
+                opcion_id: opcionId,
+                permisos: permisos
+            });
+            opcionesVistas.add(opcionId);
+        }
+    });
+    
+    fetch('/app/permisos/guardar-permisos-sucursal/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            sucursal_id: sucursalActual,
+            permisos: todosPermisos
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Guardado!',
+                text: data.mensaje,
+                timer: 2000,
+                showConfirmButton: false
+            });
+            permisosSucursalModificados = {};
+            cargarSucursales(); // Actualizar contadores
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al guardar', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al guardar permisos', 'error');
+    });
+});
+
+// Aplicar plantilla
+document.getElementById('btnAplicarPlantilla').addEventListener('click', function() {
+    document.getElementById('plantillaSeleccionada').value = '';
+    document.querySelectorAll('.plantilla-opcion').forEach(el => el.classList.remove('selected'));
+    document.getElementById('btnConfirmarPlantilla').disabled = true;
+    new bootstrap.Modal(document.getElementById('modalAplicarPlantilla')).show();
+});
+
+document.querySelectorAll('.plantilla-opcion').forEach(opcion => {
+    opcion.addEventListener('click', function() {
+        document.querySelectorAll('.plantilla-opcion').forEach(el => el.classList.remove('selected'));
+        this.classList.add('selected');
+        document.getElementById('plantillaSeleccionada').value = this.dataset.plantilla;
+        document.getElementById('btnConfirmarPlantilla').disabled = false;
+    });
+});
+
+document.getElementById('btnConfirmarPlantilla').addEventListener('click', function() {
+    const plantilla = document.getElementById('plantillaSeleccionada').value;
+    
+    if (!plantilla) {
+        Swal.fire('Error', 'Selecciona una plantilla', 'error');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Aplicando plantilla...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    fetch('/app/permisos/aplicar-plantilla-sucursal/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            sucursal_id: sucursalActual,
+            tipo_plantilla: plantilla
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Plantilla Aplicada!',
+                text: data.mensaje,
+                timer: 2000,
+                showConfirmButton: false
+            });
+            bootstrap.Modal.getInstance(document.getElementById('modalAplicarPlantilla')).hide();
+            cargarPermisosSucursal(sucursalActual);
+            cargarSucursales();
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al aplicar plantilla', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al aplicar plantilla', 'error');
+    });
+});
+
+// Copiar permisos entre sucursales
+document.getElementById('btnCopiarPermisosSucursal').addEventListener('click', function() {
+    const sucursalInfo = sucursalesDisponibles.find(s => s.id == sucursalActual);
+    document.getElementById('sucursalDestinoCopiar').textContent = sucursalInfo ? sucursalInfo.alias : '-';
+    new bootstrap.Modal(document.getElementById('modalCopiarPermisosSucursal')).show();
+});
+
+document.getElementById('btnConfirmarCopiarSucursal').addEventListener('click', function() {
+    const sucursalOrigen = document.getElementById('sucursalOrigenCopiar').value;
+    const sobrescribir = document.getElementById('sobrescribirPermisosSucursal').checked;
+    
+    if (!sucursalOrigen) {
+        Swal.fire('Error', 'Selecciona una sucursal origen', 'error');
+        return;
+    }
+    
+    if (sucursalOrigen == sucursalActual) {
+        Swal.fire('Error', 'No puedes copiar una sucursal sobre sí misma', 'error');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Copiando permisos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    fetch('/app/permisos/copiar-permisos-sucursal/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            sucursal_origen_id: sucursalOrigen,
+            sucursal_destino_id: sucursalActual,
+            sobrescribir: sobrescribir
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Copiado!',
+                text: data.mensaje,
+                timer: 2000,
+                showConfirmButton: false
+            });
+            bootstrap.Modal.getInstance(document.getElementById('modalCopiarPermisosSucursal')).hide();
+            cargarPermisosSucursal(sucursalActual);
+            cargarSucursales();
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al copiar', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error al copiar permisos', 'error');
+    });
+});
+
+// Restablecer permisos de sucursal
+document.getElementById('btnRestablecerSucursal').addEventListener('click', function() {
+    Swal.fire({
+        title: '¿Restablecer permisos?',
+        text: 'Se eliminarán todas las restricciones configuradas para esta sucursal. Todas las opciones quedarán habilitadas.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#FF4D4D',
+        confirmButtonText: 'Sí, restablecer',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Restableciendo...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+            
+            fetch('/app/permisos/restablecer-permisos-sucursal/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    sucursal_id: sucursalActual
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '¡Restablecido!',
+                        text: data.mensaje,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    cargarPermisosSucursal(sucursalActual);
+                    cargarSucursales();
+                } else {
+                    Swal.fire('Error', data.mensaje || 'Error al restablecer', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Error al restablecer permisos', 'error');
+            });
+        }
+    });
+});
 </script>
 
 {% include 'layout/footer.html' %}

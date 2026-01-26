@@ -545,22 +545,21 @@ def obtener_siguiente_sku():
     try:
         from .models import ParametroGlobal
         
-        # Obtener parámetro de SKU
+        # Obtener parámetro de SKU (usando el modelo correcto)
         parametro, created = ParametroGlobal.objects.get_or_create(
-            clave='ultimo_sku',
-            defaults={'valor': '1000'}
+            nombre='sku',
+            defaults={'valor_entero': 100000}
         )
         
         # Incrementar SKU
-        ultimo_sku = int(parametro.valor)
-        nuevo_sku = ultimo_sku + 1
+        nuevo_sku = parametro.valor_entero + 1
         
         # Verificar que no exista
-        while Producto_Talla.objects.filter(sku=str(nuevo_sku)).exists():
+        while Producto_Talla.objects.filter(sku=nuevo_sku).exists():
             nuevo_sku += 1
         
         # Actualizar parámetro
-        parametro.valor = str(nuevo_sku)
+        parametro.valor_entero = nuevo_sku
         parametro.save()
         
         return str(nuevo_sku)

@@ -143,7 +143,10 @@
                                 <button class="btn btn-outline-primary px-4 py-2 me-2" onclick="actualizarDashboard()">
                                     <i class="ri-refresh-line"></i> Actualizar
                                 </button>
-                                <button class="btn btn-warning px-4 py-2" onclick="verReportes()">
+                                <button class="btn btn-warning px-4 py-2 me-2" onclick="abrirModalCotizaciones()">
+                                    <i class="ri-file-list-3-line"></i> Facturar Cotización
+                                </button>
+                                <button class="btn btn-info px-4 py-2" onclick="verReportes()">
                                     <i class="ri-bar-chart-box-line"></i> Reportes
                                 </button>
                             </div>
@@ -290,7 +293,7 @@
                                         </div>
                                         
                                         <div class="row g-3">
-                                            <div class="col-md-6">
+                                            <div class="col-md-12 mb-3">
                                                 <div class="input-group input-group-lg">
                                                     <span class="input-group-text">
                                                         <i class="ri-search-line"></i>
@@ -309,6 +312,11 @@
                                             <div class="col-md-6">
                                                 <button class="btn btn-success btn-lg w-100" onclick="crearNuevoTicket()">
                                                     <i class="ri-add-line"></i> Crear Nuevo Ticket
+                                                </button>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <button class="btn btn-warning btn-lg w-100" onclick="abrirModalCotizaciones()">
+                                                    <i class="ri-file-list-3-line"></i> Cargar Cotización
                                                 </button>
                                             </div>
                                         </div>
@@ -338,7 +346,7 @@
                                 <!-- Selector de Tipo de Documento -->
                                 <div class="card shadow mb-4">
                                     <div class="card-header bg-info text-white">
-                                        <h5 class="mb-0">
+                                        <h5 class="mb-0 text-white">
                                             <i class="ri-file-text-line"></i> Tipo de Documento
                                         </h5>
                                     </div>
@@ -402,7 +410,7 @@
                                         <div id="seccionReferencia" class="mt-3" style="display: none;">
                                             <div class="card border-warning">
                                                 <div class="card-header bg-warning bg-soft d-flex justify-content-between align-items-center">
-                                                    <h6 class="mb-0 text-warning">
+                                                    <h6 class="mb-0 text-white">
                                                         <i class="ri-link"></i> Referencias a Documentos Comerciales (Opcional)
                                                     </h6>
                                                     <button type="button" class="btn btn-sm btn-success" onclick="agregarReferencia()">
@@ -480,7 +488,13 @@
                                         <div class="row mb-3">
                                             <div class="col-12">
                                                 <div class="alert alert-success d-none" id="empresaEncontrada">
-                                                    <i class="ri-building-check-line"></i> <span id="mensajeEmpresa">Empresa encontrada</span>
+                                                    <div class="d-flex align-items-start">
+                                                        <i class="ri-building-check-line fs-4 me-2"></i>
+                                                        <div class="flex-grow-1">
+                                                            <strong id="mensajeEmpresa">Empresa encontrada</strong>
+                                                            <div id="detalleEmpresa" class="small mt-1" style="font-size: 0.85rem;"></div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div class="alert alert-info d-none" id="clienteEncontrado">
                                                     <i class="ri-user-line"></i> Cliente encontrado en el sistema
@@ -809,16 +823,6 @@
                                             </button>
                                         </div>
 
-                                        <!-- Acciones Adicionales -->
-                                        <div class="row g-3 justify-content-center">
-                                            <!-- ✅ Solo Ticket de Cambio (manual) -->
-                                            <div class="col-md-6">
-                                                <button class="btn btn-outline-warning btn-lg w-100" onclick="imprimirTicketCambio()">
-                                                    <i class="ri-printer-fill"></i> Imprimir Ticket Cambio (Manual)
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
                                         <div class="mt-3">
                                             <small class="text-muted">
                                                 <i class="ri-information-line"></i> 
@@ -1047,6 +1051,7 @@
                             <form id="formProducto">
                                 <div class="row g-3 align-items-end">
                                     <input type="hidden" id="productoSku">
+                                    <input type="hidden" id="productoTallaId"><!-- ID del ProductoTalla en BD -->
                                     <input type="hidden" id="productoArticulo">
                                     <input type="hidden" id="productoDescripcion">
                                     <input type="hidden" id="productoMarca">
@@ -1301,6 +1306,75 @@
                 <button type="button" class="btn btn-primary" onclick="guardarNuevaEmpresa()">
                     <i class="ri-check-line"></i> Guardar Empresa
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cargar Cotización -->
+<div class="modal fade" id="modalCotizaciones" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-white">
+                    <i class="ri-file-list-3-line"></i> Cargar Cotización Vigente
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Barra de búsqueda -->
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="ri-search-line"></i></span>
+                            <input type="text" class="form-control" id="buscarCotizacion" 
+                                   placeholder="Buscar por número, cliente o RUT..." 
+                                   onkeyup="filtrarCotizacionesLista()">
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button class="btn btn-outline-primary" onclick="cargarCotizacionesVigentes()">
+                            <i class="ri-refresh-line"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabla de cotizaciones -->
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-hover align-middle" id="tablaCotizaciones">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Número</th>
+                                <th>Cliente</th>
+                                <th>RUT</th>
+                                <th>Fecha</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-center">Productos</th>
+                                <th class="text-center">Días Rest.</th>
+                                <th class="text-center">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyCotizaciones">
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <div class="spinner-border text-warning" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                    <p class="text-muted mt-2 mb-0">Cargando cotizaciones vigentes...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Advertencias -->
+                <div id="alertaCotizaciones" class="alert alert-info mt-3" style="display: none;">
+                    <i class="ri-information-line"></i>
+                    <span id="mensajeAlertaCotizaciones"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
             </div>
         </div>
     </div>
@@ -2062,6 +2136,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let clienteActual = null;
     let pagosActuales = [];
     let estadisticasDashboard = {};
+    let cotizacionActual = null;  // Variable para cotización cargada
+    let cotizacionesVigentes = []; // Lista de cotizaciones vigentes
 
     // URLs de API
     const apiUrls = {
@@ -2072,7 +2148,10 @@ document.addEventListener('DOMContentLoaded', function() {
         validarRut: '{% url "validar_rut_cliente" %}',
         buscarCliente: '{% url "buscar_cliente_rut" %}',
         verificarCorrelativos: '{% url "verificar_correlativos_disponibles" %}',
-        anularTicket: '{% url "anular_ticket_pendiente" %}'
+        anularTicket: '{% url "anular_ticket_pendiente" %}',
+        // APIs de cotizaciones
+        listarCotizaciones: '{% url "listar_cotizaciones" %}',
+        cargarCotizacionComoTicket: (id) => `/app/api/cotizaciones/cargar-como-ticket/${id}/`
     };
 
     // Inicialización
@@ -2114,6 +2193,80 @@ document.addEventListener('DOMContentLoaded', function() {
     function inicializarDashboard() {
         mostrarVista('dashboard');
         actualizarDashboard();
+        
+        // Verificar si viene con cotizacion_id en la URL (desde módulo de cotizaciones)
+        const urlParams = new URLSearchParams(window.location.search);
+        const cotizacionIdParam = urlParams.get('cotizacion_id');
+        
+        if (cotizacionIdParam) {
+            console.log('📋 Cotización ID detectado en URL:', cotizacionIdParam);
+            // Limpiar el parámetro de la URL sin recargar
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            // Cargar la cotización automáticamente después de un pequeño delay
+            setTimeout(() => {
+                cargarCotizacionDirecta(parseInt(cotizacionIdParam));
+            }, 500);
+        }
+    }
+    
+    // Función para cargar cotización directamente por ID (desde URL)
+    function cargarCotizacionDirecta(cotizacionId) {
+        console.log('🔄 Cargando cotización directa ID:', cotizacionId);
+        
+        Swal.fire({
+            title: 'Cargando cotización...',
+            html: '<div class="spinner-border text-warning"></div>',
+            allowOutsideClick: false,
+            showConfirmButton: false
+        });
+        
+        fetch(apiUrls.cargarCotizacionComoTicket(cotizacionId))
+            .then(response => response.json())
+            .then(data => {
+                Swal.close();
+                
+                if (data.success) {
+                    // Reiniciar wizard y mostrar vista
+                    reiniciarWizard();
+                    mostrarVista('wizard');
+                    
+                    // Cargar ticket desde cotización
+                    cargarTicket(data.ticket);
+                    
+                    // Mostrar advertencias si hay
+                    if (data.tiene_advertencias && data.advertencias.length > 0) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Advertencias de Stock',
+                            html: `<div class="text-start"><small>` + 
+                                  data.advertencias.map(a => `<div class="mb-1">• ${a}</div>`).join('') +
+                                  `</small></div>`,
+                            confirmButtonText: 'Entendido, continuar'
+                        });
+                    }
+                    
+                    mostrarNotificacion(`Cotización ${data.ticket.numero_cotizacion} cargada correctamente`, 'success');
+                    
+                    // Ir al paso 2 (Cliente y Documento)
+                    irAPaso(2);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.error || 'No se pudo cargar la cotización'
+                    });
+                }
+            })
+            .catch(error => {
+                Swal.close();
+                console.error('Error cargando cotización:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo cargar la cotización'
+                });
+            });
     }
 
     // === FUNCIONES PARA MANEJAR MÚLTIPLES REFERENCIAS ===
@@ -2582,10 +2735,18 @@ document.addEventListener('DOMContentLoaded', function() {
         ticketActual = null;
         clienteActual = null;
         pagosActuales = [];
+        cotizacionActual = null;  // Limpiar cotización cargada
         
         // Limpiar formularios
         document.getElementById('inputTicket').value = '';
         document.getElementById('formCliente').reset();
+        
+        // Limpiar referencias de cotización
+        const contenedorRefs = document.getElementById('contenedorReferencias');
+        if (contenedorRefs) {
+            contenedorRefs.innerHTML = '';
+        }
+        contadorReferencias = 0;
         
         // Actualizar UI
         actualizarProgreso();
@@ -2783,8 +2944,323 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = '/ventas/ticket/';
     }
 
+    // =========================================================================
+    // FUNCIONES DE COTIZACIONES
+    // =========================================================================
+    
+    function abrirModalCotizaciones() {
+        // Limpiar búsqueda anterior
+        document.getElementById('buscarCotizacion').value = '';
+        
+        // Mostrar modal y cargar cotizaciones
+        const modal = new bootstrap.Modal(document.getElementById('modalCotizaciones'));
+        modal.show();
+        
+        // Cargar cotizaciones vigentes
+        cargarCotizacionesVigentes();
+    }
+    
+    function cargarCotizacionesVigentes() {
+        const tbody = document.getElementById('tbodyCotizaciones');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="text-muted mt-2 mb-0">Cargando cotizaciones vigentes...</p>
+                </td>
+            </tr>
+        `;
+        
+        fetch(`${apiUrls.listarCotizaciones}?estado=VIGENTE&per_page=50`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    cotizacionesVigentes = data.cotizaciones || [];
+                    renderizarTablaCotizaciones(cotizacionesVigentes);
+                } else {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-danger">
+                                <i class="ri-error-warning-line fs-3"></i>
+                                <p class="mt-2 mb-0">${data.error || 'Error al cargar cotizaciones'}</p>
+                            </td>
+                        </tr>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando cotizaciones:', error);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-danger">
+                            <i class="ri-wifi-off-line fs-3"></i>
+                            <p class="mt-2 mb-0">Error de conexión al cargar cotizaciones</p>
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+    
+    function renderizarTablaCotizaciones(cotizaciones) {
+        const tbody = document.getElementById('tbodyCotizaciones');
+        
+        if (!cotizaciones || cotizaciones.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4">
+                        <i class="ri-file-list-3-line fs-1 text-muted"></i>
+                        <p class="text-muted mt-2 mb-0">No hay cotizaciones vigentes</p>
+                        <small class="text-muted">Las cotizaciones aparecerán aquí cuando estén disponibles</small>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let html = '';
+        cotizaciones.forEach(cot => {
+            // Badge de días restantes con colores sólidos visibles
+            const diasBgClass = cot.dias_restantes <= 5 ? 'bg-danger' : 
+                               cot.dias_restantes <= 10 ? 'bg-warning text-dark' : 'bg-success';
+            
+            // Validar si puede facturar (todos los items tienen SKU)
+            const puedeFacturar = cot.puede_facturar;
+            const itemsSinSku = cot.items_sin_sku || 0;
+            const totalItems = cot.total_items || 0;
+            
+            // Clase de estado de SKU
+            let estadoSkuHtml = '';
+            if (puedeFacturar) {
+                estadoSkuHtml = `<span class="badge bg-success" title="Todos los productos tienen SKU asociado">
+                    <i class="ri-check-line"></i> ${totalItems} OK
+                </span>`;
+            } else {
+                estadoSkuHtml = `<span class="badge bg-danger" title="${itemsSinSku} producto(s) sin SKU asociado">
+                    <i class="ri-alert-line"></i> ${itemsSinSku}/${totalItems} sin SKU
+                </span>`;
+            }
+            
+            // Botón de acción
+            let botonHtml = '';
+            if (puedeFacturar) {
+                botonHtml = `<button class="btn btn-sm btn-warning" onclick="seleccionarCotizacion(${cot.id})" 
+                        title="Cargar esta cotización para facturar">
+                    <i class="ri-file-text-line"></i> Facturar
+                </button>`;
+            } else {
+                botonHtml = `<button class="btn btn-sm btn-outline-secondary" disabled
+                        title="No se puede facturar: ${itemsSinSku} producto(s) sin SKU asociado">
+                    <i class="ri-lock-line"></i> Sin SKU
+                </button>
+                <a href="/app/cotizaciones/" class="btn btn-sm btn-outline-primary ms-1" 
+                   title="Ir a Gestión de Cotizaciones para editar y asociar SKUs" target="_blank">
+                    <i class="ri-edit-line"></i>
+                </a>`;
+            }
+            
+            html += `
+                <tr class="${!puedeFacturar ? 'table-light text-muted' : ''}">
+                    <td>
+                        <strong class="${puedeFacturar ? 'text-primary' : 'text-muted'}">${cot.numero_cotizacion}</strong>
+                    </td>
+                    <td>${cot.cliente_nombre}</td>
+                    <td><code>${cot.cliente_rut}</code></td>
+                    <td>${formatearFecha(cot.fecha_emision)}</td>
+                    <td class="text-end fw-bold">${formatearMoneda(cot.monto_total)}</td>
+                    <td class="text-center">${estadoSkuHtml}</td>
+                    <td class="text-center">
+                        <span class="badge ${diasBgClass}">
+                            ${cot.dias_restantes} días
+                        </span>
+                    </td>
+                    <td class="text-center">${botonHtml}</td>
+                </tr>
+            `;
+        });
+        
+        tbody.innerHTML = html;
+    }
+    
+    function filtrarCotizacionesLista() {
+        const filtro = document.getElementById('buscarCotizacion').value.toLowerCase().trim();
+        
+        if (!filtro) {
+            renderizarTablaCotizaciones(cotizacionesVigentes);
+            return;
+        }
+        
+        const filtradas = cotizacionesVigentes.filter(cot => 
+            cot.numero_cotizacion.toLowerCase().includes(filtro) ||
+            cot.cliente_nombre.toLowerCase().includes(filtro) ||
+            cot.cliente_rut.toLowerCase().includes(filtro)
+        );
+        
+        renderizarTablaCotizaciones(filtradas);
+    }
+    
+    function seleccionarCotizacion(cotizacionId) {
+        console.log('Cargando cotización ID:', cotizacionId);
+        
+        // Mostrar loading
+        const tbody = document.getElementById('tbodyCotizaciones');
+        const filaActual = event ? event.target.closest('tr') : null;
+        if (filaActual) {
+            filaActual.style.opacity = '0.5';
+            event.target.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            event.target.disabled = true;
+        }
+        
+        fetch(apiUrls.cargarCotizacionComoTicket(cotizacionId))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Cerrar modal
+                    const modalElement = document.getElementById('modalCotizaciones');
+                    const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                    
+                    // Reiniciar wizard y mostrar vista
+                    reiniciarWizard();
+                    mostrarVista('wizard');
+                    
+                    // Cargar ticket desde cotización
+                    cargarTicket(data.ticket);
+                    
+                    // Mostrar advertencias si hay
+                    if (data.tiene_advertencias && data.advertencias.length > 0) {
+                        let mensajeAdvertencias = data.advertencias.join('\n');
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Advertencias de Stock',
+                            html: `<div class="text-start"><small>` + 
+                                  data.advertencias.map(a => `<div class="mb-1">• ${a}</div>`).join('') +
+                                  `</small></div>`,
+                            confirmButtonText: 'Entendido, continuar'
+                        });
+                    }
+                    
+                    mostrarNotificacion(`Cotización ${data.ticket.numero_cotizacion} cargada correctamente`, 'success');
+                    
+                    // Avanzar al paso 2 (Cliente y Documento)
+                    irAPaso(2);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: data.error || 'No se pudo cargar la cotización'
+                    });
+                    
+                    // Restaurar botón
+                    if (filaActual) {
+                        filaActual.style.opacity = '1';
+                        event.target.innerHTML = '<i class="ri-arrow-right-line"></i> Cargar';
+                        event.target.disabled = false;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error cargando cotización:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error de conexión',
+                    text: 'No se pudo cargar la cotización'
+                });
+                
+                // Restaurar botón
+                if (filaActual) {
+                    filaActual.style.opacity = '1';
+                    event.target.innerHTML = '<i class="ri-arrow-right-line"></i> Cargar';
+                    event.target.disabled = false;
+                }
+            });
+    }
+    
+    function formatearFecha(fechaStr) {
+        if (!fechaStr) return '-';
+        const partes = fechaStr.split('-');
+        if (partes.length === 3) {
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+        return fechaStr;
+    }
+
+    // =========================================================================
+    // FIN FUNCIONES DE COTIZACIONES
+    // =========================================================================
+
     function cargarTicket(ticket) {
         ticketActual = ticket;
+        
+        // =========================================================================
+        // NUEVO: Detectar si es una cotización y configurar apropiadamente
+        // =========================================================================
+        if (ticket.es_cotizacion) {
+            console.log('🔄 Cargando ticket desde cotización:', ticket.numero_cotizacion);
+            
+            // Guardar referencia a la cotización
+            cotizacionActual = {
+                id: ticket.cotizacion_id,
+                numero_cotizacion: ticket.numero_cotizacion,
+                fecha_emision: ticket.fecha_emision,
+                fecha_validez: ticket.fecha_validez
+            };
+            
+            // Pre-seleccionar Factura Electrónica (las cotizaciones son para empresas)
+            setTimeout(() => {
+                const radioFactura = document.getElementById('tipoFacturaElectronica');
+                if (radioFactura) {
+                    radioFactura.checked = true;
+                    radioFactura.dispatchEvent(new Event('change'));
+                    
+                    // ✅ OCULTAR secciones de búsqueda (ya sabemos la empresa de la cotización)
+                    const busquedaEmpresa = document.getElementById('busquedaEmpresaSection');
+                    if (busquedaEmpresa) {
+                        busquedaEmpresa.style.display = 'none';
+                    }
+                    const busquedaCliente = document.getElementById('buscarRut')?.closest('.col-md-6');
+                    if (busquedaCliente) {
+                        busquedaCliente.style.display = 'none';
+                    }
+                    
+                    // ✅ Mostrar sección de facturación con datos de la empresa
+                    const seccionFacturacion = document.getElementById('seccionFacturacion');
+                    if (seccionFacturacion) {
+                        seccionFacturacion.style.display = 'block';
+                    }
+                }
+                
+                // ✅ Mostrar datos de la empresa de la cotización
+                if (ticket.cliente) {
+                    mostrarDatosEmpresaCotizacion(ticket.cliente, ticket.numero_cotizacion);
+                }
+                
+                // Mostrar sección de referencias para que el usuario pueda agregar
+                // orden de compra, HES, guía de despacho, etc. si lo necesita
+                // NOTA: NO se agrega la cotización automáticamente al DTE
+                // La relación cotización-factura queda guardada internamente via cotizacion_id
+                const seccionRef = document.getElementById('seccionReferencia');
+                if (seccionRef) {
+                    seccionRef.style.display = 'block';
+                }
+            }, 100);
+            
+            // Mostrar notificación informativa
+            mostrarNotificacion(
+                `Cotización ${ticket.numero_cotizacion} cargada. Se recomienda Factura Electrónica.`, 
+                'info', 
+                5000
+            );
+        } else {
+            // No es cotización, limpiar variable
+            cotizacionActual = null;
+        }
+        // =========================================================================
+        // FIN: Manejo de cotización
+        // =========================================================================
         
         // Cargar datos del cliente
         if (ticket.cliente) {
@@ -2799,6 +3275,56 @@ document.addEventListener('DOMContentLoaded', function() {
         cargarProductosTicket(ticket.productos);
         actualizarListaPagos();
         actualizarResumenVenta();
+    }
+    
+    // Función auxiliar para agregar referencia automática de cotización
+    function agregarReferenciaCotizacion(numeroCotizacion, fechaEmision) {
+        // Incrementar contador de referencias
+        contadorReferencias++;
+        const idReferencia = `ref-${contadorReferencias}`;
+        
+        const htmlReferencia = `
+            <div class="card mb-3 border-start border-4 border-info" id="${idReferencia}" data-ref-id="${contadorReferencias}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0 text-info">
+                            <i class="ri-file-list-3-line"></i> Referencia Cotización (Automática)
+                        </h6>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarReferencia('${idReferencia}')">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Tipo de Documento</label>
+                            <select class="form-select" id="refTipo-${contadorReferencias}" required>
+                                <option value="COTIZACION" selected>Cotización</option>
+                                <option value="801">801 - Orden de Compra</option>
+                                <option value="52">52 - Guía de Despacho</option>
+                                <option value="803">803 - Contrato</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Folio / Número</label>
+                            <input type="text" class="form-control" id="refFolio-${contadorReferencias}" value="${numeroCotizacion}" required readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Fecha Documento</label>
+                            <input type="date" class="form-control" id="refFecha-${contadorReferencias}" value="${fechaEmision}" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="refObs-${contadorReferencias}" rows="2" placeholder="Facturación de cotización...">Facturación de cotización ${numeroCotizacion}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const contenedor = document.getElementById('contenedorReferencias');
+        if (contenedor) {
+            contenedor.insertAdjacentHTML('beforeend', htmlReferencia);
+        }
     }
 
     function cargarProductosTicket(productos) {
@@ -2972,11 +3498,45 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('✅ Empresa encontrada:', data.empresa);
                     llenarDatosEmpresa(data.empresa);
                     document.getElementById('empresaEncontrada').classList.remove('d-none');
-                    document.getElementById('mensajeEmpresa').textContent = `Empresa: ${data.empresa.razon_social || data.empresa.nombre}`;
+                    document.getElementById('mensajeEmpresa').textContent = `${data.empresa.razon_social || data.empresa.nombre}`;
+                    
+                    // Mostrar detalles de la empresa (incluyendo campos requeridos para factura)
+                    const emp = data.empresa;
+                    let detalleHtml = `<div class="row mt-2">`;
+                    detalleHtml += `<div class="col-6"><strong>RUT:</strong> ${emp.rut || '<span class="text-danger">Sin RUT</span>'}</div>`;
+                    detalleHtml += `<div class="col-6"><strong>Giro:</strong> ${emp.giro || '<span class="text-warning">Sin giro</span>'}</div>`;
+                    detalleHtml += `<div class="col-6"><strong>Dirección:</strong> ${emp.direccion || '<span class="text-warning">Sin dirección</span>'}</div>`;
+                    detalleHtml += `<div class="col-6"><strong>Ciudad:</strong> ${emp.ciudad || '<span class="text-warning">Sin ciudad</span>'}</div>`;
+                    detalleHtml += `<div class="col-6"><strong>Comuna:</strong> ${emp.comuna || '<span class="text-warning">Sin comuna</span>'}</div>`;
+                    detalleHtml += `<div class="col-6"><strong>Email:</strong> ${emp.email || '<span class="text-muted">Sin email</span>'}</div>`;
+                    detalleHtml += `</div>`;
+                    
+                    // Verificar si faltan datos obligatorios para factura
+                    const camposFaltantes = [];
+                    if (!emp.giro) camposFaltantes.push('Giro');
+                    if (!emp.direccion) camposFaltantes.push('Dirección');
+                    if (!emp.ciudad) camposFaltantes.push('Ciudad');
+                    if (!emp.comuna) camposFaltantes.push('Comuna');
+                    
+                    if (camposFaltantes.length > 0) {
+                        detalleHtml += `<div class="alert alert-warning mt-2 mb-0 py-1 px-2" style="font-size: 0.8rem;">
+                            <i class="ri-alert-line"></i> <strong>Faltan datos para factura:</strong> ${camposFaltantes.join(', ')}
+                        </div>`;
+                    }
+                    
+                    document.getElementById('detalleEmpresa').innerHTML = detalleHtml;
+                    
+                    // ✅ Mostrar automáticamente la sección de facturación si estamos en factura
+                    const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value;
+                    if (tipoDocumento === 'FACTURA_ELECTRONICA') {
+                        document.getElementById('seccionFacturacion').style.display = 'block';
+                    }
+                    
                     mostrarNotificacion('Empresa encontrada. Datos cargados.', 'success');
                 } else {
                     console.log('❌ Empresa no encontrada');
                     document.getElementById('empresaEncontrada').classList.add('d-none');
+                    document.getElementById('detalleEmpresa').innerHTML = '';
                     mostrarNotificacion(data.error || 'Empresa no encontrada', 'info');
                 }
             })
@@ -3003,6 +3563,57 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('clienteEmailFactura').value = empresa.email || '';
         
         console.log('✅ Datos de empresa llenados correctamente');
+    }
+
+    // ✅ NUEVO: Función para mostrar datos de empresa al cargar cotización
+    function mostrarDatosEmpresaCotizacion(cliente, numeroCotizacion) {
+        console.log('📋 Mostrando datos de empresa de cotización:', cliente);
+        
+        // Mostrar alerta de empresa encontrada
+        const empresaEncontrada = document.getElementById('empresaEncontrada');
+        const mensajeEmpresa = document.getElementById('mensajeEmpresa');
+        const detalleEmpresa = document.getElementById('detalleEmpresa');
+        
+        if (empresaEncontrada && mensajeEmpresa && detalleEmpresa) {
+            empresaEncontrada.classList.remove('d-none');
+            mensajeEmpresa.innerHTML = `<i class="ri-file-list-3-line me-1"></i> Cotización ${numeroCotizacion} - ${cliente.razon_social || cliente.nombre || 'Sin nombre'}`;
+            
+            // Construir detalle con todos los campos
+            let detalleHtml = `<div class="row mt-2" style="font-size: 0.85rem;">`;
+            detalleHtml += `<div class="col-6"><strong>RUT:</strong> ${cliente.rut || '<span class="text-danger">Sin RUT</span>'}</div>`;
+            detalleHtml += `<div class="col-6"><strong>Giro:</strong> ${cliente.giro || '<span class="text-warning">Sin giro</span>'}</div>`;
+            detalleHtml += `<div class="col-6"><strong>Dirección:</strong> ${cliente.direccion || '<span class="text-warning">Sin dirección</span>'}</div>`;
+            detalleHtml += `<div class="col-6"><strong>Ciudad:</strong> ${cliente.ciudad || '<span class="text-warning">Sin ciudad</span>'}</div>`;
+            detalleHtml += `<div class="col-6"><strong>Comuna:</strong> ${cliente.comuna || '<span class="text-warning">Sin comuna</span>'}</div>`;
+            detalleHtml += `<div class="col-6"><strong>Email:</strong> ${cliente.email || cliente.email_facturacion || '<span class="text-muted">Sin email</span>'}</div>`;
+            detalleHtml += `</div>`;
+            
+            // Verificar si faltan datos obligatorios para factura
+            const camposFaltantes = [];
+            if (!cliente.giro) camposFaltantes.push('Giro');
+            if (!cliente.direccion) camposFaltantes.push('Dirección');
+            if (!cliente.ciudad) camposFaltantes.push('Ciudad');
+            if (!cliente.comuna) camposFaltantes.push('Comuna');
+            
+            if (camposFaltantes.length > 0) {
+                detalleHtml += `<div class="alert alert-warning mt-2 mb-0 py-1 px-2" style="font-size: 0.8rem;">
+                    <i class="ri-alert-line"></i> <strong>Faltan datos para factura:</strong> ${camposFaltantes.join(', ')}
+                    <br><small>Por favor complete los campos marcados en rojo antes de continuar.</small>
+                </div>`;
+                
+                // Resaltar campos vacíos
+                if (!cliente.giro) document.getElementById('clienteGiro').classList.add('border-warning');
+                if (!cliente.direccion) document.getElementById('clienteDireccion').classList.add('border-warning');
+                if (!cliente.ciudad) document.getElementById('clienteCiudad').classList.add('border-warning');
+                if (!cliente.comuna) document.getElementById('clienteComuna').classList.add('border-warning');
+            } else {
+                detalleHtml += `<div class="alert alert-success mt-2 mb-0 py-1 px-2" style="font-size: 0.8rem;">
+                    <i class="ri-check-line"></i> <strong>Datos completos para facturación</strong>
+                </div>`;
+            }
+            
+            detalleEmpresa.innerHTML = detalleHtml;
+        }
     }
 
     function limpiarFormularioCliente(tipo) {
@@ -3111,9 +3722,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Mostrar mensaje de éxito
                 mostrarNotificacion('Empresa registrada exitosamente', 'success');
                 
-                // Mostrar alerta de empresa encontrada
+                // Mostrar alerta de empresa encontrada con detalles
+                const emp = data.empresa;
                 document.getElementById('empresaEncontrada').classList.remove('d-none');
-                document.getElementById('mensajeEmpresa').textContent = `Empresa: ${data.empresa.razon_social}`;
+                document.getElementById('mensajeEmpresa').textContent = `${emp.razon_social || emp.nombre}`;
+                
+                // Mostrar detalles de la nueva empresa
+                let detalleHtml = `<div class="row mt-2">`;
+                detalleHtml += `<div class="col-6"><strong>RUT:</strong> ${emp.rut || '-'}</div>`;
+                detalleHtml += `<div class="col-6"><strong>Giro:</strong> ${emp.giro || '-'}</div>`;
+                detalleHtml += `<div class="col-6"><strong>Dirección:</strong> ${emp.direccion || '-'}</div>`;
+                detalleHtml += `<div class="col-6"><strong>Ciudad:</strong> ${emp.ciudad || '-'}</div>`;
+                detalleHtml += `</div>`;
+                document.getElementById('detalleEmpresa').innerHTML = detalleHtml;
+                
+                // Mostrar sección de facturación si estamos en modo factura
+                const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value;
+                if (tipoDocumento === 'FACTURA_ELECTRONICA') {
+                    document.getElementById('seccionFacturacion').style.display = 'block';
+                }
             } else {
                 mostrarNotificacion(data.error || 'Error al registrar empresa', 'error');
             }
@@ -3836,6 +4463,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function llenarFormularioProducto(producto) {
         // Campos ocultos
         document.getElementById('productoSku').value = producto.sku || '';
+        document.getElementById('productoTallaId').value = producto.id || producto.producto_talla_id || '';  // ID del ProductoTalla
         document.getElementById('productoArticulo').value = producto.articulo || '';
         document.getElementById('productoDescripcion').value = producto.descripcion || '';
         document.getElementById('productoMarca').value = producto.marca || '';
@@ -3936,6 +4564,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function limpiarFormularioProductoModal() {
         document.getElementById('productoSku').value = '';
+        document.getElementById('productoTallaId').value = '';  // ✅ Limpiar ID
         document.getElementById('productoArticulo').value = '';
         document.getElementById('productoDescripcion').value = '';
         document.getElementById('productoMarca').value = '';
@@ -4084,9 +4713,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Crear objeto producto
+            // Crear objeto producto con ID para el backend
+            const productoTallaId = document.getElementById('productoTallaId').value;
             const nuevoProducto = {
                 sku: sku,
+                producto_talla_id: productoTallaId ? parseInt(productoTallaId) : null,  // ✅ ID para el backend
                 articulo: articulo,
                 descripcion: document.getElementById('productoDescripcion').value.trim(),
                 marca: document.getElementById('productoMarca').value.trim(),
@@ -4573,17 +5204,45 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        // ✅ Preparar productos actualizados (incluye productos agregados como bolsas)
+        const productosActualizados = ticketActual.productos.map(p => ({
+            producto_talla_id: p.producto_talla_id || null,
+            sku: p.sku,
+            articulo: p.articulo || p.descripcion,
+            descripcion: p.descripcion || p.articulo,
+            talla: p.talla || '',
+            cantidad: p.cantidad || p.stock || 1,
+            precio_unitario: p.precio_unitario || p.precio,
+            descuento_unitario: p.descuento_unitario || 0,
+            subtotal: p.subtotal || (p.cantidad * p.precio_unitario)
+        }));
+        
         const payload = {
-            correlativo: ticketActual.ticket_id,
+            correlativo: ticketActual.ticket_id || ticketActual.correlativo,
             cliente: obtenerDatosCliente(),
             pagos: pagosActuales,
+            productos: productosActualizados,  // ✅ NUEVO: Enviar productos actualizados
             tipo_documento: tipoDocumento,
             estado: 'PAGADO',
             metodo_pago_principal: pagosActuales.length > 0 ? pagosActuales[0].metodo_pago : 'EFECTIVO',
             referencias: referencias  // ✅ Array de referencias múltiples
         };
+        
+        // =========================================================================
+        // NUEVO: Incluir cotizacion_id si viene de una cotización
+        // =========================================================================
+        if (cotizacionActual && cotizacionActual.id) {
+            payload.cotizacion_id = cotizacionActual.id;
+            console.log('📋 Facturando cotización:', cotizacionActual.numero_cotizacion);
+        }
+        // =========================================================================
+        
+        console.log('📦 Payload con productos:', payload);
 
-        fetch(apiUrls.registrarPagos(ticketActual.ticket_id), {
+        // Determinar el correlativo a usar (cotización o ticket normal)
+        const correlativoParaAPI = ticketActual.es_cotizacion ? ticketActual.correlativo : ticketActual.ticket_id;
+
+        fetch(apiUrls.registrarPagos(correlativoParaAPI), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -4603,6 +5262,12 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.success) {
+                // ✅ IMPORTANTE: Actualizar ticketActual con los datos del ticket creado/actualizado
+                if (data.ticket) {
+                    console.log('✅ Actualizando ticketActual con datos del servidor:', data.ticket);
+                    ticketActual = data.ticket;
+                }
+                
                 // Si hay crédito de trabajador en los pagos, descontar del crédito
                 const pagoCreditoTrabajador = pagosActuales.find(p => p.metodo_pago === 'CREDITO_TRABAJADOR');
                 
@@ -4633,17 +5298,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (creditoData.success) {
                             console.log('✅ Crédito descontado:', creditoData);
                             
-                            // Mostrar mensaje con info del crédito
-                            let htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
+                            // Mostrar mensaje con info del crédito y DTE
+                            let htmlMensaje = '';
                             
                             if (data.dte_generado) {
-                                htmlMensaje += `
-                                    <hr>
-                                    <p class="text-success">
-                                        <i class="ri-file-check-line"></i> 
-                                        <strong>${data.dte_generado.tipo} #${data.dte_generado.numero}</strong> generado
-                                    </p>
-                                `;
+                                htmlMensaje = `<p><strong>${data.dte_generado.tipo} N° ${data.dte_generado.numero}</strong></p>
+                                    <p class="text-success"><i class="ri-check-circle-line"></i> Documento generado exitosamente</p>`;
+                            } else {
+                                htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
                             }
                             
                             htmlMensaje += `
@@ -4665,8 +5327,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 timerProgressBar: true
                             }).then(() => {
                                 desactivarCreditoTrabajador();
-                                volverAlDashboard();
-                                actualizarDashboard();
+                                // ✅ CORREGIDO: Preguntar por ticket de cambio antes de volver al dashboard
+                                preguntarTicketCambio(ticketActual.ticket_id);
                             });
                         } else {
                             console.error('Error al descontar crédito:', creditoData.error);
@@ -4688,16 +5350,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     // ✅ El DTE ya se generó automáticamente en el backend al registrar el pago
                     let mensaje = '¡Venta finalizada correctamente!';
-                    let htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
+                    let htmlMensaje = '';
                     
-                    // Agregar mensaje si se generó DTE
+                    // Mostrar número de DTE si se generó, si no mostrar número de ticket
                     if (data.dte_generado) {
-                        htmlMensaje += `
-                            <hr>
-                            <p class="text-success">
-                                <i class="ri-file-check-line"></i> 
-                                <strong>${data.dte_generado.tipo} #${data.dte_generado.numero}</strong> generado exitosamente
-                            </p>
+                        htmlMensaje = `
+                            <div class="text-center mb-3">
+                                <h4 class="text-success mb-2">
+                                    <i class="ri-file-check-line"></i> 
+                                    ${data.dte_generado.tipo}
+                                </h4>
+                                <h2 class="text-dark fw-bold">N° ${data.dte_generado.numero}</h2>
+                            </div>
                         `;
                         
                         // ✅ Descargar archivo TXT automáticamente si se generó
@@ -4724,6 +5388,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 console.error('Error al descargar TXT:', error);
                             }
                         }
+                    } else {
+                        // Sin DTE - mostrar número de ticket
+                        htmlMensaje = `<p><strong>Ticket #${ticketActual.ticket_id}</strong> procesado exitosamente</p>`;
                     }
                     
                     if (typeof Swal !== 'undefined') {
@@ -4731,18 +5398,18 @@ document.addEventListener('DOMContentLoaded', function() {
                             icon: 'success',
                             title: '¡Venta Completada!',
                             html: htmlMensaje,
-                            confirmButtonText: 'Aceptar',
-                            timer: 4000,
-                            timerProgressBar: true
+                            confirmButtonText: 'Continuar',
+                            showConfirmButton: true,
+                            allowOutsideClick: false
                         }).then(() => {
-                            volverAlDashboard();
-                            actualizarDashboard();
+                            // ✅ CORREGIDO: Preguntar por ticket de cambio antes de volver al dashboard
+                            preguntarTicketCambio(ticketActual.ticket_id);
                         });
                     } else {
                         mostrarNotificacion(mensaje, 'success');
+                        // ✅ CORREGIDO: Preguntar por ticket de cambio
                         setTimeout(() => {
-                            volverAlDashboard();
-                            actualizarDashboard();
+                            preguntarTicketCambio(ticketActual.ticket_id);
                         }, 2000);
                     }
                 }
@@ -4787,41 +5454,6 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         
         mostrarNotificacion('Preparando impresión...', 'info');
-    }
-
-    function imprimirTicketCambio() {
-        if (!ticketActual) {
-            mostrarNotificacion('No hay ticket para imprimir', 'warning');
-            return;
-        }
-
-        try {
-            // Generar ticket de cambio
-            const ventanaImpresion = window.open('', '_blank', 'width=320,height=600');
-            
-            if (!ventanaImpresion) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'No se pudo abrir la ventana de impresión. Verifique que no esté bloqueada por el navegador.'
-                });
-                return;
-            }
-            
-            const htmlTicket = generarHtmlTicketCambio(ticketActual);
-            ventanaImpresion.document.write(htmlTicket);
-            ventanaImpresion.document.close();
-            
-            mostrarNotificacion('Ticket de cambio preparado para impresión', 'success');
-            
-        } catch (error) {
-            console.error('Error al imprimir ticket de cambio:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Error al imprimir',
-                text: 'Ocurrió un error al preparar el ticket de cambio: ' + error.message
-            });
-        }
     }
 
     function enviarPorEmail() {
@@ -5043,6 +5675,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // ✅ Función para cargar datos del ticket antes de imprimir
     async function cargarTicketParaCambio(ticketId, cantidad, modoImpresion = 'ventana') {
+        console.log('🎫 cargarTicketParaCambio llamado con:', { ticketId, cantidad, modoImpresion });
+        console.log('🎫 ticketActual actual:', ticketActual);
+        
         try {
             Swal.fire({
                 title: 'Preparando ticket de cambio...',
@@ -5053,32 +5688,68 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
+            // ✅ Si ya tenemos los datos del ticket actualizados, usarlos directamente
+            if (ticketActual && ticketActual.productos && ticketActual.productos.length > 0) {
+                console.log('🎫 Usando ticketActual existente (ya tiene productos)');
+                Swal.close();
+                imprimirTicketsCambio(ticketId, cantidad, modoImpresion);
+                return;
+            }
+            
             const response = await fetch(`/app/api/tickets/${ticketId}/`);
+            console.log('🎫 Response status:', response.status);
             
             if (response.ok) {
-                const ticketData = await response.json();
+                const responseData = await response.json();
                 Swal.close();
                 
-                // Actualizar ticketActual con los datos completos
+                console.log('🎫 Respuesta API ticket:', responseData);
+                
+                // ✅ CORREGIDO: Extraer el ticket de la respuesta (puede venir como {success, ticket} o directamente)
+                let ticketData = responseData;
+                if (responseData.success && responseData.ticket) {
+                    ticketData = responseData.ticket;
+                }
+                
+                console.log('🎫 Datos del ticket extraídos:', ticketData);
+                console.log('🎫 Productos del ticket:', ticketData.productos);
+                
+                // Actualizar ticketActual con los datos completos del ticket
                 ticketActual = ticketData;
                 
                 // Imprimir tickets de cambio según el modo seleccionado
                 imprimirTicketsCambio(ticketId, cantidad, modoImpresion);
             } else {
-                throw new Error('No se pudo cargar el ticket');
+                // Intentar obtener el error específico
+                const errorData = await response.json().catch(() => ({}));
+                console.error('🎫 Error al cargar ticket:', errorData);
+                throw new Error(errorData.error || `HTTP ${response.status}: No se pudo cargar el ticket`);
             }
         } catch (error) {
             console.error('Error al cargar ticket:', error);
+            Swal.close();
+            
+            // ✅ Si tenemos ticketActual con productos, intentar imprimir de todos modos
+            if (ticketActual && ticketActual.productos && ticketActual.productos.length > 0) {
+                console.log('🎫 Usando ticketActual como fallback para impresión');
+                imprimirTicketsCambio(ticketId, cantidad, modoImpresion);
+                return;
+            }
+            
             Swal.fire({
                 icon: 'warning',
                 title: 'Advertencia',
-                text: 'No se pudo cargar los datos completos del ticket, pero puede imprimir el ticket de cambio básico.',
+                html: `
+                    <p>No se pudo cargar los datos completos del ticket.</p>
+                    <p class="text-muted small">${error.message}</p>
+                    <p>¿Desea imprimir el ticket de cambio de todos modos?</p>
+                `,
                 showCancelButton: true,
                 confirmButtonText: 'Imprimir de todos modos',
                 cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    imprimirTicketsCambio(ticketId, cantidad);
+                    imprimirTicketsCambio(ticketId, cantidad, modoImpresion);
                 } else {
                     volverAlDashboard();
                     actualizarDashboard();
@@ -5088,8 +5759,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ✅ Función para imprimir tickets de cambio (con soporte térmica)
+    // Flag para evitar llamadas duplicadas en modo ventana
+    let impresionVentanaEnProgreso = false;
+    
     function imprimirTicketsCambio(ticketId, cantidad, modoImpresion = 'ventana') {
         cantidad = parseInt(cantidad) || 1;
+        
+        // ✅ PROTECCIÓN: Evitar llamadas duplicadas en modo ventana
+        if (modoImpresion === 'ventana' && impresionVentanaEnProgreso) {
+            console.warn('⚠️ Ya hay una impresión de ventana en progreso, ignorando solicitud duplicada');
+            return;
+        }
+        
+        if (modoImpresion === 'ventana') {
+            impresionVentanaEnProgreso = true;
+        }
         
         Swal.fire({
             title: '🖨️ Imprimiendo...',
@@ -5112,6 +5796,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // ✅ MEJORADO: Modo ventana - Generar múltiples copias en UNA sola ventana
         try {
             if (!ticketActual) {
+                impresionVentanaEnProgreso = false; // ✅ Reset flag si no hay ticket
                 Swal.close();
                 mostrarNotificacion('No hay ticket para imprimir', 'warning');
                 volverAlDashboard();
@@ -5125,6 +5810,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const ventanaImpresion = window.open('', '_blank', 'width=400,height=700');
             
             if (!ventanaImpresion) {
+                impresionVentanaEnProgreso = false; // ✅ Reset flag si popup bloqueado
                 Swal.close();
                 Swal.fire({
                     icon: 'error',
@@ -5177,10 +5863,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 <body>
                     ${contenidoMultiple}
                     <script>
+                        // ✅ Cerrar ventana automáticamente después de imprimir
+                        window.onafterprint = function() {
+                            window.close();
+                        };
+                        
                         // Auto-imprimir después de cargar
                         window.onload = function() {
                             setTimeout(function() {
                                 window.print();
+                                // Fallback: cerrar después de 3 segundos si afterprint no funciona
+                                setTimeout(function() {
+                                    if (!window.closed) {
+                                        window.close();
+                                    }
+                                }, 3000);
                             }, 300);
                         };
                     <\/script>
@@ -5190,59 +5887,100 @@ document.addEventListener('DOMContentLoaded', function() {
             ventanaImpresion.document.close();
             
             Swal.close();
+            
+            // ✅ Reset flag después de un tiempo prudente
+            setTimeout(() => {
+                impresionVentanaEnProgreso = false;
+            }, 5000);
+            
+            // ✅ Mostrar mensaje breve y volver al dashboard automáticamente
             Swal.fire({
                 icon: 'success',
-                title: '✅ Tickets Preparados',
+                title: '✅ Imprimiendo Ticket de Cambio',
                 html: `
                     <p class="fs-5">Se generaron <strong>${cantidad}</strong> ticket(s) de cambio</p>
-                    <p class="text-success"><i class="ri-check-line"></i> La ventana de impresión se ha abierto</p>
-                    <hr>
-                    <div class="alert alert-warning">
-                        <i class="ri-time-line"></i> <strong>Espere a que se complete la impresión</strong>
-                    </div>
+                    <p class="text-success"><i class="ri-printer-line"></i> La impresión se abrió automáticamente</p>
                 `,
                 confirmButtonText: '<i class="ri-check-double-line me-2"></i> CONTINUAR',
                 showConfirmButton: true,
-                allowOutsideClick: false,
+                allowOutsideClick: true,
+                timer: 5000,  // ✅ Auto-cerrar después de 5 segundos
+                timerProgressBar: true,
                 customClass: {
                     confirmButton: 'btn btn-success btn-lg px-5 py-3 fw-bold fs-4'
                 },
                 buttonsStyling: false
             }).then(() => {
-                volverAlDashboard();
-                actualizarDashboard();
+                try {
+                    // Cerrar ventana de impresión si sigue abierta
+                    if (ventanaImpresion && !ventanaImpresion.closed) {
+                        ventanaImpresion.close();
+                    }
+                    volverAlDashboard();
+                    actualizarDashboard();
+                } catch (e) {
+                    console.error('Error al volver al dashboard:', e);
+                    volverAlDashboard();
+                }
             });
             
         } catch (error) {
             console.error('Error al imprimir tickets de cambio:', error);
+            impresionVentanaEnProgreso = false; // ✅ Reset flag en caso de error
             Swal.close();
             Swal.fire({
                 icon: 'error',
                 title: 'Error de Impresión',
-                html: `<p class="fs-5">Ocurrió un error: ${error.message}</p>`,
+                html: `<p class="fs-5">Ocurrió un error: ${error.message || 'Error desconocido'}</p>
+                       <p class="text-muted small">Puede continuar normalmente.</p>`,
                 confirmButtonText: '<i class="ri-arrow-left-line me-2"></i> VOLVER AL DASHBOARD',
+                allowOutsideClick: true,
                 customClass: {
                     confirmButton: 'btn btn-primary btn-lg px-4 py-3 fw-bold fs-5'
                 },
                 buttonsStyling: false
             }).then(() => {
-                volverAlDashboard();
-                actualizarDashboard();
+                try {
+                    volverAlDashboard();
+                    actualizarDashboard();
+                } catch (e) {
+                    console.error('Error al volver:', e);
+                    volverAlDashboard();
+                }
             });
         }
     }
     
     // ✅ Función para impresión térmica automática (silenciosa)
+    // Flag para evitar impresiones duplicadas
+    let impresionEnProgreso = false;
+    
     async function imprimirTermicaTicketsCambio(cantidad) {
         cantidad = parseInt(cantidad) || 1;
+        
+        // ✅ PROTECCIÓN: Evitar impresiones duplicadas
+        if (impresionEnProgreso) {
+            console.warn('⚠️ Ya hay una impresión en progreso, ignorando solicitud duplicada');
+            return;
+        }
+        impresionEnProgreso = true;
         
         try {
             if (!ticketActual) {
                 Swal.close();
                 mostrarNotificacion('No hay ticket para imprimir', 'warning');
                 volverAlDashboard();
+                impresionEnProgreso = false;
                 return;
             }
+            
+            // ✅ LIMPIEZA: Eliminar iframes de impresión anteriores
+            const iframesAnteriores = document.querySelectorAll('iframe[data-print-ticket]');
+            iframesAnteriores.forEach(iframe => {
+                if (iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            });
             
             // Generar el HTML del ticket de cambio
             const htmlTicketBase = generarHtmlTicketCambio(ticketActual);
@@ -5270,6 +6008,7 @@ document.addEventListener('DOMContentLoaded', function() {
             iframe.style.width = '0';
             iframe.style.height = '0';
             iframe.style.border = '0';
+            iframe.setAttribute('data-print-ticket', 'true'); // Marcar para identificación
             document.body.appendChild(iframe);
             
             const iframeDoc = iframe.contentWindow.document;
@@ -5303,15 +6042,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.warn('Impresión silenciosa no disponible:', printError);
                 // Fallback: usar modo ventana
                 document.body.removeChild(iframe);
+                impresionEnProgreso = false;
                 imprimirTicketsCambio(ticketActual.ticket_id, cantidad, 'ventana');
                 return;
             }
             
-            // Limpiar iframe después de imprimir
+            // Limpiar iframe después de imprimir y resetear flag
             setTimeout(() => {
                 if (iframe.parentNode) {
                     document.body.removeChild(iframe);
                 }
+                impresionEnProgreso = false;
             }, 3000);
             
             Swal.close();
@@ -5340,6 +6081,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (error) {
             console.error('Error en impresión térmica:', error);
+            impresionEnProgreso = false; // ✅ Reset flag en caso de error
             Swal.close();
             
             // Fallback: preguntar si quiere usar modo ventana
@@ -5457,183 +6199,362 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function generarHtmlTicketCambio(ticketData) {
-        // Obtener información de la sucursal y empresa
-        const nombreEmpresa = '{{ request.user.empresa.nombreEmpresa|default:"EMPRESA" }}';
-        const nombreSucursal = '{{ sucursal_actual.nombreSucursal|default:"SUCURSAL" }}' || ticketData.sucursal_nombre || 'SUCURSAL';
-        const fechaActual = new Date();
-        const fechaVencimiento = new Date(fechaActual.getTime() + (15 * 24 * 60 * 60 * 1000)); // +15 días
-        
-        // Formatear productos
-        let productosHtml = '';
-        if (ticketData.productos && Array.isArray(ticketData.productos)) {
-            ticketData.productos.forEach(prod => {
-                const nombreProducto = prod.nombre || prod.descripcion || '';
-                const talla = prod.talla ? ` - ${prod.talla}` : '';
-                const cantidad = prod.cantidad || prod.stock || 1;
-                const precio = prod.precio || prod.precio_unitario || 0;
-                
-                productosHtml += `
-                    <div class="item">
-                        ${cantidad}x ${nombreProducto}${talla}
-                        <span style="float:right">$${precio.toLocaleString()}</span>
-                    </div>
-                `;
-            });
+        // ✅ Validar datos de entrada
+        if (!ticketData) {
+            console.error('❌ ticketData es null o undefined');
+            ticketData = {};
         }
         
-        const total = ticketData.totales?.total || ticketData.total || 0;
-        const ticketId = ticketData.ticket_id || ticketData.correlativo || 'N/A';
+        try {
+            // Obtener información de la sucursal y empresa
+            const nombreEmpresa = '{{ request.user.empresa.nombreEmpresa|default:"EMPRESA" }}';
+            const sucursalAlias = (ticketData.sucursal && ticketData.sucursal.alias) ? ticketData.sucursal.alias : '{{ sucursal_actual.alias|default:"" }}' || '';
+            const nombreSucursal = (ticketData.sucursal && ticketData.sucursal.nombre) ? ticketData.sucursal.nombre : '{{ sucursal_actual.nombreSucursal|default:"SUCURSAL" }}' || 'SUCURSAL';
+            
+            // Fechas
+            const fechaCompra = ticketData.fecha || new Date().toISOString().split('T')[0];
+            let fechaCompraFormateada;
+            try {
+                fechaCompraFormateada = new Date(fechaCompra + 'T12:00:00').toLocaleDateString('es-CL');
+            } catch (e) {
+                fechaCompraFormateada = fechaCompra;
+            }
+            const fechaActual = new Date();
+            const fechaVencimiento = new Date(new Date(fechaCompra + 'T12:00:00').getTime() + (15 * 24 * 60 * 60 * 1000));
+            
+            // ID del ticket
+            const ticketId = ticketData.ticket_id || ticketData.correlativo || ticketData.id || 'N/A';
+            
+            // Código único de cambio
+            const fechaCorta = fechaCompra.replace(/-/g, '').substring(2);
+            const codigoCambio = `TC-${sucursalAlias || 'SUC'}-${ticketId}-${fechaCorta}`;
+            
+            // DTE info
+            const dteNumero = ticketData.dte_numero || ticketData.folio_dte || '';
+            
+            // Formatear productos (SIN PRECIOS - es ticket de cambio)
+            const productos = ticketData.productos || ticketData.items || ticketData.ticket_productos || [];
+            let productosTexto = '';
+            let totalItems = 0;
+            
+            console.log('🎫 Datos del ticket para cambio:', ticketData);
+            console.log('🎫 Productos encontrados:', productos);
         
-        // Información del DTE asociado (si existe)
-        const dteInfo = ticketData.dte_numero ? `
-            <div class="section">
-                <div class="importante">DOCUMENTO TRIBUTARIO</div>
-                <div style="text-align: center;">
-                    DTE N&deg;: <strong>${ticketData.dte_numero}</strong><br>
-                    ${ticketData.dte_tipo || 'Boleta Electrónica'}
-                </div>
-            </div>
-        ` : '';
+        if (productos && Array.isArray(productos) && productos.length > 0) {
+            productos.forEach((prod) => {
+                const sku = prod.sku || '---';
+                const desc = prod.descripcion || prod.nombre || prod.articulo || 'PRODUCTO';
+                const talla = prod.talla || '';
+                const cant = prod.cantidad || prod.stock || 1;
+                
+                totalItems += cant;
+                
+                // Truncar descripción para que quepa bien
+                const descCorta = desc.length > 20 ? desc.substring(0, 20) : desc;
+                
+                productosTexto += `
+<tr>
+  <td class="sku">${sku}</td>
+  <td class="desc">${descCorta}</td>
+  <td class="tal">${talla || '-'}</td>
+  <td class="cnt">${cant}</td>
+</tr>`;
+            });
+        } else {
+            productosTexto = '<tr><td colspan="4" style="text-align:center;padding:10px;color:#666;">Sin productos</td></tr>';
+        }
         
-        return `
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Ticket Cambio #${ticketId}</title>
-                <style>
-                    body { 
-                        font-family: 'Courier New', monospace; 
-                        font-size: 11px; 
-                        width: 72mm; 
-                        padding: 2mm; 
-                        margin: 0;
-                        line-height: 1.4;
-                    }
-                    .header { 
-                        text-align: center; 
-                        border-bottom: 1px dashed #000; 
-                        margin-bottom: 8px; 
-                        padding-bottom: 8px; 
-                    }
-                    .empresa {
-                        font-weight: bold;
-                        font-size: 13px;
-                        margin-bottom: 3px;
-                    }
-                    .titulo-cambio {
-                        font-weight: bold;
-                        font-size: 14px;
-                        margin: 8px 0;
-                        background: #000;
-                        color: #fff;
-                        padding: 5px;
-                    }
-                    .item { 
-                        margin: 3px 0; 
-                        font-size: 10px;
-                    }
-                    .section {
-                        margin: 10px 0;
-                        padding: 8px 0;
-                        border-top: 1px dashed #000;
-                    }
-                    .total {
-                        font-weight: bold;
-                        font-size: 13px;
-                        margin-top: 10px;
-                        padding-top: 8px;
-                        border-top: 2px solid #000;
-                        text-align: right;
-                    }
-                    .footer {
-                        text-align: center;
-                        font-size: 9px;
-                        margin-top: 10px;
-                        padding-top: 8px;
-                        border-top: 1px dashed #000;
-                    }
-                    .importante {
-                        font-weight: bold;
-                        text-align: center;
-                        margin: 5px 0;
-                    }
-                    ul {
-                        margin: 5px 0;
-                        padding-left: 15px;
-                        font-size: 9px;
-                    }
-                    @media print { 
-                        body { 
-                            width: 72mm; 
-                        } 
-                        @page { 
-                            size: 72mm auto; 
-                            margin: 0; 
-                        } 
-                    }
-                </style>
-            </head>
-            <body onload="window.print(); window.close();">
-                <div class="header">
-                    <div class="empresa">${nombreEmpresa}</div>
-                    <div>${nombreSucursal}</div>
-                    <div class="titulo-cambio">*** TICKET DE CAMBIO ***</div>
-                    <div style="margin-top: 5px;">
-                        Ticket Original: #${ticketId}<br>
-                        Fecha Emisi&oacute;n: ${fechaActual.toLocaleDateString('es-CL')}<br>
-                        ${fechaActual.toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'})}
-                    </div>
-                </div>
-                
-                ${dteInfo}
-                
-                <div class="section">
-                    <div class="importante">PRODUCTOS ORIGINALES</div>
-                    ${productosHtml || '<div class="item">Ver detalle en ticket de venta</div>'}
-                </div>
-                
-                <div class="total">
-                    MONTO TOTAL: $${total.toLocaleString('es-CL')}
-                </div>
-                
-                <div class="section">
-                    <div class="importante">V&Aacute;LIDO HASTA:</div>
-                    <div style="text-align: center; font-size: 12px; font-weight: bold;">
-                        ${fechaVencimiento.toLocaleDateString('es-CL')}
-                    </div>
-                </div>
-                
-                <div class="section">
-                    <div class="importante">CONDICIONES DE CAMBIO:</div>
-                    <ul>
-                        <li>Producto en perfecto estado</li>
-                        <li>Con etiquetas y embalaje original</li>
-                        <li>V&aacute;lido por 15 d&iacute;as corridos</li>
-                        <li>NO se devuelve dinero en efectivo</li>
-                        <li>Presentar este ticket para cambios</li>
-                        <li>Solo en esta sucursal</li>
-                    </ul>
-                </div>
-                
-                <div class="footer">
-                    <div style="font-weight: bold; margin-bottom: 5px;">
-                        PRESENTE ESTE TICKET PARA REALIZAR EL CAMBIO
-                    </div>
-                    <div style="margin-top: 5px;">
-                        <strong>Para realizar el cambio, acuda con:</strong><br>
-                        • Este ticket<br>
-                        • Productos a cambiar<br>
-                        • Documento tributario (si tiene)
-                    </div>
-                    <div style="margin-top: 8px; padding-top: 5px; border-top: 1px dashed #000;">
-                        Ticket #${ticketId} - Sistema RetailMind<br>
-                        Impreso: ${new Date().toLocaleString('es-CL')}
-                    </div>
-                </div>
-            </body>
-            </html>
-        `;
+        return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Ticket Cambio ${ticketId}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    width: 72mm;
+    padding: 0;
+    margin: 0;
+    background: #fff;
+    color: #000;
+}
+.ticket { 
+    width: 100%; 
+    padding: 3mm;
+}
+
+/* HEADER */
+.hdr { 
+    text-align: center; 
+    margin-bottom: 8px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+}
+.emp { 
+    font-size: 14px; 
+    font-weight: bold; 
+    margin-bottom: 2px;
+}
+.suc { 
+    font-size: 10px; 
+}
+.ttl {
+    font-size: 16px;
+    font-weight: bold;
+    margin: 8px 0;
+    padding: 6px;
+    background: #000;
+    color: #fff;
+    text-align: center;
+}
+
+/* CODIGO */
+.cod {
+    border: 2px solid #000;
+    padding: 8px 4px;
+    margin: 8px 0;
+    text-align: center;
+}
+.cod-lbl { 
+    font-size: 9px; 
+    margin-bottom: 3px;
+}
+.cod-val {
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    word-break: break-all;
+}
+
+/* LINEA */
+.ln { 
+    border-bottom: 1px dashed #000; 
+    margin: 6px 0; 
+}
+
+/* INFO */
+.inf { 
+    font-size: 10px; 
+    margin: 6px 0;
+}
+.inf-r { 
+    display: flex; 
+    justify-content: space-between; 
+    padding: 1px 0;
+}
+.inf-r b { 
+    font-weight: bold; 
+}
+
+/* TABLA PRODUCTOS */
+.prd-hdr {
+    font-weight: bold;
+    text-align: center;
+    padding: 4px;
+    font-size: 11px;
+    background: #ddd;
+    margin: 6px 0 2px 0;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9px;
+}
+th {
+    background: #eee;
+    padding: 3px 2px;
+    font-size: 9px;
+    font-weight: bold;
+    border-bottom: 1px solid #000;
+}
+td {
+    padding: 3px 2px;
+    border-bottom: 1px dotted #ccc;
+}
+.sku { 
+    font-weight: bold; 
+    width: 22%;
+}
+.desc { 
+    width: 45%;
+}
+.tal { 
+    text-align: center; 
+    width: 18%;
+}
+.cnt { 
+    text-align: center; 
+    font-weight: bold; 
+    width: 15%;
+}
+
+/* VALIDEZ */
+.val {
+    border: 2px solid #000;
+    padding: 6px;
+    margin: 8px 0;
+    text-align: center;
+}
+.val-ttl { 
+    font-size: 10px; 
+}
+.val-fec { 
+    font-size: 16px; 
+    font-weight: bold; 
+    margin: 3px 0;
+}
+.val-dia { 
+    font-size: 9px; 
+    color: #666;
+}
+
+/* CONDICIONES */
+.cnd {
+    font-size: 8px;
+    padding: 4px;
+    background: #f5f5f5;
+    margin: 6px 0;
+}
+.cnd b { 
+    display: block; 
+    margin-bottom: 2px;
+}
+.cnd ul { 
+    margin: 0; 
+    padding-left: 12px;
+}
+.cnd li { 
+    margin: 1px 0;
+}
+
+/* INSTRUCCIONES */
+.ins {
+    text-align: center;
+    padding: 6px;
+    border: 2px dashed #000;
+    margin: 6px 0;
+    font-size: 9px;
+}
+.ins b {
+    display: block;
+    font-size: 10px;
+    margin-bottom: 3px;
+}
+
+/* FOOTER */
+.ftr {
+    text-align: center;
+    font-size: 8px;
+    color: #666;
+    margin-top: 8px;
+    padding-top: 4px;
+    border-top: 1px dashed #000;
+}
+
+@media print { 
+    body { 
+        width: 72mm; 
+        margin: 0; 
+        padding: 0;
+    }
+    @page { 
+        size: 72mm auto; 
+        margin: 0; 
+    }
+}
+</style>
+</head>
+<body>
+<div class="ticket">
+    
+    <!-- HEADER -->
+    <div class="hdr">
+        <div class="emp">${nombreEmpresa}</div>
+        <div class="suc">${nombreSucursal}</div>
+    </div>
+    
+    <div class="ttl">TICKET DE CAMBIO</div>
+    
+    <!-- CODIGO -->
+    <div class="cod">
+        <div class="cod-lbl">CODIGO CAMBIO</div>
+        <div class="cod-val">${codigoCambio}</div>
+    </div>
+    
+    <div class="ln"></div>
+    
+    <!-- INFO -->
+    <div class="inf">
+        <div class="inf-r"><b>TICKET:</b><span>#${ticketId}</span></div>
+        <div class="inf-r"><b>FECHA:</b><span>${fechaCompraFormateada}</span></div>
+        <div class="inf-r"><b>SUCURSAL:</b><span>${sucursalAlias || nombreSucursal}</span></div>
+        ${dteNumero ? `<div class="inf-r"><b>DTE:</b><span>${dteNumero}</span></div>` : ''}
+    </div>
+    
+    <div class="ln"></div>
+    
+    <!-- PRODUCTOS -->
+    <div class="prd-hdr">PRODUCTOS (${totalItems})</div>
+    <table>
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Producto</th>
+                <th>Talla</th>
+                <th>Cant</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${productosTexto}
+        </tbody>
+    </table>
+    
+    <!-- VALIDEZ -->
+    <div class="val">
+        <div class="val-ttl">VALIDO HASTA</div>
+        <div class="val-fec">${fechaVencimiento.toLocaleDateString('es-CL')}</div>
+        <div class="val-dia">15 dias desde compra</div>
+    </div>
+    
+    <!-- CONDICIONES -->
+    <div class="cnd">
+        <b>CONDICIONES:</b>
+        <ul>
+            <li>Sin uso, con etiquetas</li>
+            <li>NO devuelve dinero</li>
+            <li>Igual o mayor valor</li>
+            <li>Con este ticket</li>
+        </ul>
+    </div>
+    
+    <!-- INSTRUCCIONES -->
+    <div class="ins">
+        <b>PARA CAMBIO</b>
+        Sucursal: ${sucursalAlias || nombreSucursal}<br>
+        Tipo: Ticket de Cambio<br>
+        Numero: ${ticketId}<br>
+        Fecha: ${fechaCompraFormateada}
+    </div>
+    
+    <div class="ftr">
+        ${fechaActual.toLocaleDateString('es-CL')}<br>
+        RetailMind
+    </div>
+    
+</div>
+</body>
+</html>`;
+        } catch (error) {
+            console.error('❌ Error generando HTML de ticket de cambio:', error);
+            // Retornar un HTML mínimo de error
+            return `<!DOCTYPE html><html><head><title>Error</title></head><body style="font-family: sans-serif; padding: 20px; text-align: center;">
+                <h2>Error al generar ticket</h2>
+                <p>No se pudo generar el ticket de cambio.</p>
+                <p style="color: #666;">Puede continuar sin el ticket.</p>
+            </body></html>`;
+        }
     }
 
     // === FUNCIONES DE NAVEGACIÓN ===
@@ -5738,7 +6659,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 title: `¿Anular Ticket #${correlativo}?`,
                 html: `
                     <p>Esta acción no se puede deshacer.</p>
-                    <p>El stock de los productos será devuelto al inventario.</p>
+                    <p class="text-muted"><small>El ticket será cancelado. Como está pendiente, no se han descontado productos del inventario.</small></p>
                     <textarea id="motivoAnulacion" class="form-control mt-3" 
                               placeholder="Motivo de anulación (opcional)" rows="3"></textarea>
                 `,
@@ -6274,6 +7195,11 @@ document.addEventListener('DOMContentLoaded', function() {
     window.cancelarVenta = cancelarVenta;
     window.buscarTicketPorNumero = buscarTicketPorNumero;
     window.crearNuevoTicket = crearNuevoTicket;
+    // Funciones de cotizaciones
+    window.abrirModalCotizaciones = abrirModalCotizaciones;
+    window.cargarCotizacionesVigentes = cargarCotizacionesVigentes;
+    window.filtrarCotizacionesLista = filtrarCotizacionesLista;
+    window.seleccionarCotizacion = seleccionarCotizacion;
     // window.buscarClientePorRut ya está definida globalmente arriba
     window.agregarPago = agregarPago;
     window.confirmarPago = confirmarPago;

@@ -24,6 +24,7 @@ from .views_modulo_ventas import (
     # Funciones Gestión Documentos
     gestion_ventas_documentos,
     listar_documentos_ventas,
+    exportar_documentos_ventas_excel,
     convertir_ticket_a_factura,
     detalle_documento_venta,
     anular_documento_venta,
@@ -157,6 +158,7 @@ from .views_modulo_gestion_precios import (
     proponer_cambio_precio,
     obtener_indicadores_precios_pendientes,
     listar_cambios_pendientes,
+    eliminar_cambios_aplicados,
     revisar_cambio_precio,
     aprobar_cambio_precio,
     rechazar_cambio_precio,
@@ -189,6 +191,10 @@ from .views_modulo_cotizaciones import (
     buscar_productos_cotizacion,
     # APIs de clientes
     crear_cliente_cotizacion,
+    # APIs de integración POS
+    cargar_cotizacion_como_ticket,
+    # API de envío por correo
+    enviar_cotizacion_correo,
 )
 from .views_edicion_productos import (
     # Edición de productos
@@ -223,7 +229,7 @@ from .views_modulo_requerimientos import (
     exportar_requerimientos,
 )
 from .views_permisos import (
-    # Gestión de permisos
+    # Gestión de permisos por rol
     gestion_permisos,
     obtener_permisos_rol,
     guardar_permiso,
@@ -231,6 +237,13 @@ from .views_permisos import (
     copiar_permisos_rol,
     gestionar_modulos_opciones,
     estadisticas_permisos,
+    # Gestión de permisos por sucursal
+    obtener_sucursales_permisos,
+    obtener_permisos_sucursal,
+    guardar_permisos_sucursal,
+    copiar_permisos_sucursal,
+    aplicar_plantilla_tipo_sucursal,
+    restablecer_permisos_sucursal,
 )
 from .views_transbank_sdk import (
     # Vistas
@@ -268,6 +281,7 @@ urlpatterns = [
      # Dashboard Home con KPIs de Retail (NEXO Design System)
      path('home/', views_dashboard_home.dashboard_home, name='verHome'),
      path('dashboard/', views_dashboard_home.dashboard_home, name='dashboard_home'),
+     path('bienvenida/', views_dashboard_home.bienvenida, name='bienvenida'),
      path('dashboard/api/ventas-tiempo-real/', views_dashboard_home.api_dashboard_ventas_tiempo_real, name='api_dashboard_ventas_tiempo_real'),
      path('dashboard/api/stock-alertas/', views_dashboard_home.api_dashboard_stock_alertas, name='api_dashboard_stock_alertas'),
      
@@ -304,6 +318,8 @@ urlpatterns = [
      path('api/exportar-compras-excel/', views_modulo_compras.exportar_compras_excel, name='exportar_compras_excel'),
      path('api/exportar-compras-csv/', views_modulo_compras.exportar_compras_csv, name='exportar_compras_csv'),
      path('crear_compra/', views.crear_compra, name='crear_compra'),
+     path('eliminar_compra/', views.eliminar_compra, name='eliminar_compra'),
+     path('validar_factura_proveedor/', views.validar_factura_proveedor, name='validar_factura_proveedor'),
      path('obtener_compras/', views.obtener_compras_por_anio, name='obtener_compras'),
      path('verGestionProducto/', views.verGestionProducto, name='verGestionProducto'),
      path('importar_csv_compra/', views.importar_csv_compra, name='importar_csv_compra'),
@@ -327,6 +343,7 @@ urlpatterns = [
      path('eliminarNC/<int:nc_id>/', views.eliminarNotaCredito, name='eliminarNotaCredito'),
      path('obtenerDTE/<int:dte_id>/', views.obtener_dte, name='obtener_dte'),
      path('eliminarDTE/<int:dte_id>/', views.eliminar_dte, name='eliminar_dte'),
+     path('restaurarDTE/<int:dte_id>/', views.restaurar_dte, name='restaurar_dte'),
      
      # Incidencias DTE
      path('incidencias/<int:dte_id>/', views.listar_incidencias, name='listar_incidencias'),
@@ -359,9 +376,13 @@ urlpatterns = [
      path('guia_talla_detalle/<int:id>/', views.guia_talla_detalle, name='guia_talla_detalle'),
      path('eliminar_guia_talla/', views.eliminar_guia_talla, name='eliminar_guia_talla'),
      path('app/guias_talla_por_marca/', views.guias_talla_por_marca, name='guias_talla_por_marca'),
-     path('app/verificar_producto_existente/', views.verificar_existencia_producto, name='verificar_producto_existente'),
+     path('app/verificar_producto_existente/', views.verificar_producto_existente, name='verificar_producto_existente_app'),
      path('obtener_siguiente_sku/', views.obtener_siguiente_sku_view, name='obtener_siguiente_sku'),
+     path('obtener_multiples_skus/', views.obtener_multiples_skus_view, name='obtener_multiples_skus'),
+     path('configuracion-sku/', views.obtener_configuracion_sku, name='configuracion_sku'),
+     path('configuracion-sku/actualizar/', views.actualizar_configuracion_sku, name='actualizar_configuracion_sku'),
      path('verificar_producto_existente/', views.verificar_producto_existente, name='verificar_producto_existente'),
+     path('buscar_productos_por_articulo/', views.buscar_productos_por_articulo, name='buscar_productos_por_articulo'),
      path('crear_producto_desde_recepcion/', views.crear_producto_desde_recepcion, name='crear_producto_desde_recepcion'),
      path('obtener_recepciones_producto/<int:producto_id>/', views.obtener_recepciones_producto, name='obtener_recepciones_producto'),
      path('actualizar_recepciones_producto/', views.actualizar_recepciones_producto, name='actualizar_recepciones_producto'),
@@ -515,7 +536,7 @@ urlpatterns = [
     path('api/crear-ticket/', views.crear_ticket, name='crear_ticket'),
     path('api/tickets/<int:correlativo>/', obtener_ticket_por_correlativo, name='obtener_ticket_por_correlativo'),
     path('api/tickets/buscar/', buscar_ticket_pos, name='buscar_ticket_pos'),
-    path('api/tickets/<int:correlativo>/pagos/', registrar_pagos_ticket, name='registrar_pagos_ticket'),
+    path('api/tickets/<str:correlativo>/pagos/', registrar_pagos_ticket, name='registrar_pagos_ticket'),
     path('api/tickets/anular/', anular_ticket_pendiente, name='anular_ticket_pendiente'),
     path('ticket-pago-pos/', ticket_pago_pos, name='ticket_pago_pos'),
 
@@ -532,6 +553,7 @@ urlpatterns = [
     # === GESTIÓN DE DOCUMENTOS DE VENTAS ===
     path('ventas/documentos/', gestion_ventas_documentos, name='gestion_ventas_documentos'),
     path('api/ventas/documentos/', listar_documentos_ventas, name='listar_documentos_ventas'),
+    path('api/ventas/exportar-documentos/', exportar_documentos_ventas_excel, name='exportar_documentos_ventas_excel'),
     path('api/ventas/convertir-factura/', convertir_ticket_a_factura, name='convertir_ticket_a_factura'),
     path('api/ventas/documento/<int:documento_id>/', detalle_documento_venta, name='detalle_documento_venta'),
     path('api/ventas/anular-documento/', anular_documento_venta, name='anular_documento_venta'),
@@ -573,6 +595,8 @@ urlpatterns = [
     path('documentos/gestion-dte/', views.gestion_dte, name='gestion_dte'),
     path('documentos/api/cargar-dte-ventas/', views.cargar_dte_ventas, name='cargar_dte_ventas'),
     path('documentos/api/dte/<int:dte_id>/', views.detalle_dte, name='detalle_dte'),
+    path('detalle_dte/<int:dte_id>/', views.vista_detalle_dte, name='vista_detalle_dte'),  # Vista HTML
+    path('api/detalle_dte_completo/<int:dte_id>/', views.api_detalle_dte_completo, name='api_detalle_dte_completo'),  # API completa
     
     # === Gestión de Correlativos ===
     path('documentos/gestion-correlativos/', views.gestion_correlativos, name='gestion_correlativos'),
@@ -689,6 +713,7 @@ urlpatterns = [
     path('api/cotizaciones/', listar_cotizaciones, name='listar_cotizaciones'),
     path('api/cotizaciones/<int:cotizacion_id>/', detalle_cotizacion, name='detalle_cotizacion'),
     path('api/cotizaciones/<int:cotizacion_id>/pdf/', cotizacion_pdf, name='cotizacion_pdf'),
+    path('api/cotizaciones/<int:cotizacion_id>/enviar-correo/', enviar_cotizacion_correo, name='enviar_cotizacion_correo'),
 
     # APIs de creación y edición
     path('api/cotizaciones/crear/', crear_cotizacion, name='crear_cotizacion'),
@@ -697,6 +722,9 @@ urlpatterns = [
     # APIs de acciones
     path('api/cotizaciones/anular/', anular_cotizacion, name='anular_cotizacion'),
     path('api/cotizaciones/convertir-factura/', convertir_cotizacion_factura, name='convertir_cotizacion_factura'),
+    
+    # APIs de integración POS
+    path('api/cotizaciones/cargar-como-ticket/<int:cotizacion_id>/', cargar_cotizacion_como_ticket, name='cargar_cotizacion_como_ticket'),
     
     # APIs de búsqueda
     path('api/cotizaciones/buscar-productos/', buscar_productos_cotizacion, name='buscar_productos_cotizacion'),
@@ -757,6 +785,7 @@ urlpatterns = [
     path('gestion-precios/proponer-cambio/', proponer_cambio_precio, name='proponer_cambio_precio'),
     path('gestion-precios/indicadores-pendientes/', obtener_indicadores_precios_pendientes, name='indicadores_precios_pendientes'),
     path('gestion-precios/listar-cambios/', listar_cambios_pendientes, name='listar_cambios_pendientes'),
+    path('gestion-precios/eliminar-cambios-aplicados/', eliminar_cambios_aplicados, name='eliminar_cambios_aplicados'),
     path('gestion-precios/revisar-cambio/', revisar_cambio_precio, name='revisar_cambio_precio'),
     path('gestion-precios/aprobar-cambio/', aprobar_cambio_precio, name='aprobar_cambio_precio'),
     path('gestion-precios/rechazar-cambio/', rechazar_cambio_precio, name='rechazar_cambio_precio'),
@@ -770,6 +799,7 @@ urlpatterns = [
     path('notificaciones-dte/eliminar/', views.eliminar_notificacion_dte, name='eliminar_notificacion_dte'),
     path('notificaciones-dte/descartar-todas/', views.descartar_todas_notificaciones_dte, name='descartar_todas_notificaciones_dte'),
     path('dtes-pendientes-recibir/', views.obtener_dtes_pendientes_recibir, name='obtener_dtes_pendientes_recibir'),
+    path('dtes-pendientes-recibir/descartar/', views.descartar_dte_pendiente, name='descartar_dte_pendiente'),
     path('dtes-pendientes-regularizar/', views.obtener_dtes_pendientes_regularizar, name='obtener_dtes_pendientes_regularizar'),
 
     # Regularización de precios entre sucursales
@@ -857,11 +887,19 @@ urlpatterns = [
     # Vista principal de gestión de permisos
     path('permisos/gestion/', gestion_permisos, name='gestion_permisos'),
     
-    # APIs de permisos
+    # APIs de permisos por rol
     path('permisos/obtener-permisos-rol/', obtener_permisos_rol, name='obtener_permisos_rol'),
     path('permisos/guardar-permiso/', guardar_permiso, name='guardar_permiso'),
     path('permisos/guardar-permisos-masivos/', guardar_permisos_masivos, name='guardar_permisos_masivos'),
     path('permisos/copiar-permisos-rol/', copiar_permisos_rol, name='copiar_permisos_rol'),
+    
+    # APIs de permisos por sucursal
+    path('permisos/sucursales/', obtener_sucursales_permisos, name='obtener_sucursales_permisos'),
+    path('permisos/obtener-permisos-sucursal/', obtener_permisos_sucursal, name='obtener_permisos_sucursal'),
+    path('permisos/guardar-permisos-sucursal/', guardar_permisos_sucursal, name='guardar_permisos_sucursal'),
+    path('permisos/copiar-permisos-sucursal/', copiar_permisos_sucursal, name='copiar_permisos_sucursal'),
+    path('permisos/aplicar-plantilla-sucursal/', aplicar_plantilla_tipo_sucursal, name='aplicar_plantilla_tipo_sucursal'),
+    path('permisos/restablecer-permisos-sucursal/', restablecer_permisos_sucursal, name='restablecer_permisos_sucursal'),
     
     # Gestión de módulos y opciones
     path('permisos/modulos-opciones/', gestionar_modulos_opciones, name='gestionar_modulos_opciones'),

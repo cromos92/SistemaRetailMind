@@ -434,7 +434,18 @@
     color: var(--nexo-white);
 }
 
-.badge-sync {
+.badge-tipo-cambio {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 6px;
+}
+
+.badge-sync, .badge-tipo-sync {
     background: rgba(0, 212, 170, 0.15);
     color: #00997A;
     border: 1px solid rgba(0, 212, 170, 0.3);
@@ -445,6 +456,25 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+}
+
+.badge-tipo-manual {
+    background: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-primary-dark);
+    border: 1px solid rgba(0, 102, 255, 0.2);
+}
+
+.badge-tipo-recomendacion {
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+    border: 1px solid rgba(255, 176, 32, 0.3);
+}
+
+.badge-tipo-masivo {
+    background: rgba(138, 43, 226, 0.1);
+    color: #8A2BE2;
+    border: 1px solid rgba(138, 43, 226, 0.2);
+}
 }
 
 .badge-warning-urgent {
@@ -651,6 +681,288 @@
     background: var(--nexo-gray-300);
 }
 
+/* ========== TABLA DE CAMBIOS MEJORADA ========== */
+.tabla-cambios-wrapper {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
+}
+
+#tablaCambios {
+    font-size: 13px;
+    margin-bottom: 0;
+    width: 100%;
+}
+
+#tablaCambios thead {
+    background: linear-gradient(135deg, #f8f9fc 0%, #eef1f6 100%);
+}
+
+#tablaCambios thead th {
+    font-weight: 700;
+    color: var(--nexo-gray-700);
+    border-bottom: 2px solid var(--nexo-primary);
+    white-space: nowrap;
+    padding: 14px 12px;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+#tablaCambios tbody td {
+    vertical-align: middle;
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--nexo-gray-100);
+    transition: all 0.15s ease;
+}
+
+#tablaCambios tbody tr {
+    transition: all 0.15s ease;
+}
+
+#tablaCambios tbody tr:hover {
+    background-color: #f0f7ff;
+    transform: scale(1.001);
+}
+
+#tablaCambios tbody tr:hover td {
+    border-color: var(--nexo-primary-light);
+}
+
+/* Columna de producto */
+.col-producto {
+    min-width: 200px;
+}
+
+.producto-nombre {
+    font-weight: 600;
+    color: var(--nexo-secondary);
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.producto-tallas {
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+}
+
+/* Columna de precios */
+.precio-cell {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 14px;
+}
+
+.precio-anterior {
+    color: var(--nexo-gray-500);
+    text-decoration: line-through;
+}
+
+.precio-nuevo {
+    color: var(--nexo-secondary);
+    font-weight: 700;
+    font-size: 15px;
+}
+
+/* Columna de cambio porcentual */
+.cambio-positivo {
+    color: #00875A;
+    background: rgba(0, 212, 170, 0.1);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cambio-negativo {
+    color: #DE350B;
+    background: rgba(255, 77, 77, 0.1);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Badges de tipo */
+.tipo-badge {
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tipo-sync {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1565c0;
+    border: 1px solid #90caf9;
+}
+
+.tipo-manual {
+    background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+    color: #e65100;
+    border: 1px solid #ffcc80;
+}
+
+/* Badges de estado */
+.estado-badge {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.estado-aplicado {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.estado-pendiente {
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    color: #f57c00;
+    border: 1px solid #ffe082;
+}
+
+.estado-aprobado {
+    background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%);
+    color: #00796b;
+    border: 1px solid #80cbc4;
+}
+
+.estado-rechazado {
+    background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+}
+
+/* Columna de fecha */
+.fecha-cell {
+    font-size: 12px;
+    color: var(--nexo-gray-500);
+}
+
+/* Botones de acción */
+.btn-accion {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: none;
+    transition: all 0.15s ease;
+    font-size: 14px;
+}
+
+.btn-eliminar {
+    background: #fff5f5;
+    color: #e53e3e;
+}
+
+.btn-eliminar:hover {
+    background: #e53e3e;
+    color: white;
+    transform: scale(1.1);
+}
+
+.btn-aprobar {
+    background: #f0fff4;
+    color: #38a169;
+}
+
+.btn-aprobar:hover {
+    background: #38a169;
+    color: white;
+    transform: scale(1.1);
+}
+
+.btn-rechazar {
+    background: #fff5f5;
+    color: #e53e3e;
+}
+
+.btn-rechazar:hover {
+    background: #e53e3e;
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Checkbox personalizado */
+#tablaCambios .form-check-input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    border: 2px solid var(--nexo-gray-300);
+}
+
+#tablaCambios .form-check-input:checked {
+    background-color: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+}
+
+/* Fila seleccionada */
+#tablaCambios tbody tr.selected {
+    background-color: rgba(0, 102, 255, 0.08);
+}
+
+/* Footer de la tabla */
+.tabla-footer {
+    background: #f8f9fc;
+    padding: 16px 20px;
+    border-top: 2px solid var(--nexo-gray-100);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.info-seleccion {
+    font-size: 13px;
+    color: var(--nexo-gray-500);
+}
+
+.info-seleccion strong {
+    color: var(--nexo-primary);
+    font-weight: 700;
+}
+
+/* Empty state mejorado */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+}
+
+.empty-state i {
+    font-size: 64px;
+    color: var(--nexo-gray-300);
+    margin-bottom: 16px;
+}
+
+.empty-state h3 {
+    color: var(--nexo-gray-700);
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
+.empty-state p {
+    color: var(--nexo-gray-500);
+    font-size: 14px;
+}
+
 /* ========== LOADING ========== */
 .loading-indicator {
     text-align: center;
@@ -708,101 +1020,105 @@
     <!-- Header de la página -->
     <div class="page-header-nexo">
         <div class="container-fluid">
-            <h1>
-                <i class="ri-file-list-3-line"></i> Revisión de Cambios de Precios
-            </h1>
-            <p class="subtitle">Gestiona y aprueba las alertas de cambios de precios de todas las sucursales</p>
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h1>
+                        <i class="ri-refresh-line"></i> Historial de Sincronizaciones
+                    </h1>
+                    <p class="subtitle">Registro de precios sincronizados automáticamente entre sucursales</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/app/gestion-precios/edicion-rapida/" class="btn btn-light btn-sm">
+                        <i class="ri-price-tag-3-line me-1"></i> Edición Rápida
+                    </a>
+                    <a href="/app/verGestionProducto/" class="btn btn-light btn-sm">
+                        <i class="ri-shopping-bag-line me-1"></i> Gestión Productos
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="container-fluid">
-        <!-- Resumen de Indicadores -->
-        <div class="summary-cards" id="summaryCards">
-            <div class="summary-card" onclick="filtrarPorEstado('PENDIENTE')" id="cardPendiente">
-                <div class="summary-icon pendiente">
-                    <i class="ri-time-line"></i>
-                </div>
-                <div class="summary-info">
-                    <h3 id="countPendiente">0</h3>
-                    <p>Pendientes</p>
-                </div>
-            </div>
-            <div class="summary-card" onclick="filtrarPorEstado('REVISADO')" id="cardRevisado">
-                <div class="summary-icon revisado">
-                    <i class="ri-eye-line"></i>
-                </div>
-                <div class="summary-info">
-                    <h3 id="countRevisado">0</h3>
-                    <p>Revisados</p>
-                </div>
-            </div>
-            <div class="summary-card" onclick="filtrarPorEstado('APROBADO')" id="cardAprobado">
+        <!-- Resumen de Indicadores - Simplificado a 2 tarjetas -->
+        <div class="summary-cards" id="summaryCards" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="summary-card" onclick="filtrarPorEstado('APLICADO')" id="cardAplicado">
                 <div class="summary-icon aprobado">
-                    <i class="ri-check-double-line"></i>
+                    <i class="ri-refresh-line"></i>
                 </div>
                 <div class="summary-info">
-                    <h3 id="countAprobado">0</h3>
-                    <p>Aprobados</p>
+                    <h3 id="countAplicado">0</h3>
+                    <p>Sincronizados (activos)</p>
                 </div>
             </div>
-            <div class="summary-card" onclick="filtrarPorEstado('RECHAZADO')" id="cardRechazado">
-                <div class="summary-icon rechazado">
-                    <i class="ri-close-circle-line"></i>
+            <div class="summary-card" onclick="verDescartados()" id="cardDescartados">
+                <div class="summary-icon" style="background: rgba(108, 117, 125, 0.15); color: #6c757d;">
+                    <i class="ri-archive-line"></i>
                 </div>
                 <div class="summary-info">
-                    <h3 id="countRechazado">0</h3>
-                    <p>Rechazados</p>
+                    <h3 id="countDescartados">0</h3>
+                    <p>Descartados (archivados)</p>
                 </div>
             </div>
         </div>
 
-        <!-- Filtros -->
+        <!-- Filtros - Simplificados -->
         <div class="filters-section">
-            <div class="row align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label">Estado</label>
-                    <select id="filterEstado" class="form-select" onchange="cargarCambios()">
-                        <option value="">Todos los estados</option>
-                        <option value="PENDIENTE" selected>Pendientes</option>
-                        <option value="REVISADO">Revisados</option>
-                        <option value="APROBADO">Aprobados</option>
-                        <option value="RECHAZADO">Rechazados</option>
-                        <option value="APLICADO">Aplicados</option>
+            <div class="row align-items-end g-2">
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">Tipo de Registro</label>
+                    <select id="filterTipoCambio" class="form-select" onchange="onTipoCambioChange()">
+                        <option value="">Todos los activos</option>
+                        <option value="SINCRONIZACION" selected>🔄 Sincronización</option>
+                        <option value="MANUAL">✏️ Manual</option>
+                        <option value="REGULARIZACION">⚖️ Regularización</option>
+                        <option value="DESCARTADOS" style="background:#f8f9fa;border-top:1px solid #dee2e6;">📦 Descartados (archivo)</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">Prioridad</label>
-                    <select id="filterPrioridad" class="form-select" onchange="cargarCambios()">
-                        <option value="">Todas</option>
-                        <option value="URGENTE">🔴 Urgente</option>
-                        <option value="ALTA">🟠 Alta</option>
-                        <option value="MEDIA">🔵 Media</option>
-                        <option value="BAJA">⚪ Baja</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
+                <div class="col-lg-2 col-md-3">
                     <label class="form-label">Sucursal</label>
                     <select id="filterSucursal" class="form-select" onchange="cargarCambios()">
-                        <option value="">Todas las sucursales</option>
+                        <option value="">Todas</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <button class="btn-refresh w-100" onclick="cargarCambios()">
-                        <i class="ri-refresh-line"></i> Actualizar
-                    </button>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">Buscar</label>
+                    <input type="text" id="filterBusqueda" class="form-control" placeholder="Artículo..." onkeyup="debounceCargar()">
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label">&nbsp;</label>
-                    <button class="btn-action btn-approve-all w-100" onclick="aprobarTodosPendientes()" id="btnAprobarTodos" style="display: none;">
-                        <i class="ri-check-double-line"></i> Aprobar Todos
-                    </button>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">Desde</label>
+                    <input type="date" id="filterFechaDesde" class="form-control" onchange="cargarCambios()">
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">Hasta</label>
+                    <input type="date" id="filterFechaHasta" class="form-control" onchange="cargarCambios()">
+                </div>
+            </div>
+            <!-- Segunda fila: atajos y acciones -->
+            <div class="row mt-2 align-items-center">
+                <div class="col-md-6">
+                    <div class="d-flex gap-2 align-items-center">
+                        <span class="text-muted small">Atajos:</span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="filtroHoy()" title="Hoy">Hoy</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="filtroSemana()" title="Esta semana">Semana</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="filtroMes()" title="Este mes">Mes</button>
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button class="btn-refresh" onclick="cargarCambios()">
+                            <i class="ri-refresh-line"></i> Actualizar
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="limpiarFiltros()" title="Limpiar filtros">
+                            <i class="ri-filter-off-line"></i> Limpiar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Lista de Cambios -->
-        <div class="changes-card">
+        <!-- Tabla de Cambios -->
+        <div class="tabla-cambios-wrapper">
             <div class="loading-indicator" id="loadingIndicator" style="display: none;">
                 <div class="spinner"></div>
                 <p style="color: var(--nexo-gray-500);">Cargando cambios de precios...</p>
@@ -810,113 +1126,55 @@
 
             <div class="empty-state" id="emptyState" style="display: none;">
                 <i class="ri-inbox-2-line"></i>
-                <h3>No hay cambios pendientes</h3>
-                <p>Todos los cambios han sido procesados. ¡Buen trabajo! 🎉</p>
+                <h3>No hay cambios</h3>
+                <p>No se encontraron registros con los filtros seleccionados.</p>
             </div>
 
-            <div id="changesContainer">
-                <!-- Los cambios se cargarán aquí dinámicamente -->
+            <div class="table-responsive" id="changesContainer">
+                <table class="table" id="tablaCambios">
+                    <thead>
+                        <tr>
+                            <th style="width: 45px;">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="form-check-input">
+                            </th>
+                            <th class="col-producto">Producto</th>
+                            <th>Sucursal</th>
+                            <th>Tipo</th>
+                            <th class="text-end">Anterior</th>
+                            <th class="text-end">Nuevo</th>
+                            <th class="text-center">Variación</th>
+                            <th class="text-center">Estado</th>
+                            <th>Fecha</th>
+                            <th style="width: 90px;" class="text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaCambiosBody">
+                        <!-- Se llena dinámicamente -->
+                    </tbody>
+                </table>
             </div>
 
-            <div class="pagination-controls" id="paginationControls" style="display: none;">
-                <button class="btn" id="btnPrev" onclick="cambiarPagina(-1)">
-                    <i class="ri-arrow-left-s-line"></i> Anterior
-                </button>
-                <span class="page-info" id="pageInfo">Página 1 de 1</span>
-                <button class="btn" id="btnNext" onclick="cambiarPagina(1)">
-                    Siguiente <i class="ri-arrow-right-s-line"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de Revisión -->
-<div id="modalReview" class="modal-nexo">
-    <div class="modal-content-nexo">
-        <div class="modal-header-nexo review">
-            <i class="ri-eye-line"></i>
-            <h3>Revisar Cambio de Precio</h3>
-        </div>
-        <div class="modal-body-nexo">
-            <div class="modal-alert info">
-                <i class="ri-information-line"></i>
-                <div>
-                    <strong>Marcar como revisado</strong><br>
-                    <small>El cambio quedará en estado "revisado" y podrá ser aprobado o rechazado posteriormente.</small>
+            <!-- Footer de la tabla -->
+            <div class="tabla-footer" id="paginationControls" style="display: none;">
+                <div class="info-seleccion">
+                    <strong id="countSeleccionados">0</strong> seleccionados
+                    <button class="btn btn-sm btn-secondary ms-3" id="btnDescartarSeleccionados" onclick="descartarSeleccionados()" style="display: none;">
+                        <i class="ri-archive-line me-1"></i> Descartar
+                    </button>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-primary" id="btnPrev" onclick="cambiarPagina(-1)">
+                        <i class="ri-arrow-left-s-line"></i>
+                    </button>
+                    <span class="page-info px-3" id="pageInfo" style="font-size: 13px;">Página 1 de 1</span>
+                    <button class="btn btn-sm btn-outline-primary" id="btnNext" onclick="cambiarPagina(1)">
+                        <i class="ri-arrow-right-s-line"></i>
+                    </button>
+                </div>
+                <div class="text-muted small">
+                    Total: <strong id="totalRegistros">0</strong> registros
                 </div>
             </div>
-            <div>
-                <label class="form-label">Observaciones (opcional)</label>
-                <textarea id="observacionesRevision" class="form-control" rows="3" placeholder="Agrega tus observaciones sobre este cambio..."></textarea>
-            </div>
-        </div>
-        <div class="modal-footer-nexo">
-            <button class="btn btn-secondary" onclick="cerrarModal('modalReview')">Cancelar</button>
-            <button class="btn btn-primary" onclick="confirmarRevision()" style="background: var(--nexo-primary); color: white; border: none;">
-                <i class="ri-eye-line"></i> Marcar como Revisado
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de Aprobación -->
-<div id="modalApprove" class="modal-nexo">
-    <div class="modal-content-nexo">
-        <div class="modal-header-nexo approve">
-            <i class="ri-check-double-line"></i>
-            <h3>Aprobar Cambio de Precio</h3>
-        </div>
-        <div class="modal-body-nexo">
-            <div class="modal-alert info">
-                <i class="ri-information-line"></i>
-                <div>
-                    <strong>Confirmar aprobación</strong><br>
-                    <small>El nuevo precio se aplicará inmediatamente a todas las tallas del producto.</small>
-                </div>
-            </div>
-            <div id="infoProductoAprobacion" style="background: var(--nexo-gray-100); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
-                <!-- Se llenará dinámicamente -->
-            </div>
-            <div>
-                <label class="form-label">Observaciones (opcional)</label>
-                <textarea id="observacionesAprobacion" class="form-control" rows="2" placeholder="Agrega comentarios..."></textarea>
-            </div>
-        </div>
-        <div class="modal-footer-nexo">
-            <button class="btn btn-secondary" onclick="cerrarModal('modalApprove')">Cancelar</button>
-            <button class="btn" onclick="confirmarAprobacion()" style="background: var(--nexo-accent); color: white; border: none;">
-                <i class="ri-check-line"></i> Aprobar y Aplicar
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de Rechazo -->
-<div id="modalReject" class="modal-nexo">
-    <div class="modal-content-nexo">
-        <div class="modal-header-nexo reject">
-            <i class="ri-close-circle-line"></i>
-            <h3>Rechazar Cambio de Precio</h3>
-        </div>
-        <div class="modal-body-nexo">
-            <div class="modal-alert warning">
-                <i class="ri-error-warning-line"></i>
-                <div>
-                    <strong>Atención</strong><br>
-                    <small>El cambio será rechazado y NO se aplicará al producto.</small>
-                </div>
-            </div>
-            <div>
-                <label class="form-label">Motivo del Rechazo <span style="color: var(--nexo-error);">*</span></label>
-                <textarea id="motivoRechazo" class="form-control" rows="3" placeholder="Explica por qué se rechaza este cambio..." required></textarea>
-            </div>
-        </div>
-        <div class="modal-footer-nexo">
-            <button class="btn btn-secondary" onclick="cerrarModal('modalReject')">Cancelar</button>
-            <button class="btn" onclick="confirmarRechazo()" style="background: var(--nexo-error); color: white; border: none;">
-                <i class="ri-close-line"></i> Rechazar Cambio
-            </button>
         </div>
     </div>
 </div>
@@ -926,7 +1184,6 @@
 <script>
 let paginaActual = 1;
 let totalPaginas = 1;
-let cambioSeleccionado = null;
 let cambiosActuales = [];
 
 // Inicializar
@@ -935,47 +1192,67 @@ document.addEventListener('DOMContentLoaded', function() {
     cargarIndicadores();
     cargarCambios();
     
-    // Auto-refresh cada 30 segundos
+    // Auto-refresh cada 60 segundos
     setInterval(() => {
         cargarIndicadores();
         cargarCambios();
-    }, 30000);
+    }, 60000);
 });
 
-// Cargar indicadores de resumen
+// Cargar indicadores de resumen - SIMPLIFICADO
 async function cargarIndicadores() {
     try {
-        const response = await fetch('/app/gestion-precios/indicadores-pendientes/');
+        // Cargar desde listar-cambios que ya tiene los contadores
+        const response = await fetch('/app/gestion-precios/listar-cambios/?estado=APLICADO&per_page=1');
         const data = await response.json();
         
-        if (data.success) {
-            document.getElementById('countPendiente').textContent = data.indicadores.total_pendientes;
-            document.getElementById('countRevisado').textContent = data.indicadores.total_revisados;
-            document.getElementById('countAprobado').textContent = data.indicadores.total_aprobados;
-            document.getElementById('countRechazado').textContent = data.indicadores.total_rechazados;
-            
-            // Mostrar botón "Aprobar Todos" si hay pendientes
-            const btnAprobarTodos = document.getElementById('btnAprobarTodos');
-            if (data.indicadores.total_pendientes > 0) {
-                btnAprobarTodos.style.display = 'flex';
-                btnAprobarTodos.innerHTML = `<i class="ri-check-double-line"></i> Aprobar (${data.indicadores.total_pendientes})`;
-            } else {
-                btnAprobarTodos.style.display = 'none';
-            }
+        if (data.success && data.resumen) {
+            // Sincronizados (activos)
+            document.getElementById('countAplicado').textContent = data.resumen.aplicados || 0;
+            // Descartados
+            document.getElementById('countDescartados').textContent = data.resumen.descartados || 0;
         }
     } catch (error) {
         console.error('Error cargando indicadores:', error);
     }
 }
 
-// Filtrar por estado desde las tarjetas
+// Filtrar por estado desde las tarjetas - SIMPLIFICADO
 function filtrarPorEstado(estado) {
-    document.getElementById('filterEstado').value = estado;
+    // Actualizar estado visual de las tarjetas
+    document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
+    document.getElementById('cardAplicado').classList.add('active');
+    
+    // Cambiar a tipo Sincronización (activos)
+    document.getElementById('filterTipoCambio').value = 'SINCRONIZACION';
+    
+    paginaActual = 1;
+    cargarCambios();
+}
+
+// Ver registros descartados (desde tarjeta)
+function verDescartados() {
+    document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
+    document.getElementById('cardDescartados').classList.add('active');
+    document.getElementById('filterTipoCambio').value = 'DESCARTADOS';
+    paginaActual = 1;
+    cargarCambios();
+}
+
+// Manejar cambio en el select de tipo
+function onTipoCambioChange() {
+    const tipo = document.getElementById('filterTipoCambio').value;
     
     // Actualizar estado visual de las tarjetas
     document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
-    document.getElementById(`card${estado.charAt(0) + estado.slice(1).toLowerCase()}`).classList.add('active');
     
+    if (tipo === 'DESCARTADOS') {
+        document.getElementById('cardDescartados').classList.add('active');
+    } else {
+        document.getElementById('cardAplicado').classList.add('active');
+    }
+    
+    paginaActual = 1;
     cargarCambios();
 }
 
@@ -1000,15 +1277,72 @@ async function cargarSucursales() {
 }
 
 // Cargar cambios pendientes
+// Variable para debounce de búsqueda
+let debounceTimer = null;
+
+function debounceCargar() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        paginaActual = 1;
+        cargarCambios();
+    }, 300);
+}
+
+function limpiarFiltros() {
+    document.getElementById('filterTipoCambio').value = 'SINCRONIZACION';
+    document.getElementById('filterSucursal').value = '';
+    document.getElementById('filterBusqueda').value = '';
+    document.getElementById('filterFechaDesde').value = '';
+    document.getElementById('filterFechaHasta').value = '';
+    document.querySelectorAll('.summary-card').forEach(card => card.classList.remove('active'));
+    document.getElementById('cardAplicado').classList.add('active');
+    paginaActual = 1;
+    cargarCambios();
+}
+
+// Atajos de fecha
+function filtroHoy() {
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('filterFechaDesde').value = hoy;
+    document.getElementById('filterFechaHasta').value = hoy;
+    cargarCambios();
+}
+
+function filtroSemana() {
+    const hoy = new Date();
+    const primerDiaSemana = new Date(hoy);
+    primerDiaSemana.setDate(hoy.getDate() - hoy.getDay() + 1); // Lunes
+    document.getElementById('filterFechaDesde').value = primerDiaSemana.toISOString().split('T')[0];
+    document.getElementById('filterFechaHasta').value = hoy.toISOString().split('T')[0];
+    cargarCambios();
+}
+
+function filtroMes() {
+    const hoy = new Date();
+    const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('filterFechaDesde').value = primerDiaMes.toISOString().split('T')[0];
+    document.getElementById('filterFechaHasta').value = hoy.toISOString().split('T')[0];
+    cargarCambios();
+}
+
 async function cargarCambios() {
     mostrarCargando(true);
     
+    const tipoSeleccionado = document.getElementById('filterTipoCambio').value;
+    const esDescartados = tipoSeleccionado === 'DESCARTADOS';
+    
+    // Configurar filtros según el tipo seleccionado
     const filtros = {
-        estado: document.getElementById('filterEstado').value,
-        prioridad: document.getElementById('filterPrioridad').value,
+        estado: 'APLICADO',
+        tipo_cambio: esDescartados ? '' : tipoSeleccionado,  // Si es descartados, no filtrar por tipo
         sucursal_id: document.getElementById('filterSucursal').value,
+        busqueda: document.getElementById('filterBusqueda').value,
+        fecha_desde: document.getElementById('filterFechaDesde').value,
+        fecha_hasta: document.getElementById('filterFechaHasta').value,
+        mostrar_descartados: esDescartados ? 'true' : 'false',  // Mostrar solo descartados
+        solo_descartados: esDescartados ? 'true' : 'false',     // Filtrar SOLO los descartados
         page: paginaActual,
-        per_page: 10
+        per_page: 15
     };
     
     try {
@@ -1020,6 +1354,12 @@ async function cargarCambios() {
             cambiosActuales = data.cambios;
             renderizarCambios(data.cambios);
             actualizarPaginacion(data.pagination);
+            
+            // Actualizar contadores
+            if (data.resumen) {
+                document.getElementById('countAplicado').textContent = data.resumen.aplicados || 0;
+                document.getElementById('countDescartados').textContent = data.resumen.descartados || 0;
+            }
         } else {
             console.error('Error:', data.error);
         }
@@ -1030,9 +1370,10 @@ async function cargarCambios() {
     }
 }
 
-// Renderizar lista de cambios
+// Renderizar tabla de cambios - SIMPLIFICADO
 function renderizarCambios(cambios) {
     const container = document.getElementById('changesContainer');
+    const tbody = document.getElementById('tablaCambiosBody');
     
     if (cambios.length === 0) {
         container.style.display = 'none';
@@ -1045,398 +1386,210 @@ function renderizarCambios(cambios) {
     document.getElementById('emptyState').style.display = 'none';
     document.getElementById('paginationControls').style.display = 'flex';
     
-    container.innerHTML = '';
+    tbody.innerHTML = '';
     
     cambios.forEach(cambio => {
-        const div = document.createElement('div');
-        div.className = `change-item ${cambio.prioridad.toLowerCase()}`;
+        const tr = document.createElement('tr');
+        tr.dataset.id = cambio.id;
         
-        const estadoClass = `status-${cambio.estado.toLowerCase()}`;
-        const prioridadClass = `priority-${cambio.prioridad.toLowerCase()}`;
+        // Clase de cambio porcentual
+        const cambioClass = cambio.porcentaje_cambio > 0 ? 'cambio-positivo' : 'cambio-negativo';
+        const cambioIcon = cambio.porcentaje_cambio > 0 ? '▲' : '▼';
         
-        const porcentajeColor = cambio.porcentaje_cambio > 0 ? 'var(--nexo-accent)' : 'var(--nexo-error)';
-        const porcentajeIcon = cambio.porcentaje_cambio > 0 ? 'ri-arrow-up-line' : 'ri-arrow-down-line';
-        
-        // Badges adicionales
-        let badgesExtra = '';
-        if (cambio.tipo_cambio === 'Sincronización') {
-            badgesExtra += `<span class="badge-sync"><i class="ri-refresh-line"></i> Sincronizado</span>`;
+        // Badge de tipo
+        let tipoBadge = '';
+        switch(cambio.tipo_cambio) {
+            case 'Sincronización':
+                tipoBadge = `<span class="tipo-badge tipo-sync"><i class="ri-refresh-line"></i> Sync</span>`;
+                break;
+            case 'Manual':
+                tipoBadge = `<span class="tipo-badge tipo-manual"><i class="ri-edit-line"></i> Manual</span>`;
+                break;
+            case 'Regularización':
+                tipoBadge = `<span class="tipo-badge" style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;"><i class="ri-scales-line"></i> Regulariz.</span>`;
+                break;
+            default:
+                tipoBadge = `<span class="tipo-badge" style="background:#f0f0f0;color:#666;">${cambio.tipo_cambio}</span>`;
         }
-        if (cambio.requiere_atencion) {
-            badgesExtra += `<span class="badge-warning-urgent"><i class="ri-alarm-warning-line"></i> Requiere atención</span>`;
+        
+        // Estado simplificado: Sincronizado o Descartado
+        const esDescartado = cambio.descartado === true;
+        let estadoBadge = esDescartado 
+            ? `<span class="estado-badge" style="background:#6c757d;color:#fff;"><i class="ri-archive-line"></i> Descartado</span>`
+            : `<span class="estado-badge estado-aplicado"><i class="ri-check-line"></i> Sincronizado</span>`;
+        
+        // Solo botón de descartar (si no está ya descartado)
+        let acciones = esDescartado
+            ? `<span class="text-muted small"><i class="ri-eye-line"></i> Archivado</span>`
+            : `<button class="btn-accion btn-eliminar" onclick="descartarCambio(${cambio.id})" title="Descartar (archivar)">
+                    <i class="ri-archive-line"></i>
+               </button>`;
+        
+        // Estilo para descartados
+        if (esDescartado) {
+            tr.style.opacity = '0.6';
+            tr.style.backgroundColor = '#f8f9fa';
         }
         
-        div.innerHTML = `
-            <div class="change-header">
-                <div class="product-info">
-                    <h4>${cambio.producto}</h4>
-                    <small>
-                        <i class="ri-t-shirt-line"></i> ${cambio.tallas_preview || cambio.tallas_count + ' tallas'} &nbsp;|&nbsp;
-                        <i class="ri-store-2-line"></i> ${cambio.sucursal} &nbsp;|&nbsp;
-                        <i class="ri-price-tag-3-line"></i> ${cambio.tipo_cambio}
-                    </small>
-                    <div style="margin-top: 8px;">${badgesExtra}</div>
-                </div>
-                <div style="text-align: right;">
-                    <span class="status-badge ${estadoClass}">
-                        <i class="ri-${getStatusIcon(cambio.estado)}"></i> ${cambio.estado_display}
-                    </span>
-                    <br>
-                    <span class="priority-badge ${prioridadClass}" style="margin-top: 8px; display: inline-block;">
-                        ${cambio.prioridad}
-                    </span>
-                </div>
-            </div>
-
-            <div class="price-comparison">
-                <div class="price-box price-old">
-                    <div class="price-label">Precio Anterior</div>
-                    <div class="price-value">${formatearMoneda(cambio.precio_anterior)}</div>
-                </div>
-                
-                <div class="arrow-change">
-                    <i class="${porcentajeIcon}" style="color: ${porcentajeColor};"></i>
-                </div>
-                
-                <div class="price-box price-new">
-                    <div class="price-label">Precio Nuevo</div>
-                    <div class="price-value">${formatearMoneda(cambio.precio_nuevo)}</div>
-                    <div style="font-size: 14px; color: ${porcentajeColor}; font-weight: 600; margin-top: 4px;">
-                        ${cambio.porcentaje_cambio > 0 ? '+' : ''}${cambio.porcentaje_cambio.toFixed(1)}%
-                    </div>
-                </div>
-            </div>
-
-            <div class="change-details">
-                <div class="detail-row">
-                    <span class="detail-label"><i class="ri-money-dollar-circle-line"></i> Diferencia:</span>
-                    <span class="detail-value" style="color: ${porcentajeColor}; font-weight: 600;">
-                        ${cambio.diferencia > 0 ? '+' : ''}${formatearMoneda(cambio.diferencia)}
-                    </span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label"><i class="ri-chat-3-line"></i> Motivo:</span>
-                    <span class="detail-value">${cambio.motivo || 'Sin motivo especificado'}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label"><i class="ri-user-line"></i> Propuesto por:</span>
-                    <span class="detail-value">${cambio.creado_por} - ${cambio.fecha_creacion}</span>
-                </div>
-                ${cambio.revisado_por ? `
-                <div class="detail-row">
-                    <span class="detail-label"><i class="ri-eye-line"></i> Revisado por:</span>
-                    <span class="detail-value">${cambio.revisado_por} - ${cambio.fecha_revision}</span>
-                </div>
-                ` : ''}
-                ${cambio.aprobado_por ? `
-                <div class="detail-row">
-                    <span class="detail-label"><i class="ri-check-line"></i> ${cambio.estado === 'RECHAZADO' ? 'Rechazado' : 'Aprobado'} por:</span>
-                    <span class="detail-value">${cambio.aprobado_por} - ${cambio.fecha_aprobacion}</span>
-                </div>
-                ` : ''}
-                <div class="detail-row">
-                    <span class="detail-label"><i class="ri-calendar-line"></i> Días en espera:</span>
-                    <span class="detail-value">
-                        ${cambio.dias_pendiente} día${cambio.dias_pendiente !== 1 ? 's' : ''}
-                        ${cambio.esta_vencido ? '<span class="badge-warning-urgent" style="margin-left: 8px;">Vencido</span>' : ''}
-                    </span>
-                </div>
-            </div>
-
-            ${cambio.estado === 'PENDIENTE' || cambio.estado === 'REVISADO' ? `
-            <div class="actions-section">
-                ${cambio.estado === 'PENDIENTE' ? `
-                <button class="btn-action btn-review" onclick="abrirModalRevision(${cambio.id})">
-                    <i class="ri-eye-line"></i> Revisar
-                </button>
-                ` : ''}
-                <button class="btn-action btn-approve" onclick="abrirModalAprobacion(${cambio.id}, '${cambio.producto}', ${cambio.precio_anterior}, ${cambio.precio_nuevo})">
-                    <i class="ri-check-line"></i> Aprobar
-                </button>
-                <button class="btn-action btn-reject" onclick="abrirModalRechazo(${cambio.id})">
-                    <i class="ri-close-line"></i> Rechazar
-                </button>
-            </div>
-            ` : ''}
+        tr.innerHTML = `
+            <td>
+                ${esDescartado ? '<span class="text-muted">-</span>' : `<input type="checkbox" class="form-check-input check-cambio" value="${cambio.id}" onchange="actualizarSeleccion()">`}
+            </td>
+            <td class="col-producto">
+                <div class="producto-nombre">${cambio.producto}</div>
+                <div class="producto-tallas">${cambio.tallas_preview || cambio.tallas_count + ' tallas'}</div>
+            </td>
+            <td><strong>${cambio.sucursal}</strong></td>
+            <td>${tipoBadge}</td>
+            <td class="text-end precio-cell precio-anterior">${formatearMoneda(cambio.precio_anterior)}</td>
+            <td class="text-end precio-cell precio-nuevo">${formatearMoneda(cambio.precio_nuevo)}</td>
+            <td class="text-center">
+                <span class="${cambioClass}">
+                    ${cambioIcon} ${cambio.porcentaje_cambio > 0 ? '+' : ''}${cambio.porcentaje_cambio.toFixed(1)}%
+                </span>
+            </td>
+            <td class="text-center">${estadoBadge}</td>
+            <td class="fecha-cell">${cambio.fecha_creacion}${esDescartado && cambio.fecha_descarte ? `<br><small class="text-muted">Desc: ${cambio.fecha_descarte}</small>` : ''}</td>
+            <td class="text-center">${acciones}</td>
         `;
         
-        container.appendChild(div);
+        tbody.appendChild(tr);
     });
-}
-
-// Obtener icono de estado
-function getStatusIcon(estado) {
-    const iconos = {
-        'PENDIENTE': 'time-line',
-        'REVISADO': 'eye-line',
-        'APROBADO': 'check-double-line',
-        'APLICADO': 'check-double-line',
-        'RECHAZADO': 'close-circle-line'
-    };
-    return iconos[estado] || 'information-line';
-}
-
-// Abrir modal de revisión
-function abrirModalRevision(cambioId) {
-    cambioSeleccionado = cambioId;
-    document.getElementById('observacionesRevision').value = '';
-    document.getElementById('modalReview').style.display = 'block';
-}
-
-// Confirmar revisión
-async function confirmarRevision() {
-    const observaciones = document.getElementById('observacionesRevision').value;
     
-    try {
-        const response = await fetch('/app/gestion-precios/revisar-cambio/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                cambio_id: cambioSeleccionado,
-                observaciones: observaciones
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            Swal.fire({
-                icon: 'success',
-                title: '¡Revisado!',
-                text: 'El cambio ha sido marcado como revisado',
-                confirmButtonColor: '#0066FF'
-            });
-            cerrarModal('modalReview');
-            cargarIndicadores();
-            cargarCambios();
-        } else {
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: data.error,
-                confirmButtonColor: '#0066FF'
-            });
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Error al revisar el cambio',
-            confirmButtonColor: '#0066FF'
-        });
+    // Resetear checkbox de seleccionar todo
+    document.getElementById('selectAll').checked = false;
+    actualizarSeleccion();
+    
+    // Actualizar total de registros
+    const totalElement = document.getElementById('totalRegistros');
+    if (totalElement) {
+        totalElement.textContent = cambios.length;
     }
 }
 
-// Abrir modal de aprobación
-function abrirModalAprobacion(cambioId, producto, precioAnterior, precioNuevo) {
-    cambioSeleccionado = cambioId;
-    document.getElementById('observacionesAprobacion').value = '';
-    
-    // Mostrar info del producto
-    const diferencia = precioNuevo - precioAnterior;
-    const porcentaje = ((diferencia / precioAnterior) * 100).toFixed(1);
-    
-    document.getElementById('infoProductoAprobacion').innerHTML = `
-        <strong>${producto}</strong><br>
-        <small style="color: var(--nexo-gray-500);">
-            ${formatearMoneda(precioAnterior)} → ${formatearMoneda(precioNuevo)} 
-            (<span style="color: ${diferencia >= 0 ? 'var(--nexo-accent)' : 'var(--nexo-error)'}">
-                ${diferencia >= 0 ? '+' : ''}${porcentaje}%
-            </span>)
-        </small>
-    `;
-    
-    document.getElementById('modalApprove').style.display = 'block';
+// Toggle seleccionar todos
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.check-cambio').forEach(cb => {
+        cb.checked = selectAll;
+    });
+    actualizarSeleccion();
 }
 
-// Confirmar aprobación
-async function confirmarAprobacion() {
-    const observaciones = document.getElementById('observacionesAprobacion').value;
+// Actualizar contador de seleccionados
+function actualizarSeleccion() {
+    const seleccionados = document.querySelectorAll('.check-cambio:checked').length;
+    document.getElementById('countSeleccionados').textContent = seleccionados;
     
-    try {
-        const response = await fetch('/app/gestion-precios/aprobar-cambio/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                cambio_id: cambioSeleccionado,
-                observaciones: observaciones
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            Swal.fire({
-                icon: 'success',
-                title: '¡Aprobado!',
-                html: `El precio ha sido actualizado<br><small>${data.tallas_afectadas} talla(s) afectadas</small>`,
-                confirmButtonColor: '#00D4AA'
-            });
-            cerrarModal('modalApprove');
-            cargarIndicadores();
-            cargarCambios();
-        } else {
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: data.error,
-                confirmButtonColor: '#0066FF'
-            });
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Error al aprobar el cambio',
-            confirmButtonColor: '#0066FF'
-        });
+    const btnDescartar = document.getElementById('btnDescartarSeleccionados');
+    if (seleccionados > 0) {
+        btnDescartar.style.display = 'inline-flex';
+        btnDescartar.innerHTML = `<i class="ri-archive-line me-1"></i> Descartar (${seleccionados})`;
+    } else {
+        btnDescartar.style.display = 'none';
     }
 }
 
-// Abrir modal de rechazo
-function abrirModalRechazo(cambioId) {
-    cambioSeleccionado = cambioId;
-    document.getElementById('motivoRechazo').value = '';
-    document.getElementById('modalReject').style.display = 'block';
-}
-
-// Confirmar rechazo
-async function confirmarRechazo() {
-    const motivo = document.getElementById('motivoRechazo').value.trim();
-    
-    if (!motivo) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Motivo requerido',
-            text: 'Debes especificar un motivo para rechazar',
-            confirmButtonColor: '#0066FF'
-        });
-        return;
-    }
-    
-    try {
-        const response = await fetch('/app/gestion-precios/rechazar-cambio/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                cambio_id: cambioSeleccionado,
-                observaciones: motivo
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            Swal.fire({
-                icon: 'info',
-                title: 'Rechazado',
-                text: 'El cambio ha sido rechazado',
-                confirmButtonColor: '#0066FF'
-            });
-            cerrarModal('modalReject');
-            cargarIndicadores();
-            cargarCambios();
-        } else {
-            Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: data.error,
-                confirmButtonColor: '#0066FF'
-            });
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Error al rechazar el cambio',
-            confirmButtonColor: '#0066FF'
-        });
-    }
-}
-
-// Aprobar todos los pendientes
-async function aprobarTodosPendientes() {
-    const pendientes = cambiosActuales.filter(c => c.estado === 'PENDIENTE' || c.estado === 'REVISADO');
-    
-    if (pendientes.length === 0) {
-        Swal.fire({
-            icon: 'info',
-            title: 'Sin pendientes',
-            text: 'No hay cambios pendientes para aprobar',
-            confirmButtonColor: '#0066FF'
-        });
-        return;
-    }
-    
-    const result = await Swal.fire({
-        title: `¿Aprobar ${pendientes.length} cambio(s)?`,
-        html: `Se aplicarán todos los cambios de precio pendientes de esta página.<br><br>
-               <small style="color: var(--nexo-gray-500);">Esta acción no se puede deshacer.</small>`,
+// Descartar un cambio (archivarlo, no eliminarlo)
+async function descartarCambio(cambioId) {
+    const confirm = await Swal.fire({
         icon: 'question',
+        title: '¿Descartar este registro?',
+        text: 'El registro se archivará. Puedes verlo activando "Mostrar descartados"',
         showCancelButton: true,
-        confirmButtonColor: '#00D4AA',
-        cancelButtonColor: '#8A8A9A',
-        confirmButtonText: 'Sí, aprobar todos',
-        cancelButtonText: 'Cancelar'
+        confirmButtonText: 'Sí, descartar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF4D4D'
     });
     
-    if (!result.isConfirmed) return;
+    if (!confirm.isConfirmed) return;
     
-    let exitosos = 0;
-    let errores = 0;
-    
-    // Mostrar loading
-    Swal.fire({
-        title: 'Aprobando cambios...',
-        html: '<div class="spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #00D4AA; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>',
-        showConfirmButton: false,
-        allowOutsideClick: false
-    });
-    
-    for (const cambio of pendientes) {
-        try {
-            const response = await fetch('/app/gestion-precios/aprobar-cambio/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
-                },
-                body: JSON.stringify({
-                    cambio_id: cambio.id,
-                    observaciones: 'Aprobación masiva'
-                })
+    try {
+        const response = await fetch('/app/gestion-precios/eliminar-cambios-aplicados/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ cambio_ids: [cambioId] })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Alerta descartada',
+                timer: 1500,
+                showConfirmButton: false
             });
-            
-            const data = await response.json();
-            if (data.success) exitosos++;
-            else errores++;
-        } catch (error) {
-            errores++;
+            cargarCambios();
+            cargarIndicadores();
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: data.error
+            });
         }
+    } catch (error) {
+        console.error('Error:', error);
     }
+}
+
+// Eliminar seleccionados
+async function descartarSeleccionados() {
+    const ids = Array.from(document.querySelectorAll('.check-cambio:checked')).map(cb => parseInt(cb.value));
     
-    Swal.fire({
-        icon: exitosos > 0 ? 'success' : 'error',
-        title: exitosos > 0 ? '¡Completado!' : 'Error',
-        html: `${exitosos} cambio(s) aprobados${errores > 0 ? `<br><small style="color: var(--nexo-error);">${errores} error(es)</small>` : ''}`,
-        confirmButtonColor: '#00D4AA'
+    if (ids.length === 0) return;
+    
+    const confirm = await Swal.fire({
+        icon: 'question',
+        title: `¿Descartar ${ids.length} registro(s)?`,
+        text: 'Los registros se archivarán. Puedes verlos activando "Mostrar descartados"',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, descartar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#6c757d'
     });
     
-    cargarIndicadores();
-    cargarCambios();
+    if (!confirm.isConfirmed) return;
+    
+    try {
+        const response = await fetch('/app/gestion-precios/eliminar-cambios-aplicados/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ cambio_ids: ids })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Completado!',
+                text: `${data.eliminados} registro(s) eliminados`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+            cargarCambios();
+            cargarIndicadores();
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: data.error
+            });
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
 }
+
+// Función auxiliar - ya no se necesitan las funciones de aprobar/rechazar/revisar
 
 // Utilidades
 function formatearMoneda(valor) {
@@ -1445,10 +1598,6 @@ function formatearMoneda(valor) {
 
 function mostrarCargando(mostrar) {
     document.getElementById('loadingIndicator').style.display = mostrar ? 'block' : 'none';
-}
-
-function cerrarModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
 }
 
 function cambiarPagina(direccion) {
@@ -1462,6 +1611,12 @@ function actualizarPaginacion(pagination) {
     document.getElementById('btnPrev').disabled = !pagination.has_previous;
     document.getElementById('btnNext').disabled = !pagination.has_next;
     totalPaginas = pagination.total_pages;
+    
+    // Actualizar total de registros
+    const totalElement = document.getElementById('totalRegistros');
+    if (totalElement && pagination.total_items) {
+        totalElement.textContent = pagination.total_items;
+    }
 }
 
 function getCookie(name) {
@@ -1479,19 +1634,10 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// Cerrar modal al hacer click fuera
-window.onclick = function(event) {
-    if (event.target.classList.contains('modal-nexo')) {
-        event.target.style.display = 'none';
-    }
-}
-
-// Atajos de teclado
+// Atajos de teclado - R para refrescar
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.modal-nexo').forEach(modal => {
-            modal.style.display = 'none';
-        });
+    if (e.key === 'r' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+        cargarCambios();
     }
 });
 </script>

@@ -154,14 +154,20 @@ def obtener_producto_edicion(request, producto_id):
 @transaction.atomic
 def actualizar_producto(request, producto_id):
     """
-    Actualizar datos del producto base
-    No afecta a las variaciones/tallas
-    Ahora también registra historial y notifica a otras sucursales si hay cambio de precio
+    Actualizar datos del producto base y SINCRONIZAR A TODAS LAS SUCURSALES
+    
+    Comportamiento:
+    - Actualiza el producto seleccionado
+    - Busca TODOS los productos con el mismo artículo en TODAS las sucursales
+    - Actualiza descripción, categoría, atributos y precios en todos ellos
+    - Registra historial de cambios de precio
+    - Actualiza lotes FIFO activos con el nuevo precio
     """
     try:
         producto = get_object_or_404(Producto.objects.select_related('sucursal'), id=producto_id)
         
-        # Guardar precio anterior para comparar
+        # Guardar valores anteriores para comparar
+        articulo_anterior = producto.articulo
         precio_anterior = producto.precioventa
         sucursal_origen = producto.sucursal
         
@@ -170,6 +176,9 @@ def actualizar_producto(request, producto_id):
             data = json.loads(request.body)
         else:  # POST
             data = json.loads(request.body)
+        
+        # Opción para propagar a todas las sucursales (por defecto True)
+        propagar_sucursales = data.get('propagar_sucursales', True)
         
         # Validaciones
         articulo = data.get('articulo', '').strip()
@@ -184,6 +193,7 @@ def actualizar_producto(request, producto_id):
             costo = int(data.get('costo', 0))
             sobreprecio = int(data.get('sobreprecio', 0))
             precioventa = int(data.get('precioventa', 0))
+            precioSugerido = int(data.get('precioSugerido', 0))
             
             if costo < 0:
                 raise ValueError('El costo no puede ser negativo')
@@ -198,147 +208,139 @@ def actualizar_producto(request, producto_id):
                 'error': str(e)
             }, status=400)
         
-        # Actualizar campos básicos
-        producto.articulo = articulo
-        producto.descripcion = data.get('descripcion', '')
-        producto.costo = costo
-        producto.sobreprecio = sobreprecio
-        producto.precioventa = precioventa
-        producto.precioSugerido = int(data.get('precioSugerido', 0))
-        
-        # Actualizar categoría
+        # Obtener categoría
+        categoria = None
         categoria_id = data.get('categoria_id')
         if categoria_id:
             try:
-                producto.categoria = Categoria.objects.get(id=categoria_id)
+                categoria = Categoria.objects.get(id=categoria_id)
             except Categoria.DoesNotExist:
                 return JsonResponse({
                     'success': False,
                     'error': f'Categoría con ID {categoria_id} no encontrada'
                 }, status=400)
         
-        # Actualizar atributos
+        # Obtener atributos
+        atributos = {}
         for i in range(1, 5):
             atributo_key = f'atributo{i}_id'
             atributo_id = data.get(atributo_key)
             
             if atributo_id:
                 try:
-                    atributo = AtributoOpcion.objects.get(id=atributo_id)
-                    setattr(producto, f'atributo{i}', atributo)
+                    atributos[f'atributo{i}'] = AtributoOpcion.objects.get(id=atributo_id)
                 except AtributoOpcion.DoesNotExist:
                     return JsonResponse({
                         'success': False,
                         'error': f'Atributo con ID {atributo_id} no encontrado'
                     }, status=400)
             else:
-                setattr(producto, f'atributo{i}', None)
+                atributos[f'atributo{i}'] = None
         
-        # Guardar cambios
-        producto.save()
+        # ========== BUSCAR TODOS LOS PRODUCTOS CON MISMO ARTÍCULO ==========
+        if propagar_sucursales:
+            # Buscar por artículo original (antes de cambiar)
+            productos_a_actualizar = Producto.objects.filter(
+                articulo=articulo_anterior
+            ).select_related('sucursal')
+        else:
+            # Solo el producto actual
+            productos_a_actualizar = Producto.objects.filter(id=producto_id)
         
-        # === SI CAMBIÓ EL PRECIO: REGISTRAR HISTORIAL Y NOTIFICAR ===
-        sucursales_notificadas = 0
+        productos_actualizados = 0
+        sucursales_afectadas = set()
+        lotes_totales_actualizados = 0
         historial_registrado = False
         
-        if precio_anterior != precioventa:
-            from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser, LoteProducto
-            from django.utils import timezone
-            from datetime import timedelta
+        # Importar modelos necesarios
+        from .models import LoteProducto
+        try:
+            from .models import HistorialCambioPrecio
+            tiene_historial = True
+        except ImportError:
+            tiene_historial = False
+        
+        # ========== ACTUALIZAR TODOS LOS PRODUCTOS ==========
+        for prod in productos_a_actualizar:
+            precio_prod_anterior = prod.precioventa
             
-            # Calcular diferencia y porcentaje
-            diferencia = precioventa - precio_anterior
-            porcentaje = (diferencia / precio_anterior * 100) if precio_anterior > 0 else 0
+            # Actualizar campos básicos
+            prod.articulo = articulo
+            prod.descripcion = data.get('descripcion', '')
+            prod.costo = costo
+            prod.sobreprecio = sobreprecio
+            prod.precioventa = precioventa
+            prod.precioSugerido = precioSugerido
+            prod.categoria = categoria
             
-            # Actualizar lotes activos
+            # Actualizar atributos
+            prod.atributo1 = atributos.get('atributo1')
+            prod.atributo2 = atributos.get('atributo2')
+            prod.atributo3 = atributos.get('atributo3')
+            prod.atributo4 = atributos.get('atributo4')
+            
+            prod.save()
+            productos_actualizados += 1
+            
+            if prod.sucursal:
+                sucursales_afectadas.add(prod.sucursal.alias)
+            
+            # Actualizar lotes FIFO activos de este producto
             lotes_actualizados = LoteProducto.objects.filter(
-                producto_talla__producto=producto,
+                producto_talla__producto=prod,
                 cantidad_disponible__gt=0,
                 activo=True
-            ).update(precio_venta_unitario=precioventa)
-            
-            # Registrar en historial
-            HistorialCambioPrecio.objects.create(
-                producto=producto,
-                precio_anterior=precio_anterior,
-                precio_nuevo=precioventa,
-                diferencia=diferencia,
-                porcentaje_cambio=porcentaje,
-                motivo='Actualización desde Gestión de Productos',
-                tipo_cambio='MANUAL',
-                usuario=request.user,
-                ip_address=request.META.get('REMOTE_ADDR'),
-                tallas_afectadas=producto.producto_talla.count(),
-                lotes_afectados=lotes_actualizados
+            ).update(
+                precio_venta_unitario=precioventa,
+                costo_unitario=costo,
+                sobreprecio_unitario=sobreprecio
             )
-            historial_registrado = True
+            lotes_totales_actualizados += lotes_actualizados
             
-            # Buscar productos similares en OTRAS sucursales
-            productos_otras_sucursales = Producto.objects.filter(
-                articulo=producto.articulo,
-                atributo1=producto.atributo1,
-                atributo2=producto.atributo2
-            ).exclude(
-                sucursal=sucursal_origen
-            ).select_related('sucursal')
-            
-            for prod_similar in productos_otras_sucursales:
-                primera_talla = prod_similar.producto_talla.first()
-                if not primera_talla:
-                    continue
+            # Registrar historial si cambió el precio
+            if tiene_historial and precio_prod_anterior != precioventa:
+                diferencia = precioventa - precio_prod_anterior
+                porcentaje = (diferencia / precio_prod_anterior * 100) if precio_prod_anterior > 0 else 0
                 
-                # Crear cambio pendiente para la otra sucursal
-                cambio = CambioPrecioPendiente.objects.create(
-                    producto_talla=primera_talla,
-                    sucursal=prod_similar.sucursal,
-                    precio_anterior=prod_similar.precioventa,
-                    precio_nuevo=precioventa,
-                    diferencia=precioventa - prod_similar.precioventa,
-                    porcentaje_cambio=((precioventa - prod_similar.precioventa) / prod_similar.precioventa * 100) if prod_similar.precioventa > 0 else 0,
-                    tipo_cambio='SINCRONIZACION',
-                    estado='PENDIENTE',
-                    motivo=f'Sincronización desde {sucursal_origen.alias}: Actualización de producto',
-                    creado_por=request.user,
-                    prioridad='MEDIA',
-                    fecha_vencimiento=timezone.now() + timedelta(days=7)
-                )
-                
-                # Crear notificaciones para usuarios de esa sucursal
-                usuarios_sucursal = EmpresaUser.objects.filter(
-                    sucursal=prod_similar.sucursal,
-                    status=True
-                ).select_related('user')
-                
-                mensaje_notif = (
-                    f"💰 Cambio de precio desde {sucursal_origen.alias}: "
-                    f"{producto.articulo} | "
-                    f"${precio_anterior:,} → ${precioventa:,} "
-                    f"({'+' if diferencia > 0 else ''}{porcentaje:.1f}%)"
-                )
-                
-                for empresa_user in usuarios_sucursal:
-                    NotificacionCambioPrecio.objects.create(
-                        cambio_precio=cambio,
-                        usuario=empresa_user.user,
-                        tipo='NUEVA',
-                        mensaje=mensaje_notif
+                try:
+                    HistorialCambioPrecio.objects.create(
+                        producto=prod,
+                        precio_anterior=precio_prod_anterior,
+                        precio_nuevo=precioventa,
+                        diferencia=diferencia,
+                        porcentaje_cambio=porcentaje,
+                        motivo=f'Sincronización global desde {sucursal_origen.alias if sucursal_origen else "Sistema"}',
+                        tipo_cambio='SINCRONIZACION_GLOBAL',
+                        usuario=request.user,
+                        ip_address=request.META.get('REMOTE_ADDR'),
+                        tallas_afectadas=prod.producto_talla.count(),
+                        lotes_afectados=lotes_actualizados
                     )
-                    sucursales_notificadas += 1
-                
-                cambio.notificado = True
-                cambio.save()
+                    historial_registrado = True
+                except Exception:
+                    pass  # Si falla el historial, continuar
+        
+        # Construir mensaje de respuesta
+        if productos_actualizados > 1:
+            mensaje = f'Producto actualizado en {productos_actualizados} sucursales: {", ".join(sorted(sucursales_afectadas))}'
+        else:
+            mensaje = 'Producto actualizado exitosamente'
         
         return JsonResponse({
             'success': True,
-            'message': 'Producto actualizado exitosamente',
+            'message': mensaje,
             'producto': {
                 'id': producto.id,
-                'articulo': producto.articulo,
-                'precioventa': producto.precioventa
+                'articulo': articulo,
+                'precioventa': precioventa
             },
-            'precio_cambio': precio_anterior != precioventa,
-            'historial_registrado': historial_registrado,
-            'sucursales_notificadas': sucursales_notificadas
+            'sincronizacion': {
+                'productos_actualizados': productos_actualizados,
+                'sucursales_afectadas': list(sucursales_afectadas),
+                'lotes_actualizados': lotes_totales_actualizados,
+                'historial_registrado': historial_registrado
+            },
+            'precio_cambio': precio_anterior != precioventa
         })
         
     except json.JSONDecodeError:

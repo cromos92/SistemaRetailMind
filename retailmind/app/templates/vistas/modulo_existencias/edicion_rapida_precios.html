@@ -777,6 +777,160 @@
     padding: 40px 20px;
 }
 
+/* Buscador del historial */
+.historial-sidebar-search {
+    padding: 12px 16px;
+    background: var(--nexo-gray-100);
+    border-bottom: 1px solid var(--nexo-gray-200);
+    flex-shrink: 0;
+}
+
+.historial-search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.historial-search-wrapper i {
+    position: absolute;
+    left: 12px;
+    color: var(--nexo-gray-400);
+    font-size: 16px;
+    pointer-events: none;
+}
+
+.historial-search-input {
+    width: 100%;
+    padding: 10px 36px 10px 38px;
+    border: 2px solid var(--nexo-gray-200);
+    border-radius: 8px;
+    font-size: 13px;
+    background: var(--nexo-white);
+    transition: all 0.2s ease;
+}
+
+.historial-search-input:focus {
+    outline: none;
+    border-color: var(--nexo-accent);
+    box-shadow: 0 0 0 3px rgba(106, 90, 205, 0.1);
+}
+
+.historial-search-input::placeholder {
+    color: var(--nexo-gray-400);
+}
+
+.historial-search-clear {
+    position: absolute;
+    right: 8px;
+    background: var(--nexo-gray-200);
+    border: none;
+    color: var(--nexo-gray-500);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.historial-search-clear:hover {
+    background: var(--nexo-gray-300);
+    color: var(--nexo-gray-700);
+}
+
+.historial-search-clear.visible {
+    display: flex;
+}
+
+.historial-search-results-info {
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+    margin-top: 8px;
+    display: none;
+}
+
+.historial-search-results-info.visible {
+    display: block;
+}
+
+.historial-search-results-info span {
+    font-weight: 600;
+    color: var(--nexo-primary);
+}
+
+/* Resaltado del texto buscado */
+.historial-reciente-item .highlight {
+    background: linear-gradient(120deg, rgba(106, 90, 205, 0.3) 0%, rgba(106, 90, 205, 0.2) 100%);
+    color: var(--nexo-primary);
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+/* Estado "sin resultados" en búsqueda */
+.historial-no-results {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--nexo-gray-500);
+}
+
+.historial-no-results i {
+    font-size: 40px;
+    color: var(--nexo-gray-300);
+    margin-bottom: 10px;
+    display: block;
+}
+
+.historial-no-results h4 {
+    margin: 0 0 6px 0;
+    font-size: 14px;
+    color: var(--nexo-gray-600);
+}
+
+.historial-no-results p {
+    margin: 0;
+    font-size: 12px;
+}
+
+.historial-no-results .search-term {
+    color: var(--nexo-primary);
+    font-weight: 600;
+}
+
+/* Botón para buscar en servidor */
+.btn-buscar-servidor {
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--nexo-accent) 0%, #5a4fcf 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(106, 90, 205, 0.3);
+}
+
+.btn-buscar-servidor:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(106, 90, 205, 0.4);
+}
+
+.btn-buscar-servidor:active {
+    transform: translateY(0);
+}
+
+.btn-buscar-servidor i {
+    font-size: 15px;
+}
+
 @media (max-width: 600px) {
     .historial-stats {
         grid-template-columns: repeat(2, 1fr);
@@ -1677,6 +1831,27 @@
             <i class="ri-close-line"></i>
         </button>
     </div>
+    
+    <!-- Buscador del historial -->
+    <div class="historial-sidebar-search">
+        <div class="historial-search-wrapper">
+            <i class="ri-search-line"></i>
+            <input type="text" 
+                   id="historialSearchInput" 
+                   class="historial-search-input" 
+                   placeholder="Buscar artículo... (Enter para buscar)"
+                   oninput="filtrarHistorialLocal(this.value)"
+                   onkeydown="manejarTeclaBusquedaHistorial(event)">
+            <button class="historial-search-clear" id="historialSearchClear" onclick="limpiarBusquedaHistorial()">
+                <i class="ri-close-line"></i>
+            </button>
+        </div>
+        <div class="historial-search-results-info" id="historialSearchInfo">
+            <span id="historialResultsCount">0</span> resultado(s) encontrado(s)
+            <span id="historialSearchTip" style="display: none;"> - Presiona Enter para buscar en todo el historial</span>
+        </div>
+    </div>
+    
     <div class="historial-sidebar-content" id="historialSidebarContent">
         <div class="historial-sidebar-loading">
             <div class="spinner-historial"></div>
@@ -1720,6 +1895,7 @@
 let listaEdicion = [];
 let productosDisponibles = [];
 let buscando = false; // Flag para evitar búsquedas múltiples
+let historialRecienteData = []; // Variable para almacenar historial y permitir filtrado
 
 // Inicializar
 document.addEventListener('DOMContentLoaded', function() {
@@ -1770,6 +1946,16 @@ function cerrarHistorialReciente() {
 // Cargar historial reciente
 async function cargarHistorialReciente() {
     const container = document.getElementById('historialSidebarContent');
+    const searchInput = document.getElementById('historialSearchInput');
+    const searchClear = document.getElementById('historialSearchClear');
+    const searchInfo = document.getElementById('historialSearchInfo');
+    
+    // Limpiar búsqueda al recargar
+    if (searchInput) {
+        searchInput.value = '';
+        searchClear.classList.remove('visible');
+        searchInfo.classList.remove('visible');
+    }
     
     container.innerHTML = `
         <div class="historial-sidebar-loading">
@@ -1783,8 +1969,11 @@ async function cargarHistorialReciente() {
         const data = await response.json();
         
         if (data.success && data.historial && data.historial.length > 0) {
+            // Guardar historial en variable global para filtrado
+            historialRecienteData = data.historial;
             renderizarHistorialReciente(data.historial, container);
         } else {
+            historialRecienteData = [];
             container.innerHTML = `
                 <div class="historial-sidebar-empty">
                     <i class="ri-file-list-3-line"></i>
@@ -1795,6 +1984,7 @@ async function cargarHistorialReciente() {
         }
     } catch (error) {
         console.error('Error cargando historial reciente:', error);
+        historialRecienteData = [];
         container.innerHTML = `
             <div class="historial-sidebar-empty">
                 <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
@@ -1805,8 +1995,8 @@ async function cargarHistorialReciente() {
     }
 }
 
-// Renderizar historial reciente
-function renderizarHistorialReciente(historial, container) {
+// Renderizar historial reciente (con soporte para resaltado de búsqueda)
+function renderizarHistorialReciente(historial, container, searchTerm = '') {
     let html = '';
     
     historial.forEach(item => {
@@ -1817,10 +2007,16 @@ function renderizarHistorialReciente(historial, container) {
         const variacionClass = variacion >= 0 ? 'positivo' : 'negativo';
         const variacionIcon = variacion >= 0 ? '↑' : '↓';
         
+        // Resaltar término de búsqueda en el nombre del producto
+        let nombreMostrar = item.producto_nombre;
+        if (searchTerm) {
+            nombreMostrar = resaltarTexto(item.producto_nombre, searchTerm);
+        }
+        
         html += `
             <div class="historial-reciente-item" onclick="verHistorial(${item.producto_id}, '${item.producto_nombre.replace(/'/g, "\\'")}', '${item.producto_talla || ''}', 0, ${item.precio_nuevo})">
                 <div class="item-header">
-                    <h4 class="producto-nombre">${item.producto_nombre}</h4>
+                    <h4 class="producto-nombre">${nombreMostrar}</h4>
                     <span class="fecha-badge">${item.hace_cuanto || item.fecha_cambio}</span>
                 </div>
                 
@@ -1845,13 +2041,191 @@ function renderizarHistorialReciente(historial, container) {
         `;
     });
     
+    const mensajeFinal = searchTerm 
+        ? `${historial.length} resultado(s) para "${searchTerm}"`
+        : `Mostrando las últimas ${historial.length} ediciones`;
+    
     html += `
         <div style="text-align: center; padding: 16px; font-size: 12px; color: var(--nexo-gray-500);">
-            <i class="ri-information-line"></i> Mostrando las últimas ${historial.length} ediciones
+            <i class="ri-information-line"></i> ${mensajeFinal}
         </div>
     `;
     
     container.innerHTML = html;
+}
+
+// ========== FUNCIONES DE BÚSQUEDA EN HISTORIAL ==========
+
+// Resaltar texto de búsqueda
+function resaltarTexto(texto, termino) {
+    if (!termino) return texto;
+    
+    // Escapar caracteres especiales de regex
+    const terminoEscapado = termino.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${terminoEscapado})`, 'gi');
+    
+    return texto.replace(regex, '<span class="highlight">$1</span>');
+}
+
+// Manejar teclas en el buscador de historial
+function manejarTeclaBusquedaHistorial(event) {
+    if (event.key === 'Escape') {
+        limpiarBusquedaHistorial();
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        const termino = event.target.value.trim();
+        if (termino.length >= 2) {
+            buscarHistorialEnServidor(termino);
+        }
+    }
+}
+
+// Filtrar historial LOCAL (mientras escribe)
+function filtrarHistorialLocal(termino) {
+    const container = document.getElementById('historialSidebarContent');
+    const searchClear = document.getElementById('historialSearchClear');
+    const searchInfo = document.getElementById('historialSearchInfo');
+    const resultsCount = document.getElementById('historialResultsCount');
+    const searchTip = document.getElementById('historialSearchTip');
+    
+    termino = termino.trim().toLowerCase();
+    
+    // Mostrar/ocultar botón de limpiar
+    if (termino.length > 0) {
+        searchClear.classList.add('visible');
+    } else {
+        searchClear.classList.remove('visible');
+        searchInfo.classList.remove('visible');
+        searchTip.style.display = 'none';
+        // Mostrar todo el historial
+        if (historialRecienteData.length > 0) {
+            renderizarHistorialReciente(historialRecienteData, container);
+        }
+        return;
+    }
+    
+    // Filtrar por nombre de producto, usuario o sucursal (filtrado LOCAL)
+    const resultados = historialRecienteData.filter(item => {
+        const nombreMatch = item.producto_nombre.toLowerCase().includes(termino);
+        const usuarioMatch = item.usuario && item.usuario.toLowerCase().includes(termino);
+        const sucursalMatch = item.sucursal && item.sucursal.toLowerCase().includes(termino);
+        return nombreMatch || usuarioMatch || sucursalMatch;
+    });
+    
+    // Actualizar contador
+    resultsCount.textContent = resultados.length;
+    searchInfo.classList.add('visible');
+    
+    // Mostrar tip de buscar en servidor si hay pocos resultados locales
+    if (termino.length >= 2) {
+        searchTip.style.display = 'inline';
+    } else {
+        searchTip.style.display = 'none';
+    }
+    
+    // Mostrar resultados o mensaje de "sin resultados"
+    if (resultados.length > 0) {
+        renderizarHistorialReciente(resultados, container, termino);
+    } else {
+        container.innerHTML = `
+            <div class="historial-no-results">
+                <i class="ri-search-line"></i>
+                <h4>Sin resultados en ediciones recientes</h4>
+                <p>No se encontró "<span class="search-term">${termino}</span>" en las últimas ediciones</p>
+                <button class="btn-buscar-servidor" onclick="buscarHistorialEnServidor('${termino.replace(/'/g, "\\'")}')">
+                    <i class="ri-search-2-line"></i> Buscar en todo el historial
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Buscar historial en el SERVIDOR (búsqueda completa)
+async function buscarHistorialEnServidor(termino) {
+    const container = document.getElementById('historialSidebarContent');
+    const searchClear = document.getElementById('historialSearchClear');
+    const searchInfo = document.getElementById('historialSearchInfo');
+    const resultsCount = document.getElementById('historialResultsCount');
+    const searchTip = document.getElementById('historialSearchTip');
+    
+    if (!termino || termino.length < 2) {
+        return;
+    }
+    
+    // Mostrar loading
+    container.innerHTML = `
+        <div class="historial-sidebar-loading">
+            <div class="spinner-historial"></div>
+            <p>Buscando "<strong>${termino}</strong>" en todo el historial...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/app/gestion-precios/historial-reciente/?search=${encodeURIComponent(termino)}`);
+        const data = await response.json();
+        
+        if (data.success && data.historial && data.historial.length > 0) {
+            // Actualizar contador
+            resultsCount.textContent = data.historial.length;
+            searchInfo.classList.add('visible');
+            searchTip.style.display = 'none';
+            searchClear.classList.add('visible');
+            
+            // Renderizar resultados con resaltado
+            renderizarHistorialReciente(data.historial, container, termino);
+            
+            // Agregar indicador de búsqueda en servidor
+            const infoDiv = container.querySelector('div[style*="text-align: center"]');
+            if (infoDiv) {
+                infoDiv.innerHTML = `<i class="ri-database-2-line"></i> ${data.historial.length} resultado(s) en todo el historial para "${termino}"`;
+            }
+        } else {
+            resultsCount.textContent = '0';
+            searchInfo.classList.add('visible');
+            searchTip.style.display = 'none';
+            
+            container.innerHTML = `
+                <div class="historial-no-results">
+                    <i class="ri-file-search-line"></i>
+                    <h4>Sin resultados</h4>
+                    <p>No se encontraron cambios de precio para "<span class="search-term">${termino}</span>"</p>
+                    <p style="font-size: 11px; margin-top: 8px; color: var(--nexo-gray-400);">
+                        Verifica el nombre del artículo o prueba con otro término
+                    </p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error buscando en historial:', error);
+        container.innerHTML = `
+            <div class="historial-no-results">
+                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+                <h4>Error de conexión</h4>
+                <p>No se pudo buscar en el historial</p>
+                <button class="btn-buscar-servidor" onclick="buscarHistorialEnServidor('${termino.replace(/'/g, "\\'")}')">
+                    <i class="ri-refresh-line"></i> Reintentar
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Limpiar búsqueda del historial
+function limpiarBusquedaHistorial() {
+    const searchInput = document.getElementById('historialSearchInput');
+    const searchClear = document.getElementById('historialSearchClear');
+    const searchInfo = document.getElementById('historialSearchInfo');
+    const searchTip = document.getElementById('historialSearchTip');
+    const container = document.getElementById('historialSidebarContent');
+    
+    searchInput.value = '';
+    searchClear.classList.remove('visible');
+    searchInfo.classList.remove('visible');
+    searchTip.style.display = 'none';
+    searchInput.focus();
+    
+    // Recargar historial desde servidor (las últimas ediciones)
+    cargarHistorialReciente();
 }
 
 // Buscar productos

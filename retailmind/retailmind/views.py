@@ -37,22 +37,98 @@ def _obtener_codigo_2fa(usuario):
 
 
 def _enviar_pin_2fa(usuario, codigo):
-    subject = 'NEXO - PIN de acceso'
+    subject = '🔐 NEXO - Tu código de acceso'
+    nombre = usuario.get_full_name() or usuario.username
+    
+    # Mensaje de texto plano (fallback)
     text_message = f"""
-Hola {usuario.get_full_name()},
+Hola {nombre},
 
-Tu PIN de acceso es: {codigo}
+Tu código de acceso es: {codigo}
 
-Este PIN es válido por un tiempo limitado. Si no solicitaste este código, contacta al administrador.
+Este código es válido por 10 minutos.
+Si no solicitaste este código, ignora este mensaje.
 
-Equipo NEXO
+— Equipo NEXO
     """.strip()
+
+    # Mensaje HTML con diseño moderno
+    html_message = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f7;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td align="center" style="padding: 40px 20px;">
+                    <table role="presentation" style="width: 100%; max-width: 440px; border-collapse: collapse;">
+                        <!-- Header -->
+                        <tr>
+                            <td style="background: linear-gradient(135deg, #1A1A2E 0%, #2A2A4E 100%); padding: 30px 40px; border-radius: 16px 16px 0 0; text-align: center;">
+                                <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">
+                                    🔐 Código de Acceso
+                                </h1>
+                            </td>
+                        </tr>
+                        
+                        <!-- Body -->
+                        <tr>
+                            <td style="background-color: #ffffff; padding: 40px; border-radius: 0 0 16px 16px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);">
+                                <p style="margin: 0 0 24px; color: #4A4A5A; font-size: 16px; line-height: 1.5;">
+                                    Hola <strong style="color: #1A1A2E;">{nombre}</strong>,
+                                </p>
+                                
+                                <p style="margin: 0 0 24px; color: #4A4A5A; font-size: 15px; line-height: 1.5;">
+                                    Usa el siguiente código para completar tu inicio de sesión:
+                                </p>
+                                
+                                <!-- Código PIN destacado -->
+                                <div style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 12px; padding: 24px; text-align: center; margin: 0 0 24px;">
+                                    <span style="font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; font-size: 42px; font-weight: 700; color: #ffffff; letter-spacing: 12px; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                        {codigo}
+                                    </span>
+                                </div>
+                                
+                                <div style="background-color: #FFF8E6; border-left: 4px solid #FFB020; padding: 16px; border-radius: 0 8px 8px 0; margin: 0 0 24px;">
+                                    <p style="margin: 0; color: #8B6914; font-size: 14px;">
+                                        ⏱️ Este código es válido por <strong>10 minutos</strong>.
+                                    </p>
+                                </div>
+                                
+                                <p style="margin: 0; color: #8A8A9A; font-size: 13px; line-height: 1.5;">
+                                    Si no solicitaste este código, puedes ignorar este mensaje de forma segura. Tu cuenta permanece protegida.
+                                </p>
+                            </td>
+                        </tr>
+                        
+                        <!-- Footer -->
+                        <tr>
+                            <td style="padding: 24px 40px; text-align: center;">
+                                <p style="margin: 0; color: #8A8A9A; font-size: 12px;">
+                                    Este es un mensaje automático de <strong style="color: #1A1A2E;">NEXO</strong>
+                                </p>
+                                <p style="margin: 8px 0 0; color: #C1C1C9; font-size: 11px;">
+                                    © {timezone.now().year} RetailMind. Todos los derechos reservados.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
 
     send_mail(
         subject=subject,
         message=text_message,
         from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
         recipient_list=[usuario.email],
+        html_message=html_message,
         fail_silently=False,
     )
 

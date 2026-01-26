@@ -40,6 +40,56 @@
         --nexo-transition-normal: 250ms ease;
     }
 
+    /* ========== MOTIVO SELECT - DESTACADO ========== */
+    #select-motivo-principal {
+        border: 3px solid #ffc107 !important;
+        font-size: 1.05rem !important;
+        font-weight: 600 !important;
+        color: #d97706 !important;
+        background-color: #fffef8 !important;
+        cursor: pointer !important;
+        transition: all 0.3s ease !important;
+        padding: 0.75rem 1rem !important;
+    }
+
+    #select-motivo-principal:hover {
+        border-color: #ff9800 !important;
+        background-color: #fff9e6 !important;
+        box-shadow: 0 4px 12px rgba(255, 152, 0, 0.25) !important;
+        transform: translateY(-1px);
+    }
+
+    #select-motivo-principal:focus {
+        border-color: #ff9800 !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.25), 0 4px 12px rgba(255, 152, 0, 0.3) !important;
+        transform: scale(1.01);
+    }
+
+    #select-motivo-principal option {
+        padding: 10px !important;
+        font-size: 1rem !important;
+    }
+
+    #select-motivo-principal option:first-child {
+        color: #6c757d !important;
+        font-style: italic;
+    }
+
+    /* Animación de atención para el card del MOTIVO */
+    @keyframes pulseWarning {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4);
+        }
+        50% {
+            box-shadow: 0 0 0 8px rgba(255, 193, 7, 0);
+        }
+    }
+
+    .card.border-warning {
+        animation: pulseWarning 2s infinite;
+    }
+
     /* ========== PAGE BACKGROUND ========== */
     .page-content {
         background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #ECEEF2 100%);
@@ -789,11 +839,6 @@
         flex-shrink: 0;
     }
     
-    #modalNuevoCambio .modal-footer {
-        flex-shrink: 0;
-        padding: 0.75rem 1.5rem;
-    }
-    
     /* Compactar alerts en el modal */
     #modalNuevoCambio .alert {
         padding: 0.5rem 0.75rem;
@@ -987,6 +1032,114 @@
 
     .ticket-cambio-badge i {
         font-size: 1rem;
+    }
+    
+    /* ========== MODAL DETALLE COMPACTO ========== */
+    #modalDetalleCambio .modal-header {
+        background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);
+    }
+    
+    #modalDetalleCambio .card-header {
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    
+    #modalDetalleCambio .table {
+        margin-bottom: 0;
+    }
+    
+    #modalDetalleCambio .table-sm td,
+    #modalDetalleCambio .table-sm th {
+        padding: 0.35rem 0.5rem;
+    }
+    
+    #modalDetalleCambio .card {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    #modalDetalleCambio .progress {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    #modalDetalleCambio .badge {
+        font-weight: 500;
+        padding: 0.35em 0.65em;
+    }
+    
+    #modalDetalleCambio code {
+        font-size: 0.85em;
+        background-color: #f1f3f5;
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: #0066FF;
+    }
+    
+    #modalDetalleCambio .alert {
+        border-radius: 6px;
+    }
+    
+    /* Scroll suave para historial */
+    #detalle-historial {
+        scroll-behavior: smooth;
+    }
+    
+    #detalle-historial::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    #detalle-historial::-webkit-scrollbar-track {
+        background: #f1f3f5;
+        border-radius: 3px;
+    }
+    
+    #detalle-historial::-webkit-scrollbar-thumb {
+        background: #adb5bd;
+        border-radius: 3px;
+    }
+    
+    #detalle-historial::-webkit-scrollbar-thumb:hover {
+        background: #868e96;
+    }
+    
+    /* ========== MODAL NUEVO CAMBIO - FOOTER FIJO ========== */
+    #modalNuevoCambio .modal-footer {
+        background: linear-gradient(135deg, var(--nexo-gray-100) 0%, #fff 100%) !important;
+        border-top: 2px solid #e9ecef !important;
+    }
+    
+    /* Asegurar que los botones del footer sean clickeables */
+    #modalNuevoCambio .modal-footer button {
+        pointer-events: auto !important;
+        cursor: pointer !important;
+    }
+    
+    /* Asegurar que el contenido del modal no bloquee el footer */
+    #modalNuevoCambio .modal-content {
+        position: relative;
+    }
+    
+    /* Botón siguiente con animación */
+    #btn-siguiente {
+        transition: all 0.3s ease;
+    }
+    
+    #btn-siguiente.show-animated {
+        animation: pulseButton 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulseButton {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.4);
+        }
+        50% {
+            box-shadow: 0 0 0 8px rgba(13, 110, 253, 0);
+        }
+    }
+    
+    #btn-siguiente:hover {
+        transform: scale(1.02);
     }
 </style>
 
@@ -1275,7 +1428,7 @@
 <!-- end main content-->
 
 <!-- Modal: Nuevo Cambio/Devolución NEXO -->
-<div class="modal fade" id="modalNuevoCambio" tabindex="-1" data-backdrop="static">
+<div class="modal fade" id="modalNuevoCambio" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-nexo-secondary">
@@ -1283,7 +1436,7 @@
                     <i class="ri-exchange-line me-2" style="color: var(--nexo-accent);"></i> 
                     Nuevo Cambio/Devolución
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" onclick="cerrarModalNuevoCambio(event)"></button>
             </div>
             <div class="modal-body" style="background: var(--nexo-gray-100);">
                 <!-- Wizard Stepper NEXO -->
@@ -1349,6 +1502,39 @@
                             <i class="ri-search-2-line me-2"></i> Datos del Documento
                         </div>
                         <div class="card-body py-2">
+                            <!-- Selector de tipo de DTE (solo visible cuando DTE está seleccionado) -->
+                            <div class="row g-2 mb-2" id="selector-tipo-dte" style="display: none;">
+                                <div class="col-12">
+                                    <label class="form-label small mb-1">
+                                        <i class="ri-file-list-3-line me-1 text-info"></i> Tipo de DTE
+                                    </label>
+                                    <div class="btn-group w-100" role="group">
+                                        <input type="radio" class="btn-check" name="tipo_dte" id="radio-todos-dte" value="" checked>
+                                        <label class="btn btn-outline-primary btn-sm" for="radio-todos-dte">
+                                            <i class="ri-file-list-line"></i> Todos los DTEs
+                                        </label>
+                                        
+                                        <input type="radio" class="btn-check" name="tipo_dte" id="radio-boleta" value="39">
+                                        <label class="btn btn-outline-primary btn-sm" for="radio-boleta">
+                                            <i class="ri-receipt-line"></i> Boleta (39)
+                                        </label>
+                                        
+                                        <input type="radio" class="btn-check" name="tipo_dte" id="radio-factura" value="33">
+                                        <label class="btn btn-outline-primary btn-sm" for="radio-factura">
+                                            <i class="ri-file-text-line"></i> Factura (33)
+                                        </label>
+                                        
+                                        <input type="radio" class="btn-check" name="tipo_dte" id="radio-factura-exenta" value="34">
+                                        <label class="btn btn-outline-primary btn-sm" for="radio-factura-exenta">
+                                            <i class="ri-file-text-line"></i> Fact. Exenta (34)
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        <i class="ri-information-line"></i> Si hay múltiples documentos con el mismo número, seleccione el tipo específico
+                                    </small>
+                                </div>
+                            </div>
+                            
                             <div class="row g-2 align-items-end">
                                 <div class="col-md-3">
                                     <label class="form-label small mb-1">
@@ -1367,7 +1553,7 @@
                                         </span>
                                         <input type="text" class="form-control" id="input-ticket-correlativo" 
                                                placeholder="Ej: 12345" required autocomplete="off">
-                                        <button class="btn btn-nexo-primary" onclick="buscarDocumentoParaCambio()">
+                                        <button class="btn btn-nexo-primary" onclick="buscarDocumentoParaCambio(event)">
                                             <i class="ri-search-line me-1"></i> Buscar
                                         </button>
                                     </div>
@@ -1444,19 +1630,38 @@
                 <div id="paso-seleccionar-productos" style="display: none;">
                     <div class="row g-3">
                         <div class="col-12">
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <div class="alert alert-primary border-primary mb-0 py-2 px-3 flex-grow-1 me-3">
-                                    <span class="small"><i class="ri-information-line me-1"></i> <strong>Paso 2:</strong> Escanea productos a devolver → Agrega nuevos → Completa observaciones</span>
-                                </div>
-                                <div style="min-width: 200px;">
-                                    <select class="form-control form-control-sm" id="select-motivo-principal" required>
-                                        <option value="">Motivo *</option>
-                                        {% for value, display in motivo_choices %}
-                                        <option value="{{ value }}">{{ display }}</option>
-                                        {% endfor %}
-                                    </select>
+                            <div class="alert alert-primary border-primary mb-2 py-2 px-3">
+                                <span class="small"><i class="ri-information-line me-1"></i> <strong>Paso 2:</strong> Escanea productos a devolver → Agrega nuevos → Completa observaciones</span>
+                            </div>
+                            
+                            <!-- Campo MOTIVO destacado -->
+                            <div class="card border-warning shadow-sm mb-3" style="border-width: 3px !important; background: linear-gradient(135deg, #fff9e6 0%, #fffbf0 100%);">
+                                <div class="card-body py-3 px-4">
+                                    <div class="row align-items-center">
+                                        <div class="col-auto">
+                                            <div class="d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); border-radius: 12px; box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);">
+                                                <i class="ri-error-warning-line text-white" style="font-size: 28px;"></i>
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <label class="form-label fw-bold mb-1 text-warning" style="font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                                                <i class="ri-alert-line me-1"></i> MOTIVO DE LA OPERACIÓN *
+                                            </label>
+                                            <select class="form-select form-select-lg shadow-sm" id="select-motivo-principal" required 
+                                                    style="border: 2px solid #ffc107; font-size: 1.05rem; font-weight: 600; color: #d97706; background-color: #fffef8; cursor: pointer; transition: all 0.3s ease;">
+                                                <option value="" style="color: #6c757d;">⚠️ Seleccione el motivo principal...</option>
+                                                {% for value, display in motivo_choices %}
+                                                <option value="{{ value }}">{{ display }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <small class="text-muted d-block mt-1">
+                                                <i class="ri-information-line"></i> Campo obligatorio para procesar la operación
+                                            </small>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                        </div>
 
                     <!-- Sistema de Escaneo de Productos -->
                     <div class="card border-primary mb-3">
@@ -1726,16 +1931,16 @@
                 
                 <!-- Botones de acción -->
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary" onclick="cerrarModalNuevoCambio(event)">
                         <i class="ri-close-line"></i> Cancelar
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" id="btn-anterior" onclick="pasoAnterior()" style="display: none;">
+                    <button type="button" class="btn btn-outline-secondary" id="btn-anterior" onclick="pasoAnterior(event)" style="display: none;">
                         <i class="ri-arrow-left-line"></i> Anterior
                     </button>
-                    <button type="button" class="btn btn-primary" id="btn-siguiente" onclick="siguientePaso()" style="display: none;">
-                        Siguiente <i class="ri-arrow-right-line"></i>
+                    <button type="button" class="btn btn-primary" id="btn-siguiente" onclick="siguientePaso(event)" style="display: none;">
+                        <span class="btn-text">Siguiente</span> <i class="ri-arrow-right-line"></i>
                     </button>
-                    <button type="button" class="btn btn-success" id="btn-crear-cambio" onclick="crearCambioDevolucion()" style="display: none;">
+                    <button type="button" class="btn btn-success" id="btn-crear-cambio" onclick="crearCambioDevolucion(event)" style="display: none;">
                         <i class="ri-save-line"></i> Crear Solicitud
                     </button>
                 </div>
@@ -1746,30 +1951,30 @@
 
 <!-- Modal: Detalle de Cambio -->
 <div class="modal fade" id="modalDetalleCambio" tabindex="-1">
-    <div class="modal-dialog modal-fullscreen">
+    <div class="modal-dialog modal-xl" style="max-width: 1200px;">
         <div class="modal-content">
-            <div class="modal-header bg-gradient-primary text-white">
-                <h5 class="modal-title"><i class="ri-exchange-line"></i> Detalle Completo - Cambio/Devolución #<span id="detalle-numero-op">---</span></h5>
+            <div class="modal-header bg-gradient-primary text-white py-2">
+                <h6 class="modal-title mb-0"><i class="ri-exchange-line"></i> Detalle - Cambio/Devolución #<span id="detalle-numero-op">---</span></h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" style="background-color: #f8f9fa;">
+            <div class="modal-body p-3" style="background-color: #f8f9fa;">
                 <div class="container-fluid">
                     
                     <!-- Estado y Timeline -->
-                    <div class="row mb-4">
+                    <div class="row mb-3">
                         <div class="col-12">
                             <div class="card shadow-sm border-0">
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <h5 class="mb-0"><i class="ri-flow-chart"></i> Estado de la Operación</h5>
-                                        <span class="badge fs-6" id="detalle-badge-estado">PENDIENTE</span>
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0"><i class="ri-flow-chart"></i> Estado</h6>
+                                        <span class="badge" id="detalle-badge-estado">PENDIENTE</span>
                                     </div>
-                                    <div class="progress" style="height: 30px;">
+                                    <div class="progress" style="height: 20px;">
                                         <div class="progress-bar" id="detalle-progreso" role="progressbar" style="width: 33%">
-                                            <span id="detalle-progreso-texto">Pendiente</span>
+                                            <small id="detalle-progreso-texto">Pendiente</small>
                                         </div>
                                     </div>
-                                    <div class="d-flex justify-content-between mt-2 small text-muted">
+                                    <div class="d-flex justify-content-between mt-1" style="font-size: 0.75rem;">
                                         <span>📝 Solicitado</span>
                                         <span>✅ Aprobado</span>
                                         <span>🎉 Completado</span>
@@ -1780,78 +1985,95 @@
                     </div>
 
                     <!-- Información General -->
-                    <div class="row mb-4">
+                    <div class="row mb-3">
                         <div class="col-md-4">
                             <div class="card shadow-sm border-0 h-100">
-                                <div class="card-header bg-info text-white">
-                                    <i class="ri-information-line"></i> Información General
+                                <div class="card-header bg-info text-white py-1 px-2">
+                                    <small><i class="ri-information-line"></i> Información General</small>
                                 </div>
-                                <div class="card-body">
-                                    <dl class="row mb-0">
-                                        <dt class="col-5">Operación:</dt>
-                                        <dd class="col-7" id="detalle-numero-operacion">-</dd>
-                                        
-                                        <dt class="col-5">Tipo:</dt>
-                                        <dd class="col-7" id="detalle-tipo-operacion">-</dd>
-                                        
-                                        <dt class="col-5">Fecha:</dt>
-                                        <dd class="col-7" id="detalle-fecha-solicitud">-</dd>
-                                        
-                                        <dt class="col-5">Cliente:</dt>
-                                        <dd class="col-7" id="detalle-cliente">-</dd>
-                                        
-                                        <dt class="col-5">Motivo:</dt>
-                                        <dd class="col-7"><span class="badge bg-warning text-dark" id="detalle-motivo">-</span></dd>
-                                    </dl>
+                                <div class="card-body p-2">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size: 0.85rem;">
+                                        <tr>
+                                            <td class="text-muted" width="40%">Operación:</td>
+                                            <td><strong id="detalle-numero-operacion">-</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Tipo:</td>
+                                            <td id="detalle-tipo-operacion">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Fecha:</td>
+                                            <td id="detalle-fecha-solicitud">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Cliente:</td>
+                                            <td id="detalle-cliente">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Motivo:</td>
+                                            <td><span class="badge bg-warning text-dark" id="detalle-motivo">-</span></td>
+                                        </tr>
+                                    </table>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="col-md-4">
                             <div class="card shadow-sm border-0 h-100">
-                                <div class="card-header bg-primary text-white">
-                                    <i class="ri-file-list-line"></i> Documento Original
+                                <div class="card-header bg-primary text-white py-1 px-2">
+                                    <small><i class="ri-file-list-line"></i> Documento Original</small>
                                 </div>
-                                <div class="card-body">
-                                    <dl class="row mb-0">
-                                        <dt class="col-5">Documento:</dt>
-                                        <dd class="col-7" id="detalle-doc-original">-</dd>
-                                        
-                                        <dt class="col-5">Fecha:</dt>
-                                        <dd class="col-7" id="detalle-doc-fecha">-</dd>
-                                        
-                                        <dt class="col-5">Vendedor:</dt>
-                                        <dd class="col-7" id="detalle-vendedor">-</dd>
-                                        
-                                        <dt class="col-5">Total Doc:</dt>
-                                        <dd class="col-7 fw-bold" id="detalle-total-doc">$0</dd>
-                                        
-                                        <dt class="col-5">Plazo:</dt>
-                                        <dd class="col-7" id="detalle-plazo">-</dd>
-                                    </dl>
+                                <div class="card-body p-2">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size: 0.85rem;">
+                                        <tr>
+                                            <td class="text-muted" width="40%">Documento:</td>
+                                            <td><strong id="detalle-doc-original">-</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Fecha:</td>
+                                            <td id="detalle-doc-fecha">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Vendedor:</td>
+                                            <td id="detalle-vendedor">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Total Doc:</td>
+                                            <td><strong id="detalle-total-doc">$0</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Plazo:</td>
+                                            <td id="detalle-plazo">-</td>
+                                        </tr>
+                                    </table>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="col-md-4">
                             <div class="card shadow-sm border-0 h-100 border-success border-2">
-                                <div class="card-header bg-success text-white">
-                                    <i class="ri-money-dollar-circle-line"></i> Resumen Financiero
+                                <div class="card-header bg-success text-white py-1 px-2">
+                                    <small><i class="ri-money-dollar-circle-line"></i> Resumen Financiero</small>
                                 </div>
-                                <div class="card-body">
-                                    <dl class="row mb-2">
-                                        <dt class="col-6">Productos Devueltos:</dt>
-                                        <dd class="col-6 text-end text-danger fw-bold" id="detalle-monto-original">-$0</dd>
-                                        
-                                        <dt class="col-6">Productos Nuevos:</dt>
-                                        <dd class="col-6 text-end text-success fw-bold" id="detalle-monto-nuevo">+$0</dd>
-                                    </dl>
-                                    <hr>
-                                    <dl class="row mb-0">
-                                        <dt class="col-6 fs-5">DIFERENCIA:</dt>
-                                        <dd class="col-6 text-end fs-4 fw-bold" id="detalle-diferencia">$0</dd>
-                                    </dl>
-                                    <div class="alert alert-light mt-2 mb-0 py-2" id="detalle-accion-diferencia">
+                                <div class="card-body p-2">
+                                    <table class="table table-sm table-borderless mb-0" style="font-size: 0.85rem;">
+                                        <tr>
+                                            <td class="text-muted">Devueltos:</td>
+                                            <td class="text-end text-danger"><strong id="detalle-monto-original">-$0</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="text-muted">Nuevos:</td>
+                                            <td class="text-end text-success"><strong id="detalle-monto-nuevo">+$0</strong></td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2"><hr class="my-1"></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>DIFERENCIA:</strong></td>
+                                            <td class="text-end"><strong class="fs-5" id="detalle-diferencia">$0</strong></td>
+                                        </tr>
+                                    </table>
+                                    <div class="alert alert-light mt-2 mb-0 py-1 px-2" id="detalle-accion-diferencia" style="font-size: 0.8rem;">
                                         <small id="detalle-texto-diferencia">-</small>
                                     </div>
                                 </div>
@@ -1860,22 +2082,22 @@
                     </div>
 
                     <!-- PRODUCTOS SALIENTES (Devueltos) -->
-                    <div class="row mb-4">
+                    <div class="row mb-3">
                         <div class="col-12">
                             <div class="card shadow-sm border-danger border-2">
-                                <div class="card-header bg-danger text-white">
-                                    <i class="ri-arrow-left-circle-line"></i> PRODUCTOS SALIENTES (Devueltos por el Cliente)
+                                <div class="card-header bg-danger text-white py-1 px-2">
+                                    <small><i class="ri-arrow-left-circle-line"></i> PRODUCTOS DEVUELTOS</small>
                                 </div>
-                                <div class="card-body">
+                                <div class="card-body p-2">
                                     <div class="table-responsive">
-                                        <table class="table table-hover">
+                                        <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th>SKU</th>
                                                     <th>Artículo</th>
                                                     <th>Talla</th>
-                                                    <th class="text-center">Cantidad</th>
-                                                    <th class="text-end">Precio Unit.</th>
+                                                    <th class="text-center">Cant.</th>
+                                                    <th class="text-end">P. Unit.</th>
                                                     <th class="text-end">Subtotal</th>
                                                     <th>Condición</th>
                                                 </tr>
@@ -1885,8 +2107,8 @@
                                             </tbody>
                                             <tfoot class="table-light">
                                                 <tr>
-                                                    <th colspan="5" class="text-end">TOTAL DEVUELTO:</th>
-                                                    <th class="text-end text-danger fs-5" id="detalle-total-salientes">$0</th>
+                                                    <th colspan="5" class="text-end">TOTAL:</th>
+                                                    <th class="text-end text-danger" id="detalle-total-salientes">$0</th>
                                                     <th></th>
                                                 </tr>
                                             </tfoot>
@@ -1898,23 +2120,23 @@
                     </div>
 
                     <!-- PRODUCTOS ENTRANTES (Nuevos) -->
-                    <div class="row mb-4">
+                    <div class="row mb-3">
                         <div class="col-12">
                             <div class="card shadow-sm border-success border-2">
-                                <div class="card-header bg-success text-white">
-                                    <i class="ri-arrow-right-circle-line"></i> PRODUCTOS ENTRANTES (Entregados al Cliente)
+                                <div class="card-header bg-success text-white py-1 px-2">
+                                    <small><i class="ri-arrow-right-circle-line"></i> PRODUCTOS ENTREGADOS</small>
                                 </div>
-                                <div class="card-body">
+                                <div class="card-body p-2">
                                     <div class="table-responsive">
-                                        <table class="table table-hover">
+                                        <table class="table table-sm table-hover mb-0" style="font-size: 0.85rem;">
                                             <thead class="table-light">
                                                 <tr>
                                                     <th>SKU</th>
                                                     <th>Artículo</th>
                                                     <th>Marca</th>
                                                     <th>Talla</th>
-                                                    <th class="text-center">Cantidad</th>
-                                                    <th class="text-end">Precio Unit.</th>
+                                                    <th class="text-center">Cant.</th>
+                                                    <th class="text-end">P. Unit.</th>
                                                     <th class="text-end">Subtotal</th>
                                                 </tr>
                                             </thead>
@@ -1923,8 +2145,8 @@
                                             </tbody>
                                             <tfoot class="table-light">
                                                 <tr>
-                                                    <th colspan="6" class="text-end">TOTAL NUEVO:</th>
-                                                    <th class="text-end text-success fs-5" id="detalle-total-entrantes">$0</th>
+                                                    <th colspan="6" class="text-end">TOTAL:</th>
+                                                    <th class="text-end text-success" id="detalle-total-entrantes">$0</th>
                                                 </tr>
                                             </tfoot>
                                         </table>
@@ -1938,10 +2160,10 @@
                     <div class="row">
                         <div class="col-12">
                             <div class="card shadow-sm border-0">
-                                <div class="card-header bg-light">
-                                    <i class="ri-time-line"></i> Historial de Transacciones
+                                <div class="card-header bg-light py-1 px-2">
+                                    <small><i class="ri-time-line"></i> Historial de Transacciones</small>
                                 </div>
-                                <div class="card-body">
+                                <div class="card-body p-2" style="max-height: 250px; overflow-y: auto;">
                                     <div id="detalle-historial">
                                         <!-- Timeline dinámico -->
                                     </div>
@@ -1952,8 +2174,8 @@
 
                 </div>
             </div>
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
                     <i class="ri-close-line"></i> Cerrar
                 </button>
                 <div id="acciones-cambio">
@@ -2417,6 +2639,8 @@ let productosNuevos = [];
 let pasoActual = 1;
 let cambioActual = null;
 let tipoOperacionDetectada = null;
+let permitirCierre = false;  // Flag para control de cierre del modal
+let navegandoEntrePasos = false;  // Flag para detectar navegación entre pasos
 
 const TIPO_OPERACION_LABELS = {
     'CAMBIO_SIMPLE': 'Cambio sin diferencia',
@@ -2510,6 +2734,7 @@ function configurarEventos() {
     // Enter en búsqueda de documento
     $('#input-ticket-correlativo, #input-fecha-compra').on('keypress', function(e) {
         if (e.which === 13) {
+            e.preventDefault();
             buscarDocumentoParaCambio();
         }
     });
@@ -2517,6 +2742,7 @@ function configurarEventos() {
     // Enter en búsqueda de productos
     $('#input-buscar-producto').on('keypress', function(e) {
         if (e.which === 13) {
+            e.preventDefault();
             buscarProductosParaCambio();
         }
     });
@@ -2537,6 +2763,25 @@ function configurarEventos() {
             toggleProductoOriginal(index);
         });
     });
+    
+    // Prevenir cierre accidental del modal con ESC o click fuera
+    // NUEVA ESTRATEGIA: Remover el listener problemático y usar configuración de Bootstrap
+    $('#modalNuevoCambio').off('hide.bs.modal');
+    
+    // Variable global para permitir cierre después de guardar
+    window.permitirCierreModal = function() {
+        permitirCierre = true;
+    };
+    
+    // Funciones para bloquear/desbloquear cierre del modal
+    // Nota: El modal ya está configurado con backdrop=static, estas funciones son para compatibilidad
+    window.bloquearCierreModal = function() {
+        console.log('🔒 Modal bloqueado (configuración estática)');
+    };
+    
+    window.desbloquearCierreModal = function() {
+        console.log('🔓 Modal desbloqueado (configuración estática)');
+    };
 }
 
 // ========== SELECCIÓN DE TIPO DE DOCUMENTO NEXO ==========
@@ -2548,6 +2793,15 @@ function seleccionarTipoDocumento(tipo) {
     
     // Guardar tipo seleccionado
     $('#tipo-documento-seleccionado').val(tipo);
+    
+    // Mostrar/ocultar selector de tipo de DTE
+    if (tipo === 'DTE') {
+        $('#selector-tipo-dte').slideDown(300);
+    } else {
+        $('#selector-tipo-dte').slideUp(300);
+        // Resetear selección de tipo DTE
+        $('#radio-todos-dte').prop('checked', true);
+    }
     
     // Actualizar textos según el tipo
     const configuraciones = {
@@ -3187,12 +3441,59 @@ function mostrarFormularioNuevoCambio() {
     $('#modalNuevoCambio').modal('show');
 }
 
+function cerrarModalNuevoCambio(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    console.log('🔴 cerrarModalNuevoCambio() llamado');
+    console.log('  → ticketActual:', ticketActual);
+    console.log('  → pasoActual:', pasoActual);
+    console.log('  → productosOriginales.length:', productosOriginales.length);
+    console.log('  → productosNuevos.length:', productosNuevos.length);
+    
+    const documentoCargado = ticketActual !== null;
+    const productosSeleccionados = pasoActual >= 2 && (productosOriginales.length > 0 || productosNuevos.length > 0);
+    const hayDatos = documentoCargado || productosSeleccionados;
+    
+    if (hayDatos) {
+        Swal.fire({
+            title: '¿Está seguro?',
+            text: 'Hay información sin guardar. ¿Desea salir?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, salir',
+            cancelButtonText: 'No, continuar',
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                console.log('✅ Usuario confirmó cierre');
+                permitirCierre = true;
+                $('#modalNuevoCambio').modal('hide');
+            } else {
+                console.log('❌ Usuario canceló cierre');
+            }
+        });
+    } else {
+        console.log('✅ No hay datos, cerrando directamente');
+        permitirCierre = true;
+        $('#modalNuevoCambio').modal('hide');
+    }
+}
+
 function resetearFormularioNuevoCambio() {
     pasoActual = 1;
     ticketActual = null;
     productosOriginales = [];
     productosNuevos = [];
     productosEscaneados = {};  // Limpiar productos escaneados
+    permitirCierre = false;  // Reset flag de cierre
+    navegandoEntrePasos = false;  // Reset flag de navegación
+    
+    // Desbloquear cierre del modal
+    window.desbloquearCierreModal();
     
     resetResumenLateral();
     actualizarStepper();
@@ -3221,6 +3522,28 @@ function resetearFormularioNuevoCambio() {
     $('#tbody-productos-originales').empty();
     $('#tbody-productos-nuevos').empty();
     
+    // ✅ LIMPIAR SECCIÓN DE PRODUCTOS NUEVOS COMPLETAMENTE
+    // Limpiar buscador de productos
+    $('#input-buscar-producto').val('');
+    
+    // Limpiar y ocultar panel de resultados de búsqueda
+    $('#tbody-resultados-busqueda').empty();
+    $('#panel-resultados-busqueda').hide();
+    $('#contador-resultados').text('0');
+    
+    // Limpiar tabla de productos nuevos y mostrar mensaje vacío
+    $('#tbody-productos-nuevos').html(`
+        <tr id="fila-sin-productos-nuevos">
+            <td colspan="8" class="text-center text-muted py-2">
+                <i class="ri-inbox-2-line opacity-50 me-1"></i>
+                <span class="small">Busca y agrega productos para entregar</span>
+            </td>
+        </tr>
+    `);
+    
+    // Resetear badge de productos nuevos
+    $('#badge-productos-nuevos').text('0 agregados');
+    
     // Limpiar sistema de escaneo
     $('#input-escanear-sku').val('');
     $('#tbody-productos-escaneados').empty();
@@ -3230,7 +3553,12 @@ function resetearFormularioNuevoCambio() {
     // Ocultar sección de productos nuevos
 }
 
-function buscarDocumentoParaCambio() {
+function buscarDocumentoParaCambio(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
     // ✅ PREVENIR BÚSQUEDA SI YA HAY RESULTADOS
     if (ticketActual !== null) {
         Swal.fire({
@@ -3245,6 +3573,9 @@ function buscarDocumentoParaCambio() {
     const numero = $('#input-ticket-correlativo').val().trim();
     const fecha = $('#input-fecha-compra').val();
     const tipoDocumento = $('#tipo-documento-seleccionado').val() || 'DTE';
+    
+    // Obtener tipo de DTE específico si está seleccionado
+    const tipoDteEspecifico = $('input[name="tipo_dte"]:checked').val();
     
     // Textos según tipo de documento
     const mensajesPorTipo = {
@@ -3302,13 +3633,33 @@ function buscarDocumentoParaCambio() {
         fecha_compra: fecha
     };
     
+    // Agregar tipo de DTE específico si está seleccionado
+    if (tipoBackend === 'dte' && tipoDteEspecifico) {
+        params.tipo_dte = tipoDteEspecifico;
+    }
+    
     $.get('/app/ventas/api/buscar-documento-cambio/', params)
         .done(function(response) {
+            console.log('📦 DEBUG - Response completo del backend:', response);
+            console.log('📦 DEBUG - response.success:', response.success);
+            console.log('📦 DEBUG - response.documento:', response.documento);
+            
             ocultarLoading();
             
             if (response.success) {
+                console.log('✅ DEBUG - Documento encontrado exitosamente');
+                console.log('  → puede_cambiar:', response.documento.puede_cambiar);
+                console.log('  → dentro_del_plazo:', response.documento.dentro_del_plazo);
+                console.log('  → productos.length:', response.documento.productos?.length || 0);
+                console.log('  → productos_disponibles:', response.documento.productos_disponibles);
+                
                 ticketActual = response.documento;
+                console.log('  → ticketActual asignado:', ticketActual);
+                
                 mostrarInformacionDocumento(response.documento);
+                
+                // ✅ BLOQUEAR CIERRE DEL MODAL DESPUÉS DE CARGAR DOCUMENTO
+                window.bloquearCierreModal();
                 
                 // ✅ DESHABILITAR CAMPOS Y BOTÓN DE BÚSQUEDA DESPUÉS DE ENCONTRAR
                 $('#input-ticket-correlativo').prop('disabled', true);
@@ -3316,80 +3667,56 @@ function buscarDocumentoParaCambio() {
                 $('.btn-primary:contains("Buscar")').prop('disabled', true);
                 
                 if (response.documento.puede_cambiar) {
+                    console.log('✅ DEBUG - Mostrando botón SIGUIENTE');
                     $('#btn-siguiente').show();
+                    $('#btn-siguiente').removeClass('d-none');
+                    // Agregar animación
+                    setTimeout(() => {
+                        $('#btn-siguiente').addClass('show-animated');
+                    }, 100);
                     
                     // Mostrar mensaje si fue redirigido a otro ticket
                     if (response.documento.fue_redirigido) {
                         Swal.fire({
                             icon: 'success',
-                            title: '🔄 Ticket Actualizado Automáticamente',
+                            title: '🔄 Ticket Actualizado',
                             html: `
-                                <div class="alert alert-info">
-                                    <i class="ri-information-line"></i> 
-                                    El ticket <strong>#${response.documento.correlativo_original}</strong> ya tiene cambios completados.
-                                </div>
-                                <hr>
-                                <div class="alert alert-success">
-                                    <i class="ri-arrow-right-line"></i> 
-                                    <strong>Se cargó automáticamente:</strong><br>
-                                    <h5 class="mt-2 mb-0">Ticket #${response.documento.correlativo}</h5>
-                                    <small>(Último cambio de la cadena)</small>
-                                </div>
-                                <hr>
-                                <p class="small text-muted">
-                                    <strong>💡 Info:</strong> Este ticket contiene los productos que se entregaron en el último cambio.<br>
-                                    Puede realizar un nuevo cambio sobre estos productos.
-                                </p>
+                                <p>El ticket <strong>#${response.documento.correlativo_original}</strong> ya tiene cambios.</p>
+                                <p>Se cargó automáticamente el <strong>Ticket #${response.documento.correlativo}</strong></p>
                             `,
-                            confirmButtonText: 'Entendido, Continuar',
-                            timer: 6000
+                            confirmButtonText: 'Entendido',
+                            timer: 4000,
+                            timerProgressBar: true
                         });
                     }
                     
-                    // Si hay cambios anteriores, mostrar mensaje informativo
+                    // Si hay cambios anteriores, mostrar mensaje informativo (NO BLOQUEANTE)
                     const cambiosAnteriores = response.documento.cambios_anteriores || [];
                     const cambiosPendientes = cambiosAnteriores.filter(c => c.estado === 'Solicitado' || c.estado === 'Aprobado');
                     
                     if (cambiosPendientes.length > 0 && !response.documento.fue_redirigido) {
+                        // Mostrar como toast no bloqueante
                         Swal.fire({
+                            toast: true,
+                            position: 'top-end',
                             icon: 'info',
-                            title: 'Cambios Parciales Detectados',
-                            html: `
-                                <div class="alert alert-info">
-                                    <i class="ri-information-line"></i> 
-                                    Este documento tiene <strong>${cambiosAnteriores.length} cambio(s) anterior(es)</strong>
-                                </div>
-                                <hr>
-                                <p class="text-start"><strong>📋 Estado actual:</strong></p>
-                                <ul class="text-start">
-                                    ${cambiosAnteriores.map(c => `
-                                        <li>
-                                            <strong>${c.numero_operacion}</strong> - ${c.tipo_operacion}<br>
-                                            <small class="text-muted">Estado: <strong>${c.estado}</strong> | Fecha: ${c.fecha_solicitud}</small>
-                                        </li>
-                                    `).join('')}
-                                </ul>
-                                <hr>
-                                <div class="alert alert-success">
-                                    <i class="ri-check-line"></i> 
-                                    Puede continuar. Aún quedan <strong>${response.documento.productos.length} producto(s) disponible(s)</strong> para cambio.
-                                </div>
-                                <p class="small text-muted">
-                                    <strong>💡 Nota:</strong> El sistema permite múltiples cambios parciales hasta agotar 
-                                    todos los productos del documento original.
-                                </p>
-                            `,
-                            confirmButtonText: 'Entendido, Continuar',
-                            showCancelButton: true,
-                            cancelButtonText: 'Cancelar',
-                            width: '600px'
-                        }).then((result) => {
-                            if (!result.isConfirmed) {
-                                limpiarBusqueda();
-                            }
+                            title: `${cambiosAnteriores.length} cambio(s) anterior(es) detectado(s)`,
+                            text: `${response.documento.productos.length} producto(s) disponible(s) para cambio`,
+                            showConfirmButton: false,
+                            timer: 4000,
+                            timerProgressBar: true
                         });
                     }
                 } else {
+                    // NO PUEDE CAMBIAR - Mostrar razón específica
+                    console.log('⚠️ DEBUG - NO puede cambiar el documento');
+                    console.log('  → dentro_del_plazo:', response.documento.dentro_del_plazo);
+                    console.log('  → productos.length:', response.documento.productos?.length || 0);
+                    console.log('  → productos_disponibles:', response.documento.productos_disponibles);
+                    
+                    // Ocultar botón siguiente
+                    $('#btn-siguiente').hide();
+                    
                     // Determinar razón específica por la que no puede cambiar
                     let razon = '';
                     let icono = 'warning';
@@ -3397,65 +3724,126 @@ function buscarDocumentoParaCambio() {
                     
                     if (!response.documento.dentro_del_plazo) {
                         razon = `
-                            <p class="text-danger"><strong>⏰ El plazo de cambio ha vencido</strong></p>
-                            <hr>
-                            <p>Fecha de compra: <strong>${response.documento.fecha}</strong></p>
-                            <p>Fecha límite: <strong>${response.documento.fecha_limite_cambio}</strong></p>
-                            <p>Días transcurridos: <strong>${response.documento.dias_transcurridos} días</strong></p>
-                            <p class="small text-muted mt-2">Plazo permitido: 30 días desde la compra</p>
+                            <div class="alert alert-danger">
+                                <h5>⏰ El plazo de cambio ha vencido</h5>
+                            </div>
+                            <div class="table-responsive mt-3">
+                                <table class="table table-bordered">
+                                    <tr>
+                                        <td width="40%"><strong>Fecha de compra:</strong></td>
+                                        <td>${response.documento.fecha}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Fecha límite:</strong></td>
+                                        <td class="text-danger">${response.documento.fecha_limite_cambio}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Días transcurridos:</strong></td>
+                                        <td class="text-danger">${response.documento.dias_transcurridos} días</td>
+                                    </tr>
+                                    <tr class="table-info">
+                                        <td><strong>Plazo permitido:</strong></td>
+                                        <td>30 días desde la compra</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="alert alert-info mt-3">
+                                <i class="ri-information-line"></i> <strong>Nota:</strong> Los cambios solo pueden realizarse dentro del plazo establecido por política de la tienda.
+                            </div>
                         `;
                         icono = 'error';
-                    } else if (response.documento.productos.length === 0) {
+                        titulo = 'Fuera de Plazo';
+                    } else if (response.documento.productos.length === 0 || response.documento.productos_disponibles === 0) {
                         // Todos los productos ya fueron cambiados
                         const cambiosAnteriores = response.documento.cambios_anteriores || [];
                         let listaCambios = '';
                         
                         if (cambiosAnteriores.length > 0) {
-                            listaCambios = '<ul class="list-unstyled text-start mt-2">';
+                            listaCambios = '<div class="list-group mt-3">';
                             cambiosAnteriores.forEach(cambio => {
+                                const estadoClass = cambio.estado === 'Completado' ? 'success' : 
+                                                   cambio.estado === 'Solicitado' ? 'warning' : 'secondary';
                                 listaCambios += `
-                                    <li class="mb-2">
-                                        <i class="ri-check-circle-line text-success"></i> 
-                                        <strong>${cambio.numero_operacion}</strong><br>
-                                        <small class="text-muted">
-                                            ${cambio.tipo_operacion} - ${cambio.estado}<br>
-                                            Fecha: ${cambio.fecha_solicitud}
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">${cambio.numero_operacion}</h6>
+                                                <small class="text-muted">${cambio.tipo_operacion}</small>
+                                            </div>
+                                            <span class="badge bg-${estadoClass}">${cambio.estado}</span>
+                                        </div>
+                                        <small class="text-muted d-block mt-2">
+                                            <i class="ri-calendar-line"></i> ${cambio.fecha_solicitud}
                                         </small>
-                                    </li>
+                                    </div>
                                 `;
                             });
-                            listaCambios += '</ul>';
+                            listaCambios += '</div>';
                         }
                         
                         razon = `
                             <div class="alert alert-info">
-                                <i class="ri-information-line"></i> 
+                                <i class="ri-check-circle-line"></i> 
                                 <strong>Todos los productos de este documento ya fueron cambiados</strong>
                             </div>
-                            <hr>
-                            <p><strong>📋 Documento:</strong> #${response.documento.correlativo}</p>
-                            <p><strong>📅 Fecha de compra:</strong> ${response.documento.fecha}</p>
-                            <p><strong>🔄 Cambios realizados:</strong> ${cambiosAnteriores.length}</p>
+                            <div class="table-responsive mt-3">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <td width="40%"><strong>📋 Documento:</strong></td>
+                                        <td>#${response.documento.correlativo}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>📅 Fecha de compra:</strong></td>
+                                        <td>${response.documento.fecha}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>💰 Total original:</strong></td>
+                                        <td>$${formatearNumero(response.documento.total)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>🔄 Cambios realizados:</strong></td>
+                                        <td class="text-success">${cambiosAnteriores.length} cambio(s)</td>
+                                    </tr>
+                                </table>
+                            </div>
                             ${listaCambios}
-                            <hr>
-                            <p class="small text-muted">
-                                <strong>💡 Nota:</strong> Los cambios parciales permiten realizar múltiples cambios 
-                                hasta agotar todos los productos del documento original.
-                            </p>
+                            <div class="alert alert-light mt-3">
+                                <small>
+                                    <i class="ri-information-line"></i> <strong>Nota:</strong> El sistema permite múltiples cambios parciales hasta agotar todos los productos del documento original. Este documento ya no tiene productos disponibles.
+                                </small>
+                            </div>
                         `;
                         icono = 'info';
-                        titulo = 'Productos Agotados';
+                        titulo = 'Sin Productos Disponibles';
                     } else {
+                        // Otro problema
                         razon = `
-                            <p>Este documento no puede ser cambiado.</p>
+                            <div class="alert alert-warning">
+                                <h5><i class="ri-alert-line"></i> Este documento no puede ser cambiado</h5>
+                            </div>
+                            <div class="mt-3">
+                                <p><strong>Información del documento:</strong></p>
+                                <ul class="list-unstyled">
+                                    <li>📋 Documento: #${response.documento.correlativo || '-'}</li>
+                                    <li>📅 Fecha: ${response.documento.fecha || '-'}</li>
+                                    <li>⏰ Días transcurridos: ${response.documento.dias_transcurridos || 0}</li>
+                                    <li>✅ Dentro del plazo: ${response.documento.dentro_del_plazo ? 'Sí' : 'No'}</li>
+                                    <li>📦 Productos disponibles: ${response.documento.productos_disponibles || 0}</li>
+                                </ul>
+                            </div>
                             <hr>
-                            <p>Verifique que:</p>
-                            <ul class="text-start">
-                                <li>El documento esté <strong>PAGADO</strong></li>
-                                <li>Esté dentro del <strong>plazo de 30 días</strong></li>
-                                <li>Tenga productos <strong>disponibles</strong> para cambio</li>
-                            </ul>
+                            <div class="alert alert-light">
+                                <strong>Verifique que:</strong>
+                                <ul class="mb-0">
+                                    <li>El documento esté <strong>PAGADO</strong></li>
+                                    <li>Esté dentro del <strong>plazo de 30 días</strong></li>
+                                    <li>Tenga productos <strong>disponibles</strong> para cambio</li>
+                                    <li>El estado del documento sea <strong>válido</strong></li>
+                                </ul>
+                            </div>
                         `;
+                        icono = 'warning';
+                        titulo = 'Documento No Válido';
                     }
                     
                     Swal.fire({
@@ -3463,24 +3851,57 @@ function buscarDocumentoParaCambio() {
                         title: titulo,
                         html: razon,
                         confirmButtonText: 'Entendido',
-                        width: '600px'
+                        width: '700px',
+                        customClass: {
+                            popup: 'text-start'
+                        }
                     });
                 }
             } else {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Documento no encontrado',
-                    html: `
-                        <p>${response.error}</p>
-                        <hr>
-                        <p class="small text-muted">
-                            Verifique que:
-                            <br>• El número de DTE sea correcto
-                            <br>• La fecha de compra coincida
-                            <br>• El documento pertenezca a <strong>esta sucursal</strong>
-                        </p>
-                    `
-                });
+                // Error al buscar documento
+                ocultarLoading();
+                
+                // Verificar si hay múltiples documentos
+                if (response.multiple_documents && response.documents_html) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Múltiples Documentos Encontrados',
+                        html: `
+                            <div class="alert alert-warning">
+                                <i class="ri-alert-line"></i> ${response.error}
+                            </div>
+                            <hr>
+                            ${response.documents_html}
+                            <hr>
+                            <div class="alert alert-info">
+                                <i class="ri-information-line"></i> ${response.message}
+                            </div>
+                            <p class="small text-muted mt-2">
+                                <strong>💡 Instrucciones:</strong><br>
+                                1. Seleccione el tipo de DTE específico (Boleta, Factura, etc.) usando los botones arriba del buscador<br>
+                                2. Vuelva a buscar con el tipo seleccionado
+                            </p>
+                        `,
+                        confirmButtonText: 'Entendido',
+                        width: '700px'
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Documento no encontrado',
+                        html: `
+                            <p>${response.error}</p>
+                            <hr>
+                            <p class="small text-muted">
+                                Verifique que:
+                                <br>• El número de DTE sea correcto
+                                <br>• La fecha de compra coincida
+                                <br>• El documento pertenezca a <strong>esta sucursal</strong>
+                                <br>• Si hay múltiples DTEs con el mismo número, seleccione el tipo específico
+                            </p>
+                        `
+                    });
+                }
             }
         })
         .fail(function() {
@@ -3506,6 +3927,9 @@ function limpiarBusqueda() {
     productosOriginales = [];
     productosNuevos = [];
     
+    // Desbloquear cierre del modal
+    window.desbloquearCierreModal();
+    
     // Mostrar mensaje informativo
     Swal.fire({
         icon: 'info',
@@ -3523,6 +3947,10 @@ function buscarTicketParaCambio() {
 
 function mostrarInformacionDocumento(documento) {
     console.log('📋 DEBUG mostrarInformacionDocumento - Documento recibido:', documento);
+    console.log('  → puede_cambiar:', documento.puede_cambiar);
+    console.log('  → tipo:', documento.tipo);
+    console.log('  → correlativo:', documento.correlativo);
+    console.log('  → numero_documento:', documento.numero_documento);
     
     // Determinar si es ticket o DTE
     const esTicket = documento.tipo === 'TICKET' || documento.correlativo !== undefined;
@@ -3536,11 +3964,12 @@ function mostrarInformacionDocumento(documento) {
     $('#ticket-vendedor').text(documento.vendedor);
     $('#ticket-dias').text(documento.dias_transcurridos);
     $('#ticket-fecha-limite').text(documento.fecha_limite_cambio);
-    $('#ticket-estado-plazo').html(
-        documento.dentro_del_plazo 
-            ? '<span class="badge bg-success">Dentro del plazo</span>' 
-            : '<span class="badge bg-danger">Fuera del plazo</span>'
-    );
+    
+    // Estado del plazo con icono más visible
+    const dentroPlazoBadge = documento.dentro_del_plazo 
+        ? '<span class="badge bg-success"><i class="ri-check-line"></i> Dentro del plazo</span>' 
+        : '<span class="badge bg-danger"><i class="ri-close-line"></i> Fuera de plazo</span>';
+    $('#ticket-estado-plazo').html(dentroPlazoBadge);
     
     // Mostrar información de cambios anteriores
     const cambiosAnteriores = documento.cambios_anteriores || [];
@@ -3560,7 +3989,11 @@ function mostrarInformacionDocumento(documento) {
         
         if (productosDisponibles > 0) {
             cambiosHtml += ` <span class="badge bg-info" title="Aún quedan productos disponibles">
-                <i class="ri-checkbox-circle-line"></i> ${productosDisponibles} productos disponibles
+                <i class="ri-checkbox-circle-line"></i> ${productosDisponibles} disponibles
+            </span>`;
+        } else {
+            cambiosHtml += ` <span class="badge bg-secondary" title="Sin productos disponibles">
+                <i class="ri-close-circle-line"></i> Sin productos disponibles
             </span>`;
         }
     }
@@ -3572,7 +4005,8 @@ function mostrarInformacionDocumento(documento) {
     $('#seccion-datos-documento').slideUp(200);
     $('#info-ticket').slideDown(300);
     
-    console.log('✅ Información del documento mostrada, productos:', documento.productos?.length || 0);
+    console.log('✅ Información del documento mostrada');
+    console.log('  → productos disponibles:', documento.productos?.length || 0);
 }
 
 // Mantener compatibilidad
@@ -3594,17 +4028,30 @@ function mostrarInformacionTicket(ticket) {
     $('#info-ticket').show();
 }
 
-function siguientePaso() {
-    console.log('🔍 DEBUG siguientePaso - pasoActual:', pasoActual);
+function siguientePaso(event) {
+    console.log('🔵 ========== INICIO siguientePaso() ==========');
+    console.log('  → event:', event);
+    
+    if (event) {
+        console.log('  → Previniendo comportamiento por defecto del evento');
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    console.log('  → pasoActual:', pasoActual);
+    console.log('  → ticketActual:', ticketActual);
     
     if (pasoActual === 1) {
-        console.log('  → Ir al paso 2');
+        console.log('  → PASO 1 → PASO 2');
         
         // Validar que haya un documento cargado
         if (!ticketActual) {
+            console.log('  ❌ Error: No hay ticketActual');
             mostrarError('Debe buscar un documento válido primero');
             return;
         }
+        
+        console.log('  ✅ ticketActual existe, procediendo a paso 2');
         
         // Ir al paso 2
         pasoActual = 2;
@@ -3615,17 +4062,18 @@ function siguientePaso() {
         actualizarStepper();
         actualizarVistaPreviaTotales();
         
-        console.log('✅ Paso 2 mostrado');
+        console.log('  ✅ Paso 2 mostrado correctamente');
+        console.log('  → pasoActual ahora es:', pasoActual);
     } else if (pasoActual === 2) {
-        console.log('  → Validar y continuar al paso 3');
+        console.log('  → PASO 2 → PASO 3');
         
         // Validar selección
         if (!validarSeleccionProductos()) {
-            console.log('❌ Validación falló');
+            console.log('  ❌ Validación de productos falló');
             return;
         }
         
-        console.log('✅ Validación exitosa, mostrando resumen');
+        console.log('  ✅ Validación exitosa, mostrando resumen');
         
         // Ir al paso 3
         pasoActual = 3;
@@ -3636,11 +4084,19 @@ function siguientePaso() {
         $('#btn-anterior').show();
         actualizarStepper();
         
-        console.log('✅ Paso 3 (resumen) mostrado');
+        console.log('  ✅ Paso 3 (resumen) mostrado');
+        console.log('  → pasoActual ahora es:', pasoActual);
     }
+    
+    console.log('🔵 ========== FIN siguientePaso() ==========');
 }
 
-function pasoAnterior() {
+function pasoAnterior(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
     console.log('🔍 DEBUG pasoAnterior - pasoActual:', pasoActual);
     
     if (pasoActual === 2) {
@@ -4424,7 +4880,12 @@ function generarResumen() {
     }
 }
 
-function crearCambioDevolucion() {
+function crearCambioDevolucion(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
     console.log('📋 DEBUG crearCambioDevolucion - ticketActual completo:', ticketActual);
     console.log('📦 DEBUG - productosNuevos:', productosNuevos);
     
@@ -4569,6 +5030,8 @@ function crearCambioDevolucion() {
                     `,
                     confirmButtonText: 'Entendido'
                 });
+                // Permitir cierre del modal
+                window.permitirCierreModal();
                 $('#modalNuevoCambio').modal('hide');
                 cargarCambiosDevoluciones();
             } else {
@@ -4652,14 +5115,30 @@ function mostrarDetalleCambio(data) {
     $('#detalle-numero-operacion').text(cambio.numero_operacion);
     $('#detalle-tipo-operacion').html(`<span class="badge bg-primary">${cambio.tipo_operacion_display}</span>`);
     $('#detalle-fecha-solicitud').text(cambio.fecha_solicitud);
-    $('#detalle-cliente').text(cambio.cliente || 'Cliente General');
+    
+    // Cliente desde ticket_original o desde cambio
+    let clienteNombre = 'Cliente General';
+    if (cambio.ticket_original && cambio.ticket_original.cliente_nombre) {
+        clienteNombre = cambio.ticket_original.cliente_nombre;
+        if (cambio.ticket_original.cliente_rut) {
+            clienteNombre += ` (${cambio.ticket_original.cliente_rut})`;
+        }
+    }
+    $('#detalle-cliente').text(clienteNombre);
     $('#detalle-motivo').text(cambio.motivo_principal_display);
     
     // ===== DOCUMENTO ORIGINAL =====
-    $('#detalle-doc-original').text(cambio.documento_original || '-');
-    $('#detalle-doc-fecha').text(cambio.fecha_documento_original || '-');
-    $('#detalle-vendedor').text(cambio.vendedor_original || '-');
-    $('#detalle-total-doc').text('$' + formatearNumero(cambio.total_documento_original || 0));
+    if (cambio.ticket_original) {
+        $('#detalle-doc-original').text(cambio.ticket_original.correlativo || '-');
+        $('#detalle-doc-fecha').text(cambio.ticket_original.fecha || '-');
+        $('#detalle-vendedor').text(cambio.ticket_original.vendedor || '-');
+        $('#detalle-total-doc').text('$' + formatearNumero(cambio.ticket_original.total || 0));
+    } else {
+        $('#detalle-doc-original').text('-');
+        $('#detalle-doc-fecha').text('-');
+        $('#detalle-vendedor').text('-');
+        $('#detalle-total-doc').text('$0');
+    }
     $('#detalle-plazo').html(
         cambio.dentro_del_plazo 
             ? '<span class="badge bg-success">Dentro del plazo ✓</span>' 
@@ -4764,7 +5243,7 @@ function mostrarDetalleCambio(data) {
             let iconoAccion = 'ri-record-circle-line';
             let colorBadge = 'bg-secondary';
             
-            if (item.accion === 'SOLICITADO') {
+            if (item.accion === 'SOLICITADO' || item.accion === 'CREADO') {
                 iconoAccion = 'ri-file-add-line';
                 colorBadge = 'bg-warning';
             } else if (item.accion === 'APROBADO') {
@@ -4779,16 +5258,16 @@ function mostrarDetalleCambio(data) {
             }
             
             historialEl.append(`
-                <div class="d-flex mb-3 ${index < data.historial.length - 1 ? 'pb-3 border-bottom' : ''}">
-                    <div class="me-3">
-                        <span class="badge ${colorBadge} rounded-pill" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-                            <i class="${iconoAccion} fs-5"></i>
+                <div class="d-flex mb-2 ${index < data.historial.length - 1 ? 'pb-2 border-bottom' : ''}" style="font-size: 0.85rem;">
+                    <div class="me-2">
+                        <span class="badge ${colorBadge} rounded-pill" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+                            <i class="${iconoAccion}"></i>
                         </span>
                     </div>
                     <div class="flex-grow-1">
-                        <h6 class="mb-1">${item.accion_display || item.accion}</h6>
-                        <p class="mb-1 text-muted small">${item.descripcion || item.observaciones || '-'}</p>
-                        <small class="text-muted">
+                        <h6 class="mb-0" style="font-size: 0.9rem;">${item.accion_display || item.accion}</h6>
+                        <p class="mb-0 text-muted small">${item.descripcion || item.observaciones || '-'}</p>
+                        <small class="text-muted" style="font-size: 0.75rem;">
                             <i class="ri-user-line"></i> ${item.usuario} - 
                             <i class="ri-time-line"></i> ${item.timestamp}
                         </small>
@@ -4798,9 +5277,9 @@ function mostrarDetalleCambio(data) {
         });
     } else {
         historialEl.html(`
-            <div class="text-center text-muted py-4">
-                <i class="ri-time-line" style="font-size: 2rem; opacity: 0.3;"></i>
-                <p class="mb-0 mt-2">Sin historial registrado</p>
+            <div class="text-center text-muted py-3">
+                <i class="ri-time-line" style="font-size: 1.5rem; opacity: 0.3;"></i>
+                <p class="mb-0 mt-2 small">Sin historial registrado</p>
             </div>
         `);
     }
@@ -4812,10 +5291,10 @@ function mostrarDetalleCambio(data) {
     if (cambio.estado === 'SOLICITADO') {
         const tipoOp = cambio.tipo_operacion || '';
         accionesEl.append(`
-            <button class="btn btn-success btn-lg me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
-                <i class="ri-check-line"></i> Aprobar y Ejecutar Cambio
+            <button class="btn btn-sm btn-success me-2" onclick='aprobarCambioConDatos(${cambio.id}, "${tipoOp}", ${montoDevuelto}, ${montoNuevo})'>
+                <i class="ri-check-line"></i> Aprobar y Ejecutar
             </button>
-            <button class="btn btn-danger" onclick='cancelarCambio(${cambio.id})'>
+            <button class="btn btn-sm btn-danger" onclick='cancelarCambio(${cambio.id})'>
                 <i class="ri-delete-bin-line"></i> Eliminar
             </button>
         `);
@@ -4823,21 +5302,19 @@ function mostrarDetalleCambio(data) {
     
     if (cambio.estado === 'COMPLETADO') {
         accionesEl.append(`
-            <div class="alert alert-success mb-0 p-3">
-                <i class="ri-check-double-line fs-4"></i> 
-                <strong>Cambio Completado Exitosamente</strong>
-                <hr>
-                <p class="mb-1"><i class="ri-ticket-line"></i> Ticket generado: #${cambio.ticket_nuevo?.correlativo || '-'}</p>
-                <p class="mb-0"><i class="ri-truck-line"></i> Inventario actualizado</p>
+            <div class="alert alert-success mb-0 p-2">
+                <small>
+                    <i class="ri-check-double-line"></i> 
+                    <strong>Completado</strong> - Ticket: #${cambio.ticket_nuevo?.correlativo || '-'}
+                </small>
             </div>
         `);
     }
     
     if (cambio.estado === 'CANCELADO') {
         accionesEl.append(`
-            <div class="alert alert-secondary mb-0 p-3">
-                <i class="ri-forbid-line fs-4"></i> 
-                <strong>Operación Cancelada</strong>
+            <div class="alert alert-secondary mb-0 p-2">
+                <small><i class="ri-forbid-line"></i> <strong>Cancelado</strong></small>
             </div>
         `);
     }

@@ -835,11 +835,6 @@
                         </span>
                     </div>
                 </div>
-                <div class="nexo-module-footer">
-                    <a href="{% url 'dashboard_ventas_mejorado' %}" class="nexo-module-link">
-                        Ver Dashboard Ventas <i class="ri-arrow-right-line"></i>
-                    </a>
-                </div>
             </div>
 
             <!-- Módulo Inventario -->
@@ -883,11 +878,6 @@
                         {% endfor %}
                     </div>
                     {% endif %}
-                </div>
-                <div class="nexo-module-footer">
-                    <a href="{% url 'ver_resumen_existencias' %}" class="nexo-module-link">
-                        Ver Existencias <i class="ri-arrow-right-line"></i>
-                    </a>
                 </div>
             </div>
 
@@ -936,11 +926,6 @@
                         </span>
                         <span class="nexo-list-value text-primary">${{ operaciones.monto_por_cobrar|floatformat:0|intcomma }}</span>
                     </div>
-                </div>
-                <div class="nexo-module-footer">
-                    <a href="{% url 'gestion_cambios_devoluciones' %}" class="nexo-module-link">
-                        Gestionar Operaciones <i class="ri-arrow-right-line"></i>
-                    </a>
                 </div>
             </div>
         </div>
@@ -1129,15 +1114,16 @@ setInterval(function() {
 // ========== Formato de números ==========
 document.addEventListener('DOMContentLoaded', function() {
     // Formatear números grandes
-    document.querySelectorAll('.nexo-kpi-value, .nexo-stat-value').forEach(function(el) {
-        let text = el.textContent.trim();
-        if (text.startsWith('$')) {
-            let num = parseInt(text.replace(/[$,\.]/g, ''));
-            if (!isNaN(num)) {
-                el.textContent = '$' + num.toLocaleString('es-CL');
-            }
+document.querySelectorAll('.nexo-kpi-value, .nexo-stat-value, .nexo-module-badge').forEach(function(el) {
+    let text = el.textContent.trim();
+    if (text.includes('$')) {
+        let digits = text.replace(/[^\d]/g, '');
+        let num = parseInt(digits, 10);
+        if (!isNaN(num)) {
+            el.textContent = '$' + num.toLocaleString('es-CL');
         }
-    });
+    }
+});
 });
 
 // ========== Animación del botón refresh ==========

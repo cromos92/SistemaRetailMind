@@ -528,6 +528,71 @@
     #fullscreenLoader .spinner-border {
         color: #405189 !important;
     }
+    
+    /* ==================== ESTILOS PARA NOTAS DE CRÉDITO ==================== */
+    .fila-nota-credito {
+        background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(255, 193, 7, 0.08) 100%) !important;
+        border-left: 4px solid #dc3545 !important;
+    }
+    
+    .fila-nota-credito:hover {
+        background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(255, 193, 7, 0.15) 100%) !important;
+    }
+    
+    .badge-nota-credito {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+        color: white;
+        font-weight: 600;
+        animation: pulseNC 2s infinite;
+    }
+    
+    @keyframes pulseNC {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+        50% { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
+    }
+    
+    .icono-nc {
+        color: #dc3545;
+        font-size: 1.1rem;
+        margin-right: 4px;
+    }
+    
+    /* ==================== ESTILOS PARA DTEs DESCARTADOS ==================== */
+    .fila-descartado {
+        background: repeating-linear-gradient(
+            45deg,
+            rgba(108, 117, 125, 0.05),
+            rgba(108, 117, 125, 0.05) 10px,
+            rgba(108, 117, 125, 0.1) 10px,
+            rgba(108, 117, 125, 0.1) 20px
+        ) !important;
+        opacity: 0.7;
+        text-decoration: line-through;
+        color: #6c757d;
+    }
+    
+    .fila-descartado:hover {
+        opacity: 0.85;
+    }
+    
+    .badge-descartado {
+        background: #6c757d !important;
+        text-decoration: none !important;
+    }
+    
+    /* Toggle para mostrar descartados */
+    .toggle-descartados {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #6c757d;
+    }
+    
+    .toggle-descartados .form-check-input:checked {
+        background-color: #6c757d;
+        border-color: #6c757d;
+    }
 </style>
 
 <!-- Loader con estilo del proyecto -->
@@ -750,7 +815,17 @@
                             <option value="NOTA DE DEBITO">Nota de Débito</option>
                         </select>
                     </div>
-                    <div class="col-md-6 text-end">
+                    <div class="col-md-2">
+                        <div class="toggle-descartados">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="toggleDescartados">
+                                <label class="form-check-label" for="toggleDescartados">
+                                    <i class="bi bi-trash me-1"></i>Ver descartados
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
                         <div class="btn-group" role="group">
                             <button type="button" class="btn btn-outline-primary pagination-btn" id="btnPrevPageDTE">
                                 <i class="bi bi-chevron-left"></i> Anterior
@@ -2075,7 +2150,8 @@
                 page_size: 20,
                 search: search,
                 tipo_documento: $('#filtroTipoDocumento').val(),
-                filtro_vencimiento: filtroVencimientoActual
+                filtro_vencimiento: filtroVencimientoActual,
+                incluir_descartados: $('#toggleDescartados').is(':checked')
             }),
             success: function (data) {
                 try {
@@ -2151,12 +2227,23 @@
                             if (dte.factura_asociada_info && dte.factura_asociada_info.factura_numero) {
                                 facturaAsociadaNumero = dte.factura_asociada_info.factura_numero;
                             }
+                            
+                            // Determinar clases CSS especiales para NC y descartados
+                            const esNotaCredito = dte.es_nota_credito || dte.tipo === 'NOTA DE CREDITO';
+                            const estaDescartado = dte.descartado;
+                            let clasesFilaExtra = [];
+                            if (esNotaCredito) clasesFilaExtra.push('fila-nota-credito');
+                            if (estaDescartado) clasesFilaExtra.push('fila-descartado');
 
                             const fila = `
-<tr>
+<tr class="${clasesFilaExtra.join(' ')}">
     <td style="display: none;">${dte.id || ''}</td>
     <td>
-        ${elegiblePagoMasivo && saldoPendiente > 0
+        ${estaDescartado 
+            ? `<span class="badge badge-descartado" title="Descartado: ${dte.motivo_descarte || 'Sin motivo'}">
+                <i class="bi bi-trash"></i>
+               </span>`
+            : (elegiblePagoMasivo && saldoPendiente > 0
                                     ? `<input type="checkbox" class="form-check-input checkbox-factura" 
                       value="${dte.id}" 
                       data-proveedor="${dte.nombre}" 
@@ -2164,10 +2251,13 @@
                       data-monto="${saldoPendiente}"
                       data-numero="${dte.numero_documento}"
                       onchange="actualizarSeleccionMasiva()">`
-                                    : ''
+                                    : '')
                                 }
     </td>
-    <td>${resaltarBusquedaDTE(dte.nombre || '', search)}</td>
+    <td>
+        ${esNotaCredito ? '<i class="bi bi-receipt-cutoff icono-nc" title="Nota de Crédito"></i>' : ''}
+        ${resaltarBusquedaDTE(dte.nombre || '', search)}
+    </td>
     <td>${resaltarBusquedaDTE(dte.rut || '', search)}</td>
     <td>
         ${resaltarBusquedaDTE(dte.numero_documento || '', search)}

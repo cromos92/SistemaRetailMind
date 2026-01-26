@@ -114,18 +114,22 @@ def obtener_documentos_etiquetas(request):
                     total_unidades=Sum('stock')
                 )['total_unidades'] or 0
                 
-                # Verificar si ya fue impreso
-                ya_impreso = ('DTE_COMPRA', dte.id) in docs_impresos
+                # Verificar si ya fue impreso y contar veces
+                impresiones = HistorialImpresionEtiqueta.objects.filter(
+                    tipo_origen='DTE_COMPRA',
+                    documento_id=dte.id,
+                    completado=True
+                ).order_by('-fecha_impresion')
+                
+                veces_impreso = impresiones.count()
+                ya_impreso = veces_impreso > 0
                 
                 # Obtener última impresión si existe
                 ultima_impresion = None
-                if ya_impreso:
-                    hist = HistorialImpresionEtiqueta.objects.filter(
-                        tipo_origen='DTE_COMPRA',
-                        documento_id=dte.id
-                    ).first()
-                    if hist:
-                        ultima_impresion = hist.fecha_impresion.strftime('%d/%m/%Y %H:%M')
+                if ya_impreso and impresiones.exists():
+                    hist = impresiones.first()
+                    usuario_nombre = hist.usuario.get_full_name() or hist.usuario.username if hist.usuario else 'Sistema'
+                    ultima_impresion = f'{hist.fecha_impresion.strftime("%d/%m/%Y %H:%M")} por {usuario_nombre}'
                 
                 documentos.append({
                     'id': dte.id,
@@ -140,6 +144,7 @@ def obtener_documentos_etiquetas(request):
                     'monto': float(dte.monto_con_iva),
                     'estado': dte.estado_dte,
                     'ya_impreso': ya_impreso,
+                    'veces_impreso': veces_impreso,
                     'ultima_impresion': ultima_impresion
                 })
         
@@ -175,17 +180,21 @@ def obtener_documentos_etiquetas(request):
                 if mov and mov.sucursal_destino:
                     sucursal_destino = mov.sucursal_destino.alias
                 
-                # Verificar si ya fue impreso
-                ya_impreso = ('DTE_TRASPASO', dte.id) in docs_impresos
+                # Verificar si ya fue impreso y contar veces
+                impresiones = HistorialImpresionEtiqueta.objects.filter(
+                    tipo_origen='DTE_TRASPASO',
+                    documento_id=dte.id,
+                    completado=True
+                ).order_by('-fecha_impresion')
+                
+                veces_impreso = impresiones.count()
+                ya_impreso = veces_impreso > 0
                 
                 ultima_impresion = None
-                if ya_impreso:
-                    hist = HistorialImpresionEtiqueta.objects.filter(
-                        tipo_origen='DTE_TRASPASO',
-                        documento_id=dte.id
-                    ).first()
-                    if hist:
-                        ultima_impresion = hist.fecha_impresion.strftime('%d/%m/%Y %H:%M')
+                if ya_impreso and impresiones.exists():
+                    hist = impresiones.first()
+                    usuario_nombre = hist.usuario.get_full_name() or hist.usuario.username if hist.usuario else 'Sistema'
+                    ultima_impresion = f'{hist.fecha_impresion.strftime("%d/%m/%Y %H:%M")} por {usuario_nombre}'
                 
                 documentos.append({
                     'id': dte.id,
@@ -200,6 +209,7 @@ def obtener_documentos_etiquetas(request):
                     'monto': float(dte.monto_con_iva),
                     'estado': dte.estado_dte,
                     'ya_impreso': ya_impreso,
+                    'veces_impreso': veces_impreso,
                     'ultima_impresion': ultima_impresion
                 })
         
@@ -229,16 +239,21 @@ def obtener_documentos_etiquetas(request):
                     traspaso=traspaso
                 ).aggregate(total=Sum('cantidad_solicitada'))['total'] or 0
                 
-                ya_impreso = ('TRASPASO_INTERNO', traspaso.id) in docs_impresos
+                # Verificar si ya fue impreso y contar veces
+                impresiones = HistorialImpresionEtiqueta.objects.filter(
+                    tipo_origen='TRASPASO_INTERNO',
+                    documento_id=traspaso.id,
+                    completado=True
+                ).order_by('-fecha_impresion')
+                
+                veces_impreso = impresiones.count()
+                ya_impreso = veces_impreso > 0
                 
                 ultima_impresion = None
-                if ya_impreso:
-                    hist = HistorialImpresionEtiqueta.objects.filter(
-                        tipo_origen='TRASPASO_INTERNO',
-                        documento_id=traspaso.id
-                    ).first()
-                    if hist:
-                        ultima_impresion = hist.fecha_impresion.strftime('%d/%m/%Y %H:%M')
+                if ya_impreso and impresiones.exists():
+                    hist = impresiones.first()
+                    usuario_nombre = hist.usuario.get_full_name() or hist.usuario.username if hist.usuario else 'Sistema'
+                    ultima_impresion = f'{hist.fecha_impresion.strftime("%d/%m/%Y %H:%M")} por {usuario_nombre}'
                 
                 documentos.append({
                     'id': traspaso.id,
@@ -253,6 +268,7 @@ def obtener_documentos_etiquetas(request):
                     'monto': 0,
                     'estado': traspaso.estado,
                     'ya_impreso': ya_impreso,
+                    'veces_impreso': veces_impreso,
                     'ultima_impresion': ultima_impresion
                 })
         

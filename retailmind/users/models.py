@@ -3,6 +3,13 @@ from django.db import models
 from django.utils import timezone
 import uuid
 import re
+import os
+
+def user_profile_photo_path(instance, filename):
+    """Genera la ruta para guardar las fotos de perfil"""
+    ext = filename.split('.')[-1]
+    filename = f"perfil_{instance.id}_{timezone.now().strftime('%Y%m%d%H%M%S')}.{ext}"
+    return os.path.join('usuarios', 'fotos_perfil', filename)
 
 class Usuario(AbstractUser):
     """
@@ -10,6 +17,7 @@ class Usuario(AbstractUser):
     Migrado desde olagreetings_user_management
     """
     # Definición de roles
+    # Nota: is_superuser es un campo separado de Django, no un rol
     ROLES = [
         ('administrador', 'Administrador'),
         ('administracion', 'Administración'),
@@ -23,6 +31,15 @@ class Usuario(AbstractUser):
     telefono = models.CharField(max_length=15, null=True, blank=True, verbose_name="Teléfono")
     direccion = models.TextField(null=True, blank=True, verbose_name="Dirección")
     fecha_nacimiento = models.DateField(null=True, blank=True, verbose_name="Fecha de Nacimiento")
+    
+    # Foto de perfil
+    foto_perfil = models.ImageField(
+        upload_to=user_profile_photo_path,
+        null=True,
+        blank=True,
+        verbose_name="Foto de Perfil",
+        help_text="Imagen de perfil del usuario"
+    )
     
     # Campos de empresa
     empresa = models.CharField(max_length=100, null=True, blank=True, verbose_name="Empresa")
@@ -188,6 +205,22 @@ class Usuario(AbstractUser):
         self.save()
         
         return password_temporal
+    
+    def get_iniciales(self):
+        """Retorna las iniciales del usuario (máximo 2 letras)"""
+        if self.first_name and self.last_name:
+            return f"{self.first_name[0]}{self.last_name[0]}".upper()
+        elif self.first_name:
+            return self.first_name[:2].upper()
+        elif self.username:
+            return self.username[:2].upper()
+        return "U"
+    
+    def get_foto_url(self):
+        """Retorna la URL de la foto de perfil o None"""
+        if self.foto_perfil:
+            return self.foto_perfil.url
+        return None
 
 class LogAcceso(models.Model):
     """
@@ -206,3 +239,246 @@ class LogAcceso(models.Model):
     
     def __str__(self):
         return f"{self.usuario.username} - {self.fecha_acceso}"
+
+
+class SesionActiva(models.Model):
+    """
+    Modelo para rastrear sesiones activas de usuarios.
+    Permite ver y cerrar sesiones desde cualquier dispositivo.
+    """
+    usuario = models.ForeignKey(
+        Usuario, 
+        on_delete=models.CASCADE, 
+        related_name='sesiones_activas',
+        verbose_name="Usuario"
+    )
+    session_key = models.CharField(
+        max_length=40, 
+        unique=True, 
+        verbose_name="Clave de Sesión"
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True, 
+        blank=True, 
+        verbose_name="Dirección IP"
+    )
+    user_agent = models.TextField(
+        null=True, 
+        blank=True, 
+        verbose_name="User Agent"
+    )
+    dispositivo = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True,
+        verbose_name="Dispositivo"
+    )
+    navegador = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True,
+        verbose_name="Navegador"
+    )
+    sistema_operativo = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True,
+        verbose_name="Sistema Operativo"
+    )
+    ubicacion = models.CharField(
+        max_length=200, 
+        null=True, 
+        blank=True,
+        verbose_name="Ubicación Aproximada"
+    )
+    fecha_inicio = models.DateTimeField(
+        auto_now_add=True, 
+        verbose_name="Fecha de Inicio"
+    )
+    ultima_actividad = models.DateTimeField(
+        auto_now=True, 
+        verbose_name="Última Actividad"
+    )
+    es_actual = models.BooleanField(
+        default=False, 
+        verbose_name="Es Sesión Actual"
+    )
+    activa = models.BooleanField(
+        default=True, 
+        verbose_name="Sesión Activa"
+    )
+    
+    class Meta:
+        verbose_name = "Sesión Activa"
+        verbose_name_plural = "Sesiones Activas"
+        ordering = ['-ultima_actividad']
+    
+    def __str__(self):
+        return f"{self.usuario.username} - {self.dispositivo or 'Desconocido'} - {self.fecha_inicio}"
+    
+    @classmethod
+    def registrar_sesion(cls, request, usuario):
+        """
+        Registra una nueva sesión para el usuario.
+        Parsea el user-agent para extraer información del dispositivo.
+        """
+        user_agent_string = request.META.get('HTTP_USER_AGENT', '')
+        ip = cls.get_client_ip(request)
+        
+        # Intentar parsear user-agent con la biblioteca user-agents
+        dispositivo = 'Desconocido'
+        navegador = 'Desconocido'
+        sistema_operativo = 'Desconocido'
+        
+        try:
+            from user_agents import parse
+            user_agent = parse(user_agent_string)
+            dispositivo = user_agent.device.family or 'Desconocido'
+            if user_agent.device.brand:
+                dispositivo = f"{user_agent.device.brand} {user_agent.device.model or ''}"
+            navegador = f"{user_agent.browser.family} {user_agent.browser.version_string}"
+            sistema_operativo = f"{user_agent.os.family} {user_agent.os.version_string}"
+        except ImportError:
+            # Si user-agents no está instalado, parsear manualmente
+            ua_lower = user_agent_string.lower()
+            
+            # Detectar navegador
+            if 'chrome' in ua_lower and 'edg' not in ua_lower:
+                navegador = 'Chrome'
+            elif 'firefox' in ua_lower:
+                navegador = 'Firefox'
+            elif 'safari' in ua_lower and 'chrome' not in ua_lower:
+                navegador = 'Safari'
+            elif 'edg' in ua_lower:
+                navegador = 'Microsoft Edge'
+            elif 'opera' in ua_lower or 'opr' in ua_lower:
+                navegador = 'Opera'
+            
+            # Detectar SO
+            if 'windows' in ua_lower:
+                sistema_operativo = 'Windows'
+            elif 'mac os' in ua_lower or 'macos' in ua_lower:
+                sistema_operativo = 'macOS'
+            elif 'linux' in ua_lower:
+                sistema_operativo = 'Linux'
+            elif 'android' in ua_lower:
+                sistema_operativo = 'Android'
+            elif 'iphone' in ua_lower or 'ipad' in ua_lower:
+                sistema_operativo = 'iOS'
+            
+            # Detectar dispositivo
+            if 'mobile' in ua_lower or 'android' in ua_lower:
+                dispositivo = 'Móvil'
+            elif 'tablet' in ua_lower or 'ipad' in ua_lower:
+                dispositivo = 'Tablet'
+            else:
+                dispositivo = 'Computador'
+        except Exception:
+            pass
+        
+        # Asegurar que la sesión tiene una key
+        if not request.session.session_key:
+            request.session.create()
+        
+        # Crear o actualizar sesión
+        sesion, created = cls.objects.update_or_create(
+            session_key=request.session.session_key,
+            defaults={
+                'usuario': usuario,
+                'ip_address': ip,
+                'user_agent': user_agent_string[:500] if user_agent_string else None,
+                'dispositivo': dispositivo[:100] if dispositivo else None,
+                'navegador': navegador[:100] if navegador else None,
+                'sistema_operativo': sistema_operativo[:100] if sistema_operativo else None,
+                'activa': True
+            }
+        )
+        
+        return sesion
+    
+    @staticmethod
+    def get_client_ip(request):
+        """Obtiene la IP real del cliente"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+    
+    def cerrar_sesion(self):
+        """Marca la sesión como cerrada"""
+        from django.contrib.sessions.models import Session
+        
+        self.activa = False
+        self.save()
+        
+        # Eliminar la sesión de Django
+        try:
+            Session.objects.filter(session_key=self.session_key).delete()
+        except:
+            pass
+
+
+class TokenResetPassword(models.Model):
+    """
+    Modelo para tokens de reseteo de contraseña por correo.
+    Permite enviar links seguros para cambiar contraseña.
+    """
+    usuario = models.ForeignKey(
+        Usuario,
+        on_delete=models.CASCADE,
+        related_name='tokens_reset',
+        verbose_name="Usuario"
+    )
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        verbose_name="Token"
+    )
+    fecha_creacion = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de Creación"
+    )
+    fecha_expiracion = models.DateTimeField(
+        verbose_name="Fecha de Expiración"
+    )
+    usado = models.BooleanField(
+        default=False,
+        verbose_name="Token Usado"
+    )
+    ip_solicitud = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        verbose_name="IP de Solicitud"
+    )
+    
+    class Meta:
+        verbose_name = "Token de Reset de Password"
+        verbose_name_plural = "Tokens de Reset de Password"
+        ordering = ['-fecha_creacion']
+    
+    def __str__(self):
+        return f"{self.usuario.username} - {self.token}"
+    
+    def es_valido(self):
+        """Verifica si el token es válido (no usado y no expirado)"""
+        return not self.usado and self.fecha_expiracion > timezone.now()
+    
+    @classmethod
+    def crear_token(cls, usuario, request=None, horas_validez=24):
+        """Crea un nuevo token de reset para el usuario"""
+        # Invalidar tokens anteriores
+        cls.objects.filter(usuario=usuario, usado=False).update(usado=True)
+        
+        ip = None
+        if request:
+            ip = SesionActiva.get_client_ip(request)
+        
+        token = cls.objects.create(
+            usuario=usuario,
+            fecha_expiracion=timezone.now() + timezone.timedelta(hours=horas_validez),
+            ip_solicitud=ip
+        )
+        
+        return token

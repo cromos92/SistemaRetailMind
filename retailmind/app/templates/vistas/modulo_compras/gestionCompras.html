@@ -461,9 +461,209 @@
     margin-bottom: 1rem;
 }
 
+/* ==================== ESTILOS MEJORADOS MODAL RECEPCION ==================== */
+
+/* Barra de acciones masivas */
+.acciones-masivas-bar {
+    background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    border: 2px solid rgba(10, 179, 156, 0.3);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.acciones-masivas-bar .btn {
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 10px 16px;
+    transition: all 0.2s ease;
+}
+
+.acciones-masivas-bar .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Input de cantidad mejorado */
+.input-cantidad-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.input-cantidad-wrapper .form-control {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 8px 4px;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+    transition: all 0.2s ease;
+    width: 70px;
+}
+
+.input-cantidad-wrapper .form-control:focus {
+    border-color: #0ab39c;
+    box-shadow: 0 0 0 3px rgba(10, 179, 156, 0.2);
+}
+
+.input-cantidad-wrapper .form-control.has-value {
+    background: linear-gradient(135deg, #e6fff9 0%, #d4f7f0 100%);
+    border-color: #0ab39c;
+}
+
+/* Botones de cantidad rapida */
+.btn-cantidad-rapida {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-cantidad-rapida:hover {
+    transform: scale(1.1);
+}
+
+.btn-max {
+    background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
+    color: white;
+}
+
+.btn-mitad {
+    background: linear-gradient(135deg, #405189 0%, #364574 100%);
+    color: white;
+}
+
+.btn-clear {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Input factura mejorado */
+.input-factura-wrapper {
+    position: relative;
+}
+
+.input-factura-wrapper .form-control {
+    padding-right: 30px;
+    border-radius: 8px;
+    border: 2px solid #dee2e6;
+    font-weight: 500;
+}
+
+.input-factura-wrapper .form-control:focus {
+    border-color: #405189;
+    box-shadow: 0 0 0 3px rgba(64, 81, 137, 0.2);
+}
+
+.input-factura-wrapper .form-control.has-factura {
+    background: linear-gradient(135deg, #e8eaf6 0%, #dde1f0 100%);
+    border-color: #405189;
+}
+
+.input-factura-wrapper .factura-icon {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #405189;
+    font-size: 0.85rem;
+}
+
+/* Fila con datos ingresados */
+.row-con-datos {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+    border-left: 4px solid #0ab39c !important;
+}
+
+.row-con-datos td {
+    font-weight: 500;
+}
+
+/* Badge de cantidad ingresada */
+.badge-cantidad-ingresada {
+    background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
+    color: white;
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+/* Resumen flotante */
+.resumen-flotante {
+    position: sticky;
+    bottom: 0;
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    padding: 12px 20px;
+    border-radius: 12px 12px 0 0;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    z-index: 100;
+}
+
+.resumen-flotante .stat-item {
+    text-align: center;
+}
+
+.resumen-flotante .stat-label {
+    font-size: 0.7rem;
+    opacity: 0.85;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.resumen-flotante .stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: white;
+}
+
+/* Animacion de shake para errores */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.input-error {
+    animation: shake 0.3s ease;
+    border-color: #dc3545 !important;
+}
+
+/* Checkbox seleccionar fila */
+.check-seleccionar {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #0ab39c;
+}
+
+/* Fila seleccionada */
+.fila-seleccionada {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%) !important;
+    border-left: 4px solid #ffc107 !important;
+}
+
 </style>
 
-<!-- Loader Mejorado NEXO -->
+<!-- Loader con estilo del proyecto -->
 <div id="fullscreenLoader" style="
     display: none;
     position: fixed;
@@ -472,23 +672,18 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(255, 255, 255, 0.9);
+    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
     backdrop-filter: blur(8px);
     text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <div class="loader-nexo mb-4">
-            <div class="spinner-grow text-primary" role="status" style="width: 1rem; height: 1rem; animation-delay: 0s;">
-                <span class="visually-hidden">Cargando...</span>
-            </div>
-            <div class="spinner-grow text-primary mx-2" role="status" style="width: 1.2rem; height: 1.2rem; animation-delay: 0.1s;">
-                <span class="visually-hidden">Cargando...</span>
-            </div>
-            <div class="spinner-grow text-primary" role="status" style="width: 1rem; height: 1rem; animation-delay: 0.2s;">
-                <span class="visually-hidden">Cargando...</span>
-            </div>
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
+        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
+            <i class="bi bi-cart4 fs-3 text-white"></i>
         </div>
-        <h6 class="text-secondary fw-semibold mb-1">Cargando información</h6>
-        <p class="text-muted small mb-0">Por favor espera...</p>
+        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mb-0 fw-bold" style="color: #405189;">Cargando información...</p>
+        <small class="text-muted">Por favor espera un momento</small>
     </div>
 </div>
 
@@ -1025,7 +1220,7 @@
                                 <h5 class="mb-2">Arrastra tu archivo aquí</h5>
                                 <p class="text-muted mb-3">o haz clic para seleccionar desde tu computadora</p>
                                 <input type="file" class="d-none" id="archivoCSV" accept=".csv,.xlsx,.xls">
-                                <button type="button" class="btn btn-primary" onclick="$('#archivoCSV').click()">
+                                <button type="button" class="btn btn-primary" id="btnSeleccionarArchivoCSV">
                                     <i class="bi bi-folder2-open me-2"></i>Seleccionar Archivo
                                 </button>
                                 <div class="mt-3">
@@ -1380,24 +1575,79 @@
                             <p class="mt-3 text-muted fs-5">Cargando productos de la compra...</p>
                         </div>
                         
-                        <!-- Barra de herramientas superior - Estilo Chat Proyecto -->
+                        <!-- ========== BARRA DE ACCIONES MASIVAS ========== -->
+                        <div class="acciones-masivas-bar mb-3">
+                            <div class="row align-items-center g-3">
+                                <!-- Acciones masivas izquierda -->
+                                <div class="col-lg-6">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="text-white fw-bold me-2">
+                                            <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Acciones Masivas:
+                                        </span>
+                                        <button type="button" class="btn btn-success btn-sm" id="btnRecepcionarTodo" 
+                                                title="Marca todas las cantidades pendientes como recibidas">
+                                            <i class="bi bi-check-all me-1"></i>Recepcionar Todo
+                                        </button>
+                                        <button type="button" class="btn btn-warning btn-sm text-dark" id="btnRecepcionarMitad"
+                                                title="Marca la mitad de cada cantidad pendiente">
+                                            <i class="bi bi-percent me-1"></i>50%
+                                        </button>
+                                        <div class="vr mx-2 bg-secondary opacity-50" style="height: 30px;"></div>
+                                        <div class="input-group input-group-sm" style="width: 220px;">
+                                            <span class="input-group-text bg-primary text-white border-0">
+                                                <i class="bi bi-receipt"></i>
+                                            </span>
+                                            <input type="text" class="form-control" id="facturaGlobalMasiva" 
+                                                   placeholder="Factura para todos..." list="facturas-global-list">
+                                            <datalist id="facturas-global-list"></datalist>
+                                            <button class="btn btn-primary" type="button" id="btnAplicarFacturaGlobal" title="Aplicar factura a todos los productos">
+                                                <i class="bi bi-arrow-right-circle"></i>
+                                            </button>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-light btn-sm" id="btnLimpiarTodo"
+                                                title="Limpiar todas las cantidades y facturas ingresadas">
+                                            <i class="bi bi-eraser me-1"></i>Limpiar
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Resumen rápido derecha -->
+                                <div class="col-lg-6">
+                                    <div class="d-flex justify-content-end align-items-center gap-4">
+                                        <div class="text-center">
+                                            <div class="small text-white-50">Por Recepcionar</div>
+                                            <div class="text-white fw-bold fs-5" id="quickStatPendientes">0</div>
+                                        </div>
+                                        <div class="text-center">
+                                            <div class="small text-white-50">Ingresados</div>
+                                            <div class="text-success fw-bold fs-5" id="quickStatIngresados">0</div>
+                                        </div>
+                                        <div class="text-center px-3 py-1 rounded" style="background: rgba(10,179,156,0.2);">
+                                            <div class="small text-white-50">Total $</div>
+                                            <div class="text-warning fw-bold fs-5" id="quickStatMonto">$0</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ========== BARRA DE HERRAMIENTAS ========== -->
                         <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; border-left: 4px solid #405189 !important;">
                             <div class="card-body py-3">
                                 <div class="row align-items-center g-3">
                                     <!-- Tipo de vista -->
-                                    <div class="col-lg-4">
+                                    <div class="col-lg-3">
                                         <label class="small fw-bold mb-2 d-block" style="color: #405189;">
                                             <i class="bi bi-eye me-1"></i>Modo de Vista
                                         </label>
                                         <div class="btn-group w-100" role="group">
                                             <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaAgrupada" autocomplete="off" checked>
-                                            <label class="btn btn-outline-primary btn-vista" for="vistaAgrupada">
-                                                <i class="bi bi-grid-3x3-gap me-1"></i> Agrupada (Tallas juntas)
+                                            <label class="btn btn-outline-primary btn-vista btn-sm" for="vistaAgrupada">
+                                                <i class="bi bi-grid-3x3-gap me-1"></i>Agrupada
                                             </label>
                                             
                                             <input type="radio" class="btn-check" name="vistaRecepcion" id="vistaDetallada" autocomplete="off">
-                                            <label class="btn btn-outline-primary btn-vista" for="vistaDetallada">
-                                                <i class="bi bi-list-ul me-1"></i> Detallada
+                                            <label class="btn btn-outline-primary btn-vista btn-sm" for="vistaDetallada">
+                                                <i class="bi bi-list-ul me-1"></i>Detallada
                                             </label>
                                         </div>
                                     </div>
@@ -1407,7 +1657,7 @@
                                         <label class="small fw-bold mb-2 d-block" style="color: #405189;">
                                             <i class="bi bi-search me-1"></i>Buscar Producto
                                         </label>
-                                        <div class="input-group">
+                                        <div class="input-group input-group-sm">
                                             <span class="input-group-text bg-white border-end-0" style="border-color: #405189;">
                                                 <i class="bi bi-search" style="color: #405189;"></i>
                                             </span>
@@ -1419,63 +1669,64 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- Acciones rápidas -->
-                                    <div class="col-lg-4 text-end">
+                                    <!-- Filtros rápidos -->
+                                    <div class="col-lg-3">
                                         <label class="small fw-bold mb-2 d-block" style="color: #405189;">
-                                            <i class="bi bi-lightning me-1"></i>Acciones Rápidas
+                                            <i class="bi bi-funnel me-1"></i>Filtrar por Estado
                                         </label>
-                                        <button type="button" class="btn btn-outline-info" id="btnRecargarFacturas" 
-                                                data-bs-toggle="tooltip" title="Recargar facturas disponibles del proveedor" style="border-radius: 8px;">
-                                            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar Facturas
+                                        <select class="form-select form-select-sm" id="filtroEstadoRecepcion" style="border-color: #405189;">
+                                            <option value="">Todos</option>
+                                            <option value="pendientes">Solo Pendientes</option>
+                                            <option value="parciales">Solo Parciales</option>
+                                            <option value="completos">Solo Completos</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- Acciones -->
+                                    <div class="col-lg-2 text-end">
+                                        <label class="small fw-bold mb-2 d-block" style="color: #405189;">
+                                            <i class="bi bi-gear me-1"></i>Opciones
+                                        </label>
+                                        <button type="button" class="btn btn-outline-info btn-sm" id="btnRecargarFacturas" 
+                                                data-bs-toggle="tooltip" title="Recargar facturas disponibles">
+                                            <i class="bi bi-arrow-clockwise"></i>
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Card de ayuda colapsable - Mejorada -->
-                        <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; border-left: 4px solid #0ab39c !important;">
-                            <div class="card-body py-3 px-4">
-                                <div class="d-flex align-items-start">
-                                    <div class="rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); flex-shrink: 0;">
-                                        <i class="bi bi-lightbulb text-white fs-5"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <strong style="color: #405189;">¿Cómo funciona?</strong>
-                                        <p class="mb-2 small text-muted">
-                                            1️⃣ <strong>Ingresa la cantidad</strong> que recibes (puede ser parcial o total del stock indicado).<br>
-                                            2️⃣ <strong>Selecciona la factura del proveedor</strong> - Solo aparecen facturas pendientes del mismo proveedor.<br>
-                                            3️⃣ En vista agrupada, usa <span class="badge bg-success"><i class="bi bi-check-all"></i></span> para aplicar a todas las tallas del producto.
-                                        </p>
-                                        <a href="#" class="text-decoration-none small" data-bs-toggle="collapse" data-bs-target="#ayudaRecepcion" style="color: #405189;">
-                                            <i class="bi bi-question-circle me-1"></i>Ver más ayuda <i class="bi bi-chevron-down"></i>
-                                        </a>
-                                    </div>
-                                </div>
-                                <div class="collapse mt-3" id="ayudaRecepcion">
-                                    <div class="rounded p-3 small" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
-                                        <div class="row">
-                                            <div class="col-md-4">
-                                                <div class="d-flex align-items-center mb-2">
-                                                    <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                                    <strong>Facturas Válidas</strong>
-                                                </div>
-                                                <p class="text-muted mb-0">Se muestran las facturas pendientes del proveedor. Puedes seleccionar cualquiera.</p>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="d-flex align-items-center mb-2">
-                                                    <i class="bi bi-calculator text-info me-2"></i>
-                                                    <strong>Cantidad Parcial</strong>
-                                                </div>
-                                                <p class="text-muted mb-0">Puedes recepcionar menos unidades que las indicadas en el stock. El sistema guardará la diferencia como pendiente.</p>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="d-flex align-items-center mb-2">
-                                                    <i class="bi bi-arrow-clockwise text-primary me-2"></i>
-                                                    <strong>Actualizar Facturas</strong>
-                                                </div>
-                                                <p class="text-muted mb-0">Si acabas de crear una factura en DTEs, presiona "Actualizar Facturas" para que aparezca en la lista.</p>
-                                            </div>
+                        <!-- Card de ayuda compacta - Colapsada por defecto -->
+                        <div class="alert alert-light border-0 py-2 px-3 mb-3 d-flex align-items-center justify-content-between" 
+                             style="border-radius: 8px; background: linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 100%); border-left: 3px solid #0ab39c !important;">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-info-circle text-primary me-2"></i>
+                                <small class="text-muted">
+                                    <strong class="text-primary">Tip:</strong> Usa 
+                                    <span class="badge bg-success btn-sm mx-1"><i class="bi bi-arrow-up-circle-fill"></i></span> para cantidad máxima,
+                                    <span class="badge bg-primary btn-sm mx-1">½</span> para 50%, o
+                                    <span class="badge bg-warning text-dark btn-sm mx-1">Recepcionar Todo</span> arriba para aplicar masivamente.
+                                </small>
+                            </div>
+                            <a href="#" class="text-decoration-none small" data-bs-toggle="collapse" data-bs-target="#ayudaRecepcion" style="color: #405189;">
+                                <i class="bi bi-question-circle me-1"></i>Más ayuda
+                            </a>
+                        </div>
+                        <div class="collapse mb-3" id="ayudaRecepcion">
+                            <div class="card border-0 shadow-sm" style="border-radius: 10px;">
+                                <div class="card-body py-2 px-3">
+                                    <div class="row small">
+                                        <div class="col-md-4">
+                                            <i class="bi bi-check-circle-fill text-success me-1"></i>
+                                            <strong>Facturas:</strong> Solo aparecen las pendientes del proveedor.
+                                        </div>
+                                        <div class="col-md-4">
+                                            <i class="bi bi-calculator text-info me-1"></i>
+                                            <strong>Parcial:</strong> Puedes recepcionar menos unidades.
+                                        </div>
+                                        <div class="col-md-4">
+                                            <i class="bi bi-arrow-clockwise text-primary me-1"></i>
+                                            <strong>Actualizar:</strong> Usa el botón si creaste una factura nueva.
                                         </div>
                                     </div>
                                 </div>
@@ -2016,7 +2267,8 @@ const GestionCompras = (function() {
     const urls = {
         crearCompra: '{% url "crear_compra" %}',
         obtenerCompras: '{% url "obtener_compras" %}',
-        eliminarCompra: '/app/eliminar_compra/',
+        eliminarCompra: '{% url "eliminar_compra" %}',
+        validarFacturaProveedor: '{% url "validar_factura_proveedor" %}',
         importarCSV: '/app/importar_csv_compra/',
         agregarProductoManual: '/app/agregar_producto_manual/',
         guardarRecepcion: '/app/guardar_recepcion/',
@@ -2577,28 +2829,37 @@ const GestionCompras = (function() {
         </div>
     </td>
     <td>
-        <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
-               data-ids='${tallaIdsStr}'
-               data-grupo="${grupoId}"
-               data-stock="${talla.stock}"
-               data-recepcionado="${talla.recepcionado || 0}"
-               value="${pendiente > 0 ? '' : (talla.recepcionado || '')}"
-               max="${pendiente > 0 ? pendiente : talla.stock}"
-               min="0"
-               placeholder="${pendiente > 0 ? pendiente : talla.stock}">
-        <span class="indicador-ingresado badge bg-info text-white mt-1" style="display: none; font-size: 0.65rem;"></span>
+        <div class="input-cantidad-wrapper">
+            <button type="button" class="btn-cantidad-rapida btn-max" 
+                    onclick="aplicarCantidadRapida(this, 'max')" title="Máximo">
+                <i class="bi bi-arrow-up-circle-fill"></i>
+            </button>
+            <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
+                   data-ids='${tallaIdsStr}'
+                   data-grupo="${grupoId}"
+                   data-stock="${talla.stock}"
+                   data-recepcionado="${talla.recepcionado || 0}"
+                   data-max="${pendiente > 0 ? pendiente : talla.stock}"
+                   value="${pendiente > 0 ? '' : (talla.recepcionado || '')}"
+                   max="${pendiente > 0 ? pendiente : talla.stock}"
+                   min="0"
+                   placeholder="${pendiente > 0 ? pendiente : talla.stock}">
+            <button type="button" class="btn-cantidad-rapida btn-mitad" 
+                    onclick="aplicarCantidadRapida(this, 'mitad')" title="50%">
+                ½
+            </button>
+        </div>
+        <span class="indicador-ingresado badge-cantidad-ingresada" style="display: none;"></span>
     </td>
     <td>
-        <div class="input-group input-group-sm">
-            <input type="text" class="form-control factura-datalist-input ${selectedFacturaValue ? 'border-success' : ''}" 
+        <div class="input-factura-wrapper">
+            <input type="text" class="form-control form-control-sm factura-datalist-input ${selectedFacturaValue ? 'has-factura' : ''}" 
                    list="${datalistId}" 
                    data-ids='${tallaIdsStr}'
                    data-grupo="${grupoId}"
                    value="${selectedFacturaValue}"
                    placeholder="Factura...">
-            <span class="input-group-text bg-light" style="font-size: 0.7rem;">
-                <i class="bi bi-receipt"></i>
-            </span>
+            <i class="bi bi-receipt factura-icon"></i>
         </div>
         <span class="indicador-factura badge bg-primary text-white mt-1" style="display: none; font-size: 0.65rem;"></span>
         <datalist id="${datalistId}">
@@ -2770,22 +3031,36 @@ const GestionCompras = (function() {
         ${badgeAgrupados}
     </td>
     <td>
-        <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
-               data-ids='${tallaIdsStr}'
-               data-stock="${item.stock}"
-               data-recepcionado="${item.recepcionado || 0}"
-               value="${pendiente > 0 ? '' : (item.recepcionado || '')}"
-               max="${pendiente > 0 ? pendiente : item.stock}"
-               min="0"
-               placeholder="${pendiente > 0 ? pendiente : item.stock}">
-        <span class="indicador-ingresado badge bg-info text-white mt-1" style="display: none; font-size: 0.65rem;"></span>
+        <div class="input-cantidad-wrapper">
+            <button type="button" class="btn-cantidad-rapida btn-max" 
+                    onclick="aplicarCantidadRapida(this, 'max')" title="Máximo">
+                <i class="bi bi-arrow-up-circle-fill"></i>
+            </button>
+            <input type="number" class="form-control form-control-sm recepcionado-input ${tieneRecepcion ? 'border-success' : ''}"
+                   data-ids='${tallaIdsStr}'
+                   data-stock="${item.stock}"
+                   data-recepcionado="${item.recepcionado || 0}"
+                   data-max="${pendiente > 0 ? pendiente : item.stock}"
+                   value="${pendiente > 0 ? '' : (item.recepcionado || '')}"
+                   max="${pendiente > 0 ? pendiente : item.stock}"
+                   min="0"
+                   placeholder="${pendiente > 0 ? pendiente : item.stock}">
+            <button type="button" class="btn-cantidad-rapida btn-mitad" 
+                    onclick="aplicarCantidadRapida(this, 'mitad')" title="50%">
+                ½
+            </button>
+        </div>
+        <span class="indicador-ingresado badge-cantidad-ingresada" style="display: none;"></span>
     </td>
     <td>
-        <input type="text" class="form-control form-control-sm factura-datalist-input ${facturasAsociadas.length > 0 ? 'border-success' : ''}" 
-               list="${datalistId}" 
-               data-ids='${tallaIdsStr}' 
-               value=""
-               placeholder="Factura...">
+        <div class="input-factura-wrapper">
+            <input type="text" class="form-control form-control-sm factura-datalist-input ${facturasAsociadas.length > 0 ? 'has-factura' : ''}" 
+                   list="${datalistId}" 
+                   data-ids='${tallaIdsStr}' 
+                   value=""
+                   placeholder="Factura...">
+            <i class="bi bi-receipt factura-icon"></i>
+        </div>
         <span class="indicador-factura badge bg-primary text-white mt-1" style="display: none; font-size: 0.65rem;"></span>
         <datalist id="${datalistId}">
             ${facturaOptions}
@@ -2886,6 +3161,288 @@ const GestionCompras = (function() {
             });
         }
     });
+
+    // ========== FUNCIONES DE ACCIONES MASIVAS ==========
+    
+    // Recepcionar todo (marcar todas las cantidades pendientes)
+    $('#btnRecepcionarTodo').on('click', function() {
+        const $btn = $(this);
+        const originalHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Aplicando...');
+        
+        Swal.fire({
+            title: '¿Recepcionar todo?',
+            html: 'Se marcarán <strong>todas las cantidades pendientes</strong> como recibidas.<br><small class="text-muted">Aún podrás modificar antes de guardar.</small>',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#0ab39c',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="bi bi-check-all me-1"></i>Sí, recepcionar todo',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                let totalAplicado = 0;
+                
+                // Aplicar a inputs de vista detallada
+                $('.recepcionado-input').each(function() {
+                    const max = parseInt($(this).attr('max')) || 0;
+                    if (max > 0) {
+                        $(this).val(max).addClass('has-value');
+                        marcarFilaConDatos($(this));
+                        totalAplicado += max;
+                    }
+                });
+                
+                // Aplicar a inputs masivos de vista agrupada
+                $('.recepcion-masiva-input').each(function() {
+                    const stockTotal = parseInt($(this).data('stock-total')) || 0;
+                    if (stockTotal > 0) {
+                        $(this).val(stockTotal);
+                    }
+                });
+                
+                recalcularTotalesRecepcion();
+                actualizarQuickStats();
+                
+                GestionCompras.showSuccess(`Se aplicaron ${totalAplicado.toLocaleString()} unidades en total`);
+            }
+            $btn.prop('disabled', false).html(originalHtml);
+        });
+    });
+    
+    // Recepcionar 50%
+    $('#btnRecepcionarMitad').on('click', function() {
+        let totalAplicado = 0;
+        
+        $('.recepcionado-input').each(function() {
+            const max = parseInt($(this).attr('max')) || 0;
+            const mitad = Math.ceil(max / 2);
+            if (mitad > 0) {
+                $(this).val(mitad).addClass('has-value');
+                marcarFilaConDatos($(this));
+                totalAplicado += mitad;
+            }
+        });
+        
+        $('.recepcion-masiva-input').each(function() {
+            const stockTotal = parseInt($(this).data('stock-total')) || 0;
+            const mitad = Math.ceil(stockTotal / 2);
+            if (mitad > 0) {
+                $(this).val(mitad);
+            }
+        });
+        
+        recalcularTotalesRecepcion();
+        actualizarQuickStats();
+        
+        GestionCompras.showSuccess(`Se aplicó 50%: ${totalAplicado.toLocaleString()} unidades`);
+    });
+    
+    // Aplicar factura global a todos
+    $('#btnAplicarFacturaGlobal').on('click', function() {
+        const factura = $('#facturaGlobalMasiva').val().trim();
+        
+        if (!factura) {
+            $('#facturaGlobalMasiva').addClass('input-error');
+            setTimeout(() => $('#facturaGlobalMasiva').removeClass('input-error'), 300);
+            GestionCompras.showError('Ingresa un número de factura');
+            return;
+        }
+        
+        let aplicados = 0;
+        
+        // Aplicar a todas las facturas de vista detallada
+        $('.factura-datalist-input').each(function() {
+            $(this).val(factura).addClass('has-factura');
+            aplicados++;
+        });
+        
+        // Aplicar a facturas masivas
+        $('.factura-masiva-input').each(function() {
+            $(this).val(factura);
+            aplicados++;
+        });
+        
+        // Validar facturas
+        setTimeout(() => {
+            $('.factura-datalist-input, .factura-masiva-input').each(function() {
+                validarFacturaInput($(this));
+            });
+        }, 100);
+        
+        GestionCompras.showSuccess(`Factura "${factura}" aplicada a ${aplicados} productos`);
+        $('#facturaGlobalMasiva').val('');
+    });
+    
+    // Limpiar todo
+    $('#btnLimpiarTodo').on('click', function() {
+        Swal.fire({
+            title: '¿Limpiar todo?',
+            text: 'Se borrarán todas las cantidades y facturas ingresadas.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="bi bi-eraser me-1"></i>Sí, limpiar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Limpiar inputs de cantidad
+                $('.recepcionado-input').val('').removeClass('has-value is-valid is-invalid');
+                $('.recepcion-masiva-input').val('');
+                
+                // Limpiar inputs de factura
+                $('.factura-datalist-input, .factura-masiva-input').val('').removeClass('has-factura is-valid is-invalid');
+                $('#facturaGlobalMasiva').val('');
+                
+                // Quitar marcas de filas
+                $('.row-con-datos').removeClass('row-con-datos');
+                $('.indicador-ingresado, .indicador-factura').hide();
+                
+                recalcularTotalesRecepcion();
+                actualizarQuickStats();
+                
+                GestionCompras.showSuccess('Datos limpiados correctamente');
+            }
+        });
+    });
+    
+    // Filtro por estado
+    $('#filtroEstadoRecepcion').on('change', function() {
+        const filtro = $(this).val();
+        
+        $('.talla-detalle, .producto-grupo').each(function() {
+            const $fila = $(this);
+            const esCompleto = $fila.hasClass('table-success');
+            const esParcial = $fila.hasClass('table-warning');
+            const esPendiente = !esCompleto && !esParcial;
+            
+            let mostrar = true;
+            
+            switch(filtro) {
+                case 'pendientes':
+                    mostrar = esPendiente;
+                    break;
+                case 'parciales':
+                    mostrar = esParcial;
+                    break;
+                case 'completos':
+                    mostrar = esCompleto;
+                    break;
+            }
+            
+            $fila.toggle(mostrar);
+        });
+    });
+    
+    // Marcar fila con datos ingresados
+    function marcarFilaConDatos($input) {
+        const $fila = $input.closest('tr');
+        const valor = parseInt($input.val()) || 0;
+        
+        if (valor > 0) {
+            $fila.addClass('row-con-datos');
+            const $indicador = $input.siblings('.indicador-ingresado');
+            if ($indicador.length) {
+                $indicador.text(`${valor} uds`).show();
+            }
+        } else {
+            $fila.removeClass('row-con-datos');
+            $input.siblings('.indicador-ingresado').hide();
+        }
+    }
+    
+    // Actualizar quick stats
+    function actualizarQuickStats() {
+        let pendientes = 0;
+        let ingresados = 0;
+        let monto = 0;
+        
+        $('.recepcionado-input').each(function() {
+            const max = parseInt($(this).attr('max')) || 0;
+            const valor = parseInt($(this).val()) || 0;
+            const costo = parseFloat($(this).closest('tr').find('td:eq(5)').text().replace(/[^0-9.-]/g, '')) || 0;
+            
+            pendientes += max;
+            ingresados += valor;
+            monto += valor * costo;
+        });
+        
+        $('#quickStatPendientes').text(pendientes.toLocaleString());
+        $('#quickStatIngresados').text(ingresados.toLocaleString());
+        $('#quickStatMonto').text('$' + monto.toLocaleString());
+    }
+    
+    // Evento para actualizar quick stats cuando cambia un input
+    $(document).on('input change', '.recepcionado-input', function() {
+        marcarFilaConDatos($(this));
+        actualizarQuickStats();
+        
+        // Agregar clase visual si tiene valor
+        const valor = parseInt($(this).val()) || 0;
+        if (valor > 0) {
+            $(this).addClass('has-value');
+        } else {
+            $(this).removeClass('has-value');
+        }
+    });
+    
+    // Evento para marcar factura con clase visual
+    $(document).on('input change', '.factura-datalist-input', function() {
+        const valor = $(this).val().trim();
+        if (valor) {
+            $(this).addClass('has-factura');
+        } else {
+            $(this).removeClass('has-factura');
+        }
+    });
+    
+    // Actualizar datalist global de facturas cuando se actualicen las facturas
+    function actualizarDatalistGlobal(facturas) {
+        const opciones = facturas.map(f => `<option value="${f.text}" data-id="${f.id}"></option>`).join('');
+        $('#facturas-global-list').html(opciones);
+    }
+    
+    // ========== FUNCIÓN PARA BOTONES DE CANTIDAD RÁPIDA ==========
+    window.aplicarCantidadRapida = function(btn, tipo) {
+        const $wrapper = $(btn).closest('.input-cantidad-wrapper');
+        const $input = $wrapper.find('.recepcionado-input');
+        const max = parseInt($input.data('max')) || parseInt($input.attr('max')) || 0;
+        
+        let valor = 0;
+        
+        switch(tipo) {
+            case 'max':
+                valor = max;
+                break;
+            case 'mitad':
+                valor = Math.ceil(max / 2);
+                break;
+            case 'clear':
+                valor = 0;
+                break;
+        }
+        
+        $input.val(valor > 0 ? valor : '').trigger('change');
+        
+        // Efecto visual de confirmación
+        const $btn = $(btn);
+        const originalBg = $btn.css('background');
+        $btn.css('transform', 'scale(1.2)');
+        setTimeout(() => {
+            $btn.css('transform', 'scale(1)');
+        }, 150);
+        
+        // Actualizar indicador
+        const $indicador = $wrapper.siblings('.indicador-ingresado, .badge-cantidad-ingresada');
+        if (valor > 0) {
+            $indicador.html(`<i class="bi bi-check-circle me-1"></i>${valor} uds`).show();
+        } else {
+            $indicador.hide();
+        }
+        
+        actualizarQuickStats();
+    };
 
     // ========== FUNCIONES EDITAR RECEPCIÓN DE COMPRA ==========
     
@@ -3204,6 +3761,9 @@ const GestionCompras = (function() {
         $('datalist[id^="facturas-list-"]').each(function() {
             $(this).html(opciones);
         });
+        
+        // Actualizar datalist global de acciones masivas
+        $('#facturas-global-list').html(opciones);
     }
     
     function actualizarFacturasDisponibles(origen = 'manual') {
@@ -3327,10 +3887,30 @@ let archivoCSVActual = null;
 // Inicializar drag & drop para CSV
 $(document).ready(function() {
     const uploadZone = $('#csvUploadZone');
+    const fileInput = $('#archivoCSV');
     
-    // Click en la zona
-    uploadZone.on('click', function() {
-        $('#archivoCSV').click();
+    // Función para abrir el selector de archivos
+    function abrirSelectorArchivos() {
+        // Usar timeout para evitar conflictos con eventos de click
+        setTimeout(function() {
+            fileInput[0].click();
+        }, 10);
+    }
+    
+    // Click en el botón de seleccionar archivo
+    $(document).on('click', '#btnSeleccionarArchivoCSV', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        abrirSelectorArchivos();
+    });
+    
+    // Click en la zona (excluyendo el botón y el input)
+    uploadZone.on('click', function(e) {
+        // Solo abrir si no se hizo click en el botón o en elementos interactivos
+        if (!$(e.target).closest('#btnSeleccionarArchivoCSV, button, input').length) {
+            e.preventDefault();
+            abrirSelectorArchivos();
+        }
     });
 
     // Drag & Drop events
@@ -3353,20 +3933,21 @@ $(document).ready(function() {
         
         const files = e.originalEvent.dataTransfer.files;
         if (files.length > 0) {
-            $('#archivoCSV')[0].files = files;
+            fileInput[0].files = files;
             manejarSeleccionArchivoCSV(files[0]);
         }
     });
 
     // Cambio de archivo manual
-    $('#archivoCSV').on('change', function(e) {
+    fileInput.on('change', function(e) {
         if (e.target.files.length > 0) {
             manejarSeleccionArchivoCSV(e.target.files[0]);
         }
     });
 
     // Remover archivo
-    $('#btnRemoveCSV').on('click', function() {
+    $('#btnRemoveCSV').on('click', function(e) {
+        e.stopPropagation();
         resetCSVUpload();
     });
 
@@ -4135,7 +4716,7 @@ function resetCSVUpload() {
     });
 
     // Función para validar factura de un input
-    function validarFacturaInput(facturaInput) {
+    function validarFacturaInput(facturaInput, validarConServidor = false) {
         const facturaNumero = (facturaInput.val() || '').trim();
         let facturaId = null;
         
@@ -4166,11 +4747,15 @@ function resetCSVUpload() {
                 facturaInput.removeClass('is-invalid').addClass('is-valid');
                 return facturaId;
             } else {
-                // Si no encontró en el datalist, marcar como inválida
+                // Si no encontró en el datalist, validar contra el servidor
                 facturaInput.removeClass('is-valid').addClass('is-invalid');
                 
-                // Agregar tooltip explicativo
-                facturaInput.attr('title', 'Esta factura no está en la lista disponible. Usa el botón "Recargar Facturas" si es una factura nueva.');
+                // Validar contra el servidor para ver si la factura existe y a quién pertenece
+                if (validarConServidor && currentProveedorId) {
+                    validarFacturaConServidor(facturaNumero, currentProveedorId, facturaInput);
+                } else {
+                    facturaInput.attr('title', 'Esta factura no está en la lista del mes actual. Usa el botón "Recargar Facturas" si es una factura nueva.');
+                }
                 
                 return null;
             }
@@ -4180,10 +4765,81 @@ function resetCSVUpload() {
             return null;
         }
     }
+    
+    // Función para validar factura contra el servidor
+    function validarFacturaConServidor(numeroFactura, proveedorId, inputElement) {
+        $.ajax({
+            url: urls.validarFacturaProveedor,
+            method: 'GET',
+            data: {
+                numero: numeroFactura,
+                proveedor_id: proveedorId
+            },
+            success: function(response) {
+                if (response.existe) {
+                    if (response.pertenece_proveedor) {
+                        // La factura existe y pertenece al proveedor correcto
+                        inputElement.removeClass('is-invalid').addClass('is-valid');
+                        inputElement.attr('title', `Factura válida: ${response.factura.numero} - $${response.factura.monto.toLocaleString()}`);
+                        
+                        // Agregar la factura al datalist si no está
+                        const datalistId = inputElement.attr('list');
+                        const $datalist = $('#' + datalistId);
+                        if (!$datalist.find(`option[data-id="${response.factura.id}"]`).length) {
+                            $datalist.append(`<option value="${response.factura.numero}" data-id="${response.factura.id}">`);
+                        }
+                    } else {
+                        // La factura existe pero pertenece a OTRO proveedor
+                        inputElement.removeClass('is-valid').addClass('is-invalid');
+                        inputElement.attr('title', response.mensaje);
+                        
+                        // Mostrar alerta
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Factura de otro proveedor',
+                            html: `
+                                <div class="text-start">
+                                    <p><strong>Factura N°:</strong> ${response.factura.numero}</p>
+                                    <p><strong>Pertenece a:</strong> ${response.factura.emisor_nombre}</p>
+                                    <p><strong>Monto:</strong> $${response.factura.monto.toLocaleString()}</p>
+                                    <p><strong>Fecha:</strong> ${response.factura.fecha}</p>
+                                    <hr>
+                                    <p class="text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Esta factura NO pertenece al proveedor de esta compra.</p>
+                                </div>
+                            `,
+                            confirmButtonText: 'Entendido',
+                            confirmButtonColor: '#f06548'
+                        });
+                    }
+                } else {
+                    // La factura no existe en el sistema
+                    inputElement.attr('title', response.mensaje);
+                }
+            },
+            error: function() {
+                console.warn('Error al validar factura contra servidor');
+            }
+        });
+    }
 
-    // Validación en tiempo real al cambiar la factura
-    $(document).on('input change', '.factura-datalist-input', function() {
-        validarFacturaInput($(this));
+    // Validación en tiempo real al cambiar la factura (sin servidor para rapidez)
+    $(document).on('input', '.factura-datalist-input', function() {
+        validarFacturaInput($(this), false);
+        
+        // Actualizar indicador visual
+        const $row = $(this).closest('tr');
+        actualizarIndicadoresIngresados($row);
+    });
+    
+    // Validación completa al salir del input (con servidor si no se encuentra)
+    $(document).on('blur change', '.factura-datalist-input', function() {
+        const $input = $(this);
+        const facturaNumero = ($input.val() || '').trim();
+        
+        // Si hay factura ingresada y no es válida localmente, validar con servidor
+        if (facturaNumero && $input.hasClass('is-invalid')) {
+            validarFacturaConServidor(facturaNumero, currentProveedorId, $input);
+        }
         
         // Actualizar indicador visual
         const $row = $(this).closest('tr');

@@ -595,6 +595,105 @@
     height: 3rem;
     color: var(--nexo-primary);
 }
+
+/* ========== TABS STYLES ========== */
+.nexo-tabs-container {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1rem 1.5rem;
+    box-shadow: var(--nexo-shadow-sm);
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.nexo-tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.nexo-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 500;
+    font-size: 0.875rem;
+    border: 2px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    color: var(--nexo-gray-700);
+    cursor: pointer;
+    transition: all var(--nexo-transition-fast);
+}
+
+.nexo-tab:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+    background: var(--nexo-primary-light);
+}
+
+.nexo-tab.active {
+    border-color: var(--nexo-primary);
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-tab.active .nexo-tab-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--nexo-white);
+}
+
+.nexo-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 0.5rem;
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+}
+
+.nexo-tab-badge.success {
+    background: rgba(0, 212, 170, 0.15);
+    color: #00A67D;
+}
+
+.nexo-tab-badge.warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+}
+
+.nexo-tab-info {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.8125rem;
+    color: var(--nexo-gray-700);
+    display: flex;
+    align-items: center;
+}
+
+.nexo-tab-info i {
+    color: var(--nexo-primary);
+}
+
+/* Badge para sin sucursal en tabla */
+.badge-sin-sucursal {
+    background: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
 </style>
 
 <div class="main-content">
@@ -684,6 +783,31 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- ========== TABS DE FILTRO POR SUCURSAL ========== -->
+            <div class="nexo-tabs-container mb-4">
+                <div class="nexo-tabs" role="tablist">
+                    <button class="nexo-tab active" data-tab="todos" onclick="cambiarTab('todos')" role="tab">
+                        <i class="bi bi-people me-2"></i>
+                        Todos
+                        <span class="nexo-tab-badge" id="countTodos">0</span>
+                    </button>
+                    <button class="nexo-tab" data-tab="con-sucursal" onclick="cambiarTab('con-sucursal')" role="tab">
+                        <i class="bi bi-building-check me-2"></i>
+                        Con Sucursal Asignada
+                        <span class="nexo-tab-badge success" id="countConSucursal">0</span>
+                    </button>
+                    <button class="nexo-tab" data-tab="sin-sucursal" onclick="cambiarTab('sin-sucursal')" role="tab">
+                        <i class="bi bi-person-exclamation me-2"></i>
+                        Sin Sucursal
+                        <span class="nexo-tab-badge warning" id="countSinSucursal">0</span>
+                    </button>
+                </div>
+                <div class="nexo-tab-info" id="tabInfo">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <span id="tabInfoText">Mostrando todos los vendedores registrados</span>
                 </div>
             </div>
 
@@ -945,6 +1069,7 @@ let vendedorSeleccionado = null;
 let modoEdicion = false;
 let codigoValido = false;
 let validandoCodigo = false;
+let tabActual = 'todos'; // Tab actual: 'todos', 'con-sucursal', 'sin-sucursal'
 
 // Inicializar cuando jQuery esté disponible
 $(document).ready(function() {
@@ -992,6 +1117,7 @@ $(document).ready(function() {
     window.aplicarFiltros = aplicarFiltros;
     window.limpiarFiltros = limpiarFiltros;
     window.confirmarEliminar = confirmarEliminar;
+    window.cambiarTab = cambiarTab;
     
     console.log('✅ Gestión de Vendedores NEXO inicializada');
 });
@@ -1163,8 +1289,14 @@ function cargarVendedores() {
             if (response.success) {
                 vendedores = response.vendedores;
                 console.log('📊 Vendedores cargados:', vendedores.length);
-                console.log('📋 Lista de vendedores:', vendedores.map(v => ({id: v.id, nombre: v.nombre, activo: v.activo})));
-                actualizarTabla(vendedores);
+                console.log('📋 Lista de vendedores:', vendedores.map(v => ({id: v.id, nombre: v.nombre, activo: v.activo, sucursales: v.sucursales?.length || 0})));
+                
+                // Actualizar contadores de tabs
+                actualizarContadoresTabs();
+                
+                // Aplicar filtro de tab actual
+                aplicarFiltros();
+                
                 actualizarMetricas(response.metricas);
             } else {
                 mostrarError('Error al cargar vendedores', response.error || 'Error desconocido');
@@ -1176,6 +1308,51 @@ function cargarVendedores() {
             mostrarTablaVacia();
         }
     });
+}
+
+// Función para actualizar contadores de tabs
+function actualizarContadoresTabs() {
+    const total = vendedores.length;
+    const conSucursal = vendedores.filter(v => v.sucursales && v.sucursales.length > 0).length;
+    const sinSucursal = vendedores.filter(v => !v.sucursales || v.sucursales.length === 0).length;
+    
+    $('#countTodos').text(total);
+    $('#countConSucursal').text(conSucursal);
+    $('#countSinSucursal').text(sinSucursal);
+    
+    console.log(`📊 Contadores - Total: ${total}, Con Sucursal: ${conSucursal}, Sin Sucursal: ${sinSucursal}`);
+}
+
+// Función para cambiar de tab
+function cambiarTab(tab) {
+    tabActual = tab;
+    
+    // Actualizar clases de tabs activos
+    $('.nexo-tab').removeClass('active');
+    $(`.nexo-tab[data-tab="${tab}"]`).addClass('active');
+    
+    // Actualizar texto informativo
+    let infoText = '';
+    switch(tab) {
+        case 'todos':
+            infoText = 'Mostrando todos los vendedores registrados';
+            break;
+        case 'con-sucursal':
+            infoText = '<strong>Vendedores de punto de venta:</strong> Personal asignado a una sucursal específica para ventas presenciales';
+            break;
+        case 'sin-sucursal':
+            infoText = '<strong>Personal sin asignación:</strong> Estos vendedores no tienen sucursal asignada. Podrían ser personal administrativo, de créditos, o externos. Revise si deben estar en esta lista.';
+            break;
+    }
+    $('#tabInfoText').html(infoText);
+    
+    // Cambiar color del info según el tab
+    const tabInfo = $('#tabInfo');
+    tabInfo.css('background', tab === 'sin-sucursal' ? 'rgba(255, 176, 32, 0.1)' : 'var(--nexo-gray-100)');
+    tabInfo.find('i').css('color', tab === 'sin-sucursal' ? 'var(--nexo-warning)' : 'var(--nexo-primary)');
+    
+    // Aplicar filtros con el nuevo tab
+    aplicarFiltros();
 }
 
 // Función para escapar HTML
@@ -1194,13 +1371,34 @@ function actualizarTabla(listaVendedores) {
     console.log('🔄 Actualizando tabla con', listaVendedores.length, 'vendedores');
     
     if (!listaVendedores || listaVendedores.length === 0) {
+        let emptyMessage = {
+            icon: 'bi-person-x',
+            title: 'No se encontraron vendedores',
+            subtitle: 'Intenta ajustar los filtros o crea un nuevo vendedor'
+        };
+        
+        // Personalizar mensaje según el tab activo
+        if (tabActual === 'con-sucursal') {
+            emptyMessage = {
+                icon: 'bi-building-x',
+                title: 'No hay vendedores con sucursal asignada',
+                subtitle: 'Los vendedores sin sucursal aparecerán en la pestaña "Sin Sucursal"'
+            };
+        } else if (tabActual === 'sin-sucursal') {
+            emptyMessage = {
+                icon: 'bi-person-check',
+                title: 'Todos los vendedores tienen sucursal asignada',
+                subtitle: 'No hay vendedores pendientes de asignación'
+            };
+        }
+        
         tbody.html(`
             <tr>
                 <td colspan="9">
                     <div class="nexo-empty-state">
-                        <i class="bi bi-person-x"></i>
-                        <h6>No se encontraron vendedores</h6>
-                        <p>Intenta ajustar los filtros o crea un nuevo vendedor</p>
+                        <i class="bi ${emptyMessage.icon}"></i>
+                        <h6>${emptyMessage.title}</h6>
+                        <p>${emptyMessage.subtitle}</p>
                     </div>
                 </td>
             </tr>
@@ -1248,7 +1446,7 @@ function actualizarTabla(listaVendedores) {
                     <td>
                         ${sucursalesEscapado && sucursalesEscapado !== 'Sin asignar' ? 
                             `<span class="nexo-badge info"><i class="bi bi-shop me-1"></i>${sucursalesEscapado}</span>` : 
-                            '<span style="color: var(--nexo-gray-500);">Sin asignar</span>'}
+                            `<span class="badge-sin-sucursal"><i class="bi bi-exclamation-triangle"></i> Sin asignar</span>`}
                     </td>
                     <td style="color: var(--nexo-gray-700);">${correoEscapado || '<span style="color: var(--nexo-gray-500);">Sin correo</span>'}</td>
                     <td>
@@ -1583,15 +1781,24 @@ function aplicarFiltros() {
     const comision = $('#filtroComision').val();
     const ordenar = $('#ordenarPor').val();
     
-    console.log('🔍 Aplicando filtros - Búsqueda:', busqueda, 'Estado:', estado, 'Total vendedores:', vendedores.length);
+    console.log('🔍 Aplicando filtros - Tab:', tabActual, 'Búsqueda:', busqueda, 'Estado:', estado, 'Total vendedores:', vendedores.length);
     
     let vendedoresFiltrados = vendedores.filter(function(vendedor) {
+        // Filtro por TAB (sucursal asignada)
+        if (tabActual === 'con-sucursal') {
+            if (!vendedor.sucursales || vendedor.sucursales.length === 0) return false;
+        } else if (tabActual === 'sin-sucursal') {
+            if (vendedor.sucursales && vendedor.sucursales.length > 0) return false;
+        }
+        
         // Filtro de búsqueda
         if (busqueda) {
             const nombre = (vendedor.nombre || '').toLowerCase();
             const rut = (vendedor.rut || '').toLowerCase();
             const codigo = (vendedor.codigo_vendedor || '').toLowerCase();
-            const texto = `${nombre} ${rut} ${codigo}`;
+            const empresa = (vendedor.empresa || '').toLowerCase();
+            const sucursales = (vendedor.sucursales_nombres || '').toLowerCase();
+            const texto = `${nombre} ${rut} ${codigo} ${empresa} ${sucursales}`;
             if (!texto.includes(busqueda)) return false;
         }
         
@@ -1640,7 +1847,9 @@ function limpiarFiltros() {
     $('#filtroEstado').val('');
     $('#filtroComision').val('');
     $('#ordenarPor').val('nombre');
-    actualizarTabla(vendedores);
+    
+    // NO resetear el tab, solo los filtros dentro del tab actual
+    aplicarFiltros();
 }
 
 // Función para exportar vendedores

@@ -366,6 +366,29 @@ class Dte(models.Model):
         null=True,
         help_text="Motivo del rechazo del DTE (máximo 100 caracteres)"
     )
+    
+    # === CAMPOS PARA SOFT DELETE / DESCARTE ===
+    descartado = models.BooleanField(
+        default=False,
+        help_text="DTE marcado como descartado (no se muestra en listados pero permanece en DB)"
+    )
+    fecha_descarte = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que se descartó el DTE"
+    )
+    descartado_por = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Usuario que descartó el DTE"
+    )
+    motivo_descarte = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text="Motivo por el cual se descartó"
+    )
 
     def __str__(self):
         return f"DTE {self.numero_documento} - {self.tipo_documento}"
@@ -559,86 +582,33 @@ class Producto_Talla(models.Model):
     
     def stock_sucursal(self, sucursal_id):
         """
-        Calcula el stock disponible en una sucursal específica
+        Retorna el stock disponible en una sucursal específica.
         
-        SISTEMA HÍBRIDO (compatible con migración de datos legacy):
-        - Si existen movimientos: Calcula desde movimientos (sistema nuevo)
-        - Si NO hay movimientos: Usa campo 'stock' directo (datos migrados/legacy)
+        IMPORTANTE: Usa directamente el campo 'stock' de la tabla Producto_Talla
+        que está sincronizado desde MySQL (producción).
         
-        Esto permite migrar datos históricos sin crear millones de movimientos
+        El stock solo se muestra si el producto pertenece a la sucursal consultada.
         """
-        from django.db.models import Sum, Q
+        # ✅ Asegurar que sucursal_id sea int para comparaciones correctas
+        if sucursal_id is not None:
+            sucursal_id = int(sucursal_id)
         
-        # Verificar si hay movimientos para esta talla
-        tiene_movimientos = self.movimientos_productos_talla.exists()
+        # ✅ Usar stock directo de la tabla (sincronizado desde MySQL)
+        # Solo retornar stock si el producto pertenece a esta sucursal
+        if self.producto and self.producto.sucursal_id == sucursal_id:
+            return max(0, self.stock or 0)
         
-        if tiene_movimientos:
-            # SISTEMA NUEVO: Calcular desde movimientos
-            # Sumar ingresos a esta sucursal (movimientos donde sucursal_destino = sucursal_id)
-            ingresos = self.movimientos_productos_talla.filter(
-                Q(sucursal_destino_id=sucursal_id) &
-                (Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA')) &
-                Q(estado='COMPLETADO')
-            ).aggregate(total=Sum('cantidad'))['total'] or 0
-            
-            # Sumar egresos desde esta sucursal (movimientos donde sucursal_origen = sucursal_id)
-            egresos = self.movimientos_productos_talla.filter(
-                Q(sucursal_origen_id=sucursal_id) &
-                (Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA')) &
-                Q(estado='COMPLETADO')
-            ).aggregate(total=Sum('cantidad'))['total'] or 0
-            
-            # El stock en sucursal es ingresos + egresos (egresos son negativos)
-            stock_calculado = ingresos + egresos
-            
-            return max(0, stock_calculado)  # No permitir stock negativo
-        else:
-            # SISTEMA LEGACY: Intentar obtener stock desde StockSucursal si existe
-            try:
-                from .models import StockSucursal
-                stock_registro = StockSucursal.objects.filter(
-                    producto_talla=self,
-                    sucursal_id=sucursal_id
-                ).first()
-                
-                if stock_registro:
-                    return max(0, stock_registro.cantidad)
-            except (ImportError, AttributeError):
-                # Si no existe el modelo StockSucursal, continuar con la lógica legacy
-                pass
-            
-            # Fallback: Usar campo stock directo (datos migrados/legacy)
-            # Si el producto pertenece a esta sucursal, retornar su stock
-            if self.producto.sucursal_id == sucursal_id:
-                return max(0, self.stock)
-            else:
-                # ⚠️ ADVERTENCIA: En modo legacy sin movimientos ni tabla StockSucursal,
-                # no podemos determinar el stock por sucursal con precisión.
-                # Retornamos 0 para evitar inconsistencias.
-                # SOLUCIÓN: Migrar a sistema de movimientos o crear registros en StockSucursal
-                return 0  # No hay stock en esta sucursal
+        # Producto no pertenece a esta sucursal
+        return 0
     
     def stock_total(self):
         """
-        Calcula el stock total en todas las sucursales
+        Retorna el stock total del producto.
+        
+        IMPORTANTE: Usa directamente el campo 'stock' de la tabla Producto_Talla
+        que está sincronizado desde MySQL (producción).
         """
-        from django.db.models import Sum
-        
-        # Sumar todos los ingresos
-        ingresos = self.movimientos_productos_talla.filter(
-            tipo_movimiento='INGRESO',
-            estado='COMPLETADO'
-        ).aggregate(total=Sum('cantidad'))['total'] or 0
-        
-        # Sumar todos los egresos (son negativos)
-        egresos = self.movimientos_productos_talla.filter(
-            tipo_movimiento='EGRESO',
-            estado='COMPLETADO'
-        ).aggregate(total=Sum('cantidad'))['total'] or 0
-        
-        stock_calculado = ingresos + egresos
-        
-        return max(0, stock_calculado)
+        return max(0, self.stock or 0)
 # ========== CONSTANTES PARA MOVIMIENTOS ==========
 TIPO_MOVIMIENTO_CHOICES = [
     ('INGRESO', 'Ingreso'),
@@ -653,7 +623,9 @@ TIPO_MOVIMIENTO_CHOICES = [
 CONCEPTO_MOVIMIENTO_CHOICES = [
     # === INGRESOS ===
     ('INGRESO_INICIAL', 'Ingreso Inicial'),
+    ('INGRESO_MANUAL', 'Ingreso Manual'),  # ✅ AGREGADO: Para creación manual de productos
     ('RECEPCION_COMPRA', 'Recepción de Compra'),
+    ('REPOSICION_STOCK', 'Reposición de Stock'),  # ✅ AGREGADO: Para reposiciones
     ('DEVOLUCION_CLIENTE', 'Devolución de Cliente'),
     ('TRASPASO_ENTRADA', 'Traspaso Entrada'),
     ('REGULARIZACION_TRASPASO', 'Regularización de Traspaso'),
@@ -676,6 +648,10 @@ CONCEPTO_MOVIMIENTO_CHOICES = [
     ('TRASPASO_VITRINA', 'Traspaso a Vitrina'),
     ('CAMBIO_PRODUCTO_SALIDA', 'Cambio de Producto (Salida)'),
     ('CAMBIO_PRODUCTO_ENTRADA', 'Cambio de Producto (Entrada)'),
+    
+    # === CORRECCIONES ===
+    ('CORRECCION_STOCK', 'Corrección de Stock'),  # ✅ AGREGADO: Para corregir errores
+    ('ANULACION_REGULARIZACION', 'Anulación de Regularización'),  # ✅ AGREGADO
 ]
 
 ESTADO_MOVIMIENTO_CHOICES = [
@@ -1034,6 +1010,14 @@ class Dte_Productos(models.Model):
 
 
 class Compras(models.Model):
+    # Estados de la compra
+    ESTADO_CHOICES = [
+        ('ACTIVA', 'Activa'),
+        ('COMPLETADA', 'Completada'),
+        ('ELIMINADA', 'Eliminada'),
+        ('CANCELADA', 'Cancelada'),
+    ]
+    
     empresa =   models.ForeignKey(Empresa,   on_delete=models.CASCADE)
     nombre=   models.CharField(max_length=200)
     correlativo = models.IntegerField()
@@ -1042,8 +1026,16 @@ class Compras(models.Model):
     fecha =   models.DateField( auto_now=True)
     fechaInicioTemporada =   models.DateField(null=True,blank=True)
     fechaTerminoTemporada =   models.DateField(null=True,blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='ACTIVA')
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.CharField(max_length=100, null=True, blank=True)
+    
     def __str__(self):
         return f"Compras   {self.nombre} - {self.temporada}"
+    
+    @property
+    def esta_eliminada(self):
+        return self.estado == 'ELIMINADA'
 class Compras_Producto(models.Model):
     compras =   models.ForeignKey(Compras,   on_delete=models.CASCADE)
     nombre=   models.CharField(max_length=200)
@@ -1122,6 +1114,16 @@ class Productos_Recepcionados(models.Model):
     recepcionado_por = models.CharField(max_length=100, blank=True, null=True)
     fecha_regularizacion = models.DateTimeField(null=True, blank=True)
     regularizado_por = models.CharField(max_length=100, blank=True, null=True)
+    
+    # ✅ AGREGADO: Trazabilidad completa - vincular recepción con movimiento
+    movimiento_ingreso = models.ForeignKey(
+        'Movimientos_Producto',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recepciones_asociadas',
+        help_text="Movimiento de ingreso generado por esta recepción"
+    )
     
     class Meta:
         verbose_name = 'Producto Recepcionado'
@@ -1474,6 +1476,10 @@ class Movimientos_Producto(models.Model):
             models.Index(fields=['fecha', 'tipo_movimiento']),
             models.Index(fields=['ProductoTalla', 'fecha']),
             models.Index(fields=['concepto', 'estado']),
+            # ✅ OPTIMIZACIÓN: Índices para búsquedas por sucursal (carga inicial rápida)
+            models.Index(fields=['sucursal_origen', 'fecha']),
+            models.Index(fields=['sucursal_destino', 'fecha']),
+            models.Index(fields=['-fecha', '-hora']),  # Índice para ordenamiento descendente
         ]
     
     def __str__(self):
@@ -2866,10 +2872,12 @@ class CambioDevolucionDetalle(models.Model):
         Ticket_Productos, 
         on_delete=models.CASCADE,
         related_name='cambios_como_original',
-        help_text="Producto del ticket original que se cambia/devuelve"
+        null=True, blank=True,
+        help_text="Producto del ticket original que se cambia/devuelve (NULL para productos adicionales)"
     )
     cantidad_original = models.IntegerField(
-        help_text="Cantidad del producto original a cambiar/devolver"
+        default=0,
+        help_text="Cantidad del producto original a cambiar/devolver (0 para productos adicionales)"
     )
     
     # === PRODUCTO NUEVO (SI ES CAMBIO) ===
@@ -2904,7 +2912,8 @@ class CambioDevolucionDetalle(models.Model):
     # === DIFERENCIAS DE PRECIO ===
     precio_original_unitario = models.DecimalField(
         max_digits=10, decimal_places=2,
-        help_text="Precio unitario original"
+        default=0,
+        help_text="Precio unitario original (0 para productos adicionales)"
     )
     diferencia_unitaria = models.DecimalField(
         max_digits=10, decimal_places=2, 
@@ -3294,13 +3303,27 @@ class Cotizacion_Empresa(models.Model):
         return 0
     
     def calcular_totales(self):
-        """Calcula los totales de la cotización basándose en sus items"""
-        from decimal import Decimal
+        """
+        Calcula los totales de la cotización basándose en sus items.
+        IMPORTANTE: Los precios unitarios ya INCLUYEN IVA (19%).
+        Por lo tanto, debemos calcular el neto y el IVA desde el total con IVA.
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+        
         items = self.items.all()
-        self.subtotal = sum((item.subtotal for item in items), Decimal('0'))
-        # Calcular IVA (19% en Chile)
-        self.impuesto = self.subtotal * Decimal('0.19')
-        self.total = self.subtotal + self.impuesto - (self.descuento or Decimal('0'))
+        # total_bruto = suma de (cantidad * precio_unitario) - El precio YA incluye IVA
+        total_bruto = sum((item.subtotal for item in items), Decimal('0'))
+        
+        # Calcular neto desde el bruto (precio con IVA)
+        # Fórmula: neto = bruto / 1.19
+        self.subtotal = (total_bruto / Decimal('1.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        
+        # Calcular IVA (19% del neto)
+        self.impuesto = (self.subtotal * Decimal('0.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        
+        # Total = neto + IVA - descuento (debe ser igual al total_bruto si no hay descuento)
+        self.total = total_bruto - (self.descuento or Decimal('0'))
+        
         self.save()
     
     def anular(self, usuario, motivo=""):
@@ -3756,6 +3779,23 @@ class CambioPrecioPendiente(models.Model):
     notificado = models.BooleanField(
         default=False,
         help_text="Si se notificó a la sucursal"
+    )
+    descartado = models.BooleanField(
+        default=False,
+        help_text="Si el usuario descartó/archivó este registro"
+    )
+    fecha_descarte = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Fecha en que se descartó"
+    )
+    descartado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cambios_precio_descartados',
+        help_text="Usuario que descartó el registro"
     )
     prioridad = models.CharField(
         max_length=10,
@@ -4460,6 +4500,8 @@ class PermisoRol(models.Model):
     """
     Define qué roles tienen acceso a qué opciones del menú
     """
+    # Roles del sistema - todos los usuarios usan estos roles para permisos
+    # (is_superuser de Django ya no da acceso automático)
     ROLES_CHOICES = [
         ('administrador', 'Administrador'),
         ('administracion', 'Administración'),
@@ -4518,22 +4560,22 @@ class PermisoRol(models.Model):
         return f"{self.get_rol_display()} - {self.opcion_menu.nombre}"
     
     @classmethod
-    def tiene_permiso(cls, usuario, codigo_opcion, tipo_permiso='puede_ver'):
+    def tiene_permiso(cls, usuario, codigo_opcion, tipo_permiso='puede_ver', sucursal_id=None):
         """
-        Verifica si un usuario tiene un permiso específico para una opción
+        Verifica si un usuario tiene un permiso específico para una opción.
+        También verifica los permisos de la sucursal si se proporciona sucursal_id.
         
         Args:
             usuario: Instancia del usuario
             codigo_opcion: Código de la opción del menú
             tipo_permiso: puede_ver, puede_crear, puede_editar, puede_eliminar, puede_exportar, puede_aprobar
+            sucursal_id: ID de la sucursal actual del usuario (opcional)
         
         Returns:
-            bool: True si tiene permiso, False en caso contrario
+            bool: True si tiene permiso (por rol Y por sucursal), False en caso contrario
         """
-        # Superusuarios siempre tienen todos los permisos
-        if usuario.is_superuser:
-            return True
-        
+        # Todos los usuarios respetan los permisos configurados por rol
+        # (is_superuser ya no da acceso automático, se usa el campo 'rol')
         try:
             opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
             permiso = cls.objects.filter(
@@ -4541,11 +4583,32 @@ class PermisoRol(models.Model):
                 opcion_menu=opcion
             ).first()
             
+            # Verificar permiso por rol
+            tiene_permiso_rol = False
             if permiso:
-                return getattr(permiso, tipo_permiso, False)
+                tiene_permiso_rol = getattr(permiso, tipo_permiso, False)
             
-            # Si no hay permiso definido, denegar acceso
-            return False
+            if not tiene_permiso_rol:
+                return False
+            
+            # Verificar permiso por sucursal (si se proporcionó sucursal_id)
+            if sucursal_id:
+                # Mapear tipo_permiso de rol a tipo_permiso de sucursal
+                # Para 'puede_ver', verificamos 'habilitado' en sucursal
+                tipo_permiso_sucursal = 'habilitado' if tipo_permiso == 'puede_ver' else tipo_permiso
+                
+                permiso_sucursal = PermisoSucursal.objects.filter(
+                    sucursal_id=sucursal_id,
+                    opcion_menu=opcion
+                ).first()
+                
+                if permiso_sucursal:
+                    # Si hay configuración de sucursal, verificar el permiso específico
+                    tiene_permiso_sucursal = getattr(permiso_sucursal, tipo_permiso_sucursal, True)
+                    if not tiene_permiso_sucursal:
+                        return False
+            
+            return True
         except OpcionMenu.DoesNotExist:
             return False
     
@@ -4554,9 +4617,7 @@ class PermisoRol(models.Model):
         """
         Retorna todas las opciones del menú disponibles para un usuario
         """
-        if usuario.is_superuser:
-            return OpcionMenu.objects.filter(activo=True)
-        
+        # Todos los usuarios respetan los permisos configurados por rol
         opciones_ids = cls.objects.filter(
             rol=usuario.rol,
             puede_ver=True,
@@ -4626,6 +4687,118 @@ class ConfiguracionPermisoGlobal(models.Model):
             return json.loads(self.valor)
         else:
             return self.valor
+
+
+class PermisoSucursal(models.Model):
+    """
+    Define qué opciones del menú están habilitadas para cada sucursal.
+    Permite restringir funcionalidades específicas por sucursal.
+    Por ejemplo: Una sucursal vendedora no puede crear productos ni hacer compras.
+    """
+    sucursal = models.ForeignKey(
+        'app.Sucursal',
+        on_delete=models.CASCADE,
+        related_name='permisos_sucursal',
+        help_text="Sucursal a la que aplica este permiso"
+    )
+    opcion_menu = models.ForeignKey(
+        OpcionMenu,
+        on_delete=models.CASCADE,
+        related_name='permisos_sucursal'
+    )
+    habilitado = models.BooleanField(
+        default=True,
+        help_text="Si esta opción está habilitada para la sucursal"
+    )
+    puede_crear = models.BooleanField(
+        default=True,
+        help_text="Puede crear nuevos registros desde esta sucursal"
+    )
+    puede_editar = models.BooleanField(
+        default=True,
+        help_text="Puede editar registros desde esta sucursal"
+    )
+    puede_eliminar = models.BooleanField(
+        default=False,
+        help_text="Puede eliminar registros desde esta sucursal"
+    )
+    puede_exportar = models.BooleanField(
+        default=True,
+        help_text="Puede exportar datos desde esta sucursal"
+    )
+    puede_aprobar = models.BooleanField(
+        default=False,
+        help_text="Puede aprobar operaciones desde esta sucursal"
+    )
+    notas = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Notas sobre por qué esta restricción está aplicada"
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('sucursal', 'opcion_menu')
+        verbose_name = 'Permiso por Sucursal'
+        verbose_name_plural = 'Permisos por Sucursal'
+        ordering = ['sucursal', 'opcion_menu']
+    
+    def __str__(self):
+        estado = "Habilitado" if self.habilitado else "Deshabilitado"
+        return f"{self.sucursal.alias} - {self.opcion_menu.nombre} ({estado})"
+    
+    @classmethod
+    def sucursal_tiene_permiso(cls, sucursal, codigo_opcion, tipo_permiso='habilitado'):
+        """
+        Verifica si una sucursal tiene un permiso específico para una opción.
+        
+        Args:
+            sucursal: Instancia de la sucursal o ID de la sucursal
+            codigo_opcion: Código de la opción del menú
+            tipo_permiso: habilitado, puede_crear, puede_editar, puede_eliminar, puede_exportar, puede_aprobar
+        
+        Returns:
+            bool: True si tiene permiso, False en caso contrario
+        """
+        try:
+            if isinstance(sucursal, int):
+                sucursal_id = sucursal
+            else:
+                sucursal_id = sucursal.id
+            
+            opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
+            permiso = cls.objects.filter(
+                sucursal_id=sucursal_id,
+                opcion_menu=opcion
+            ).first()
+            
+            if permiso:
+                return getattr(permiso, tipo_permiso, True)
+            
+            # Si no hay permiso definido para la sucursal, está permitido por defecto
+            return True
+        except OpcionMenu.DoesNotExist:
+            return True
+    
+    @classmethod
+    def opciones_disponibles_para_sucursal(cls, sucursal):
+        """
+        Retorna las opciones del menú habilitadas para una sucursal
+        """
+        if isinstance(sucursal, int):
+            sucursal_id = sucursal
+        else:
+            sucursal_id = sucursal.id
+        
+        # Obtener opciones deshabilitadas para la sucursal
+        opciones_deshabilitadas = cls.objects.filter(
+            sucursal_id=sucursal_id,
+            habilitado=False
+        ).values_list('opcion_menu_id', flat=True)
+        
+        # Retornar todas las opciones activas excepto las deshabilitadas
+        return OpcionMenu.objects.filter(activo=True).exclude(id__in=opciones_deshabilitadas)
 
 
 # ========== SISTEMA DE CÓDIGOS DE AUTORIZACIÓN DINÁMICOS ==========
@@ -5037,6 +5210,46 @@ class NotificacionDTE(models.Model):
             detalle_problemas=detalle_problemas,
             usuario_que_proceso=usuario_reportante
         )
+
+
+# ==============================================================================
+# ALERTAS NAVBAR - DTEs PENDIENTES POR RECEPCIONAR
+# ==============================================================================
+
+class DteAlertaDescartada(models.Model):
+    """Registro de alertas de DTE descartadas por usuario."""
+
+    dte = models.ForeignKey(
+        Dte,
+        on_delete=models.CASCADE,
+        related_name='alertas_descartadas'
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='alertas_dte_descartadas'
+    )
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='alertas_dte_descartadas'
+    )
+    fecha_descartada = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Alerta DTE Descartada'
+        verbose_name_plural = 'Alertas DTE Descartadas'
+        unique_together = ('dte', 'usuario')
+        indexes = [
+            models.Index(fields=['dte', 'usuario'], name='dte_alerta_dte_user_idx'),
+            models.Index(fields=['usuario'], name='dte_alerta_usuario_idx'),
+            models.Index(fields=['-fecha_descartada'], name='dte_alerta_fecha_idx'),
+        ]
+
+    def __str__(self):
+        return f"Alerta DTE #{self.dte.numero_documento} descartada por {self.usuario}"
 
 
 # ==============================================================================

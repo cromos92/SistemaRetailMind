@@ -21,8 +21,10 @@ class Command(BaseCommand):
         self.crear_modulo_requerimientos()
         self.crear_modulo_reportes()
         self.crear_modulo_configuracion()
+        self.crear_modulo_usuario()  # Nuevo módulo para opciones de usuario
         
         # Crear permisos por defecto para cada rol
+        # Nota: is_superuser de Django tiene acceso total automáticamente
         self.crear_permisos_administrador()
         self.crear_permisos_jefe_local()
         self.crear_permisos_cajero()
@@ -42,53 +44,26 @@ class Command(BaseCommand):
             }
         )
         
-        # Dashboard Ventas
-        OpcionMenu.objects.get_or_create(
-            codigo='dashboard_ventas',
-            defaults={
-                'modulo': modulo,
-                'nombre': 'Dashboard Ventas',
-                'url_name': 'dashboard_ventas',
-                'icono': 'ri-dashboard-line',
-                'orden': 1
-            }
-        )
+        opciones = [
+            ('dashboard_general', 'Dashboard General', 'verHome', None, 'ri-dashboard-3-line', 1),
+            ('dashboard_ventas', 'Dashboard Ventas', 'dashboard_ventas', None, 'ri-dashboard-line', 2),
+            ('dashboard_productos', 'Dashboard Productos', None, '/app/dashboard_productos/', 'bi-box-seam', 3),
+            ('dashboard_fifo', 'Dashboard FIFO', None, '/app/dashboard_fifo/', 'bi-arrow-repeat', 4),
+            ('dashboard_compras_estrategico', 'Dashboard Compras', None, '/app/verDashboardCompras/', 'ri-shopping-bag-line', 5),
+        ]
         
-        # Dashboard Productos
-        OpcionMenu.objects.get_or_create(
-            codigo='dashboard_productos',
-            defaults={
-                'modulo': modulo,
-                'nombre': 'Dashboard Productos',
-                'url_path': '/app/dashboard_productos/',
-                'icono': 'bi-box-seam',
-                'orden': 2
-            }
-        )
-        
-        # Dashboard FIFO
-        OpcionMenu.objects.get_or_create(
-            codigo='dashboard_fifo',
-            defaults={
-                'modulo': modulo,
-                'nombre': 'Dashboard FIFO',
-                'url_path': '/app/dashboard_fifo/',
-                'icono': 'bi-arrow-repeat',
-                'orden': 3
-            }
-        )
-        
-        # Dashboard Compras
-        OpcionMenu.objects.get_or_create(
-            codigo='dashboard_compras_estrategico',
-            defaults={
-                'modulo': modulo,
-                'nombre': 'Dashboard Compras Estratégico',
-                'url_path': '/app/verDashboardCompras/',
-                'icono': 'ri-graph-up-line',
-                'orden': 4
-            }
-        )
+        for codigo, nombre, url_name, url_path, icono, orden in opciones:
+            OpcionMenu.objects.get_or_create(
+                codigo=codigo,
+                defaults={
+                    'modulo': modulo,
+                    'nombre': nombre,
+                    'url_name': url_name,
+                    'url_path': url_path,
+                    'icono': icono,
+                    'orden': orden
+                }
+            )
         
         self.stdout.write('[Dashboard] Modulo Dashboard creado')
 
@@ -183,10 +158,13 @@ class Command(BaseCommand):
         )
         
         opciones = [
-            ('gestion_producto', 'Gestión Producto', None, '/app/verGestionProducto/', 'ri-box-3-line', 1),
-            ('edicion_rapida_precios', 'Edición Rápida Precios', 'edicion_rapida_precios', None, 'ri-flashlight-line', 2),
-            ('revisar_cambios_precios', 'Revisar Cambios Precios', 'revisar_cambios_precios', None, 'ri-task-line', 3),
+            ('gestion_producto', 'Gestión Producto', None, '/app/verGestionProducto/', 'ri-archive-line', 1),
+            ('edicion_rapida_precios', 'Gestión de Precios', 'edicion_rapida_precios', None, 'ri-price-tag-3-line', 2),
+            ('revisar_cambios_precios', 'Alertas de Precios', 'revisar_cambios_precios', None, 'ri-notification-badge-line', 3),
             ('movimientos_producto', 'Movimientos Por Sucursal', None, '/app/verMovimientosProducto/', 'ri-arrow-left-right-line', 4),
+            ('gestion_inventarios', 'Gestión de Inventarios', 'gestion_inventarios', None, 'ri-clipboard-line', 5),
+            ('gestion_etiquetas_zebra', 'Impresión Etiquetas Zebra', 'gestion_etiquetas_zebra', None, 'ri-printer-line', 6),
+            ('buscar_productos_sucursal', 'Buscar Producto Sucursal', 'buscar_productos_sucursal', None, 'ri-search-line', 7),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -282,12 +260,18 @@ class Command(BaseCommand):
         )
         
         opciones = [
+            # Reportes Ventas
             ('reporte_ventas_sucursal', 'Ventas por Sucursal', None, '/app/reportes/ventas-sucursal/', 'ri-store-2-line', 1),
             ('reporte_documentos_emitidos', 'Documentos Emitidos', None, '/app/reportes/documentos-emitidos/', 'ri-file-list-3-line', 2),
+            # Reportes Existencias
             ('reporte_existencias', 'Reporte de Existencias', 'ver_reporte_existencias', None, 'ri-file-list-3-line', 3),
             ('reporte_existencias_marca', 'Existencias por Marca', 'ver_reporte_existencias_marca', None, 'ri-price-tag-3-line', 4),
             ('reporte_existencias_sucursal', 'Existencias por Sucursal', 'ver_reporte_existencias_sucursal', None, 'ri-store-2-line', 5),
-            ('reporte_despachos_proveedor', 'Despachos por Proveedor', None, '/app/verReporteDespachosProveedor/', 'bi-truck', 6),
+            ('resumen_existencias', 'Resumen Existencias', 'ver_resumen_existencias', None, 'ri-pie-chart-line', 6),
+            ('reporte_movimientos_sucursal', 'Inicial vs Restante', 'ver_reporte_movimientos_sucursal', None, 'ri-exchange-line', 7),
+            # Reportes Compras
+            ('reporte_despachos_proveedor', 'Despachos por Proveedor', None, '/app/verReporteDespachosProveedor/', 'bi-truck', 8),
+            ('reporte_compras', 'Reporte de Compras', None, '/app/reportes/compras/', 'bi-bag', 9),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -319,10 +303,12 @@ class Command(BaseCommand):
         
         opciones = [
             ('gestion_usuarios', 'Gestión Usuarios', None, '/app/gestion_usuarios/', 'bi-people-fill', 1),
-            ('gestion_empresas', 'Gestión Empresas', None, '/empresa_management/lista_empresas/', 'bi-building-fill', 2),
-            ('gestion_clientes', 'Gestión Clientes', None, '/empresa_management/lista_clientes/', 'bi-person-badge-fill', 3),
-            ('gestion_vendedores', 'Gestión Vendedores', None, '/app/gestion_vendedores/', 'bi-people', 4),
-            ('gestion_permisos', 'Gestión Permisos', 'gestion_permisos', None, 'bi-shield-lock', 5),
+            ('gestion_sucursales', 'Gestión Sucursales', None, '/app/gestion-sucursales/', 'bi-building', 2),
+            ('gestion_empresas', 'Gestión Empresas', None, '/empresa_management/lista_empresas/', 'bi-building-fill', 3),
+            ('gestion_clientes', 'Gestión Clientes', None, '/empresa_management/lista_clientes/', 'bi-person-badge-fill', 4),
+            ('gestion_vendedores', 'Gestión Vendedores', None, '/app/gestion_vendedores/', 'bi-people', 5),
+            ('gestion_permisos', 'Gestión Permisos', 'gestion_permisos', None, 'bi-shield-lock', 6),
+            ('interfaz_acepta', 'Interfaz Prueba Acepta', None, '/app/configuracion/interfaz-prueba-acepta/', 'ri-file-text-line', 7),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -339,6 +325,39 @@ class Command(BaseCommand):
             )
         
         self.stdout.write('[Configuracion] Modulo Configuracion creado')
+
+    def crear_modulo_usuario(self):
+        """Crear módulo Usuario con opciones de perfil y acciones rápidas"""
+        modulo, created = ModuloSistema.objects.get_or_create(
+            codigo='usuario',
+            defaults={
+                'nombre': 'Mi Cuenta',
+                'descripcion': 'Opciones de perfil de usuario y acciones rápidas',
+                'icono': 'ri-user-settings-line',
+                'orden': 9
+            }
+        )
+        
+        opciones = [
+            ('mi_perfil', 'Mi Perfil', 'users:mi_perfil', None, 'ri-user-settings-line', 1),
+            ('ajuste_stock_rapido', 'Ajuste de Stock', 'ajuste_stock_rapido', None, 'ri-inbox-line', 2),
+            ('cambiar_empresa', 'Cambiar Empresa/Sucursal', 'cambiar_empresa', None, 'ri-building-line', 3),
+        ]
+        
+        for codigo, nombre, url_name, url_path, icono, orden in opciones:
+            OpcionMenu.objects.get_or_create(
+                codigo=codigo,
+                defaults={
+                    'modulo': modulo,
+                    'nombre': nombre,
+                    'url_name': url_name,
+                    'url_path': url_path,
+                    'icono': icono,
+                    'orden': orden
+                }
+            )
+        
+        self.stdout.write('[Usuario] Modulo Mi Cuenta creado')
 
     def crear_permisos_administrador(self):
         """Crear permisos para el rol Administrador (acceso total)"""
@@ -368,7 +387,7 @@ class Command(BaseCommand):
         # Códigos que el jefe local puede ver
         codigos_permitidos = [
             # Dashboard
-            'dashboard_ventas', 'dashboard_productos', 'dashboard_fifo', 'dashboard_compras_estrategico',
+            'dashboard_general', 'dashboard_ventas', 'dashboard_productos', 'dashboard_fifo', 'dashboard_compras_estrategico',
             # Ventas
             'ticket_venta', 'cambios_devoluciones', 'pos_dashboard', 'gestion_documentos_ventas',
             'cuadratura_caja', 'pos_transbank',
@@ -377,6 +396,7 @@ class Command(BaseCommand):
             'gestion_cotizaciones', 'gestion_creditos',
             # Existencias
             'gestion_producto', 'edicion_rapida_precios', 'revisar_cambios_precios', 'movimientos_producto',
+            'gestion_inventarios', 'gestion_etiquetas_zebra', 'buscar_productos_sucursal',
             # Compras
             'gestion_compras', 'gestion_dte_compras',
             # Requerimientos
@@ -384,8 +404,11 @@ class Command(BaseCommand):
             # Reportes
             'reporte_ventas_sucursal', 'reporte_documentos_emitidos', 'reporte_existencias',
             'reporte_existencias_marca', 'reporte_existencias_sucursal', 'reporte_despachos_proveedor',
+            'resumen_existencias', 'reporte_movimientos_sucursal', 'reporte_compras',
             # Configuración
             'gestion_clientes', 'gestion_vendedores',
+            # Mi Cuenta
+            'mi_perfil', 'ajuste_stock_rapido', 'cambiar_empresa',
         ]
         
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
@@ -411,11 +434,17 @@ class Command(BaseCommand):
         
         # Códigos que el cajero puede ver
         codigos_permitidos = [
+            # Dashboard
+            'dashboard_general',
             # Ventas
             'ticket_venta', 'cambios_devoluciones', 'pos_dashboard', 'gestion_documentos_ventas',
             'cuadratura_caja', 'pos_transbank',
+            # Existencias (solo consulta)
+            'buscar_productos_sucursal',
             # Requerimientos (solo crear)
             'lista_requerimientos', 'crear_requerimiento',
+            # Mi Cuenta
+            'mi_perfil', 'ajuste_stock_rapido',
         ]
         
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
@@ -446,10 +475,16 @@ class Command(BaseCommand):
         
         # Códigos que el vendedor puede ver
         codigos_permitidos = [
+            # Dashboard
+            'dashboard_general',
             # Ventas
             'ticket_venta', 'pos_dashboard',
+            # Existencias (solo consulta)
+            'buscar_productos_sucursal',
             # Requerimientos
             'lista_requerimientos', 'crear_requerimiento',
+            # Mi Cuenta
+            'mi_perfil',
         ]
         
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)

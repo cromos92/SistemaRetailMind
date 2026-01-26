@@ -731,6 +731,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let documentosPorPagina = 20;
     let totalDocumentos = 0;
     let documentoSeleccionado = null;
+    let documentoActualModal = null; // Documento que se muestra actualmente en el modal
     let timeoutBusqueda = null;
     
     // Variables de ordenamiento
@@ -1282,6 +1283,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('✅ Documento encontrado:', documento);
         
+        // Guardar el documento actual para las funciones de impresión y descarga
+        documentoActualModal = documento;
+        
         // Actualizar título del modal
         const tituloElement = document.getElementById('tituloDetalleCompleto');
         if (tituloElement) {
@@ -1627,11 +1631,308 @@ document.addEventListener('DOMContentLoaded', function() {
     // === FUNCIONES DE ACCIONES DEL MODAL ===
     
     window.imprimirDTE = function() {
-        mostrarExito('Función de impresión en desarrollo');
+        if (!documentoActualModal) {
+            mostrarError('No hay documento seleccionado para imprimir');
+            return;
+        }
+        
+        // Crear ventana de impresión con el contenido del documento
+        const contenido = document.getElementById('contenidoDetalleCompleto').innerHTML;
+        const doc = documentoActualModal;
+        
+        const ventanaImpresion = window.open('', '_blank', 'width=800,height=600');
+        ventanaImpresion.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>${doc.tipo} #${doc.numero || doc.numero_documento || 'S/N'}</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { 
+                        font-family: Arial, sans-serif; 
+                        padding: 20px;
+                        font-size: 12px;
+                        line-height: 1.4;
+                    }
+                    .header-print {
+                        text-align: center;
+                        margin-bottom: 20px;
+                        padding-bottom: 15px;
+                        border-bottom: 2px solid #333;
+                    }
+                    .header-print h1 {
+                        font-size: 18px;
+                        margin-bottom: 5px;
+                    }
+                    .header-print p {
+                        color: #666;
+                        font-size: 11px;
+                    }
+                    .info-section {
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 20px;
+                        gap: 20px;
+                    }
+                    .info-box {
+                        flex: 1;
+                        border: 1px solid #ddd;
+                        padding: 10px;
+                        border-radius: 5px;
+                    }
+                    .info-box h4 {
+                        font-size: 11px;
+                        text-transform: uppercase;
+                        color: #666;
+                        margin-bottom: 8px;
+                        border-bottom: 1px solid #eee;
+                        padding-bottom: 5px;
+                    }
+                    .info-box p {
+                        margin: 4px 0;
+                        font-size: 11px;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 15px 0;
+                    }
+                    th, td {
+                        border: 1px solid #ddd;
+                        padding: 8px;
+                        text-align: left;
+                        font-size: 11px;
+                    }
+                    th {
+                        background-color: #f5f5f5;
+                        font-weight: bold;
+                    }
+                    .text-end { text-align: right; }
+                    .text-center { text-align: center; }
+                    .total-section {
+                        margin-top: 20px;
+                        text-align: right;
+                        padding: 15px;
+                        background: #f8f9fa;
+                        border-radius: 5px;
+                    }
+                    .total-section h3 {
+                        font-size: 16px;
+                        color: #0d6efd;
+                    }
+                    .badge {
+                        display: inline-block;
+                        padding: 2px 6px;
+                        border-radius: 3px;
+                        font-size: 10px;
+                        background: #e9ecef;
+                    }
+                    .footer-print {
+                        margin-top: 30px;
+                        padding-top: 15px;
+                        border-top: 1px solid #ddd;
+                        text-align: center;
+                        font-size: 10px;
+                        color: #666;
+                    }
+                    @media print {
+                        body { padding: 0; }
+                        .no-print { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="header-print">
+                    <h1>${doc.tipo} #${doc.numero || doc.numero_documento || 'S/N'}</h1>
+                    <p>Fecha: ${formatearFecha(doc.fecha)} | Estado: ${doc.estado}</p>
+                </div>
+                
+                <div class="info-section">
+                    <div class="info-box">
+                        <h4>Cliente</h4>
+                        <p><strong>${doc.cliente_nombre || 'Sin nombre'}</strong></p>
+                        <p>RUT: ${doc.cliente_rut || 'No especificado'}</p>
+                        ${doc.cliente_giro ? `<p>Giro: ${doc.cliente_giro}</p>` : ''}
+                        ${doc.cliente_direccion ? `<p>Dirección: ${doc.cliente_direccion}</p>` : ''}
+                        ${doc.cliente_comuna ? `<p>Comuna: ${doc.cliente_comuna}</p>` : ''}
+                    </div>
+                    <div class="info-box">
+                        <h4>Venta</h4>
+                        <p>Vendedor: ${doc.vendedor_nombre || 'No asignado'}</p>
+                        <p>Fecha: ${formatearFecha(doc.fecha)}</p>
+                        <p>Productos: ${doc.total_productos || 0} items</p>
+                        <p>Métodos de Pago: ${doc.metodos_pago_str || 'Sin información'}</p>
+                    </div>
+                </div>
+                
+                <h4 style="margin: 15px 0 10px;">Productos</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Producto</th>
+                            <th>Talla</th>
+                            <th class="text-center">Cant.</th>
+                            <th class="text-end">Precio</th>
+                            <th class="text-end">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(doc.productos || []).map(p => `
+                            <tr>
+                                <td>${p.sku || 'N/A'}</td>
+                                <td>${p.nombre || ''}</td>
+                                <td>${p.talla || 'N/A'}</td>
+                                <td class="text-center">${p.cantidad || 0}</td>
+                                <td class="text-end">${formatearMoneda(p.precio_unitario || 0)}</td>
+                                <td class="text-end">${formatearMoneda(p.subtotal || (p.precio_unitario * p.cantidad) || 0)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                
+                <div class="total-section">
+                    <h3>TOTAL: ${formatearMoneda(doc.total)}</h3>
+                </div>
+                
+                <div class="footer-print">
+                    <p>Documento generado el ${new Date().toLocaleString('es-CL')}</p>
+                </div>
+            </body>
+            </html>
+        `);
+        
+        ventanaImpresion.document.close();
+        
+        // Esperar a que se cargue el contenido y luego imprimir
+        setTimeout(() => {
+            ventanaImpresion.print();
+        }, 500);
     };
     
     window.descargarPDF = function() {
-        mostrarExito('Función de descarga PDF en desarrollo');
+        if (!documentoActualModal) {
+            mostrarError('No hay documento seleccionado para descargar');
+            return;
+        }
+        
+        const doc = documentoActualModal;
+        
+        // Mostrar mensaje de carga
+        Swal.fire({
+            title: 'Generando PDF...',
+            text: 'Por favor espere mientras se genera el documento',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+        
+        // Cargar html2pdf desde CDN si no está disponible
+        if (typeof html2pdf === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+            script.onload = () => generarPDF(doc);
+            script.onerror = () => {
+                Swal.close();
+                // Fallback: usar la impresión como PDF
+                mostrarInfo('Use la opción "Guardar como PDF" en el diálogo de impresión');
+                setTimeout(() => imprimirDTE(), 500);
+            };
+            document.head.appendChild(script);
+        } else {
+            generarPDF(doc);
+        }
     };
+    
+    function generarPDF(doc) {
+        // Crear contenido HTML para el PDF
+        const contenidoPDF = document.createElement('div');
+        contenidoPDF.innerHTML = `
+            <div style="padding: 20px; font-family: Arial, sans-serif;">
+                <div style="text-align: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #333;">
+                    <h1 style="font-size: 18px; margin-bottom: 5px;">${doc.tipo} #${doc.numero || doc.numero_documento || 'S/N'}</h1>
+                    <p style="color: #666; font-size: 11px;">Fecha: ${formatearFecha(doc.fecha)} | Estado: ${doc.estado}</p>
+                </div>
+                
+                <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                    <div style="flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+                        <h4 style="font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Cliente</h4>
+                        <p style="margin: 4px 0; font-size: 11px;"><strong>${doc.cliente_nombre || 'Sin nombre'}</strong></p>
+                        <p style="margin: 4px 0; font-size: 11px;">RUT: ${doc.cliente_rut || 'No especificado'}</p>
+                        ${doc.cliente_giro ? `<p style="margin: 4px 0; font-size: 11px;">Giro: ${doc.cliente_giro}</p>` : ''}
+                        ${doc.cliente_direccion ? `<p style="margin: 4px 0; font-size: 11px;">Dirección: ${doc.cliente_direccion}</p>` : ''}
+                    </div>
+                    <div style="flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+                        <h4 style="font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Venta</h4>
+                        <p style="margin: 4px 0; font-size: 11px;">Vendedor: ${doc.vendedor_nombre || 'No asignado'}</p>
+                        <p style="margin: 4px 0; font-size: 11px;">Fecha: ${formatearFecha(doc.fecha)}</p>
+                        <p style="margin: 4px 0; font-size: 11px;">Productos: ${doc.total_productos || 0} items</p>
+                    </div>
+                </div>
+                
+                <h4 style="margin: 15px 0 10px; font-size: 12px;">Productos</h4>
+                <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 11px;">
+                    <thead>
+                        <tr style="background-color: #f5f5f5;">
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">SKU</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Producto</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Talla</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Cant.</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Precio</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${(doc.productos || []).map(p => `
+                            <tr>
+                                <td style="border: 1px solid #ddd; padding: 8px;">${p.sku || 'N/A'}</td>
+                                <td style="border: 1px solid #ddd; padding: 8px;">${p.nombre || ''}</td>
+                                <td style="border: 1px solid #ddd; padding: 8px;">${p.talla || 'N/A'}</td>
+                                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.cantidad || 0}</td>
+                                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatearMoneda(p.precio_unitario || 0)}</td>
+                                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatearMoneda(p.subtotal || (p.precio_unitario * p.cantidad) || 0)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 20px; text-align: right; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                    <h3 style="font-size: 16px; color: #0d6efd; margin: 0;">TOTAL: ${formatearMoneda(doc.total)}</h3>
+                </div>
+                
+                <div style="margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center; font-size: 10px; color: #666;">
+                    <p>Documento generado el ${new Date().toLocaleString('es-CL')}</p>
+                </div>
+            </div>
+        `;
+        
+        const opt = {
+            margin: 10,
+            filename: `${doc.tipo.replace(/ /g, '_')}_${doc.numero || doc.numero_documento || 'SN'}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        
+        html2pdf().set(opt).from(contenidoPDF).save().then(() => {
+            Swal.close();
+            mostrarExito('PDF descargado correctamente');
+        }).catch(err => {
+            Swal.close();
+            console.error('Error al generar PDF:', err);
+            mostrarError('Error al generar el PDF. Intente con la opción de Imprimir.');
+        });
+    }
+    
+    function mostrarInfo(mensaje) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Información',
+            text: mensaje,
+            confirmButtonColor: '#3085d6'
+        });
+    }
 });
 </script>

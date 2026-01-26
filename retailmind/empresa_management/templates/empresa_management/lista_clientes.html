@@ -7,96 +7,478 @@
 {% include 'layout/menu.html' %}
 {% include 'layout/footer.html' %}
 
+<!-- SweetAlert2 -->
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+
 <style>
-.cliente-card {
-    border-radius: 15px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s;
+/* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
+    --nexo-radius-sm: 4px;
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-radius-full: 9999px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
 }
 
-.cliente-card:hover {
-    transform: translateY(-2px);
+/* ========== CARDS & CONTAINERS ========== */
+.nexo-card {
+    background-color: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-sm);
+    transition: var(--nexo-transition-normal);
 }
 
-.status-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 500;
+.nexo-card:hover {
+    box-shadow: var(--nexo-shadow-md);
 }
 
-.status-activo { background-color: #d4edda; color: #155724; }
-.status-inactivo { background-color: #f8d7da; color: #721c24; }
-
-.tipo-badge {
-    background: linear-gradient(45deg, #28a745, #20c997);
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: 500;
+.nexo-card-header {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    color: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
+    padding: 1rem 1.5rem;
 }
 
-.table-responsive {
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.filter-section {
-    background: #f8f9fa;
-    border-radius: 10px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.modal-xl .modal-dialog {
-    max-width: 900px;
-}
-
-.form-floating > .form-control {
-    height: calc(3.5rem + 2px);
-    line-height: 1.25;
-}
-
-.form-floating > .form-control:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.btn-action {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    border-radius: 0.375rem;
-}
-
-.avatar-placeholder {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: linear-gradient(45deg, #007bff, #0056b3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    font-size: 1.2rem;
-}
-
-.pagination-info {
-    font-size: 0.875rem;
-    color: #6c757d;
-}
-
-.pagination-controls {
+.nexo-card-header h5, .nexo-card-header h6 {
+    margin: 0;
+    font-weight: 600;
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
 
-.pagination-controls .form-select {
-    width: auto;
-    min-width: 80px;
+/* ========== STATS CARDS ========== */
+.stats-card {
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    text-align: center;
+    transition: var(--nexo-transition-normal);
+    border: none;
+}
+
+.stats-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.stats-card-primary {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    color: var(--nexo-white);
+}
+
+.stats-card-success {
+    background: linear-gradient(135deg, var(--nexo-success) 0%, #00B894 100%);
+    color: var(--nexo-white);
+}
+
+.stats-card-warning {
+    background: linear-gradient(135deg, var(--nexo-warning) 0%, #F39C12 100%);
+    color: var(--nexo-white);
+}
+
+.stats-card-info {
+    background: linear-gradient(135deg, var(--nexo-info) 0%, #0052CC 100%);
+    color: var(--nexo-white);
+}
+
+.stats-card i {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.9;
+}
+
+.stats-card h3 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.stats-card p {
+    font-size: 0.875rem;
+    opacity: 0.9;
+    margin: 0;
+}
+
+/* ========== BUTTONS ========== */
+.btn-nexo-primary {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1.25rem;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-primary:hover {
+    background-color: var(--nexo-primary-dark);
+    color: var(--nexo-white);
+    transform: translateY(-1px);
+}
+
+.btn-nexo-success {
+    background-color: var(--nexo-success);
+    color: var(--nexo-white);
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1.25rem;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-success:hover {
+    background-color: #00B894;
+    color: var(--nexo-white);
+    transform: translateY(-1px);
+}
+
+.btn-nexo-outline {
+    background-color: transparent;
+    color: var(--nexo-primary);
+    border: 2px solid var(--nexo-primary);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-outline:hover {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.btn-nexo-secondary {
+    background-color: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: var(--nexo-transition-fast);
+}
+
+.btn-nexo-secondary:hover {
+    background-color: var(--nexo-gray-300);
+    color: var(--nexo-gray-900);
+}
+
+/* ========== ACTION BUTTONS ========== */
+.btn-action {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--nexo-radius-md);
+    transition: var(--nexo-transition-fast);
+    border: none;
+    font-size: 0.875rem;
+}
+
+.btn-action-view {
+    background-color: rgba(0, 102, 255, 0.1);
+    color: var(--nexo-info);
+}
+
+.btn-action-view:hover {
+    background-color: var(--nexo-info);
+    color: var(--nexo-white);
+}
+
+.btn-action-edit {
+    background-color: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.btn-action-edit:hover {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.btn-action-delete {
+    background-color: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error);
+}
+
+.btn-action-delete:hover {
+    background-color: var(--nexo-error);
+    color: var(--nexo-white);
+}
+
+/* ========== BADGES ========== */
+.badge-nexo {
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--nexo-radius-full);
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.badge-nexo-success {
+    background-color: rgba(0, 212, 170, 0.15);
+    color: #00B894;
+}
+
+.badge-nexo-warning {
+    background-color: rgba(255, 176, 32, 0.15);
+    color: #996B00;
+}
+
+.badge-nexo-error {
+    background-color: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.badge-nexo-info {
+    background-color: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.badge-nexo-primary {
+    background-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.badge-tipo {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    color: var(--nexo-white);
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--nexo-radius-full);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* ========== TABLE STYLES ========== */
+.table-nexo {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.table-nexo thead {
+    background-color: var(--nexo-secondary);
+    color: var(--nexo-white);
+}
+
+.table-nexo thead th {
+    padding: 1rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    border: none;
+    white-space: nowrap;
+}
+
+.table-nexo tbody tr {
+    border-bottom: 1px solid var(--nexo-gray-100);
+    transition: var(--nexo-transition-fast);
+}
+
+.table-nexo tbody tr:hover {
+    background-color: var(--nexo-primary-light);
+}
+
+.table-nexo tbody td {
+    padding: 1rem 0.75rem;
+    vertical-align: middle;
+    font-size: 0.875rem;
+    color: var(--nexo-gray-700);
+}
+
+.table-nexo .fw-semibold {
+    color: var(--nexo-gray-900);
+}
+
+/* ========== FORM ELEMENTS ========== */
+.form-control-nexo, .form-select-nexo {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    transition: var(--nexo-transition-fast);
+    background-color: var(--nexo-white);
+}
+
+.form-control-nexo:focus, .form-select-nexo:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    outline: none;
+}
+
+.form-label-nexo {
+    font-weight: 500;
+    color: var(--nexo-gray-700);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+/* ========== FILTER SECTION ========== */
+.filter-section-nexo {
+    background-color: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+/* ========== MODAL STYLES ========== */
+.modal-header-nexo {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    color: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg) var(--nexo-radius-lg) 0 0;
+    padding: 1.25rem 1.5rem;
+}
+
+.modal-header-nexo .modal-title {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-header-nexo .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+}
+
+.modal-header-nexo .btn-close:hover {
+    opacity: 1;
+}
+
+.modal-content-nexo {
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-xl);
+}
+
+.modal-body-nexo {
+    padding: 1.5rem;
+}
+
+.modal-footer-nexo {
+    border-top: 1px solid var(--nexo-gray-100);
+    padding: 1rem 1.5rem;
+}
+
+/* ========== ALERT STYLES ========== */
+.alert-nexo {
+    border: none;
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem 1.25rem;
+    border-left: 4px solid;
+}
+
+.alert-nexo-error {
+    background-color: rgba(255, 77, 77, 0.1);
+    border-color: var(--nexo-error);
+    color: var(--nexo-error);
+}
+
+.alert-nexo-warning {
+    background-color: rgba(255, 176, 32, 0.1);
+    border-color: var(--nexo-warning);
+    color: #996B00;
+}
+
+/* ========== PAGE TITLE ========== */
+.page-title-nexo {
+    color: var(--nexo-gray-900);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.page-title-nexo i {
+    color: var(--nexo-primary);
+}
+
+/* ========== AVATAR ========== */
+.avatar-nexo {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--nexo-radius-full);
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nexo-white);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* ========== PAGINATION ========== */
+.pagination-nexo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-info-nexo {
+    font-size: 0.875rem;
+    color: var(--nexo-gray-500);
+}
+
+.pagination-nexo .btn-page {
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.875rem;
+}
+
+/* ========== EMPTY STATE ========== */
+.empty-state-nexo {
+    padding: 4rem 2rem;
+    text-align: center;
+    color: var(--nexo-gray-500);
+}
+
+.empty-state-nexo i {
+    font-size: 4rem;
+    color: var(--nexo-gray-300);
+    margin-bottom: 1rem;
+}
+
+.empty-state-nexo p {
+    font-size: 1rem;
+    margin: 0;
+}
+
+/* ========== FORM FLOATING NEXO ========== */
+.form-floating-nexo .form-control,
+.form-floating-nexo .form-select {
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    height: calc(3.5rem + 2px);
+}
+
+.form-floating-nexo .form-control:focus,
+.form-floating-nexo .form-select:focus {
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
 }
 </style>
 
@@ -107,20 +489,22 @@
             <!-- ========== HEADER Y TÍTULO ========== -->
             <div class="row mb-4">
                 <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                         <div>
-                            <h2 class="mb-1">
-                                <i class="bi bi-person-badge-fill text-primary me-2"></i>
+                            <h4 class="mb-1 page-title-nexo">
+                                <i class="ri-user-3-line"></i>
                                 Gestión de Clientes
-                            </h2>
-                            <p class="text-muted mb-0">Administra los clientes y sus datos</p>
+                            </h4>
+                            <p class="mb-0" style="color: var(--nexo-gray-500);">
+                                Administra los clientes y sus datos de contacto
+                            </p>
                         </div>
                         <div class="d-flex gap-2">
-                            <button class="btn btn-success" onclick="exportarClientes()">
-                                <i class="bi bi-download me-1"></i>Exportar
+                            <button class="btn btn-nexo-success" onclick="exportarClientes()">
+                                <i class="ri-download-2-line me-1"></i>Exportar
                             </button>
-                            <button class="btn btn-primary" onclick="abrirModalCrear()">
-                                <i class="bi bi-plus-circle me-1"></i>Nuevo Cliente
+                            <button class="btn btn-nexo-primary" onclick="abrirModalCrear()">
+                                <i class="ri-add-circle-line me-1"></i>Nuevo Cliente
                             </button>
                         </div>
                     </div>
@@ -128,101 +512,93 @@
             </div>
 
             <!-- ========== MÉTRICAS RÁPIDAS ========== -->
-            <div class="row mb-4">
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card cliente-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-primary mb-1" id="totalClientes">0</div>
-                            <div class="text-muted">Total Clientes</div>
-                        </div>
+            <div class="row mb-4 g-3">
+                <div class="col-xl-3 col-md-6">
+                    <div class="stats-card stats-card-primary">
+                        <i class="ri-group-line d-block"></i>
+                        <h3 id="totalClientes">0</h3>
+                        <p>Total Clientes</p>
                     </div>
                 </div>
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card cliente-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-success mb-1" id="clientesActivos">0</div>
-                            <div class="text-muted">Clientes Activos</div>
-                        </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stats-card stats-card-success">
+                        <i class="ri-user-follow-line d-block"></i>
+                        <h3 id="clientesActivos">0</h3>
+                        <p>Clientes Activos</p>
                     </div>
                 </div>
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card cliente-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-info mb-1" id="clientesNuevos">0</div>
-                            <div class="text-muted">Clientes Nuevos (Mes)</div>
-                        </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stats-card stats-card-info">
+                        <i class="ri-user-add-line d-block"></i>
+                        <h3 id="clientesNuevos">0</h3>
+                        <p>Nuevos (Mes)</p>
                     </div>
                 </div>
-                <div class="col-xl-3 col-md-6 mb-3">
-                    <div class="card cliente-card border-0">
-                        <div class="card-body text-center">
-                            <div class="h2 text-warning mb-1" id="ventasPromedio">0</div>
-                            <div class="text-muted">Ventas Promedio</div>
-                        </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stats-card stats-card-warning">
+                        <i class="ri-shopping-cart-line d-block"></i>
+                        <h3 id="ventasPromedio">$0</h3>
+                        <p>Ventas Promedio</p>
                     </div>
                 </div>
             </div>
 
             <!-- ========== FILTROS ========== -->
-            <div class="filter-section">
+            <div class="filter-section-nexo">
                 <div class="row g-3">
                     <div class="col-md-3">
-                        <label class="form-label">Buscar</label>
-                        <input type="text" class="form-control" id="filtroBusqueda" placeholder="Nombre, RUT o email...">
+                        <label class="form-label-nexo">Buscar</label>
+                        <input type="text" class="form-control form-control-nexo" id="filtroBusqueda" placeholder="Nombre, RUT o email...">
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Estado</label>
-                        <select class="form-select" id="filtroEstado">
+                        <label class="form-label-nexo">Estado</label>
+                        <select class="form-select form-select-nexo" id="filtroEstado">
                             <option value="">Todos</option>
                             <option value="activo">Activos</option>
                             <option value="inactivo">Inactivos</option>
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Tipo</label>
-                        <select class="form-select" id="filtroTipo">
+                        <label class="form-label-nexo">Tipo</label>
+                        <select class="form-select form-select-nexo" id="filtroTipo">
                             <option value="">Todos</option>
                             <option value="natural">Persona Natural</option>
                             <option value="juridica">Persona Jurídica</option>
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Ordenar por</label>
-                        <select class="form-select" id="ordenarPor">
+                        <label class="form-label-nexo">Ordenar por</label>
+                        <select class="form-select form-select-nexo" id="ordenarPor">
                             <option value="nombre">Nombre</option>
                             <option value="rut">RUT</option>
                             <option value="fecha">Fecha</option>
                             <option value="ventas">Ventas</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-primary" onclick="aplicarFiltros()">
-                                <i class="bi bi-search me-1"></i>Filtrar
-                            </button>
-                            <button class="btn btn-outline-secondary" onclick="limpiarFiltros()">
-                                <i class="bi bi-x-circle me-1"></i>Limpiar
-                            </button>
-                        </div>
+                    <div class="col-md-3 d-flex align-items-end gap-2">
+                        <button class="btn btn-nexo-primary flex-grow-1" onclick="aplicarFiltros()">
+                            <i class="ri-filter-line me-1"></i>Filtrar
+                        </button>
+                        <button class="btn btn-nexo-secondary" onclick="limpiarFiltros()">
+                            <i class="ri-close-circle-line"></i>
+                        </button>
                     </div>
                 </div>
             </div>
 
             <!-- ========== TABLA PRINCIPAL ========== -->
-            <div class="card shadow">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="bi bi-table me-2"></i>Lista de Clientes
+            <div class="nexo-card">
+                <div class="nexo-card-header d-flex justify-content-between align-items-center">
+                    <h6>
+                        <i class="ri-table-line"></i>
+                        Lista de Clientes
                     </h6>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary" id="contadorClientes">0 clientes</span>
-                    </div>
+                    <span class="badge-nexo badge-nexo-primary" id="contadorClientes">0 clientes</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover table-striped" id="tablaClientes">
-                            <thead class="table-dark">
+                        <table class="table table-nexo" id="tablaClientes">
+                            <thead>
                                 <tr>
                                     <th>Cliente</th>
                                     <th>RUT</th>
@@ -231,15 +607,16 @@
                                     <th>Teléfono</th>
                                     <th>Empresa</th>
                                     <th>Estado</th>
-                                    <th>Acciones</th>
+                                    <th class="text-center">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td colspan="8" class="text-center py-5">
-                                        <i class="bi bi-hourglass-split text-muted" style="font-size: 2rem;"></i>
-                                        <h6 class="text-muted mt-3">Cargando clientes...</h6>
-                                        <p class="text-muted small">Los datos se cargarán automáticamente</p>
+                                    <td colspan="8">
+                                        <div class="empty-state-nexo">
+                                            <i class="ri-loader-4-line ri-spin d-block"></i>
+                                            <p>Cargando clientes...</p>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
@@ -247,19 +624,21 @@
                     </div>
                     
                     <!-- ========== PAGINACIÓN ========== -->
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <div class="pagination-info">
+                    <div class="d-flex justify-content-between align-items-center p-3 border-top" style="border-color: var(--nexo-gray-100) !important;">
+                        <div class="pagination-info-nexo">
                             Mostrando <span id="inicioPagina">0</span> a <span id="finPagina">0</span> de <span id="totalRegistros">0</span> clientes
                         </div>
-                        <div class="pagination-controls">
-                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarPagina('anterior')" id="btnAnterior" disabled>
-                                <i class="bi bi-chevron-left"></i> Anterior
+                        <div class="pagination-nexo">
+                            <button class="btn btn-nexo-outline btn-page" onclick="cambiarPagina('anterior')" id="btnAnterior" disabled>
+                                <i class="ri-arrow-left-s-line"></i> Anterior
                             </button>
-                            <span class="mx-2">Página <span id="paginaActual">1</span> de <span id="totalPaginas">1</span></span>
-                            <button class="btn btn-outline-primary btn-sm" onclick="cambiarPagina('siguiente')" id="btnSiguiente">
-                                Siguiente <i class="bi bi-chevron-right"></i>
+                            <span class="mx-2" style="color: var(--nexo-gray-700); font-size: 0.875rem;">
+                                Página <span id="paginaActual">1</span> de <span id="totalPaginas">1</span>
+                            </span>
+                            <button class="btn btn-nexo-outline btn-page" onclick="cambiarPagina('siguiente')" id="btnSiguiente">
+                                Siguiente <i class="ri-arrow-right-s-line"></i>
                             </button>
-                            <select class="form-select form-select-sm" id="registrosPorPagina" onchange="cambiarRegistrosPorPagina()">
+                            <select class="form-select form-select-nexo ms-2" id="registrosPorPagina" onchange="cambiarRegistrosPorPagina()" style="width: auto;">
                                 <option value="10">10</option>
                                 <option value="25" selected>25</option>
                                 <option value="50">50</option>
@@ -280,91 +659,107 @@
 <!-- ========== MODAL CREAR/EDITAR CLIENTE ========== -->
 <div class="modal fade" id="modalCliente" tabindex="-1" aria-labelledby="modalClienteLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content modal-content-nexo">
+            <div class="modal-header modal-header-nexo">
                 <h5 class="modal-title" id="modalClienteLabel">
-                    <i class="bi bi-person-plus me-2"></i>Nuevo Cliente
+                    <i class="ri-user-add-line me-2"></i>Nuevo Cliente
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body modal-body-nexo">
                 <form id="formCliente">
                     <input type="hidden" id="clienteId" name="cliente_id">
                     
-                    <div class="row g-3">
+                    <div class="row g-4">
                         <!-- Información Básica -->
-                        <div class="col-md-6">
-                            <div class="form-floating">
+                        <div class="col-12">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-user-line me-2"></i>Información Básica
+                            </h6>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="text" class="form-control" id="rutCliente" name="rut" placeholder="RUT" required>
                                 <label for="rutCliente">RUT *</label>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <select class="form-select" id="tipoCliente" name="tipo" required>
-                                    <option value="">Seleccionar tipo</option>
-                                    <option value="natural">Persona Natural</option>
-                                    <option value="juridica">Persona Jurídica</option>
-                                </select>
-                                <label for="tipoCliente">Tipo de Cliente *</label>
+                        <div class="col-md-4">
+                            <div class="form-floating form-floating-nexo">
+                                <input type="text" class="form-control" id="nombreCliente" name="nombre" placeholder="Nombre" required>
+                                <label for="nombreCliente">Nombre *</label>
                             </div>
                         </div>
-                        <div class="col-md-12">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="nombreCliente" name="nombre" placeholder="Nombre Completo" required>
-                                <label for="nombreCliente">Nombre Completo *</label>
+                        <div class="col-md-4">
+                            <div class="form-floating form-floating-nexo">
+                                <input type="text" class="form-control" id="apellidoCliente" name="apellido" placeholder="Apellido" required>
+                                <label for="apellidoCliente">Apellido *</label>
                             </div>
                         </div>
                         
                         <!-- Contacto -->
+                        <div class="col-12 mt-4">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-phone-line me-2"></i>Información de Contacto
+                            </h6>
+                        </div>
                         <div class="col-md-6">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="email" class="form-control" id="emailCliente" name="email" placeholder="Email">
                                 <label for="emailCliente">Email</label>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="tel" class="form-control" id="telefonoCliente" name="telefono" placeholder="Teléfono">
                                 <label for="telefonoCliente">Teléfono</label>
                             </div>
                         </div>
                         
                         <!-- Dirección -->
+                        <div class="col-12 mt-4">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-map-pin-line me-2"></i>Dirección
+                            </h6>
+                        </div>
                         <div class="col-md-12">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="text" class="form-control" id="direccionCliente" name="direccion" placeholder="Dirección">
                                 <label for="direccionCliente">Dirección</label>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="text" class="form-control" id="ciudadCliente" name="ciudad" placeholder="Ciudad">
                                 <label for="ciudadCliente">Ciudad</label>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="text" class="form-control" id="regionCliente" name="region" placeholder="Región">
                                 <label for="regionCliente">Región</label>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="text" class="form-control" id="codigoPostalCliente" name="codigo_postal" placeholder="Código Postal">
                                 <label for="codigoPostalCliente">Código Postal</label>
                             </div>
                         </div>
                         
                         <!-- Información Adicional -->
+                        <div class="col-12 mt-4">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-building-line me-2"></i>Información Adicional
+                            </h6>
+                        </div>
                         <div class="col-md-6">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="text" class="form-control" id="empresaCliente" name="empresa" placeholder="Empresa">
                                 <label for="empresaCliente">Empresa</label>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="text" class="form-control" id="cargoCliente" name="cargo" placeholder="Cargo">
                                 <label for="cargoCliente">Cargo</label>
                             </div>
@@ -372,7 +767,7 @@
                         
                         <!-- Información Comercial -->
                         <div class="col-md-6">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <select class="form-select" id="categoriaCliente" name="categoria">
                                     <option value="">Seleccionar categoría</option>
                                     <option value="bronce">Bronce</option>
@@ -384,7 +779,7 @@
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="form-floating">
+                            <div class="form-floating form-floating-nexo">
                                 <input type="number" class="form-control" id="limiteCredito" name="limite_credito" placeholder="Límite de Crédito" min="0">
                                 <label for="limiteCredito">Límite de Crédito</label>
                             </div>
@@ -392,17 +787,18 @@
                     </div>
                     
                     <!-- Validaciones -->
-                    <div id="erroresFormulario" class="alert alert-danger mt-3" style="display: none;">
-                        <ul id="listaErrores" class="mb-0"></ul>
+                    <div id="erroresFormulario" class="alert alert-nexo alert-nexo-error mt-4" style="display: none;">
+                        <i class="ri-error-warning-line me-2"></i>
+                        <ul id="listaErrores" class="mb-0 d-inline"></ul>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle me-1"></i>Cancelar
+            <div class="modal-footer modal-footer-nexo">
+                <button type="button" class="btn btn-nexo-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-circle-line me-1"></i>Cancelar
                 </button>
-                <button type="button" class="btn btn-primary" onclick="guardarCliente()">
-                    <i class="bi bi-check-circle me-1"></i>Guardar
+                <button type="button" class="btn btn-nexo-primary" onclick="guardarCliente()">
+                    <i class="ri-check-line me-1"></i>Guardar
                 </button>
             </div>
         </div>
@@ -412,20 +808,20 @@
 <!-- ========== MODAL DETALLE CLIENTE ========== -->
 <div class="modal fade" id="modalDetalleCliente" tabindex="-1" aria-labelledby="modalDetalleClienteLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content modal-content-nexo">
+            <div class="modal-header modal-header-nexo">
                 <h5 class="modal-title" id="modalDetalleClienteLabel">
-                    <i class="bi bi-info-circle me-2"></i>Detalle de Cliente
+                    <i class="ri-user-search-line me-2"></i>Detalle de Cliente
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body modal-body-nexo">
                 <div id="contenidoDetalleCliente">
                     <!-- El contenido se cargará dinámicamente -->
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <div class="modal-footer modal-footer-nexo">
+                <button type="button" class="btn btn-nexo-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -434,21 +830,26 @@
 <!-- ========== MODAL CONFIRMAR ELIMINACIÓN ========== -->
 <div class="modal fade" id="modalConfirmarEliminar" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content modal-content-nexo">
+            <div class="modal-header modal-header-nexo" style="background: linear-gradient(135deg, var(--nexo-error) 0%, #E74C3C 100%);">
                 <h5 class="modal-title">
-                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Confirmar Eliminación
+                    <i class="ri-alert-line me-2"></i>Confirmar Eliminación
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <p>¿Estás seguro de que deseas eliminar al cliente <strong id="nombreClienteEliminar"></strong>?</p>
-                <p class="text-muted small">Esta acción no se puede deshacer.</p>
+            <div class="modal-body modal-body-nexo">
+                <div class="text-center mb-4">
+                    <i class="ri-delete-bin-line" style="font-size: 4rem; color: var(--nexo-error);"></i>
+                </div>
+                <p class="text-center" style="color: var(--nexo-gray-700);">
+                    ¿Estás seguro de que deseas eliminar al cliente <strong id="nombreClienteEliminar"></strong>?
+                </p>
+                <p class="text-center small" style="color: var(--nexo-gray-500);">Esta acción no se puede deshacer.</p>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" onclick="confirmarEliminar()">
-                    <i class="bi bi-trash me-1"></i>Eliminar
+            <div class="modal-footer modal-footer-nexo">
+                <button type="button" class="btn btn-nexo-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn" style="background-color: var(--nexo-error); color: white;" onclick="confirmarEliminar()">
+                    <i class="ri-delete-bin-line me-1"></i>Eliminar
                 </button>
             </div>
         </div>
@@ -456,6 +857,8 @@
 </div>
 
 <!-- ========== SCRIPTS ========== -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
 // Variables globales
 let clientes = [];
@@ -468,15 +871,17 @@ let totalPaginas = 1;
 
 // Inicializar cuando jQuery esté disponible
 $(document).ready(function() {
-    console.log('🚀 Inicializando Gestión de Clientes...');
+    console.log('🚀 Inicializando Gestión de Clientes (NEXO Design)...');
     
     // Cargar datos iniciales
     cargarClientes();
     cargarMetricas();
     
-    // Eventos de filtros
+    // Eventos de filtros con debounce
+    let debounceTimer;
     $('#filtroBusqueda').on('keyup', function() {
-        aplicarFiltros();
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(aplicarFiltros, 300);
     });
     
     $('#filtroEstado, #filtroTipo, #ordenarPor').on('change', function() {
@@ -494,6 +899,7 @@ $(document).ready(function() {
     window.limpiarFiltros = limpiarFiltros;
     window.cambiarPagina = cambiarPagina;
     window.cambiarRegistrosPorPagina = cambiarRegistrosPorPagina;
+    window.confirmarEliminar = confirmarEliminar;
     
     console.log('✅ Gestión de Clientes inicializada');
 });
@@ -538,52 +944,63 @@ function cargarMetricas() {
     });
 }
 
-// Función para actualizar tabla
+// Función para actualizar tabla con diseño NEXO
 function actualizarTabla(clientes) {
     const tbody = $('#tablaClientes tbody');
     tbody.empty();
     
     if (clientes.length === 0) {
-        tbody.html('<tr><td colspan="8" class="text-center text-muted">No se encontraron clientes</td></tr>');
+        tbody.html(`
+            <tr>
+                <td colspan="8">
+                    <div class="empty-state-nexo">
+                        <i class="ri-user-unfollow-line d-block"></i>
+                        <p>No se encontraron clientes</p>
+                    </div>
+                </td>
+            </tr>
+        `);
         return;
     }
     
     clientes.forEach(function(cliente) {
+        const tipoDisplay = cliente.get_tipo_display || (cliente.tipo === 'INDIVIDUAL' ? 'Natural' : cliente.tipo === 'EMPRESA' ? 'Jurídica' : cliente.tipo);
+        
         const fila = `
             <tr>
                 <td>
-                    <div class="d-flex align-items-center">
-                        <div class="avatar-placeholder me-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-nexo">
                             ${cliente.nombre ? cliente.nombre.charAt(0).toUpperCase() : 'C'}
                         </div>
                         <div>
-                            <strong>${cliente.nombre || 'Sin nombre'}</strong>
-                            <br><small class="text-muted">${cliente.empresa || ''}</small>
+                            <div class="fw-semibold" style="color: var(--nexo-gray-900);">${cliente.nombre || 'Sin nombre'}</div>
+                            <small style="color: var(--nexo-gray-500);">${cliente.empresa || ''}</small>
                         </div>
                     </div>
                 </td>
-                <td>${cliente.rut || 'Sin RUT'}</td>
+                <td style="color: var(--nexo-gray-700);">${cliente.rut || 'Sin RUT'}</td>
                 <td>
-                    <span class="tipo-badge">${cliente.get_tipo_display || cliente.tipo}</span>
+                    <span class="badge-tipo">${tipoDisplay}</span>
                 </td>
-                <td>${cliente.email || 'Sin email'}</td>
-                <td>${cliente.telefono || 'Sin teléfono'}</td>
-                <td>${cliente.empresa || 'Sin empresa'}</td>
+                <td style="color: var(--nexo-gray-500);">${cliente.email || 'Sin email'}</td>
+                <td style="color: var(--nexo-gray-500);">${cliente.telefono || 'Sin teléfono'}</td>
+                <td style="color: var(--nexo-gray-500);">${cliente.empresa || '-'}</td>
                 <td>
-                    <span class="status-badge ${cliente.activo ? 'status-activo' : 'status-inactivo'}">
+                    <span class="badge-nexo ${cliente.activo ? 'badge-nexo-success' : 'badge-nexo-error'}">
                         ${cliente.activo ? 'Activo' : 'Inactivo'}
                     </span>
                 </td>
-                <td>
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-info btn-action" onclick="verDetalleCliente(${cliente.id})" title="Ver Detalle">
-                            <i class="bi bi-eye"></i>
+                <td class="text-center">
+                    <div class="d-flex gap-1 justify-content-center">
+                        <button class="btn btn-action btn-action-view" onclick="verDetalleCliente(${cliente.id})" title="Ver Detalle">
+                            <i class="ri-eye-line"></i>
                         </button>
-                        <button class="btn btn-outline-primary btn-action" onclick="editarCliente(${cliente.id})" title="Editar">
-                            <i class="bi bi-pencil"></i>
+                        <button class="btn btn-action btn-action-edit" onclick="editarCliente(${cliente.id})" title="Editar">
+                            <i class="ri-pencil-line"></i>
                         </button>
-                        <button class="btn btn-outline-danger btn-action" onclick="eliminarCliente(${cliente.id}, '${cliente.nombre}')" title="Eliminar">
-                            <i class="bi bi-trash"></i>
+                        <button class="btn btn-action btn-action-delete" onclick="eliminarCliente(${cliente.id}, '${(cliente.nombre || '').replace(/'/g, "\\'")}')" title="Eliminar">
+                            <i class="ri-delete-bin-line"></i>
                         </button>
                     </div>
                 </td>
@@ -592,7 +1009,7 @@ function actualizarTabla(clientes) {
         tbody.append(fila);
     });
     
-    $('#contadorClientes').text(clientes.length + ' clientes');
+    $('#contadorClientes').text(totalRegistros + ' clientes');
 }
 
 // Función para actualizar métricas
@@ -600,22 +1017,22 @@ function actualizarMetricas(metricas) {
     $('#totalClientes').text(metricas.total_clientes || 0);
     $('#clientesActivos').text(metricas.clientes_activos || 0);
     $('#clientesNuevos').text(metricas.clientes_nuevos_mes || 0);
-    $('#ventasPromedio').text('$' + (metricas.ventas_promedio || 0).toLocaleString());
+    $('#ventasPromedio').text('$' + (metricas.ventas_promedio || 0).toLocaleString('es-CL'));
 }
 
 // Función para actualizar paginación
 function actualizarPaginacion() {
-    const inicio = ((paginaActual - 1) * registrosPorPagina) + 1;
+    const inicio = totalRegistros > 0 ? ((paginaActual - 1) * registrosPorPagina) + 1 : 0;
     const fin = Math.min(paginaActual * registrosPorPagina, totalRegistros);
     
     $('#inicioPagina').text(inicio);
     $('#finPagina').text(fin);
     $('#totalRegistros').text(totalRegistros);
     $('#paginaActual').text(paginaActual);
-    $('#totalPaginas').text(totalPaginas);
+    $('#totalPaginas').text(totalPaginas || 1);
     
     $('#btnAnterior').prop('disabled', paginaActual === 1);
-    $('#btnSiguiente').prop('disabled', paginaActual === totalPaginas);
+    $('#btnSiguiente').prop('disabled', paginaActual >= totalPaginas);
 }
 
 // Función para cambiar página
@@ -638,9 +1055,11 @@ function cambiarRegistrosPorPagina() {
 // Función para abrir modal de creación
 function abrirModalCrear() {
     modoEdicion = false;
-    $('#modalClienteLabel').html('<i class="bi bi-person-plus me-2"></i>Nuevo Cliente');
+    $('#modalClienteLabel').html('<i class="ri-user-add-line me-2"></i>Nuevo Cliente');
     $('#formCliente')[0].reset();
     $('#clienteId').val('');
+    $('#nombreCliente').val('');
+    $('#apellidoCliente').val('');
     $('#erroresFormulario').hide();
     $('#modalCliente').modal('show');
 }
@@ -656,21 +1075,24 @@ function editarCliente(clienteId) {
                 modoEdicion = true;
                 clienteSeleccionado = cliente;
                 
-                $('#modalClienteLabel').html('<i class="bi bi-pencil me-2"></i>Editar Cliente');
+                $('#modalClienteLabel').html('<i class="ri-pencil-line me-2"></i>Editar Cliente');
                 $('#clienteId').val(cliente.id);
-                $('#rutCliente').val(cliente.rut);
-                $('#tipoCliente').val(cliente.tipo);
-                $('#nombreCliente').val(cliente.nombre);
-                $('#emailCliente').val(cliente.email);
-                $('#telefonoCliente').val(cliente.telefono);
-                $('#direccionCliente').val(cliente.direccion);
-                $('#ciudadCliente').val(cliente.ciudad);
-                $('#regionCliente').val(cliente.region);
-                $('#codigoPostalCliente').val(cliente.codigo_postal);
-                $('#empresaCliente').val(cliente.empresa);
-                $('#cargoCliente').val(cliente.cargo);
-                $('#categoriaCliente').val(cliente.categoria);
-                $('#limiteCredito').val(cliente.limite_credito);
+                $('#rutCliente').val(cliente.rut || '');
+                
+                // Llenar nombre y apellido por separado
+                $('#nombreCliente').val(cliente.nombre_solo || cliente.nombre || '');
+                $('#apellidoCliente').val(cliente.apellido || '');
+                
+                $('#emailCliente').val(cliente.email || '');
+                $('#telefonoCliente').val(cliente.telefono || cliente.celular || '');
+                $('#direccionCliente').val(cliente.direccion || '');
+                $('#ciudadCliente').val(cliente.ciudad || cliente.comuna || '');
+                $('#regionCliente').val(cliente.region || '');
+                $('#codigoPostalCliente').val(cliente.codigo_postal || '');
+                $('#empresaCliente').val(cliente.empresa || '');
+                $('#cargoCliente').val(cliente.cargo || '');
+                $('#categoriaCliente').val(cliente.categoria || '');
+                $('#limiteCredito').val(cliente.limite_credito || 0);
                 $('#erroresFormulario').hide();
                 
                 $('#modalCliente').modal('show');
@@ -678,13 +1100,14 @@ function editarCliente(clienteId) {
                 showErrorAlert('Error', response.error || 'Error al cargar cliente');
             }
         },
-        error: function() {
+        error: function(xhr) {
+            console.error('Error al cargar cliente:', xhr);
             showErrorAlert('Error', 'Error de conexión al cargar cliente');
         }
     });
 }
 
-// Función para ver detalle de cliente
+// Función para ver detalle de cliente con diseño NEXO
 function verDetalleCliente(clienteId) {
     $.ajax({
         url: `/empresa_management/obtener_cliente/${clienteId}/`,
@@ -692,61 +1115,107 @@ function verDetalleCliente(clienteId) {
         success: function(response) {
             if (response.success) {
                 const cliente = response.cliente;
+                
+                // Formatear el tipo de cliente para mostrar
+                let tipoDisplay = cliente.get_tipo_display || cliente.tipo_cliente || cliente.tipo || 'No especificado';
+                if (tipoDisplay === 'INDIVIDUAL') tipoDisplay = 'Persona Natural';
+                else if (tipoDisplay === 'EMPRESA') tipoDisplay = 'Persona Jurídica';
+                
                 const contenido = `
                     <div class="row">
                         <div class="col-md-6">
-                            <h6 class="text-primary">Información Básica</h6>
-                            <table class="table table-sm">
-                                <tr><td><strong>RUT:</strong></td><td>${cliente.rut || 'No especificado'}</td></tr>
-                                <tr><td><strong>Nombre:</strong></td><td>${cliente.nombre || 'No especificado'}</td></tr>
-                                <tr><td><strong>Tipo:</strong></td><td><span class="tipo-badge">${cliente.get_tipo_display || cliente.tipo}</span></td></tr>
-                                <tr><td><strong>Empresa:</strong></td><td>${cliente.empresa || 'No especificada'}</td></tr>
-                                <tr><td><strong>Cargo:</strong></td><td>${cliente.cargo || 'No especificado'}</td></tr>
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-user-line me-2"></i>Información Básica
+                            </h6>
+                            <table class="table table-sm" style="font-size: 0.875rem;">
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500); width: 40%;"><strong>RUT:</strong></td>
+                                    <td style="color: var(--nexo-gray-900);">${cliente.rut || 'No especificado'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500);"><strong>Nombre:</strong></td>
+                                    <td style="color: var(--nexo-gray-900);">${cliente.nombre || 'No especificado'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500);"><strong>Tipo:</strong></td>
+                                    <td><span class="badge-tipo">${tipoDisplay}</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500);"><strong>Empresa:</strong></td>
+                                    <td style="color: var(--nexo-gray-900);">${cliente.empresa || 'No especificada'}</td>
+                                </tr>
                             </table>
                         </div>
                         <div class="col-md-6">
-                            <h6 class="text-primary">Información de Contacto</h6>
-                            <table class="table table-sm">
-                                <tr><td><strong>Email:</strong></td><td>${cliente.email || 'No especificado'}</td></tr>
-                                <tr><td><strong>Teléfono:</strong></td><td>${cliente.telefono || 'No especificado'}</td></tr>
-                                <tr><td><strong>Categoría:</strong></td><td>${cliente.categoria || 'No especificada'}</td></tr>
-                                <tr><td><strong>Límite Crédito:</strong></td><td>$${(cliente.limite_credito || 0).toLocaleString()}</td></tr>
-                                <tr><td><strong>Estado:</strong></td><td><span class="status-badge ${cliente.activo ? 'status-activo' : 'status-inactivo'}">${cliente.activo ? 'Activo' : 'Inactivo'}</span></td></tr>
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-phone-line me-2"></i>Información de Contacto
+                            </h6>
+                            <table class="table table-sm" style="font-size: 0.875rem;">
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500); width: 40%;"><strong>Email:</strong></td>
+                                    <td style="color: var(--nexo-gray-900);">${cliente.email || 'No especificado'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500);"><strong>Teléfono:</strong></td>
+                                    <td style="color: var(--nexo-gray-900);">${cliente.telefono || 'No especificado'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500);"><strong>Celular:</strong></td>
+                                    <td style="color: var(--nexo-gray-900);">${cliente.celular || 'No especificado'}</td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--nexo-gray-500);"><strong>Estado:</strong></td>
+                                    <td>
+                                        <span class="badge-nexo ${cliente.activo ? 'badge-nexo-success' : 'badge-nexo-error'}">
+                                            ${cliente.activo ? 'Activo' : 'Inactivo'}
+                                        </span>
+                                    </td>
+                                </tr>
                             </table>
                         </div>
                     </div>
-                    <div class="row mt-3">
+                    <div class="row mt-4">
                         <div class="col-12">
-                            <h6 class="text-primary">Dirección</h6>
-                            <p>${cliente.direccion || 'No especificada'}, ${cliente.ciudad || ''} ${cliente.region || ''} ${cliente.codigo_postal || ''}</p>
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-map-pin-line me-2"></i>Dirección
+                            </h6>
+                            <p style="color: var(--nexo-gray-700); background: var(--nexo-gray-100); padding: 0.75rem 1rem; border-radius: var(--nexo-radius-md);">
+                                ${cliente.direccion || 'No especificada'}${cliente.comuna ? ', ' + cliente.comuna : ''}${cliente.ciudad ? ', ' + cliente.ciudad : ''}
+                            </p>
                         </div>
                     </div>
+                    ${cliente.observaciones ? `
                     <div class="row mt-3">
                         <div class="col-12">
-                            <h6 class="text-primary">Estadísticas</h6>
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-primary">${cliente.total_compras || 0}</div>
-                                        <small class="text-muted">Total Compras</small>
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-file-text-line me-2"></i>Observaciones
+                            </h6>
+                            <p style="color: var(--nexo-gray-700); background: var(--nexo-gray-100); padding: 0.75rem 1rem; border-radius: var(--nexo-radius-md);">
+                                ${cliente.observaciones}
+                            </p>
+                        </div>
+                    </div>
+                    ` : ''}
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h6 style="color: var(--nexo-primary); font-weight: 600; margin-bottom: 1rem;">
+                                <i class="ri-calendar-line me-2"></i>Información del Registro
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="nexo-card p-3 text-center">
+                                        <div class="h5 mb-1" style="color: var(--nexo-info);">
+                                            ${cliente.fecha_creacion ? new Date(cliente.fecha_creacion).toLocaleDateString('es-CL') : 'N/A'}
+                                        </div>
+                                        <small style="color: var(--nexo-gray-500);">Fecha de Registro</small>
                                     </div>
                                 </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-success">$${(cliente.total_ventas || 0).toLocaleString()}</div>
-                                        <small class="text-muted">Total Ventas</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-info">${cliente.fecha_creacion ? new Date(cliente.fecha_creacion).toLocaleDateString() : 'N/A'}</div>
-                                        <small class="text-muted">Fecha Registro</small>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="text-center">
-                                        <div class="h4 text-warning">${cliente.fecha_actualizacion ? new Date(cliente.fecha_actualizacion).toLocaleDateString() : 'N/A'}</div>
-                                        <small class="text-muted">Última Actualización</small>
+                                <div class="col-md-6">
+                                    <div class="nexo-card p-3 text-center">
+                                        <div class="h5 mb-1" style="color: var(--nexo-warning);">
+                                            ${cliente.fecha_actualizacion ? new Date(cliente.fecha_actualizacion).toLocaleDateString('es-CL') : 'N/A'}
+                                        </div>
+                                        <small style="color: var(--nexo-gray-500);">Última Actualización</small>
                                     </div>
                                 </div>
                             </div>
@@ -760,7 +1229,8 @@ function verDetalleCliente(clienteId) {
                 showErrorAlert('Error', response.error || 'Error al cargar detalle de cliente');
             }
         },
-        error: function() {
+        error: function(xhr) {
+            console.error('Error al cargar detalle:', xhr);
             showErrorAlert('Error', 'Error de conexión al cargar detalle de cliente');
         }
     });
@@ -792,7 +1262,7 @@ function guardarCliente() {
     const errores = [];
     if (!data.rut) errores.push('El RUT es obligatorio');
     if (!data.nombre) errores.push('El nombre es obligatorio');
-    if (!data.tipo) errores.push('El tipo de cliente es obligatorio');
+    if (!data.apellido) errores.push('El apellido es obligatorio');
     
     if (errores.length > 0) {
         mostrarErrores(errores);
@@ -818,12 +1288,38 @@ function guardarCliente() {
                 );
                 $('#modalCliente').modal('hide');
                 cargarClientes();
+                cargarMetricas();
             } else {
-                mostrarErrores(response.errors || [response.error]);
+                // Procesar errores del backend
+                if (response.errors && typeof response.errors === 'object') {
+                    const erroresList = [];
+                    for (const [campo, mensajes] of Object.entries(response.errors)) {
+                        if (Array.isArray(mensajes)) {
+                            mensajes.forEach(msg => erroresList.push(`${campo}: ${msg}`));
+                        } else {
+                            erroresList.push(`${campo}: ${mensajes}`);
+                        }
+                    }
+                    mostrarErrores(erroresList);
+                } else {
+                    mostrarErrores([response.error || response.message || 'Error desconocido']);
+                }
             }
         },
-        error: function() {
-            showErrorAlert('Error', 'Error de conexión al guardar cliente');
+        error: function(xhr) {
+            if (xhr.responseJSON && xhr.responseJSON.errors) {
+                const erroresList = [];
+                for (const [campo, mensajes] of Object.entries(xhr.responseJSON.errors)) {
+                    if (Array.isArray(mensajes)) {
+                        mensajes.forEach(msg => erroresList.push(`${campo}: ${msg}`));
+                    } else {
+                        erroresList.push(`${campo}: ${mensajes}`);
+                    }
+                }
+                mostrarErrores(erroresList);
+            } else {
+                showErrorAlert('Error', 'Error de conexión al guardar cliente');
+            }
         }
     });
 }
@@ -839,7 +1335,7 @@ function eliminarCliente(clienteId, nombre) {
 function confirmarEliminar() {
     $.ajax({
         url: `/empresa_management/eliminar_cliente/${clienteSeleccionado}/`,
-        method: 'DELETE',
+        method: 'POST',
         headers: {
             'X-CSRFToken': getCSRFToken()
         },
@@ -848,8 +1344,9 @@ function confirmarEliminar() {
                 showSuccessAlert('Cliente Eliminado', response.message);
                 $('#modalConfirmarEliminar').modal('hide');
                 cargarClientes();
+                cargarMetricas();
             } else {
-                showErrorAlert('Error', response.error);
+                showErrorAlert('Error', response.error || response.message);
             }
         },
         error: function() {
@@ -932,28 +1429,24 @@ function mostrarErrores(errores) {
     $('#erroresFormulario').show();
 }
 
-// Funciones de utilidad para alertas
+// Funciones de utilidad para alertas con SweetAlert2 y colores NEXO
 function showSuccessAlert(title, message) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'success',
-            title: title,
-            text: message
-        });
-    } else {
-        alert(`${title}: ${message}`);
-    }
+    Swal.fire({
+        icon: 'success',
+        title: title,
+        text: message,
+        confirmButtonColor: '#0066FF',
+        iconColor: '#00D4AA'
+    });
 }
 
 function showErrorAlert(title, message) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'error',
-            title: title,
-            text: message
-        });
-    } else {
-        alert(`${title}: ${message}`);
-    }
+    Swal.fire({
+        icon: 'error',
+        title: title,
+        text: message,
+        confirmButtonColor: '#0066FF',
+        iconColor: '#FF4D4D'
+    });
 }
-</script> 
+</script>

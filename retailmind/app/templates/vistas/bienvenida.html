@@ -1,0 +1,198 @@
+{% load static %}
+
+{% include 'layout/header.html' %}
+{% include 'layout/menu.html' %}
+
+<style>
+    .bienvenida-container {
+        min-height: calc(100vh - 200px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .bienvenida-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 40px;
+        color: white;
+        text-align: center;
+        max-width: 600px;
+        box-shadow: 0 20px 60px rgba(102, 126, 234, 0.4);
+    }
+    
+    .bienvenida-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+        opacity: 0.9;
+    }
+    
+    .bienvenida-titulo {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    
+    .bienvenida-subtitulo {
+        font-size: 1.1rem;
+        opacity: 0.9;
+        margin-bottom: 30px;
+    }
+    
+    .bienvenida-info {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .info-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin: 10px 0;
+    }
+    
+    .info-item i {
+        font-size: 1.2rem;
+    }
+    
+    /* Opciones disponibles */
+    .opciones-container {
+        margin-top: 40px;
+    }
+    
+    .opciones-titulo {
+        color: var(--vz-heading-color);
+        font-weight: 600;
+        margin-bottom: 20px;
+        font-size: 1.1rem;
+    }
+    
+    .opciones-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 15px;
+    }
+    
+    .opcion-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+    
+    .opcion-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        border-color: #667eea;
+    }
+    
+    .opcion-card i {
+        font-size: 2rem;
+        color: #667eea;
+        margin-bottom: 10px;
+        display: block;
+    }
+    
+    .opcion-card .nombre {
+        font-weight: 600;
+        color: #333;
+        font-size: 0.95rem;
+    }
+    
+    .opcion-card .modulo {
+        font-size: 0.75rem;
+        color: #888;
+        margin-top: 5px;
+    }
+    
+    .sin-opciones {
+        text-align: center;
+        padding: 40px;
+        color: #888;
+    }
+    
+    .sin-opciones i {
+        font-size: 3rem;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+        
+        <!-- Card de bienvenida -->
+        <div class="bienvenida-container">
+            <div class="bienvenida-card">
+                <div class="bienvenida-icon">
+                    <i class="ri-hand-heart-line"></i>
+                </div>
+                <h1 class="bienvenida-titulo">
+                    ¡Bienvenido, {{ user.first_name|default:user.username }}!
+                </h1>
+                <p class="bienvenida-subtitulo">
+                    Estás conectado al sistema RetailMind
+                </p>
+                
+                <div class="bienvenida-info">
+                    {% if sucursal_actual %}
+                    <div class="info-item">
+                        <i class="ri-building-line"></i>
+                        <span>Sucursal: <strong>{{ sucursal_actual.alias }}</strong></span>
+                    </div>
+                    {% endif %}
+                    <div class="info-item">
+                        <i class="ri-user-line"></i>
+                        <span>Rol: <strong>{{ user.get_rol_display }}</strong></span>
+                    </div>
+                    <div class="info-item">
+                        <i class="ri-calendar-line"></i>
+                        <span>{{ fecha_actual|date:"l, d F Y" }}</span>
+                    </div>
+                </div>
+                
+                <p style="font-size: 0.9rem; opacity: 0.8;">
+                    <i class="ri-information-line me-1"></i>
+                    Usa el menú lateral para navegar a las opciones disponibles
+                </p>
+            </div>
+        </div>
+        
+        <!-- Opciones disponibles -->
+        {% if opciones_disponibles %}
+        <div class="opciones-container">
+            <h5 class="opciones-titulo">
+                <i class="ri-apps-line me-2"></i>
+                Accesos Rápidos
+            </h5>
+            <div class="opciones-grid">
+                {% for opcion in opciones_disponibles %}
+                <a href="{% if opcion.url_name %}{% url opcion.url_name %}{% elif opcion.url_path %}{{ opcion.url_path }}{% else %}#{% endif %}" 
+                   class="opcion-card">
+                    <i class="{{ opcion.icono }}"></i>
+                    <div class="nombre">{{ opcion.nombre }}</div>
+                    <div class="modulo">{{ opcion.modulo }}</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="sin-opciones">
+            <i class="ri-lock-line d-block"></i>
+            <p>No tienes opciones disponibles asignadas a tu perfil.</p>
+            <p class="small text-muted">Contacta al administrador para solicitar acceso.</p>
+        </div>
+        {% endif %}
+        
+    </div>
+</div>
+
+{% include 'layout/footer.html' %}

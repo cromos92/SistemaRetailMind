@@ -60,7 +60,7 @@
 }
 
 .method-selector {
-    background: var(--nexo-white);
+    background: white;
     border: 2px solid var(--nexo-gray-300);
     border-radius: var(--nexo-radius-lg);
     padding: 20px;
@@ -1405,7 +1405,7 @@
                 <div class="col-md-4">
                     <div class="card" style="border: none; border-radius: var(--nexo-radius-lg); overflow: hidden; box-shadow: var(--nexo-shadow-md);">
                         <div class="card-header" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color: white; border: none;">
-                            <h6 class="mb-0"><i class="bi bi-calculator-fill me-2"></i>Totales Finales</h6>
+                            <h6 class="mb-0" style="color: white;"><i class="bi bi-calculator-fill me-2"></i>Totales Finales</h6>
                         </div>
                         <div class="card-body">
                             <div class="d-flex justify-content-between mb-2">
@@ -3318,15 +3318,16 @@ function getPrecioSegunMetodo(product) {
     if (selectedMethod === 'interno') {
         // ═══════════════════════════════════════════════════════════════
         // DESPACHO INTERNO: Para venta entre sucursales propias
-        // Usar SOLO el sobreprecio (NO costo, NO precio_venta)
+        // Usar costo + sobreprecio (precio interno para traspasos)
         // ═══════════════════════════════════════════════════════════════
+        const costo = parseInt(product.costo || 0);
         const sobreprecio = parseInt(product.sobreprecio || 0);
+        const precioInterno = costo + sobreprecio;
         
-        console.log(`💰 Despacho INTERNO: SOLO sobreprecio = ${sobreprecio}`);
-        console.log(`   (NO usar costo: ${product.costo}, NO usar precio_venta: ${product.precio_venta})`);
+        console.log(`💰 Despacho INTERNO: Costo=${costo}, Sobreprecio=${sobreprecio}, PrecioInterno=${precioInterno}`);
         
-        // SIEMPRE retornar SOLO sobreprecio
-        return sobreprecio;
+        // Retornar costo + sobreprecio (precio interno)
+        return precioInterno;
         
     } else if (selectedMethod === 'externo') {
         // ═══════════════════════════════════════════════════════════════

@@ -236,13 +236,22 @@ def crear_cliente(request):
 
 @login_required
 @csrf_exempt
-@require_http_methods(["POST"])
-def editar_cliente(request, cliente_id):
+@require_http_methods(["POST", "PUT"])
+def editar_cliente(request):
     """Editar cliente existente via AJAX"""
     
     try:
-        cliente = get_object_or_404(Cliente, id=cliente_id)
         data = json.loads(request.body)
+        
+        # Obtener el ID del cliente del body
+        cliente_id = data.get('cliente_id') or data.get('id')
+        if not cliente_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'ID de cliente no proporcionado'
+            }, status=400)
+        
+        cliente = get_object_or_404(Cliente, id=cliente_id)
         
         # Guardar datos anteriores para el log
         datos_anteriores = {
@@ -256,25 +265,46 @@ def editar_cliente(request, cliente_id):
         
         with transaction.atomic():
             # Obtener empresa si se especifica
-            empresa = None
+            empresa = cliente.empresa  # Mantener empresa actual por defecto
             if data.get('empresa_id'):
                 empresa = get_object_or_404(Empresa, id=data['empresa_id'])
             
-            # Actualizar campos
-            cliente.nombre = data['nombre']
-            cliente.apellido = data['apellido']
-            cliente.rut = data.get('rut', '')
-            cliente.email = data.get('email', '')
-            cliente.telefono = data.get('telefono', '')
-            cliente.celular = data.get('celular', '')
-            cliente.direccion = data.get('direccion', '')
-            cliente.comuna = data.get('comuna', '')
-            cliente.ciudad = data.get('ciudad', '')
-            cliente.fecha_nacimiento = data.get('fecha_nacimiento', '')
-            cliente.genero = data.get('genero', '')
-            cliente.tipo_cliente = data.get('tipo_cliente', 'INDIVIDUAL')
+            # Manejar el nombre - puede venir como nombre completo o separado
+            nombre_completo = data.get('nombre', '')
+            if data.get('apellido'):
+                # Si viene apellido separado, usar ambos campos
+                cliente.nombre = data.get('nombre', '')
+                cliente.apellido = data.get('apellido', '')
+            else:
+                # Si viene nombre completo, intentar separar
+                partes = nombre_completo.split(' ', 1)
+                cliente.nombre = partes[0] if partes else ''
+                cliente.apellido = partes[1] if len(partes) > 1 else ''
+            
+            # Actualizar campos básicos
+            cliente.rut = data.get('rut', cliente.rut or '')
+            cliente.email = data.get('email', cliente.email or '')
+            cliente.telefono = data.get('telefono', cliente.telefono or '')
+            cliente.celular = data.get('celular', cliente.celular or '')
+            cliente.direccion = data.get('direccion', cliente.direccion or '')
+            cliente.comuna = data.get('comuna', cliente.comuna or '')
+            cliente.ciudad = data.get('ciudad', cliente.ciudad or '')
+            cliente.observaciones = data.get('observaciones', cliente.observaciones or '')
+            
+            # Mapear tipo de cliente del frontend al modelo
+            tipo = data.get('tipo') or data.get('tipo_cliente', '')
+            if tipo in ['natural', 'INDIVIDUAL']:
+                cliente.tipo_cliente = 'INDIVIDUAL'
+            elif tipo in ['juridica', 'EMPRESA']:
+                cliente.tipo_cliente = 'EMPRESA'
+            elif tipo:
+                cliente.tipo_cliente = tipo
+            
+            # Campos opcionales
+            if data.get('genero'):
+                cliente.genero = data.get('genero', '')
+            
             cliente.empresa = empresa
-            cliente.observaciones = data.get('observaciones', '')
             cliente.updated_by = request.user
             
             # Procesar fecha de nacimiento si se proporciona
@@ -647,47 +677,46 @@ def buscar_clientes_ajax(request):
 
 @login_required
 def obtener_cliente(request, cliente_id):
-    """Obtener información de un cliente específico por su ID (solo lectura)"""
+    """Obtener información de un cliente específico por su ID"""
     try:
-        empresa = get_object_or_404(Empresa, id=cliente_id)
-        try:
-            cliente_info = empresa.cliente
-        except Cliente.DoesNotExist:
-            cliente_info = None
+        cliente = get_object_or_404(Cliente, id=cliente_id)
+        
         return JsonResponse({
             'success': True,
             'cliente': {
-                'id': empresa.id,
-                'nombre': empresa.nombre,
-                'rut': empresa.rut,
-                'nombre_fantasia': empresa.nombre_fantasia,
-                'razon_social': empresa.razon_social,
-                'giro': empresa.giro,
-                'direccion': empresa.direccion,
-                'comuna': empresa.comuna,
-                'ciudad': empresa.ciudad,
-                'region': empresa.region,
-                'telefono': empresa.telefono,
-                'email_contacto': empresa.email_contacto,
-                'contacto_principal': empresa.contacto_principal,
-                'es_activa': empresa.es_activa,
-                'limite_credito': float(empresa.limite_credito),
-                'tipo_cliente': cliente_info.tipo_cliente if cliente_info else 'EMPRESA',
-                'categoria': cliente_info.categoria if cliente_info else 'D',
-                'estado': cliente_info.estado if cliente_info else 'ACTIVO',
-                'vendedor_asignado': cliente_info.vendedor_asignado.id if cliente_info and cliente_info.vendedor_asignado else None,
-                'fecha_primer_compra': cliente_info.fecha_primer_compra.strftime('%Y-%m-%d') if cliente_info and cliente_info.fecha_primer_compra else None,
-                'fecha_ultima_compra': cliente_info.fecha_ultima_compra.strftime('%Y-%m-%d') if cliente_info and cliente_info.fecha_ultima_compra else None,
-                'total_compras': float(cliente_info.total_compras) if cliente_info else 0,
-                'numero_compras': cliente_info.numero_compras if cliente_info else 0,
-                'limite_credito_cliente': float(cliente_info.limite_credito_cliente) if cliente_info else 0,
-                'saldo_actual': float(cliente_info.saldo_actual) if cliente_info else 0,
-                'fuente_cliente': cliente_info.fuente_cliente if cliente_info else '',
-                'referido_por': cliente_info.referido_por if cliente_info else '',
-                'notas_comerciales': cliente_info.notas_comerciales if cliente_info else '',
+                'id': cliente.id,
+                'nombre': f"{cliente.nombre} {cliente.apellido}".strip(),
+                'rut': cliente.rut or '',
+                'tipo': cliente.tipo_cliente,
+                'get_tipo_display': cliente.get_tipo_cliente_display() if hasattr(cliente, 'get_tipo_cliente_display') else cliente.tipo_cliente,
+                'email': cliente.email or '',
+                'telefono': cliente.telefono or cliente.celular or '',
+                'direccion': cliente.direccion or '',
+                'ciudad': cliente.ciudad or '',
+                'region': '',  # El modelo no tiene región, usar comuna
+                'codigo_postal': '',  # El modelo no tiene código postal
+                'empresa': cliente.empresa.nombre if cliente.empresa else '',
+                'cargo': '',  # El modelo no tiene cargo
+                'categoria': '',  # El modelo no tiene categoría de cliente
+                'limite_credito': 0,  # El modelo no tiene límite de crédito directo
+                'activo': cliente.activo,
+                'fecha_creacion': cliente.created_at.strftime('%Y-%m-%d %H:%M') if cliente.created_at else None,
+                'fecha_actualizacion': cliente.updated_at.strftime('%Y-%m-%d %H:%M') if hasattr(cliente, 'updated_at') and cliente.updated_at else None,
+                'total_compras': 0,
+                'total_ventas': 0,
+                # Campos adicionales del modelo Cliente
+                'apellido': cliente.apellido or '',
+                'nombre_solo': cliente.nombre or '',
+                'celular': cliente.celular or '',
+                'comuna': cliente.comuna or '',
+                'fecha_nacimiento': cliente.fecha_nacimiento.strftime('%Y-%m-%d') if cliente.fecha_nacimiento else '',
+                'genero': cliente.genero or '',
+                'tipo_cliente': cliente.tipo_cliente,
+                'observaciones': cliente.observaciones or '',
+                'empresa_id': cliente.empresa.id if cliente.empresa else None,
             }
         })
-    except Empresa.DoesNotExist:
+    except Cliente.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Cliente no encontrado'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500) 

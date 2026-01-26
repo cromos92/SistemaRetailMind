@@ -2,6 +2,455 @@
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 
+<style>
+/* ========== NEXO DESIGN SYSTEM - Mi Perfil ========== */
+:root {
+    --nexo-primary: #0066FF;
+    --nexo-primary-dark: #0052CC;
+    --nexo-primary-light: #E6F0FF;
+    --nexo-secondary: #1A1A2E;
+    --nexo-accent: #00D4AA;
+    --nexo-success: #00D4AA;
+    --nexo-warning: #FFB020;
+    --nexo-error: #FF4D4D;
+    --nexo-info: #0066FF;
+    --nexo-gray-900: #1A1A2E;
+    --nexo-gray-700: #4A4A5A;
+    --nexo-gray-500: #8A8A9A;
+    --nexo-gray-300: #D1D1D9;
+    --nexo-gray-100: #F5F5F7;
+    --nexo-white: #FFFFFF;
+    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
+    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
+    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
+    --nexo-radius-md: 8px;
+    --nexo-radius-lg: 12px;
+    --nexo-radius-xl: 16px;
+    --nexo-transition-fast: 150ms ease;
+    --nexo-transition-normal: 250ms ease;
+}
+
+/* ========== PERFIL HEADER ========== */
+.profile-header {
+    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    border-radius: var(--nexo-radius-xl);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.profile-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    transform: translate(100px, -100px);
+}
+
+.profile-avatar-container {
+    position: relative;
+    display: inline-block;
+}
+
+.profile-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 4px solid var(--nexo-white);
+    object-fit: cover;
+    box-shadow: var(--nexo-shadow-lg);
+    background: var(--nexo-gray-100);
+}
+
+.profile-avatar-placeholder {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 4px solid var(--nexo-white);
+    background: linear-gradient(135deg, var(--nexo-accent) 0%, #00B38A 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--nexo-white);
+    box-shadow: var(--nexo-shadow-lg);
+}
+
+.avatar-edit-btn {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--nexo-white);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--nexo-shadow-md);
+    transition: var(--nexo-transition-fast);
+    color: var(--nexo-primary);
+}
+
+.avatar-edit-btn:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+    transform: scale(1.1);
+}
+
+.profile-info h2 {
+    color: var(--nexo-white);
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.profile-info .role-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    color: var(--nexo-white);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+.profile-info .email {
+    color: rgba(255,255,255,0.85);
+    margin-top: 0.25rem;
+}
+
+/* ========== CARDS ========== */
+.nexo-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-lg);
+    border: 1px solid var(--nexo-gray-300);
+    box-shadow: var(--nexo-shadow-sm);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    transition: var(--nexo-transition-fast);
+}
+
+.nexo-card:hover {
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.nexo-card-header {
+    background: var(--nexo-gray-100);
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.nexo-card-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+}
+
+.nexo-card-header i {
+    font-size: 1.25rem;
+    color: var(--nexo-primary);
+}
+
+.nexo-card-body {
+    padding: 1.5rem;
+}
+
+/* ========== FORM STYLES ========== */
+.nexo-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.nexo-form-group label {
+    display: block;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.nexo-form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    font-size: 0.95rem;
+    transition: var(--nexo-transition-fast);
+    background: var(--nexo-white);
+}
+
+.nexo-form-control:focus {
+    outline: none;
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+}
+
+.nexo-form-control:disabled {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-500);
+}
+
+.nexo-form-hint {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    margin-top: 0.25rem;
+}
+
+/* ========== BUTTONS ========== */
+.nexo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+    border: none;
+}
+
+.nexo-btn-primary {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-primary:hover {
+    background: var(--nexo-primary-dark);
+}
+
+.nexo-btn-success {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-success:hover {
+    background: #00B38A;
+}
+
+.nexo-btn-warning {
+    background: var(--nexo-warning);
+    color: var(--nexo-gray-900);
+}
+
+.nexo-btn-warning:hover {
+    background: #E6A100;
+}
+
+.nexo-btn-danger {
+    background: var(--nexo-error);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-danger:hover {
+    background: #E63939;
+}
+
+.nexo-btn-outline {
+    background: transparent;
+    border: 2px solid var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.nexo-btn-outline:hover {
+    background: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.nexo-btn-sm {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+}
+
+.nexo-btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--nexo-radius-md);
+}
+
+/* ========== SESIONES ========== */
+.session-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 0.75rem;
+    transition: var(--nexo-transition-fast);
+    background: var(--nexo-white);
+}
+
+.session-item:hover {
+    border-color: var(--nexo-primary-light);
+    box-shadow: var(--nexo-shadow-sm);
+}
+
+.session-item.current {
+    border-color: var(--nexo-success);
+    background: rgba(0, 212, 170, 0.05);
+}
+
+.session-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--nexo-radius-md);
+    background: var(--nexo-primary-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: var(--nexo-primary);
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+.session-item.current .session-icon {
+    background: rgba(0, 212, 170, 0.15);
+    color: var(--nexo-success);
+}
+
+.session-info {
+    flex: 1;
+}
+
+.session-info h6 {
+    margin: 0 0 0.25rem 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+}
+
+.session-info p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--nexo-gray-500);
+}
+
+.session-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
+.session-badge.current {
+    background: var(--nexo-success);
+    color: var(--nexo-white);
+}
+
+/* ========== SECURITY OPTIONS ========== */
+.security-option {
+    display: flex;
+    align-items: center;
+    padding: 1.25rem;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: var(--nexo-radius-md);
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.security-option:hover {
+    border-color: var(--nexo-primary);
+    background: var(--nexo-primary-light);
+}
+
+.security-option-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--nexo-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+.security-option-icon.warning {
+    background: rgba(255, 176, 32, 0.15);
+    color: var(--nexo-warning);
+}
+
+.security-option-icon.primary {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.security-option-icon.danger {
+    background: rgba(255, 77, 77, 0.15);
+    color: var(--nexo-error);
+}
+
+.security-option h6 {
+    margin: 0 0 0.25rem 0;
+    font-weight: 600;
+    color: var(--nexo-gray-900);
+}
+
+.security-option p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--nexo-gray-500);
+}
+
+/* ========== STATS ========== */
+.profile-stat {
+    text-align: center;
+    padding: 1rem;
+}
+
+.profile-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--nexo-primary);
+}
+
+.profile-stat-label {
+    font-size: 0.8rem;
+    color: var(--nexo-gray-500);
+    margin-top: 0.25rem;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    .profile-header {
+        text-align: center;
+    }
+    
+    .profile-avatar, .profile-avatar-placeholder {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .session-item {
+        flex-wrap: wrap;
+    }
+    
+    .session-actions {
+        width: 100%;
+        margin-top: 0.75rem;
+        display: flex;
+        justify-content: flex-end;
+    }
+}
+</style>
+
 <div class="page-content">
     <div class="container-fluid">
         
@@ -20,94 +469,287 @@
             </div>
         </div>
 
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h4 class="card-title mb-0 text-white">
-                            <i class="ri-user-settings-line me-2"></i>
-                            Información Personal
-                        </h4>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <!-- Foto de perfil -->
-                            <div class="col-md-3 text-center">
-                                <img src="{% static 'images/users/user-dummy-img.jpg' %}" 
-                                     class="rounded-circle img-thumbnail mb-3" 
-                                     width="150" 
-                                     id="fotoPerfil"
-                                     alt="Foto de perfil">
-                                <div>
-                                    <button class="btn btn-primary btn-sm" disabled title="Funcionalidad próximamente">
-                                        <i class="ri-image-edit-line me-1"></i>
-                                        Cambiar Foto
-                                    </button>
-                                </div>
+        <!-- Profile Header -->
+        <div class="profile-header">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <div class="profile-avatar-container">
+                        {% if usuario.foto_perfil %}
+                            <img src="{{ usuario.foto_perfil.url }}" class="profile-avatar" id="avatarPreview" alt="Foto de perfil">
+                        {% else %}
+                            <div class="profile-avatar-placeholder" id="avatarPlaceholder">
+                                {{ usuario.get_iniciales }}
                             </div>
-                            
-                            <!-- Información del usuario -->
-                            <div class="col-md-9">
-                                <h5 class="mb-3">Datos Personales</h5>
-                                
-                                <!-- Formulario -->
-                                <form id="formPerfil">
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label fw-bold">Nombre</label>
-                                            <input type="text" class="form-control" 
-                                                   name="first_name" 
-                                                   value="{{ user.first_name }}"
-                                                   required>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label fw-bold">Apellido</label>
-                                            <input type="text" class="form-control" 
-                                                   name="last_name" 
-                                                   value="{{ user.last_name }}"
-                                                   required>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label fw-bold">Email</label>
-                                            <input type="email" class="form-control" 
-                                                   name="email" 
-                                                   value="{{ user.email }}"
-                                                   required>
-                                        </div>
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label fw-bold">Teléfono</label>
-                                            <input type="text" class="form-control" 
-                                                   name="telefono" 
-                                                   value="{{ user.telefono|default:'' }}"
-                                                   placeholder="+56912345678">
-                                        </div>
-                                        <div class="col-md-12 mb-3">
-                                            <label class="form-label fw-bold">Usuario</label>
-                                            <input type="text" class="form-control" 
-                                                   value="{{ user.username }}"
-                                                   disabled>
-                                            <small class="text-muted">El nombre de usuario no se puede cambiar</small>
-                                        </div>
-                                    </div>
-                                    
-                                    <button type="submit" class="btn btn-success">
-                                        <i class="ri-save-line me-1"></i>
-                                        Guardar Cambios
-                                    </button>
-                                </form>
-                                
-                                <hr class="my-4">
-                                
-                                <!-- Cambiar contraseña -->
-                                <h5 class="mb-3">Seguridad</h5>
-                                <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalCambiarPassword">
-                                    <i class="ri-lock-password-line me-1"></i>
-                                    Cambiar Contraseña
-                                </button>
+                        {% endif %}
+                        <button class="avatar-edit-btn" onclick="document.getElementById('fotoInput').click()" title="Cambiar foto">
+                            <i class="ri-camera-line"></i>
+                        </button>
+                        <input type="file" id="fotoInput" accept="image/*" style="display: none" onchange="subirFoto(this)">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="profile-info">
+                        <h2>{{ usuario.get_full_name }}</h2>
+                        <span class="role-badge">
+                            <i class="ri-shield-user-line me-1"></i>
+                            {{ usuario.get_rol_display }}
+                        </span>
+                        <p class="email mb-0 mt-2">
+                            <i class="ri-mail-line me-1"></i>
+                            {{ usuario.email }}
+                        </p>
+                        {% if empresa_user %}
+                        <p class="email mb-0 mt-1" style="opacity: 0.85;">
+                            <i class="ri-building-line me-1"></i>
+                            {{ empresa_user.empresa.nombre }} - {{ empresa_user.sucursal.alias }}
+                        </p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-auto d-none d-md-block">
+                    <div class="row text-center">
+                        <div class="col">
+                            <div class="profile-stat">
+                                <div class="profile-stat-value" style="color: var(--nexo-white);">
+                                    {{ sesiones|length }}
+                                </div>
+                                <div class="profile-stat-label" style="color: rgba(255,255,255,0.7);">
+                                    Sesiones Activas
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Columna Izquierda - Información Personal -->
+            <div class="col-lg-8">
+                <!-- Card: Información Personal -->
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <i class="ri-user-3-line"></i>
+                        <h5>Información Personal</h5>
+                    </div>
+                    <div class="nexo-card-body">
+                        <form id="formPerfil">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="nexo-form-group">
+                                        <label>Nombre</label>
+                                        <input type="text" class="nexo-form-control" name="first_name" 
+                                               value="{{ usuario.first_name }}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="nexo-form-group">
+                                        <label>Apellido</label>
+                                        <input type="text" class="nexo-form-control" name="last_name" 
+                                               value="{{ usuario.last_name }}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="nexo-form-group">
+                                        <label>Correo Electrónico</label>
+                                        <input type="email" class="nexo-form-control" name="email" 
+                                               value="{{ usuario.email }}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="nexo-form-group">
+                                        <label>Teléfono</label>
+                                        <input type="text" class="nexo-form-control" name="telefono" 
+                                               value="{{ usuario.telefono|default:'' }}"
+                                               placeholder="+56 9 1234 5678">
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="nexo-form-group">
+                                        <label>Nombre de Usuario</label>
+                                        <input type="text" class="nexo-form-control" value="{{ usuario.username }}" disabled>
+                                        <span class="nexo-form-hint">El nombre de usuario no se puede cambiar</span>
+                                    </div>
+                                </div>
+                                {% if usuario.rut %}
+                                <div class="col-md-6">
+                                    <div class="nexo-form-group">
+                                        <label>RUT</label>
+                                        <input type="text" class="nexo-form-control" value="{{ usuario.rut }}" disabled>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex justify-content-end mt-3">
+                                <button type="submit" class="nexo-btn nexo-btn-success">
+                                    <i class="ri-save-line"></i>
+                                    Guardar Cambios
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Card: Sesiones Activas -->
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <i class="ri-device-line"></i>
+                        <h5>Sesiones Activas</h5>
+                        {% if sesiones|length > 1 %}
+                        <button class="nexo-btn nexo-btn-danger nexo-btn-sm ms-auto" onclick="cerrarTodasSesiones()">
+                            <i class="ri-logout-circle-line"></i>
+                            Cerrar todas las demás
+                        </button>
+                        {% endif %}
+                    </div>
+                    <div class="nexo-card-body">
+                        {% if sesiones %}
+                            <div id="sesionesContainer">
+                            {% for sesion in sesiones %}
+                                <div class="session-item {% if sesion.session_key == sesion_actual_key %}current{% endif %}" data-id="{{ sesion.id }}">
+                                    <div class="session-icon">
+                                        {% if 'Móvil' in sesion.dispositivo or 'Mobile' in sesion.dispositivo %}
+                                            <i class="ri-smartphone-line"></i>
+                                        {% elif 'Tablet' in sesion.dispositivo %}
+                                            <i class="ri-tablet-line"></i>
+                                        {% else %}
+                                            <i class="ri-computer-line"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="session-info">
+                                        <h6>
+                                            {{ sesion.navegador|default:"Navegador" }} en {{ sesion.sistema_operativo|default:"Sistema" }}
+                                            {% if sesion.session_key == sesion_actual_key %}
+                                                <span class="session-badge current">Esta sesión</span>
+                                            {% endif %}
+                                        </h6>
+                                        <p>
+                                            <i class="ri-map-pin-line me-1"></i>
+                                            {{ sesion.ip_address|default:"IP desconocida" }}
+                                            <span class="mx-2">•</span>
+                                            <i class="ri-time-line me-1"></i>
+                                            Última actividad: {{ sesion.ultima_actividad|date:"d/m/Y H:i" }}
+                                        </p>
+                                    </div>
+                                    {% if sesion.session_key != sesion_actual_key %}
+                                    <div class="session-actions">
+                                        <button class="nexo-btn nexo-btn-outline nexo-btn-sm" onclick="cerrarSesion({{ sesion.id }})">
+                                            <i class="ri-logout-box-line"></i>
+                                            Cerrar
+                                        </button>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="ri-device-line" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
+                                <p class="text-muted mt-2">No hay sesiones activas registradas</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha - Seguridad -->
+            <div class="col-lg-4">
+                <!-- Card: Seguridad -->
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <i class="ri-shield-keyhole-line"></i>
+                        <h5>Seguridad</h5>
+                    </div>
+                    <div class="nexo-card-body">
+                        <!-- Cambiar contraseña directamente -->
+                        <div class="security-option" onclick="abrirModalPassword()">
+                            <div class="security-option-icon warning">
+                                <i class="ri-lock-password-line"></i>
+                            </div>
+                            <div>
+                                <h6>Cambiar Contraseña</h6>
+                                <p>Actualiza tu contraseña actual</p>
+                            </div>
+                            <i class="ri-arrow-right-s-line ms-auto" style="font-size: 1.5rem; color: var(--nexo-gray-300);"></i>
+                        </div>
+
+                        <!-- Cambiar contraseña por email -->
+                        <div class="security-option" onclick="solicitarCambioEmail()">
+                            <div class="security-option-icon primary">
+                                <i class="ri-mail-send-line"></i>
+                            </div>
+                            <div>
+                                <h6>Cambiar por Email</h6>
+                                <p>Recibe un link seguro en tu correo</p>
+                            </div>
+                            <i class="ri-arrow-right-s-line ms-auto" style="font-size: 1.5rem; color: var(--nexo-gray-300);"></i>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <!-- Cerrar sesión -->
+                        <div class="security-option" onclick="cerrarSesionActual()">
+                            <div class="security-option-icon danger">
+                                <i class="ri-logout-box-r-line"></i>
+                            </div>
+                            <div>
+                                <h6>Cerrar Sesión</h6>
+                                <p>Salir de esta sesión</p>
+                            </div>
+                            <i class="ri-arrow-right-s-line ms-auto" style="font-size: 1.5rem; color: var(--nexo-gray-300);"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card: Información de Cuenta -->
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <i class="ri-information-line"></i>
+                        <h5>Información de Cuenta</h5>
+                    </div>
+                    <div class="nexo-card-body">
+                        <div class="mb-3">
+                            <small class="text-muted">Miembro desde</small>
+                            <p class="mb-0 fw-semibold">{{ usuario.date_joined|date:"d/m/Y" }}</p>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">Último acceso</small>
+                            <p class="mb-0 fw-semibold">
+                                {% if usuario.fecha_ultimo_acceso %}
+                                    {{ usuario.fecha_ultimo_acceso|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    No registrado
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div>
+                            <small class="text-muted">Estado de cuenta</small>
+                            <p class="mb-0">
+                                {% if usuario.es_activo %}
+                                    <span class="badge" style="background: var(--nexo-success);">Activa</span>
+                                {% else %}
+                                    <span class="badge" style="background: var(--nexo-error);">Inactiva</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {% if usuario.foto_perfil %}
+                <!-- Card: Foto de Perfil -->
+                <div class="nexo-card">
+                    <div class="nexo-card-header">
+                        <i class="ri-image-line"></i>
+                        <h5>Foto de Perfil</h5>
+                    </div>
+                    <div class="nexo-card-body text-center">
+                        <button class="nexo-btn nexo-btn-danger nexo-btn-sm" onclick="eliminarFoto()">
+                            <i class="ri-delete-bin-line"></i>
+                            Eliminar foto
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
         
@@ -116,36 +758,54 @@
 
 <!-- Modal Cambiar Contraseña -->
 <div class="modal fade" id="modalCambiarPassword" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--nexo-radius-lg); overflow: hidden;">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-warning) 0%, #E6A100 100%); border: none;">
+                <h5 class="modal-title" style="color: var(--nexo-gray-900);">
                     <i class="ri-lock-password-line me-2"></i>
                     Cambiar Contraseña
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 <form id="formCambiarPassword">
-                    <div class="mb-3">
-                        <label class="form-label">Contraseña Actual</label>
-                        <input type="password" class="form-control" name="password_actual" required>
+                    <div class="nexo-form-group">
+                        <label>Contraseña Actual</label>
+                        <div class="position-relative">
+                            <input type="password" class="nexo-form-control" name="password_actual" id="password_actual" required>
+                            <button type="button" class="btn btn-link position-absolute end-0 top-50 translate-middle-y" 
+                                    onclick="togglePassword('password_actual')" style="text-decoration: none;">
+                                <i class="ri-eye-line" id="password_actual_icon"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Nueva Contraseña</label>
-                        <input type="password" class="form-control" name="password_nueva" required minlength="6">
-                        <small class="text-muted">Mínimo 6 caracteres</small>
+                    <div class="nexo-form-group">
+                        <label>Nueva Contraseña</label>
+                        <div class="position-relative">
+                            <input type="password" class="nexo-form-control" name="password_nueva" id="password_nueva" required minlength="6">
+                            <button type="button" class="btn btn-link position-absolute end-0 top-50 translate-middle-y" 
+                                    onclick="togglePassword('password_nueva')" style="text-decoration: none;">
+                                <i class="ri-eye-line" id="password_nueva_icon"></i>
+                            </button>
+                        </div>
+                        <span class="nexo-form-hint">Mínimo 6 caracteres</span>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Confirmar Nueva Contraseña</label>
-                        <input type="password" class="form-control" name="password_confirmar" required>
+                    <div class="nexo-form-group">
+                        <label>Confirmar Nueva Contraseña</label>
+                        <div class="position-relative">
+                            <input type="password" class="nexo-form-control" name="password_confirmar" id="password_confirmar" required>
+                            <button type="button" class="btn btn-link position-absolute end-0 top-50 translate-middle-y" 
+                                    onclick="togglePassword('password_confirmar')" style="text-decoration: none;">
+                                <i class="ri-eye-line" id="password_confirmar_icon"></i>
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" form="formCambiarPassword" class="btn btn-warning">
-                    <i class="ri-check-line me-1"></i>
+            <div class="modal-footer" style="border: none;">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" form="formCambiarPassword" class="nexo-btn nexo-btn-warning">
+                    <i class="ri-check-line"></i>
                     Cambiar Contraseña
                 </button>
             </div>
@@ -156,7 +816,23 @@
 {% include 'layout/footer.html' %}
 
 <script>
-// Actualizar perfil
+// ========== COOKIE HELPER ==========
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// ========== ACTUALIZAR PERFIL ==========
 $('#formPerfil').on('submit', function(e) {
     e.preventDefault();
     
@@ -178,20 +854,38 @@ $('#formPerfil').on('submit', function(e) {
                 icon: 'success',
                 title: 'Perfil Actualizado',
                 text: response.message,
-                timer: 2000
+                confirmButtonColor: '#00D4AA'
             });
         },
         error: function(xhr) {
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: xhr.responseJSON?.error || 'Error al actualizar perfil'
+                text: xhr.responseJSON?.error || 'Error al actualizar perfil',
+                confirmButtonColor: '#FF4D4D'
             });
         }
     });
 });
 
-// Cambiar contraseña
+// ========== CAMBIAR CONTRASEÑA ==========
+function abrirModalPassword() {
+    $('#modalCambiarPassword').modal('show');
+}
+
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(inputId + '_icon');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'ri-eye-off-line';
+    } else {
+        input.type = 'password';
+        icon.className = 'ri-eye-line';
+    }
+}
+
 $('#formCambiarPassword').on('submit', function(e) {
     e.preventDefault();
     
@@ -202,7 +896,8 @@ $('#formCambiarPassword').on('submit', function(e) {
         Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'Las contraseñas no coinciden'
+            text: 'Las contraseñas no coinciden',
+            confirmButtonColor: '#FF4D4D'
         });
         return;
     }
@@ -211,7 +906,8 @@ $('#formCambiarPassword').on('submit', function(e) {
         Swal.fire({
             icon: 'error',
             title: 'Error',
-            text: 'La contraseña debe tener al menos 6 caracteres'
+            text: 'La contraseña debe tener al menos 6 caracteres',
+            confirmButtonColor: '#FF4D4D'
         });
         return;
     }
@@ -232,7 +928,7 @@ $('#formCambiarPassword').on('submit', function(e) {
                 icon: 'success',
                 title: 'Contraseña Cambiada',
                 text: response.message,
-                timer: 2000
+                confirmButtonColor: '#00D4AA'
             }).then(() => {
                 $('#modalCambiarPassword').modal('hide');
                 $('#formCambiarPassword')[0].reset();
@@ -242,27 +938,257 @@ $('#formCambiarPassword').on('submit', function(e) {
             Swal.fire({
                 icon: 'error',
                 title: 'Error',
-                text: xhr.responseJSON?.error || 'Error al cambiar contraseña'
+                text: xhr.responseJSON?.error || 'Error al cambiar contraseña',
+                confirmButtonColor: '#FF4D4D'
             });
         }
     });
 });
 
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
+// ========== CAMBIAR CONTRASEÑA POR EMAIL ==========
+function solicitarCambioEmail() {
+    Swal.fire({
+        icon: 'question',
+        title: 'Cambiar contraseña por email',
+        html: `
+            <p>Se enviará un enlace seguro a tu correo electrónico:</p>
+            <p><strong>{{ usuario.email }}</strong></p>
+            <p class="text-muted small">El enlace será válido por 24 horas</p>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Enviar enlace',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+        cancelButtonColor: '#8A8A9A'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: '{% url "users:solicitar_cambio_password" %}',
+                method: 'POST',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(response) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Correo enviado',
+                        text: response.message,
+                        confirmButtonColor: '#00D4AA'
+                    });
+                },
+                error: function(xhr) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: xhr.responseJSON?.error || 'Error al enviar correo',
+                        confirmButtonColor: '#FF4D4D'
+                    });
+                }
+            });
         }
+    });
+}
+
+// ========== GESTIÓN DE SESIONES ==========
+function cerrarSesion(sesionId) {
+    Swal.fire({
+        icon: 'warning',
+        title: '¿Cerrar esta sesión?',
+        text: 'La sesión en ese dispositivo será terminada',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cerrar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonColor: '#8A8A9A'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/users/cerrar-sesion/${sesionId}/`,
+                method: 'POST',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(response) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sesión cerrada',
+                        text: response.message,
+                        confirmButtonColor: '#00D4AA'
+                    }).then(() => {
+                        $(`.session-item[data-id="${sesionId}"]`).fadeOut(300, function() {
+                            $(this).remove();
+                        });
+                    });
+                },
+                error: function(xhr) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: xhr.responseJSON?.error || 'Error al cerrar sesión',
+                        confirmButtonColor: '#FF4D4D'
+                    });
+                }
+            });
+        }
+    });
+}
+
+function cerrarTodasSesiones() {
+    Swal.fire({
+        icon: 'warning',
+        title: '¿Cerrar todas las otras sesiones?',
+        text: 'Se cerrarán todas las sesiones excepto esta',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cerrar todas',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonColor: '#8A8A9A'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: '{% url "users:cerrar_todas_sesiones" %}',
+                method: 'POST',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(response) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sesiones cerradas',
+                        text: response.message,
+                        confirmButtonColor: '#00D4AA'
+                    }).then(() => {
+                        location.reload();
+                    });
+                },
+                error: function(xhr) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: xhr.responseJSON?.error || 'Error al cerrar sesiones',
+                        confirmButtonColor: '#FF4D4D'
+                    });
+                }
+            });
+        }
+    });
+}
+
+function cerrarSesionActual() {
+    Swal.fire({
+        icon: 'warning',
+        title: '¿Cerrar sesión?',
+        text: 'Serás redirigido a la página de inicio de sesión',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cerrar sesión',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonColor: '#8A8A9A'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = '{% url "logout" %}';
+        }
+    });
+}
+
+// ========== FOTO DE PERFIL ==========
+function subirFoto(input) {
+    if (!input.files || !input.files[0]) return;
+    
+    const file = input.files[0];
+    
+    // Validar tipo
+    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!tiposPermitidos.includes(file.type)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Tipo no permitido',
+            text: 'Solo se permiten imágenes: JPG, PNG, GIF, WEBP',
+            confirmButtonColor: '#FF4D4D'
+        });
+        return;
     }
-    return cookieValue;
+    
+    // Validar tamaño (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Archivo muy grande',
+            text: 'La imagen no puede superar los 5MB',
+            confirmButtonColor: '#FF4D4D'
+        });
+        return;
+    }
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Subiendo foto...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    const formData = new FormData();
+    formData.append('foto', file);
+    
+    $.ajax({
+        url: '{% url "users:subir_foto_perfil" %}',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {'X-CSRFToken': getCookie('csrftoken')},
+        success: function(response) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Foto actualizada',
+                text: response.message,
+                confirmButtonColor: '#00D4AA'
+            }).then(() => {
+                location.reload();
+            });
+        },
+        error: function(xhr) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: xhr.responseJSON?.error || 'Error al subir la foto',
+                confirmButtonColor: '#FF4D4D'
+            });
+        }
+    });
+}
+
+function eliminarFoto() {
+    Swal.fire({
+        icon: 'warning',
+        title: '¿Eliminar foto de perfil?',
+        text: 'Se mostrará tus iniciales en su lugar',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#FF4D4D',
+        cancelButtonColor: '#8A8A9A'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: '{% url "users:eliminar_foto_perfil" %}',
+                method: 'POST',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(response) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Foto eliminada',
+                        confirmButtonColor: '#00D4AA'
+                    }).then(() => {
+                        location.reload();
+                    });
+                },
+                error: function(xhr) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: xhr.responseJSON?.error || 'Error al eliminar la foto',
+                        confirmButtonColor: '#FF4D4D'
+                    });
+                }
+            });
+        }
+    });
 }
 </script>
-
-
-

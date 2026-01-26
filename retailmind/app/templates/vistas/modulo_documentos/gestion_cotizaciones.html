@@ -401,7 +401,7 @@
                                     <th style="width: 5%">#</th>
                                     <th style="width: 25%">Descripción <span style="color: var(--nexo-error);">*</span></th>
                                     <th style="width: 10%">Cantidad <span style="color: var(--nexo-error);">*</span></th>
-                                    <th style="width: 15%">Precio Unit. <span style="color: var(--nexo-error);">*</span></th>
+                                    <th style="width: 15%">Precio Unit. <small style="font-weight: normal; color: var(--nexo-text-muted);">(IVA incl.)</small> <span style="color: var(--nexo-error);">*</span></th>
                                     <th style="width: 15%">Subtotal</th>
                                     <th style="width: 20%">Producto Asociado</th>
                                     <th style="width: 10%">Acciones</th>
@@ -414,11 +414,26 @@
                     </div>
                     <div class="nexo-total-bar">
                         <div class="row">
-                            <div class="col text-end">
-                                <h5 class="mb-0">
-                                    <span style="color: var(--nexo-text-muted);">Total:</span>
-                                    <span class="nexo-total-value ms-2" id="totalCotizacion">$0</span>
-                                </h5>
+                            <div class="col-md-8">
+                                <small style="color: var(--nexo-text-muted);">
+                                    <i class="ri-information-line"></i> Los precios unitarios incluyen IVA (19%)
+                                </small>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+                                    <div style="font-size: 12px;">
+                                        <span style="color: var(--nexo-text-muted);">Neto:</span>
+                                        <span style="color: var(--nexo-text-secondary); margin-left: 8px;" id="netoCotizacion">$0</span>
+                                    </div>
+                                    <div style="font-size: 12px;">
+                                        <span style="color: var(--nexo-text-muted);">IVA (19%):</span>
+                                        <span style="color: var(--nexo-text-secondary); margin-left: 8px;" id="ivaCotizacion">$0</span>
+                                    </div>
+                                    <div style="font-size: 16px; font-weight: 700; border-top: 1px solid var(--nexo-border); padding-top: 4px;">
+                                        <span style="color: var(--nexo-text-muted);">Total:</span>
+                                        <span class="nexo-total-value ms-2" id="totalCotizacion" style="color: var(--nexo-primary);">$0</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -449,7 +464,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content nexo-modal">
             <div class="modal-header nexo-modal-header">
-                <h5 class="modal-title" id="tituloDetalleCotizacion">
+                <h5 class="modal-title" id="tituloDetalleCotizacion" style="color: white;">
                     <i class="ri-file-text-line me-2"></i> Detalle de Cotización
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -473,6 +488,9 @@
                 </button>
                 <button type="button" class="nexo-btn-success" onclick="descargarPDF()">
                     <i class="ri-download-line me-1"></i> Descargar PDF
+                </button>
+                <button type="button" class="nexo-btn-primary" id="btnEnviarCorreo" onclick="enviarCotizacionPorCorreo()">
+                    <i class="ri-mail-send-line me-1"></i> Enviar por Correo
                 </button>
                 <button type="button" class="nexo-btn-warning" id="btnConvertirFactura" onclick="convertirAFactura()">
                     <i class="ri-file-list-3-line me-1"></i> Convertir a Factura
@@ -1506,6 +1524,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let itemIndexForProducto = null;
     let cotizacionActual = null;
     let clientesData = []; // Para almacenar datos de clientes con email
+    let datosEdicionCotizacion = null; // Datos de cotización para cargar en edición
 
     // URLs de API
     const apiUrls = {
@@ -1932,6 +1951,44 @@ document.addEventListener('DOMContentLoaded', function() {
             const clasesDias = diasRestantes < 0 ? 'dias-restantes-alerta' : 
                               diasRestantes <= 7 ? 'dias-restantes-warning' : 'dias-restantes-ok';
             
+            // Determinar estado de SKU y Stock
+            let estadoItemsHtml = '';
+            let estadoItemsIcon = '';
+            let estadoItemsColor = '';
+            let estadoItemsTitle = '';
+            
+            if (cot.items_sin_sku > 0) {
+                // Hay items sin SKU asociado
+                estadoItemsIcon = 'ri-error-warning-line';
+                estadoItemsColor = 'var(--nexo-warning)';
+                estadoItemsTitle = `${cot.items_sin_sku} producto(s) sin SKU asociado`;
+                estadoItemsHtml = `
+                    <div style="font-size: 10px; color: var(--nexo-warning); margin-top: 2px;">
+                        <i class="ri-error-warning-line"></i> ${cot.items_sin_sku} sin SKU
+                    </div>`;
+            } else if (cot.items_sin_stock > 0) {
+                // Todos tienen SKU pero hay problemas de stock
+                estadoItemsIcon = 'ri-alert-line';
+                estadoItemsColor = 'var(--nexo-error)';
+                const detalleStock = cot.problemas_stock && cot.problemas_stock.length > 0 
+                    ? cot.problemas_stock.map(p => `SKU ${p.sku}: stock ${p.stock}/${p.requerido}`).join(', ')
+                    : `${cot.items_sin_stock} producto(s) sin stock suficiente`;
+                estadoItemsTitle = detalleStock;
+                estadoItemsHtml = `
+                    <div style="font-size: 10px; color: var(--nexo-error); margin-top: 2px;">
+                        <i class="ri-alert-line"></i> ${cot.items_sin_stock} sin stock
+                    </div>`;
+            } else if (cot.items_con_sku === cot.total_items && cot.total_items > 0) {
+                // Todo OK: todos tienen SKU y stock suficiente
+                estadoItemsIcon = 'ri-checkbox-circle-line';
+                estadoItemsColor = 'var(--nexo-success)';
+                estadoItemsTitle = 'Todos los productos tienen SKU y stock suficiente';
+                estadoItemsHtml = `
+                    <div style="font-size: 10px; color: var(--nexo-success); margin-top: 2px;">
+                        <i class="ri-checkbox-circle-line"></i> Listo
+                    </div>`;
+            }
+            
             return `
                 <tr>
                     <td>
@@ -1950,21 +2007,29 @@ document.addEventListener('DOMContentLoaded', function() {
                             ${diasRestantes < 0 ? 'Vencida' : diasRestantes + ' días'}
                         </span>
                     </td>
-                    <td class="text-center">
+                    <td class="text-center" title="${estadoItemsTitle}">
                         <span class="nexo-badge" style="background-color: var(--nexo-gray-100); color: var(--nexo-text-secondary);">${cot.total_items} items</span>
+                        ${estadoItemsHtml}
                     </td>
                     <td>
                         <span class="fw-medium" style="color: var(--nexo-text-primary);">${formatearMoneda(cot.monto_total)}</span>
                     </td>
                     <td>
-                        <span class="${obtenerClaseEstado(cot.estado)}">${cot.estado}</span>
+                        ${cot.facturada || cot.estado === 'FACTURADA' ? `
+                            <span class="nexo-badge nexo-badge-info">
+                                <i class="ri-checkbox-circle-fill"></i> FACTURADA
+                            </span>
+                            ${cot.numero_factura ? `<div style="font-size: 10px; color: var(--nexo-text-muted); margin-top: 2px;">${cot.numero_factura}</div>` : ''}
+                        ` : `
+                            <span class="${obtenerClaseEstado(cot.estado)}">${cot.estado}</span>
+                        `}
                     </td>
                     <td>
                         <div class="btn-group btn-group-sm">
                             <button class="btn btn-action" style="background-color: var(--nexo-primary); color: white; border-color: var(--nexo-primary);" onclick="verDetalle(${cot.id})" title="Ver Detalle">
                                 <i class="ri-eye-line"></i>
                             </button>
-                            ${cot.estado === 'VIGENTE' ? `
+                            ${cot.estado === 'VIGENTE' && !cot.facturada ? `
                                 <button class="btn btn-action" style="background-color: var(--nexo-success); color: white; border-color: var(--nexo-success);" onclick="editarCotizacion(${cot.id})" title="Editar">
                                     <i class="ri-edit-line"></i>
                                 </button>
@@ -2124,14 +2189,22 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function calcularTotalCotizacion() {
-        let total = 0;
+        let totalBruto = 0; // Total con IVA incluido
         document.querySelectorAll('#tbodyItemsCotizacion tr').forEach(row => {
             const cantidad = parseFloat(row.querySelector('.item-cantidad').value) || 0;
             const precio = parseFloat(row.querySelector('.item-precio').value) || 0;
-            total += cantidad * precio;
+            totalBruto += cantidad * precio;
         });
         
-        document.getElementById('totalCotizacion').textContent = formatearMoneda(total);
+        // Calcular neto e IVA desde el total bruto (precio ya incluye IVA)
+        // Fórmula: neto = bruto / 1.19
+        const neto = Math.round(totalBruto / 1.19);
+        const iva = Math.round(neto * 0.19);
+        
+        // Actualizar UI con el desglose
+        document.getElementById('netoCotizacion').textContent = formatearMoneda(neto);
+        document.getElementById('ivaCotizacion').textContent = formatearMoneda(iva);
+        document.getElementById('totalCotizacion').textContent = formatearMoneda(totalBruto);
     }
 
     window.eliminarItem = function(itemId) {
@@ -2956,6 +3029,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Limpiar referencia de edición
         window.cotizacionEnEdicion = null;
+        datosEdicionCotizacion = null;
 
         // Restaurar título del modal
         document.querySelector('#modalNuevaCotizacion .modal-title').innerHTML = `
@@ -2998,8 +3072,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function mostrarDetalleCotizacion(cot) {
         document.getElementById('tituloDetalleCotizacion').innerHTML = `
-            <i class="ri-file-text-line me-2"></i> Detalle de Cotización
+            <i class="ri-file-text-line me-2" style="color: white;"></i> Detalle de Cotización
         `;
+        document.getElementById('tituloDetalleCotizacion').style.color = 'white';
 
         const diasRestantes = calcularDiasRestantes(cot.fecha_validez);
         
@@ -3044,9 +3119,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div class="col-md-5 text-end">
                         <div style="background: rgba(255,255,255,0.15); border-radius: 16px; padding: 20px; backdrop-filter: blur(10px);">
-                            <span style="font-size: 13px; opacity: 0.8; display: block; margin-bottom: 4px;">MONTO TOTAL</span>
-                            <h2 style="font-weight: 700; margin: 0; font-size: 32px;">${formatearMoneda(cot.monto_total)}</h2>
-                            <small style="opacity: 0.7;">IVA incluido</small>
+                            <span style="font-size: 13px; opacity: 0.8; display: block; margin-bottom: 4px; color: white;">MONTO TOTAL</span>
+                            <h2 style="font-weight: 700; margin: 0; font-size: 32px; color: white;">${formatearMoneda(cot.monto_total)}</h2>
+                            <small style="opacity: 0.7; color: white;">IVA incluido</small>
                         </div>
                     </div>
                 </div>
@@ -3255,10 +3330,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('contenidoDetalleCotizacion').innerHTML = html;
         
-        // Mostrar/ocultar botón de facturar
+        // Buscar información de stock en cotizacionesData
+        const cotizacionInfo = cotizacionesData.find(c => c.id === cot.id);
+        
+        // Mostrar/ocultar botón de facturar según estado, SKU y stock
         const btnFacturar = document.getElementById('btnConvertirFactura');
-        if (cot.estado === 'VIGENTE') {
+        const estaFacturada = cotizacionInfo && (cotizacionInfo.facturada || cot.estado === 'FACTURADA');
+        
+        if (estaFacturada) {
+            // Ya está facturada - mostrar estado pero deshabilitar
             btnFacturar.style.display = 'inline-block';
+            btnFacturar.disabled = true;
+            btnFacturar.innerHTML = `<i class="ri-checkbox-circle-fill me-1"></i> FACTURADA`;
+            btnFacturar.title = cotizacionInfo.numero_factura ? `Doc: ${cotizacionInfo.numero_factura}` : 'Esta cotización ya fue facturada';
+            btnFacturar.className = 'nexo-btn-secondary';
+            btnFacturar.style.backgroundColor = 'var(--nexo-info)';
+            btnFacturar.style.borderColor = 'var(--nexo-info)';
+            btnFacturar.style.cursor = 'not-allowed';
+        } else if (cot.estado === 'VIGENTE') {
+            btnFacturar.style.display = 'inline-block';
+            btnFacturar.style.cursor = 'pointer';
+            
+            // Actualizar estado del botón según SKU y stock
+            if (cotizacionInfo) {
+                if (cotizacionInfo.items_sin_sku > 0) {
+                    btnFacturar.disabled = false; // Habilitado para mostrar mensaje
+                    btnFacturar.innerHTML = '<i class="ri-error-warning-line me-1"></i> Faltan SKUs';
+                    btnFacturar.title = `${cotizacionInfo.items_sin_sku} producto(s) sin SKU asociado`;
+                    btnFacturar.className = 'nexo-btn-secondary';
+                    btnFacturar.style.backgroundColor = '';
+                    btnFacturar.style.borderColor = '';
+                } else if (cotizacionInfo.items_sin_stock > 0) {
+                    btnFacturar.disabled = false; // Habilitado para mostrar mensaje
+                    btnFacturar.innerHTML = '<i class="ri-alert-line me-1"></i> Sin Stock';
+                    btnFacturar.title = `${cotizacionInfo.items_sin_stock} producto(s) sin stock suficiente`;
+                    btnFacturar.className = 'nexo-btn-error';
+                    btnFacturar.style.backgroundColor = 'var(--nexo-error)';
+                    btnFacturar.style.borderColor = 'var(--nexo-error)';
+                } else {
+                    btnFacturar.disabled = false;
+                    btnFacturar.innerHTML = '<i class="ri-file-list-3-line me-1"></i> Convertir a Factura';
+                    btnFacturar.title = 'Todos los productos tienen SKU y stock suficiente';
+                    btnFacturar.className = 'nexo-btn-warning';
+                    btnFacturar.style.backgroundColor = '';
+                    btnFacturar.style.borderColor = '';
+                }
+            }
         } else {
             btnFacturar.style.display = 'none';
         }
@@ -3269,30 +3386,135 @@ document.addEventListener('DOMContentLoaded', function() {
     window.convertirAFactura = function() {
         if (!cotizacionActual) return;
         
-        if (confirm('¿Desea convertir esta cotización en factura?')) {
-            fetch(apiUrls.convertirFactura, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                },
-                body: JSON.stringify({ cotizacion_id: cotizacionActual.id })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    mostrarExito('Cotización convertida a factura exitosamente');
-                    bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion')).hide();
-                    cargarCotizaciones();
-                } else {
-                    mostrarError('Error al convertir: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                mostrarError('Error al convertir cotización');
+        // Buscar datos de stock en cotizacionesData (lista principal)
+        const cotizacionInfo = cotizacionesData.find(c => c.id === cotizacionActual.id);
+        
+        // ✅ Validar que no esté ya facturada
+        if (cotizacionInfo && (cotizacionInfo.facturada || cotizacionActual.estado === 'FACTURADA')) {
+            Swal.fire({
+                title: '<i class="ri-checkbox-circle-fill text-info"></i> Cotización ya Facturada',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-3 text-info">
+                            <i class="ri-information-line"></i> 
+                            <strong>Esta cotización ya fue facturada</strong>
+                        </p>
+                        ${cotizacionInfo.numero_factura ? `
+                            <p class="text-muted">
+                                Documento: <strong>${cotizacionInfo.numero_factura}</strong>
+                            </p>
+                        ` : ''}
+                        <hr>
+                        <p class="small text-muted">
+                            No es posible facturar una cotización que ya ha sido procesada.
+                        </p>
+                    </div>
+                `,
+                icon: 'info',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#17a2b8'
             });
+            return;
         }
+        
+        // Validar SKUs asociados
+        if (cotizacionInfo && cotizacionInfo.items_sin_sku > 0) {
+            Swal.fire({
+                title: '<i class="ri-error-warning-line text-warning"></i> No se puede facturar',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-3 text-danger">
+                            <i class="ri-close-circle-line"></i> 
+                            <strong>${cotizacionInfo.items_sin_sku} producto(s) no tienen SKU asociado</strong>
+                        </p>
+                        <p class="text-muted">
+                            Debe asociar un SKU a todos los productos de la cotización antes de poder facturarla.
+                        </p>
+                        <hr>
+                        <p class="small">
+                            <i class="ri-lightbulb-line"></i> 
+                            Haga clic en "Editar" para asociar los SKUs faltantes.
+                        </p>
+                    </div>
+                `,
+                icon: 'warning',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#ffc107'
+            });
+            return;
+        }
+        
+        // Validar Stock suficiente
+        if (cotizacionInfo && cotizacionInfo.items_sin_stock > 0) {
+            const detalleProblemas = cotizacionInfo.problemas_stock && cotizacionInfo.problemas_stock.length > 0
+                ? cotizacionInfo.problemas_stock.map(p => 
+                    `<li><code>${p.sku}</code>: Stock actual <strong>${p.stock}</strong>, requerido <strong>${p.requerido}</strong></li>`
+                  ).join('')
+                : `<li>${cotizacionInfo.items_sin_stock} producto(s) con stock insuficiente</li>`;
+            
+            Swal.fire({
+                title: '<i class="ri-alert-line text-danger"></i> Stock Insuficiente',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-3 text-danger">
+                            <i class="ri-close-circle-line"></i> 
+                            <strong>No hay stock suficiente para facturar esta cotización</strong>
+                        </p>
+                        <div class="alert alert-danger py-2">
+                            <strong>Productos con problemas:</strong>
+                            <ul class="mb-0 mt-2">${detalleProblemas}</ul>
+                        </div>
+                        <hr>
+                        <p class="small text-muted">
+                            <i class="ri-lightbulb-line"></i> 
+                            Debe reponer stock o ajustar las cantidades en la cotización antes de facturar.
+                        </p>
+                    </div>
+                `,
+                icon: 'error',
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#dc3545'
+            });
+            return;
+        }
+        
+        // Todo OK - Mostrar opciones de facturación
+        Swal.fire({
+            title: '<i class="ri-file-list-3-line text-warning"></i> Facturar Cotización',
+            html: `
+                <div class="text-start">
+                    <p class="mb-3">Cotización: <strong>${cotizacionActual.numero_cotizacion}</strong></p>
+                    <p class="mb-3">Cliente: <strong>${cotizacionActual.cliente_nombre}</strong></p>
+                    <p class="mb-3">Total: <strong>$${cotizacionActual.monto_total.toLocaleString('es-CL')}</strong></p>
+                    <div class="alert alert-success py-2 mb-3">
+                        <i class="ri-checkbox-circle-line"></i> Todos los productos tienen SKU y stock suficiente
+                    </div>
+                    <hr>
+                    <p class="text-muted small">
+                        <i class="ri-information-line"></i> 
+                        Se abrirá el Punto de Venta para registrar el pago y generar el documento tributario (Factura o Boleta).
+                    </p>
+                </div>
+            `,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-arrow-right-line"></i> Ir a Facturar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#ffc107',
+            customClass: {
+                confirmButton: 'btn btn-warning',
+                cancelButton: 'btn btn-secondary'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Cerrar modal de detalle
+                bootstrap.Modal.getInstance(document.getElementById('modalDetalleCotizacion')).hide();
+                
+                // Redirigir al POS Dashboard con el ID de la cotización
+                // El POS abrirá automáticamente el modal de cotizaciones y cargará esta
+                window.location.href = `/app/pos-dashboard/?cotizacion_id=${cotizacionActual.id}`;
+            }
+        });
     };
 
     window.anularCotizacion = function(cotizacionId) {
@@ -3333,93 +3555,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Guardar ID de cotización en edición
                     window.cotizacionEnEdicion = cotizacionId;
                     
-                    // Abrir modal
+                    // Guardar datos para cargar después de que Select2 esté listo
+                    datosEdicionCotizacion = cot;
+                    
+                    // Abrir modal - el evento shown.bs.modal cargará los datos
                     const modal = new bootstrap.Modal(document.getElementById('modalNuevaCotizacion'));
                     modal.show();
-                    
-                    // Cambiar título del modal
-                    document.querySelector('#modalNuevaCotizacion .modal-title').innerHTML = `
-                        <i class="ri-edit-line me-2" style="color: white;"></i> <span style="color: white;">Editar Cotización ${cot.numero_cotizacion}</span>
-                    `;
-                    
-                    // Esperar a que el modal esté visible y Select2 inicializado
-                    setTimeout(() => {
-                        // Seleccionar cliente en Select2
-                        const selectCliente = $('#clienteCotizacion');
-                        if (selectCliente.data('select2')) {
-                            // Buscar el cliente en los datos
-                            const clienteData = clientesData.find(c => c.nombre === cot.cliente_nombre || c.rut === cot.cliente_rut);
-                            if (clienteData) {
-                                selectCliente.val(clienteData.id).trigger('change');
-                                mostrarInfoCliente(clienteData);
-                            }
-                        }
-                        
-                        // Llenar campos
-                        document.getElementById('fechaEmisionCotizacion').value = cot.fecha_emision;
-                        document.getElementById('diasValidez').value = cot.dias_validez;
-                        document.getElementById('descripcionCotizacion').value = cot.descripcion || '';
-                        
-                        // Limpiar items existentes
-                        document.getElementById('tbodyItemsCotizacion').innerHTML = '';
-                        itemCounter = 0;
-                        
-                        // Agregar items de la cotización
-                        cot.items.forEach(item => {
-                            agregarItemCotizacion();
-                            const currentItemId = itemCounter;
-                            const row = document.getElementById(`item-${currentItemId}`);
-
-                            row.querySelector('.item-descripcion').value = item.descripcion;
-                            row.querySelector('.item-cantidad').value = item.cantidad;
-                            row.querySelector('.item-precio').value = item.precio_unitario;
-
-                            // Cargar TODOS los SKUs asociados
-                            console.log('📦 Item:', item.numero_linea, 'skus_asociados:', item.skus_asociados);
-
-                            // Usar skus_asociados (nuevo) o producto_data (compatibilidad)
-                            const skusDelItem = item.skus_asociados || (item.producto_data ? [item.producto_data] : []);
-                            
-                            if (skusDelItem.length > 0) {
-                                console.log(`✅ Cargando ${skusDelItem.length} SKUs asociados`);
-
-                                // Convertir cada SKU al formato esperado
-                                const skusData = skusDelItem.map(producto => ({
-                                    id: producto.id,
-                                    sku: producto.sku,
-                                    nombre: producto.nombre,
-                                    talla: producto.talla,
-                                    marca: producto.marca,
-                                    costo: producto.costo,
-                                    precio: producto.precio,
-                                    stock: producto.stock,
-                                    margen_porcentaje: producto.margen_porcentaje,
-                                    cantidad: producto.cantidad
-                                }));
-
-                                console.log('📋 SKUs Data creados:', skusData);
-
-                                // Guardar TODOS los SKUs en el item
-                                setSkusData(currentItemId, skusData);
-
-                                // Renderizar todos los SKUs asociados
-                                renderizarSkusItem(currentItemId);
-                                actualizarResumenSkus(currentItemId);
-
-                                console.log(`✅ ${skusData.length} SKUs renderizados para item:`, currentItemId);
-                            } else {
-                                console.log('⚠️ Item sin SKUs asociados:', item);
-                            }
-
-                            calcularSubtotalItem(currentItemId);
-                            actualizarIndicadorRentabilidadItem(currentItemId);
-                        });
-
-                        // Actualizar total
-                        calcularTotalCotizacion();
-                        
-                    }, 500);
-                    
                 } else {
                     mostrarError('Error al cargar cotización: ' + data.error);
                 }
@@ -3429,6 +3570,118 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarError('Error al cargar cotización');
             });
     };
+    
+    // Función para cargar datos de cotización en el formulario (modo edición)
+    function cargarDatosEdicion(cot) {
+        console.log('📝 Cargando datos de edición para cotización:', cot.numero_cotizacion);
+        
+        // Cambiar título del modal
+        document.querySelector('#modalNuevaCotizacion .modal-title').innerHTML = `
+            <i class="ri-edit-line me-2" style="color: white;"></i> <span style="color: white;">Editar Cotización ${cot.numero_cotizacion}</span>
+        `;
+        
+        // Seleccionar cliente en Select2
+        const selectCliente = $('#clienteCotizacion');
+        const clienteId = cot.cliente_id;
+        
+        if (clienteId && selectCliente.data('select2')) {
+            // Buscar datos del cliente en clientesData para obtener el email
+            const clienteData = clientesData.find(c => c.id == clienteId);
+            
+            // Seleccionar el valor
+            selectCliente.val(clienteId).trigger('change');
+            
+            // Mostrar info del cliente con email
+            if (clienteData) {
+                console.log('✅ Cliente encontrado en clientesData:', clienteData);
+                mostrarInfoCliente({
+                    id: clienteId,
+                    nombre: clienteData.nombre || clienteData.razon_social || cot.cliente_nombre,
+                    rut: clienteData.rut || cot.cliente_rut,
+                    email: clienteData.correoIntercambio || clienteData.email || cot.cliente_email || '',
+                    correoIntercambio: clienteData.correoIntercambio || clienteData.email || cot.cliente_email || ''
+                });
+            } else {
+                console.log('⚠️ Cliente no en clientesData, usando datos de cotización');
+                mostrarInfoCliente({
+                    id: clienteId,
+                    nombre: cot.cliente_nombre,
+                    rut: cot.cliente_rut,
+                    email: cot.cliente_email || '',
+                    correoIntercambio: cot.cliente_email || ''
+                });
+            }
+            console.log(`✅ Cliente seleccionado: ID=${clienteId}, Nombre=${cot.cliente_nombre}`);
+        } else {
+            console.warn('⚠️ No se pudo seleccionar cliente:', { clienteId, select2Ready: selectCliente.data('select2') });
+        }
+        
+        // Llenar campos
+        document.getElementById('fechaEmisionCotizacion').value = cot.fecha_emision;
+        document.getElementById('diasValidez').value = cot.dias_validez;
+        document.getElementById('descripcionCotizacion').value = cot.descripcion || '';
+        
+        // Limpiar items existentes
+        document.getElementById('tbodyItemsCotizacion').innerHTML = '';
+        itemCounter = 0;
+        
+        // Agregar items de la cotización
+        cot.items.forEach(item => {
+            agregarItemCotizacion();
+            const currentItemId = itemCounter;
+            const row = document.getElementById(`item-${currentItemId}`);
+
+            row.querySelector('.item-descripcion').value = item.descripcion;
+            row.querySelector('.item-cantidad').value = item.cantidad;
+            row.querySelector('.item-precio').value = item.precio_unitario;
+
+            // Cargar TODOS los SKUs asociados
+            console.log('📦 Item:', item.numero_linea, 'skus_asociados:', item.skus_asociados);
+
+            // Usar skus_asociados (nuevo) o producto_data (compatibilidad)
+            const skusDelItem = item.skus_asociados || (item.producto_data ? [item.producto_data] : []);
+            
+            if (skusDelItem.length > 0) {
+                console.log(`✅ Cargando ${skusDelItem.length} SKUs asociados`);
+
+                // Convertir cada SKU al formato esperado
+                const skusData = skusDelItem.map(producto => ({
+                    id: producto.id,
+                    sku: producto.sku,
+                    nombre: producto.nombre,
+                    talla: producto.talla,
+                    marca: producto.marca,
+                    costo: producto.costo,
+                    precio: producto.precio,
+                    stock: producto.stock,
+                    margen: producto.margen_porcentaje || 0,
+                    cantidad: producto.cantidad
+                }));
+
+                console.log('📋 SKUs Data creados:', skusData);
+
+                // Guardar TODOS los SKUs en el item
+                setSkusData(currentItemId, skusData);
+
+                // Renderizar todos los SKUs asociados
+                renderizarSkusItem(currentItemId);
+                actualizarResumenSkus(currentItemId);
+
+                console.log(`✅ ${skusData.length} SKUs renderizados para item:`, currentItemId);
+            } else {
+                console.log('⚠️ Item sin SKUs asociados:', item);
+            }
+
+            calcularSubtotalItem(currentItemId);
+            actualizarIndicadorRentabilidadItem(currentItemId);
+        });
+
+        // Actualizar total
+        calcularTotalCotizacion();
+        
+        // Limpiar datos de edición
+        datosEdicionCotizacion = null;
+    }
 
     // === FUNCIONES DE UTILIDAD ===
     
@@ -4036,28 +4289,164 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Agregar primer item al abrir modal y reinicializar Select2
-    document.getElementById('modalNuevaCotizacion').addEventListener('shown.bs.modal', function() {
-        // Si NO estamos editando, limpiar todo el formulario
-        if (!window.cotizacionEnEdicion) {
-            console.log('🆕 Abriendo modal para NUEVA cotización - limpiando formulario');
-            limpiarFormularioCotizacion();
-        } else {
-            console.log('📝 Abriendo modal para EDITAR cotización:', window.cotizacionEnEdicion);
+    // Enviar cotización por correo electrónico
+    window.enviarCotizacionPorCorreo = function() {
+        if (!cotizacionActual) return;
+        
+        const cot = cotizacionActual;
+        const clienteEmail = cot.cliente_email || '';
+        
+        // Verificar si el cliente tiene email
+        if (!clienteEmail) {
+            Swal.fire({
+                icon: 'warning',
+                title: '<i class="ri-mail-close-line"></i> Sin Email',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-3">El cliente <strong>${cot.cliente_nombre}</strong> no tiene correo electrónico registrado.</p>
+                        <p class="text-muted mb-0">Puede agregar un email al cliente y volver a intentar.</p>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: 'var(--nexo-primary)'
+            });
+            return;
         }
         
-        // Reinicializar Select2 en el contexto del modal
+        // Solicitar confirmación con opción de cambiar email
+        Swal.fire({
+            title: '<i class="ri-mail-send-line" style="color: var(--nexo-primary);"></i> Enviar Cotización',
+            html: `
+                <div class="text-start">
+                    <p class="mb-3">Se enviará la cotización <strong>${cot.numero_cotizacion}</strong> al siguiente correo:</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Correo destino:</label>
+                        <input type="email" id="emailDestino" class="form-control" value="${clienteEmail}" 
+                               placeholder="correo@empresa.cl" style="font-size: 15px;">
+                    </div>
+                    <div class="alert alert-info py-2 px-3" style="font-size: 13px;">
+                        <i class="ri-information-line me-1"></i>
+                        El correo incluirá un resumen de la cotización con los productos, precios y validez.
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: '<i class="ri-send-plane-fill me-1"></i> Enviar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: 'var(--nexo-primary)',
+            customClass: {
+                confirmButton: 'btn btn-primary',
+                cancelButton: 'btn btn-secondary'
+            },
+            preConfirm: () => {
+                const email = document.getElementById('emailDestino').value.trim();
+                if (!email) {
+                    Swal.showValidationMessage('Ingrese un correo electrónico');
+                    return false;
+                }
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    Swal.showValidationMessage('El formato del correo no es válido');
+                    return false;
+                }
+                return email;
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const emailDestino = result.value;
+                
+                // Mostrar loading
+                Swal.fire({
+                    title: 'Enviando correo...',
+                    html: `
+                        <div class="text-center">
+                            <div class="spinner-border text-primary mb-3" role="status">
+                                <span class="visually-hidden">Enviando...</span>
+                            </div>
+                            <p class="text-muted">Enviando cotización a ${emailDestino}</p>
+                        </div>
+                    `,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                // Llamar al endpoint de envío
+                fetch(`/app/api/cotizaciones/${cot.id}/enviar-correo/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({
+                        email_destino: emailDestino
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '<i class="ri-mail-check-line" style="color: var(--nexo-success);"></i> Correo Enviado',
+                            html: `
+                                <div class="text-start">
+                                    <p class="mb-2">La cotización <strong>${cot.numero_cotizacion}</strong> fue enviada exitosamente.</p>
+                                    <p class="text-muted mb-0"><i class="ri-mail-line me-1"></i> Destino: <strong>${emailDestino}</strong></p>
+                                </div>
+                            `,
+                            confirmButtonText: 'Aceptar',
+                            confirmButtonColor: 'var(--nexo-success)'
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error al enviar',
+                            text: data.error || 'No se pudo enviar el correo. Intente nuevamente.',
+                            confirmButtonColor: 'var(--nexo-error)'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error de conexión',
+                        text: 'No se pudo conectar con el servidor. Verifique su conexión.',
+                        confirmButtonColor: 'var(--nexo-error)'
+                    });
+                });
+            }
+        });
+    };
+
+    // Agregar primer item al abrir modal y reinicializar Select2
+    document.getElementById('modalNuevaCotizacion').addEventListener('shown.bs.modal', function() {
+        // Reinicializar Select2 en el contexto del modal PRIMERO
         if (clientesData.length > 0) {
             inicializarSelect2Clientes();
         }
         
-        // Agregar primer item si no hay ninguno (solo para nueva cotización)
-        if (document.querySelectorAll('#tbodyItemsCotizacion tr').length === 0) {
-            agregarItemCotizacion();
-        }
-        
-        // Ocultar info de cliente al abrir (si es nueva)
-        if (!window.cotizacionEnEdicion) {
+        // Si estamos editando, cargar los datos de la cotización
+        if (window.cotizacionEnEdicion && datosEdicionCotizacion) {
+            console.log('📝 Abriendo modal para EDITAR cotización:', window.cotizacionEnEdicion);
+            // Pequeño delay para asegurar que Select2 esté completamente listo
+            setTimeout(() => {
+                cargarDatosEdicion(datosEdicionCotizacion);
+            }, 100);
+        } else {
+            // Si NO estamos editando, limpiar todo el formulario
+            console.log('🆕 Abriendo modal para NUEVA cotización - limpiando formulario');
+            limpiarFormularioCotizacion();
+            
+            // Agregar primer item si no hay ninguno
+            if (document.querySelectorAll('#tbodyItemsCotizacion tr').length === 0) {
+                agregarItemCotizacion();
+            }
+            
+            // Ocultar info de cliente
             ocultarInfoCliente();
         }
     });
@@ -4073,6 +4462,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // IMPORTANTE: Limpiar estado de edición al cerrar
         window.cotizacionEnEdicion = null;
+        datosEdicionCotizacion = null;
     });
     
     // Limpiar y enfocar input al abrir modal de búsqueda de productos

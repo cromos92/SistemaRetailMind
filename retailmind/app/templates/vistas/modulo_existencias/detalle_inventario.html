@@ -26,6 +26,314 @@
     --nexo-radius-lg: 12px;
 }
 
+/* ========== PROCESO STEPS ========== */
+.process-steps-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1rem;
+}
+
+.step-mini {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-500);
+    transition: all 0.2s;
+}
+
+.step-mini.active {
+    background: var(--nexo-primary);
+    color: white;
+}
+
+.step-mini.completed {
+    background: var(--nexo-success);
+    color: white;
+}
+
+.step-mini i {
+    font-size: 0.9rem;
+}
+
+.step-connector {
+    width: 20px;
+    height: 2px;
+    background: var(--nexo-gray-300);
+}
+
+/* ========== PANEL COMPARACIÓN ========== */
+.comparison-panel {
+    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+    border-radius: var(--nexo-radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.comparison-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.comparison-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.comparison-title i {
+    color: var(--nexo-primary);
+}
+
+.comparison-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.comparison-box {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-md);
+    padding: 1.25rem;
+    text-align: center;
+    border: 2px solid var(--nexo-gray-300);
+    transition: all 0.2s;
+}
+
+.comparison-box.pistola {
+    border-color: var(--nexo-primary);
+    background: linear-gradient(135deg, rgba(0, 102, 255, 0.05) 0%, var(--nexo-white) 100%);
+}
+
+.comparison-box.sistema {
+    border-color: var(--nexo-accent);
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.05) 0%, var(--nexo-white) 100%);
+}
+
+.comparison-box-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    margin: 0 auto 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+.comparison-box.pistola .comparison-box-icon {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary);
+}
+
+.comparison-box.sistema .comparison-box-icon {
+    background: rgba(0, 212, 170, 0.15);
+    color: var(--nexo-accent);
+}
+
+.comparison-box-label {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.comparison-box-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    line-height: 1;
+}
+
+.comparison-vs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.comparison-vs-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--nexo-gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: var(--nexo-gray-700);
+}
+
+.comparison-vs-text {
+    font-size: 0.7rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+}
+
+/* ========== RESUMEN DE DIFERENCIAS ========== */
+.diferencias-dashboard {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.diferencia-card {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem;
+    text-align: center;
+    border: 1px solid var(--nexo-gray-300);
+    transition: all 0.2s;
+}
+
+.diferencia-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--nexo-shadow-md);
+}
+
+.diferencia-card.sobrantes {
+    border-left: 4px solid var(--nexo-success);
+}
+
+.diferencia-card.faltantes {
+    border-left: 4px solid var(--nexo-error);
+}
+
+.diferencia-card.coinciden {
+    border-left: 4px solid var(--nexo-primary);
+}
+
+.diferencia-card.pendientes {
+    border-left: 4px solid var(--nexo-warning);
+}
+
+.diferencia-card-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.diferencia-card.sobrantes .diferencia-card-value { color: var(--nexo-success); }
+.diferencia-card.faltantes .diferencia-card-value { color: var(--nexo-error); }
+.diferencia-card.coinciden .diferencia-card-value { color: var(--nexo-primary); }
+.diferencia-card.pendientes .diferencia-card-value { color: var(--nexo-warning); }
+
+.diferencia-card-label {
+    font-size: 0.7rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ========== FILTROS SEGMENTACIÓN ========== */
+.segmentation-filters {
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--nexo-gray-300);
+}
+
+.segmentation-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.segmentation-title i {
+    color: var(--nexo-primary);
+}
+
+.segment-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.segment-chip {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    border: 1px solid var(--nexo-gray-300);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.segment-chip:hover {
+    background: var(--nexo-primary-light);
+    border-color: var(--nexo-primary);
+}
+
+.segment-chip.active {
+    background: var(--nexo-primary);
+    color: white;
+    border-color: var(--nexo-primary);
+}
+
+.segment-chip .chip-count {
+    background: rgba(0,0,0,0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+}
+
+.segment-chip.active .chip-count {
+    background: rgba(255,255,255,0.3);
+}
+
+/* ========== BTN EXPORTAR DIFERENCIAS GRANDE ========== */
+.btn-export-diferencias-lg {
+    background: linear-gradient(135deg, var(--nexo-error) 0%, #cc3d3d 100%);
+    color: white;
+    padding: 12px 28px;
+    border-radius: var(--nexo-radius-md);
+    font-weight: 700;
+    font-size: 0.95rem;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 15px rgba(255, 77, 77, 0.35);
+}
+
+.btn-export-diferencias-lg:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 77, 77, 0.45);
+    color: white;
+}
+
+.btn-export-diferencias-lg i {
+    font-size: 1.2rem;
+}
+
 .nexo-page {
     background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
     min-height: calc(100vh - 60px);
@@ -374,6 +682,87 @@
             </div>
         </div>
         
+        <!-- Mini Steps del Proceso -->
+        <div class="process-steps-mini" id="processSteps">
+            <div class="step-mini" id="step1">
+                <i class="bi bi-plus-circle"></i> Crear
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-mini" id="step2">
+                <i class="bi bi-upc-scan"></i> Cargar Pistola
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-mini" id="step3">
+                <i class="bi bi-arrows-expand"></i> Comparar
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-mini" id="step4">
+                <i class="bi bi-graph-up-arrow"></i> Analizar
+            </div>
+            <div class="step-connector"></div>
+            <div class="step-mini" id="step5">
+                <i class="bi bi-check2-circle"></i> Aprobar
+            </div>
+        </div>
+        
+        <!-- Panel de Comparación PISTOLA vs SISTEMA -->
+        <div class="comparison-panel">
+            <div class="comparison-header">
+                <div class="comparison-title">
+                    <i class="bi bi-arrows-expand"></i> Comparación: Conteo Físico vs Stock Sistema
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="abrirModalImportarConteo()">
+                        <i class="bi bi-upload"></i> Cargar Archivo Pistola
+                    </button>
+                </div>
+            </div>
+            <div class="comparison-grid">
+                <div class="comparison-box pistola">
+                    <div class="comparison-box-icon">
+                        <i class="bi bi-upc-scan"></i>
+                    </div>
+                    <div class="comparison-box-label">Conteo Físico (Pistola)</div>
+                    <div class="comparison-box-value" id="totalPistola">0</div>
+                    <small class="text-muted">unidades contadas</small>
+                </div>
+                <div class="comparison-vs">
+                    <div class="comparison-vs-icon">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </div>
+                    <div class="comparison-vs-text">VS</div>
+                </div>
+                <div class="comparison-box sistema">
+                    <div class="comparison-box-icon">
+                        <i class="bi bi-database"></i>
+                    </div>
+                    <div class="comparison-box-label">Stock Sistema</div>
+                    <div class="comparison-box-value" id="totalSistema">0</div>
+                    <small class="text-muted">unidades registradas</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dashboard de Diferencias -->
+        <div class="diferencias-dashboard">
+            <div class="diferencia-card sobrantes" onclick="filtrarPorTipoDiferencia('sobrantes')">
+                <div class="diferencia-card-value" id="cardSobrantes">0</div>
+                <div class="diferencia-card-label">Productos Sobrantes</div>
+            </div>
+            <div class="diferencia-card faltantes" onclick="filtrarPorTipoDiferencia('faltantes')">
+                <div class="diferencia-card-value" id="cardFaltantes">0</div>
+                <div class="diferencia-card-label">Productos Faltantes</div>
+            </div>
+            <div class="diferencia-card coinciden" onclick="filtrarPorTipoDiferencia('coinciden')">
+                <div class="diferencia-card-value" id="cardCoinciden">0</div>
+                <div class="diferencia-card-label">Coinciden Exacto</div>
+            </div>
+            <div class="diferencia-card pendientes" onclick="filtrarPorTipoDiferencia('pendientes')">
+                <div class="diferencia-card-value" id="cardPendientes">0</div>
+                <div class="diferencia-card-label">Pendientes Contar</div>
+            </div>
+        </div>
+        
         <!-- Progress bar -->
         <div class="progress-large">
             <div class="progress-info">
@@ -385,43 +774,49 @@
             </div>
         </div>
         
-        <!-- Quick stats -->
-        <div class="quick-stats">
-            <div class="stat-item">
-                <div class="stat-value" id="statTotal">0</div>
-                <div class="stat-label">Total Productos</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="statContados">0</div>
-                <div class="stat-label">Contados</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="statPendientes">0</div>
-                <div class="stat-label">Pendientes</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value diferencia-positiva" id="statSobrantes">0</div>
-                <div class="stat-label">Sobrantes</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value diferencia-negativa" id="statFaltantes">0</div>
-                <div class="stat-label">Faltantes</div>
+        <!-- Filtros de Segmentación por Departamento/Marca -->
+        <div class="segmentation-filters" id="segmentFilters">
+            <div class="row align-items-start">
+                <div class="col-md-6">
+                    <div class="segmentation-title">
+                        <i class="bi bi-building"></i> Filtrar por Departamento
+                    </div>
+                    <div class="segment-chips" id="chipsDepartamentos">
+                        <div class="segment-chip active" data-filter="" onclick="filtrarPorDepartamento(this, '')">
+                            <i class="bi bi-grid-3x3-gap"></i> Todos
+                            <span class="chip-count" id="countTodosDept">0</span>
+                        </div>
+                        <!-- Se llenan dinámicamente -->
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="segmentation-title">
+                        <i class="bi bi-tag"></i> Filtrar por Marca
+                    </div>
+                    <div class="segment-chips" id="chipsMarcas">
+                        <div class="segment-chip active" data-filter="" onclick="filtrarPorMarca(this, '')">
+                            <i class="bi bi-grid-3x3-gap"></i> Todas
+                            <span class="chip-count" id="countTodasMarcas">0</span>
+                        </div>
+                        <!-- Se llenan dinámicamente -->
+                    </div>
+                </div>
             </div>
         </div>
         
         <!-- Card de conteo -->
         <div class="nexo-card">
             <div class="nexo-card-header">
-                <h5><i class="bi bi-list-check"></i> Conteo de Productos</h5>
-                <div class="d-flex gap-2">
-                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="exportarDiferencias()">
-                        <i class="bi bi-filter-circle"></i> Exportar Diferencias
+                <h5><i class="bi bi-list-check"></i> Detalle de Productos</h5>
+                <div class="d-flex gap-2 align-items-center">
+                    <button class="btn-export-diferencias-lg" onclick="exportarDiferencias()" id="btnExportarDiferencias">
+                        <i class="bi bi-file-earmark-excel"></i> Exportar Diferencias a Excel
                     </button>
-                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="abrirModalImportarConteo()">
-                        <i class="bi bi-upload"></i> Importar Pistola
+                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" style="background: rgba(255,255,255,0.1);" onclick="abrirModalImportarConteo()">
+                        <i class="bi bi-upload"></i> Cargar Pistola
                     </button>
-                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="exportarInventario()">
-                        <i class="bi bi-download"></i> Exportar
+                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" style="background: rgba(255,255,255,0.1);" onclick="exportarInventario()">
+                        <i class="bi bi-download"></i> Exportar Todo
                     </button>
                 </div>
             </div>
@@ -430,9 +825,11 @@
                 <div class="nexo-filters">
                     <div class="row g-2 align-items-center">
                         <div class="col-md-3">
-                            <input type="text" class="form-control form-control-sm" id="filtroSearch" placeholder="Buscar SKU o producto...">
+                            <label class="form-label small mb-1">Buscar producto</label>
+                            <input type="text" class="form-control form-control-sm" id="filtroSearch" placeholder="SKU, código o nombre...">
                         </div>
                         <div class="col-md-2">
+                            <label class="form-label small mb-1">Estado conteo</label>
                             <select class="form-select form-select-sm" id="filtroEstadoConteo">
                                 <option value="">Todos</option>
                                 <option value="pendiente">Pendientes</option>
@@ -441,24 +838,27 @@
                             </select>
                         </div>
                         <div class="col-md-2">
+                            <label class="form-label small mb-1">Marca</label>
                             <select class="form-select form-select-sm" id="filtroMarca">
                                 <option value="">Todas las marcas</option>
                             </select>
                         </div>
                         <div class="col-md-2">
+                            <label class="form-label small mb-1">Departamento</label>
                             <select class="form-select form-select-sm" id="filtroCategoria">
-                                <option value="">Todas las categorías</option>
+                                <option value="">Todos los departamentos</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <div class="form-check">
+                            <label class="form-label small mb-1">&nbsp;</label>
+                            <div class="form-check mt-1">
                                 <input type="checkbox" class="form-check-input" id="filtroDiferencias">
-                                <label class="form-check-label small" for="filtroDiferencias">Solo diferencias</label>
+                                <label class="form-check-label small" for="filtroDiferencias">Solo con diferencias</label>
                             </div>
                         </div>
-                        <div class="col-md-1">
-                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline w-100" onclick="limpiarFiltros()">
-                                <i class="bi bi-x"></i>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline w-100" onclick="limpiarFiltros()" title="Limpiar filtros">
+                                <i class="bi bi-x-lg"></i>
                             </button>
                         </div>
                     </div>

@@ -2091,11 +2091,18 @@ def generar_txt_desde_dte_existente(request):
         # Mapear tipo de documento a código numérico
         tipo_mapping = {
             'FACTURA_ELECTRONICA': 33,
+            'FACTURA ELECTRONICA': 33,
             'FACTURA_EXENTA': 34,
+            'FACTURA EXENTA': 34,
             'BOLETA_ELECTRONICA': 39,
+            'BOLETA ELECTRONICA': 39,
             'BOLETA_EXENTA': 41,
+            'BOLETA EXENTA': 41,
             'GUIA_DESPACHO': 52,
-            'NOTA_CREDITO': 61
+            'GUIA DESPACHO': 52,
+            'GUIA': 52,  # ✅ Para traspasos internos
+            'NOTA_CREDITO': 61,
+            'NOTA DE CREDITO': 61
         }
         tipo_numerico = tipo_mapping.get(dte.tipo_documento, 33)
         

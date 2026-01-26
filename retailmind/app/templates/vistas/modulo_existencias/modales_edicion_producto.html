@@ -11,6 +11,39 @@
             <div class="modal-body">
                 <input type="hidden" id="edit_producto_id">
                 
+                <!-- OPCION DE SINCRONIZACION GLOBAL -->
+                <div class="alert alert-warning py-2 mb-3" role="alert">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-building me-2 fs-5"></i>
+                            <div>
+                                <strong>Sincronizacion Global</strong>
+                                <div class="small text-muted">Al guardar, los cambios se aplicaran a TODAS las sucursales donde exista este articulo</div>
+                            </div>
+                        </div>
+                        <div class="form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" id="edit_propagar_sucursales" checked style="width: 3em; height: 1.5em;">
+                            <label class="form-check-label fw-bold" for="edit_propagar_sucursales">Activado</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ALERTA INFORMATIVA -->
+                <div class="alert alert-info alert-dismissible fade show py-2 mb-3" role="alert">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-info-circle-fill me-2 fs-5"></i>
+                        <div>
+                            <strong>Que se actualiza:</strong>
+                            <ul class="mb-0 ps-3 small">
+                                <li><strong>Producto base:</strong> nombre, descripcion, categoria, atributos y precios.</li>
+                                <li><strong>Lotes FIFO activos:</strong> se actualizan con los nuevos precios.</li>
+                                <li><strong>Movimientos historicos:</strong> NO se modifican (metricas y reportes intactos).</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                
                 <!-- TABS DE NAVEGACIÓN -->
                 <ul class="nav nav-tabs" id="tabsEdicionProducto" role="tablist">
                     <li class="nav-item">
@@ -41,15 +74,15 @@
                             
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="edit_articulo">Nombre del Producto <span class="text-danger">*</span></label>
+                                    <div class="form-group mb-3">
+                                        <label for="edit_articulo" class="form-label">Nombre del Producto <span class="text-danger">*</span></label>
                                         <input type="text" class="form-control" id="edit_articulo" placeholder="Ej: Zapatilla Nike Air Max">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="edit_categoria_id">Categoría</label>
-                                        <select class="form-control select2" id="edit_categoria_id">
+                                    <div class="form-group mb-3">
+                                        <label for="edit_categoria_id" class="form-label">Categoría</label>
+                                        <select class="form-select select2-edicion" id="edit_categoria_id" style="width: 100%;">
                                             <option value="">Seleccionar categoría...</option>
                                         </select>
                                     </div>
@@ -58,9 +91,9 @@
                             
                             <div class="row">
                                 <div class="col-md-12">
-                                    <div class="form-group">
-                                        <label for="edit_descripcion">Descripción</label>
-                                        <textarea class="form-control" id="edit_descripcion" rows="3" placeholder="Descripción del producto"></textarea>
+                                    <div class="form-group mb-3">
+                                        <label for="edit_descripcion" class="form-label">Descripción</label>
+                                        <textarea class="form-control" id="edit_descripcion" rows="2" placeholder="Descripción del producto"></textarea>
                                     </div>
                                 </div>
                             </div>
@@ -68,23 +101,23 @@
                             <!-- ATRIBUTOS -->
                             <div class="row">
                                 <div class="col-md-12">
-                                    <h6 class="border-bottom pb-2 mb-3 mt-3">Atributos</h6>
+                                    <h6 class="border-bottom pb-2 mb-3 mt-2">Atributos</h6>
                                 </div>
                             </div>
                             
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="edit_atributo1_id">Marca</label>
-                                        <select class="form-control select2" id="edit_atributo1_id">
+                                    <div class="form-group mb-3">
+                                        <label for="edit_atributo1_id" class="form-label">Marca</label>
+                                        <select class="form-select select2-edicion" id="edit_atributo1_id" data-atributo="marca" style="width: 100%;">
                                             <option value="">Seleccionar marca...</option>
                                         </select>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="edit_atributo2_id">Color</label>
-                                        <select class="form-control select2" id="edit_atributo2_id">
+                                    <div class="form-group mb-3">
+                                        <label for="edit_atributo2_id" class="form-label">Color</label>
+                                        <select class="form-select select2-edicion" id="edit_atributo2_id" data-atributo="color" style="width: 100%;">
                                             <option value="">Seleccionar color...</option>
                                         </select>
                                     </div>
@@ -93,17 +126,17 @@
                             
                             <div class="row">
                                 <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="edit_atributo3_id">Género</label>
-                                        <select class="form-control select2" id="edit_atributo3_id">
+                                    <div class="form-group mb-3">
+                                        <label for="edit_atributo3_id" class="form-label">Género</label>
+                                        <select class="form-select select2-edicion" id="edit_atributo3_id" data-atributo="genero" style="width: 100%;">
                                             <option value="">Seleccionar género...</option>
                                         </select>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="edit_atributo4_id">Otro Atributo</label>
-                                        <select class="form-control select2" id="edit_atributo4_id">
+                                    <div class="form-group mb-3">
+                                        <label for="edit_atributo4_id" class="form-label">Otro Atributo</label>
+                                        <select class="form-select select2-edicion" id="edit_atributo4_id" data-atributo="otro" style="width: 100%;">
                                             <option value="">Seleccionar...</option>
                                         </select>
                                     </div>
@@ -428,6 +461,48 @@
     cursor: pointer;
 }
 
+/* ===== ESTILOS PARA SELECT2 EN MODAL DE EDICIÓN ===== */
+#modalEdicionProducto .select2-container {
+    width: 100% !important;
+}
+
+#modalEdicionProducto .select2-container--default .select2-selection--single {
+    height: 38px;
+    padding: 4px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+}
+
+#modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 28px;
+    color: #495057;
+}
+
+#modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 36px;
+}
+
+#modalEdicionProducto .select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: #6c757d;
+}
+
+/* Asegurar que el dropdown de Select2 aparezca sobre el modal */
+#modalEdicionProducto .select2-container--open .select2-dropdown {
+    z-index: 1060;
+}
+
+/* Estilos para el campo de búsqueda en el dropdown */
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    padding: 6px 10px;
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #0d6efd;
+    color: white;
+}
+
 #tablaHistorialMovimientos tbody tr {
     transition: background-color 0.2s;
 }
@@ -435,5 +510,36 @@
 #tablaHistorialMovimientos tbody tr:hover {
     background-color: #e9ecef;
 }
+
+/* Estilos para el switch de sincronizacion */
+#edit_propagar_sucursales:checked + label {
+    color: #198754;
+}
+
+#edit_propagar_sucursales:not(:checked) + label {
+    color: #6c757d;
+}
 </style>
 
+<script>
+// Script para el switch de sincronizacion global
+document.addEventListener('DOMContentLoaded', function() {
+    const switchSincronizar = document.getElementById('edit_propagar_sucursales');
+    if (switchSincronizar) {
+        switchSincronizar.addEventListener('change', function() {
+            const label = this.nextElementSibling;
+            const alertDiv = this.closest('.alert');
+            
+            if (this.checked) {
+                label.textContent = 'Activado';
+                alertDiv.classList.remove('alert-secondary');
+                alertDiv.classList.add('alert-warning');
+            } else {
+                label.textContent = 'Desactivado';
+                alertDiv.classList.remove('alert-warning');
+                alertDiv.classList.add('alert-secondary');
+            }
+        });
+    }
+});
+</script>

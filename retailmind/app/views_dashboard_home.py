@@ -3,7 +3,7 @@ Dashboard Home - RetailMind
 Vista principal con KPIs de retail para seguimiento de sucursal
 """
 
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.db.models import Sum, Count, Q, Avg, F, Min, Max
@@ -15,8 +15,50 @@ from .models import (
     Ticket, Ticket_Productos, Dte, Dte_Productos, Producto, Producto_Talla,
     Sucursal, EmpresaUser, Empresa, Compras, Compras_Producto, Compras_Producto_Talla,
     Productos_Recepcionados, Requerimiento, Movimientos_Producto, LoteProducto,
-    CambioDevolucion, Solicitud_Regularizacion, Traspaso, AjusteInventario
+    CambioDevolucion, Solicitud_Regularizacion, Traspaso, AjusteInventario,
+    PermisoRol, OpcionMenu
 )
+
+
+@login_required
+def bienvenida(request):
+    """
+    Página de bienvenida básica para usuarios sin acceso al dashboard completo.
+    No requiere permisos especiales.
+    """
+    sucursal_id = request.session.get('idSucursalActual')
+    sucursal_actual = None
+    if sucursal_id:
+        sucursal_actual = Sucursal.objects.filter(id=sucursal_id).first()
+    
+    # Obtener opciones del menú que el usuario SÍ puede ver
+    opciones_disponibles = []
+    try:
+        opciones = OpcionMenu.objects.filter(
+            activo=True,
+            padre__isnull=True  # Solo opciones principales, no submenús
+        ).select_related('modulo').order_by('modulo__orden', 'orden')
+        
+        for opcion in opciones:
+            if PermisoRol.tiene_permiso(request.user, opcion.codigo, 'puede_ver', sucursal_id):
+                opciones_disponibles.append({
+                    'nombre': opcion.nombre,
+                    'codigo': opcion.codigo,
+                    'icono': opcion.icono or 'ri-apps-line',
+                    'url_name': opcion.url_name,
+                    'url_path': opcion.url_path,
+                    'modulo': opcion.modulo.nombre if opcion.modulo else 'General'
+                })
+    except Exception as e:
+        print(f"Error obteniendo opciones: {e}")
+    
+    context = {
+        'sucursal_actual': sucursal_actual,
+        'fecha_actual': timezone.now().date(),
+        'opciones_disponibles': opciones_disponibles,
+    }
+    
+    return render(request, 'vistas/bienvenida.html', context)
 
 
 @login_required
@@ -29,6 +71,18 @@ def dashboard_home(request):
         # Obtener sucursal y empresa actual
         sucursal_id = request.session.get('idSucursalActual')
         empresa_id = request.session.get('idEmpresaActual')
+        
+        # Verificar si el usuario tiene permiso para ver el dashboard con estadísticas
+        tiene_permiso_dashboard = PermisoRol.tiene_permiso(
+            request.user, 
+            'dashboard_general', 
+            'puede_ver',
+            sucursal_id=sucursal_id
+        )
+        
+        if not tiene_permiso_dashboard:
+            # Redirigir a página de bienvenida básica
+            return redirect('bienvenida')
         
         # Obtener información de la sucursal
         sucursal_actual = None

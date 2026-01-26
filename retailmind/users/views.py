@@ -19,8 +19,16 @@ import re
 import csv
 from datetime import datetime, timedelta
 
-from .models import Usuario, LogAcceso
+from .models import Usuario, LogAcceso, SesionActiva, TokenResetPassword
 from app.models import Sucursal, EmpresaUser, Empresa
+import io
+
+# Intentar importar Pillow para procesamiento de imágenes
+try:
+    from PIL import Image
+    PILLOW_AVAILABLE = True
+except ImportError:
+    PILLOW_AVAILABLE = False
 
 # ========== FUNCIONES DE VALIDACIÓN ==========
 
@@ -1004,13 +1012,40 @@ Equipo NEXO
 
 @login_required
 def mi_perfil(request):
-    """Vista del perfil del usuario actual"""
+    """Vista del perfil del usuario actual con sesiones activas"""
     try:
+        usuario = request.user
+        
+        # Registrar/actualizar sesión actual
+        if request.session.session_key:
+            sesion_actual = SesionActiva.registrar_sesion(request, usuario)
+            # Marcar como sesión actual
+            SesionActiva.objects.filter(usuario=usuario).update(es_actual=False)
+            sesion_actual.es_actual = True
+            sesion_actual.save()
+        
+        # Obtener sesiones activas
+        sesiones = SesionActiva.objects.filter(
+            usuario=usuario,
+            activa=True
+        ).order_by('-ultima_actividad')[:10]
+        
+        # Obtener empresa y sucursal actual
+        empresa_user = EmpresaUser.objects.filter(
+            user=usuario,
+            active=True
+        ).select_related('empresa', 'sucursal').first()
+        
         return render(request, 'users/mi_perfil.html', {
-            'usuario': request.user
+            'usuario': usuario,
+            'sesiones': sesiones,
+            'sesion_actual_key': request.session.session_key,
+            'empresa_user': empresa_user
         })
     except Exception as e:
         print(f"❌ Error en mi_perfil: {str(e)}")
+        import traceback
+        traceback.print_exc()
         from django.http import HttpResponse
         return HttpResponse(f"Error: {str(e)}", status=500)
 
@@ -1088,7 +1123,7 @@ def cambiar_password(request):
 @require_POST
 @csrf_exempt
 def subir_foto_perfil(request):
-    """Subir foto de perfil del usuario (placeholder)"""
+    """Subir foto de perfil del usuario"""
     try:
         if 'foto' not in request.FILES:
             return JsonResponse({
@@ -1096,18 +1131,428 @@ def subir_foto_perfil(request):
                 'error': 'No se proporcionó ninguna imagen'
             }, status=400)
         
-        # TODO: Implementar guardado de foto
-        # Por ahora, retornar éxito
+        foto = request.FILES['foto']
+        usuario = request.user
+        
+        # Validar tipo de archivo
+        tipos_permitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        if foto.content_type not in tipos_permitidos:
+            return JsonResponse({
+                'success': False,
+                'error': 'Tipo de archivo no permitido. Solo se permiten: JPG, PNG, GIF, WEBP'
+            }, status=400)
+        
+        # Validar tamaño (máximo 5MB)
+        if foto.size > 5 * 1024 * 1024:
+            return JsonResponse({
+                'success': False,
+                'error': 'La imagen es muy grande. Máximo 5MB'
+            }, status=400)
+        
+        # Eliminar foto anterior si existe
+        if usuario.foto_perfil:
+            try:
+                usuario.foto_perfil.delete(save=False)
+            except:
+                pass
+        
+        # Procesar y redimensionar imagen si Pillow está disponible
+        if PILLOW_AVAILABLE:
+            try:
+                img = Image.open(foto)
+                
+                # Convertir a RGB si es necesario (para PNG con transparencia)
+                if img.mode in ('RGBA', 'P'):
+                    img = img.convert('RGB')
+                
+                # Redimensionar si es muy grande (máximo 500x500)
+                max_size = (500, 500)
+                img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                
+                # Guardar en memoria
+                output = io.BytesIO()
+                img.save(output, format='JPEG', quality=85)
+                output.seek(0)
+                
+                # Guardar nueva foto procesada
+                from django.core.files.uploadedfile import InMemoryUploadedFile
+                foto_procesada = InMemoryUploadedFile(
+                    output,
+                    'ImageField',
+                    f"perfil_{usuario.id}.jpg",
+                    'image/jpeg',
+                    output.getbuffer().nbytes,
+                    None
+                )
+                
+                usuario.foto_perfil = foto_procesada
+                usuario.save()
+                
+            except Exception as img_error:
+                print(f"Error procesando imagen con Pillow: {img_error}")
+                # Si falla el procesamiento, guardar la imagen original
+                usuario.foto_perfil = foto
+                usuario.save()
+        else:
+            # Sin Pillow, guardar la imagen original
+            usuario.foto_perfil = foto
+            usuario.save()
         
         return JsonResponse({
             'success': True,
-            'message': 'Funcionalidad de foto en desarrollo'
+            'message': 'Foto de perfil actualizada exitosamente',
+            'foto_url': usuario.foto_perfil.url if usuario.foto_perfil else None
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def eliminar_foto_perfil(request):
+    """Eliminar la foto de perfil del usuario"""
+    try:
+        usuario = request.user
+        
+        if usuario.foto_perfil:
+            try:
+                usuario.foto_perfil.delete(save=False)
+            except:
+                pass
+            usuario.foto_perfil = None
+            usuario.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Foto de perfil eliminada'
         })
     except Exception as e:
         return JsonResponse({
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# ========== GESTIÓN DE SESIONES ==========
+
+@login_required
+@require_GET
+def listar_sesiones(request):
+    """Listar todas las sesiones activas del usuario"""
+    try:
+        sesiones = SesionActiva.objects.filter(
+            usuario=request.user,
+            activa=True
+        ).order_by('-ultima_actividad')
+        
+        sesiones_data = []
+        for sesion in sesiones:
+            sesiones_data.append({
+                'id': sesion.id,
+                'dispositivo': sesion.dispositivo or 'Desconocido',
+                'navegador': sesion.navegador or 'Desconocido',
+                'sistema_operativo': sesion.sistema_operativo or 'Desconocido',
+                'ip_address': sesion.ip_address,
+                'fecha_inicio': sesion.fecha_inicio.strftime('%d/%m/%Y %H:%M'),
+                'ultima_actividad': sesion.ultima_actividad.strftime('%d/%m/%Y %H:%M'),
+                'es_actual': sesion.session_key == request.session.session_key
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'sesiones': sesiones_data
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def cerrar_sesion(request, sesion_id):
+    """Cerrar una sesión específica"""
+    try:
+        sesion = SesionActiva.objects.filter(
+            id=sesion_id,
+            usuario=request.user,
+            activa=True
+        ).first()
+        
+        if not sesion:
+            return JsonResponse({
+                'success': False,
+                'error': 'Sesión no encontrada'
+            }, status=404)
+        
+        # No permitir cerrar la sesión actual
+        if sesion.session_key == request.session.session_key:
+            return JsonResponse({
+                'success': False,
+                'error': 'No puedes cerrar tu sesión actual. Usa el botón de cerrar sesión del menú.'
+            }, status=400)
+        
+        sesion.cerrar_sesion()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Sesión en {sesion.dispositivo} cerrada exitosamente'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_POST
+@csrf_exempt
+def cerrar_todas_sesiones(request):
+    """Cerrar todas las sesiones excepto la actual"""
+    try:
+        sesiones = SesionActiva.objects.filter(
+            usuario=request.user,
+            activa=True
+        ).exclude(session_key=request.session.session_key)
+        
+        count = sesiones.count()
+        
+        for sesion in sesiones:
+            sesion.cerrar_sesion()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'{count} sesión(es) cerrada(s) exitosamente'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+# ========== RESET DE PASSWORD POR CORREO ==========
+
+@login_required
+@require_POST
+@csrf_exempt
+def solicitar_cambio_password_email(request):
+    """
+    Envía un correo con link para cambiar la contraseña.
+    El usuario debe estar logueado para solicitar esto.
+    """
+    try:
+        usuario = request.user
+        
+        # Crear token de reset
+        token_obj = TokenResetPassword.crear_token(usuario, request)
+        
+        # Construir URL del link
+        site_url = getattr(settings, 'SITE_URL', 'http://localhost:8000').rstrip('/')
+        reset_url = f"{site_url}{reverse('users:confirmar_cambio_password', args=[str(token_obj.token)])}"
+        
+        # Enviar correo
+        enviar_email_reset_password(usuario, reset_url, token_obj)
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Se ha enviado un correo a {usuario.email} con instrucciones para cambiar tu contraseña'
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def confirmar_cambio_password(request, token):
+    """
+    Vista para confirmar el cambio de contraseña desde el link del correo.
+    GET: Muestra el formulario para nueva contraseña
+    POST: Procesa el cambio de contraseña
+    """
+    try:
+        # Buscar token
+        token_obj = TokenResetPassword.objects.filter(token=token).first()
+        
+        if not token_obj:
+            return render(request, 'users/reset_password_error.html', {
+                'error': 'Link inválido o expirado',
+                'detalle': 'El enlace que utilizaste no es válido. Por favor solicita un nuevo enlace.'
+            })
+        
+        if not token_obj.es_valido():
+            return render(request, 'users/reset_password_error.html', {
+                'error': 'Link expirado',
+                'detalle': 'Este enlace ha expirado. Por favor solicita un nuevo enlace de recuperación.'
+            })
+        
+        if request.method == 'POST':
+            password_nueva = request.POST.get('password_nueva', '').strip()
+            password_confirmar = request.POST.get('password_confirmar', '').strip()
+            
+            # Validaciones
+            if not password_nueva or not password_confirmar:
+                return render(request, 'users/reset_password_form.html', {
+                    'token': token,
+                    'error': 'Todos los campos son obligatorios'
+                })
+            
+            if password_nueva != password_confirmar:
+                return render(request, 'users/reset_password_form.html', {
+                    'token': token,
+                    'error': 'Las contraseñas no coinciden'
+                })
+            
+            if len(password_nueva) < 6:
+                return render(request, 'users/reset_password_form.html', {
+                    'token': token,
+                    'error': 'La contraseña debe tener al menos 6 caracteres'
+                })
+            
+            # Cambiar contraseña
+            usuario = token_obj.usuario
+            usuario.set_password(password_nueva)
+            usuario.requiere_cambio_password = False
+            usuario.save()
+            
+            # Marcar token como usado
+            token_obj.usado = True
+            token_obj.save()
+            
+            # Cerrar todas las sesiones del usuario por seguridad
+            SesionActiva.objects.filter(usuario=usuario, activa=True).update(activa=False)
+            
+            return render(request, 'users/reset_password_success.html', {
+                'usuario': usuario
+            })
+        
+        # GET: Mostrar formulario
+        return render(request, 'users/reset_password_form.html', {
+            'token': token,
+            'usuario': token_obj.usuario
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return render(request, 'users/reset_password_error.html', {
+            'error': 'Error inesperado',
+            'detalle': str(e)
+        })
+
+
+def enviar_email_reset_password(usuario, reset_url, token_obj):
+    """
+    Envía el email con el link para resetear la contraseña
+    """
+    from django.core.mail import EmailMultiAlternatives
+    
+    subject = '🔑 NEXO - Cambio de Contraseña Solicitado'
+    
+    # Calcular tiempo de expiración
+    horas_restantes = int((token_obj.fecha_expiracion - timezone.now()).total_seconds() / 3600)
+    
+    # Mensaje en texto plano
+    text_message = f"""
+Hola {usuario.get_full_name()},
+
+Has solicitado cambiar tu contraseña en NEXO.
+
+Para continuar, haz clic en el siguiente enlace:
+{reset_url}
+
+⚠️ Este enlace expirará en {horas_restantes} horas.
+
+Si no solicitaste este cambio, puedes ignorar este correo y tu contraseña permanecerá igual.
+
+Saludos cordiales,
+Equipo NEXO
+    """
+    
+    # Mensaje HTML
+    html_message = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #F5F5F7; margin: 0; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(26, 26, 46, 0.1); }}
+            .header {{ background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); padding: 30px; text-align: center; }}
+            .header h1 {{ color: #FFFFFF; margin: 0; font-size: 28px; }}
+            .header p {{ color: rgba(255,255,255,0.85); margin: 10px 0 0 0; }}
+            .content {{ padding: 30px; }}
+            .btn {{ display: inline-block; background: linear-gradient(135deg, #00D4AA 0%, #00B38A 100%); color: #FFFFFF; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 20px 0; }}
+            .btn:hover {{ background: linear-gradient(135deg, #00B38A 0%, #009977 100%); }}
+            .warning {{ background: rgba(255, 176, 32, 0.1); border-left: 4px solid #FFB020; padding: 15px; border-radius: 8px; margin: 20px 0; }}
+            .warning strong {{ color: #996B00; }}
+            .info {{ background: rgba(0, 102, 255, 0.1); border-left: 4px solid #0066FF; padding: 15px; border-radius: 8px; margin: 20px 0; color: #0052CC; }}
+            .footer {{ background: #F5F5F7; padding: 20px; text-align: center; color: #8A8A9A; font-size: 12px; }}
+            .link-text {{ word-break: break-all; background: #F5F5F7; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #4A4A5A; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🔑 Cambio de Contraseña</h1>
+                <p>Solicitud recibida</p>
+            </div>
+            <div class="content">
+                <p style="color: #4A4A5A; font-size: 16px;">Hola <strong>{usuario.get_full_name()}</strong>,</p>
+                <p style="color: #4A4A5A;">Has solicitado cambiar tu contraseña en NEXO. Haz clic en el botón de abajo para continuar:</p>
+                
+                <div style="text-align: center;">
+                    <a href="{reset_url}" class="btn">Cambiar mi Contraseña</a>
+                </div>
+                
+                <div class="warning">
+                    <strong>⏰ Este enlace expirará en {horas_restantes} horas</strong><br>
+                    Después de ese tiempo, deberás solicitar un nuevo enlace.
+                </div>
+                
+                <div class="info">
+                    <strong>💡 ¿No solicitaste este cambio?</strong><br>
+                    Puedes ignorar este correo de forma segura. Tu contraseña no será modificada.
+                </div>
+                
+                <p style="color: #8A8A9A; font-size: 12px; margin-top: 20px;">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+                <p class="link-text">{reset_url}</p>
+            </div>
+            <div class="footer">
+                <p>Este correo fue enviado automáticamente por el sistema NEXO.</p>
+                <p>© {timezone.now().year} NEXO - Sistema de Gestión Retail</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    try:
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[usuario.email]
+        )
+        email.attach_alternative(html_message, "text/html")
+        email.send(fail_silently=False)
+        print(f"✅ Email de reset de password enviado a {usuario.email}")
+    except Exception as e:
+        print(f"❌ Error enviando correo de reset: {e}")
+        raise e
 
 
 # ========== APIS PARA GESTIÓN DE PERMISOS ==========

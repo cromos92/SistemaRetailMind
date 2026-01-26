@@ -184,7 +184,14 @@ def importar_csv_compra(request):
 
 
 def recepcionar_compra(request):
-    """Recepcionar productos de una compra"""
+    """
+    Recepcionar productos de una compra
+    
+    IMPORTANTE: Esta función usa registrar_movimiento_producto que:
+    - Crea el movimiento de ingreso
+    - Actualiza el stock en Producto_Talla
+    - Crea automáticamente el lote FIFO (cuando crear_lote_fifo=True y concepto es de ingreso)
+    """
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -205,13 +212,17 @@ def recepcionar_compra(request):
             
             compra = get_object_or_404(Compras, id=compra_id)
             sucursal_id = request.session.get('idSucursalActual')
+            sucursal = Sucursal.objects.filter(id=sucursal_id).first() if sucursal_id else None
+            responsable = request.user.username if hasattr(request.user, 'username') else 'Sistema'
             
             with transaction.atomic():
+                productos_procesados = 0
                 for item in productos:
                     producto_talla = get_object_or_404(Producto_Talla, id=item['producto_talla_id'])
-                    cantidad = item['cantidad']
-                    costo_unitario = Decimal(item['costo_unitario'])
-                    precio_venta = Decimal(item.get('precio_venta', 0))
+                    cantidad = int(item['cantidad'])
+                    costo_unitario = Decimal(str(item['costo_unitario']))
+                    precio_venta = Decimal(str(item.get('precio_venta', producto_talla.producto.precioventa)))
+                    sobreprecio = Decimal(str(item.get('sobreprecio', producto_talla.producto.sobreprecio)))
                     
                     # Crear registro de recepción
                     Productos_Recepcionados.objects.create(
@@ -224,26 +235,32 @@ def recepcionar_compra(request):
                         fecha_recepcion=timezone.now()
                     )
                     
-                    # Crear lote FIFO
-                    from .views import crear_lote_producto
-                    crear_lote_producto(
-                        producto_talla=producto_talla,
-                        cantidad=cantidad,
-                        costo_unitario=costo_unitario,
-                        sobreprecio_unitario=0,
-                        precio_venta_unitario=precio_venta,
-                        observaciones=f'Recepción compra #{compra.numero_factura}'
-                    )
-                    
-                    # Registrar movimiento
+                    # ✅ CORREGIDO: Usar registrar_movimiento_producto que:
+                    # - Crea el movimiento con el concepto correcto
+                    # - Actualiza el stock de Producto_Talla
+                    # - Crea el lote FIFO automáticamente (cuando crear_lote_fifo=True)
+                    # ⚠️ NO crear lote FIFO manualmente para evitar duplicación
                     from .views import registrar_movimiento_producto
                     registrar_movimiento_producto(
                         producto_talla=producto_talla,
-                        concepto='COMPRA',
+                        concepto='RECEPCION_COMPRA',  # ✅ CORREGIDO: Usar concepto válido
                         cantidad=cantidad,
-                        responsable=request.user,
-                        observaciones=f'Recepción compra #{compra.numero_factura}'
+                        responsable=responsable,
+                        sucursal_origen=sucursal,
+                        sucursal_destino=sucursal,
+                        observaciones=f'Recepción compra #{compra.numero_factura}',
+                        referencia_externa=f'COMPRA_{compra.id}',
+                        crear_lote_fifo=True  # ✅ El lote se crea automáticamente
                     )
+                    
+                    # Actualizar costo del producto si es diferente (costo más reciente)
+                    if producto_talla.producto.costo != int(costo_unitario):
+                        producto_talla.producto.costo = int(costo_unitario)
+                        producto_talla.producto.sobreprecio = int(sobreprecio)
+                        producto_talla.producto.precioventa = int(precio_venta)
+                        producto_talla.producto.save()
+                    
+                    productos_procesados += 1
                 
                 # Actualizar estado de la compra
                 compra.estado = 'RECEPCIONADA'
@@ -252,7 +269,7 @@ def recepcionar_compra(request):
             
             return JsonResponse({
                 'success': True,
-                'message': 'Compra recepcionada exitosamente'
+                'message': f'Compra recepcionada exitosamente. {productos_procesados} producto(s) procesado(s)'
             })
             
         except json.JSONDecodeError:
@@ -261,6 +278,9 @@ def recepcionar_compra(request):
                 'error': 'Datos JSON inválidos'
             })
         except Exception as e:
+            import traceback
+            print(f"❌ Error en recepcionar_compra: {str(e)}")
+            print(traceback.format_exc())
             return JsonResponse({
                 'success': False,
                 'error': f'Error al recepcionar compra: {str(e)}'
@@ -465,13 +485,22 @@ def crearDteCompras(request):
                 # Crear productos del DTE
                 for item in productos:
                     producto_talla = get_object_or_404(Producto_Talla, id=item['producto_talla_id'])
+                    cantidad = int(item['cantidad'])
+                    precio_unitario = int(item['precio_unitario'])
+                    costo = producto_talla.producto.costo
+                    
+                    # Guardar sobreprecio tal cual está en el producto (es un DELTA/MARGEN)
+                    sobreprecio_unitario = producto_talla.producto.sobreprecio
                     
                     Dte_Productos.objects.create(
                         dte=dte,
                         productoTalla=producto_talla,
-                        cantidad=item['cantidad'],
-                        precio_unitario=item['precio_unitario'],
-                        descuento_unitario=item.get('descuento_unitario', 0)
+                        descripcion=f"{producto_talla.producto.articulo} - Talla {producto_talla.talla}",
+                        costo=costo,
+                        sobreprecio=sobreprecio_unitario,
+                        precio=precio_unitario,
+                        stock=cantidad,
+                        activo=True
                     )
             
             return JsonResponse({
@@ -1314,7 +1343,14 @@ def exportar_dashboard_compras(request):
         
         # Obtener datos del dashboard
         dashboard_response = dashboard_compras_estrategico(request)
-        dashboard_data = json.loads(dashboard_response.content)['dashboard']
+        dashboard_payload = json.loads(dashboard_response.content)
+        if isinstance(dashboard_payload, dict) and dashboard_payload.get('success') is False:
+            return JsonResponse({
+                'success': False,
+                'error': dashboard_payload.get('error', 'Error al generar dashboard')
+            })
+
+        dashboard_data = dashboard_payload.get('dashboard', dashboard_payload)
         
         # Crear workbook
         wb = openpyxl.Workbook()
@@ -1324,23 +1360,44 @@ def exportar_dashboard_compras(request):
         ws_metricas.title = "Métricas Generales"
         
         # Escribir métricas
-        metricas = dashboard_data['metricas_generales']
+        metricas = dashboard_data.get('metricas_generales', {})
+        metricas_adicionales = dashboard_data.get('metricas_adicionales', {})
+        total_compras = metricas.get('total_compras', metricas_adicionales.get('total_compras', 0))
+        monto_total = metricas.get('monto_total', metricas_adicionales.get('inversion_total', 0))
+        promedio_compra = metricas.get(
+            'promedio_compra',
+            round(monto_total / total_compras, 2) if total_compras else 0
+        )
+        dtes_pendientes = metricas.get('dtes_pendientes', 0)
+        monto_pendiente = metricas.get('monto_pendiente', 0)
+
         ws_metricas.append(['Métrica', 'Valor'])
-        ws_metricas.append(['Total Compras', metricas['total_compras']])
-        ws_metricas.append(['Monto Total', metricas['monto_total']])
-        ws_metricas.append(['Promedio por Compra', metricas['promedio_compra']])
-        ws_metricas.append(['DTEs Pendientes', metricas['dtes_pendientes']])
-        ws_metricas.append(['Monto Pendiente', metricas['monto_pendiente']])
+        ws_metricas.append(['Total Compras', total_compras])
+        ws_metricas.append(['Monto Total', monto_total])
+        ws_metricas.append(['Promedio por Compra', promedio_compra])
+        ws_metricas.append(['DTEs Pendientes', dtes_pendientes])
+        ws_metricas.append(['Monto Pendiente', monto_pendiente])
         
         # Hoja de compras por proveedor
         ws_proveedores = wb.create_sheet("Compras por Proveedor")
         ws_proveedores.append(['Proveedor', 'Total Compras', 'Monto Total'])
         
-        for item in dashboard_data['compras_por_proveedor']:
+        compras_por_proveedor = dashboard_data.get('compras_por_proveedor')
+        if not compras_por_proveedor:
+            compras_por_proveedor = [
+                {
+                    'proveedor': item.get('proveedor', '-'),
+                    'total_compras': item.get('total_compras', ''),
+                    'monto_total': item.get('inversion', 0)
+                }
+                for item in dashboard_data.get('top_proveedores', [])
+            ]
+
+        for item in compras_por_proveedor:
             ws_proveedores.append([
-                item['proveedor'],
-                item['total_compras'],
-                item['monto_total']
+                item.get('proveedor', '-'),
+                item.get('total_compras', ''),
+                item.get('monto_total', 0)
             ])
         
         # Preparar respuesta
@@ -1655,10 +1712,10 @@ def exportar_compras_excel(request):
         # Datos de productos
         row_idx = 2
         for compra in compras:
-            productos = Compras_Producto.objects.filter(compras=compra).prefetch_related('compras_producto_talla')
+            productos = Compras_Producto.objects.filter(compras=compra).prefetch_related('compras_producto_talla_set')
             
             for producto in productos:
-                tallas = Compras_Producto_Talla.objects.filter(compra_producto=producto)
+                tallas = producto.compras_producto_talla_set.all()
                 
                 for talla in tallas:
                     # Obtener recepción si existe
@@ -1756,10 +1813,10 @@ def exportar_compras_csv(request):
         
         # Datos
         for compra in compras:
-            productos = Compras_Producto.objects.filter(compras=compra).prefetch_related('compras_producto_talla')
+            productos = Compras_Producto.objects.filter(compras=compra).prefetch_related('compras_producto_talla_set')
             
             for producto in productos:
-                tallas = Compras_Producto_Talla.objects.filter(compra_producto=producto)
+                tallas = producto.compras_producto_talla_set.all()
                 
                 for talla in tallas:
                     # Obtener recepción si existe

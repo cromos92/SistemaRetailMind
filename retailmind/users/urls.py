@@ -33,6 +33,16 @@ urlpatterns = [
     path('actualizar-perfil/', views.actualizar_perfil, name='actualizar_perfil'),
     path('cambiar-password/', views.cambiar_password, name='cambiar_password'),
     path('subir-foto-perfil/', views.subir_foto_perfil, name='subir_foto_perfil'),
+    path('eliminar-foto-perfil/', views.eliminar_foto_perfil, name='eliminar_foto_perfil'),
+    
+    # Gestión de sesiones
+    path('sesiones/', views.listar_sesiones, name='listar_sesiones'),
+    path('cerrar-sesion/<int:sesion_id>/', views.cerrar_sesion, name='cerrar_sesion'),
+    path('cerrar-todas-sesiones/', views.cerrar_todas_sesiones, name='cerrar_todas_sesiones'),
+    
+    # Reset de password por correo
+    path('solicitar-cambio-password/', views.solicitar_cambio_password_email, name='solicitar_cambio_password'),
+    path('reset-password/<uuid:token>/', views.confirmar_cambio_password, name='confirmar_cambio_password'),
     
     # APIs para gestión de permisos
     path('api/usuarios-por-rol/', views.usuarios_por_rol, name='usuarios_por_rol'),

@@ -9,6 +9,7 @@
 <link href="{% static 'libs/datatables.net-buttons-bs5/css/buttons.bootstrap5.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/sweetalert2/sweetalert2.min.css' %}" rel="stylesheet" type="text/css" />
 <link href="{% static 'libs/flatpickr/flatpickr.min.css' %}" rel="stylesheet" type="text/css" />
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
 <!-- NEXO Design System Variables -->
 <style>
@@ -414,6 +415,74 @@
     color: var(--nexo-white);
     border: none;
     padding: 1rem 1.5rem;
+}
+
+/* Select2 NEXO Style */
+.select2-container--default .select2-selection--single {
+    height: 42px !important;
+    border: 1px solid var(--nexo-gray-300) !important;
+    border-radius: var(--nexo-radius-md) !important;
+    padding: 6px 12px !important;
+    background-color: var(--nexo-white) !important;
+}
+
+.select2-container--default .select2-selection--single:focus,
+.select2-container--default.select2-container--focus .select2-selection--single,
+.select2-container--default.select2-container--open .select2-selection--single {
+    border-color: var(--nexo-primary) !important;
+    box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1) !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: var(--nexo-gray-900) !important;
+    line-height: 28px !important;
+    padding-left: 0 !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: var(--nexo-gray-500) !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px !important;
+    right: 8px !important;
+}
+
+.select2-container--default .select2-dropdown {
+    border: 1px solid var(--nexo-gray-300) !important;
+    border-radius: var(--nexo-radius-md) !important;
+    box-shadow: var(--nexo-shadow-lg) !important;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: 1px solid var(--nexo-gray-300) !important;
+    border-radius: var(--nexo-radius-md) !important;
+    padding: 0.5rem 0.75rem !important;
+}
+
+.select2-container--default .select2-search--dropdown .select2-search__field:focus {
+    border-color: var(--nexo-primary) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.1) !important;
+}
+
+.select2-container--default .select2-results__option {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: var(--nexo-primary-light) !important;
+    color: var(--nexo-primary) !important;
+}
+
+.select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: var(--nexo-primary) !important;
+    color: var(--nexo-white) !important;
+}
+
+.select2-container {
+    width: 100% !important;
 }
 
 .nexo-modal-footer {
@@ -822,7 +891,7 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content nexo-modal">
             <div class="modal-header nexo-modal-header">
-                <h5 class="modal-title" id="modal-credito-label">
+                <h5 class="modal-title" id="modal-credito-label" style="color: white;">
                     <i class="ri-add-line me-1"></i> Nuevo Crédito
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -1476,6 +1545,17 @@ $(document).ready(function() {
 
                     $('#trabajador-id').html(options);
                     $('#filtro-trabajador').html(filterOptions);
+                    
+                    // Inicializar Select2 con búsqueda para el trabajador
+                    if ($('#trabajador-id').data('select2')) {
+                        $('#trabajador-id').select2('destroy');
+                    }
+                    $('#trabajador-id').select2({
+                        placeholder: 'Seleccionar trabajador...',
+                        allowClear: true,
+                        width: '100%',
+                        dropdownParent: $('#modal-credito')
+                    });
                 }
             })
             .fail(function() {
@@ -3145,3 +3225,4 @@ $(document).ready(function() {
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 <script src="{% static 'libs/flatpickr/flatpickr.min.js' %}"></script>
 <script src="{% static 'libs/flatpickr/l10n/es.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>

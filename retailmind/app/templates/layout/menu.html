@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 
 <body>
 <!-- NEXO Design System - Menu Styles -->
@@ -612,8 +613,11 @@
                                                         <i class="ri-checkbox-circle-line"></i>
                                                     </span>
                                                 </div>
-                                                <h6 class="text-muted">¡Todo al día!</h6>
-                                                <p class="text-muted fs-12 mb-0">No tienes DTEs pendientes de recepcionar</p>
+                                                <h6 class="text-success">¡Todo al día!</h6>
+                                                <p class="text-muted fs-12 mb-1">No tienes DTEs pendientes de recepcionar</p>
+                                                <p class="text-muted fs-11 mb-0">
+                                                    <i class="ri-information-line"></i> Las alertas desaparecen automáticamente al confirmar recepción
+                                                </p>
                                             </div>
                                         </div>
 
@@ -832,7 +836,7 @@
                                 
                                 if (data.success && data.dtes && data.dtes.length > 0) {
                                     list.innerHTML = data.dtes.map(dte => `
-                                        <div class="text-reset notification-item d-block dropdown-item position-relative" id="dte-notif-${dte.id}">
+                                        <a href="/app/recepcion-dte/?dte_id=${dte.id}" class="text-reset notification-item d-block dropdown-item position-relative" id="dte-notif-${dte.id}">
                                             <div class="d-flex">
                                                 <div class="avatar-xs me-3 flex-shrink-0">
                                                     <span class="avatar-title ${dte.urgente ? 'bg-soft-danger text-danger' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
@@ -845,25 +849,26 @@
                                                         #${dte.numero_documento}
                                                     </h6>
                                                     <p class="fs-12 text-muted mb-1">
-                                                        De: <strong>${dte.emisor_nombre}</strong>
+                                                        Emisor: <strong>${dte.emisor_nombre}</strong>
                                                     </p>
                                                     <p class="fs-12 mb-1">
-                                                        <span class="text-success fw-bold">$${Number(dte.monto_con_iva).toLocaleString('es-CL')}</span>
+                                                        <span class="text-success fw-bold">$${Number(dte.monto_con_iva).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                                                         <span class="text-muted">• ${dte.unidades_productos} uds</span>
+                                                    </p>
+                                                    <p class="fs-12 text-muted mb-1">
+                                                        Sucursal: <strong>${dte.sucursal_origen_alias || '-'}</strong>
                                                     </p>
                                                     <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
                                                         <span><i class="mdi mdi-clock-outline"></i> ${dte.fecha_emision}</span>
                                                         ${dte.urgente ? '<span class="badge bg-danger ms-2">+7 dias</span>' : 
                                                          dte.dias_desde_emision > 3 ? '<span class="badge bg-warning text-dark ms-2">' + dte.dias_desde_emision + ' dias</span>' : ''}
                                                     </p>
+                                                    <p class="mb-0 mt-1">
+                                                        <small class="text-primary"><i class="ri-arrow-right-line"></i> Click para recepcionar</small>
+                                                    </p>
                                                 </div>
-                                                <button type="button" class="btn btn-sm btn-ghost-secondary position-absolute end-0 top-50 translate-middle-y me-2" 
-                                                        onclick="event.stopPropagation(); descartarNotificacionDTE(${dte.id})" 
-                                                        title="Descartar">
-                                                    <i class="ri-close-line fs-16"></i>
-                                                </button>
                                             </div>
-                                        </div>
+                                        </a>
                                     `).join('');
                                     list.style.display = 'block';
                                     noDtes.style.display = 'none';
@@ -972,6 +977,20 @@
                                     notifElement.style.opacity = '0';
                                     notifElement.style.transform = 'translateX(20px)';
                                     
+                                    const response = await fetch('/app/dtes-pendientes-recibir/descartar/', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRFToken': getCsrfToken()
+                                        },
+                                        body: JSON.stringify({ dte_id: dteId })
+                                    });
+                                    
+                                    const data = await response.json();
+                                    if (!data.success) {
+                                        throw new Error(data.error || 'No se pudo descartar');
+                                    }
+                                    
                                     setTimeout(() => {
                                         notifElement.remove();
                                         
@@ -990,6 +1009,11 @@
                                 }
                             } catch (error) {
                                 console.error('Error al descartar notificacion:', error);
+                                const notifElement = document.getElementById(`dte-notif-${dteId}`);
+                                if (notifElement) {
+                                    notifElement.style.opacity = '1';
+                                    notifElement.style.transform = '';
+                                }
                             }
                         }
                         
@@ -1051,7 +1075,7 @@
                                                         <i class="ri-money-dollar-circle-line"></i>
                                                     </span>
                                                 </div>
-                                                <div class="flex-1" onclick="marcarNotificacionLeida(${notif.id}, this.parentElement.parentElement)">
+                                                <div class="flex-1" onclick="irARevisarPendientes(${notif.cambio_id})">
                                                     <h6 class="mt-0 mb-1 fs-13 ${notif.leida ? '' : 'fw-bold'}">
                                                         ${notif.producto}
                                                     </h6>
@@ -1061,11 +1085,11 @@
                                                         ${!notif.leida ? '<span class="badge bg-warning ms-2">Nuevo</span>' : ''}
                                                     </p>
                                                 </div>
-                                                <button class="btn btn-sm btn-link text-danger p-0 ms-2" 
-                                                        onclick="event.stopPropagation(); eliminarNotificacion(${notif.id})"
-                                                        title="Eliminar">
-                                                    <i class="ri-close-line"></i>
-                                                </button>
+                                                <a href="/app/gestion-precios/revisar-pendientes/" 
+                                                   class="btn btn-sm btn-link text-primary p-0 ms-2" 
+                                                   title="Ver detalles">
+                                                    <i class="ri-arrow-right-line"></i>
+                                                </a>
                                             </div>
                                         </div>
                                     `).join('');
@@ -1144,6 +1168,13 @@
                         }
                         
                         // Marcar notificación como leída (con feedback visual inmediato)
+                        // ✅ Redirigir a página de revisar pendientes (NO marcar como leída)
+                        function irARevisarPendientes(cambioId) {
+                            // Redirigir a la página de revisar pendientes
+                            // La notificación se eliminará cuando se regularice el precio desde allí
+                            window.location.href = '/app/gestion-precios/revisar-pendientes/' + (cambioId ? '?cambio=' + cambioId : '');
+                        }
+                        
                         async function marcarNotificacionLeida(notificacionId, elemento) {
                             // Feedback visual inmediato
                             if (elemento) {
@@ -1308,7 +1339,7 @@
 
                         <!-- Quick Sucursal Switcher - Solo para Administradores -->
                         {% if user.is_authenticated %}
-                        {% if user.is_superuser or user.rol == 'administrador' %}
+                        {% if user.rol == 'administrador' %}
                         <!-- Mobile: Quick access icon (Solo Admin) -->
                         <a href="{% url 'cambiar_empresa' %}" 
                            class="d-flex d-lg-none align-items-center justify-content-center me-2"
@@ -1562,19 +1593,31 @@
                             <button type="button" class="btn shadow-none p-1" id="page-header-user-dropdown"
                                 data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                 <span class="d-flex align-items-center">
+                                    {% if user.foto_perfil %}
                                     <img class="rounded-circle header-profile-user"
-                                        src="{% static 'images/users/user-dummy-img.jpg' %}" alt="Header Avatar"
-                                        style="width: 38px; height: 38px; object-fit: cover;">
+                                        src="{{ user.foto_perfil.url }}" alt="Foto de perfil"
+                                        style="width: 38px; height: 38px; object-fit: cover; border: 2px solid #E6F0FF;">
+                                    {% else %}
+                                    <div class="rounded-circle header-profile-user d-flex align-items-center justify-content-center"
+                                        style="width: 38px; height: 38px; background: linear-gradient(135deg, #00D4AA 0%, #00B38A 100%); color: white; font-weight: 700; font-size: 0.9rem; border: 2px solid #E6F0FF;">
+                                        {{ user.first_name.0|default:user.username.0|upper }}{{ user.last_name.0|default:""|upper }}
+                                    </div>
+                                    {% endif %}
                                 </span>
                             </button>
                             <div class="dropdown-menu dropdown-menu-end" style="min-width: 240px;">
                                 <!-- Header con avatar y rol -->
                                 <div class="dropdown-header" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 10px; padding: 16px; margin: 4px; margin-bottom: 8px;">
                                     <div class="d-flex align-items-center gap-3">
-                                        <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                                            <i class="ri-user-3-fill" style="color: white; font-size: 1.25rem;"></i>
+                                        {% if user.foto_perfil %}
+                                        <img src="{{ user.foto_perfil.url }}" alt="Foto de perfil"
+                                            style="width: 45px; height: 45px; border-radius: 12px; object-fit: cover; border: 2px solid #E6F0FF;">
+                                        {% else %}
+                                        <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1rem;">
+                                            {{ user.first_name.0|default:user.username.0|upper }}{{ user.last_name.0|default:""|upper }}
                                         </div>
-                                        <div>
+                                        {% endif %}
+                                        <div style="flex: 1;">
                                             <div style="font-weight: 600; color: #1A1A2E; font-size: 0.95rem;">
                                                 {{ user.first_name|default:user.username|capfirst }} {{ user.last_name|capfirst }}
                                             </div>
@@ -1582,28 +1625,29 @@
                                                 {{ user.email|default:"Usuario" }}
                                             </div>
                                             <!-- Badge del Rol -->
-                                            <div style="margin-top: 6px;">
-                                                {% if user.is_superuser %}
-                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #FFB020 0%, #FF8C00 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
-                                                    <i class="ri-vip-crown-fill" style="font-size: 0.7rem;"></i> Super Admin
-                                                </span>
-                                                {% elif user.rol == 'administrador' %}
-                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
-                                                    <i class="ri-shield-star-fill" style="font-size: 0.7rem;"></i> Administrador
-                                                </span>
-                                                {% elif user.rol == 'jefe_local' %}
-                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #00D4AA 0%, #00B894 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
-                                                    <i class="ri-user-star-fill" style="font-size: 0.7rem;"></i> Jefe Local
-                                                </span>
-                                                {% elif user.rol == 'cajero' %}
-                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
-                                                    <i class="ri-calculator-fill" style="font-size: 0.7rem;"></i> Cajero
-                                                </span>
-                                                {% else %}
-                                                <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #8A8A9A 0%, #6B7280 100%); color: white; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;">
-                                                    <i class="ri-user-fill" style="font-size: 0.7rem;"></i> Vendedor
-                                                </span>
-                                                {% endif %}
+                                            <div style="margin-top: 8px; display: flex; align-items: center; gap: 6px;">
+                                                    <span style="font-size: 0.7rem; color: #64748b; font-weight: 500;">Rol:</span>
+                                                    {% if user.rol == 'administrador' %}
+                                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(0, 102, 255, 0.35);">
+                                                        <i class="ri-shield-star-fill" style="font-size: 0.75rem;"></i> Administrador
+                                                    </span>
+                                                    {% elif user.rol == 'administracion' %}
+                                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);">
+                                                        <i class="ri-briefcase-4-fill" style="font-size: 0.75rem;"></i> Administración
+                                                    </span>
+                                                    {% elif user.rol == 'jefe_local' %}
+                                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #00D4AA 0%, #00B894 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(0, 212, 170, 0.35);">
+                                                        <i class="ri-user-star-fill" style="font-size: 0.75rem;"></i> Jefe Local
+                                                    </span>
+                                                    {% elif user.rol == 'cajero' %}
+                                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(139, 92, 246, 0.35);">
+                                                        <i class="ri-calculator-fill" style="font-size: 0.75rem;"></i> Cajero
+                                                    </span>
+                                                    {% else %}
+                                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #8A8A9A 0%, #6B7280 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(138, 138, 154, 0.35);">
+                                                        <i class="ri-user-fill" style="font-size: 0.75rem;"></i> Vendedor
+                                                    </span>
+                                                    {% endif %}
                                             </div>
                                         </div>
                                     </div>
@@ -1622,7 +1666,7 @@
                                 </a>
                                 
                                 <!-- Cambiar Sucursal / Ver Centro de Trabajo -->
-                                {% if user.is_superuser or user.rol == 'administrador' %}
+                                {% if user.rol == 'administrador' %}
                                 <a class="dropdown-item" href="{% url 'cambiar_empresa' %}">
                                     <i class="ri-building-line fs-16 align-middle me-2" style="color: #00D4AA;"></i>
                                     <span class="align-middle">Cambiar Empresa/Sucursal</span>
@@ -1713,6 +1757,9 @@
                     <div id="two-column-menu">
                     </div>
                     <ul class="navbar-nav" id="navbar-nav">
+                        <!-- ========== MÓDULO DASHBOARD ========== -->
+                        {% contar_opciones_disponibles user 'dashboard' as total_dashboard %}
+                        {% if total_dashboard > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#dashboards" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="dashboards">
@@ -1720,17 +1767,21 @@
                             </a>
                             <div class="menu-dropdown collapse" id="dashboards" style="">
                                 <ul class="nav nav-sm flex-column">
-
+                                    {% if user|puede_ver_opcion:'dashboard_general' %}
                                     <li class="nav-item">
                                         <a href="{% url 'verHome' %}" class="nav-link" data-key="t-dashboard-general">
                                             <i class="ri-dashboard-3-line"></i> Dashboard General
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_ventas' %}
                                     <li class="nav-item">
                                         <a href="{% url 'dashboard_ventas' %}" class="nav-link" data-key="t-dashboard-ventas">
                                             <i class="ri-dashboard-line"></i> Dashboard Ventas
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_productos' or user|puede_ver_opcion:'dashboard_fifo' %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#dashboardExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="dashboardExistencias">
@@ -1738,31 +1789,38 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="dashboardExistencias">
                                             <ul class="nav nav-sm flex-column">
+                                                {% if user|puede_ver_opcion:'dashboard_productos' %}
                                                 <li class="nav-item">
                                                     <a href="/app/dashboard_productos/" class="nav-link" data-key="t-chartjs">
                                                         <i class="bi bi-box-seam"></i> Dashboard Productos
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'dashboard_fifo' %}
                                                 <li class="nav-item">
                                                     <a href="/app/dashboard_fifo/" class="nav-link" data-key="t-echarts">
                                                         <i class="bi bi-arrow-repeat"></i> Dashboard FIFO
                                                     </a>
                                                 </li>
+                                                {% endif %}
                                             </ul>
                                         </div>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'dashboard_compras_estrategico' %}
                                     <li class="nav-item">
                                         <a href="/app/verDashboardCompras/" class="nav-link" data-key="t-dashboard-compras">
                                             <i class="ri-shopping-bag-line"></i> Dashboard de Compras
                                         </a>
                                     </li>
-
-
-
-
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO VENTAS ========== -->
+                        {% contar_opciones_disponibles user 'ventas' as total_ventas %}
+                        {% if total_ventas > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloVentas" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloVentas">
@@ -1771,41 +1829,55 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloVentas" style="">
                                 <ul class="nav nav-sm flex-column">
-
+                                    {% if user|puede_ver_opcion:'ticket_venta' %}
                                     <li class="nav-item">
                                         <a href="{% url 'ticket_venta' %}" class="nav-link" data-key="t-ticket-venta">
                                             <i class="mdi mdi-receipt"></i> Ticket de Venta
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'cambios_devoluciones' %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_cambios_devoluciones' %}" class="nav-link" data-key="t-cambios-devoluciones">
                                             <i class="ri-exchange-line"></i> Cambios y Devoluciones
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'pos_dashboard' %}
                                     <li class="nav-item">
                                         <a href="{% url 'pos_dashboard' %}" class="nav-link" data-key="t-generar-venta">
                                             <i class="ri-dashboard-3-line"></i> Generar Venta
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_documentos_ventas' %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_ventas_documentos' %}" class="nav-link" data-key="t-consulta-documentos">
                                             <i class="ri-file-search-line"></i> Consulta Documentos
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'cuadratura_caja' %}
                                     <li class="nav-item">
                                         <a href="{% url 'cuadratura_caja' %}" class="nav-link" data-key="t-cuadratura-caja">
                                             <i class="ri-calculator-line"></i> Cuadratura y Arqueo
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'pos_transbank' %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_transbank_pos_sdk' %}" class="nav-link" data-key="t-transbank">
                                             <i class="ri-bank-card-line"></i> POS Transbank (SDK Oficial)
                                         </a>
                                     </li>
-
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO DOCUMENTOS ========== -->
+                        {% contar_opciones_disponibles user 'documentos' as total_documentos %}
+                        {% if total_documentos > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloDocumentos" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloDocumentos">
@@ -1813,48 +1885,62 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloDocumentos" style="">
                                 <ul class="nav nav-sm flex-column">
-
-                        <li class="nav-item">
-                            <a href="/app/emisionDTE/" class="nav-link" data-key="t-chartjs">
-                                <i class="bi bi-file-earmark-plus"></i> Emisión DTE
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="/app/documentos/gestion-dte/" class="nav-link" data-key="t-gestion-dte">
-                                <i class="bi bi-file-earmark-text"></i> Gestión DTE
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="/app/recepcion-dte/" class="nav-link" data-key="t-recepcion-dte">
-                                <i class="bi bi-box-arrow-in-down"></i> Recepción Documentos
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'regularizar_recepciones' %}" class="nav-link" data-key="t-regularizar">
-                                <i class="ri-settings-3-line"></i> Regularizar Recepciones
-                            </a>
-                        </li>
-                      
+                                    {% if user|puede_ver_opcion:'emision_dte' %}
+                                    <li class="nav-item">
+                                        <a href="/app/emisionDTE/" class="nav-link" data-key="t-chartjs">
+                                            <i class="bi bi-file-earmark-plus"></i> Emisión DTE
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_dte' %}
+                                    <li class="nav-item">
+                                        <a href="/app/documentos/gestion-dte/" class="nav-link" data-key="t-gestion-dte">
+                                            <i class="bi bi-file-earmark-text"></i> Gestión DTE
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'recepcion_dte' %}
+                                    <li class="nav-item">
+                                        <a href="/app/recepcion-dte/" class="nav-link" data-key="t-recepcion-dte">
+                                            <i class="bi bi-box-arrow-in-down"></i> Recepción Documentos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'regularizar_recepciones' %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'regularizar_recepciones' %}" class="nav-link" data-key="t-regularizar">
+                                            <i class="ri-settings-3-line"></i> Regularizar Recepciones
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_cotizaciones' %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_cotizaciones' %}" class="nav-link" data-key="t-cotizaciones">
                                             <i class="ri-file-text-line"></i> Gestión Cotizaciones
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_correlativos' %}
                                     <li class="nav-item">
                                         <a href="/app/documentos/gestion-correlativos/" class="nav-link" data-key="t-gestion-correlativos">
                                             <i class="ri-file-list-3-line"></i> Gestión Correlativos
                                         </a>
                                     </li>
-                                  
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_creditos' %}
                                     <li class="nav-item">
                                         <a href="/app/documentos/gestion-creditos/" class="nav-link" data-key="t-gestion-creditos">
                                             <i class="ri-bank-card-line"></i> Gestión Créditos
                                         </a>
                                     </li>
-
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO EXISTENCIAS ========== -->
+                        {% contar_opciones_disponibles user 'existencias' as total_existencias %}
+                        {% if total_existencias > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#sidebarCharts" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="sidebarCharts">
@@ -1862,41 +1948,55 @@
                             </a>
                             <div class="menu-dropdown collapse" id="sidebarCharts" style="">
                                 <ul class="nav nav-sm flex-column">
-
+                                    {% if user|puede_ver_opcion:'gestion_producto' %}
                                     <li class="nav-item">
                                         <a href="/app/verGestionProducto/" class="nav-link" data-key="t-chartjs">
                                             <i class="ri-archive-line"></i> Gestión Producto
                                         </a>
                                     </li>
-                                    
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'edicion_rapida_precios' %}
                                     <li class="nav-item">
                                         <a href="{% url 'edicion_rapida_precios' %}" class="nav-link" data-key="t-edicion-rapida">
                                             <i class="ri-price-tag-3-line"></i> Gestión de Precios
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'revisar_cambios_precios' %}
                                     <li class="nav-item">
                                         <a href="{% url 'revisar_cambios_precios' %}" class="nav-link" data-key="t-revisar-precios">
                                             <i class="ri-notification-badge-line"></i> Alertas de Precios
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'movimientos_producto' %}
                                     <li class="nav-item">
                                         <a href="/app/verMovimientosProducto/" class="nav-link" data-key="t-echarts">
                                             <i class="ri-arrow-left-right-line"></i> Movimientos Por Sucursal
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_inventarios' %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_inventarios' %}" class="nav-link" data-key="t-gestion-inventarios">
                                             <i class="ri-clipboard-line"></i> Gestión de Inventarios
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_etiquetas_zebra' %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_etiquetas_zebra' %}" class="nav-link" data-key="t-etiquetas-zebra">
                                             <i class="ri-printer-line"></i> Impresión Etiquetas Zebra
                                         </a>
                                     </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO COMPRAS ========== -->
+                        {% contar_opciones_disponibles user 'compras' as total_compras %}
+                        {% if total_compras > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloCompras" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloCompras">
@@ -1904,19 +2004,27 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloCompras">
                                 <ul class="nav nav-sm flex-column">
+                                    {% if user|puede_ver_opcion:'gestion_compras' %}
                                     <li class="nav-item">
                                         <a href="/app/verGestionCompras/" class="nav-link" data-key="t-chartjs">
                                             <i class="ri-shopping-cart-2-line"></i> Gestión Compras
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_dte_compras' %}
                                     <li class="nav-item">
                                         <a href="/app/verGestionDteCompras/" class="nav-link" data-key="t-echarts">
                                             <i class="ri-file-list-2-line"></i> Gestión Documentos Compras
                                         </a>
                                     </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO REQUERIMIENTOS ========== -->
+                        {% contar_opciones_disponibles user 'requerimientos' as total_requerimientos %}
+                        {% if total_requerimientos > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloRequerimientos" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloRequerimientos">
@@ -1924,14 +2032,20 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloRequerimientos">
                                 <ul class="nav nav-sm flex-column">
+                                    {% if user|puede_ver_opcion:'lista_requerimientos' %}
                                     <li class="nav-item">
                                         <a href="{% url 'modulo_requerimientos' %}" class="nav-link" data-key="t-lista-requerimientos">
                                             <i class="ri-list-check"></i> Requerimientos
                                         </a>
                                     </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO REPORTES ========== -->
+                        {% contar_opciones_disponibles user 'reportes' as total_reportes %}
+                        {% if total_reportes > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloReportes" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloReportes">
@@ -1940,6 +2054,7 @@
                             <div class="menu-dropdown collapse" id="moduloReportes">
                                 <ul class="nav nav-sm flex-column">
                                     <!-- Sección: Reportes Compras -->
+                                    {% if user|puede_ver_opcion:'reporte_despachos_proveedor' or user|puede_ver_opcion:'reporte_compras' %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesCompras" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesCompras">
@@ -1947,36 +2062,26 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="reportesCompras">
                                             <ul class="nav nav-sm flex-column">
+                                                {% if user|puede_ver_opcion:'reporte_despachos_proveedor' %}
                                                 <li class="nav-item">
                                                     <a href="/app/verReporteDespachosProveedor/" class="nav-link" data-key="t-chartjs">
                                                         <i class="bi bi-truck"></i> Despachos por Proveedor
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'reporte_compras' %}
                                                 <li class="nav-item">
                                                     <a href="/app/reportes/compras/" class="nav-link" data-key="t-reporte-compras">
                                                         <i class="bi bi-bag"></i> Reporte de Compras
                                                     </a>
                                                 </li>
+                                                {% endif %}
                                             </ul>
                                         </div>
                                     </li>
-                                    <!-- Sección: Reportes Requerimientos -->
-                                    <li class="nav-item">
-                                        <a class="nav-link menu-link collapsed" href="#reportesRequerimientos" data-bs-toggle="collapse"
-                                            role="button" aria-expanded="false" aria-controls="reportesRequerimientos">
-                                            <i class="bi bi-clipboard-data"></i> Reportes Requerimientos
-                                        </a>
-                                        <div class="menu-dropdown collapse" id="reportesRequerimientos">
-                                            <ul class="nav nav-sm flex-column">
-                                                <li class="nav-item">
-                                                    <a href="#" class="nav-link disabled" data-key="t-chartjs">
-                                                        <i class="bi bi-clipboard-data"></i> Reporte de Requerimientos (próximamente)
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                    </li>
+                                    {% endif %}
                                     <!-- Sección: Reportes Ventas -->
+                                    {% if user|puede_ver_opcion:'reporte_ventas_sucursal' or user|puede_ver_opcion:'reporte_documentos_emitidos' %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesVentas" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesVentas">
@@ -1984,30 +2089,26 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="reportesVentas">
                                             <ul class="nav nav-sm flex-column">
+                                                {% if user|puede_ver_opcion:'reporte_ventas_sucursal' %}
                                                 <li class="nav-item">
                                                     <a href="/app/reportes/ventas-sucursal/" class="nav-link" data-key="t-ventas-sucursal">
                                                         <i class="ri-store-2-line"></i> Ventas Sucursal
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'reporte_documentos_emitidos' %}
                                                 <li class="nav-item">
                                                     <a href="/app/reportes/documentos-emitidos/" class="nav-link" data-key="t-documentos-emitidos">
                                                         <i class="ri-file-list-3-line"></i> Documentos Emitidos
                                                     </a>
                                                 </li>
-                                                <li class="nav-item">
-                                                    <a href="#" class="nav-link disabled" data-key="t-ventas-producto">
-                                                        <i class="bi bi-box-seam"></i> Ventas por Producto (próximamente)
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="#" class="nav-link disabled" data-key="t-ventas-cliente">
-                                                        <i class="bi bi-person"></i> Ventas por Cliente (próximamente)
-                                                    </a>
-                                                </li>
+                                                {% endif %}
                                             </ul>
                                         </div>
                                     </li>
+                                    {% endif %}
                                     <!-- Sección: Reportes Existencias -->
+                                    {% if user|puede_ver_opcion:'reporte_existencias' or user|puede_ver_opcion:'reporte_existencias_marca' or user|puede_ver_opcion:'reporte_existencias_sucursal' %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesExistencias">
@@ -2015,47 +2116,52 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="reportesExistencias">
                                             <ul class="nav nav-sm flex-column">
+                                                {% if user|puede_ver_opcion:'reporte_existencias' %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias' %}" class="nav-link" data-key="t-reporte-existencias">
                                                         <i class="ri-file-list-3-line"></i> Reporte de Existencias
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'reporte_existencias_marca' %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias_marca' %}" class="nav-link" data-key="t-reporte-existencias-marca">
                                                         <i class="ri-price-tag-3-line"></i> Existencias por Marca
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'reporte_existencias_sucursal' %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_existencias_sucursal' %}" class="nav-link" data-key="t-reporte-existencias-sucursal">
                                                         <i class="ri-store-2-line"></i> Existencias por Sucursal
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'resumen_existencias' %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_resumen_existencias' %}" class="nav-link" data-key="t-resumen-existencias">
                                                         <i class="ri-pie-chart-line"></i> Resumen Existencias
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if user|puede_ver_opcion:'reporte_movimientos_sucursal' %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_movimientos_sucursal' %}" class="nav-link" data-key="t-movimientos-sucursal">
                                                         <i class="ri-exchange-line"></i> Inicial vs Restante
                                                     </a>
                                                 </li>
-                                                <li class="nav-item">
-                                                    <a href="#" class="nav-link disabled" data-key="t-kardex">
-                                                        <i class="bi bi-archive"></i> Kardex de Productos (próximamente)
-                                                    </a>
-                                                </li>
-                                                <li class="nav-item">
-                                                    <a href="#" class="nav-link disabled" data-key="t-valorizado">
-                                                        <i class="bi bi-currency-dollar"></i> Inventario Valorizado (próximamente)
-                                                    </a>
-                                                </li>
+                                                {% endif %}
                                             </ul>
                                         </div>
                                     </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
+                        <!-- ========== MÓDULO CONFIGURACIÓN ========== -->
+                        {% contar_opciones_disponibles user 'configuracion' as total_configuracion %}
+                        {% if total_configuracion > 0 %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloConfiguracion"
                                 data-bs-toggle="collapse" role="button" aria-expanded="false"
@@ -2064,48 +2170,59 @@
                             </a>
                             <div class="menu-dropdown collapse" id="moduloConfiguracion">
                                 <ul class="nav nav-sm flex-column">
-
+                                    {% if user|puede_ver_opcion:'gestion_usuarios' %}
                                     <li class="nav-item">
                                         <a href="/app/gestion_usuarios/" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-people-fill"></i> Gestion Usuarios
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_sucursales' %}
                                     <li class="nav-item">
                                         <a href="/app/gestion-sucursales/" class="nav-link" data-key="t-gestion-sucursales">
                                             <i class="bi bi-building"></i> Gestión Sucursales
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_empresas' %}
                                     <li class="nav-item">
                                         <a href="/empresa_management/lista_empresas/" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-building-fill"></i> Gestion Empresas
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_clientes' %}
                                     <li class="nav-item">
                                         <a href="/empresa_management/lista_clientes/" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-person-badge-fill"></i> Gestion Clientes
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_vendedores' %}
                                     <li class="nav-item">
                                         <a href="/app/gestion_vendedores/" class="nav-link" data-key="t-chartjs">
                                             <i class="bi bi-people"></i> Gestion Vendedores
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'gestion_permisos' %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_permisos' %}" class="nav-link" data-key="t-gestion-permisos">
                                             <i class="bi bi-shield-lock"></i> Gestion Permisos
                                         </a>
                                     </li>
+                                    {% endif %}
+                                    {% if user|puede_ver_opcion:'interfaz_acepta' %}
                                     <li class="nav-item">
                                         <a href="/app/configuracion/interfaz-prueba-acepta/" class="nav-link" data-key="t-interfaz-acepta">
                                             <i class="ri-file-text-line"></i> Interfaz Prueba Acepta
                                         </a>
                                     </li>
-
-
-
+                                    {% endif %}
                                 </ul>
                             </div>
                         </li>
+                        {% endif %}
 
                     </ul>
 

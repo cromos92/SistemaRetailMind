@@ -471,7 +471,40 @@
     border-radius: var(--nexo-radius-md) !important;
     box-shadow: var(--nexo-shadow-lg) !important;
 }
+
+/* Loader con estilo del proyecto */
+#fullscreenLoader {
+    backdrop-filter: blur(4px);
+}
+
+#fullscreenLoader .spinner-border {
+    color: #405189 !important;
+}
 </style>
+
+<!-- Loader con estilo del proyecto -->
+<div id="fullscreenLoader" style="
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
+    backdrop-filter: blur(8px);
+    text-align: center;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
+        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
+            <i class="bi bi-arrow-left-right fs-3 text-white"></i>
+        </div>
+        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mb-0 fw-bold" style="color: #405189;">Cargando movimientos...</p>
+        <small class="text-muted">Por favor espera un momento</small>
+    </div>
+</div>
 
 <div class="page-content nexo-page">
     <div class="container-fluid">
@@ -821,6 +854,26 @@
 // Variables globales
 let currentPageMovimientos = 1;
 let pageSizeMovimientos = 50;
+let fechasDefectoAplicadas = false;
+
+// ✅ OPTIMIZACIÓN: Función para obtener fecha formateada (dd/mm/yyyy)
+function obtenerFechaFormateada(diasAtras = 0) {
+    const fecha = new Date();
+    fecha.setDate(fecha.getDate() - diasAtras);
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const anio = fecha.getFullYear();
+    return `${dia}/${mes}/${anio}`;
+}
+
+// ✅ OPTIMIZACIÓN: Establecer fechas por defecto (últimos 30 días)
+function establecerFechasDefecto() {
+    const hoy = obtenerFechaFormateada(0);
+    const hace30Dias = obtenerFechaFormateada(30);
+    $('#filtroFechaInicio').val(hace30Dias);
+    $('#filtroFechaFin').val(hoy);
+    fechasDefectoAplicadas = true;
+}
 
 // === FUNCIONES PARA MOVIMIENTOS ===
 
@@ -1270,6 +1323,9 @@ $(document).ready(function() {
     // Cambiar los inputs de fecha a type="text" para compatibilidad visual
     $('#filtroFechaInicio, #filtroFechaFin, #filtroFechaInicioKardex, #filtroFechaFinKardex, #filtroFechaInicioKardexAgrupado, #filtroFechaFinKardexAgrupado').attr('type', 'text');
     
+    // ✅ OPTIMIZACIÓN: Establecer fechas por defecto ANTES de inicializar Tempus Dominus
+    establecerFechasDefecto();
+    
     // Inicializar Tempus Dominus en los inputs de fecha
     const options = {
         display: {
@@ -1313,7 +1369,7 @@ $(document).ready(function() {
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaInicioKardexAgrupado'), options);
     new tempusDominus.TempusDominus(document.getElementById('filtroFechaFinKardexAgrupado'), options);
     
-    // Cargar datos iniciales
+    // ✅ OPTIMIZACIÓN: Cargar datos iniciales (ahora con fechas por defecto)
     cargarMovimientos();
     cargarProductosKardex();
     cargarProductosKardexAgrupado();

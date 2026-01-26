@@ -408,6 +408,10 @@ def confirmar_recepcion_api(request):
             tallas_a_actualizar = {}  # sku -> cantidad a agregar
             productos_con_problemas_data = []
             
+            # ✅ Variables para el resumen
+            total_esperado = 0
+            total_recepcionado = 0
+            
             for prod_data in productos_recepcion:
                 dte_producto_id = prod_data.get('dte_producto_id')
                 dte_producto = dte_productos_map.get(dte_producto_id)
@@ -424,6 +428,10 @@ def confirmar_recepcion_api(request):
                 cantidad_faltante = int(prod_data.get('cantidad_faltante', 0))
                 estado = prod_data.get('estado', 'RECEPCIONADO_OK')
                 observaciones = prod_data.get('observaciones', '')
+                
+                # ✅ Acumular totales
+                total_esperado += cantidad_esperada
+                total_recepcionado += cantidad_recepcionada
                 
                 tiene_problemas = (
                     estado != 'RECEPCIONADO_OK' or
@@ -594,7 +602,6 @@ def confirmar_recepcion_api(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        transaction.set_rollback(True)
         return JsonResponse({
             'success': False,
             'error': f'Error al confirmar recepción: {str(e)}'
@@ -1141,6 +1148,8 @@ def obtener_productos_regularizar(request):
                 'id': recepcion.id,
                 'dte_numero': recepcion.dte.numero_documento if recepcion.dte else '-',
                 'dte_fecha': recepcion.dte.fecha_emision if recepcion.dte else None,
+                'tipo_documento': recepcion.dte.tipo_documento if recepcion.dte else '-',
+                'tipo_documento_display': recepcion.dte.get_tipo_documento_display() if recepcion.dte else '-',
                 'sku': str(recepcion.producto_talla.sku) if recepcion.producto_talla else '-',
                 'producto_nombre': producto_nombre,
                 'requiere_nc': requiere_nc,
@@ -2040,12 +2049,15 @@ def regularizar_producto_api(request):
                         referencias=f"Producto de cambio por DTE #{dte_original.numero_documento}. NC #{numero_nc}. {motivo_envio}"
                     )
                     
+                    # Guardar sobreprecio tal cual está en el producto (es un DELTA/MARGEN)
+                    sobreprecio_cambio = producto_cambio.producto.sobreprecio if producto_cambio.producto else 0
+                    
                     Dte_Productos.objects.create(
                         dte=dte_cambio,
                         productoTalla=producto_cambio,
                         descripcion=f"CAMBIO: {producto_cambio.producto.articulo} - Talla {producto_cambio.talla}",
                         costo=costo_cambio,
-                        sobreprecio=producto_cambio.producto.sobreprecio if producto_cambio.producto else 0,
+                        sobreprecio=sobreprecio_cambio,
                         precio=precio_cambio,
                         stock=cantidad_envio,
                         activo=True
@@ -2063,7 +2075,7 @@ def regularizar_producto_api(request):
                         sucursal_destino=sucursal_destino,
                         cantidad=-cantidad_envio,
                         costo=costo_cambio,
-                        sobreprecio=producto_cambio.producto.sobreprecio if producto_cambio.producto else 0,
+                        sobreprecio=sobreprecio_cambio,
                         precio=precio_cambio,
                         concepto='TRASPASO_SALIDA',
                         tipo_movimiento='EGRESO',
@@ -3090,9 +3102,11 @@ def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsabl
     producto_talla.save()
     
     # Crear lote FIFO para ingresos (solo si es positivo y se solicita)
+    # Lista de conceptos que generan lotes FIFO automáticamente
     if crear_lote_fifo and cantidad > 0 and concepto in [
-        'INGRESO_INICIAL', 'RECEPCION_COMPRA', 'DEVOLUCION_CLIENTE', 
-        'TRASPASO_ENTRADA', 'AJUSTE_POSITIVO', 'DONACION_RECIBIDA'
+        'INGRESO_INICIAL', 'INGRESO_MANUAL', 'RECEPCION_COMPRA', 'REPOSICION_STOCK',
+        'DEVOLUCION_CLIENTE', 'TRASPASO_ENTRADA', 'AJUSTE_POSITIVO', 'DONACION_RECIBIDA',
+        'CAMBIO_PRODUCTO_ENTRADA'
     ]:
         try:
             crear_lote_producto(
@@ -4391,7 +4405,10 @@ def verGestionCompras(request):
     try:
         marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
         color = Productos_Atributos.objects.get(nombre__iexact='Color')
-        genero = Productos_Atributos.objects.get(nombre__iexact='Género')
+        # IMPORTANTE: Usar "Sexo" que es el atributo real usado en productos (ID 3)
+        genero = Productos_Atributos.objects.filter(nombre__iexact='Sexo').first()
+        if not genero:
+            genero = Productos_Atributos.objects.filter(nombre__iexact='Género').first()
     except Productos_Atributos.DoesNotExist:
         marca = color = genero = None
     
@@ -4412,7 +4429,11 @@ def verGestionProducto(request):
         # Intentar obtener los atributos básicos
         marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
         color = Productos_Atributos.objects.get(nombre__iexact='Color')
-        genero = Productos_Atributos.objects.get(nombre__iexact='Género')
+        # IMPORTANTE: Usar "Sexo" que es el atributo real usado en productos (ID 3)
+        # "Género" (ID 4) tiene valores diferentes y no coincide
+        genero = Productos_Atributos.objects.filter(nombre__iexact='Sexo').first()
+        if not genero:
+            genero = Productos_Atributos.objects.filter(nombre__iexact='Género').first()
         
     except Productos_Atributos.DoesNotExist:
         # Si no existen los atributos, ejecutar inicialización automática
@@ -4426,7 +4447,9 @@ def verGestionProducto(request):
             # Intentar obtener los atributos nuevamente
             marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
             color = Productos_Atributos.objects.get(nombre__iexact='Color')
-            genero = Productos_Atributos.objects.get(nombre__iexact='Género')
+            genero = Productos_Atributos.objects.filter(nombre__iexact='Sexo').first()
+            if not genero:
+                genero = Productos_Atributos.objects.filter(nombre__iexact='Género').first()
             
         except Exception as e:
             messages.error(request, f'Error al inicializar atributos: {str(e)}')
@@ -4708,6 +4731,103 @@ def crear_compra(request):
         
         return JsonResponse({'success': False, 'error': f'Error interno: {str(e)}'}, status=500)
 
+
+@login_required
+@require_POST
+def eliminar_compra(request):
+    """
+    Soft delete de una compra - cambia estado a ELIMINADA en lugar de borrar de DB.
+    """
+    from django.utils import timezone
+    
+    try:
+        data = json.loads(request.body)
+        compra_id = data.get('compra_id')
+        
+        if not compra_id:
+            return JsonResponse({'success': False, 'error': 'ID de compra no proporcionado'}, status=400)
+        
+        compra = get_object_or_404(Compras, id=compra_id)
+        
+        # Verificar si ya está eliminada
+        if compra.estado == 'ELIMINADA':
+            return JsonResponse({'success': False, 'error': 'Esta compra ya fue eliminada'}, status=400)
+        
+        # Soft delete: cambiar estado a ELIMINADA
+        compra.estado = 'ELIMINADA'
+        compra.fecha_eliminacion = timezone.now()
+        compra.eliminado_por = request.user.get_full_name() or request.user.username
+        compra.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Compra "{compra.nombre}" marcada como eliminada correctamente'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error: {str(e)}'}, status=500)
+
+
+@login_required
+@require_GET
+def validar_factura_proveedor(request):
+    """
+    Valida si un número de factura pertenece al proveedor indicado.
+    Retorna información de la factura si existe.
+    """
+    numero_factura = request.GET.get('numero', '').strip()
+    proveedor_id = request.GET.get('proveedor_id')
+    
+    if not numero_factura:
+        return JsonResponse({'existe': False, 'error': 'Número de factura no proporcionado'})
+    
+    try:
+        proveedor_id = int(proveedor_id) if proveedor_id else None
+    except (TypeError, ValueError):
+        proveedor_id = None
+    
+    # Buscar la factura por número
+    factura = Dte.objects.filter(
+        tipo_transaccion='COMPRA',
+        numero_documento__iexact=numero_factura
+    ).select_related('emisor').first()
+    
+    if not factura:
+        return JsonResponse({
+            'existe': False,
+            'mensaje': f'No se encontró factura con número "{numero_factura}"'
+        })
+    
+    # Verificar si pertenece al proveedor
+    pertenece_proveedor = False
+    if proveedor_id:
+        try:
+            prov = Empresa.objects.get(id=proveedor_id)
+            # Verificar por ID de emisor o por RUT
+            if factura.emisor_id == proveedor_id:
+                pertenece_proveedor = True
+            elif prov.rut and factura.emisor and factura.emisor.rut == prov.rut:
+                pertenece_proveedor = True
+        except Empresa.DoesNotExist:
+            pass
+    
+    return JsonResponse({
+        'existe': True,
+        'pertenece_proveedor': pertenece_proveedor,
+        'factura': {
+            'id': factura.id,
+            'numero': str(factura.numero_documento),
+            'monto': float(factura.monto_con_iva),
+            'fecha': factura.fecha_emision.strftime('%d/%m/%Y') if factura.fecha_emision else '',
+            'emisor_nombre': factura.emisor.nombre if factura.emisor else 'Desconocido',
+            'emisor_id': factura.emisor_id,
+            'estado': factura.estado_dte
+        },
+        'mensaje': 'La factura pertenece a este proveedor' if pertenece_proveedor else f'ALERTA: La factura pertenece a "{factura.emisor.nombre if factura.emisor else "otro proveedor"}", no al proveedor de esta compra'
+    })
+
  
 @require_GET
 def obtener_compras_por_anio(request):
@@ -4727,9 +4847,11 @@ def obtener_compras_por_anio(request):
         page = 1
         page_size = 20
 
-    # Query base optimizada
+    # Query base optimizada - EXCLUIR compras eliminadas
     compras_query = Compras.objects.filter(
         fecha__year=anio
+    ).exclude(
+        estado='ELIMINADA'  # Soft delete: no mostrar eliminadas
     ).select_related('empresa').annotate(
         # Calcular total de unidades y costo total usando subconsultas
         unidades_totales=Sum('compras_producto__compras_producto_talla__stock'),
@@ -5715,6 +5837,9 @@ def cargarDteCompra(request):
             if not empresa_id:
                 return JsonResponse({'error': 'Empresa no identificada en sesión'}, status=403)
 
+            # Parámetro para incluir descartados (por defecto NO se muestran)
+            incluir_descartados = data.get('incluir_descartados', False)
+
             # Query base optimizada
             # Para DTEs de COMPRA: emisor = proveedor, receptor = nosotros (opcional)
             dtes_query = Dte.objects.filter(
@@ -5723,6 +5848,10 @@ def cargarDteCompra(request):
             ).filter(
                 Q(receptor_id=empresa_id) | Q(receptor__isnull=True)  # Mostrar con o sin receptor
             ).select_related('emisor', 'receptor')  # El proveedor es el emisor
+            
+            # Excluir descartados por defecto (soft delete)
+            if not incluir_descartados:
+                dtes_query = dtes_query.filter(descartado=False)
 
             # Aplicar filtro por tipo de documento si se proporciona
             if tipo_documento_filtro:
@@ -5845,7 +5974,11 @@ def cargarDteCompra(request):
                     'tiene_factura_anexada': tiene_factura_anexada,
                     'requiere_factura': d.tipo_documento in ['COTIZACION', 'GUIA'],
                     'nc_esta_asociada': nc_esta_asociada,
-                    'factura_asociada_info': factura_asociada_info
+                    'factura_asociada_info': factura_asociada_info,
+                    # Campos adicionales para soft delete y notas de crédito
+                    'descartado': d.descartado,
+                    'es_nota_credito': d.es_nota_credito or d.tipo_documento == 'NOTA DE CREDITO',
+                    'motivo_descarte': d.motivo_descarte
                 })
 
             # Respuesta con metadatos de paginación
@@ -6143,20 +6276,76 @@ def eliminarNotaCredito(request, nc_id):
  
  
 def eliminar_dte(request, dte_id):
+    """
+    Soft delete de DTE - marca como descartado en lugar de eliminar.
+    Si se pasa forzar=True, elimina permanentemente (hard delete).
+    """
+    from django.utils import timezone
+    
     if request.method == 'DELETE':
         try:
+            data = json.loads(request.body) if request.body else {}
+            forzar = data.get('forzar', False)
+            motivo = data.get('motivo', 'Eliminado por usuario')
+            
             dte = Dte.objects.get(id=dte_id)
-            dte.delete()
-            return JsonResponse({'success': True})
+            
+            if forzar:
+                # Hard delete solo si se fuerza
+                dte.delete()
+                return JsonResponse({
+                    'success': True, 
+                    'message': f'DTE #{dte.numero_documento} eliminado permanentemente'
+                })
+            else:
+                # Soft delete - marcar como descartado
+                dte.descartado = True
+                dte.fecha_descarte = timezone.now()
+                dte.descartado_por = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'Sistema'
+                dte.motivo_descarte = motivo
+                dte.save()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'DTE #{dte.numero_documento} marcado como descartado',
+                    'soft_delete': True
+                })
+                
         except Dte.DoesNotExist:
             return JsonResponse({'error': 'DTE no encontrado'}, status=404)
         except ProtectedError:
             return JsonResponse({
-                'error': 'No se puede eliminar este DTE porque tiene registros asociados (como pagos, notas u otros).'
+                'error': 'No se puede eliminar este DTE porque tiene registros asociados (como pagos, notas u otros).',
+                'puede_forzar': True,
+                'productos_count': Dte_Productos.objects.filter(dte_id=dte_id).count()
             }, status=400)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
 
+    return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+
+@login_required
+def restaurar_dte(request, dte_id):
+    """Restaurar un DTE descartado"""
+    if request.method == 'POST':
+        try:
+            dte = Dte.objects.get(id=dte_id, descartado=True)
+            dte.descartado = False
+            dte.fecha_descarte = None
+            dte.descartado_por = None
+            dte.motivo_descarte = None
+            dte.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'DTE #{dte.numero_documento} restaurado correctamente'
+            })
+        except Dte.DoesNotExist:
+            return JsonResponse({'error': 'DTE no encontrado o no está descartado'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
 
@@ -7082,6 +7271,7 @@ def obtener_recepciones_producto(request, producto_id):
             data_recepciones.append({
                 'id': rec.id,
                 'talla': rec.compra_producto_talla.talla if rec.compra_producto_talla else '-',
+                'compra_producto_talla_id': rec.compra_producto_talla_id,
                 'cantidad': rec.stockArribado,
                 'cantidad_esperada': rec.cantidad_esperada,
                 'dte_id': rec.dte_id,
@@ -7111,8 +7301,8 @@ def obtener_recepciones_producto(request, producto_id):
 @transaction.atomic
 def actualizar_recepciones_producto(request):
     """
-    Actualiza las cantidades de recepciones de un producto antes de crearlo.
-    Permite modificar cantidades o eliminar recepciones.
+    Actualiza las cantidades y tallas de recepciones de un producto antes de crearlo.
+    Permite modificar cantidades, tallas o eliminar recepciones.
     """
     try:
         data = json.loads(request.body)
@@ -7129,10 +7319,13 @@ def actualizar_recepciones_producto(request):
         
         actualizados = 0
         eliminados = 0
+        tallas_actualizadas = 0
         
         for cambio in cambios:
             recepcion_id = cambio.get('recepcion_id')
             cantidad_nueva = cambio.get('cantidad', 0)
+            talla_nueva = cambio.get('talla', '').strip()
+            compra_producto_talla_id = cambio.get('compra_producto_talla_id')
             eliminar = cambio.get('eliminar', False)
             
             try:
@@ -7152,14 +7345,117 @@ def actualizar_recepciones_producto(request):
                     recepcion.save()
                     actualizados += 1
                     
+                    # Actualizar talla si cambió
+                    if talla_nueva and recepcion.compra_producto_talla:
+                        if recepcion.compra_producto_talla.talla != talla_nueva:
+                            recepcion.compra_producto_talla.talla = talla_nueva
+                            recepcion.compra_producto_talla.save()
+                            tallas_actualizadas += 1
+                    
             except Productos_Recepcionados.DoesNotExist:
                 continue
         
+        mensaje = f'Se actualizaron {actualizados} recepciones'
+        if tallas_actualizadas > 0:
+            mensaje += f', {tallas_actualizadas} tallas modificadas'
+        if eliminados > 0:
+            mensaje += f' y se eliminaron {eliminados}'
+        
         return JsonResponse({
             'success': True,
-            'message': f'Se actualizaron {actualizados} recepciones y se eliminaron {eliminados}',
+            'message': mensaje,
             'actualizados': actualizados,
+            'tallas_actualizadas': tallas_actualizadas,
             'eliminados': eliminados
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def vista_detalle_dte(request, dte_id):
+    """Vista HTML para mostrar el detalle de un DTE"""
+    return render(request, 'vistas/modulo_compras/detalle_dte.html', {
+        'dte_id': dte_id
+    })
+
+
+@login_required
+@require_GET
+def api_detalle_dte_completo(request, dte_id):
+    """API que retorna el detalle completo de un DTE (compras o ventas)"""
+    try:
+        dte = get_object_or_404(Dte, id=dte_id)
+        
+        # Obtener productos del DTE
+        productos = []
+        for detalle in Dte_Productos.objects.filter(dte=dte).select_related('productoTalla__producto'):
+            producto = detalle.productoTalla.producto if detalle.productoTalla else None
+            subtotal = (detalle.precio or 0) * (detalle.stock or 0)
+            productos.append({
+                'id': detalle.id,
+                'producto': producto.articulo if producto else detalle.descripcion,
+                'sku': detalle.productoTalla.sku if detalle.productoTalla else None,
+                'talla': detalle.productoTalla.talla if detalle.productoTalla else None,
+                'descripcion': detalle.descripcion,
+                'cantidad': detalle.stock,
+                'precio_unitario': detalle.precio,
+                'subtotal': subtotal,
+                'costo': detalle.costo,
+            })
+        
+        # Obtener pagos del DTE
+        pagos = []
+        total_pagado = 0
+        for pago in Dte_Detalle_Pago.objects.filter(dte=dte):
+            pagos.append({
+                'id': pago.id,
+                'metodo_pago': pago.metodo_pago,
+                'voucher': pago.voucher,
+                'monto': pago.monto,
+                'tipo_tarjeta': pago.tipo_tarjeta,
+            })
+            if pago.metodo_pago != 'Nota de Crédito':
+                total_pagado += pago.monto or 0
+        
+        saldo = float(dte.monto_con_iva or 0) - float(total_pagado)
+        
+        return JsonResponse({
+            'success': True,
+            'dte': {
+                'id': dte.id,
+                'numero_documento': dte.numero_documento,
+                'tipo_documento': dte.tipo_documento,
+                'estado_dte': dte.estado_dte,
+                'estado_pago': dte.estado_pago,
+                'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else None,
+                'fecha_vencimiento': dte.fecha_vencimiento.strftime('%d/%m/%Y') if dte.fecha_vencimiento else None,
+                'fecha_recepcion': dte.fecha_recepcion.strftime('%d/%m/%Y') if dte.fecha_recepcion else None,
+                'responsable': dte.responsable,
+                'dias_credito': dte.diasCredito,
+                'bultos': dte.bultos,
+                'unidades_productos': dte.unidades_productos,
+                'monto_neto': float(dte.monto_neto or 0),
+                'monto_con_iva': float(dte.monto_con_iva or 0),
+                'saldo': saldo,
+                'observaciones': dte.observaciones,
+                # Receptor
+                'receptor_nombre': dte.receptor.nombre if dte.receptor else None,
+                'receptor_rut': dte.receptor.rut if dte.receptor else None,
+                # Emisor
+                'emisor_nombre': dte.emisor.nombre if dte.emisor else None,
+                'emisor_rut': dte.emisor.rut if dte.emisor else None,
+                # Sucursal
+                'sucursal_nombre': dte.sucursal.nombre if dte.sucursal else None,
+                # Vendedor
+                'vendedor_nombre': f"{dte.vendedor.first_name} {dte.vendedor.last_name}".strip() if dte.vendedor else None,
+            },
+            'productos': productos,
+            'pagos': pagos
         })
         
     except Exception as e:
@@ -7336,43 +7632,104 @@ def actualizar_recepciones_compra(request):
 
  
 @require_GET
+@login_required
 def margenes_usuario(request):
+    """Obtiene los márgenes del usuario para la sucursal actual"""
     user = request.user
-    empresa_id = request.session.get('idEmpresaActual')  # o ajusta al tuyo
+    empresa_id = request.session.get('idEmpresaActual')
     sucursal_id = request.session.get('idSucursalActual')
 
     try:
-        eu = EmpresaUser.objects.get(user=user, empresa_id=empresa_id, sucursal_id=sucursal_id, status=True)
+        # Primero intentar obtener márgenes específicos de la sucursal
+        eu = EmpresaUser.objects.filter(
+            user=user, 
+            empresa_id=empresa_id, 
+            sucursal_id=sucursal_id, 
+            status=True
+        ).first()
+        
+        if eu:
+            sucursal_nombre = eu.sucursal.alias if eu.sucursal else 'Sin sucursal'
+            return JsonResponse({
+                'success': True,
+                'margenSobreprecio': eu.margenSobreprecio or 0,
+                'margenPrecioVenta': eu.margenPrecioVenta or 0,
+                'sucursal_id': sucursal_id,
+                'sucursal_nombre': sucursal_nombre
+            })
+        
+        # Si no existe para esta sucursal, buscar el activo del usuario
+        eu_activo = EmpresaUser.objects.filter(
+            user=user, 
+            empresa_id=empresa_id,
+            active=True
+        ).first()
+        
+        if eu_activo:
+            return JsonResponse({
+                'success': True,
+                'margenSobreprecio': eu_activo.margenSobreprecio or 0,
+                'margenPrecioVenta': eu_activo.margenPrecioVenta or 0,
+                'sucursal_id': sucursal_id,
+                'sucursal_nombre': eu_activo.sucursal.alias if eu_activo.sucursal else 'Sin sucursal',
+                'nota': 'Usando márgenes del perfil activo'
+            })
+        
+        # Si no hay ninguno, devolver valores por defecto
         return JsonResponse({
             'success': True,
-            'margenSobreprecio': eu.margenSobreprecio or 0,
-            'margenPrecioVenta': eu.margenPrecioVenta or 0
+            'margenSobreprecio': 0,
+            'margenPrecioVenta': 0,
+            'sucursal_id': sucursal_id,
+            'nota': 'Sin configuración previa'
         })
-    except EmpresaUser.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Configuración no encontrada'})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
 @require_POST
 @login_required
 def guardar_margenes_usuario(request):
+    """Guarda los márgenes del usuario para la sucursal actual"""
     empresa_id = request.session.get('idEmpresaActual')
     sucursal_id = request.session.get('idSucursalActual')
+    
     try:
-        eu = EmpresaUser.objects.get(
+        margenSobreprecio = int(request.POST.get('margenSobreprecio', 0))
+        margenPrecioVenta = int(request.POST.get('margenPrecioVenta', 0))
+        
+        # Buscar o crear registro para esta sucursal específica
+        eu, created = EmpresaUser.objects.get_or_create(
             user=request.user,
             empresa_id=empresa_id,
             sucursal_id=sucursal_id,
-            status=True
+            defaults={
+                'status': True,
+                'active': False,
+                'margenSobreprecio': margenSobreprecio,
+                'margenPrecioVenta': margenPrecioVenta
+            }
         )
-
-        margenSobreprecio = int(request.POST.get('margenSobreprecio', 0))
-        margenPrecioVenta = int(request.POST.get('margenPrecioVenta', 0))
-
-        eu.margenSobreprecio = margenSobreprecio
-        eu.margenPrecioVenta = margenPrecioVenta
-        eu.save()
-
-        return JsonResponse({'success': True})
-    except EmpresaUser.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Configuración no encontrada'})
+        
+        if not created:
+            # Si ya existía, actualizar los márgenes
+            eu.margenSobreprecio = margenSobreprecio
+            eu.margenPrecioVenta = margenPrecioVenta
+            eu.save()
+        
+        sucursal_nombre = eu.sucursal.alias if eu.sucursal else 'Sin sucursal'
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Márgenes guardados para {sucursal_nombre}',
+            'sucursal_id': sucursal_id,
+            'sucursal_nombre': sucursal_nombre,
+            'created': created
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
   
 def ajustar_margenes(request):
@@ -7599,12 +7956,21 @@ def verificar_existencia_producto(request):
  
 @transaction.atomic
 def obtener_siguiente_sku():
+    """
+    Obtiene el siguiente SKU disponible verificando que no exista en la BD.
+    Usa select_for_update para evitar condiciones de carrera.
+    """
     parametro, creado = ParametroGlobal.objects.select_for_update().get_or_create(
         nombre='sku',
         defaults={'valor_entero': 100000}
     )
 
     siguiente = parametro.valor_entero + 1
+    
+    # Verificar que el SKU no exista ya en la base de datos
+    while Producto_Talla.objects.filter(sku=siguiente).exists():
+        siguiente += 1
+    
     parametro.valor_entero = siguiente
     parametro.save()
 
@@ -7612,97 +7978,571 @@ def obtener_siguiente_sku():
 @require_GET
 def obtener_siguiente_sku_view(request):
     try:
-        sku = obtener_siguiente_sku()  # 👈 esta es tu función interna que sí funciona
+        sku = obtener_siguiente_sku()
         return JsonResponse({'success': True, 'sku': sku})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_GET
+@transaction.atomic
+def obtener_multiples_skus_view(request):
+    """
+    Genera múltiples SKUs verificados de una vez.
+    Uso: /app/obtener_multiples_skus/?cantidad=5
+    """
+    try:
+        cantidad = int(request.GET.get('cantidad', 1))
+        if cantidad < 1 or cantidad > 100:
+            return JsonResponse({'success': False, 'error': 'Cantidad debe ser entre 1 y 100'}, status=400)
+        
+        skus = []
+        for _ in range(cantidad):
+            sku = obtener_siguiente_sku()
+            skus.append(sku)
+        
+        return JsonResponse({'success': True, 'skus': skus})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ========== CONFIGURACIÓN DE SKU ==========
+
+@login_required
+@require_GET
+def obtener_configuracion_sku(request):
+    """
+    Obtiene la configuración actual del SKU secuencial
+    NOTA: Solo considera SKUs secuenciales (< 10 millones)
+          Los SKUs mayores son códigos de barras/EAN y no se cuentan
+    """
+    try:
+        # Umbral para diferenciar SKUs secuenciales de códigos de barras
+        UMBRAL_SKU_SECUENCIAL = 10000000  # 10 millones
+        
+        parametro, created = ParametroGlobal.objects.get_or_create(
+            nombre='sku',
+            defaults={'valor_entero': 100000}
+        )
+        
+        # Obtener el SKU máximo SECUENCIAL (ignorar códigos de barras)
+        max_sku_db = Producto_Talla.objects.filter(
+            sku__lt=UMBRAL_SKU_SECUENCIAL
+        ).aggregate(m=Max('sku'))['m'] or 0
+        
+        return JsonResponse({
+            'success': True,
+            'configuracion': {
+                'valor_actual': parametro.valor_entero,
+                'max_sku_en_db': max_sku_db,
+                'siguiente_sku': max(parametro.valor_entero, max_sku_db) + 1,
+                'fecha_actualizacion': parametro.fecha_actualizacion.strftime('%d/%m/%Y %H:%M') if parametro.fecha_actualizacion else None
+            }
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def actualizar_configuracion_sku(request):
+    """
+    Actualiza el valor inicial del SKU secuencial
+    Permite valores menores al máximo si hay al menos 4 millones de espacio
+    """
+    try:
+        # Umbral para diferenciar SKUs secuenciales de códigos de barras
+        UMBRAL_SKU_SECUENCIAL = 10000000  # 10 millones
+        MARGEN_SEGURIDAD = 4000000  # 4 millones de SKUs de margen
+        
+        data = json.loads(request.body)
+        nuevo_valor = int(data.get('valor', 0))
+        
+        if nuevo_valor <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'El valor debe ser mayor a 0'
+            }, status=400)
+        
+        # Obtener el SKU máximo SECUENCIAL (ignorar códigos de barras)
+        max_sku_db = Producto_Talla.objects.filter(
+            sku__lt=UMBRAL_SKU_SECUENCIAL
+        ).aggregate(m=Max('sku'))['m'] or 0
+        
+        # Validación: Si el nuevo valor es menor al máximo, debe haber 4M de margen
+        if nuevo_valor < max_sku_db:
+            espacio_disponible = max_sku_db - nuevo_valor
+            if espacio_disponible < MARGEN_SEGURIDAD:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Valor muy cercano al máximo existente ({max_sku_db}). Necesita al menos {MARGEN_SEGURIDAD:,} de margen. Disponible: {espacio_disponible:,}'
+                }, status=400)
+        
+        # Actualizar parámetro
+        parametro, created = ParametroGlobal.objects.get_or_create(
+            nombre='sku',
+            defaults={'valor_entero': nuevo_valor}
+        )
+        
+        valor_anterior = parametro.valor_entero
+        parametro.valor_entero = nuevo_valor
+        parametro.save()
+        
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'SKU actualizado de {valor_anterior} a {nuevo_valor}',
+            'configuracion': {
+                'valor_anterior': valor_anterior,
+                'valor_nuevo': nuevo_valor,
+                'siguiente_sku': nuevo_valor + 1
+            }
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Datos JSON inválidos'
+        }, status=400)
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'error': 'El valor debe ser un número entero válido'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+@require_GET
+def buscar_productos_por_articulo(request):
+    """
+    Busca TODOS los productos que coincidan con un artículo (diferentes colores, marcas, etc.)
+    Útil para mostrar variantes disponibles al usuario
+    """
+    articulo = request.GET.get('articulo', '').strip()
+    sucursal_id = request.session.get('idSucursalActual')
+    
+    if not articulo:
+        return JsonResponse({'productos': []})
+    
+    # Buscar todos los productos con este artículo en la sucursal
+    filtros = {'articulo__iexact': articulo}
+    if sucursal_id:
+        filtros['sucursal_id'] = sucursal_id
+    
+    productos = Producto.objects.filter(**filtros).select_related(
+        'atributo1', 'atributo2', 'atributo3', 'categoria'
+    ).prefetch_related('producto_tallas')[:20]
+    
+    resultado = []
+    for p in productos:
+        tallas = list(p.producto_tallas.values('talla', 'sku', 'stock'))
+        stock_total = sum(t.get('stock', 0) for t in tallas)
+        
+        resultado.append({
+            'id': p.id,
+            'articulo': p.articulo,
+            'descripcion': p.descripcion,
+            'marca': p.atributo1.valor if p.atributo1 else '-',
+            'marca_id': p.atributo1_id,
+            'color': p.atributo2.valor if p.atributo2 else '-',
+            'color_id': p.atributo2_id,
+            'genero': p.atributo3.valor if p.atributo3 else '-',
+            'genero_id': p.atributo3_id,
+            'categoria': p.categoria.nombre if p.categoria else '-',
+            'categoria_id': p.categoria_id,
+            'costo': int(p.costo or 0),
+            'sobreprecio': int(p.sobreprecio or 0),
+            'precioventa': int(p.precioventa or 0),
+            'stock_total': stock_total,
+            'tallas': tallas,
+            'tallas_str': ', '.join([t['talla'] for t in tallas])
+        })
+    
+    return JsonResponse({'productos': resultado, 'total': len(resultado)})
+
  
 def verificar_producto_existente(request):
     articulo = request.GET.get('articulo')
     marca = request.GET.get('marca')
     color = request.GET.get('color')
     genero = request.GET.get('genero')
-    categoria = request.GET.get('categoria')  # 🔧 AGREGADA CATEGORÍA
+    categoria = request.GET.get('categoria')
+    sku_base = request.GET.get('sku_base')  # SKU base del producto de compra
+
+    # ✅ OBTENER SUCURSAL ACTIVA DEL USUARIO
+    sucursal_id = request.session.get('idSucursalActual')
+    if not sucursal_id:
+        # Intentar obtener de EmpresaUser
+        try:
+            empresa_user = EmpresaUser.objects.filter(user=request.user, active=True).first()
+            if empresa_user and empresa_user.sucursal:
+                sucursal_id = empresa_user.sucursal.id
+        except:
+            pass
 
     # Convertir a enteros si son números, o buscar por valor si son texto
     filtros = {'articulo': articulo}
     
-    if marca:
+    # ✅ FILTRAR POR SUCURSAL ACTIVA
+    if sucursal_id:
+        filtros['sucursal_id'] = sucursal_id
+    
+    # ========== FUNCIÓN PARA BUSCAR ATRIBUTO CASE-INSENSITIVE ==========
+    def buscar_atributo_flexible(valor, tipo_atributo=None):
+        """Busca atributo por valor ignorando mayúsculas/minúsculas"""
+        if not valor:
+            return None
         try:
-            # Si es un número, usar como ID
-            marca_id = int(marca)
-            filtros['atributo1_id'] = marca_id
+            # Primero intentar como ID
+            attr_id = int(valor)
+            return attr_id
         except (ValueError, TypeError):
-            # Si es texto, buscar por valor
+            # Buscar por valor case-insensitive
             try:
-                marca_obj = AtributoOpcion.objects.get(valor=marca)
-                filtros['atributo1_id'] = marca_obj.id
+                # Buscar el atributo que más se usa con ese valor (para evitar duplicados)
+                attr_obj = AtributoOpcion.objects.filter(valor__iexact=valor).first()
+                if attr_obj:
+                    return attr_obj.id
             except AtributoOpcion.DoesNotExist:
-                return JsonResponse({
-                    'existe': False,
-                    'tallas_existentes': []
-                })
+                pass
+        return None
+    
+    if marca:
+        marca_id = buscar_atributo_flexible(marca)
+        if marca_id:
+            filtros['atributo1_id'] = marca_id
     
     if color:
-        try:
-            color_id = int(color)
+        color_id = buscar_atributo_flexible(color)
+        if color_id:
             filtros['atributo2_id'] = color_id
-        except (ValueError, TypeError):
-            try:
-                color_obj = AtributoOpcion.objects.get(valor=color)
-                filtros['atributo2_id'] = color_obj.id
-            except AtributoOpcion.DoesNotExist:
-                return JsonResponse({
-                    'existe': False,
-                    'tallas_existentes': []
-                })
     
     if genero:
-        try:
-            genero_id = int(genero)
+        genero_id = buscar_atributo_flexible(genero)
+        if genero_id:
             filtros['atributo3_id'] = genero_id
-        except (ValueError, TypeError):
-            try:
-                genero_obj = AtributoOpcion.objects.get(valor=genero)
-                filtros['atributo3_id'] = genero_obj.id
-            except AtributoOpcion.DoesNotExist:
-                return JsonResponse({
-                    'existe': False,
-                    'tallas_existentes': []
-                })
     
-    # 🔧 MANEJAR CATEGORÍA
     if categoria:
         try:
             categoria_id = int(categoria)
             filtros['categoria_id'] = categoria_id
         except (ValueError, TypeError):
-            # Si es texto, buscar por nombre
             try:
                 from .models import Categoria
                 categoria_obj = Categoria.objects.get(nombre=categoria)
                 filtros['categoria_id'] = categoria_obj.id
             except Categoria.DoesNotExist:
-                return JsonResponse({
-                    'existe': False,
-                    'tallas_existentes': []
-                })
+                pass
 
+    # Buscar producto con los filtros exactos (en la sucursal activa)
     producto = Producto.objects.filter(**filtros).first()
+    
+    # ========== BÚSQUEDA FLEXIBLE SI NO ENCUENTRA EXACTO ==========
+    if not producto and articulo:
+        # Obtener valores de atributos para comparación case-insensitive
+        def get_valor_attr(attr_valor):
+            if not attr_valor:
+                return None
+            try:
+                attr_id = int(attr_valor)
+                attr_obj = AtributoOpcion.objects.filter(id=attr_id).first()
+                return attr_obj.valor.upper() if attr_obj else None
+            except (ValueError, TypeError):
+                return str(attr_valor).upper()
+        
+        valor_marca = get_valor_attr(marca)
+        valor_color = get_valor_attr(color)
+        valor_genero = get_valor_attr(genero)
+        
+        # Obtener categoría ID para comparación
+        categoria_id_filtro = None
+        if categoria:
+            try:
+                categoria_id_filtro = int(categoria)
+            except (ValueError, TypeError):
+                try:
+                    from .models import Categoria as CategoriaModel
+                    cat_obj = CategoriaModel.objects.filter(nombre=categoria).first()
+                    categoria_id_filtro = cat_obj.id if cat_obj else None
+                except:
+                    pass
+        
+        # Buscar productos con el mismo artículo en la sucursal
+        filtros_candidatos = {'articulo': articulo}
+        if sucursal_id:
+            filtros_candidatos['sucursal_id'] = sucursal_id
+        # ✅ INCLUIR CATEGORÍA EN LA BÚSQUEDA FLEXIBLE
+        if categoria_id_filtro:
+            filtros_candidatos['categoria_id'] = categoria_id_filtro
+            
+        productos_candidatos = Producto.objects.filter(
+            **filtros_candidatos
+        ).select_related('atributo1', 'atributo2', 'atributo3')
+        
+        for prod in productos_candidatos:
+            # Comparar atributos case-insensitive
+            match_marca = (not valor_marca) or \
+                         (prod.atributo1 and prod.atributo1.valor.upper() == valor_marca)
+            match_color = (not valor_color) or \
+                         (prod.atributo2 and prod.atributo2.valor.upper() == valor_color)
+            match_genero = (not valor_genero) or \
+                          (prod.atributo3 and prod.atributo3.valor.upper() == valor_genero)
+            
+            if match_marca and match_color and match_genero:
+                producto = prod
+                print(f"✅ Producto encontrado con atributos equivalentes (case-insensitive): {prod.articulo}")
+                break
+    
+    # 🔍 BUSCAR PRODUCTOS SIMILARES POR SKU (solo en sucursal activa)
+    productos_similares_sku = []
+    if sku_base and sku_base.strip():
+        filtro_sku = {'sku__icontains': sku_base.strip()}
+        if sucursal_id:
+            filtro_sku['producto__sucursal_id'] = sucursal_id
+            
+        tallas_similares = Producto_Talla.objects.filter(
+            **filtro_sku
+        ).select_related(
+            'producto', 'producto__atributo1', 'producto__atributo2', 
+            'producto__atributo3', 'producto__categoria'
+        ).distinct()[:20]
+        
+        productos_ids_vistos = set()
+        for talla in tallas_similares:
+            if talla.producto_id not in productos_ids_vistos:
+                productos_ids_vistos.add(talla.producto_id)
+                p = talla.producto
+                # Obtener tallas del producto
+                tallas_producto = list(Producto_Talla.objects.filter(producto=p).values_list('talla', flat=True))
+                productos_similares_sku.append({
+                    'id': p.id,
+                    'articulo': p.articulo,
+                    'marca': p.atributo1.valor if p.atributo1 else '-',
+                    'marca_id': p.atributo1_id,
+                    'color': p.atributo2.valor if p.atributo2 else '-',
+                    'color_id': p.atributo2_id,
+                    'genero': p.atributo3.valor if p.atributo3 else '-',
+                    'genero_id': p.atributo3_id,
+                    'categoria': p.categoria.nombre if p.categoria else '-',
+                    'categoria_id': p.categoria_id,
+                    'precioventa': float(p.precioventa) if p.precioventa else None,
+                    'costo': float(p.costo) if p.costo else None,
+                    'tallas': ', '.join(tallas_producto) if tallas_producto else '-',
+                    'sku_ejemplo': talla.sku
+                })
+    
+    # 🔍 BUSCAR PRODUCTOS SIMILARES POR NOMBRE (solo en sucursal activa)
+    productos_similares_nombre = []
+    if articulo and articulo.strip():
+        filtro_nombre = {'articulo__icontains': articulo.strip()}
+        if sucursal_id:
+            filtro_nombre['sucursal_id'] = sucursal_id
+            
+        productos_nombre = Producto.objects.filter(
+            **filtro_nombre
+        ).select_related(
+            'atributo1', 'atributo2', 'atributo3', 'categoria'
+        ).exclude(id=producto.id if producto else 0)[:10]
+        
+        for p in productos_nombre:
+            primera_talla = Producto_Talla.objects.filter(producto=p).first()
+            tallas_producto = list(Producto_Talla.objects.filter(producto=p).values_list('talla', flat=True))
+            productos_similares_nombre.append({
+                'id': p.id,
+                'articulo': p.articulo,
+                'marca': p.atributo1.valor if p.atributo1 else '-',
+                'marca_id': p.atributo1_id,
+                'color': p.atributo2.valor if p.atributo2 else '-',
+                'color_id': p.atributo2_id,
+                'genero': p.atributo3.valor if p.atributo3 else '-',
+                'genero_id': p.atributo3_id,
+                'categoria': p.categoria.nombre if p.categoria else '-',
+                'categoria_id': p.categoria_id,
+                'precioventa': float(p.precioventa) if p.precioventa else None,
+                'costo': float(p.costo) if p.costo else None,
+                'tallas': ', '.join(tallas_producto) if tallas_producto else '-',
+                'sku_ejemplo': primera_talla.sku if primera_talla else '-'
+            })
     
     if producto:
         # Obtener las tallas existentes con sus SKUs
         tallas_existentes = Producto_Talla.objects.filter(producto=producto).values('talla', 'sku', 'stock')
+        tallas_lista = list(Producto_Talla.objects.filter(producto=producto).values_list('talla', flat=True))
+        
+        # ========== NORMALIZACIÓN DE TALLAS PARA COMPARACIÓN FLEXIBLE ==========
+        def normalizar_talla_verificacion(talla_str):
+            """Normaliza una talla para comparación (7 = 7.0 = 7,0)"""
+            if not talla_str:
+                return None
+            talla_str = str(talla_str).strip().replace(',', '.')
+            try:
+                valor = float(talla_str)
+                if valor == int(valor):
+                    return f"{int(valor)}.0"
+                return f"{valor:.1f}"
+            except (ValueError, TypeError):
+                return talla_str.upper()
+        
+        # Crear mapa de tallas normalizadas para que el frontend pueda comparar
+        tallas_normalizadas_map = {}
+        for talla in tallas_lista:
+            talla_norm = normalizar_talla_verificacion(talla)
+            if talla_norm:
+                tallas_normalizadas_map[talla_norm] = talla
+                # También agregar variantes comunes
+                try:
+                    valor = float(talla.replace(',', '.'))
+                    if valor == int(valor):
+                        # Para enteros, agregar sin decimal
+                        tallas_normalizadas_map[str(int(valor))] = talla
+                except (ValueError, TypeError):
+                    pass
+        # ==========================================================================
+        
+        # ✅ Incluir info del producto encontrado (incluyendo precios para comparación)
+        producto_encontrado = {
+            'id': producto.id,
+            'articulo': producto.articulo,
+            'descripcion': producto.descripcion,
+            'marca': producto.atributo1.valor if producto.atributo1 else '-',
+            'marca_id': producto.atributo1_id,  # ✅ ID para seleccionar en el form
+            'color': producto.atributo2.valor if producto.atributo2 else '-',
+            'color_id': producto.atributo2_id,  # ✅ ID para seleccionar en el form
+            'genero': producto.atributo3.valor if producto.atributo3 else '-',
+            'genero_id': producto.atributo3_id,  # ✅ ID para seleccionar en el form
+            'categoria': producto.categoria.nombre if producto.categoria else '-',
+            'categoria_id': producto.categoria_id,  # ✅ ID para seleccionar en el form
+            'tallas': ', '.join(tallas_lista) if tallas_lista else '-',
+            'total_tallas': len(tallas_lista),
+            # ✅ Agregar precios para comparación en frontend
+            'costo': int(producto.costo or 0),
+            'sobreprecio': int(producto.sobreprecio or 0),
+            'precioventa': int(producto.precioventa or 0),
+            'stock_total': sum(t.get('stock', 0) for t in tallas_existentes)
+        }
+        
+        # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES ==========
+        productos_otras_sucursales = []
+        try:
+            # Buscar productos con mismo artículo y atributos en OTRAS sucursales
+            filtros_otras = {
+                'articulo': articulo,
+            }
+            if producto.atributo1_id:
+                filtros_otras['atributo1_id'] = producto.atributo1_id
+            if producto.atributo2_id:
+                filtros_otras['atributo2_id'] = producto.atributo2_id
+            if producto.atributo3_id:
+                filtros_otras['atributo3_id'] = producto.atributo3_id
+            if producto.categoria_id:
+                filtros_otras['categoria_id'] = producto.categoria_id
+            
+            otros_productos = Producto.objects.filter(
+                **filtros_otras
+            ).exclude(
+                sucursal_id=sucursal_id  # Excluir sucursal actual
+            ).select_related('sucursal', 'atributo1', 'atributo2')
+            
+            for op in otros_productos:
+                productos_otras_sucursales.append({
+                    'sucursal_id': op.sucursal_id,
+                    'sucursal_nombre': op.sucursal.alias if op.sucursal else 'Sin sucursal',
+                    'precioventa': int(op.precioventa or 0),
+                    'costo': int(op.costo or 0),
+                    'sobreprecio': int(op.sobreprecio or 0),
+                    'precio_diferente': int(op.precioventa or 0) != int(producto.precioventa or 0),
+                    'marca': op.atributo1.valor if op.atributo1 else '-',
+                    'color': op.atributo2.valor if op.atributo2 else '-'
+                })
+            
+            if productos_otras_sucursales:
+                print(f"📊 Producto encontrado en {len(productos_otras_sucursales)} otras sucursales")
+        except Exception as e:
+            print(f"⚠️ Error buscando en otras sucursales: {e}")
+        # =========================================================
         
         return JsonResponse({
             'existe': True,
             'producto_id': producto.id,
-            'tallas_existentes': list(tallas_existentes)
+            'producto_encontrado': producto_encontrado,
+            'tallas_existentes': list(tallas_existentes),
+            'tallas_normalizadas_map': tallas_normalizadas_map,  # Mapa para comparación flexible
+            'productos_similares_sku': productos_similares_sku,
+            'productos_similares_nombre': productos_similares_nombre,
+            'productos_otras_sucursales': productos_otras_sucursales  # ✅ NUEVO: Precios en otras sucursales
         })
     else:
+        # ========== BUSCAR PRECIOS EN OTRAS SUCURSALES (para producto nuevo) ==========
+        productos_otras_sucursales = []
+        try:
+            print(f"🔍 Buscando en otras sucursales - Artículo: {articulo}, Marca: {marca}, Color: {color}, Género: {genero}")
+            
+            # Obtener IDs de atributos para la búsqueda
+            marca_id = buscar_atributo_flexible(marca) if marca else None
+            color_id = buscar_atributo_flexible(color) if color else None
+            genero_id = buscar_atributo_flexible(genero) if genero else None
+            
+            print(f"   IDs encontrados - Marca: {marca_id}, Color: {color_id}, Género: {genero_id}")
+            
+            # ✅ BÚSQUEDA MEJORADA: Primero buscar solo por artículo (más flexible)
+            if articulo:
+                # Búsqueda 1: Por artículo exacto (ignorando case)
+                otros_productos = Producto.objects.filter(
+                    articulo__iexact=articulo
+                ).select_related('sucursal', 'atributo1', 'atributo2', 'atributo3')
+                
+                # Si hay sucursal actual, excluirla
+                if sucursal_id:
+                    otros_productos = otros_productos.exclude(sucursal_id=sucursal_id)
+                
+                print(f"   Productos encontrados solo por artículo: {otros_productos.count()}")
+                
+                # Si hay muchos, filtrar por atributos
+                if otros_productos.count() > 10 and (marca_id or color_id):
+                    filtros_extras = Q()
+                    if marca_id:
+                        filtros_extras &= Q(atributo1_id=marca_id)
+                    if color_id:
+                        filtros_extras &= Q(atributo2_id=color_id)
+                    if genero_id:
+                        filtros_extras &= Q(atributo3_id=genero_id)
+                    otros_productos = otros_productos.filter(filtros_extras)
+                    print(f"   Productos después de filtrar por atributos: {otros_productos.count()}")
+                
+                for op in otros_productos:
+                    productos_otras_sucursales.append({
+                        'sucursal_id': op.sucursal_id,
+                        'sucursal_nombre': op.sucursal.alias if op.sucursal else 'Sin sucursal',
+                        'precioventa': int(op.precioventa or 0),
+                        'costo': int(op.costo or 0),
+                        'sobreprecio': int(op.sobreprecio or 0),
+                        'precio_diferente': True,  # Siempre diferente porque no existe local
+                        'marca': op.atributo1.valor if op.atributo1 else '-',
+                        'color': op.atributo2.valor if op.atributo2 else '-'
+                    })
+                
+                if productos_otras_sucursales:
+                    print(f"📊 Producto NO existe localmente, pero encontrado en {len(productos_otras_sucursales)} otras sucursales")
+                else:
+                    print(f"📭 Producto no encontrado en ninguna otra sucursal")
+        except Exception as e:
+            import traceback
+            print(f"⚠️ Error buscando en otras sucursales: {e}")
+            print(traceback.format_exc())
+        # =========================================================
+        
         return JsonResponse({
             'existe': False,
-            'tallas_existentes': []
+            'tallas_existentes': [],
+            'producto_encontrado': None,
+            'productos_similares_sku': productos_similares_sku,
+            'productos_similares_nombre': productos_similares_nombre,
+            'productos_otras_sucursales': productos_otras_sucursales  # ✅ NUEVO: Precios en otras sucursales
         })
 @transaction.atomic
 def crear_producto_desde_recepcion(request):
@@ -7728,57 +8568,345 @@ def crear_producto_desde_recepcion(request):
     tipo_talla = data.get('tipo_talla') or 'CL'
     guia_talla = data.get('guia_talla') or None
     producto_compra_id = data.get('producto_compra_id') or None
+    
+    # ========== DEBUG: Ver datos recibidos ==========
+    print(f"\n{'='*60}")
+    print(f"📥 DATOS RECIBIDOS EN crear_producto_desde_recepcion:")
+    print(f"   Artículo: {articulo}")
+    print(f"   Atributos: marca={atributo1}, color={atributo2}, genero={atributo3}")
+    print(f"   Categoría: {categoria}")
+    print(f"   Precios: costo={costo}, sobreprecio={sobreprecio}, precioventa={precioventa}")
+    print(f"   producto_compra_id: {producto_compra_id}")
+    print(f"   Sucursal: {sucursal_id}")
+    
+    # Ver tallas recibidas
+    tallas_recibidas = [(k, v) for k, v in data.items() if k.startswith('sku_') or k.startswith('stock_')]
+    print(f"   Tallas/SKUs recibidos: {tallas_recibidas}")
+    print(f"{'='*60}\n")
 
-    # 2. Crear el producto principal
-    producto = Producto.objects.create(
+    # ========== NORMALIZACIÓN DE ATRIBUTOS (case-insensitive) ==========
+    def buscar_atributo_normalizado(atributo_id, tipo_atributo=None):
+        """
+        Busca un atributo considerando mayúsculas/minúsculas.
+        Si el ID dado no existe o hay uno equivalente con diferente capitalización,
+        retorna el ID correcto.
+        """
+        if not atributo_id:
+            return None
+        
+        try:
+            # Primero verificar si el ID existe
+            atributo = AtributoOpcion.objects.get(id=atributo_id)
+            valor_original = atributo.valor
+            
+            # Buscar si hay un atributo equivalente (case-insensitive)
+            # Usar el primero que coincida
+            atributo_similar = AtributoOpcion.objects.filter(
+                atributo=atributo.atributo,
+                valor__iexact=valor_original
+            ).first()
+            
+            if atributo_similar:
+                return atributo_similar.id
+            
+            return atributo_id
+        except AtributoOpcion.DoesNotExist:
+            return atributo_id
+    
+    # Normalizar atributos para búsqueda flexible
+    atributo1_normalizado = buscar_atributo_normalizado(atributo1)
+    atributo2_normalizado = buscar_atributo_normalizado(atributo2)
+    atributo3_normalizado = buscar_atributo_normalizado(atributo3)
+
+    # ========== 2. BUSCAR SI PRODUCTO YA EXISTE EN ESTA SUCURSAL ==========
+    # Primero intentar búsqueda exacta
+    producto_existente = Producto.objects.filter(
         articulo=articulo,
-        descripcion=descripcion,
-        atributo1_id=atributo1,
-        atributo2_id=atributo2,
-        atributo3_id=atributo3,
-        atributo4_id=atributo4,
+        atributo1_id=atributo1_normalizado,
+        atributo2_id=atributo2_normalizado,
+        atributo3_id=atributo3_normalizado,
         categoria_id=categoria,
-        sucursal=sucursal,
-        costo=costo,
-        sobreprecio=sobreprecio,
-        precioventa=precioventa,
-        precioSugerido=precio_sugerido,
-        tipo_talla=tipo_talla,
-        guia_talla_id=guia_talla,
-    )
+        sucursal=sucursal
+    ).first()
+    
+    # Si no encuentra, buscar con atributos case-insensitive por valor
+    if not producto_existente:
+        from django.db.models import Q
+        
+        # Obtener valores de atributos para búsqueda flexible
+        def get_valor_atributo(attr_id):
+            if not attr_id:
+                return None
+            try:
+                return AtributoOpcion.objects.get(id=attr_id).valor
+            except AtributoOpcion.DoesNotExist:
+                return None
+        
+        valor_attr1 = get_valor_atributo(atributo1)
+        valor_attr2 = get_valor_atributo(atributo2)
+        valor_attr3 = get_valor_atributo(atributo3)
+        
+        # Buscar productos con el mismo artículo en la sucursal Y MISMA CATEGORÍA
+        filtros_flex = {'articulo': articulo, 'sucursal': sucursal}
+        if categoria:
+            filtros_flex['categoria_id'] = categoria
+            
+        productos_candidatos = Producto.objects.filter(
+            **filtros_flex
+        ).select_related('atributo1', 'atributo2', 'atributo3')
+        
+        for prod in productos_candidatos:
+            # Comparar atributos case-insensitive
+            match_attr1 = (not valor_attr1 and not prod.atributo1) or \
+                         (valor_attr1 and prod.atributo1 and prod.atributo1.valor.upper() == valor_attr1.upper())
+            match_attr2 = (not valor_attr2 and not prod.atributo2) or \
+                         (valor_attr2 and prod.atributo2 and prod.atributo2.valor.upper() == valor_attr2.upper())
+            match_attr3 = (not valor_attr3 and not prod.atributo3) or \
+                         (valor_attr3 and prod.atributo3 and prod.atributo3.valor.upper() == valor_attr3.upper())
+            
+            if match_attr1 and match_attr2 and match_attr3:
+                producto_existente = prod
+                print(f"✅ Producto encontrado con atributos equivalentes (case-insensitive): {prod.articulo}")
+                break
+    
+    producto_actualizado = False
+    precios_cambiaron = False
+    precio_anterior = 0
+    costo_anterior = 0
+    
+    if producto_existente:
+        # ✅ PRODUCTO EXISTE - Actualizar precios si cambiaron
+        producto = producto_existente
+        precio_anterior = producto.precioventa
+        costo_anterior = producto.costo
+        
+        print(f"🔍 DEBUG - Producto existente encontrado: {producto.articulo} (ID: {producto.id})")
+        print(f"   Precios BD: costo={producto.costo}, sobreprecio={producto.sobreprecio}, precioventa={producto.precioventa}")
+        print(f"   Precios nuevos: costo={costo}, sobreprecio={sobreprecio}, precioventa={precioventa}")
+        
+        # Verificar si los precios cambiaron (forzar comparación como int)
+        costo_db = int(producto.costo or 0)
+        sobreprecio_db = int(producto.sobreprecio or 0)
+        precioventa_db = int(producto.precioventa or 0)
+        
+        if costo_db != costo or sobreprecio_db != sobreprecio or precioventa_db != precioventa:
+            precios_cambiaron = True
+            print(f"✅ Precios cambiaron - Actualizando...")
+            
+            # Actualizar precios del producto
+            producto.costo = costo
+            producto.sobreprecio = sobreprecio
+            producto.precioventa = precioventa
+            producto.precioSugerido = precio_sugerido
+            producto.descripcion = descripcion  # También actualizar descripción
+            producto.save()
+            print(f"✅ Producto guardado con nuevos precios")
+            
+            # Registrar historial de cambio de precio
+            try:
+                from .models import HistorialCambioPrecio
+                diferencia = precioventa - precio_anterior
+                porcentaje = round((diferencia / precio_anterior * 100), 2) if precio_anterior else 0
+                HistorialCambioPrecio.objects.create(
+                    producto=producto,
+                    precio_anterior=precio_anterior,
+                    precio_nuevo=precioventa,
+                    diferencia=diferencia,
+                    porcentaje_cambio=porcentaje,
+                    tipo_cambio='ACTUALIZACION_RECEPCION',
+                    motivo=f'Actualización desde recepción de compra en {sucursal.alias}',
+                    usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+            except Exception as e:
+                print(f"⚠️ Error registrando historial de precio: {e}")
+            
+            # Actualizar lotes FIFO activos con el nuevo precio
+            LoteProducto.objects.filter(
+                producto_talla__producto=producto,
+                cantidad_disponible__gt=0,
+                activo=True
+            ).update(
+                precio_venta_unitario=precioventa,
+                costo_unitario=costo,
+                sobreprecio_unitario=sobreprecio
+            )
+            
+            producto_actualizado = True
+            print(f"📝 Producto existente actualizado: {articulo} - Precio: {precio_anterior} → {precioventa}")
+        else:
+            print(f"📌 Producto existente sin cambios de precio: {articulo}")
+    else:
+        # 🆕 PRODUCTO NO EXISTE - Crear nuevo
+        producto = Producto.objects.create(
+            articulo=articulo,
+            descripcion=descripcion,
+            atributo1_id=atributo1,
+            atributo2_id=atributo2,
+            atributo3_id=atributo3,
+            atributo4_id=atributo4,
+            categoria_id=categoria,
+            sucursal=sucursal,
+            costo=costo,
+            sobreprecio=sobreprecio,
+            precioventa=precioventa,
+            precioSugerido=precio_sugerido,
+            tipo_talla=tipo_talla,
+            guia_talla_id=guia_talla,
+        )
+        print(f"🆕 Producto nuevo creado: {articulo}")
 
-    # 3. Crear variantes (tallas)
+    # 3. Crear o reutilizar variantes (tallas)
     tallas = []
+    tallas_nuevas = 0
+    tallas_existentes = 0
+    
+    # ========== FUNCIÓN DE NORMALIZACIÓN DE TALLAS ==========
+    def normalizar_talla(talla_str):
+        """
+        Normaliza una talla para comparación flexible.
+        Convierte diferentes formatos al mismo estándar:
+        - '7' → '7.0'
+        - '7,0' → '7.0'
+        - '7.0' → '7.0'
+        - '10' → '10.0'
+        - '6,5' → '6.5'
+        Retorna None si no es numérica (ej: 'S', 'M', 'L')
+        """
+        if not talla_str:
+            return None
+        talla_str = str(talla_str).strip()
+        # Reemplazar coma por punto
+        talla_str = talla_str.replace(',', '.')
+        try:
+            valor = float(talla_str)
+            # Formatear: si es entero mostrar con .0, si tiene decimal mantenerlo
+            if valor == int(valor):
+                return f"{int(valor)}.0"
+            else:
+                return f"{valor:.1f}"
+        except (ValueError, TypeError):
+            # No es numérica, retornar tal cual (ej: 'S', 'M', 'L', 'XL')
+            return talla_str.upper()
+    
+    def generar_variantes_talla(talla_str):
+        """
+        Genera todas las posibles variantes de formato de una talla.
+        Por ejemplo: '7' genera ['7', '7.0', '7,0']
+        """
+        variantes = [str(talla_str).strip()]
+        talla_str = str(talla_str).strip().replace(',', '.')
+        
+        try:
+            valor = float(talla_str)
+            # Agregar variante entera si aplica
+            if valor == int(valor):
+                variantes.append(str(int(valor)))  # '7'
+                variantes.append(f"{int(valor)}.0")  # '7.0'
+                variantes.append(f"{int(valor)},0")  # '7,0'
+            else:
+                # Talla con decimal (ej: 7.5)
+                variantes.append(f"{valor:.1f}")  # '7.5'
+                variantes.append(f"{valor:.1f}".replace('.', ','))  # '7,5'
+        except (ValueError, TypeError):
+            pass
+        
+        return list(set(variantes))  # Eliminar duplicados
+    
+    def buscar_talla_existente(producto, talla_buscar):
+        """
+        Busca una talla existente considerando diferentes formatos.
+        Retorna el Producto_Talla si existe, None si no.
+        """
+        variantes = generar_variantes_talla(talla_buscar)
+        
+        # Buscar con cualquiera de las variantes
+        for variante in variantes:
+            pt = Producto_Talla.objects.filter(producto=producto, talla=variante).first()
+            if pt:
+                return pt
+        
+        # Si no encontró exacta, buscar por normalización
+        talla_normalizada = normalizar_talla(talla_buscar)
+        if talla_normalizada:
+            for pt in Producto_Talla.objects.filter(producto=producto):
+                if normalizar_talla(pt.talla) == talla_normalizada:
+                    return pt
+        
+        return None
+    # ========== FIN FUNCIONES DE NORMALIZACIÓN ==========
+    
     for key in data:
         if key.startswith('sku_'):
             talla = key.replace('sku_', '')
             sku = int(data[key])
             stock = int(data.get(f'stock_{talla}', 0))
-            pt = Producto_Talla.objects.create(
-                producto=producto,
-                sku=sku,
-                stock=stock,
-                talla=talla,
-            )
+            
+            # Verificar si la talla ya existe para este producto (con normalización)
+            pt_existente = buscar_talla_existente(producto, talla)
+            
+            if pt_existente:
+                # ✅ Talla existe - reutilizar (el movimiento sumará stock)
+                pt = pt_existente
+                tallas_existentes += 1
+                print(f"📌 Talla existente reutilizada: '{talla}' coincide con '{pt.talla}' (SKU: {pt.sku})")
+            else:
+                # 🆕 Talla nueva - crear con stock=0
+                # Normalizar la talla antes de guardar para consistencia
+                talla_guardar = talla
+                talla_norm = normalizar_talla(talla)
+                if talla_norm and talla_norm != talla:
+                    # Si es numérica, guardar en formato normalizado
+                    talla_guardar = talla_norm
+                
+                # ✅ VERIFICAR QUE EL SKU NO EXISTA - si existe, generar uno nuevo
+                sku_final = sku
+                if Producto_Talla.objects.filter(sku=sku).exists():
+                    # SKU ya existe (posiblemente otro usuario lo usó mientras tanto)
+                    # Generar uno nuevo verificado
+                    sku_final = obtener_siguiente_sku()
+                    print(f"⚠️ SKU {sku} ya existía, usando nuevo: {sku_final}")
+                
+                pt = Producto_Talla.objects.create(
+                    producto=producto,
+                    sku=sku_final,
+                    stock=0,  # Iniciar en 0, el movimiento sumará el stock
+                    talla=talla_guardar,
+                )
+                tallas_nuevas += 1
+                print(f"🆕 Talla nueva creada: {talla_guardar} (SKU: {sku_final})")
+            
             tallas.append((pt, stock, talla))
 
     # 4. Registrar movimiento de ingreso y CREAR LOTES FIFO para cada variante
     # IMPORTANTE: Crear un lote por cada DTE diferente para mantener trazabilidad
+    print(f"\n📦 TALLAS A PROCESAR: {len(tallas)}")
     for pt, stock, talla in tallas:
+        print(f"   Talla: {talla}, Stock a ingresar: {stock}, PT ID: {pt.id}, Stock actual PT: {pt.stock}")
         if producto_compra_id:
+            # Generar variantes de la talla para búsqueda flexible
+            variantes_talla = generar_variantes_talla(talla)
+            
             # Obtener TODAS las recepciones de esta talla agrupadas por DTE
+            # Usar __in para buscar todas las variantes de formato
             recepciones = Productos_Recepcionados.objects.filter(
                 compra_producto_talla__compra_producto_id=producto_compra_id,
-                compra_producto_talla__talla=talla,
+                compra_producto_talla__talla__in=variantes_talla,
                 producto_talla__isnull=True  # Solo las no procesadas
             ).values('dte_id').annotate(
                 cantidad=Sum('stockArribado')
             )
             
-            if recepciones:
-                for recepcion_grupo in recepciones:
+            # Convertir a lista para poder iterar múltiples veces
+            recepciones_list = list(recepciones)
+            print(f"   🔍 Buscando recepciones para talla '{talla}' con variantes: {variantes_talla}")
+            print(f"      Recepciones encontradas: {len(recepciones_list)}")
+            
+            if recepciones_list:
+                for recepcion_grupo in recepciones_list:
                     dte_id = recepcion_grupo['dte_id']
                     cantidad_dte = recepcion_grupo['cantidad']
+                    print(f"      ✅ Recepción encontrada: DTE={dte_id}, cantidad={cantidad_dte}")
                     
                     dte = None
                     if dte_id:
@@ -7787,40 +8915,25 @@ def crear_producto_desde_recepcion(request):
                         except Dte.DoesNotExist:
                             pass
                     
-                    # CREAR LOTE FIFO para este DTE
-                    crear_lote_producto(
-                        producto_talla=pt,
-                        cantidad=cantidad_dte,
-                        costo_unitario=costo,
-                        sobreprecio_unitario=sobreprecio,
-                        precio_venta_unitario=precioventa,
-                        dte=dte,
-                        observaciones=f'Lote inicial - {producto.articulo} Talla {talla}' + (f' - DTE: {dte.numero_documento}' if dte else '') + f' - Responsable: {usuario}'
-                    )
-                    
                     # Registrar movimiento con la cantidad específica de este DTE
+                    # ✅ crear_lote_fifo=True (el movimiento crea el lote automáticamente)
+                    ref_externa = f'{dte.tipo_documento} #{dte.numero_documento}' if dte else None
                     registrar_movimiento_producto(
                         producto_talla=pt,
                         concepto='INGRESO_INICIAL',
                         cantidad=cantidad_dte,
                         responsable=usuario,
-                        dte=dte,  # Asociar el DTE específico al movimiento
+                        dte=dte,
                         sucursal_origen=sucursal,
                         sucursal_destino=sucursal,
-                        observaciones=f'Ingreso inicial de producto {producto.articulo} - Talla {talla}' + (f' - DTE: {dte.numero_documento}' if dte else '')
+                        observaciones=f'Ingreso inicial - {producto.articulo} Talla {talla}' + (f' - DTE: {dte.numero_documento}' if dte else ''),
+                        referencia_externa=ref_externa,
+                        crear_lote_fifo=True
                     )
+                    print(f"      📝 Movimiento registrado con cantidad: {cantidad_dte}")
             else:
-                # Si no hay recepciones pendientes, crear lote y movimiento sin DTE
-                crear_lote_producto(
-                    producto_talla=pt,
-                    cantidad=stock,
-                    costo_unitario=costo,
-                    sobreprecio_unitario=sobreprecio,
-                    precio_venta_unitario=precioventa,
-                    dte=None,
-                    observaciones=f'Lote inicial - {producto.articulo} Talla {talla} - Responsable: {usuario}'
-                )
-                
+                # Si no hay recepciones pendientes, crear movimiento sin DTE
+                print(f"      ⚠️ No hay recepciones pendientes, usando stock del formulario: {stock}")
                 registrar_movimiento_producto(
                     producto_talla=pt,
                     concepto='INGRESO_INICIAL',
@@ -7829,21 +8942,12 @@ def crear_producto_desde_recepcion(request):
                     dte=None,
                     sucursal_origen=sucursal,
                     sucursal_destino=sucursal,
-                    observaciones=f'Ingreso inicial de producto {producto.articulo} - Talla {talla}'
+                    observaciones=f'Ingreso inicial - {producto.articulo} Talla {talla}',
+                    referencia_externa='CREACION_PRODUCTO',
+                    crear_lote_fifo=True
                 )
         else:
-            # Sin producto_compra_id, crear lote y movimiento sin DTE
-            crear_lote_producto(
-                producto_talla=pt,
-                cantidad=stock,
-                costo_unitario=costo,
-                sobreprecio_unitario=sobreprecio,
-                precio_venta_unitario=precioventa,
-                dte=None,
-                responsable=usuario,
-                observaciones=f'Lote inicial - {producto.articulo} Talla {talla}'
-            )
-            
+            # Sin producto_compra_id, crear movimiento sin DTE
             registrar_movimiento_producto(
                 producto_talla=pt,
                 concepto='INGRESO_INICIAL',
@@ -7852,7 +8956,9 @@ def crear_producto_desde_recepcion(request):
                 dte=None,
                 sucursal_origen=sucursal,
                 sucursal_destino=sucursal,
-                observaciones=f'Ingreso inicial de producto {producto.articulo} - Talla {talla}'
+                observaciones=f'Ingreso inicial - {producto.articulo} Talla {talla}',
+                referencia_externa='CREACION_MANUAL',
+                crear_lote_fifo=True
             )
 
     # 5. Actualizar tabla de recepción de productos
@@ -7863,26 +8969,42 @@ def crear_producto_desde_recepcion(request):
                 compra_producto_talla__talla=talla
             ).update(producto_talla=pt)
 
-    # ========== 6. SINCRONIZAR PRECIOS EN OTRAS SUCURSALES ==========
+    # ========== 6. SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
+    # Sincroniza automáticamente Y crea alertas para que las sucursales revisen el cambio
     productos_sincronizados = 0
     sucursales_afectadas = []
+    notificaciones_creadas = 0
     
     try:
-        from .models import HistorialCambioPrecio
+        from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser
+        from datetime import timedelta
         
-        # Buscar productos similares en otras sucursales
+        # Buscar productos similares en TODAS las sucursales (para sincronizar precios)
         productos_similares = Producto.objects.filter(
             articulo=articulo,
             atributo1_id=atributo1,
             atributo2_id=atributo2
-        ).exclude(sucursal=sucursal)
+        ).exclude(
+            sucursal=sucursal  # Excluir la sucursal donde se crea
+        ).annotate(
+            stock_total=Sum('producto_talla__stock')
+        ).select_related('sucursal')
+        
+        print(f"🔍 Buscando productos similares a '{articulo}' en otras sucursales: {productos_similares.count()} encontrados")
         
         if productos_similares.exists():
             for prod_similar in productos_similares:
-                precio_anterior = prod_similar.precioventa
-                costo_anterior = prod_similar.costo
+                precio_anterior = int(prod_similar.precioventa or 0)
+                stock_sucursal = prod_similar.stock_total or 0
                 
-                # Actualizar precios
+                print(f"   📦 {prod_similar.sucursal.alias}: stock={stock_sucursal}, precio_actual=${precio_anterior:,}")
+                
+                # Solo procesar si hay diferencia de precio
+                if precio_anterior == precioventa:
+                    print(f"   ⏭️ {prod_similar.sucursal.alias}: mismo precio, saltando")
+                    continue
+                
+                # === SINCRONIZAR PRECIO ===
                 prod_similar.precioventa = precioventa
                 prod_similar.costo = costo
                 prod_similar.sobreprecio = sobreprecio
@@ -7895,34 +9017,120 @@ def crear_producto_desde_recepcion(request):
                     activo=True
                 ).update(precio_venta_unitario=precioventa)
                 
-                # Registrar en historial si hubo cambio de precio
-                if precio_anterior != precioventa:
-                    HistorialCambioPrecio.objects.create(
+                # Calcular diferencia
+                diferencia_sync = precioventa - precio_anterior
+                porcentaje_sync = round((diferencia_sync / precio_anterior * 100), 2) if precio_anterior else 0
+                
+                # Registrar en historial
+                HistorialCambioPrecio.objects.create(
+                    producto=prod_similar,
+                    precio_anterior=precio_anterior,
+                    precio_nuevo=precioventa,
+                    diferencia=diferencia_sync,
+                    porcentaje_cambio=porcentaje_sync,
+                    tipo_cambio='SINCRONIZACION',
+                    motivo=f'Sincronización automática desde creación de producto en {sucursal.alias}',
+                    usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+                
+                # === CREAR ALERTA Y NOTIFICACIONES (solo si tiene stock) ===
+                try:
+                    stock_actual = prod_similar.stock_total or 0
+                    primera_talla = Producto_Talla.objects.filter(
                         producto=prod_similar,
-                        precio_anterior=precio_anterior,
-                        precio_nuevo=precioventa,
-                        tipo_cambio='SINCRONIZACION',
-                        motivo=f'Sincronización automática desde creación de producto en {sucursal.alias}',
-                        usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
+                        stock__gt=0
+                    ).first()
+                    
+                    if not primera_talla:
+                        # No hay stock, precio actualizado pero sin alerta
+                        print(f"   💤 {prod_similar.sucursal.alias}: Precio actualizado (sin alerta - stock=0)")
+                    
+                    if primera_talla:
+                        # Determinar prioridad según la diferencia
+                        prioridad = 'MEDIA'
+                        if abs(porcentaje_sync) > 20:
+                            prioridad = 'ALTA'
+                        if abs(porcentaje_sync) > 50:
+                            prioridad = 'URGENTE'
+                        
+                        # Crear cambio con estado PENDIENTE para que revisen
+                        cambio = CambioPrecioPendiente.objects.create(
+                            producto_talla=primera_talla,
+                            sucursal=prod_similar.sucursal,
+                            precio_anterior=precio_anterior,
+                            precio_nuevo=precioventa,
+                            diferencia=diferencia_sync,
+                            porcentaje_cambio=porcentaje_sync,
+                            tipo_cambio='SINCRONIZACION',
+                            estado='APLICADO',  # APLICADO porque ya se sincronizó
+                            motivo=f'Precio sincronizado automáticamente desde {sucursal.alias}',
+                            creado_por=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
+                            prioridad=prioridad,
+                            fecha_vencimiento=timezone.now() + timedelta(days=7),
+                            notificado=True
+                        )
+                        
+                        # Crear notificaciones para usuarios de esa sucursal
+                        usuarios_sucursal = EmpresaUser.objects.filter(
+                            sucursal=prod_similar.sucursal,
+                            status=True
+                        ).select_related('user')
+                        
+                        mensaje_notif = (
+                            f"💰 Precio actualizado en {articulo}: "
+                            f"${precio_anterior:,} → ${precioventa:,} "
+                            f"(desde {sucursal.alias})"
+                        )
+                        
+                        for empresa_user in usuarios_sucursal:
+                            NotificacionCambioPrecio.objects.create(
+                                cambio_precio=cambio,
+                                usuario=empresa_user.user,
+                                tipo='NUEVA',
+                                mensaje=mensaje_notif
+                            )
+                            notificaciones_creadas += 1
+                        
+                        print(f"🔔 Alerta creada para {prod_similar.sucursal.alias}: {usuarios_sucursal.count()} usuarios notificados")
+                        
+                except Exception as alert_error:
+                    print(f"⚠️ Error creando alerta: {alert_error}")
                 
                 productos_sincronizados += 1
-                if prod_similar.sucursal.alias not in sucursales_afectadas:
-                    sucursales_afectadas.append(prod_similar.sucursal.alias)
-            
-            print(f"🔄 Precios sincronizados en {productos_sincronizados} productos de {len(sucursales_afectadas)} sucursales")
+                sucursales_afectadas.append(prod_similar.sucursal.alias)
+                print(f"✅ Precio sincronizado en {prod_similar.sucursal.alias}: ${precio_anterior:,} → ${precioventa:,}")
+        
+        if productos_sincronizados > 0:
+            print(f"🔄 {productos_sincronizados} productos sincronizados en {len(sucursales_afectadas)} sucursales. {notificaciones_creadas} notificaciones enviadas")
     except Exception as e:
+        import traceback
         print(f"⚠️ Error en sincronización de precios (no crítico): {str(e)}")
+        print(traceback.format_exc())
 
-    mensaje = 'Producto creado correctamente'
+    # Construir mensaje descriptivo
+    if producto_actualizado:
+        mensaje = f'Producto actualizado correctamente'
+        if precios_cambiaron:
+            mensaje += f' (precio: ${precio_anterior:,} → ${precioventa:,})'
+    else:
+        mensaje = 'Producto creado correctamente'
+    
+    if tallas_nuevas > 0:
+        mensaje += f'. {tallas_nuevas} talla(s) nueva(s) agregada(s)'
+    if tallas_existentes > 0:
+        mensaje += f'. {tallas_existentes} talla(s) existente(s) actualizada(s)'
     if productos_sincronizados > 0:
-        mensaje += f'. Precios sincronizados en {productos_sincronizados} productos de otras sucursales'
+        mensaje += f'. Precios sincronizados en {productos_sincronizados} productos de otras sucursales ({", ".join(sucursales_afectadas)})'
 
     return JsonResponse({
         'success': True, 
         'producto_id': producto.id,
         'mensaje': mensaje,
+        'producto_actualizado': producto_actualizado,
+        'precios_cambiaron': precios_cambiaron,
+        'tallas_nuevas': tallas_nuevas,
+        'tallas_existentes': tallas_existentes,
         'productos_sincronizados': productos_sincronizados,
         'sucursales_afectadas': sucursales_afectadas
     })
@@ -7955,8 +9163,10 @@ def obtener_tallas_post(request):
 # views.py
  
 def _next_sku():
-    max_sku = Producto_Talla.objects.aggregate(m=Max('sku'))['m'] or 0
-    return max_sku + 1
+    """
+    Genera el siguiente SKU disponible usando la función centralizada.
+    """
+    return obtener_siguiente_sku()
 
 
 def _buscar_producto(request, articulo, attr1, attr2, attr3):
@@ -8006,9 +9216,17 @@ def sku_para_talla(request):
 @require_GET
 def facturas_pendientes(request):
     """
-    Devuelve facturas de compra (Dte) con saldo disponible para recepcionar productos.
-    Permite filtrar por número de factura con ?q= y por proveedor con ?proveedor_id=.
+    Devuelve facturas de compra (Dte) PENDIENTES para recepcionar productos.
+    Solo muestra facturas con estados válidos para recepción (no las ya recepcionadas/anuladas).
+    
+    Filtros:
+    - ?proveedor_id= : Filtrar por proveedor (REQUERIDO para resultados útiles)
+    - ?q= : Buscar por número de factura
+    - ?meses= : Limitar a últimos N meses (default: 12)
+    - ?limit= : Límite de resultados (default: 100)
     """
+    from datetime import date, timedelta
+    
     empresa_id = request.session.get('idEmpresaActual')
     try:
         empresa_id = int(empresa_id) if empresa_id is not None else None
@@ -8022,9 +9240,36 @@ def facturas_pendientes(request):
         proveedor_id = None
     
     q = request.GET.get('q', '').strip()
+    
+    # Parámetros de limitación
+    try:
+        meses = int(request.GET.get('meses', 1))  # Por defecto MES ACTUAL (1 mes)
+    except (TypeError, ValueError):
+        meses = 1
+    
+    try:
+        limit = min(int(request.GET.get('limit', 50)), 200)  # Máximo 200, default 50
+    except (TypeError, ValueError):
+        limit = 50
 
+    # ============================================================
+    # FILTRO PRINCIPAL: Solo DTEs de COMPRA con estados PENDIENTES
+    # Estados excluidos: RECEPCIONADO_COMPLETO, ANULADO, RECHAZADO
+    # ============================================================
+    ESTADOS_PENDIENTES = ['EMITIDO', 'ACEPTADO', 'RECEPCIONADO_PARCIAL', 'EN_REGULARIZACION']
+    
+    # Fecha de corte - por defecto mes actual
+    if meses == 1:
+        # Mes actual: desde el día 1 del mes
+        fecha_corte = date.today().replace(day=1)
+    else:
+        # N meses atrás
+        fecha_corte = date.today() - timedelta(days=meses * 30)
+    
     facturas = Dte.objects.filter(
-        tipo_transaccion='COMPRA'
+        tipo_transaccion='COMPRA',
+        estado_dte__in=ESTADOS_PENDIENTES,
+        fecha_emision__gte=fecha_corte  # Solo facturas recientes
     ).select_related('emisor')
     
     if empresa_id:
@@ -8040,11 +9285,16 @@ def facturas_pendientes(request):
         if empresas_usuario:
             facturas = facturas.filter(receptor_id__in=list(empresas_usuario))
     
+    # ============================================================
+    # FILTRO POR PROVEEDOR (MUY IMPORTANTE)
+    # Si no hay proveedor_id, devolver lista vacía o muy limitada
+    # ============================================================
     if proveedor_id:
         try:
             from .models import Empresa
             prov = Empresa.objects.get(id=proveedor_id)
             if prov.rut:
+                # Buscar por ID o por RUT (mismo proveedor puede tener múltiples registros)
                 facturas = facturas.filter(
                     Q(emisor_id=proveedor_id) | Q(emisor__rut=prov.rut)
                 )
@@ -8052,12 +9302,20 @@ def facturas_pendientes(request):
                 facturas = facturas.filter(emisor_id=proveedor_id)
         except Exception:
             facturas = facturas.filter(emisor_id=proveedor_id)
+    else:
+        # SIN PROVEEDOR: Devolver lista vacía (el usuario debe seleccionar proveedor)
+        return JsonResponse([], safe=False)
+    
     if q:
         facturas = facturas.filter(numero_documento__icontains=q)
 
-    # Excluir facturas que ya están completamente recepcionadas
-    facturas = facturas.values('id', 'numero_documento', 'monto_con_iva', 'emisor__nombre')
+    # Ordenar por fecha descendente (más recientes primero) y limitar
+    facturas = facturas.order_by('-fecha_emision')[:limit]
+    
+    # Obtener datos de facturas
+    facturas = facturas.values('id', 'numero_documento', 'monto_con_iva', 'emisor__nombre', 'fecha_emision')
     ids = [f['id'] for f in facturas]
+    
     from django.db.models import Sum, F
     from .models import Productos_Recepcionados
     usados = (
@@ -8071,21 +9329,26 @@ def facturas_pendientes(request):
     disponibles = []
     for f in facturas:
         usado = usado_map.get(f['id'], 0) or 0
-        # Devolvemos la factura SIEMPRE, sin validar si tiene saldo
+        # Formatear fecha para mostrar
+        fecha_str = f['fecha_emision'].strftime('%d/%m/%y') if f['fecha_emision'] else ''
         disponibles.append({
             'id': f['id'],
             'text': str(f['numero_documento']),
+            'text_con_fecha': f"{f['numero_documento']} ({fecha_str})",
             'monto': float(f['monto_con_iva']),
             'usado': float(usado),
-            'proveedor_nombre': f['emisor__nombre'] or ''
+            'proveedor_nombre': f['emisor__nombre'] or '',
+            'fecha': fecha_str
         })
 
-    # Formato para select2 con proveedor incluido
+    # Formato para select2 con proveedor incluido y fecha
     return JsonResponse([
         {
             'id': f['id'], 
             'text': f['text'],
-            'proveedor_nombre': f['proveedor_nombre']
+            'text_con_fecha': f['text_con_fecha'],
+            'proveedor_nombre': f['proveedor_nombre'],
+            'fecha': f['fecha']
         }
         for f in disponibles
     ], safe=False)
@@ -8104,8 +9367,9 @@ def obtener_movimientos_producto(request):
     if not sucursal_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa'}, status=400)
 
-    from datetime import datetime
+    from datetime import datetime, timedelta
     from django.utils.dateparse import parse_date
+    from django.utils import timezone
     
     def parse_fecha_ddmmyyyy(fecha_str):
         try:
@@ -8138,9 +9402,18 @@ def obtener_movimientos_producto(request):
 
     fecha_inicio_dt = parse_fecha_ddmmyyyy(fecha_inicio)
     fecha_fin_dt = parse_fecha_ddmmyyyy(fecha_fin)
+    
+    # ✅ OPTIMIZACIÓN: Fecha por defecto (últimos 30 días) si no hay filtros de fecha
+    # Esto evita cargar todo el historial en la carga inicial
+    hoy = timezone.now().date()
+    usar_fecha_defecto = not fecha_inicio and not fecha_fin
+    if usar_fecha_defecto:
+        fecha_inicio_dt = hoy - timedelta(days=30)
+        fecha_fin_dt = hoy
 
-    # ✅ OPTIMIZACIÓN: select_related para todas las relaciones necesarias
-    # Incluye atributos del producto para evitar queries adicionales
+    # ✅ OPTIMIZACIÓN: Filtro simplificado solo por sucursal_origen/destino
+    # Eliminamos JOINs innecesarios con ticket y dte para el filtro de sucursal
+    # ya que los movimientos siempre tienen sucursal_origen o sucursal_destino
     movimientos = Movimientos_Producto.objects.select_related(
         'ProductoTalla__producto__atributo1',
         'ProductoTalla__producto__atributo2', 
@@ -8150,17 +9423,16 @@ def obtener_movimientos_producto(request):
         'sucursal_origen', 
         'sucursal_destino'
     ).filter(
-        Q(sucursal_origen_id=sucursal_id) |
-        Q(sucursal_destino_id=sucursal_id) |
-        Q(ticket__sucursal_id=sucursal_id) |
-        Q(dte__sucursal_id=sucursal_id)
-    ).distinct()
+        Q(sucursal_origen_id=sucursal_id) | Q(sucursal_destino_id=sucursal_id)
+    )
     
-    # Aplicar filtros
+    # ✅ OPTIMIZACIÓN: Aplicar filtro de fecha primero (más selectivo)
     if fecha_inicio_dt:
         movimientos = movimientos.filter(fecha__gte=fecha_inicio_dt)
     if fecha_fin_dt:
         movimientos = movimientos.filter(fecha__lte=fecha_fin_dt)
+    
+    # Aplicar otros filtros
     if tipo:
         movimientos = movimientos.filter(tipo_movimiento__iexact=tipo)
     if articulo:
@@ -8170,10 +9442,12 @@ def obtener_movimientos_producto(request):
     if concepto:
         movimientos = movimientos.filter(concepto__icontains=concepto)
 
+    # ✅ OPTIMIZACIÓN: Contar y paginar de forma eficiente
+    # Primero ordenamos, luego contamos solo si es necesario para la paginación
+    movimientos = movimientos.order_by('-fecha', '-hora')
     total_count = movimientos.count()
     offset = (page - 1) * page_size
-    # ✅ ORDEN: Más recientes primero (fecha + hora descendente)
-    movimientos = movimientos.order_by('-fecha', '-hora')[offset:offset+page_size]
+    movimientos = movimientos[offset:offset+page_size]
 
     data = []
     for m in movimientos:
@@ -8233,6 +9507,12 @@ def obtener_movimientos_producto(request):
             'total_pages': (total_count + page_size - 1) // page_size,
             'has_next': page * page_size < total_count,
             'has_previous': page > 1
+        },
+        # ✅ OPTIMIZACIÓN: Informar al frontend si se usaron fechas por defecto
+        'filtros_aplicados': {
+            'fecha_inicio': fecha_inicio_dt.strftime('%d/%m/%Y') if fecha_inicio_dt else None,
+            'fecha_fin': fecha_fin_dt.strftime('%d/%m/%Y') if fecha_fin_dt else None,
+            'fecha_defecto_aplicada': usar_fecha_defecto
         }
     })
 
@@ -8585,14 +9865,42 @@ def crear_producto_manual(request):
         
         # ✅ DEBUG: Ver qué tallas se reciben
         print(f"📦 Backend recibió:")
+        print(f"   Proveedor: {proveedor_id}")
+        print(f"   DTE: {dte_id}")
+        print(f"   Artículo: {articulo}")
         print(f"   Tallas: {tallas}")
         print(f"   Stocks: {stocks}")
         print(f"   SKUs: {skus}")
         print(f"   Total tallas: {len(tallas)}")
         
-        # Validaciones básicas
-        if not all([proveedor_id, dte_id, articulo, atributo1, atributo2, atributo3, categoria_id, tipo_talla, costo, precioventa]):
-            return JsonResponse({'success': False, 'error': 'Todos los campos obligatorios deben estar completos'})
+        # Validaciones básicas con mensajes específicos
+        campos_faltantes = []
+        if not proveedor_id:
+            campos_faltantes.append('Proveedor')
+        if not dte_id:
+            campos_faltantes.append('DTE (Documento de Compra)')
+        if not articulo:
+            campos_faltantes.append('Artículo')
+        if not atributo1:
+            campos_faltantes.append('Marca')
+        if not atributo2:
+            campos_faltantes.append('Color')
+        if not atributo3:
+            campos_faltantes.append('Género')
+        if not categoria_id:
+            campos_faltantes.append('Categoría')
+        if not tipo_talla:
+            campos_faltantes.append('Tipo de Talla')
+        if not costo:
+            campos_faltantes.append('Costo')
+        if not precioventa:
+            campos_faltantes.append('Precio Venta')
+        
+        if campos_faltantes:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Faltan campos obligatorios: {", ".join(campos_faltantes)}'
+            })
         
         if not tallas:
             return JsonResponse({'success': False, 'error': 'Debe agregar al menos una talla'})
@@ -8609,100 +9917,97 @@ def crear_producto_manual(request):
         atributo2_obj = get_object_or_404(AtributoOpcion, id=atributo2)
         atributo3_obj = get_object_or_404(AtributoOpcion, id=atributo3)
         
-        # Verificar si el producto ya existe
+        # ========== VERIFICAR SI PRODUCTO EXISTE EN ESTA SUCURSAL ==========
         producto_existente = Producto.objects.filter(
             articulo=articulo,
             atributo1=atributo1_obj,
             atributo2=atributo2_obj,
-            atributo3=atributo3_obj
-        ).select_related('atributo1', 'atributo2', 'atributo3', 'categoria', 'sucursal').first()
-        
-        if producto_existente:
-            # Obtener tallas existentes del producto
-            tallas_existentes = Producto_Talla.objects.filter(producto=producto_existente).values(
-                'id', 'talla', 'stock', 'sku'
-            )
-            
-            # Preparar datos del producto existente para comparación
-            datos_existente = {
-                'id': producto_existente.id,
-                'articulo': producto_existente.articulo,
-                'descripcion': producto_existente.descripcion or '',
-                'costo': float(producto_existente.costo),
-                'sobreprecio': float(producto_existente.sobreprecio),
-                'precioventa': float(producto_existente.precioventa),
-                'precioSugerido': float(producto_existente.precioSugerido) if producto_existente.precioSugerido else None,
-                'categoria_id': producto_existente.categoria.id if producto_existente.categoria else None,
-                'categoria_nombre': producto_existente.categoria.nombre if producto_existente.categoria else None,
-                'tipo_talla': producto_existente.tipo_talla,
-                'guia_talla_id': producto_existente.guia_talla.id if producto_existente.guia_talla else None,
-                'marca': producto_existente.atributo1.valor if producto_existente.atributo1 else None,
-                'color': producto_existente.atributo2.valor if producto_existente.atributo2 else None,
-                'genero': producto_existente.atributo3.valor if producto_existente.atributo3 else None,
-                'tallas': list(tallas_existentes)
-            }
-            
-            # Datos del formulario para comparar
-            datos_nuevos = {
-                'costo': float(costo),
-                'sobreprecio': float(sobreprecio),
-                'precioventa': float(precioventa),
-                'tallas': []
-            }
-            
-            # Preparar tallas del formulario
-            tallas_procesadas = {}  # ✅ Usar dict para eliminar duplicados
-            for i, talla in enumerate(tallas):
-                if not talla.strip():
-                    continue
-                talla_limpia = talla.strip()
-                stock = int(stocks[i]) if i < len(stocks) else 1
-                sku = skus[i] if i < len(skus) else ''
-                
-                # Si la talla ya fue procesada, sumar el stock
-                if talla_limpia in tallas_procesadas:
-                    tallas_procesadas[talla_limpia]['stock'] += stock
-                    print(f"⚠️ Talla duplicada en formulario: {talla_limpia}, sumando stock")
-                else:
-                    tallas_procesadas[talla_limpia] = {
-                        'talla': talla_limpia,
-                        'stock': stock,
-                        'sku': sku
-                    }
-            
-            # Convertir dict a lista
-            datos_nuevos['tallas'] = list(tallas_procesadas.values())
-            
-            print(f"✅ Tallas procesadas (sin duplicados): {len(datos_nuevos['tallas'])}")
-            print(f"   Detalle: {datos_nuevos['tallas']}")
-            
-            return JsonResponse({
-                'success': False,
-                'producto_existente': True,
-                'error': 'Ya existe un producto con estas características',
-                'producto_actual': datos_existente,
-                'producto_nuevo': datos_nuevos
-            })
-        
-        # Crear el producto
-        producto = Producto.objects.create(
-            articulo=articulo,
-            descripcion=descripcion,
-            atributo1=atributo1_obj,
-            atributo2=atributo2_obj,
             atributo3=atributo3_obj,
             categoria=categoria,
-            tipo_talla=tipo_talla,
-            guia_talla_id=guia_talla_id if guia_talla_id else None,
-            costo=costo,
-            sobreprecio=sobreprecio,
-            precioventa=precioventa,
-            precioSugerido=precioventa,  # Usar precioSugerido (con S mayúscula)
-            sucursal=sucursal
-        )
+            sucursal=sucursal  # ✅ Filtrar por sucursal activa
+        ).first()
         
-        # Crear variantes de talla
-        tallas_creadas = {}  # ✅ Usar dict para eliminar duplicados
+        producto_actualizado = False
+        precios_cambiaron = False
+        precio_anterior = 0
+        costo_anterior = 0
+        
+        if producto_existente:
+            # ✅ PRODUCTO EXISTE - Actualizar precios si cambiaron
+            producto = producto_existente
+            precio_anterior = float(producto.precioventa)
+            costo_anterior = float(producto.costo)
+            
+            # Verificar si los precios cambiaron
+            if float(producto.costo) != float(costo) or float(producto.sobreprecio) != float(sobreprecio) or float(producto.precioventa) != float(precioventa):
+                precios_cambiaron = True
+                
+                # Actualizar precios del producto
+                producto.costo = costo
+                producto.sobreprecio = sobreprecio
+                producto.precioventa = precioventa
+                producto.precioSugerido = precioventa
+                producto.descripcion = descripcion
+                producto.save()
+                
+                # Registrar historial de cambio de precio
+                try:
+                    from .models import HistorialCambioPrecio
+                    diferencia = int(precioventa) - int(precio_anterior)
+                    porcentaje = round((diferencia / precio_anterior * 100), 2) if precio_anterior else 0
+                    HistorialCambioPrecio.objects.create(
+                        producto=producto,
+                        precio_anterior=int(precio_anterior),
+                        precio_nuevo=int(precioventa),
+                        diferencia=diferencia,
+                        porcentaje_cambio=porcentaje,
+                        tipo_cambio='ACTUALIZACION_MANUAL',
+                        motivo=f'Actualización desde creación manual en {sucursal.alias}',
+                        usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                except Exception as e:
+                    print(f"⚠️ Error registrando historial de precio: {e}")
+                
+                # Actualizar lotes FIFO activos con el nuevo precio
+                LoteProducto.objects.filter(
+                    producto_talla__producto=producto,
+                    cantidad_disponible__gt=0,
+                    activo=True
+                ).update(
+                    precio_venta_unitario=precioventa,
+                    costo_unitario=costo,
+                    sobreprecio_unitario=sobreprecio
+                )
+                
+                producto_actualizado = True
+                print(f"📝 Producto existente actualizado: {articulo} - Precio: {precio_anterior} → {precioventa}")
+            else:
+                print(f"📌 Producto existente sin cambios de precio: {articulo}")
+        else:
+            # 🆕 PRODUCTO NO EXISTE - Crear nuevo
+            producto = Producto.objects.create(
+                articulo=articulo,
+                descripcion=descripcion,
+                atributo1=atributo1_obj,
+                atributo2=atributo2_obj,
+                atributo3=atributo3_obj,
+                categoria=categoria,
+                tipo_talla=tipo_talla,
+                guia_talla_id=guia_talla_id if guia_talla_id else None,
+                costo=costo,
+                sobreprecio=sobreprecio,
+                precioventa=precioventa,
+                precioSugerido=precioventa,
+                sucursal=sucursal
+            )
+            print(f"🆕 Producto nuevo creado: {articulo}")
+        
+        # ========== CREAR O REUTILIZAR VARIANTES (TALLAS) ==========
+        tallas_creadas = {}
+        tallas_nuevas = 0
+        tallas_existentes_count = 0
+        
         for i, talla in enumerate(tallas):
             if not talla.strip():
                 continue
@@ -8712,70 +10017,104 @@ def crear_producto_manual(request):
             sku = skus[i] if i < len(skus) else ''
             guia_talla_manual_id = guias_talla_manual[i] if i < len(guias_talla_manual) else None
             
-            # Si la talla ya fue procesada, sumar el stock
+            # Si la talla ya fue procesada en este loop, sumar el stock
             if talla_limpia in tallas_creadas:
                 tallas_creadas[talla_limpia]['stock'] += stock
-                print(f"⚠️ Talla duplicada detectada: {talla_limpia}, sumando stock (total: {tallas_creadas[talla_limpia]['stock']})")
+                print(f"⚠️ Talla duplicada en formulario: {talla_limpia}, sumando stock")
                 continue
             
-            # Generar SKU si no se proporcionó
-            if not sku:
-                sku = _next_sku()
+            # Verificar si la talla ya existe para este producto
+            pt_existente = Producto_Talla.objects.filter(producto=producto, talla=talla_limpia).first()
             
-            # Crear variante de talla
-            producto_talla = Producto_Talla.objects.create(
-                producto=producto,
-                talla=talla_limpia,
-                stock=stock,
-                sku=sku,
-                guia_talla_id=guia_talla_manual_id if guia_talla_manual_id else None
-            )
+            if pt_existente:
+                # ✅ Talla existe - reutilizar
+                producto_talla = pt_existente
+                tallas_existentes_count += 1
+                print(f"📌 Talla existente reutilizada: {talla_limpia} (SKU: {pt_existente.sku})")
+            else:
+                # 🆕 Talla nueva - crear con stock=0 (el movimiento sumará)
+                # ✅ VERIFICAR QUE EL SKU NO EXISTA - si existe o está vacío, generar uno nuevo
+                sku_final = sku
+                if not sku or Producto_Talla.objects.filter(sku=sku).exists():
+                    if sku and Producto_Talla.objects.filter(sku=sku).exists():
+                        print(f"⚠️ SKU {sku} ya existía, generando nuevo")
+                    sku_final = _next_sku()
+                    
+                producto_talla = Producto_Talla.objects.create(
+                    producto=producto,
+                    talla=talla_limpia,
+                    stock=0,  # ✅ Iniciar en 0, el movimiento sumará el stock
+                    sku=sku_final,
+                    guia_talla_id=guia_talla_manual_id if guia_talla_manual_id else None
+                )
+                tallas_nuevas += 1
+                print(f"🆕 Talla nueva creada: {talla_limpia} (SKU: {sku_final})")
             
             tallas_creadas[talla_limpia] = {
                 'producto_talla': producto_talla,
                 'stock': stock,
-                'sku': sku
+                'sku': producto_talla.sku,
+                'es_nueva': pt_existente is None
             }
             
-            print(f"✅ Talla {talla_limpia} creada: Stock={stock}, SKU={sku}")
-            
-        # Registrar movimientos para las tallas creadas
+        # ========== REGISTRAR MOVIMIENTOS ==========
         for talla_nombre, talla_info in tallas_creadas.items():
             producto_talla = talla_info['producto_talla']
             stock = talla_info['stock']
             
-            # Registrar movimiento de ingreso inicial
-            registrar_movimiento_producto(
-                producto_talla=producto_talla,
-                concepto='INGRESO_MANUAL',
-                cantidad=stock,
-                responsable=responsable,
-                dte=dte,
-                observaciones=f'Creación manual - DTE: {dte.numero_documento}',
-                referencia_externa=f'Manual-{dte.numero_documento}'
-            )
-            print(f"📝 Movimiento registrado para talla {talla_nombre}: +{stock}")
+            if stock > 0:
+                # Registrar movimiento de ingreso
+                ref_externa = f'{dte.tipo_documento} #{dte.numero_documento}' if dte else 'MANUAL'
+                registrar_movimiento_producto(
+                    producto_talla=producto_talla,
+                    concepto='INGRESO_MANUAL',
+                    cantidad=stock,
+                    responsable=responsable,
+                    dte=dte,
+                    sucursal_origen=sucursal,
+                    sucursal_destino=sucursal,
+                    observaciones=f'Ingreso manual - {producto.articulo} Talla {talla_nombre}',
+                    referencia_externa=ref_externa,
+                    crear_lote_fifo=True
+                )
+                print(f"📝 Movimiento registrado para talla {talla_nombre}: +{stock}")
         
-        # ========== SINCRONIZAR PRECIOS EN OTRAS SUCURSALES ==========
-        # Buscar productos similares en otras sucursales y actualizar sus precios
+        # ========== SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
+        # Sincroniza automáticamente Y crea alertas para que las sucursales revisen el cambio
         productos_sincronizados = 0
         sucursales_afectadas = []
+        notificaciones_creadas = 0
         
         try:
-            from .models import HistorialCambioPrecio
+            from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser
+            from datetime import timedelta
             
+            # Buscar productos similares en TODAS las sucursales (para sincronizar precios)
             productos_similares = Producto.objects.filter(
                 articulo=articulo,
                 atributo1=atributo1_obj,
                 atributo2=atributo2_obj
-            ).exclude(sucursal=sucursal)
+            ).exclude(
+                sucursal=sucursal  # Excluir la sucursal donde se crea
+            ).annotate(
+                stock_total=Sum('producto_talla__stock')
+            ).select_related('sucursal')
+            
+            print(f"🔍 [Manual] Buscando productos similares a '{articulo}' en otras sucursales: {productos_similares.count()} encontrados")
             
             if productos_similares.exists():
                 for prod_similar in productos_similares:
-                    precio_anterior = prod_similar.precioventa
-                    costo_anterior = prod_similar.costo
+                    precio_anterior = int(prod_similar.precioventa or 0)
+                    stock_sucursal = prod_similar.stock_total or 0
                     
-                    # Actualizar precios
+                    print(f"   📦 {prod_similar.sucursal.alias}: stock={stock_sucursal}, precio_actual=${precio_anterior:,}")
+                    
+                    # Solo procesar si hay diferencia de precio
+                    if precio_anterior == int(precioventa):
+                        print(f"   ⏭️ {prod_similar.sucursal.alias}: mismo precio, saltando")
+                        continue
+                    
+                    # === SINCRONIZAR PRECIO ===
                     prod_similar.precioventa = precioventa
                     prod_similar.costo = costo
                     prod_similar.sobreprecio = sobreprecio
@@ -8786,36 +10125,121 @@ def crear_producto_manual(request):
                         producto_talla__producto=prod_similar,
                         cantidad_disponible__gt=0,
                         activo=True
-                    ).update(precio_venta_unitario=precioventa)
+                    ).update(precio_venta_unitario=int(precioventa))
                     
-                    # Registrar en historial si hubo cambio de precio
-                    if precio_anterior != precioventa:
-                        HistorialCambioPrecio.objects.create(
+                    # Calcular diferencia
+                    diferencia_sync = int(precioventa) - precio_anterior
+                    porcentaje_sync = round((diferencia_sync / precio_anterior * 100), 2) if precio_anterior else 0
+                    
+                    # Registrar en historial
+                    HistorialCambioPrecio.objects.create(
+                        producto=prod_similar,
+                        precio_anterior=precio_anterior,
+                        precio_nuevo=int(precioventa),
+                        diferencia=diferencia_sync,
+                        porcentaje_cambio=porcentaje_sync,
+                        tipo_cambio='SINCRONIZACION',
+                        motivo=f'Sincronización automática desde creación de producto en {sucursal.alias}',
+                        usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+                    
+                    # === CREAR ALERTA Y NOTIFICACIONES (solo si tiene stock) ===
+                    try:
+                        primera_talla = Producto_Talla.objects.filter(
                             producto=prod_similar,
-                            precio_anterior=precio_anterior,
-                            precio_nuevo=precioventa,
-                            tipo_cambio='SINCRONIZACION',
-                            motivo=f'Sincronización automática desde creación de producto en {sucursal.alias}',
-                            usuario=request.user,
-                            ip_address=request.META.get('REMOTE_ADDR')
-                        )
+                            stock__gt=0
+                        ).first()
+                        
+                        if not primera_talla:
+                            # No hay stock, precio actualizado pero sin alerta
+                            print(f"   💤 {prod_similar.sucursal.alias}: Precio actualizado (sin alerta - stock=0)")
+                        
+                        if primera_talla:
+                            # Determinar prioridad según la diferencia
+                            prioridad = 'MEDIA'
+                            if abs(porcentaje_sync) > 20:
+                                prioridad = 'ALTA'
+                            if abs(porcentaje_sync) > 50:
+                                prioridad = 'URGENTE'
+                            
+                            # Crear cambio con estado PENDIENTE para que revisen
+                            cambio = CambioPrecioPendiente.objects.create(
+                                producto_talla=primera_talla,
+                                sucursal=prod_similar.sucursal,
+                                precio_anterior=precio_anterior,
+                                precio_nuevo=int(precioventa),
+                                diferencia=diferencia_sync,
+                                porcentaje_cambio=porcentaje_sync,
+                                tipo_cambio='SINCRONIZACION',
+                                estado='APLICADO',  # APLICADO porque ya se sincronizó
+                                motivo=f'Precio sincronizado automáticamente desde {sucursal.alias}',
+                                creado_por=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
+                                prioridad=prioridad,
+                                fecha_vencimiento=timezone.now() + timedelta(days=7),
+                                notificado=True
+                            )
+                            
+                            # Crear notificaciones para usuarios de esa sucursal
+                            usuarios_sucursal = EmpresaUser.objects.filter(
+                                sucursal=prod_similar.sucursal,
+                                status=True
+                            ).select_related('user')
+                            
+                            mensaje_notif = (
+                                f"💰 Precio actualizado en {articulo}: "
+                                f"${precio_anterior:,} → ${int(precioventa):,} "
+                                f"(desde {sucursal.alias})"
+                            )
+                            
+                            for empresa_user in usuarios_sucursal:
+                                NotificacionCambioPrecio.objects.create(
+                                    cambio_precio=cambio,
+                                    usuario=empresa_user.user,
+                                    tipo='NUEVA',
+                                    mensaje=mensaje_notif
+                                )
+                                notificaciones_creadas += 1
+                            
+                            print(f"🔔 Alerta creada para {prod_similar.sucursal.alias}: {usuarios_sucursal.count()} usuarios notificados")
+                            
+                    except Exception as alert_error:
+                        print(f"⚠️ Error creando alerta: {alert_error}")
                     
                     productos_sincronizados += 1
                     if prod_similar.sucursal.alias not in sucursales_afectadas:
                         sucursales_afectadas.append(prod_similar.sucursal.alias)
                 
-                print(f"🔄 Precios sincronizados en {productos_sincronizados} productos de {len(sucursales_afectadas)} sucursales")
+                if productos_sincronizados > 0:
+                    print(f"🔄 {productos_sincronizados} productos sincronizados en {len(sucursales_afectadas)} sucursales. {notificaciones_creadas} notificaciones enviadas")
         except Exception as e:
+            import traceback
             print(f"⚠️ Error en sincronización de precios (no crítico): {str(e)}")
+            print(traceback.format_exc())
         
-        mensaje = 'Producto creado correctamente'
+        # Construir mensaje descriptivo
+        if producto_actualizado:
+            mensaje = f'Producto actualizado correctamente'
+            if precios_cambiaron:
+                mensaje += f' (precio: ${int(precio_anterior):,} → ${int(precioventa):,})'
+        else:
+            mensaje = 'Producto creado correctamente'
+        
+        if tallas_nuevas > 0:
+            mensaje += f'. {tallas_nuevas} talla(s) nueva(s) agregada(s)'
+        if tallas_existentes_count > 0:
+            mensaje += f'. {tallas_existentes_count} talla(s) existente(s) actualizada(s)'
         if productos_sincronizados > 0:
-            mensaje += f'. Precios sincronizados en {productos_sincronizados} productos de otras sucursales ({", ".join(sucursales_afectadas)})'
+            mensaje += f'. Precios sincronizados y alertas enviadas a {len(sucursales_afectadas)} sucursal(es)'
         
         return JsonResponse({
             'success': True,
             'producto_id': producto.id,
             'mensaje': mensaje,
+            'producto_actualizado': producto_actualizado,
+            'precios_cambiaron': precios_cambiaron,
+            'tallas_nuevas': tallas_nuevas,
+            'tallas_existentes': tallas_existentes_count,
             'productos_sincronizados': productos_sincronizados,
             'sucursales_afectadas': sucursales_afectadas
         })
@@ -11581,15 +13005,17 @@ def exportar_dashboard_productos(request):
         ).all()
         
         for pt in productos_talla:
+            producto_activo = getattr(pt.producto, 'activo', True)
+            fecha_creacion = getattr(pt.producto, 'fecha_creacion', None) or timezone.now()
             writer.writerow([
                 pt.producto.articulo,
-                pt.producto.sku,
+                pt.sku,
                 pt.producto.categoria.nombre if pt.producto.categoria else 'Sin Categoría',
                 pt.stock,
                 pt.producto.precioventa,
                 pt.stock * pt.producto.precioventa,
-                'Activo' if pt.producto.activo else 'Inactivo',
-                pt.producto.fecha_creacion.strftime('%d/%m/%Y')
+                'Activo' if producto_activo else 'Inactivo',
+                fecha_creacion.strftime('%d/%m/%Y')
             ])
         
         return response
@@ -11626,13 +13052,15 @@ def exportar_productos_filtrado(request):
             'producto', 'producto__categoria'
         )
         
-        if solo_activos:
+        tiene_activo = any(field.name == 'activo' for field in Producto._meta.fields)
+
+        if solo_activos and tiene_activo:
             productos_talla = productos_talla.filter(producto__activo=True)
         
         if categoria:
             productos_talla = productos_talla.filter(producto__categoria__nombre__icontains=categoria)
         
-        if estado:
+        if estado and tiene_activo:
             if estado == 'activo':
                 productos_talla = productos_talla.filter(producto__activo=True)
             elif estado == 'inactivo':
@@ -11649,15 +13077,17 @@ def exportar_productos_filtrado(request):
                 productos_talla = productos_talla.filter(stock=0)
         
         for pt in productos_talla:
+            producto_activo = getattr(pt.producto, 'activo', True)
+            fecha_creacion = getattr(pt.producto, 'fecha_creacion', None) or timezone.now()
             writer.writerow([
                 pt.producto.articulo,
-                pt.producto.sku,
+                pt.sku,
                 pt.producto.categoria.nombre if pt.producto.categoria else 'Sin Categoría',
                 pt.stock,
                 pt.producto.precioventa,
                 pt.stock * pt.producto.precioventa,
-                'Activo' if pt.producto.activo else 'Inactivo',
-                pt.producto.fecha_creacion.strftime('%d/%m/%Y')
+                'Activo' if producto_activo else 'Inactivo',
+                fecha_creacion.strftime('%d/%m/%Y')
             ])
         
         return response
@@ -12328,6 +13758,11 @@ def listar_proveedores(request):
     try:
         # Parámetros de búsqueda y paginación
         search = request.GET.get('search', '').strip()
+        filtro_tabla = request.GET.get('filtro_tabla', '').strip()
+        filtro_tabla = request.GET.get('filtro_tabla', '').strip()
+        filtro_tabla = request.GET.get('filtro_tabla', '').strip()
+        filtro_tabla = request.GET.get('filtro_tabla', '').strip()
+        filtro_tabla = request.GET.get('filtro_tabla', '').strip()
         page = int(request.GET.get('page', 1))
         page_size = min(int(request.GET.get('page_size', 25)), 100)
         
@@ -12631,6 +14066,7 @@ def buscar_productos_bodega(request):
         
         # Obtener parámetros de filtro
         search = request.GET.get('search', '').strip()
+        filtro_tabla = request.GET.get('filtro_tabla', '').strip()
         marca_id = request.GET.get('marca', '') or None
         categoria_id = request.GET.get('categoria', '') or None
         tipo_talla = request.GET.get('tipo_talla', '') or None
@@ -12723,58 +14159,24 @@ def buscar_productos_bodega(request):
             tallas_query = tallas_query.filter(stock__gt=0)
         
         # ═══════════════════════════════════════════════════════════════
-        # PASO 4: Pre-calcular stocks con movimientos en BATCH
+        # PASO 4: Construir respuesta usando stock directo de Producto_Talla
         # ═══════════════════════════════════════════════════════════════
+        # NOTA: Usamos talla.stock directamente porque es el valor sincronizado
+        # desde MySQL (producción). No recalculamos con movimientos.
         tallas_list = list(tallas_query)
-        talla_ids = [t.id for t in tallas_list]
         
-        # Obtener todos los movimientos relevantes en UNA consulta
-        from .models import Movimientos_Producto
-        
-        # Ingresos por talla (en batch)
-        ingresos_query = Movimientos_Producto.objects.filter(
-            ProductoTalla_id__in=talla_ids,
-            sucursal_destino_id=sucursal_id,
-            estado='COMPLETADO'
-        ).filter(
-            Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA')
-        ).values('ProductoTalla_id').annotate(
-            total_ingreso=Sum('cantidad')
-        )
-        ingresos_map = {m['ProductoTalla_id']: m['total_ingreso'] or 0 for m in ingresos_query}
-        
-        # Egresos por talla (en batch)
-        egresos_query = Movimientos_Producto.objects.filter(
-            ProductoTalla_id__in=talla_ids,
-            sucursal_origen_id=sucursal_id,
-            estado='COMPLETADO'
-        ).filter(
-            Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA')
-        ).values('ProductoTalla_id').annotate(
-            total_egreso=Sum('cantidad')
-        )
-        egresos_map = {m['ProductoTalla_id']: m['total_egreso'] or 0 for m in egresos_query}
-        
-        # Verificar cuáles tallas tienen movimientos
-        tallas_con_movimientos = set(ingresos_map.keys()) | set(egresos_map.keys())
-        
-        # ═══════════════════════════════════════════════════════════════
-        # PASO 5: Construir respuesta con stock calculado
-        # ═══════════════════════════════════════════════════════════════
         # Agrupar tallas por producto
         tallas_por_producto = {}
         for talla in tallas_list:
             if talla.producto_id not in tallas_por_producto:
                 tallas_por_producto[talla.producto_id] = []
             
-            # Calcular stock: si tiene movimientos usar cálculo, sino usar campo directo
-            if talla.id in tallas_con_movimientos:
-                ingreso = ingresos_map.get(talla.id, 0)
-                egreso = egresos_map.get(talla.id, 0)
-                stock_calculado = max(0, ingreso + egreso)
+            # Usar stock directo de la tabla (sincronizado desde MySQL)
+            # Solo mostrar stock si el producto pertenece a la sucursal actual
+            if talla.producto.sucursal_id == sucursal_id:
+                stock_calculado = max(0, talla.stock or 0)
             else:
-                # Sin movimientos: usar stock directo (legacy)
-                stock_calculado = max(0, talla.stock) if talla.producto.sucursal_id == sucursal_id else 0
+                stock_calculado = 0
             
             tallas_por_producto[talla.producto_id].append({
                 'id': talla.id,
@@ -13266,13 +14668,19 @@ def emitir_dte(request):
                 talla = Producto_Talla.objects.get(id=talla_id)
                 producto = talla.producto
                 
+                # Guardar sobreprecio tal cual está en el producto (es un DELTA/MARGEN)
+                costo_unitario = producto.costo
+                sobreprecio_unitario = producto.sobreprecio
+                
+                print(f"  💰 Producto: Costo={costo_unitario}, Sobreprecio={sobreprecio_unitario}, Precio={precio}")
+                
                 # Crear detalle del DTE
                 Dte_Productos.objects.create(
                     dte=dte,
                     productoTalla=talla,
                     descripcion=f"{producto.articulo} - Talla {talla.talla}",
-                    costo=producto.costo,
-                    sobreprecio=producto.sobreprecio,
+                    costo=costo_unitario,
+                    sobreprecio=sobreprecio_unitario,
                     precio=int(precio),
                     stock=cantidad,
                     activo=True
@@ -13297,10 +14705,10 @@ def emitir_dte(request):
                         observaciones=f"Venta DTE #{numero_documento} - Cliente: {receptor.nombre if receptor else 'N/A'}"
                     )
                     
-                    # ✅ NO modificar el campo talla.stock
-                    # El stock se calcula automáticamente desde los movimientos usando stock_sucursal()
+                    # ✅ Actualizar stock legacy para mantener sincronización
+                    Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
                     print(f"✓ Movimiento de egreso creado: {talla.sku} -{cantidad} en sucursal {sucursal.alias}")
-                    print(f"  Stock se actualiza automáticamente desde movimientos")
+                    print(f"✓ Stock legacy actualizado: campo stock reducido en {cantidad}")
                     
                 else:
                     # DESPACHO INTERNO: Crear movimiento de traspaso (salida en origen)
@@ -13323,13 +14731,12 @@ def emitir_dte(request):
                         observaciones=f"Traspaso DTE #{numero_documento} - Origen: {sucursal.alias} → Destino: {sucursal_destino.alias}"
                     )
                     
-                    # ✅ NO modificar el campo talla.stock
-                    # El stock se calcula automáticamente desde los movimientos usando stock_sucursal()
-                    # SOLO se crea movimiento de EGRESO en origen
-                    # El movimiento de INGRESO en destino lo creará confirmar_recepcion_api() cuando recepcionen
+                    # ✅ Actualizar stock legacy para mantener sincronización con movimientos
+                    Producto_Talla.objects.filter(id=talla.id).update(stock=F('stock') - cantidad)
                     print(f"✓ Movimiento de EGRESO creado: {talla.sku} -{cantidad} desde {sucursal.alias}")
+                    print(f"✓ Stock legacy actualizado: campo stock reducido en {cantidad}")
                     print(f"  Destino: {sucursal_destino.alias} (pendiente de recepción)")
-                    print(f"  Stock en {sucursal.alias} se actualiza automáticamente desde movimientos")
+                    print(f"  Stock en {sucursal.alias} actualizado en ambos sistemas (movimientos + legacy)")
         
         return JsonResponse({
             'success': True,
@@ -13589,6 +14996,32 @@ def buscar_productos_sucursal(request):
     
     sucursales = Sucursal.objects.filter(id__in=sucursales_usuario)
     
+    # Verificar e inicializar atributos básicos si no existen
+    try:
+        marca = Productos_Atributos.objects.get(nombre__iexact='Marca')
+        color = Productos_Atributos.objects.get(nombre__iexact='Color')
+        # IMPORTANTE: Usar "Sexo" que es el atributo real usado en productos (ID 3)
+        genero = Productos_Atributos.objects.filter(nombre__iexact='Sexo').first()
+        if not genero:
+            genero = Productos_Atributos.objects.get(nombre__iexact='Género')
+        print(f"[INFO] ✅ Atributos básicos encontrados: Marca (ID:{marca.id}), Color (ID:{color.id}), Sexo/Género (ID:{genero.id})")
+        
+    except Productos_Atributos.DoesNotExist:
+        # Si no existen los atributos, ejecutar inicialización automática
+        from django.core.management import call_command
+        from django.contrib import messages
+        
+        print("[WARNING] ⚠️ Atributos básicos no encontrados. Ejecutando inicialización automática...")
+        
+        try:
+            call_command('inicializar_atributos')
+            messages.success(request, 'Atributos básicos inicializados correctamente.')
+            print("[INFO] ✅ Atributos inicializados correctamente")
+            
+        except Exception as e:
+            messages.error(request, f'Error al inicializar atributos: {str(e)}')
+            print(f"[ERROR] ❌ Error al inicializar atributos: {str(e)}")
+    
     # Obtener todos los atributos disponibles para los filtros
     atributos = Productos_Atributos.objects.all().prefetch_related('opciones')
     
@@ -13613,6 +15046,7 @@ def obtener_productos_sucursal(request):
     try:
         # Obtener parámetros de filtro
         search = request.GET.get('search', '').strip()
+        filtro_tabla = request.GET.get('filtro_tabla', '').strip()
         categoria_id = request.GET.get('categoria_id')
         atributo1_id = request.GET.get('atributo1_id')  # Marca
         atributo2_id = request.GET.get('atributo2_id')  # Color
@@ -13653,9 +15087,27 @@ def obtener_productos_sucursal(request):
             productos_query = productos_query.filter(
                 Q(articulo__icontains=search) |
                 Q(descripcion__icontains=search) |
-                Q(producto_talla__sku__icontains=search)
+                Q(producto_talla__sku__icontains=search) |
+                Q(atributo1__valor__icontains=search) |  # Marca
+                Q(atributo2__valor__icontains=search) |  # Color
+                Q(atributo3__valor__icontains=search) |  # Género
+                Q(categoria__nombre__icontains=search)
             )
         
+        # Filtro adicional desde la tabla de resultados (server-side)
+        # Si hay filtro_tabla, lo aplica ADICIONAL al search
+        if filtro_tabla:
+            productos_query = productos_query.filter(
+                Q(articulo__icontains=filtro_tabla) |
+                Q(descripcion__icontains=filtro_tabla) |
+                Q(producto_talla__sku__icontains=filtro_tabla) |
+                Q(producto_talla__talla__icontains=filtro_tabla) |  # Agregar búsqueda por talla
+                Q(atributo1__valor__icontains=filtro_tabla) |  # Marca
+                Q(atributo2__valor__icontains=filtro_tabla) |  # Color
+                Q(atributo3__valor__icontains=filtro_tabla) |  # Género
+                Q(categoria__nombre__icontains=filtro_tabla)
+            )
+
         # Filtrar por categoría
         if categoria_id:
             productos_query = productos_query.filter(categoria_id=categoria_id)
@@ -13716,45 +15168,15 @@ def obtener_productos_sucursal(request):
         producto_ids = [p.id for p in productos]
         
         # Obtener todas las tallas de los productos paginados
-        from .models import Movimientos_Producto
-        
         tallas_query = Producto_Talla.objects.filter(producto_id__in=producto_ids)
         if solo_con_stock:
             tallas_query = tallas_query.filter(stock__gt=0)
         tallas_list = list(tallas_query.select_related('producto'))
-        talla_ids = [t.id for t in tallas_list]
         
-        # Pre-calcular stocks con movimientos en BATCH (UNA consulta para ingresos, UNA para egresos)
-        # Agrupar por sucursal del producto
-        sucursales_productos = {p.id: p.sucursal_id for p in productos}
-        
-        # Ingresos por talla
-        ingresos_query = Movimientos_Producto.objects.filter(
-            ProductoTalla_id__in=talla_ids,
-            estado='COMPLETADO'
-        ).filter(
-            Q(tipo_movimiento='INGRESO') | Q(concepto='TRASPASO_ENTRADA')
-        ).values('ProductoTalla_id', 'sucursal_destino_id').annotate(
-            total=Sum('cantidad')
-        )
-        ingresos_map = {}
-        for m in ingresos_query:
-            key = (m['ProductoTalla_id'], m['sucursal_destino_id'])
-            ingresos_map[key] = m['total'] or 0
-        
-        # Egresos por talla
-        egresos_query = Movimientos_Producto.objects.filter(
-            ProductoTalla_id__in=talla_ids,
-            estado='COMPLETADO'
-        ).filter(
-            Q(tipo_movimiento='EGRESO') | Q(concepto='TRASPASO_SALIDA')
-        ).values('ProductoTalla_id', 'sucursal_origen_id').annotate(
-            total=Sum('cantidad')
-        )
-        egresos_map = {}
-        for m in egresos_query:
-            key = (m['ProductoTalla_id'], m['sucursal_origen_id'])
-            egresos_map[key] = m['total'] or 0
+        # ═══════════════════════════════════════════════════════════════
+        # Usar stock directo de Producto_Talla (sincronizado desde MySQL)
+        # NO recalculamos con movimientos - el stock real está en talla.stock
+        # ═══════════════════════════════════════════════════════════════
         
         # Agrupar tallas por producto
         tallas_por_producto = {}
@@ -13762,24 +15184,24 @@ def obtener_productos_sucursal(request):
             if talla.producto_id not in tallas_por_producto:
                 tallas_por_producto[talla.producto_id] = []
             
-            suc_id = sucursales_productos.get(talla.producto_id)
-            ingreso_key = (talla.id, suc_id)
-            egreso_key = (talla.id, suc_id)
-            
-            tiene_movimientos = ingreso_key in ingresos_map or egreso_key in egresos_map
-            
-            if tiene_movimientos:
-                ingreso = ingresos_map.get(ingreso_key, 0)
-                egreso = egresos_map.get(egreso_key, 0)
-                stock_calculado = max(0, ingreso + egreso)
-            else:
-                stock_calculado = max(0, talla.stock)
+            # Usar stock directo de la tabla (valor real sincronizado)
+            stock_calculado = max(0, talla.stock or 0)
             
             tallas_por_producto[talla.producto_id].append({
                 'talla': talla.talla,
                 'stock': stock_calculado,
                 'sku': talla.sku
             })
+        
+        # Ordenar las tallas por stock si se requiere ordenamiento por stock
+        if ordenar in ['stock_desc', 'stock_asc']:
+            for producto_id in tallas_por_producto:
+                reverse = (ordenar == 'stock_desc')
+                tallas_por_producto[producto_id] = sorted(
+                    tallas_por_producto[producto_id],
+                    key=lambda t: t['stock'],
+                    reverse=reverse
+                )
         
         # Construir respuesta
         productos_data = []
@@ -15641,6 +17063,7 @@ def renovar_correlativo(request):
 def historial_correlativo(request, correlativo_id):
     """
     Obtiene el historial de uso de un correlativo
+    Solo consulta DTEs dentro del rango actual del correlativo para optimizar rendimiento
     """
     try:
         correlativo = get_object_or_404(Correlativo, id=correlativo_id)
@@ -15648,28 +17071,17 @@ def historial_correlativo(request, correlativo_id):
         # Buscar documentos que usen este correlativo
         historial = []
         
-        # Buscar en DTEs
-        dtes = Dte.objects.filter(
-            sucursal=correlativo.sucursal,
-            tipo_documento=correlativo.tipo_dte
-        ).order_by('-fecha_emision')[:50]  # Últimos 50 registros
-        
-        for dte in dtes:
-            historial.append({
-                'fecha': dte.fecha_emision.strftime('%d/%m/%Y'),
-                'tipo_documento': dte.tipo_documento,
-                'numero': dte.numero_documento,
-                'responsable': dte.responsable,
-                'observaciones': f'Monto: ${dte.monto_con_iva:,}'
-            })
-        
-        # Buscar en Tickets
-        tickets = Ticket.objects.filter(
-            sucursal=correlativo.sucursal
-        ).order_by('-fecha')[:50]  # Últimos 50 registros
-        
-        for ticket in tickets:
-            if correlativo.tipo_dte == 'TICKET':
+        # Filtrar solo DTEs dentro del rango del correlativo actual (1 a termino)
+        # Esto evita consultar miles de DTEs históricos de rangos anteriores
+        if correlativo.tipo_dte == 'TICKET':
+            # Buscar en Tickets - filtrar por rango del correlativo
+            tickets = Ticket.objects.filter(
+                sucursal=correlativo.sucursal,
+                correlativo__gte=1,
+                correlativo__lte=correlativo.termino
+            ).order_by('-correlativo')[:50]  # Últimos 50 registros del rango actual
+            
+            for ticket in tickets:
                 historial.append({
                     'fecha': ticket.fecha.strftime('%d/%m/%Y'),
                     'tipo_documento': 'TICKET',
@@ -15677,9 +17089,26 @@ def historial_correlativo(request, correlativo_id):
                     'responsable': ticket.responsable,
                     'observaciones': f'Total: ${ticket.total:,}'
                 })
+        else:
+            # Buscar en DTEs - filtrar por rango del correlativo
+            dtes = Dte.objects.filter(
+                sucursal=correlativo.sucursal,
+                tipo_documento=correlativo.tipo_dte,
+                numero_documento__gte=1,
+                numero_documento__lte=correlativo.termino
+            ).order_by('-numero_documento')[:50]  # Últimos 50 registros del rango actual
+            
+            for dte in dtes:
+                historial.append({
+                    'fecha': dte.fecha_emision.strftime('%d/%m/%Y'),
+                    'tipo_documento': dte.tipo_documento,
+                    'numero': dte.numero_documento,
+                    'responsable': dte.responsable,
+                    'observaciones': f'Monto: ${dte.monto_con_iva:,}'
+                })
         
-        # Ordenar por fecha descendente
-        historial.sort(key=lambda x: x['fecha'], reverse=True)
+        # Ordenar por número descendente (los más recientes primero)
+        historial.sort(key=lambda x: x['numero'], reverse=True)
         
         return JsonResponse({
             'success': True,
@@ -16374,26 +17803,40 @@ def obtener_dtes_pendientes_recibir(request):
     """
     Obtiene los DTEs pendientes de recibir para la empresa actual.
     Usado para el badge de notificaciones y la lista del dashboard.
-    Solo muestra DTEs que aún están en estado EMITIDO (no recepcionados).
+    Solo muestra DTEs de traspaso pendientes de recepción para la sucursal actual.
     """
     try:
         empresa_id = request.session.get('idEmpresaActual')
-        
-        if not empresa_id:
+        sucursal_destino_id = request.session.get('idSucursalActual')
+        usuario_id = request.user.id
+
+        if not empresa_id or not sucursal_destino_id:
             return JsonResponse({
                 'success': False,
-                'error': 'No hay empresa seleccionada'
+                'error': 'No hay empresa o sucursal seleccionada'
             })
-        
-        # DTEs recibidos pendientes de procesar (solo EMITIDO = no recepcionados)
-        dtes_query = Dte.objects.select_related(
-            'emisor', 'receptor', 'sucursal'
-        ).filter(
-            receptor_id=empresa_id,
-            estado_dte='EMITIDO'  # Solo los que NO han sido recepcionados
-        ).exclude(
-            emisor_id=empresa_id
-        ).order_by('-fecha_emision')
+
+        # DTEs de traspaso pendientes de recepción en la sucursal actual
+        dtes_query = (
+            Dte.objects.select_related('emisor', 'receptor', 'sucursal')
+            .filter(
+                tipo_transaccion='TRASPASO',
+                estado_dte='EMITIDO',
+                dte_movimientos__concepto='TRASPASO_SALIDA',
+                dte_movimientos__tipo_movimiento='EGRESO',
+                dte_movimientos__estado='COMPLETADO',
+                dte_movimientos__sucursal_destino_id=sucursal_destino_id
+            )
+            .distinct()
+            .order_by('-fecha_emision')
+        )
+        try:
+            from django.db.utils import OperationalError, ProgrammingError
+
+            dtes_query = dtes_query.exclude(alertas_descartadas__usuario_id=usuario_id)
+        except (OperationalError, ProgrammingError):
+            # Tabla de descartes no disponible (migración pendiente)
+            pass
         
         total = dtes_query.count()
         monto_total = dtes_query.aggregate(
@@ -16412,6 +17855,7 @@ def obtener_dtes_pendientes_recibir(request):
                 'tipo_documento': dte.tipo_documento,
                 'emisor_nombre': dte.emisor.nombre if dte.emisor else 'Desconocido',
                 'emisor_rut': dte.emisor.rut if dte.emisor else '',
+                'sucursal_origen_alias': dte.sucursal.alias if dte.sucursal else '-',
                 'monto_con_iva': float(dte.monto_con_iva),
                 'fecha_emision': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
                 'dias_desde_emision': dias_desde_emision,
@@ -16432,6 +17876,70 @@ def obtener_dtes_pendientes_recibir(request):
             'success': False,
             'error': str(e)
         })
+
+
+@login_required
+@require_POST
+def descartar_dte_pendiente(request):
+    """Descarta una alerta de DTE pendiente para el usuario actual."""
+    import json
+    from .models import DteAlertaDescartada
+    from django.db.utils import OperationalError, ProgrammingError
+
+    try:
+        data = json.loads(request.body)
+        dte_id = data.get('dte_id')
+
+        if not dte_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'ID de DTE requerido'
+            }, status=400)
+
+        sucursal_destino_id = request.session.get('idSucursalActual')
+        if not sucursal_destino_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal seleccionada'
+            }, status=400)
+
+        dte = Dte.objects.filter(
+            id=dte_id,
+            tipo_transaccion='TRASPASO',
+            estado_dte='EMITIDO',
+            dte_movimientos__concepto='TRASPASO_SALIDA',
+            dte_movimientos__tipo_movimiento='EGRESO',
+            dte_movimientos__estado='COMPLETADO',
+            dte_movimientos__sucursal_destino_id=sucursal_destino_id
+        ).first()
+
+        if not dte:
+            return JsonResponse({
+                'success': False,
+                'error': 'DTE no encontrado o no pendiente de recepción'
+            }, status=404)
+
+        try:
+            DteAlertaDescartada.objects.get_or_create(
+                dte=dte,
+                usuario=request.user,
+                defaults={'sucursal_id': sucursal_destino_id}
+            )
+        except (OperationalError, ProgrammingError) as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'No se pudo descartar (migración pendiente): {str(e)}'
+            }, status=500)
+
+        return JsonResponse({
+            'success': True
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 
 
 @login_required

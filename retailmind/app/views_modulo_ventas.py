@@ -811,14 +811,18 @@ def crear_ticket(request):
             sucursal = get_object_or_404(Sucursal, id=sucursal_id)
             
             # Obtener límite de descuento del rol del usuario
+            # Usamos Max para obtener el valor más alto guardado (todos deberían ser iguales)
             from .models import PermisoRol
+            from django.db.models import Max
             limite_descuento_rol = 0
             if request.user.is_authenticated:
                 rol_usuario = getattr(request.user, 'rol', None)
                 if rol_usuario:
-                    permiso = PermisoRol.objects.filter(rol=rol_usuario).first()
-                    if permiso:
-                        limite_descuento_rol = float(permiso.limite_descuento_porcentaje)
+                    resultado = PermisoRol.objects.filter(rol=rol_usuario).aggregate(
+                        max_limite=Max('limite_descuento_porcentaje')
+                    )
+                    if resultado['max_limite'] is not None:
+                        limite_descuento_rol = float(resultado['max_limite'])
             
             # Validar descuentos por producto contra el límite del rol
             for item in productos:
@@ -1196,14 +1200,18 @@ def pos_dashboard(request):
         ).first()
     
     # Obtener límite de descuento del rol del usuario
+    # Usamos Max para obtener el valor más alto guardado (todos deberían ser iguales)
     limite_descuento_rol = 0
     if request.user.is_authenticated:
         from .models import PermisoRol
+        from django.db.models import Max
         rol_usuario = getattr(request.user, 'rol', None)
         if rol_usuario:
-            permiso = PermisoRol.objects.filter(rol=rol_usuario).first()
-            if permiso:
-                limite_descuento_rol = float(permiso.limite_descuento_porcentaje)
+            resultado = PermisoRol.objects.filter(rol=rol_usuario).aggregate(
+                max_limite=Max('limite_descuento_porcentaje')
+            )
+            if resultado['max_limite'] is not None:
+                limite_descuento_rol = float(resultado['max_limite'])
     
     # Verificar si el usuario es administrador
     es_admin = request.user.is_staff or request.user.is_superuser
@@ -1941,6 +1949,7 @@ def _obtener_ticket_para_pos(request, correlativo):
     if not sucursal_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión'}, status=400)
 
+    # Primero buscar en la sucursal activa
     ticket = (
         Ticket.objects
         .select_related('sucursal', 'vendedor')
@@ -1948,6 +1957,19 @@ def _obtener_ticket_para_pos(request, correlativo):
         .filter(sucursal_id=sucursal_id, correlativo=correlativo)
         .first()
     )
+
+    # Si no se encuentra, buscar en todas las sucursales del usuario
+    # (para casos de cotizaciones facturadas desde otra sucursal)
+    if not ticket:
+        # Buscar en cualquier sucursal que el usuario tenga acceso
+        ticket = (
+            Ticket.objects
+            .select_related('sucursal', 'vendedor')
+            .prefetch_related('ticket_productos__ProductoTalla__producto', 'pagos')
+            .filter(correlativo=correlativo)
+            .order_by('-fecha', '-hora')  # El más reciente primero
+            .first()
+        )
 
     if not ticket:
         return JsonResponse({'success': False, 'error': f'Ticket {correlativo} no encontrado'}, status=404)
@@ -1983,10 +2005,13 @@ def buscar_ticket_pos(request):
     return _obtener_ticket_para_pos(request, correlativo_int)
 
 
-def generar_dte_desde_ticket(ticket, tipo_documento, usuario):
+def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
     """
     Generar DTE (Boleta o Factura Electrónica) desde un Ticket
     Genera tanto el registro en BD como el archivo TXT para Acepta
+    
+    Args:
+        cotizacion: Objeto Cotizacion_Empresa opcional para usar sus descripciones en el TXT
     """
     from decimal import Decimal
     
@@ -2067,12 +2092,16 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario):
     
     # Copiar productos del ticket al DTE
     for tp in ticket.ticket_productos.all():
+        # Guardar sobreprecio tal cual está en el producto (es un DELTA/MARGEN)
+        costo_unitario = tp.ProductoTalla.producto.costo
+        sobreprecio_unitario = tp.ProductoTalla.producto.sobreprecio
+        
         Dte_Productos.objects.create(
             dte=dte,
             productoTalla=tp.ProductoTalla,
             stock=tp.stock,
-            costo=tp.ProductoTalla.producto.costo,
-            sobreprecio=0,
+            costo=costo_unitario,
+            sobreprecio=sobreprecio_unitario,
             precio=tp.precio,
             descripcion=tp.ProductoTalla.producto.descripcion or tp.ProductoTalla.producto.articulo
         )
@@ -2124,6 +2153,93 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario):
                 metodos_pago_info.append(f"{metodo_nombre}: ${pago.monto:,}")
             metodos_pago_texto = ' | '.join(metodos_pago_info) if metodos_pago_info else 'EFECTIVO'
             
+            # ✅ DETECTAR SI ES TICKET DE CAMBIO/DEVOLUCIÓN
+            es_ticket_cambio = (ticket.modulo_origen == 'CAMBIO_DEVOLUCION')
+            
+            # Preparar productos para el TXT
+            productos_txt = []
+            
+            if es_ticket_cambio:
+                print(f"🔄 Generando TXT para TICKET DE CAMBIO - Productos con precio $0, solo diferencia")
+                
+                # Para tickets de cambio: mostrar productos con precio $0
+                for tp in ticket.ticket_productos.all():
+                    producto = tp.ProductoTalla.producto
+                    # Usar descripción del producto si existe, sino artículo
+                    nombre_producto = producto.descripcion if producto and producto.descripcion else producto.articulo
+                    
+                    productos_txt.append({
+                        'sku': tp.ProductoTalla.sku,
+                        'nombre': nombre_producto[:80],
+                        'descripcion': '',  # Dejar vacío para evitar duplicados
+                        'cantidad': tp.stock,
+                        'precio_unitario': 0,  # ✅ PRECIO $0 para productos en cambio
+                        'total': 0
+                    })
+                
+                # Agregar ítem "DIFERENCIA DE CAMBIO" con el total (si es positivo)
+                diferencia = int(ticket.total or 0)
+                if diferencia > 0:
+                    productos_txt.append({
+                        'sku': 'DIF',
+                        'nombre': 'DIFERENCIA DE CAMBIO',
+                        'descripcion': '',
+                        'cantidad': 1,
+                        'precio_unitario': diferencia,
+                        'total': diferencia
+                    })
+                else:
+                    # Si es negativo o cero, agregar con $0
+                    productos_txt.append({
+                        'sku': 'DIF',
+                        'nombre': 'DIFERENCIA DE CAMBIO',
+                        'descripcion': '',
+                        'cantidad': 1,
+                        'precio_unitario': 0,
+                        'total': 0
+                    })
+            else:
+                # Ticket normal: productos con sus precios reales
+                
+                # ✅ Si viene de cotización, crear mapa de descripciones por SKU
+                descripciones_cotizacion = {}
+                if cotizacion:
+                    try:
+                        # Obtener descripciones de los items de la cotización
+                        for item in cotizacion.items.all().prefetch_related('skus_asociados__producto_talla'):
+                            for sku_rel in item.skus_asociados.all():
+                                if sku_rel.producto_talla:
+                                    # Usar la descripción del item de la cotización
+                                    descripciones_cotizacion[sku_rel.producto_talla.sku] = item.descripcion
+                        print(f"📋 Descripciones de cotización cargadas: {len(descripciones_cotizacion)} productos")
+                    except Exception as e:
+                        print(f"⚠️ Error al cargar descripciones de cotización: {e}")
+                
+                for tp in ticket.ticket_productos.all():
+                    producto = tp.ProductoTalla.producto
+                    sku = tp.ProductoTalla.sku
+                    
+                    # ✅ PRIORIDAD: 1) Descripción de cotización, 2) Descripción del producto, 3) Artículo
+                    if sku in descripciones_cotizacion and descripciones_cotizacion[sku]:
+                        nombre_producto = descripciones_cotizacion[sku]
+                        print(f"  📄 SKU {sku}: usando descripción de cotización: {nombre_producto[:40]}")
+                    elif producto and producto.descripcion:
+                        nombre_producto = producto.descripcion
+                    else:
+                        nombre_producto = producto.articulo if producto else str(sku)
+                    
+                    precio_con_iva = tp.precio
+                    total_linea = precio_con_iva * tp.stock
+                    
+                    productos_txt.append({
+                        'sku': sku,
+                        'nombre': nombre_producto[:80],
+                        'descripcion': '',  # Dejar vacío para evitar duplicados
+                        'cantidad': tp.stock,
+                        'precio_unitario': precio_con_iva,
+                        'total': total_linea
+                    })
+            
             # Datos del documento
             datos_txt = {
                 'documento': {
@@ -2168,21 +2284,19 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario):
                 'observaciones_adicionales': ticket.observaciones_adicionales or ''
             }
             
-            # Agregar productos
-            for tp in ticket.ticket_productos.all():
-                producto = tp.ProductoTalla.producto
-                # Nombre completo con SKU
-                nombre_completo = f"{producto.articulo} SKU {tp.ProductoTalla.sku} {producto.atributo1.valor if producto.atributo1 else ''} {tp.ProductoTalla.talla}".strip()
-                
+            # ✅ Agregar productos al detalle (usar productos_txt preparados arriba)
+            for prod_txt in productos_txt:
+                # Asegurar que SKU sea string para poder hacer slicing
+                sku_str = str(prod_txt.get('sku', ''))
                 datos_txt['detalle'].append({
-                    'codigo': producto.articulo or f'PROD{producto.id}',
-                    'sku': str(tp.ProductoTalla.sku),
-                    'nombre': nombre_completo,
-                    'descripcion': producto.descripcion or '',
-                    'cantidad': tp.stock,
+                    'codigo': sku_str[:35],  # SKU como código (máx 35 chars)
+                    'sku': sku_str,
+                    'nombre': prod_txt['nombre'],  # Nombre/descripción del producto
+                    'descripcion': prod_txt.get('descripcion', ''),  # Vacío para evitar duplicados
+                    'cantidad': prod_txt['cantidad'],
                     'unidad': 'UN',
-                    'precio_unitario': tp.precio,
-                    'monto_item': tp.subtotal or (tp.precio * tp.stock)
+                    'precio_unitario': prod_txt['precio_unitario'],
+                    'monto_item': prod_txt['total']
                 })
             
             # Generar TXT
@@ -2222,6 +2336,271 @@ def registrar_pagos_ticket(request, correlativo):
     )
     if not sucursal_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión'}, status=400)
+
+    # =========================================================================
+    # NUEVO: Manejar cotizaciones cargadas como ticket
+    # Si el correlativo empieza con "COT-", es una cotización que necesita
+    # crear un ticket nuevo antes de procesar el pago
+    # =========================================================================
+    es_cotizacion = str(correlativo).startswith('COT-')
+    cotizacion_obj = None
+    productos_ya_creados_desde_cotizacion = False  # Bandera para evitar duplicar productos
+    
+    if es_cotizacion:
+        print(f"📋 Detectada cotización: {correlativo}")
+        try:
+            payload_check = json.loads(request.body or '{}')
+            cotizacion_id = payload_check.get('cotizacion_id')
+            
+            if not cotizacion_id:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Cotización detectada pero falta cotizacion_id en el payload'
+                }, status=400)
+            
+            # Importar modelo de cotización
+            from .models import Cotizacion_Empresa, Historial_Cotizacion
+            
+            # ✅ Buscar la cotización por ID (sin filtrar por sucursal activa)
+            cotizacion_obj = Cotizacion_Empresa.objects.filter(id=cotizacion_id).first()
+            
+            if not cotizacion_obj:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Cotización {cotizacion_id} no encontrada'
+                }, status=404)
+            
+            # ✅ IMPORTANTE: Usar la sucursal de la COTIZACIÓN, no la de la sesión
+            # La cotización se debe facturar en su sucursal original
+            sucursal_id = cotizacion_obj.sucursal_id
+            
+            # ✅ Verificar si la cotización ya fue facturada
+            if cotizacion_obj.facturada:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'La cotización {cotizacion_obj.numero_cotizacion} ya fue facturada con documento {cotizacion_obj.numero_factura}'
+                }, status=400)
+            
+            if not cotizacion_obj.esta_vigente:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'La cotización no está vigente o está vencida'
+                }, status=400)
+            
+            sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+            
+            # Obtener productos de la cotización
+            productos_cotizacion = payload_check.get('productos', [])
+            if not productos_cotizacion:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'No hay productos en la cotización'
+                }, status=400)
+            
+            # ✅ VALIDAR STOCK ANTES DE CREAR EL TICKET
+            # IMPORTANTE: Usar producto_talla_id si está disponible, ya que el SKU puede existir
+            # en múltiples sucursales y .first() retornaría el incorrecto
+            productos_sin_stock = []
+            
+            for prod_data in productos_cotizacion:
+                producto_talla = None
+                
+                # ✅ PRIMERO: Intentar obtener por producto_talla_id (más preciso)
+                producto_talla_id = prod_data.get('producto_talla_id')
+                if producto_talla_id:
+                    producto_talla = Producto_Talla.objects.filter(id=producto_talla_id).first()
+                
+                # FALLBACK: Si no hay producto_talla_id, buscar por SKU
+                if not producto_talla:
+                    sku = prod_data.get('sku')
+                    if sku:
+                        # Filtrar por SKU Y por sucursal de la cotización para evitar ambigüedad
+                        producto_talla = Producto_Talla.objects.filter(
+                            sku=sku,
+                            producto__sucursal_id=sucursal_id
+                        ).first()
+                        # Si no existe en la sucursal, buscar global (compatibilidad)
+                        if not producto_talla:
+                            producto_talla = Producto_Talla.objects.filter(sku=sku).first()
+                
+                if producto_talla:
+                    stock_disponible = producto_talla.stock_sucursal(sucursal_id)
+                    cantidad_requerida = int(prod_data.get('cantidad', 1))
+                    sku_display = prod_data.get('sku') or producto_talla.sku
+                    
+                    if stock_disponible < cantidad_requerida:
+                        productos_sin_stock.append({
+                            'sku': str(sku_display),
+                            'nombre': producto_talla.producto.articulo if producto_talla.producto else 'Sin nombre',
+                            'stock_disponible': stock_disponible,
+                            'cantidad_requerida': cantidad_requerida
+                        })
+            
+            if productos_sin_stock:
+                detalle = ', '.join([f"SKU {p['sku']}: {p['stock_disponible']}/{p['cantidad_requerida']}" for p in productos_sin_stock])
+                print(f"❌ Stock insuficiente: {detalle}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Stock insuficiente para facturar. {detalle}',
+                    'error_tipo': 'STOCK_INSUFICIENTE',
+                    'productos_sin_stock': productos_sin_stock
+                }, status=400)
+            
+            print(f"✅ Stock validado correctamente")
+            
+            # Crear ticket desde la cotización
+            print(f"🔄 Creando ticket desde cotización {cotizacion_obj.numero_cotizacion}")
+            
+            # Obtener siguiente correlativo para ticket
+            nuevo_correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
+            
+            # Calcular totales
+            subtotal_calc = sum(p.get('subtotal', 0) for p in productos_cotizacion)
+            total = int(cotizacion_obj.total)
+            
+            # Datos del cliente
+            datos_cliente = payload_check.get('cliente', {})
+            
+            # Obtener vendedor (usar el de la cotización o buscar uno por defecto)
+            vendedor = cotizacion_obj.vendedor
+            if not vendedor:
+                # Buscar vendedor activo asignado a esta sucursal (ManyToMany)
+                vendedor = Vendedor.objects.filter(sucursales=sucursal, activo=True).first()
+                if not vendedor:
+                    # Buscar cualquier vendedor de la sucursal
+                    vendedor = Vendedor.objects.filter(sucursales=sucursal).first()
+                    if not vendedor:
+                        return JsonResponse({
+                            'success': False, 
+                            'error': 'No hay vendedores configurados para esta sucursal'
+                        }, status=400)
+            
+            # Crear el ticket
+            ticket = Ticket.objects.create(
+                correlativo=nuevo_correlativo,
+                sucursal=sucursal,
+                vendedor=vendedor,
+                subTotal=int(subtotal_calc),  # Campo es subTotal con T mayúscula
+                descuento=int(cotizacion_obj.descuento or 0),
+                total=total,
+                estado='PENDIENTE',
+                responsable=request.user.username,  # Campo obligatorio
+                observaciones=cotizacion_obj.observaciones or '',
+                observaciones_adicionales=f'Facturación de cotización {cotizacion_obj.numero_cotizacion}. {cotizacion_obj.descripcion or ""}',
+                cliente_nombre=datos_cliente.get('nombre', cotizacion_obj.cliente.nombre),
+                cliente_rut=formatear_rut(datos_cliente.get('rut', cotizacion_obj.cliente.rut)),
+                cliente_giro=datos_cliente.get('giro', cotizacion_obj.cliente.giro or ''),
+                cliente_direccion=datos_cliente.get('direccion', cotizacion_obj.cliente.direccion or ''),
+                cliente_comuna=datos_cliente.get('comuna', cotizacion_obj.cliente.comuna or ''),
+                cliente_ciudad=datos_cliente.get('ciudad', cotizacion_obj.cliente.ciudad or ''),
+                cliente_email=datos_cliente.get('email', cotizacion_obj.cliente.correoIntercambio or ''),
+                cliente_email_facturacion=datos_cliente.get('email_facturacion', cotizacion_obj.cliente.correoAdministrador or ''),
+                modulo_origen='POS'  # Usar POS ya que COTIZACION no existe en choices
+            )
+            
+            # Crear productos del ticket
+            # ✅ IMPORTANTE: Usar producto_talla_id si está disponible
+            for prod_data in productos_cotizacion:
+                producto_talla = None
+                sku_display = prod_data.get('sku', 'N/A')
+                
+                # ✅ PRIMERO: Intentar obtener por producto_talla_id (más preciso)
+                producto_talla_id = prod_data.get('producto_talla_id')
+                if producto_talla_id:
+                    producto_talla = Producto_Talla.objects.filter(id=producto_talla_id).first()
+                
+                # FALLBACK: Si no hay producto_talla_id, buscar por SKU
+                if not producto_talla:
+                    sku = prod_data.get('sku')
+                    if sku:
+                        # Filtrar por SKU Y por sucursal de la cotización
+                        producto_talla = Producto_Talla.objects.filter(
+                            sku=sku,
+                            producto__sucursal_id=sucursal_id
+                        ).first()
+                        # Si no existe en la sucursal, buscar global (compatibilidad)
+                        if not producto_talla:
+                            producto_talla = Producto_Talla.objects.filter(sku=sku).first()
+                        sku_display = sku
+                
+                if not producto_talla:
+                    print(f"⚠️ ProductoTalla no encontrado para ID {producto_talla_id} / SKU {sku_display}")
+                    continue
+                
+                cantidad = int(prod_data.get('cantidad', 1))
+                precio = int(prod_data.get('precio_unitario', prod_data.get('precio', 0)))
+                descuento = int(prod_data.get('descuento_unitario', 0))
+                subtotal_prod = int(prod_data.get('subtotal', cantidad * precio))
+                
+                Ticket_Productos.objects.create(
+                    idTicket=ticket,
+                    ProductoTalla=producto_talla,
+                    stock=cantidad,
+                    precio=precio,
+                    precio_original=precio,
+                    descuento_unitario=descuento,
+                    subtotal=subtotal_prod,
+                    porcentaje_descuento=0
+                )
+                print(f"  ✅ Producto agregado: SKU {producto_talla.sku} (ID: {producto_talla.id}) x{cantidad}")
+            
+            # ✅ NUEVO: Actualizar datos de la Empresa si el usuario completó campos faltantes
+            empresa_cliente = cotizacion_obj.cliente
+            empresa_actualizada = False
+            campos_actualizados = []
+            
+            # Solo actualizar si hay datos nuevos que la empresa no tenía
+            if datos_cliente.get('giro') and not empresa_cliente.giro:
+                empresa_cliente.giro = datos_cliente.get('giro')
+                empresa_actualizada = True
+                campos_actualizados.append('giro')
+            
+            if datos_cliente.get('direccion') and not empresa_cliente.direccion:
+                empresa_cliente.direccion = datos_cliente.get('direccion')
+                empresa_actualizada = True
+                campos_actualizados.append('direccion')
+            
+            if datos_cliente.get('comuna') and not empresa_cliente.comuna:
+                empresa_cliente.comuna = datos_cliente.get('comuna')
+                empresa_actualizada = True
+                campos_actualizados.append('comuna')
+            
+            if datos_cliente.get('ciudad') and not empresa_cliente.ciudad:
+                empresa_cliente.ciudad = datos_cliente.get('ciudad')
+                empresa_actualizada = True
+                campos_actualizados.append('ciudad')
+            
+            if datos_cliente.get('email') and not empresa_cliente.correoIntercambio:
+                empresa_cliente.correoIntercambio = datos_cliente.get('email')
+                empresa_actualizada = True
+                campos_actualizados.append('email')
+            
+            if datos_cliente.get('telefono') and not empresa_cliente.contacto1:
+                empresa_cliente.contacto1 = datos_cliente.get('telefono')
+                empresa_actualizada = True
+                campos_actualizados.append('telefono')
+            
+            if empresa_actualizada:
+                empresa_cliente.save()
+                print(f"✅ Empresa {empresa_cliente.rut} actualizada con campos: {', '.join(campos_actualizados)}")
+            
+            # Actualizar correlativo para el resto del proceso
+            correlativo = nuevo_correlativo
+            # Marcar que los productos ya fueron creados (evitar duplicados)
+            productos_ya_creados_desde_cotizacion = True
+            print(f"✅ Ticket #{correlativo} creado desde cotización {cotizacion_obj.numero_cotizacion}")
+            
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Formato JSON inválido'}, status=400)
+        except Exception as e:
+            print(f"❌ Error creando ticket desde cotización: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'error': f'Error al procesar cotización: {str(e)}'}, status=500)
+    
+    # =========================================================================
+    # FIN: Manejo de cotizaciones
+    # =========================================================================
 
     ticket = (
         Ticket.objects
@@ -2301,14 +2680,92 @@ def registrar_pagos_ticket(request, correlativo):
     nuevo_estado = payload.get('estado')
     if nuevo_estado and nuevo_estado in dict(ESTADO_TICKET_CHOICES):
         ticket.estado = nuevo_estado
+    
+    # ✅ NUEVO: Si es cotización y tiene pagos válidos, marcar automáticamente como PAGADO
+    if productos_ya_creados_desde_cotizacion and ticket.estado == 'PENDIENTE':
+        pagos_payload = payload.get('pagos', [])
+        total_pagado = sum(int(p.get('monto', 0)) for p in pagos_payload if p.get('monto'))
+        if total_pagado >= ticket.total:
+            print(f"✅ Cotización con pagos completos (${total_pagado:,} >= ${ticket.total:,}), marcando ticket como PAGADO")
+            ticket.estado = 'PAGADO'
 
     metodo_principal = payload.get('metodo_pago_principal')
     if metodo_principal and metodo_principal in dict(METODO_PAGO_TICKET_CHOICES):
         ticket.metodo_pago = metodo_principal
 
     correlativo_confirmacion = payload.get('correlativo')
-    if correlativo_confirmacion and int(correlativo_confirmacion) != ticket.correlativo:
-        return JsonResponse({'success': False, 'error': 'Correlativo no coincide con el ticket cargado'}, status=400)
+    # Solo validar correlativo si NO es una cotización (las cotizaciones tienen formato COT-xxx)
+    if correlativo_confirmacion and not str(correlativo_confirmacion).startswith('COT-'):
+        try:
+            if int(correlativo_confirmacion) != ticket.correlativo:
+                return JsonResponse({'success': False, 'error': 'Correlativo no coincide con el ticket cargado'}, status=400)
+        except ValueError:
+            pass  # Si no se puede convertir a int, ignorar validación
+
+    # ✅ NUEVO: Procesar productos actualizados (incluye productos agregados como bolsas)
+    # IMPORTANTE: Si es cotización, los productos ya fueron creados al crear el ticket
+    productos_payload = payload.get('productos', [])
+    if productos_ya_creados_desde_cotizacion:
+        print(f"⏭️ Saltando procesamiento de productos (ya creados desde cotización)")
+    elif productos_payload and isinstance(productos_payload, list):
+        print(f"📦 Procesando {len(productos_payload)} productos del payload")
+        
+        # Obtener SKUs de productos existentes en el ticket
+        productos_existentes = {tp.ProductoTalla.sku: tp for tp in ticket.ticket_productos.select_related('ProductoTalla').all()}
+        skus_existentes = set(productos_existentes.keys())
+        skus_payload = set()
+        
+        for prod_data in productos_payload:
+            sku = prod_data.get('sku', '')
+            if not sku:
+                continue
+                
+            skus_payload.add(sku)
+            cantidad = int(prod_data.get('cantidad', 1))
+            precio_unitario = int(prod_data.get('precio_unitario', 0))
+            descuento_unitario = int(prod_data.get('descuento_unitario', 0))
+            subtotal = int(prod_data.get('subtotal', cantidad * precio_unitario))
+            
+            if sku in skus_existentes:
+                # Producto ya existe - actualizar cantidad si cambió
+                tp_existente = productos_existentes[sku]
+                if tp_existente.stock != cantidad or tp_existente.precio != precio_unitario:
+                    print(f"  📝 Actualizando producto {sku}: cantidad {tp_existente.stock} → {cantidad}")
+                    tp_existente.stock = cantidad
+                    tp_existente.precio = precio_unitario
+                    tp_existente.descuento_unitario = descuento_unitario
+                    tp_existente.subtotal = subtotal
+                    tp_existente.save()
+            else:
+                # Producto NUEVO - buscar Producto_Talla y agregarlo
+                producto_talla_id = prod_data.get('producto_talla_id')
+                producto_talla = None
+                
+                if producto_talla_id:
+                    producto_talla = Producto_Talla.objects.filter(id=producto_talla_id).first()
+                
+                if not producto_talla:
+                    producto_talla = Producto_Talla.objects.filter(sku=sku).first()
+                
+                if producto_talla:
+                    print(f"  ➕ Agregando nuevo producto {sku}: cantidad={cantidad}, precio=${precio_unitario}")
+                    Ticket_Productos.objects.create(
+                        idTicket=ticket,  # ✅ Nombre correcto del campo
+                        ProductoTalla=producto_talla,
+                        stock=cantidad,
+                        precio=precio_unitario,
+                        precio_original=precio_unitario,
+                        descuento_unitario=descuento_unitario,
+                        subtotal=subtotal,
+                        porcentaje_descuento=0
+                    )
+                else:
+                    print(f"  ⚠️ ProductoTalla no encontrado para SKU {sku}")
+        
+        # Recalcular totales del ticket
+        nuevo_subtotal = sum(tp.subtotal for tp in ticket.ticket_productos.all())
+        ticket.total = nuevo_subtotal
+        print(f"  💰 Nuevo total del ticket: ${ticket.total:,}")
 
     pagos = payload.get('pagos') or []
     ids_existentes = list(ticket.pagos.values_list('id', flat=True))
@@ -2365,12 +2822,25 @@ def registrar_pagos_ticket(request, correlativo):
         if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
             print(f"🔍 DEBUG: Iniciando descuento de stock para ticket #{ticket.correlativo}")
             for tp in ticket.ticket_productos.all():
-                stock_antes = tp.ProductoTalla.stock
+                # Usar stock_sucursal para obtener el stock real de la sucursal
+                stock_antes = tp.ProductoTalla.stock_sucursal(ticket.sucursal_id)
                 print(f"🔍 DEBUG: SKU {tp.ProductoTalla.sku} - Stock ANTES: {stock_antes}, A descontar: {tp.stock}")
                 
-                # Verificar que hay stock disponible
-                if tp.ProductoTalla.stock < tp.stock:
-                    raise ValidationError(f'Stock insuficiente para {tp.ProductoTalla.sku}. Disponible: {tp.ProductoTalla.stock}, Requerido: {tp.stock}')
+                # Verificar que hay stock disponible en la sucursal
+                if stock_antes < tp.stock:
+                    error_msg = f'Stock insuficiente para SKU {tp.ProductoTalla.sku}. Disponible: {stock_antes}, Requerido: {tp.stock}'
+                    print(f"❌ {error_msg}")
+                    # Revertir estado del ticket a PENDIENTE
+                    ticket.estado = 'PENDIENTE'
+                    ticket.save()
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'error_tipo': 'STOCK_INSUFICIENTE',
+                        'sku': str(tp.ProductoTalla.sku),
+                        'stock_disponible': stock_antes,
+                        'stock_requerido': tp.stock
+                    }, status=400)
                 
                 # Intentar consumir stock FIFO
                 try:
@@ -2471,13 +2941,38 @@ def registrar_pagos_ticket(request, correlativo):
                 for tp in ticket.ticket_productos.all():
                     print(f"🔍 DEBUG PRE-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
                 
-                dte_generado = generar_dte_desde_ticket(ticket, tipo_documento_seleccionado, request.user)
+                # ✅ Pasar cotizacion_obj para usar sus descripciones en el TXT
+                dte_generado = generar_dte_desde_ticket(ticket, tipo_documento_seleccionado, request.user, cotizacion=cotizacion_obj)
                 print(f"✓ DTE generado: {dte_generado.tipo_documento} #{dte_generado.numero_documento}")
                 
                 # Verificar stock DESPUÉS de generar DTE
                 for tp in ticket.ticket_productos.all():
                     tp.ProductoTalla.refresh_from_db()
                     print(f"🔍 DEBUG POST-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
+                
+                # =========================================================================
+                # NUEVO: Marcar cotización como facturada si viene de una cotización
+                # =========================================================================
+                if cotizacion_obj and dte_generado:
+                    try:
+                        from .models import Historial_Cotizacion
+                        
+                        # Usar solo el número de documento (el campo numero_factura tiene max_length=20)
+                        numero_documento_corto = str(dte_generado.numero_documento)[:20]
+                        numero_documento_completo = f"{dte_generado.tipo_documento} #{dte_generado.numero_documento}"
+                        cotizacion_obj.marcar_como_facturada(numero_documento_corto)
+                        
+                        # Registrar en historial
+                        Historial_Cotizacion.objects.create(
+                            cotizacion=cotizacion_obj,
+                            usuario=request.user,
+                            accion='FACTURADA',
+                            descripcion=f'Cotización facturada desde POS. Documento: {numero_documento_completo}. Ticket: #{ticket.correlativo}',
+                            ip_address=request.META.get('REMOTE_ADDR', '')
+                        )
+                        print(f"✅ Cotización {cotizacion_obj.numero_cotizacion} marcada como facturada")
+                    except Exception as cot_error:
+                        print(f"⚠️ Error al marcar cotización como facturada: {str(cot_error)}")
                     
             except Exception as e:
                 # No fallar el pago si hay error en DTE, solo registrar
@@ -2498,6 +2993,14 @@ def registrar_pagos_ticket(request, correlativo):
         # Incluir datos del archivo TXT si se generó
         if hasattr(dte_generado, 'archivo_txt_data') and dte_generado.archivo_txt_data:
             response_data['archivo_txt'] = dte_generado.archivo_txt_data
+    
+    # Incluir info de cotización si fue facturada desde una cotización
+    if cotizacion_obj:
+        response_data['cotizacion_facturada'] = {
+            'id': cotizacion_obj.id,
+            'numero_cotizacion': cotizacion_obj.numero_cotizacion,
+            'numero_factura': cotizacion_obj.numero_factura
+        }
     
     print(f"🔍🔍🔍 DEBUG: ===== FIN registrar_pagos_ticket - Ticket #{correlativo} =====")
     return JsonResponse(response_data)
@@ -2843,6 +3346,304 @@ def listar_documentos_ventas(request):
 
 
 @login_required
+@require_GET
+def exportar_documentos_ventas_excel(request):
+    """
+    API para exportar documentos de ventas (DTEs) a Excel
+    Utiliza los mismos filtros que listar_documentos_ventas
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        
+        # Función helper para convertir códigos de método de pago
+        def obtener_nombre_metodo_pago(codigo):
+            nombres_metodos = {
+                'EFECTIVO': 'Efectivo',
+                'TARJETA_DEBITO': 'Tarjeta Débito',
+                'TARJETA_CREDITO': 'Tarjeta Crédito',
+                'TRANSFERENCIA': 'Transferencia',
+                'CHEQUE': 'Cheque',
+                'OTRO': 'Otro',
+                'TBK_POS_INTEGRADO': 'Transbank POS',
+                'TBK_MANUAL': 'Transbank Manual',
+                'TBK_DEBITO_POS': 'TBK Débito POS',
+                'TBK_CREDITO_POS': 'TBK Crédito POS',
+                'TBK_PREPAGO_POS': 'TBK Prepago POS',
+                'TARJETA_COMERCIAL': 'Tarjeta Comercial',
+                'VENTA_INTERNET': 'Venta por Internet',
+                'ORDEN_COMPRA': 'Orden de Compra',
+                'CREDITO_TRABAJADOR': 'Crédito Trabajador',
+                'CREDITO_EXTERNO': 'Crédito Externo',
+            }
+            return nombres_metodos.get(codigo, codigo)
+        
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal seleccionada'
+            })
+        
+        # Obtener nombre de sucursal
+        try:
+            sucursal = Sucursal.objects.get(id=sucursal_id)
+            sucursal_nombre = sucursal.alias or sucursal.nombre
+        except Sucursal.DoesNotExist:
+            sucursal_nombre = 'Sucursal'
+        
+        # Parámetros de filtro (los mismos que listar_documentos_ventas)
+        fecha_desde = request.GET.get('fecha_desde')
+        fecha_hasta = request.GET.get('fecha_hasta')
+        tipo_documento = request.GET.get('tipo_documento')
+        estado = request.GET.get('estado')
+        metodo_pago = request.GET.get('metodo_pago')
+        buscar = request.GET.get('buscar', '').strip()
+        
+        # Parámetros de ordenamiento
+        orden_campo = request.GET.get('orden_campo', 'fecha')
+        orden_direccion = request.GET.get('orden_direccion', 'desc')
+        
+        # Query base de DTEs
+        dtes_query = Dte.objects.select_related(
+            'vendedor', 
+            'receptor'
+        ).prefetch_related(
+            'dte_asociado',
+            'dte_productos__productoTalla__producto'
+        ).filter(
+            sucursal_id=sucursal_id,
+            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+        )
+        
+        # Aplicar filtros de fecha
+        if fecha_desde:
+            dtes_query = dtes_query.filter(fecha_emision__gte=fecha_desde)
+        if fecha_hasta:
+            dtes_query = dtes_query.filter(fecha_emision__lte=fecha_hasta)
+        
+        # Aplicar filtros por tipo de DTE
+        if tipo_documento:
+            if tipo_documento == 'BOLETA_ELECTRONICA':
+                dtes_query = dtes_query.filter(tipo_documento='BOLETA ELECTRONICA')
+            elif tipo_documento == 'BOLETA_PAPEL':
+                dtes_query = dtes_query.filter(tipo_documento='BOLETA PAPEL')
+            elif tipo_documento == 'FACTURA_ELECTRONICA':
+                dtes_query = dtes_query.filter(tipo_documento='FACTURA ELECTRONICA')
+            elif tipo_documento == 'FACTURA_EXENTA':
+                dtes_query = dtes_query.filter(tipo_documento='FACTURA EXENTA')
+        
+        # Filtrar por estado
+        if estado:
+            estado_dte_map = {
+                'PENDIENTE': 'PENDIENTE',
+                'PAGADO': 'EMITIDO',
+                'ANULADO': 'ANULADO'
+            }
+            if estado in estado_dte_map:
+                dtes_query = dtes_query.filter(estado_dte=estado_dte_map[estado])
+        
+        # Filtrar por método de pago
+        if metodo_pago:
+            dtes_query = dtes_query.filter(dte_asociado__metodo_pago=metodo_pago).distinct()
+        
+        # Filtro de búsqueda
+        if buscar:
+            dtes_query = dtes_query.filter(
+                Q(numero_documento__icontains=buscar) |
+                Q(receptor__nombre__icontains=buscar) |
+                Q(receptor__rut__icontains=buscar) |
+                Q(vendedor__nombre__icontains=buscar) |
+                Q(dte_productos__productoTalla__sku__icontains=buscar) |
+                Q(dte_productos__productoTalla__producto__articulo__icontains=buscar)
+            ).distinct()
+        
+        # Recolectar datos de documentos
+        documentos_data = []
+        for dte in dtes_query:
+            # Obtener métodos de pago
+            metodos_pago_list = []
+            for pago in dte.dte_asociado.all():
+                nombre_metodo = obtener_nombre_metodo_pago(pago.metodo_pago)
+                if pago.tipo_tarjeta:
+                    nombre_metodo += f" ({pago.tipo_tarjeta})"
+                metodos_pago_list.append(nombre_metodo)
+            metodos_pago_str = ', '.join(metodos_pago_list) if metodos_pago_list else 'Sin pagos'
+            
+            # Mapear estado DTE
+            estado_display = 'PAGADO' if dte.estado_dte == 'EMITIDO' else dte.estado_dte
+            
+            # Crear datetime para ordenamiento
+            from datetime import time as dt_time
+            fecha_dt = timezone.datetime.combine(dte.fecha_emision, dt_time.min)
+            created_at_dte = timezone.make_aware(fecha_dt) if timezone.is_naive(fecha_dt) else fecha_dt
+            
+            documentos_data.append({
+                'fecha': dte.fecha_emision,
+                'created_at': created_at_dte,
+                'tipo': dte.tipo_documento,
+                'numero': dte.numero_documento,
+                'cliente_nombre': dte.receptor.nombre if dte.receptor else 'Sin nombre',
+                'cliente_rut': dte.receptor.rut if dte.receptor else '',
+                'vendedor_nombre': f"{dte.vendedor.codigo_vendedor} - {dte.vendedor.nombre}" if dte.vendedor else 'Sin vendedor',
+                'neto': int(dte.monto_total or 0),
+                'iva': int(dte.iva or 0),
+                'total': int(dte.monto_con_iva or 0),
+                'metodos_pago': metodos_pago_str,
+                'estado': estado_display,
+            })
+        
+        # Ordenar documentos
+        orden_map = {
+            'fecha': 'created_at',
+            'tipo_documento': 'tipo',
+            'numero_documento': 'numero',
+            'cliente_nombre': 'cliente_nombre',
+            'vendedor_nombre': 'vendedor_nombre',
+            'total': 'total',
+            'estado': 'estado',
+        }
+        campo_ordenar = orden_map.get(orden_campo, 'created_at')
+        reverse_order = (orden_direccion == 'desc')
+        
+        try:
+            if campo_ordenar == 'total':
+                documentos_data.sort(key=lambda x: x.get(campo_ordenar, 0) or 0, reverse=reverse_order)
+            elif campo_ordenar == 'numero':
+                documentos_data.sort(key=lambda x: int(x.get(campo_ordenar, 0) or 0), reverse=reverse_order)
+            else:
+                documentos_data.sort(key=lambda x: str(x.get(campo_ordenar, '') or '').lower(), reverse=reverse_order)
+        except (TypeError, ValueError):
+            documentos_data.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        # Crear Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Documentos de Ventas"
+        
+        # Estilos
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        title_font = Font(bold=True, size=14)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Título
+        ws['A1'] = f"DOCUMENTOS DE VENTAS - {sucursal_nombre.upper()}"
+        ws['A1'].font = title_font
+        ws.merge_cells('A1:K1')
+        
+        # Periodo
+        periodo_texto = "Todos los documentos"
+        if fecha_desde and fecha_hasta:
+            periodo_texto = f"Período: {fecha_desde} al {fecha_hasta}"
+        elif fecha_desde:
+            periodo_texto = f"Desde: {fecha_desde}"
+        elif fecha_hasta:
+            periodo_texto = f"Hasta: {fecha_hasta}"
+        ws['A2'] = periodo_texto
+        ws['A2'].font = Font(italic=True)
+        
+        # Encabezados
+        headers = [
+            "Fecha", "Tipo Documento", "Número", "Cliente", "RUT", 
+            "Vendedor", "Neto", "IVA", "Total", "Método Pago", "Estado"
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = border
+        
+        # Datos
+        total_neto = 0
+        total_iva = 0
+        total_general = 0
+        
+        for row_idx, doc in enumerate(documentos_data, 5):
+            ws.cell(row=row_idx, column=1, value=doc['fecha'].strftime('%d/%m/%Y') if doc['fecha'] else '').border = border
+            ws.cell(row=row_idx, column=2, value=doc['tipo']).border = border
+            ws.cell(row=row_idx, column=3, value=doc['numero']).border = border
+            ws.cell(row=row_idx, column=4, value=doc['cliente_nombre']).border = border
+            ws.cell(row=row_idx, column=5, value=doc['cliente_rut']).border = border
+            ws.cell(row=row_idx, column=6, value=doc['vendedor_nombre']).border = border
+            
+            cell_neto = ws.cell(row=row_idx, column=7, value=doc['neto'])
+            cell_neto.number_format = '#,##0'
+            cell_neto.border = border
+            
+            cell_iva = ws.cell(row=row_idx, column=8, value=doc['iva'])
+            cell_iva.number_format = '#,##0'
+            cell_iva.border = border
+            
+            cell_total = ws.cell(row=row_idx, column=9, value=doc['total'])
+            cell_total.number_format = '#,##0'
+            cell_total.border = border
+            
+            ws.cell(row=row_idx, column=10, value=doc['metodos_pago']).border = border
+            ws.cell(row=row_idx, column=11, value=doc['estado']).border = border
+            
+            total_neto += doc['neto']
+            total_iva += doc['iva']
+            total_general += doc['total']
+        
+        # Fila de totales
+        if documentos_data:
+            row_totales = len(documentos_data) + 5
+            ws.cell(row=row_totales, column=6, value="TOTALES:").font = Font(bold=True)
+            
+            cell_total_neto = ws.cell(row=row_totales, column=7, value=total_neto)
+            cell_total_neto.number_format = '#,##0'
+            cell_total_neto.font = Font(bold=True)
+            
+            cell_total_iva = ws.cell(row=row_totales, column=8, value=total_iva)
+            cell_total_iva.number_format = '#,##0'
+            cell_total_iva.font = Font(bold=True)
+            
+            cell_total_general = ws.cell(row=row_totales, column=9, value=total_general)
+            cell_total_general.number_format = '#,##0'
+            cell_total_general.font = Font(bold=True)
+        
+        # Ajustar anchos de columna
+        column_widths = [12, 22, 12, 35, 15, 25, 12, 12, 12, 25, 12]
+        for i, width in enumerate(column_widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = width
+        
+        # Generar respuesta
+        from io import BytesIO
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # Nombre del archivo
+        fecha_actual = timezone.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"documentos_ventas_{fecha_actual}.xlsx"
+        
+        response = HttpResponse(
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al exportar documentos: {str(e)}'
+        })
+
+
+@login_required
 @require_POST
 def convertir_ticket_a_factura(request):
     """Convertir un ticket a factura electrónica"""
@@ -2930,12 +3731,16 @@ def convertir_ticket_a_factura(request):
 
             # Copiar productos del ticket a la factura
             for ticket_producto in ticket.ticket_productos.all():
+                # Guardar sobreprecio tal cual está en el producto (es un DELTA/MARGEN)
+                costo_unitario = ticket_producto.ProductoTalla.producto.costo
+                sobreprecio_unitario = ticket_producto.ProductoTalla.producto.sobreprecio
+                
                 Dte_Productos.objects.create(
                     dte=factura,
                     productoTalla=ticket_producto.ProductoTalla,
                     descripcion=f"{ticket_producto.ProductoTalla.producto.articulo} - {ticket_producto.ProductoTalla.talla}",
-                    costo=ticket_producto.ProductoTalla.producto.costo,
-                    sobreprecio=ticket_producto.ProductoTalla.producto.sobreprecio,
+                    costo=costo_unitario,
+                    sobreprecio=sobreprecio_unitario,
                     precio=ticket_producto.precio,
                     stock=ticket_producto.stock,
                     activo=True
@@ -3253,6 +4058,260 @@ def cuadratura_caja(request):
     return render(request, 'vistas/modulo_ventas/cuadraturaCaja.html', context)
 
 
+def _calcular_cuadratura_data(sucursal, fecha_str):
+    """
+    Función helper para calcular datos de cuadratura.
+    Puede ser usada tanto por el endpoint POST como por el exportador Excel.
+    
+    Args:
+        sucursal: Instancia de Sucursal
+        fecha_str: Fecha en formato 'YYYY-MM-DD'
+    
+    Returns:
+        dict: Datos de cuadratura calculados
+    """
+    from datetime import datetime
+    from datetime import time as dt_time
+    
+    # Convertir fecha string a date object
+    fecha_obj = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+    
+    # Crear datetime para filtros con timezone aware
+    inicio_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.min))
+    fin_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.max))
+    
+    # Inicializar totales
+    cuadratura_data = {
+        'fecha_cuadratura': fecha_str,
+        'total_efectivo': 0,
+        'total_tarjeta_debito': 0,
+        'total_tarjeta_credito': 0,
+        'total_transbank': 0,
+        # Tarjetas Comerciales (solo Hites)
+        'total_hites': 0,
+        'total_tarjetas_comerciales': 0,
+        # Venta Internet (Falabella, Paris, Ripley, MercadoPago, Klap)
+        'total_falabella': 0,
+        'total_paris': 0,
+        'total_ripley': 0,
+        'total_mercadopago': 0,
+        'total_klap': 0,
+        'total_venta_internet': 0,
+        # Otros
+        'total_transferencia': 0,
+        'total_cheque': 0,
+        'total_convenio': 0,
+        'total_credito_trabajador': 0,
+        'total_credito_externo': 0,
+        'total_orden_compra': 0,
+        'total_nota_credito': 0,
+        'total_descuentos': 0,  # Descuentos aplicados
+        # Documentos
+        'total_tickets': 0,
+        'total_boletas': 0,
+        'total_boletas_electronicas': 0,
+        'total_boletas_papel': 0,
+        'total_facturas': 0,
+        'total_facturas_exentas': 0,
+        'total_notas_credito': 0,
+        'cantidad_tickets': 0,
+        'cantidad_boletas': 0,
+        'cantidad_boletas_electronicas': 0,
+        'cantidad_boletas_papel': 0,
+        'cantidad_facturas': 0,
+        'cantidad_facturas_exentas': 0,
+        'venta_total': 0,
+    }
+    
+    # ========== PROCESAR TICKETS ==========
+    tickets_del_dia = Ticket.objects.filter(
+        sucursal=sucursal,
+        created_at__range=[inicio_dia, fin_dia],
+        estado='PAGADO'
+    ).prefetch_related('pagos')
+    
+    for ticket in tickets_del_dia:
+        cuadratura_data['total_tickets'] += ticket.total or 0
+        cuadratura_data['cantidad_tickets'] += 1
+        
+        # Procesar pagos del ticket
+        for pago in ticket.pagos.all():
+            metodo = pago.metodo_pago
+            monto = pago.monto or 0
+            
+            if metodo == 'EFECTIVO':
+                cuadratura_data['total_efectivo'] += monto
+            elif metodo == 'TARJETA_DEBITO':
+                cuadratura_data['total_tarjeta_debito'] += monto
+                cuadratura_data['total_transbank'] += monto
+            elif metodo == 'TARJETA_CREDITO':
+                cuadratura_data['total_tarjeta_credito'] += monto
+                cuadratura_data['total_transbank'] += monto
+            elif metodo == 'TBK_POS_INTEGRADO' or metodo == 'TBK_MANUAL':
+                cuadratura_data['total_transbank'] += monto
+            elif metodo == 'TRANSFERENCIA':
+                cuadratura_data['total_transferencia'] += monto
+            elif metodo == 'CHEQUE':
+                cuadratura_data['total_cheque'] += monto
+            elif metodo == 'CONVENIO':
+                cuadratura_data['total_convenio'] += monto
+            elif metodo == 'CREDITO_TRABAJADOR':
+                cuadratura_data['total_credito_trabajador'] += monto
+            elif metodo == 'CREDITO_EXTERNO':
+                cuadratura_data['total_credito_externo'] += monto
+            elif metodo == 'ORDEN_COMPRA':
+                cuadratura_data['total_orden_compra'] += monto
+            elif metodo == 'TARJETA_COMERCIAL':
+                # Por defecto va a Hites (única tarjeta comercial)
+                cuadratura_data['total_hites'] += monto
+            elif metodo == 'VENTA_INTERNET':
+                cuadratura_data['total_venta_internet'] += monto
+                # Por defecto va a MercadoPago
+                cuadratura_data['total_mercadopago'] += monto
+    
+    # ========== PROCESAR DTEs (FACTURAS/BOLETAS ELECTRÓNICAS) ==========
+    # Obtener folios de DTEs que ya tienen ticket asociado para evitar duplicar pagos
+    folios_tickets = Ticket.objects.filter(
+        sucursal=sucursal,
+        created_at__range=[inicio_dia, fin_dia],
+        folio_dte__isnull=False
+    ).values_list('folio_dte', flat=True)
+    
+    dtes_del_dia = Dte.objects.filter(
+        sucursal=sucursal,
+        fecha_emision=fecha_obj,
+        estado_dte='EMITIDO',
+        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+    ).prefetch_related('dte_asociado')
+    
+    for dte in dtes_del_dia:
+        monto_dte = dte.monto_con_iva or 0
+        
+        # Calcular suma de pagos para detectar descuentos
+        suma_pagos_dte = sum((p.monto or 0) for p in dte.dte_asociado.all())
+        descuento_dte = max(0, monto_dte - suma_pagos_dte)
+        
+        # Usar monto real pagado (con descuento aplicado) para cuadratura
+        monto_real = suma_pagos_dte if suma_pagos_dte > 0 else monto_dte
+        
+        if dte.tipo_documento == 'BOLETA ELECTRONICA':
+            cuadratura_data['total_boletas_electronicas'] += monto_real
+            cuadratura_data['cantidad_boletas_electronicas'] += 1
+            cuadratura_data['total_descuentos'] += descuento_dte
+        elif dte.tipo_documento == 'BOLETA PAPEL':
+            cuadratura_data['total_boletas_papel'] += monto_real
+            cuadratura_data['cantidad_boletas_papel'] += 1
+            cuadratura_data['total_descuentos'] += descuento_dte
+        elif dte.tipo_documento == 'FACTURA ELECTRONICA':
+            cuadratura_data['total_facturas'] += monto_real
+            cuadratura_data['cantidad_facturas'] += 1
+            cuadratura_data['total_descuentos'] += descuento_dte
+        elif dte.tipo_documento == 'FACTURA EXENTA':
+            cuadratura_data['total_facturas_exentas'] += monto_real
+            cuadratura_data['cantidad_facturas_exentas'] += 1
+            cuadratura_data['total_descuentos'] += descuento_dte
+        elif dte.tipo_documento == 'NOTA DE CREDITO':
+            cuadratura_data['total_notas_credito'] += monto_dte
+        
+        # ⚠️ IMPORTANTE: Solo procesar pagos del DTE si NO tiene ticket asociado
+        # Si el folio del DTE está en la lista de tickets, sus pagos ya fueron procesados
+        tiene_ticket_asociado = dte.numero_documento in folios_tickets
+        
+        # Procesar pagos del DTE SOLO si no tiene ticket asociado
+        if not tiene_ticket_asociado:
+            for pago in dte.dte_asociado.all():
+                metodo = pago.metodo_pago or ''
+                tipo_tarjeta = pago.tipo_tarjeta or ''
+                monto = pago.monto or 0
+                
+                metodo_upper = metodo.upper()
+                tarjeta_upper = tipo_tarjeta.upper()
+                
+                # Efectivo
+                if metodo_upper == 'EFECTIVO':
+                    cuadratura_data['total_efectivo'] += monto
+                
+                # Transbank Débito
+                elif metodo_upper == 'TBK_DEBITO_POS' or 'DEBITO' in metodo_upper or 'REDCOMPRA' in tarjeta_upper:
+                    cuadratura_data['total_tarjeta_debito'] += monto
+                    cuadratura_data['total_transbank'] += monto
+                
+                # Transbank Crédito
+                elif metodo_upper == 'TBK_CREDITO_POS' or 'VISA' in tarjeta_upper or 'AMEX' in tarjeta_upper or 'DINER' in tarjeta_upper:
+                    cuadratura_data['total_tarjeta_credito'] += monto
+                    cuadratura_data['total_transbank'] += monto
+                
+                # Transbank genérico
+                elif metodo_upper in ['TBK_POS_INTEGRADO', 'TBK_MANUAL']:
+                    cuadratura_data['total_transbank'] += monto
+                
+                # Transferencia
+                elif 'TRANSFERENCIA' in metodo_upper:
+                    cuadratura_data['total_transferencia'] += monto
+                
+                # Cheque
+                elif 'CHEQUE' in metodo_upper:
+                    cuadratura_data['total_cheque'] += monto
+                
+                # Convenio
+                elif metodo_upper == 'CONVENIO':
+                    cuadratura_data['total_convenio'] += monto
+                
+                # Crédito trabajador
+                elif metodo_upper == 'CREDITO_TRABAJADOR':
+                    cuadratura_data['total_credito_trabajador'] += monto
+                
+                # Crédito externo
+                elif metodo_upper == 'CREDITO_EXTERNO':
+                    cuadratura_data['total_credito_externo'] += monto
+                
+                # Orden de compra
+                elif metodo_upper == 'ORDEN_COMPRA' or ('ORDEN' in metodo_upper and 'COMPRA' in metodo_upper):
+                    cuadratura_data['total_orden_compra'] += monto
+                
+                # Tarjeta Comercial
+                elif metodo_upper == 'TARJETA_COMERCIAL':
+                    cuadratura_data['total_tarjetas_comerciales'] += monto
+                    if 'HITES' in tarjeta_upper:
+                        cuadratura_data['total_hites'] += monto
+                
+                # Venta Internet - buscar en tipo_tarjeta para clasificar
+                elif metodo_upper == 'VENTA_INTERNET':
+                    cuadratura_data['total_venta_internet'] += monto
+                    # Clasificar por tipo_tarjeta
+                    if 'FALABELLA' in tarjeta_upper:
+                        cuadratura_data['total_falabella'] += monto
+                    elif 'PARIS' in tarjeta_upper:
+                        cuadratura_data['total_paris'] += monto
+                    elif 'RIPLEY' in tarjeta_upper:
+                        cuadratura_data['total_ripley'] += monto
+                    elif 'MERCADO' in tarjeta_upper:
+                        cuadratura_data['total_mercadopago'] += monto
+                    elif 'KLAP' in tarjeta_upper:
+                        cuadratura_data['total_klap'] += monto
+    
+    # ========== CALCULAR TOTALES GENERALES ==========
+    # Tarjetas comerciales: solo Hites
+    cuadratura_data['total_tarjetas_comerciales'] = cuadratura_data['total_hites']
+    
+    # Alias para compatibilidad con frontend
+    cuadratura_data['total_visa_mc_amex'] = cuadratura_data['total_tarjeta_credito']
+    
+    # Venta Internet ya se calcula en el loop, pero asegurar el total
+    # (ya se suma en cada if de venta internet arriba)
+    
+    cuadratura_data['venta_total'] = (
+        cuadratura_data['total_tickets'] +
+        cuadratura_data['total_boletas_electronicas'] +
+        cuadratura_data['total_boletas_papel'] +
+        cuadratura_data['total_facturas'] +
+        cuadratura_data['total_facturas_exentas'] -
+        cuadratura_data['total_notas_credito']
+    )
+    
+    return cuadratura_data
+
+
 @login_required
 @require_POST
 @csrf_exempt
@@ -3276,243 +4335,8 @@ def generar_cuadratura_caja(request):
         
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
-        # Convertir fecha string a date object
-        from datetime import datetime
-        fecha_obj = datetime.strptime(fecha_cuadratura, '%Y-%m-%d').date()
-        
-        # Crear datetime para filtros con timezone aware
-        from datetime import time as dt_time
-        inicio_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.min))
-        fin_dia = timezone.make_aware(datetime.combine(fecha_obj, dt_time.max))
-        
-        # Inicializar totales
-        cuadratura_data = {
-            'fecha_cuadratura': fecha_cuadratura,
-            'total_efectivo': 0,
-            'total_tarjeta_debito': 0,
-            'total_tarjeta_credito': 0,
-            'total_transbank': 0,
-            # Tarjetas Comerciales (solo Hites)
-            'total_hites': 0,
-            'total_tarjetas_comerciales': 0,
-            # Venta Internet (Falabella, Paris, Ripley, MercadoPago, Klap)
-            'total_falabella': 0,
-            'total_paris': 0,
-            'total_ripley': 0,
-            'total_mercadopago': 0,
-            'total_klap': 0,
-            'total_venta_internet': 0,
-            # Otros
-            'total_transferencia': 0,
-            'total_cheque': 0,
-            'total_convenio': 0,
-            'total_credito_trabajador': 0,
-            'total_credito_externo': 0,
-            'total_orden_compra': 0,
-            'total_nota_credito': 0,
-            'total_descuentos': 0,  # Descuentos aplicados
-            # Documentos
-            'total_tickets': 0,
-            'total_boletas': 0,
-            'total_boletas_electronicas': 0,
-            'total_boletas_papel': 0,
-            'total_facturas': 0,
-            'total_facturas_exentas': 0,
-            'total_notas_credito': 0,
-            'cantidad_tickets': 0,
-            'cantidad_boletas': 0,
-            'cantidad_boletas_electronicas': 0,
-            'cantidad_boletas_papel': 0,
-            'cantidad_facturas': 0,
-            'cantidad_facturas_exentas': 0,
-            'venta_total': 0,
-        }
-        
-        # ========== PROCESAR TICKETS ==========
-        tickets_del_dia = Ticket.objects.filter(
-            sucursal=sucursal,
-            created_at__range=[inicio_dia, fin_dia],
-            estado='PAGADO'
-        ).prefetch_related('pagos')
-        
-        for ticket in tickets_del_dia:
-            cuadratura_data['total_tickets'] += ticket.total or 0
-            cuadratura_data['cantidad_tickets'] += 1
-            
-            # Procesar pagos del ticket
-            for pago in ticket.pagos.all():
-                metodo = pago.metodo_pago
-                monto = pago.monto or 0
-                
-                if metodo == 'EFECTIVO':
-                    cuadratura_data['total_efectivo'] += monto
-                elif metodo == 'TARJETA_DEBITO':
-                    cuadratura_data['total_tarjeta_debito'] += monto
-                    cuadratura_data['total_transbank'] += monto
-                elif metodo == 'TARJETA_CREDITO':
-                    cuadratura_data['total_tarjeta_credito'] += monto
-                    cuadratura_data['total_transbank'] += monto
-                elif metodo == 'TBK_POS_INTEGRADO' or metodo == 'TBK_MANUAL':
-                    cuadratura_data['total_transbank'] += monto
-                elif metodo == 'TRANSFERENCIA':
-                    cuadratura_data['total_transferencia'] += monto
-                elif metodo == 'CHEQUE':
-                    cuadratura_data['total_cheque'] += monto
-                elif metodo == 'CONVENIO':
-                    cuadratura_data['total_convenio'] += monto
-                elif metodo == 'CREDITO_TRABAJADOR':
-                    cuadratura_data['total_credito_trabajador'] += monto
-                elif metodo == 'CREDITO_EXTERNO':
-                    cuadratura_data['total_credito_externo'] += monto
-                elif metodo == 'ORDEN_COMPRA':
-                    cuadratura_data['total_orden_compra'] += monto
-                elif metodo == 'TARJETA_COMERCIAL':
-                    # Por defecto va a Hites (única tarjeta comercial)
-                    cuadratura_data['total_hites'] += monto
-                elif metodo == 'VENTA_INTERNET':
-                    cuadratura_data['total_venta_internet'] += monto
-                    # Por defecto va a MercadoPago
-                    cuadratura_data['total_mercadopago'] += monto
-        
-        # ========== PROCESAR DTEs (FACTURAS/BOLETAS ELECTRÓNICAS) ==========
-        # Obtener folios de DTEs que ya tienen ticket asociado para evitar duplicar pagos
-        folios_tickets = Ticket.objects.filter(
-            sucursal=sucursal,
-            created_at__range=[inicio_dia, fin_dia],
-            folio_dte__isnull=False
-        ).values_list('folio_dte', flat=True)
-        
-        dtes_del_dia = Dte.objects.filter(
-            sucursal=sucursal,
-            fecha_emision=fecha_obj,
-            estado_dte='EMITIDO',
-            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
-        ).prefetch_related('dte_asociado')
-        
-        for dte in dtes_del_dia:
-            monto_dte = dte.monto_con_iva or 0
-            
-            # Calcular suma de pagos para detectar descuentos
-            suma_pagos_dte = sum((p.monto or 0) for p in dte.dte_asociado.all())
-            descuento_dte = max(0, monto_dte - suma_pagos_dte)
-            
-            # Usar monto real pagado (con descuento aplicado) para cuadratura
-            monto_real = suma_pagos_dte if suma_pagos_dte > 0 else monto_dte
-            
-            if dte.tipo_documento == 'BOLETA ELECTRONICA':
-                cuadratura_data['total_boletas_electronicas'] += monto_real
-                cuadratura_data['cantidad_boletas_electronicas'] += 1
-                cuadratura_data['total_descuentos'] += descuento_dte
-            elif dte.tipo_documento == 'BOLETA PAPEL':
-                cuadratura_data['total_boletas_papel'] += monto_real
-                cuadratura_data['cantidad_boletas_papel'] += 1
-                cuadratura_data['total_descuentos'] += descuento_dte
-            elif dte.tipo_documento == 'FACTURA ELECTRONICA':
-                cuadratura_data['total_facturas'] += monto_real
-                cuadratura_data['cantidad_facturas'] += 1
-                cuadratura_data['total_descuentos'] += descuento_dte
-            elif dte.tipo_documento == 'FACTURA EXENTA':
-                cuadratura_data['total_facturas_exentas'] += monto_real
-                cuadratura_data['cantidad_facturas_exentas'] += 1
-                cuadratura_data['total_descuentos'] += descuento_dte
-            elif dte.tipo_documento == 'NOTA DE CREDITO':
-                cuadratura_data['total_notas_credito'] += monto_dte
-            
-            # ⚠️ IMPORTANTE: Solo procesar pagos del DTE si NO tiene ticket asociado
-            # Si el folio del DTE está en la lista de tickets, sus pagos ya fueron procesados
-            tiene_ticket_asociado = dte.numero_documento in folios_tickets
-            
-            # Procesar pagos del DTE SOLO si no tiene ticket asociado
-            if not tiene_ticket_asociado:
-                for pago in dte.dte_asociado.all():
-                    metodo = pago.metodo_pago or ''
-                    tipo_tarjeta = pago.tipo_tarjeta or ''
-                    monto = pago.monto or 0
-                    
-                    metodo_upper = metodo.upper()
-                    tarjeta_upper = tipo_tarjeta.upper()
-                    
-                    # Efectivo
-                    if metodo_upper == 'EFECTIVO':
-                        cuadratura_data['total_efectivo'] += monto
-                    
-                    # Transbank Débito
-                    elif metodo_upper == 'TBK_DEBITO_POS' or 'DEBITO' in metodo_upper or 'REDCOMPRA' in tarjeta_upper:
-                        cuadratura_data['total_tarjeta_debito'] += monto
-                        cuadratura_data['total_transbank'] += monto
-                    
-                    # Transbank Crédito
-                    elif metodo_upper == 'TBK_CREDITO_POS' or 'VISA' in tarjeta_upper or 'AMEX' in tarjeta_upper or 'DINER' in tarjeta_upper:
-                        cuadratura_data['total_tarjeta_credito'] += monto
-                        cuadratura_data['total_transbank'] += monto
-                    
-                    # Transbank genérico
-                    elif metodo_upper in ['TBK_POS_INTEGRADO', 'TBK_MANUAL']:
-                        cuadratura_data['total_transbank'] += monto
-                    
-                    # Transferencia
-                    elif 'TRANSFERENCIA' in metodo_upper:
-                        cuadratura_data['total_transferencia'] += monto
-                    
-                    # Cheque
-                    elif 'CHEQUE' in metodo_upper:
-                        cuadratura_data['total_cheque'] += monto
-                    
-                    # Convenio
-                    elif metodo_upper == 'CONVENIO':
-                        cuadratura_data['total_convenio'] += monto
-                    
-                    # Crédito trabajador
-                    elif metodo_upper == 'CREDITO_TRABAJADOR':
-                        cuadratura_data['total_credito_trabajador'] += monto
-                    
-                    # Crédito externo
-                    elif metodo_upper == 'CREDITO_EXTERNO':
-                        cuadratura_data['total_credito_externo'] += monto
-                    
-                    # Orden de compra
-                    elif metodo_upper == 'ORDEN_COMPRA' or ('ORDEN' in metodo_upper and 'COMPRA' in metodo_upper):
-                        cuadratura_data['total_orden_compra'] += monto
-                    
-                    # Tarjeta Comercial
-                    elif metodo_upper == 'TARJETA_COMERCIAL':
-                        cuadratura_data['total_tarjetas_comerciales'] += monto
-                        if 'HITES' in tarjeta_upper:
-                            cuadratura_data['total_hites'] += monto
-                    
-                    # Venta Internet - buscar en tipo_tarjeta para clasificar
-                    elif metodo_upper == 'VENTA_INTERNET':
-                        cuadratura_data['total_venta_internet'] += monto
-                        # Clasificar por tipo_tarjeta
-                        if 'FALABELLA' in tarjeta_upper:
-                            cuadratura_data['total_falabella'] += monto
-                        elif 'PARIS' in tarjeta_upper:
-                            cuadratura_data['total_paris'] += monto
-                        elif 'RIPLEY' in tarjeta_upper:
-                            cuadratura_data['total_ripley'] += monto
-                        elif 'MERCADO' in tarjeta_upper:
-                            cuadratura_data['total_mercadopago'] += monto
-                        elif 'KLAP' in tarjeta_upper:
-                            cuadratura_data['total_klap'] += monto
-        
-        # ========== CALCULAR TOTALES GENERALES ==========
-        # Tarjetas comerciales: solo Hites
-        cuadratura_data['total_tarjetas_comerciales'] = cuadratura_data['total_hites']
-        
-        # Alias para compatibilidad con frontend
-        cuadratura_data['total_visa_mc_amex'] = cuadratura_data['total_tarjeta_credito']
-        
-        # Venta Internet ya se calcula en el loop, pero asegurar el total
-        # (ya se suma en cada if de venta internet arriba)
-        
-        cuadratura_data['venta_total'] = (
-            cuadratura_data['total_tickets'] +
-            cuadratura_data['total_boletas_electronicas'] +
-            cuadratura_data['total_boletas_papel'] +
-            cuadratura_data['total_facturas'] +
-            cuadratura_data['total_facturas_exentas'] -
-            cuadratura_data['total_notas_credito']
-        )
+        # Usar la función helper para calcular los datos
+        cuadratura_data = _calcular_cuadratura_data(sucursal, fecha_cuadratura)
         
         return JsonResponse({
             'success': True,
@@ -4498,6 +5322,7 @@ def editar_cuadratura(request, arqueo_id):
 
 
 @login_required
+@login_required
 @require_GET
 def exportar_cuadratura_excel(request):
     """Exportar cuadratura a Excel usando datos en tiempo real"""
@@ -4511,23 +5336,14 @@ def exportar_cuadratura_excel(request):
                 'error': 'Fecha y sucursal requeridas'
             })
         
-        # Generar cuadratura en tiempo real (sin guardar en BD)
-        response_data = generar_cuadratura_caja(request)
-        cuadratura_json = json.loads(response_data.content)
+        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
-        if not cuadratura_json.get('success'):
-            return JsonResponse({
-                'success': False,
-                'error': 'Error al generar datos de cuadratura'
-            })
-        
-        cuadratura_data = cuadratura_json['cuadratura']
+        # Usar la función helper directamente para calcular la cuadratura
+        cuadratura_data = _calcular_cuadratura_data(sucursal, fecha)
         
         # Convertir fecha string a date object
         from datetime import datetime
         fecha_obj = datetime.strptime(fecha, '%Y-%m-%d').date()
-        
-        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
         
         # Crear Excel
         import openpyxl
@@ -7584,20 +8400,40 @@ def crear_cambio_devolucion(request):
                             raise ValidationError(f'Producto nuevo no encontrado')
                 
                 # ✅ Crear detalle del cambio
-                # Para productos adicionales: cantidad_original = 0, precio_original_unitario = 0
-                if cantidad_cambio > 0 or producto_nuevo:
-                    detalle = CambioDevolucionDetalle.objects.create(
-                        cambio_devolucion=cambio,
-                        producto_original=ticket_producto,
-                        cantidad_original=cantidad_cambio if not es_producto_adicional else 0,
-                        producto_nuevo=producto_nuevo,
-                        cantidad_nueva=cantidad_nueva,
-                        precio_nuevo=precio_nuevo,
-                        precio_original_unitario=ticket_producto.precio if (cantidad_cambio > 0 and not es_producto_adicional) else 0,
-                        condicion_producto=item.get('condicion_producto', 'PERFECTO'),
-                        apto_para_venta=item.get('apto_para_venta', True) if not es_producto_adicional else True,
-                        observaciones=item.get('observaciones', '') + (' [PRODUCTO ADICIONAL]' if es_producto_adicional else '')
-                    )
+                # Separar la creación según sea devolución, cambio o producto adicional
+                
+                if es_producto_adicional:
+                    # Producto ADICIONAL: solo producto nuevo, sin devolución asociada
+                    if producto_nuevo:
+                        detalle = CambioDevolucionDetalle.objects.create(
+                            cambio_devolucion=cambio,
+                            producto_original=None,  # No hay producto original
+                            cantidad_original=0,
+                            producto_nuevo=producto_nuevo,
+                            cantidad_nueva=cantidad_nueva,
+                            precio_nuevo=precio_nuevo,
+                            precio_original_unitario=0,
+                            condicion_producto='PERFECTO',
+                            apto_para_venta=True,
+                            observaciones=item.get('observaciones', '') + ' [PRODUCTO ADICIONAL]'
+                        )
+                        print(f"  ✅ Detalle creado: Producto ADICIONAL {producto_nuevo.sku}")
+                else:
+                    # Producto con DEVOLUCIÓN (puede o no tener producto nuevo asociado)
+                    if cantidad_cambio > 0:
+                        detalle = CambioDevolucionDetalle.objects.create(
+                            cambio_devolucion=cambio,
+                            producto_original=ticket_producto,
+                            cantidad_original=cantidad_cambio,
+                            producto_nuevo=producto_nuevo,
+                            cantidad_nueva=cantidad_nueva,
+                            precio_nuevo=precio_nuevo,
+                            precio_original_unitario=ticket_producto.precio,
+                            condicion_producto=item.get('condicion_producto', 'PERFECTO'),
+                            apto_para_venta=item.get('apto_para_venta', True),
+                            observaciones=item.get('observaciones', '')
+                        )
+                        print(f"  ✅ Detalle creado: {ticket_producto.ProductoTalla.sku} (devuelto) → {producto_nuevo.sku if producto_nuevo else 'N/A'} (nuevo)")
             
             # ✅ Usar el monto original recalculado para mayor precisión
             if monto_original_real > 0:
@@ -7744,16 +8580,21 @@ def obtener_detalle_cambio(request, cambio_id):
         for detalle in cambio.detalles.all():
             producto_original = detalle.producto_original
             
-            productos_detalle.append({
-                'id': detalle.id,
-                'producto_original': {
+            # Manejar producto original (puede ser NULL para productos adicionales)
+            producto_original_data = None
+            if producto_original:
+                producto_original_data = {
                     'sku': producto_original.ProductoTalla.sku,
                     'articulo': producto_original.ProductoTalla.producto.articulo,
                     'descripcion': producto_original.ProductoTalla.producto.descripcion,
                     'talla': producto_original.ProductoTalla.talla,
                     'cantidad_original': producto_original.stock,
                     'precio_unitario': float(producto_original.precio),
-                },
+                }
+            
+            productos_detalle.append({
+                'id': detalle.id,
+                'producto_original': producto_original_data,
                 'cantidad_cambio': detalle.cantidad_original,
                 'precio_original_unitario': float(detalle.precio_original_unitario),
                 'valor_original_total': float(detalle.valor_original_total),
@@ -8057,7 +8898,8 @@ def ejecutar_cambio_devolucion(request):
                     cambio.ticket_nuevo = ticket_nuevo
             
             # Procesar movimientos de inventario
-            for detalle in cambio.detalles.all():
+            # Filtrar solo detalles con producto_original (excluye productos adicionales)
+            for detalle in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
                 # 1. DEVOLVER stock del producto original (INGRESO)
                 if detalle.apto_para_venta:
                     Movimientos_Producto.objects.create(
@@ -8356,7 +9198,8 @@ def aprobar_cambio_generar_ticket(request):
         stock_ajustes = {}  # Dict para rastrear ajustes de stock por producto_talla_id
         
         # 1. Primero, calcular el stock que se va a recuperar de las devoluciones
-        for item in cambio.detalles.all():
+        # Filtrar solo detalles con producto_original (excluye productos adicionales)
+        for item in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
             producto_talla_devuelto = item.producto_original.ProductoTalla
             if producto_talla_devuelto.id not in stock_ajustes:
                 stock_ajustes[producto_talla_devuelto.id] = 0
@@ -8469,24 +9312,23 @@ def aprobar_cambio_generar_ticket(request):
                 productos_nuevos_agrupados = {}
                 
                 # AGRUPAR PRODUCTOS DEVUELTOS (con precio negativo)
-                for item in cambio.detalles.all():
-                    # Solo contar si tiene cantidad > 0
-                    if item.cantidad_original and item.cantidad_original > 0:
-                        producto_talla = item.producto_original.ProductoTalla
-                        pt_id = producto_talla.id
-                        precio = abs(int(item.precio_original_unitario or 0))
-                        
-                        if pt_id in productos_devueltos_agrupados:
-                            # Sumar cantidad al existente
-                            productos_devueltos_agrupados[pt_id]['cantidad'] += item.cantidad_original
-                            productos_devueltos_agrupados[pt_id]['subtotal'] += precio * item.cantidad_original
-                        else:
-                            productos_devueltos_agrupados[pt_id] = {
-                                'producto': producto_talla,
-                                'cantidad': item.cantidad_original,
-                                'precio': precio,
-                                'subtotal': precio * item.cantidad_original
-                            }
+                # Filtrar solo detalles con producto_original (excluye productos adicionales)
+                for item in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
+                    producto_talla = item.producto_original.ProductoTalla
+                    pt_id = producto_talla.id
+                    precio = abs(int(item.precio_original_unitario or 0))
+                    
+                    if pt_id in productos_devueltos_agrupados:
+                        # Sumar cantidad al existente
+                        productos_devueltos_agrupados[pt_id]['cantidad'] += item.cantidad_original
+                        productos_devueltos_agrupados[pt_id]['subtotal'] += precio * item.cantidad_original
+                    else:
+                        productos_devueltos_agrupados[pt_id] = {
+                            'producto': producto_talla,
+                            'cantidad': item.cantidad_original,
+                            'precio': precio,
+                            'subtotal': precio * item.cantidad_original
+                        }
                 
                 # AGRUPAR PRODUCTOS NUEVOS (con precio positivo)
                 for item in cambio.detalles.all():
@@ -8546,7 +9388,8 @@ def aprobar_cambio_generar_ticket(request):
             
             try:
                 # 1. ENTRADA: Productos devueltos vuelven al inventario (SOLO SI ESTÁN APTOS)
-                for item in cambio.detalles.all():
+                # Filtrar solo detalles con producto_original (excluye productos adicionales)
+                for item in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
                     producto_talla_devuelto = item.producto_original.ProductoTalla
                     
                     # ✅ Solo sumar stock si el producto está apto para venta
@@ -8938,7 +9781,8 @@ def completar_cambio_devolucion(request):
                     cambio.ticket_nuevo = ticket_nuevo
             
             # Procesar movimientos de inventario
-            for detalle in cambio.detalles.all():
+            # Filtrar solo detalles con producto_original (excluye productos adicionales)
+            for detalle in cambio.detalles.filter(producto_original__isnull=False, cantidad_original__gt=0):
                 # 1. DEVOLVER stock del producto original (INGRESO)
                 if detalle.apto_para_venta:
                     mov_devolucion = Movimientos_Producto.objects.create(
@@ -9071,11 +9915,13 @@ def buscar_documento_cambio(request):
         numero = request.GET.get('numero', '').strip()
         tipo_documento = request.GET.get('tipo_documento', 'dte')
         fecha_compra = request.GET.get('fecha_compra', '').strip()
+        tipo_dte = request.GET.get('tipo_dte', '').strip()  # 33, 39, 34, etc.
         
         print(f"🔍 DEBUG buscar_documento_cambio - Parámetros recibidos:")
         print(f"  numero: '{numero}'")
         print(f"  tipo_documento: '{tipo_documento}'")
         print(f"  fecha_compra: '{fecha_compra}'")
+        print(f"  tipo_dte: '{tipo_dte}'")
         
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         print(f"  sucursal_id: {sucursal_id}")
@@ -9119,6 +9965,11 @@ def buscar_documento_cambio(request):
             query = query.filter(tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'])
             print(f"  Después de filtro tipo_transaccion: {query.count()}")
             
+            # Filtrar por tipo de DTE específico si se proporcionó
+            if tipo_dte:
+                query = query.filter(tipo_documento=tipo_dte)
+                print(f"  Después de filtro tipo_documento={tipo_dte}: {query.count()}")
+            
             if fecha_compra:
                 query = query.filter(fecha_emision=fecha_compra)
                 print(f"  Después de filtro fecha_emision={fecha_compra}: {query.count()}")
@@ -9139,7 +9990,7 @@ def buscar_documento_cambio(request):
                 if dte_existe.sucursal_id != sucursal_id:
                     return JsonResponse({
                         'success': False,
-                        'error': f'DTE #{numero} pertenece a otra sucursal ({dte_existe.sucursal.nombreSucursal}). Solo puede procesar documentos de la sucursal actual.'
+                        'error': f'DTE #{numero} pertenece a otra sucursal ({dte_existe.sucursal.alias}). Solo puede procesar documentos de la sucursal actual.'
                     })
                 
                 # El DTE existe, verificar por qué no pasó los filtros
@@ -9150,37 +10001,66 @@ def buscar_documento_cambio(request):
                         'error': f'DTE #{numero} es tipo "{dte_existe.tipo_transaccion}". Solo se permiten cambios de documentos de VENTA o VENTA_PUBLICO.'
                     })
                 
-                # Si llegó aquí, el tipo es correcto pero la fecha no coincide
-                if fecha_compra:
-                    # Verificar si hay múltiples DTEs con ese número
-                    count_dtes = Dte.objects.filter(
-                        numero_documento=numero,
-                        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
-                    ).count()
-                    
-                    if count_dtes > 1:
-                        # Hay múltiples DTEs, listar las fechas
-                        dtes_fechas = Dte.objects.filter(
-                            numero_documento=numero,
-                            tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
-                        ).values_list('fecha_emision', flat=True)
-                        
-                        fechas_str = ', '.join([f.strftime('%d/%m/%Y') for f in dtes_fechas])
-                        
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'Hay {count_dtes} DTEs con el número #{numero}. Fechas disponibles: {fechas_str}. Por favor especifique la fecha correcta.'
-                        })
-                    else:
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'DTE #{numero} encontrado con fecha {dte_existe.fecha_emision.strftime("%d/%m/%Y")}, pero usted buscó con fecha {fecha_compra}. Corrija la fecha de compra.'
-                        })
+                # Si llegó aquí, el tipo es correcto pero otros filtros no coinciden
+                # Verificar si hay múltiples DTEs con ese número
+                query_disponibles = Dte.objects.filter(
+                    numero_documento=numero,
+                    sucursal_id=sucursal_id,
+                    tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO']
+                )
                 
-                return JsonResponse({
-                    'success': False,
-                    'error': f'DTE #{numero} no encontrado con los filtros especificados.'
-                })
+                if fecha_compra and tipo_dte:
+                    # Usuario especificó fecha y tipo, pero no se encontró
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'No se encontró DTE #{numero} tipo {tipo_dte} con fecha {fecha_compra}. Verifique los datos.'
+                    })
+                
+                count_dtes = query_disponibles.count()
+                
+                if count_dtes > 1:
+                    # Hay múltiples DTEs, crear tabla informativa
+                    dtes_info = []
+                    tipo_dte_nombres = {
+                        '33': 'Factura Electrónica',
+                        '34': 'Factura Exenta',
+                        '39': 'Boleta Electrónica',
+                        '41': 'Boleta Exenta',
+                        '61': 'Nota de Crédito',
+                        '56': 'Nota de Débito'
+                    }
+                    
+                    for d in query_disponibles.all():
+                        tipo_nombre = tipo_dte_nombres.get(d.tipo_documento, f'Tipo {d.tipo_documento}')
+                        dtes_info.append({
+                            'tipo': d.tipo_documento,
+                            'tipo_nombre': tipo_nombre,
+                            'fecha': d.fecha_emision.strftime('%d/%m/%Y'),
+                            'monto': f'${int(d.monto_con_iva):,}'
+                        })
+                    
+                    # Crear mensaje con tabla HTML
+                    tabla_html = '<div class="table-responsive"><table class="table table-sm table-bordered">'
+                    tabla_html += '<thead><tr><th>Tipo DTE</th><th>Código</th><th>Fecha</th><th>Monto</th></tr></thead><tbody>'
+                    
+                    for info in dtes_info:
+                        tabla_html += f'<tr><td><strong>{info["tipo_nombre"]}</strong></td><td>{info["tipo"]}</td><td>{info["fecha"]}</td><td>{info["monto"]}</td></tr>'
+                    
+                    tabla_html += '</tbody></table></div>'
+                    
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Se encontraron {count_dtes} documentos con el número #{numero}',
+                        'multiple_documents': True,
+                        'documents_html': tabla_html,
+                        'message': 'Por favor, seleccione el tipo de DTE específico (Boleta o Factura) en el formulario de búsqueda.'
+                    })
+                else:
+                    # Un solo DTE pero no coincide con la fecha
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'DTE #{numero} encontrado con fecha {dte_existe.fecha_emision.strftime("%d/%m/%Y")}, pero usted buscó con fecha {fecha_compra}. Corrija la fecha de compra.'
+                    })
             
             # Verificar que esté emitido/pagado
             if dte.estado_dte not in ['EMITIDO', 'ACEPTADO']:
@@ -9325,9 +10205,44 @@ def buscar_documento_cambio(request):
             # Buscar por Ticket de Cambio (número del ticket original)
             print(f"  🎫 Buscando por Ticket de Cambio: {numero}")
             
-            # El ticket de cambio contiene el número del ticket original
-            # Puede tener formato "TC-123" o solo "123"
-            numero_ticket = numero.replace('TC-', '').replace('tc-', '').strip()
+            # El ticket de cambio puede tener varios formatos:
+            # 1. Nuevo formato: TC-{SUCURSAL}-{TICKET}-{FECHA} (ej: TC-SUC1-123-250120)
+            # 2. Formato anterior: TC-{TICKET} (ej: TC-123)
+            # 3. Solo número: 123
+            numero_limpio = numero.upper().strip()
+            numero_ticket = None
+            fecha_extraida = None
+            
+            if numero_limpio.startswith('TC-'):
+                partes = numero_limpio.split('-')
+                if len(partes) >= 4:
+                    # Nuevo formato: TC-SUCURSAL-TICKET-FECHA
+                    # TC-SUC1-123-250120 → ticket=123, fecha=2025-01-20
+                    numero_ticket = partes[2]  # El tercer elemento es el número de ticket
+                    # Extraer fecha del formato YYMMDD
+                    if len(partes[3]) == 6:
+                        try:
+                            fecha_str = partes[3]  # YYMMDD
+                            year = 2000 + int(fecha_str[0:2])
+                            month = int(fecha_str[2:4])
+                            day = int(fecha_str[4:6])
+                            fecha_extraida = f"{year}-{month:02d}-{day:02d}"
+                            print(f"  📅 Fecha extraída del código: {fecha_extraida}")
+                        except:
+                            pass
+                elif len(partes) == 2:
+                    # Formato anterior: TC-123
+                    numero_ticket = partes[1]
+                else:
+                    numero_ticket = numero_limpio.replace('TC-', '')
+            else:
+                # Solo número
+                numero_ticket = numero_limpio
+            
+            # Si se extrajo fecha del código y no se proporcionó fecha_compra, usarla
+            if fecha_extraida and not fecha_compra:
+                fecha_compra = fecha_extraida
+                print(f"  📅 Usando fecha extraída del código de cambio: {fecha_compra}")
             
             # Buscar el ticket original
             ticket_query = Ticket.objects.select_related(
@@ -9463,6 +10378,11 @@ def buscar_documento_cambio(request):
             return buscar_ticket_para_cambio_original(request, numero, fecha_compra, sucursal_id)
         
     except Exception as e:
+        import traceback
+        print(f"❌ ERROR en buscar_documento_cambio:")
+        print(f"   Mensaje: {str(e)}")
+        print(f"   Traceback completo:")
+        traceback.print_exc()
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar documento: {str(e)}'
@@ -10922,9 +11842,9 @@ def exportar_dashboard_ventas_excel(request):
             cell.fill = header_fill
         
         ventas_vendedor = queryset.values(
-            'vendedor__codigo',
+            'vendedor__codigo_vendedor',
             'vendedor__nombre',
-            'vendedor__comision_porcentaje'
+            'vendedor__comision'
         ).annotate(
             total_vendido=Sum('total'),
             cantidad_ventas=Count('id'),
@@ -10934,11 +11854,11 @@ def exportar_dashboard_ventas_excel(request):
         row = 2
         for venta in ventas_vendedor:
             total_vendido = float(venta['total_vendido'] or 0)
-            comision_porcentaje = float(venta['vendedor__comision_porcentaje'] or 0)
+            comision_porcentaje = float(venta['vendedor__comision'] or 0)
             comision_total = total_vendido * (comision_porcentaje / 100)
             participacion = (total_vendido / ventas_totales * 100) if ventas_totales > 0 else 0
             
-            ws2.cell(row, 1, venta['vendedor__codigo'])
+            ws2.cell(row, 1, venta['vendedor__codigo_vendedor'])
             ws2.cell(row, 2, venta['vendedor__nombre'])
             ws2.cell(row, 3, venta['cantidad_ventas'])
             ws2.cell(row, 4, f"${total_vendido:,.0f}")
@@ -10968,10 +11888,10 @@ def exportar_dashboard_ventas_excel(request):
             'ProductoTalla__producto__articulo',
             'ProductoTalla__producto__categoria__nombre'
         ).annotate(
-            cantidad_vendida=Sum('cantidad'),
+            cantidad_vendida=Sum('stock'),
             total_ventas=Sum(
                 ExpressionWrapper(
-                    F('cantidad') * F('precioUnitario'),
+                    F('stock') * F('precio'),
                     output_field=DecimalField()
                 )
             )

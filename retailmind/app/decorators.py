@@ -9,9 +9,9 @@ from django.http import JsonResponse, HttpResponseForbidden
 from .models import PermisoRol
 
 
-def requiere_permiso(codigo_opcion, tipo_permiso='puede_ver', redirigir_a='verHome'):
+def requiere_permiso(codigo_opcion, tipo_permiso='puede_ver', redirigir_a='bienvenida'):
     """
-    Decorador para proteger vistas según permisos del rol del usuario
+    Decorador para proteger vistas según permisos del rol del usuario Y de la sucursal activa
     
     Args:
         codigo_opcion (str): Código de la opción del menú (ej: 'dashboard_ventas', 'pos_dashboard')
@@ -31,11 +31,15 @@ def requiere_permiso(codigo_opcion, tipo_permiso='puede_ver', redirigir_a='verHo
         @wraps(view_func)
         @login_required
         def _wrapped_view(request, *args, **kwargs):
-            # Verificar permiso
+            # Obtener la sucursal actual de la sesión
+            sucursal_id = request.session.get('idSucursalActual')
+            
+            # Verificar permiso (por rol y por sucursal)
             tiene_permiso = PermisoRol.tiene_permiso(
                 usuario=request.user,
                 codigo_opcion=codigo_opcion,
-                tipo_permiso=tipo_permiso
+                tipo_permiso=tipo_permiso,
+                sucursal_id=sucursal_id
             )
             
             if not tiene_permiso:
@@ -98,7 +102,7 @@ def requiere_rol(*roles_permitidos):
                     request,
                     '⚠️ No tienes el rol necesario para acceder a esta funcionalidad.'
                 )
-                return redirect('verHome')
+                return redirect('bienvenida')
         
         return _wrapped_view
     return decorator
@@ -153,8 +157,9 @@ def verificar_permisos_multiples(*permisos):
                 return view_func(request, *args, **kwargs)
             
             # Verificar todos los permisos
+            sucursal_id = request.session.get('idSucursalActual')
             for codigo_opcion, tipo_permiso in permisos:
-                if not PermisoRol.tiene_permiso(request.user, codigo_opcion, tipo_permiso):
+                if not PermisoRol.tiene_permiso(request.user, codigo_opcion, tipo_permiso, sucursal_id=sucursal_id):
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                         return JsonResponse({
                             'error': True,
@@ -165,7 +170,7 @@ def verificar_permisos_multiples(*permisos):
                             request,
                             '⚠️ No tienes todos los permisos necesarios para realizar esta acción.'
                         )
-                        return redirect('verHome')
+                        return redirect('bienvenida')
             
             return view_func(request, *args, **kwargs)
         
