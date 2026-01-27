@@ -769,58 +769,9 @@
                                             </div>
                                         </div>
 
-                                        <!-- ✅ OPCIÓN DE TICKET DE CAMBIO ANTES DE FINALIZAR -->
-                                        <div class="card border-warning mb-4" id="seccionTicketCambio">
-                                            <div class="card-header bg-warning bg-opacity-10 border-warning">
-                                                <div class="form-check form-switch">
-                                                    <input class="form-check-input" type="checkbox" id="checkGenerarTicketCambio" style="width: 50px; height: 24px; cursor: pointer;">
-                                                    <label class="form-check-label fw-bold ms-2" for="checkGenerarTicketCambio" style="cursor: pointer; font-size: 1.1rem;">
-                                                        <i class="ri-exchange-line text-warning"></i> Generar Ticket de Cambio
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <div class="card-body" id="opcionesTicketCambio" style="display: none;">
-                                                <div class="alert alert-info mb-3">
-                                                    <i class="ri-information-line"></i>
-                                                    <strong>Ticket de Cambio:</strong> Se imprimirá automáticamente junto con la boleta para que el cliente pueda realizar cambios en los próximos 15 días.
-                                                </div>
-                                                <div class="row g-3">
-                                                    <div class="col-md-4">
-                                                        <label class="form-label fw-bold">
-                                                            <i class="ri-printer-line"></i> Cantidad de Tickets
-                                                        </label>
-                                                        <select class="form-select form-select-lg" id="cantidadTicketsCambioFinal">
-                                                            <option value="1">1 ticket</option>
-                                                            <option value="2">2 tickets</option>
-                                                            <option value="3">3 tickets</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="col-md-8">
-                                                        <label class="form-label fw-bold">
-                                                            <i class="ri-settings-3-line"></i> Opciones de Impresión
-                                                        </label>
-                                                        <div class="d-flex gap-3">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="modoImpresionCambio" id="imprimirTermica" value="termica" checked>
-                                                                <label class="form-check-label" for="imprimirTermica">
-                                                                    <i class="ri-printer-fill text-primary"></i> Impresora Térmica (Automático)
-                                                                </label>
-                                                            </div>
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="modoImpresionCambio" id="imprimirVentana" value="ventana">
-                                                                <label class="form-check-label" for="imprimirVentana">
-                                                                    <i class="ri-window-line text-secondary"></i> Ventana de Impresión
-                                                                </label>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
                                         <!-- Botón Finalizar Grande -->
                                         <div class="mb-4">
-                                            <button class="btn btn-success btn-lg w-100 py-4" onclick="finalizarVenta()" style="font-size: 1.5rem; font-weight: bold;">
+                                            <button class="btn btn-success btn-lg w-100 py-4" onclick="pasoSiguiente()" style="font-size: 1.5rem; font-weight: bold;">
                                                 <i class="ri-check-line"></i> FINALIZAR VENTA
                                             </button>
                                         </div>
@@ -829,9 +780,6 @@
                                             <small class="text-muted">
                                                 <i class="ri-information-line"></i> 
                                                 El DTE se genera automáticamente al finalizar la venta (Boleta o Factura Electrónica).
-                                                <br>
-                                                <i class="ri-exchange-line text-warning"></i> 
-                                                Si activas el ticket de cambio, se imprimirá automáticamente para el cliente.
                                             </small>
                                         </div>
                                     </div>

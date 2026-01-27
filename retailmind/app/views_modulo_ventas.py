@@ -2896,7 +2896,8 @@ def registrar_pagos_ticket(request, correlativo):
                         tipo_movimiento='EGRESO',
                         responsable=request.user.username,
                         observaciones=f'Venta ticket #{ticket.correlativo} - Consumo manual (FIFO no disponible)',
-                        referencia_externa=referencia
+                        referencia_externa=referencia,
+                        fecha=timezone.now().date()
                     )
                     # Actualizar stock manualmente
                     tp.ProductoTalla.stock -= tp.stock
@@ -2919,7 +2920,8 @@ def registrar_pagos_ticket(request, correlativo):
                         tipo_movimiento='EGRESO',
                         responsable=request.user.username,
                         observaciones=f'Venta ticket #{ticket.correlativo} - Movimiento de registro (FIFO parcial)',
-                        referencia_externa=referencia
+                        referencia_externa=referencia,
+                        fecha=timezone.now().date()
                     )
                     print(f"✓ Movimiento de registro creado sin descuento adicional")
     elif ticket_se_pago and ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
