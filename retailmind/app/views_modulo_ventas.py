@@ -2829,163 +2829,163 @@ def registrar_pagos_ticket(request, correlativo):
     print(f"🔍 DEBUG PAGO: Ticket #{ticket.correlativo}, modulo_origen='{ticket.modulo_origen}', ticket_se_pago={ticket_se_pago}")
     
     if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
-            print(f"🔍 DEBUG: Iniciando descuento de stock para ticket #{ticket.correlativo}")
-            for tp in ticket.ticket_productos.all():
-                # Usar stock_sucursal para obtener el stock real de la sucursal
-                stock_antes = tp.ProductoTalla.stock_sucursal(ticket.sucursal_id)
-                print(f"🔍 DEBUG: SKU {tp.ProductoTalla.sku} - Stock ANTES: {stock_antes}, A descontar: {tp.stock}")
-                
-                # Verificar que hay stock disponible en la sucursal
-                if stock_antes < tp.stock:
-                    error_msg = f'Stock insuficiente para SKU {tp.ProductoTalla.sku}. Disponible: {stock_antes}, Requerido: {tp.stock}'
-                    print(f"❌ {error_msg}")
-                    # Revertir estado del ticket a PENDIENTE
-                    ticket.estado = 'PENDIENTE'
-                    ticket.save()
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'error_tipo': 'STOCK_INSUFICIENTE',
-                        'sku': str(tp.ProductoTalla.sku),
-                        'stock_disponible': stock_antes,
-                        'stock_requerido': tp.stock
-                    }, status=400)
-                
-                # Intentar consumir stock FIFO
-                try:
-                    # Consumir stock FIFO (esto crea automáticamente el movimiento de EGRESO)
-                    # ✅ No pasar referencia_externa para que consumir_stock_fifo use DTE si está disponible
-                    consumir_stock_fifo(
-                        producto_talla=tp.ProductoTalla,
-                        cantidad_requerida=tp.stock,
-                        responsable=request.user.username,
-                        ticket=ticket,
-                        observaciones=f'Pago de ticket #{ticket.correlativo}',
-                        referencia_externa=None  # Dejamos que consumir_stock_fifo determine la referencia correcta
-                    )
-                    
-                    # Recargar para ver el stock actualizado
-                    tp.ProductoTalla.refresh_from_db()
-                    stock_despues = tp.ProductoTalla.stock
-                    print(f"✓ Stock consumido FIFO: SKU {tp.ProductoTalla.sku} - Stock ANTES: {stock_antes}, Stock DESPUÉS: {stock_despues}, Diferencia: {stock_antes - stock_despues}")
-                    
-                except Exception as e:
-                    print(f"❌ Error FIFO para {tp.ProductoTalla.sku}: {str(e)}")
-                    print(f"🔍 Verificando stock después del error FIFO...")
-                    
-                    # Recargar stock para verificar si FIFO ya lo descontó
-                    tp.ProductoTalla.refresh_from_db()
-                    stock_despues_error = tp.ProductoTalla.stock
-                    print(f"🔍 Stock después del error: {stock_despues_error}")
-                    
-                    # ⚠️ CRÍTICO: Solo descontar manualmente si FIFO NO descontó
-                    if stock_despues_error == stock_antes:
-                        print(f"✓ FIFO no descontó, procediendo con descuento manual")
-                        # Crear movimiento manual si falla FIFO
-                        # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
-                        referencia = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
-                        Movimientos_Producto.objects.create(
-                            ticket=ticket,
-                            ProductoTalla=tp.ProductoTalla,
-                            sucursal_origen=ticket.sucursal,
-                            cantidad=-tp.stock,  # Negativo para egreso
-                            costo=tp.ProductoTalla.producto.costo,
-                            precio=tp.precio,
-                            sobreprecio=tp.ProductoTalla.producto.sobreprecio if hasattr(tp.ProductoTalla.producto, 'sobreprecio') else 0,
-                            concepto='VENTA_DIRECTA',
-                            tipo_movimiento='EGRESO',
-                            responsable=request.user.username,
-                            observaciones=f'Venta ticket #{ticket.correlativo} - Consumo manual (FIFO no disponible)',
-                            referencia_externa=referencia
-                        )
-                        # Actualizar stock manualmente
-                        tp.ProductoTalla.stock -= tp.stock
-                        tp.ProductoTalla.save()
-                        print(f"⚠ Stock consumido manualmente: {tp.ProductoTalla.sku} -{tp.stock} (Stock: {stock_antes} → {tp.ProductoTalla.stock})")
-                    else:
-                        print(f"⚠️ ADVERTENCIA: FIFO ya descontó parcialmente. Stock: {stock_antes} → {stock_despues_error}")
-                        # No descontar de nuevo, solo crear movimiento de registro
-                        # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
-                        referencia = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
-                        Movimientos_Producto.objects.create(
-                            ticket=ticket,
-                            ProductoTalla=tp.ProductoTalla,
-                            sucursal_origen=ticket.sucursal,
-                            cantidad=-tp.stock,
-                            costo=tp.ProductoTalla.producto.costo,
-                            precio=tp.precio,
-                            sobreprecio=tp.ProductoTalla.producto.sobreprecio if hasattr(tp.ProductoTalla.producto, 'sobreprecio') else 0,
-                            concepto='VENTA_DIRECTA',
-                            tipo_movimiento='EGRESO',
-                            responsable=request.user.username,
-                            observaciones=f'Venta ticket #{ticket.correlativo} - Movimiento de registro (FIFO parcial)',
-                            referencia_externa=referencia
-                        )
-                        print(f"✓ Movimiento de registro creado sin descuento adicional")
-        elif ticket_se_pago and ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
-            print(f"ℹ️  TICKET DE CAMBIO/DEVOLUCIÓN #{ticket.correlativo}: Stock ya fue ajustado al aprobar el cambio. No se descuenta nuevamente.")
-        
-        # Guardar o actualizar cliente en la base de datos si tiene datos
-        if datos_cliente and datos_cliente.get('rut') and datos_cliente.get('nombre'):
-            guardar_o_actualizar_cliente(datos_cliente, request.user)
-        
-        # Generar DTE si el tipo de documento lo requiere
-        tipo_documento_seleccionado = payload.get('tipo_documento', '')
-        dte_generado = None
-        
-        if tipo_documento_seleccionado in ['BOLETA_ELECTRONICA', 'BOLETA_PAPEL', 'FACTURA_ELECTRONICA'] and ticket.estado == 'PAGADO':
+        print(f"🔍 DEBUG: Iniciando descuento de stock para ticket #{ticket.correlativo}")
+        for tp in ticket.ticket_productos.all():
+            # Usar stock_sucursal para obtener el stock real de la sucursal
+            stock_antes = tp.ProductoTalla.stock_sucursal(ticket.sucursal_id)
+            print(f"🔍 DEBUG: SKU {tp.ProductoTalla.sku} - Stock ANTES: {stock_antes}, A descontar: {tp.stock}")
+            
+            # Verificar que hay stock disponible en la sucursal
+            if stock_antes < tp.stock:
+                error_msg = f'Stock insuficiente para SKU {tp.ProductoTalla.sku}. Disponible: {stock_antes}, Requerido: {tp.stock}'
+                print(f"❌ {error_msg}")
+                # Revertir estado del ticket a PENDIENTE
+                ticket.estado = 'PENDIENTE'
+                ticket.save()
+                return JsonResponse({
+                    'success': False, 
+                    'error': error_msg,
+                    'error_tipo': 'STOCK_INSUFICIENTE',
+                    'sku': str(tp.ProductoTalla.sku),
+                    'stock_disponible': stock_antes,
+                    'stock_requerido': tp.stock
+                }, status=400)
+            
+            # Intentar consumir stock FIFO
             try:
-                print(f"🔍 DEBUG: Generando DTE para ticket #{ticket.correlativo}")
+                # Consumir stock FIFO (esto crea automáticamente el movimiento de EGRESO)
+                # ✅ No pasar referencia_externa para que consumir_stock_fifo use DTE si está disponible
+                consumir_stock_fifo(
+                    producto_talla=tp.ProductoTalla,
+                    cantidad_requerida=tp.stock,
+                    responsable=request.user.username,
+                    ticket=ticket,
+                    observaciones=f'Pago de ticket #{ticket.correlativo}',
+                    referencia_externa=None  # Dejamos que consumir_stock_fifo determine la referencia correcta
+                )
                 
-                # ✅ CRÍTICO: Refrescar el ticket desde la BD para tener los pagos actualizados
-                ticket.refresh_from_db()
+                # Recargar para ver el stock actualizado
+                tp.ProductoTalla.refresh_from_db()
+                stock_despues = tp.ProductoTalla.stock
+                print(f"✓ Stock consumido FIFO: SKU {tp.ProductoTalla.sku} - Stock ANTES: {stock_antes}, Stock DESPUÉS: {stock_despues}, Diferencia: {stock_antes - stock_despues}")
                 
-                # Verificar pagos ANTES de generar DTE
-                pagos_count = ticket.pagos.count()
-                print(f"🔍 DEBUG: Ticket tiene {pagos_count} pago(s) registrado(s)")
-                for pago in ticket.pagos.all():
-                    print(f"  - {pago.metodo_pago}: ${pago.monto:,}")
-                
-                # Verificar stock ANTES de generar DTE
-                for tp in ticket.ticket_productos.all():
-                    print(f"🔍 DEBUG PRE-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
-                
-                # ✅ Pasar cotizacion_obj para usar sus descripciones en el TXT
-                dte_generado = generar_dte_desde_ticket(ticket, tipo_documento_seleccionado, request.user, cotizacion=cotizacion_obj)
-                print(f"✓ DTE generado: {dte_generado.tipo_documento} #{dte_generado.numero_documento}")
-                
-                # Verificar stock DESPUÉS de generar DTE
-                for tp in ticket.ticket_productos.all():
-                    tp.ProductoTalla.refresh_from_db()
-                    print(f"🔍 DEBUG POST-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
-                
-                # =========================================================================
-                # NUEVO: Marcar cotización como facturada si viene de una cotización
-                # =========================================================================
-                if cotizacion_obj and dte_generado:
-                    try:
-                        from .models import Historial_Cotizacion
-                        
-                        # Usar solo el número de documento (el campo numero_factura tiene max_length=20)
-                        numero_documento_corto = str(dte_generado.numero_documento)[:20]
-                        numero_documento_completo = f"{dte_generado.tipo_documento} #{dte_generado.numero_documento}"
-                        cotizacion_obj.marcar_como_facturada(numero_documento_corto)
-                        
-                        # Registrar en historial
-                        Historial_Cotizacion.objects.create(
-                            cotizacion=cotizacion_obj,
-                            usuario=request.user,
-                            accion='FACTURADA',
-                            descripcion=f'Cotización facturada desde POS. Documento: {numero_documento_completo}. Ticket: #{ticket.correlativo}',
-                            ip_address=request.META.get('REMOTE_ADDR', '')
-                        )
-                        print(f"✅ Cotización {cotizacion_obj.numero_cotizacion} marcada como facturada")
-                    except Exception as cot_error:
-                        print(f"⚠️ Error al marcar cotización como facturada: {str(cot_error)}")
-                    
             except Exception as e:
-                # No fallar el pago si hay error en DTE, solo registrar
-                print(f"⚠ Error al generar DTE: {str(e)}")
+                print(f"❌ Error FIFO para {tp.ProductoTalla.sku}: {str(e)}")
+                print(f"🔍 Verificando stock después del error FIFO...")
+                
+                # Recargar stock para verificar si FIFO ya lo descontó
+                tp.ProductoTalla.refresh_from_db()
+                stock_despues_error = tp.ProductoTalla.stock
+                print(f"🔍 Stock después del error: {stock_despues_error}")
+                
+                # ⚠️ CRÍTICO: Solo descontar manualmente si FIFO NO descontó
+                if stock_despues_error == stock_antes:
+                    print(f"✓ FIFO no descontó, procediendo con descuento manual")
+                    # Crear movimiento manual si falla FIFO
+                    # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
+                    referencia = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
+                    Movimientos_Producto.objects.create(
+                        ticket=ticket,
+                        ProductoTalla=tp.ProductoTalla,
+                        sucursal_origen=ticket.sucursal,
+                        cantidad=-tp.stock,  # Negativo para egreso
+                        costo=tp.ProductoTalla.producto.costo,
+                        precio=tp.precio,
+                        sobreprecio=tp.ProductoTalla.producto.sobreprecio if hasattr(tp.ProductoTalla.producto, 'sobreprecio') else 0,
+                        concepto='VENTA_DIRECTA',
+                        tipo_movimiento='EGRESO',
+                        responsable=request.user.username,
+                        observaciones=f'Venta ticket #{ticket.correlativo} - Consumo manual (FIFO no disponible)',
+                        referencia_externa=referencia
+                    )
+                    # Actualizar stock manualmente
+                    tp.ProductoTalla.stock -= tp.stock
+                    tp.ProductoTalla.save()
+                    print(f"⚠ Stock consumido manualmente: {tp.ProductoTalla.sku} -{tp.stock} (Stock: {stock_antes} → {tp.ProductoTalla.stock})")
+                else:
+                    print(f"⚠️ ADVERTENCIA: FIFO ya descontó parcialmente. Stock: {stock_antes} → {stock_despues_error}")
+                    # No descontar de nuevo, solo crear movimiento de registro
+                    # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
+                    referencia = f'DTE_{ticket.folio_dte}' if ticket.folio_dte else f'TICKET_{ticket.correlativo}'
+                    Movimientos_Producto.objects.create(
+                        ticket=ticket,
+                        ProductoTalla=tp.ProductoTalla,
+                        sucursal_origen=ticket.sucursal,
+                        cantidad=-tp.stock,
+                        costo=tp.ProductoTalla.producto.costo,
+                        precio=tp.precio,
+                        sobreprecio=tp.ProductoTalla.producto.sobreprecio if hasattr(tp.ProductoTalla.producto, 'sobreprecio') else 0,
+                        concepto='VENTA_DIRECTA',
+                        tipo_movimiento='EGRESO',
+                        responsable=request.user.username,
+                        observaciones=f'Venta ticket #{ticket.correlativo} - Movimiento de registro (FIFO parcial)',
+                        referencia_externa=referencia
+                    )
+                    print(f"✓ Movimiento de registro creado sin descuento adicional")
+    elif ticket_se_pago and ticket.modulo_origen == 'CAMBIO_DEVOLUCION':
+        print(f"ℹ️  TICKET DE CAMBIO/DEVOLUCIÓN #{ticket.correlativo}: Stock ya fue ajustado al aprobar el cambio. No se descuenta nuevamente.")
+    
+    # Guardar o actualizar cliente en la base de datos si tiene datos
+    if datos_cliente and datos_cliente.get('rut') and datos_cliente.get('nombre'):
+        guardar_o_actualizar_cliente(datos_cliente, request.user)
+    
+    # Generar DTE si el tipo de documento lo requiere
+    tipo_documento_seleccionado = payload.get('tipo_documento', '')
+    dte_generado = None
+    
+    if tipo_documento_seleccionado in ['BOLETA_ELECTRONICA', 'BOLETA_PAPEL', 'FACTURA_ELECTRONICA'] and ticket.estado == 'PAGADO':
+        try:
+            print(f"🔍 DEBUG: Generando DTE para ticket #{ticket.correlativo}")
+            
+            # ✅ CRÍTICO: Refrescar el ticket desde la BD para tener los pagos actualizados
+            ticket.refresh_from_db()
+            
+            # Verificar pagos ANTES de generar DTE
+            pagos_count = ticket.pagos.count()
+            print(f"🔍 DEBUG: Ticket tiene {pagos_count} pago(s) registrado(s)")
+            for pago in ticket.pagos.all():
+                print(f"  - {pago.metodo_pago}: ${pago.monto:,}")
+            
+            # Verificar stock ANTES de generar DTE
+            for tp in ticket.ticket_productos.all():
+                print(f"🔍 DEBUG PRE-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
+            
+            # ✅ Pasar cotizacion_obj para usar sus descripciones en el TXT
+            dte_generado = generar_dte_desde_ticket(ticket, tipo_documento_seleccionado, request.user, cotizacion=cotizacion_obj)
+            print(f"✓ DTE generado: {dte_generado.tipo_documento} #{dte_generado.numero_documento}")
+            
+            # Verificar stock DESPUÉS de generar DTE
+            for tp in ticket.ticket_productos.all():
+                tp.ProductoTalla.refresh_from_db()
+                print(f"🔍 DEBUG POST-DTE: SKU {tp.ProductoTalla.sku} - Stock: {tp.ProductoTalla.stock}")
+            
+            # =========================================================================
+            # NUEVO: Marcar cotización como facturada si viene de una cotización
+            # =========================================================================
+            if cotizacion_obj and dte_generado:
+                try:
+                    from .models import Historial_Cotizacion
+                    
+                    # Usar solo el número de documento (el campo numero_factura tiene max_length=20)
+                    numero_documento_corto = str(dte_generado.numero_documento)[:20]
+                    numero_documento_completo = f"{dte_generado.tipo_documento} #{dte_generado.numero_documento}"
+                    cotizacion_obj.marcar_como_facturada(numero_documento_corto)
+                    
+                    # Registrar en historial
+                    Historial_Cotizacion.objects.create(
+                        cotizacion=cotizacion_obj,
+                        usuario=request.user,
+                        accion='FACTURADA',
+                        descripcion=f'Cotización facturada desde POS. Documento: {numero_documento_completo}. Ticket: #{ticket.correlativo}',
+                        ip_address=request.META.get('REMOTE_ADDR', '')
+                    )
+                    print(f"✅ Cotización {cotizacion_obj.numero_cotizacion} marcada como facturada")
+                except Exception as cot_error:
+                    print(f"⚠️ Error al marcar cotización como facturada: {str(cot_error)}")
+                
+        except Exception as e:
+            # No fallar el pago si hay error en DTE, solo registrar
+            print(f"⚠ Error al generar DTE: {str(e)}")
 
     response_data = {
         'success': True, 
