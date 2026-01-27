@@ -998,14 +998,17 @@ def formatear_decimal(numero, enteros=12, decimales=6):
 
 def limpiar_texto(texto, max_length=None):
     """
-    Limpia un texto eliminando caracteres especiales problemáticos
+    Limpia un texto eliminando caracteres especiales problemáticos para Acepta TXT
+    - Elimina acentos (á, é, í, ó, ú → a, e, i, o, u)
+    - Reemplaza Ñ por N
+    - Elimina caracteres especiales
     
     Args:
         texto (str): Texto a limpiar
         max_length (int): Longitud máxima permitida
         
     Returns:
-        str: Texto limpio
+        str: Texto limpio sin caracteres especiales
     """
     if not texto:
         return ''
@@ -1013,11 +1016,53 @@ def limpiar_texto(texto, max_length=None):
     # Convertir a string
     texto = str(texto)
     
-    # Reemplazar caracteres problemáticos
-    texto = texto.replace('|', '')  # El pipe es el separador
+    # === REEMPLAZAR ACENTOS Y CARACTERES ESPECIALES ===
+    # Vocales con acento minúsculas
+    texto = texto.replace('á', 'a')
+    texto = texto.replace('é', 'e')
+    texto = texto.replace('í', 'i')
+    texto = texto.replace('ó', 'o')
+    texto = texto.replace('ú', 'u')
+    texto = texto.replace('ü', 'u')
+    
+    # Vocales con acento mayúsculas
+    texto = texto.replace('Á', 'A')
+    texto = texto.replace('É', 'E')
+    texto = texto.replace('Í', 'I')
+    texto = texto.replace('Ó', 'O')
+    texto = texto.replace('Ú', 'U')
+    texto = texto.replace('Ü', 'U')
+    
+    # Ñ → N
+    texto = texto.replace('ñ', 'n')
+    texto = texto.replace('Ñ', 'N')
+    
+    # Otros caracteres especiales comunes
+    texto = texto.replace('ª', 'a')
+    texto = texto.replace('º', 'o')
+    texto = texto.replace('°', '')
+    texto = texto.replace('´', '')
+    texto = texto.replace('`', '')
+    texto = texto.replace('"', '')
+    texto = texto.replace('"', '')
+    texto = texto.replace(''', '')
+    texto = texto.replace(''', '')
+    texto = texto.replace('«', '')
+    texto = texto.replace('»', '')
+    
+    # === REEMPLAZAR CARACTERES DE CONTROL ===
+    texto = texto.replace('|', '')  # El pipe es el separador de Acepta
     texto = texto.replace('\n', ' ')
     texto = texto.replace('\r', ' ')
     texto = texto.replace('\t', ' ')
+    texto = texto.replace('\\', '')
+    texto = texto.replace('~', '')  # Caracteres especiales de Acepta
+    texto = texto.replace('}', '')
+    texto = texto.replace('{', '')
+    
+    # Eliminar espacios múltiples
+    import re
+    texto = re.sub(r'\s+', ' ', texto)
     
     # Truncar si es necesario
     if max_length and len(texto) > max_length:
@@ -1386,6 +1431,9 @@ def generar_txt_boleta_acepta(datos):
     correlativo_ticket = emisor.get('correlativo_ticket', '')
     metodos_pago = emisor.get('metodos_pago', '')
     
+    # ✅ Obtener nombre de impresora para BOLETAS desde configuración de sucursal
+    nombre_impresora = emisor.get('nombre_impresora_boleta', 'boleta') or 'boleta'
+    
     # Construir observación con toda la información
     observacion = f"^ Vendedor: {vendedor_nombre} (Cod: {vendedor_codigo}) ^ Ticket: {correlativo_ticket} ^ DTE: {correlativo} ^ Pago: {metodos_pago} "
     
@@ -1394,7 +1442,7 @@ def generar_txt_boleta_acepta(datos):
         '', '',
         observacion,
         '', '', '',  # ✅ 3 campos vacíos = 4 pipes
-        'boleta',
+        nombre_impresora,  # ✅ Nombre de impresora configurable por sucursal
         '4',
         '}'
     ]
@@ -1733,13 +1781,16 @@ def generar_txt_dte_acepta(datos):
     # ✅ CORRECCIÓN: Línea final con formato correcto
     # Formato real: vendedor|||observacion  |||||||impresora|4|}
     # Ejemplo: King Angulo|||CINCO MILLONES...PESOS (Total Art 51)  |||||||FACTURA MATTA 2438|4|}
+    # ✅ Obtener nombre de impresora para FACTURAS desde configuración de sucursal
+    nombre_impresora_factura = datos.get('emisor', {}).get('nombre_impresora_factura', 'factura') or 'factura'
+    
     info_adicional = [
         vendedor_codigo,  # 1. Código vendedor
         '',  # 2. Campo vacío
         '',  # 3. Campo vacío
         info_texto,  # 4. Observación/Monto con info adicional
         '', '', '', '', '', '', '',  # 5-11. 7 campos vacíos
-        'HP LaserJet Professional P1102w',  # 12. Impresora
+        nombre_impresora_factura,  # 12. Impresora (configurable por sucursal)
         '4',  # 13. Copias
         '}'  # 14. Cierre
     ]
@@ -1814,30 +1865,32 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
         'timestamp': timezone.now().strftime('%Y-%m-%dT%H:%M:%S')
     }
     
-    # Preparar datos del emisor
+    # Preparar datos del emisor - ✅ Aplicar limpiar_texto para eliminar acentos y Ñ
     emisor = {
         'rut': empresa.rut,
-        'razon_social': empresa.razon_social,
-        'giro': empresa.giro,
+        'razon_social': limpiar_texto(empresa.razon_social or ''),
+        'giro': limpiar_texto(empresa.giro or ''),
         'acteco': empresa.acteco or '',
-        'direccion': empresa.direccion,
-        'comuna': empresa.comuna,
-        'ciudad': empresa.ciudad,
-        'codigo_vendedor': ticket.responsable or 'USUARIO',
-        'sucursal': ticket.sucursal.alias if ticket.sucursal else '',  # ✅ Alias de sucursal
-        'telefono': empresa.contacto1 or ''
+        'direccion': limpiar_texto(empresa.direccion or ''),
+        'comuna': limpiar_texto(empresa.comuna or ''),
+        'ciudad': limpiar_texto(empresa.ciudad or ''),
+        'codigo_vendedor': limpiar_texto(ticket.responsable or 'USUARIO'),
+        'sucursal': limpiar_texto(ticket.sucursal.alias if ticket.sucursal else ''),
+        'telefono': empresa.contacto1 or '',
+        'nombre_impresora_boleta': getattr(ticket.sucursal, 'nombre_impresora_boleta', 'boleta') if ticket.sucursal else 'boleta',
+        'nombre_impresora_factura': getattr(ticket.sucursal, 'nombre_impresora_factura', 'factura') if ticket.sucursal else 'factura',
     }
     
-    # Preparar datos del receptor
+    # Preparar datos del receptor - ✅ Aplicar limpiar_texto
     if 'FACTURA' in tipo_dte and ticket.cliente_rut:
         # Factura con cliente específico
         receptor = {
             'rut': ticket.cliente_rut,
-            'razon_social': ticket.cliente_nombre or 'CLIENTE',
-            'giro': ticket.cliente_giro or '',
-            'direccion': ticket.cliente_direccion or '',
-            'comuna': ticket.cliente_comuna or '',
-            'ciudad': ticket.cliente_ciudad or ''
+            'razon_social': limpiar_texto(ticket.cliente_nombre or 'CLIENTE'),
+            'giro': limpiar_texto(ticket.cliente_giro or ''),
+            'direccion': limpiar_texto(ticket.cliente_direccion or ''),
+            'comuna': limpiar_texto(ticket.cliente_comuna or ''),
+            'ciudad': limpiar_texto(ticket.cliente_ciudad or '')
         }
     else:
         # Boleta o consumidor final
@@ -1850,17 +1903,23 @@ def generar_dte_desde_ticket(ticket_id, tipo_dte='BOLETA_ELECTRONICA', sucursal_
             'ciudad': ''
         }
     
-    # Preparar productos
+    # Preparar productos - ✅ Aplicar limpiar_texto para eliminar acentos y Ñ
     detalle = []
     for item in ticket.ticket_productos.all():
         producto_talla = item.ProductoTalla
         producto = producto_talla.producto
         
+        # Construir nombre limpio sin caracteres especiales
+        articulo_limpio = limpiar_texto(producto.articulo or '')
+        marca_limpia = limpiar_texto(producto.atributo1.valor if producto.atributo1 else '')
+        talla_limpia = limpiar_texto(str(producto_talla.talla) if producto_talla.talla else '')
+        nombre_limpio = f"{articulo_limpio} {marca_limpia} {talla_limpia}".strip()
+        
         detalle.append({
-            'codigo': producto.articulo or f'PROD{producto.id}',  # CORREGIDO: articulo no codigo
-            'sku': str(producto_talla.sku) if producto_talla.sku else '',
-            'nombre': f"{producto.articulo} {producto.atributo1.valor if producto.atributo1 else ''} {producto_talla.talla}".strip(),
-            'descripcion': producto.descripcion or '',
+            'codigo': limpiar_texto(producto.articulo or f'PROD{producto.id}'),
+            'sku': limpiar_texto(str(producto_talla.sku) if producto_talla.sku else ''),
+            'nombre': nombre_limpio,
+            'descripcion': limpiar_texto(producto.descripcion or ''),
             'cantidad': item.stock,
             'unidad': 'UN',
             'precio_unitario': item.precio,
@@ -2118,6 +2177,7 @@ def generar_txt_desde_dte_existente(request):
             sucursal_destino = movimiento_con_destino.sucursal_destino
         
         # Construir diccionario de datos desde el DTE
+        # ✅ Aplicar limpiar_texto para eliminar acentos y caracteres especiales
         datos = {
             'documento': {
                 'tipo_documento': tipo_numerico,
@@ -2129,26 +2189,26 @@ def generar_txt_desde_dte_existente(request):
             },
             'emisor': {
                 'rut': dte.emisor.rut,
-                'razon_social': dte.emisor.razon_social,  # ✅ Campo correcto
-                'giro': dte.emisor.giro or '',
-                'acteco': dte.emisor.acteco or '',  # ✅ Nuevo campo
-                # ✅ CORREGIDO: Usar dirección de la SUCURSAL, no de la empresa
-                'direccion': dte.sucursal.direccion if dte.sucursal else dte.emisor.direccion or '',
-                'comuna': dte.emisor.comuna or '',
-                'ciudad': dte.emisor.ciudad or '',
-                'codigo_vendedor': dte.responsable or 'USUARIO',
-                'sucursal': dte.sucursal.alias if dte.sucursal else '',  # ✅ Alias de sucursal
-                'telefono': dte.emisor.contacto1 or ''  # ✅ Nuevo campo
+                'razon_social': limpiar_texto(dte.emisor.razon_social or ''),
+                'giro': limpiar_texto(dte.emisor.giro or ''),
+                'acteco': dte.emisor.acteco or '',
+                'direccion': limpiar_texto(dte.sucursal.direccion if dte.sucursal else dte.emisor.direccion or ''),
+                'comuna': limpiar_texto(dte.emisor.comuna or ''),
+                'ciudad': limpiar_texto(dte.emisor.ciudad or ''),
+                'codigo_vendedor': limpiar_texto(dte.responsable or 'USUARIO'),
+                'sucursal': limpiar_texto(dte.sucursal.alias if dte.sucursal else ''),
+                'telefono': dte.emisor.contacto1 or '',
+                'nombre_impresora_boleta': getattr(dte.sucursal, 'nombre_impresora_boleta', 'boleta') if dte.sucursal else 'boleta',
+                'nombre_impresora_factura': getattr(dte.sucursal, 'nombre_impresora_factura', 'factura') if dte.sucursal else 'factura',
             },
             'receptor': {
                 'rut': dte.receptor.rut if dte.receptor else '66666666-6',
-                'razon_social': dte.receptor.razon_social if dte.receptor else 'CONSUMIDOR FINAL',
-                'giro': dte.receptor.giro if dte.receptor else '',
-                # ✅ CORREGIDO: Usar dirección de SUCURSAL_DESTINO si existe, sino de la empresa receptora
-                'direccion': sucursal_destino.direccion if sucursal_destino and sucursal_destino.direccion else (dte.receptor.direccion if dte.receptor else ''),
-                'comuna': dte.receptor.comuna if dte.receptor else '',  # Sucursal no tiene comuna, usar empresa
-                'ciudad': dte.receptor.ciudad if dte.receptor else '',  # Sucursal no tiene ciudad, usar empresa
-                'sucursal': sucursal_destino.alias if sucursal_destino else ''  # ✅ Alias de sucursal destino
+                'razon_social': limpiar_texto(dte.receptor.razon_social if dte.receptor else 'CONSUMIDOR FINAL'),
+                'giro': limpiar_texto(dte.receptor.giro if dte.receptor else ''),
+                'direccion': limpiar_texto(sucursal_destino.direccion if sucursal_destino and sucursal_destino.direccion else (dte.receptor.direccion if dte.receptor else '')),
+                'comuna': limpiar_texto(dte.receptor.comuna if dte.receptor else ''),
+                'ciudad': limpiar_texto(dte.receptor.ciudad if dte.receptor else ''),
+                'sucursal': limpiar_texto(sucursal_destino.alias if sucursal_destino else '')
             },
             'totales': {
                 'monto_neto': int(dte.monto_neto),  # ✅ Campo correcto
@@ -2202,11 +2262,14 @@ def generar_txt_desde_dte_existente(request):
         for articulo, grupo in productos_agrupados.items():
             # Formato: MARCA COLOR <tallas>
             tallas_str = ' '.join(grupo['tallas'])  # 2:5,5 3:6
-            marca_color = f"{grupo['marca']} {grupo['color']}".strip() if grupo['marca'] or grupo['color'] else ''
+            # ✅ Limpiar marca y color de caracteres especiales
+            marca_limpia = limpiar_texto(grupo['marca'] or '')
+            color_limpio = limpiar_texto(grupo['color'] or '')
+            marca_color = f"{marca_limpia} {color_limpio}".strip() if marca_limpia or color_limpio else ''
             nombre_final = f"{marca_color} {tallas_str}".strip() if marca_color else tallas_str
             
             datos['detalle'].append({
-                'nombre': nombre_final,
+                'nombre': limpiar_texto(nombre_final),
                 'descripcion': '',
                 'cantidad': grupo['cantidad_total'],
                 'unidad': 'UN',
@@ -2214,7 +2277,7 @@ def generar_txt_desde_dte_existente(request):
                 'descuento_pct': 0,
                 'monto_descuento': 0,
                 'monto_item': grupo['monto_total'],
-                'codigo': grupo['articulo']  # Artículo como código
+                'codigo': limpiar_texto(grupo['articulo'])  # Artículo como código
             })
         
         # Agregar referencias si existen

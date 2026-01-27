@@ -1204,6 +1204,257 @@ def obtener_productos_regularizar(request):
 
 
 @login_required
+@require_http_methods(["POST"])
+def procesar_ajuste_interno_individual(request):
+    """
+    Procesa un ajuste interno para un producto individual de una guía.
+    Solo devuelve el stock sin generar NC (para guías sin valor monetario).
+    """
+    try:
+        import json
+        from django.db import transaction
+        from .models import Productos_Recepcionados, Movimientos_Producto, Producto_Talla
+        
+        data = json.loads(request.body)
+        recepcion_id = data.get('recepcion_id')
+        cantidad_a_ajustar = int(data.get('cantidad', 0))
+        observaciones = data.get('observaciones', '')
+        
+        if not recepcion_id or cantidad_a_ajustar <= 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'Datos incompletos'
+            }, status=400)
+        
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa'
+            }, status=400)
+        
+        with transaction.atomic():
+            # Obtener la recepción
+            recepcion = Productos_Recepcionados.objects.select_for_update().get(id=recepcion_id)
+            
+            # Validar que sea una guía (sin NC)
+            if recepcion.dte and recepcion.dte.requiere_nota_credito_check():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Este DTE requiere Nota de Crédito. Use el proceso de regularización normal.'
+                }, status=400)
+            
+            # Validar que el usuario sea el emisor (quien envió originalmente)
+            if not recepcion.dte or recepcion.dte.sucursal_id != sucursal_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Solo el emisor puede procesar ajustes internos'
+                }, status=403)
+            
+            # Validar cantidad
+            cantidad_problema = recepcion.cantidad_faltante + recepcion.cantidad_danada
+            if cantidad_a_ajustar > cantidad_problema:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'La cantidad a ajustar ({cantidad_a_ajustar}) excede el problema ({cantidad_problema})'
+                }, status=400)
+            
+            # Crear movimiento de devolución al inventario del emisor
+            # (recuperar el stock que nunca llegó o llegó dañado)
+            movimiento = Movimientos_Producto.objects.create(
+                productoTalla=recepcion.producto_talla,
+                stock=cantidad_a_ajustar,
+                concepto='AJUSTE_REGULARIZACION',
+                tipo_movimiento='ENTRADA',
+                dte_relacionado=recepcion.dte,
+                sucursal_origen=None,  # No tiene origen, es ajuste
+                sucursal_destino_id=sucursal_id,  # Vuelve al emisor
+                usuario=request.user.username,
+                observaciones=f'Ajuste interno por regularización: {observaciones}'
+            )
+            
+            # Actualizar el stock del producto en la sucursal emisora
+            producto_talla = recepcion.producto_talla
+            if producto_talla:
+                producto_talla.stock += cantidad_a_ajustar
+                producto_talla.save()
+            
+            # Actualizar el estado de la recepción
+            recepcion.estado = 'REGULARIZADO'
+            recepcion.fecha_regularizacion = timezone.now()
+            recepcion.regularizado_por = request.user.username
+            recepcion.observaciones = (recepcion.observaciones or '') + f'\n[Ajuste Interno] {observaciones}'
+            recepcion.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Ajuste interno procesado. Se devolvieron {cantidad_a_ajustar} unidades al inventario.',
+                'movimiento_id': movimiento.id
+            })
+            
+    except Productos_Recepcionados.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Recepción no encontrada'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al procesar ajuste interno: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def procesar_cambio_producto_individual(request):
+    """
+    Procesa un cambio de producto individual para una guía.
+    Genera una nueva guía de despacho con el producto de reemplazo.
+    """
+    try:
+        import json
+        from django.db import transaction
+        from .models import (Productos_Recepcionados, Dte, Dte_Productos, 
+                            Producto_Talla, Movimientos_Producto, Sucursal)
+        
+        data = json.loads(request.body)
+        recepcion_id = data.get('recepcion_id')
+        producto_cambio_id = data.get('producto_cambio_id')  # ID del Producto_Talla de reemplazo
+        cantidad_cambio = int(data.get('cantidad', 0))
+        observaciones = data.get('observaciones', '')
+        
+        if not all([recepcion_id, producto_cambio_id, cantidad_cambio > 0]):
+            return JsonResponse({
+                'success': False,
+                'error': 'Datos incompletos'
+            }, status=400)
+        
+        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        if not sucursal_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No hay sucursal activa'
+            }, status=400)
+        
+        with transaction.atomic():
+            # Obtener la recepción original
+            recepcion = Productos_Recepcionados.objects.select_for_update().get(id=recepcion_id)
+            
+            # Validar que sea una guía (sin NC)
+            if recepcion.dte and recepcion.dte.requiere_nota_credito_check():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Este DTE requiere Nota de Crédito. Use el proceso de regularización normal.'
+                }, status=400)
+            
+            # Validar que el usuario sea el emisor
+            if not recepcion.dte or recepcion.dte.sucursal_id != sucursal_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Solo el emisor puede procesar cambios de producto'
+                }, status=403)
+            
+            # Obtener producto de cambio
+            producto_cambio = Producto_Talla.objects.get(id=producto_cambio_id)
+            
+            # Validar stock disponible del producto de cambio
+            if producto_cambio.stock < cantidad_cambio:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Stock insuficiente. Disponible: {producto_cambio.stock}, solicitado: {cantidad_cambio}'
+                }, status=400)
+            
+            # Obtener DTE original y sucursal destino
+            dte_original = recepcion.dte
+            sucursal_destino = None
+            
+            # Buscar sucursal destino del movimiento original
+            movimiento_original = dte_original.dte_movimientos.filter(
+                concepto__in=['TRASPASO_ENTRADA', 'TRASPASO_SALIDA']
+            ).first()
+            
+            if movimiento_original and movimiento_original.sucursal_destino:
+                sucursal_destino = movimiento_original.sucursal_destino
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No se pudo determinar la sucursal destino'
+                }, status=400)
+            
+            # Crear nueva Guía de Despacho de cambio
+            nuevo_dte = Dte.objects.create(
+                emisor=dte_original.emisor,
+                receptor=dte_original.receptor,
+                sucursal_id=sucursal_id,
+                tipo_documento='GUIA_DESPACHO',
+                tipo_transaccion='TRASPASO',
+                fecha_emision=timezone.now(),
+                estado='PENDIENTE_ENVIO',
+                monto_neto=0,  # Guías sin valor monetario
+                monto_con_iva=0,
+                referencias=f'Cambio de producto - Regularización DTE #{dte_original.numero_documento}: {observaciones}',
+                es_nota_credito=False
+            )
+            
+            # Agregar producto de cambio al nuevo DTE
+            dte_producto = Dte_Productos.objects.create(
+                dte=nuevo_dte,
+                productoTalla=producto_cambio,
+                descripcion=producto_cambio.producto.articulo,
+                stock=cantidad_cambio,
+                precio=0,  # Sin precio para guías
+                unidad_medida='UN'
+            )
+            
+            # Crear movimiento de salida del producto de cambio
+            movimiento_salida = Movimientos_Producto.objects.create(
+                productoTalla=producto_cambio,
+                stock=cantidad_cambio,
+                concepto='TRASPASO_SALIDA',
+                tipo_movimiento='SALIDA',
+                dte_relacionado=nuevo_dte,
+                sucursal_origen_id=sucursal_id,
+                sucursal_destino=sucursal_destino,
+                usuario=request.user.username,
+                observaciones=f'Cambio de producto - Regularización: {observaciones}'
+            )
+            
+            # Descontar stock del producto de cambio
+            producto_cambio.stock -= cantidad_cambio
+            producto_cambio.save()
+            
+            # Actualizar estado de la recepción original
+            recepcion.estado = 'REGULARIZADO'
+            recepcion.fecha_regularizacion = timezone.now()
+            recepcion.regularizado_por = request.user.username
+            recepcion.observaciones = (recepcion.observaciones or '') + f'\n[Cambio de Producto] DTE #{nuevo_dte.numero_documento}: {observaciones}'
+            recepcion.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Cambio de producto procesado. Nueva guía #{nuevo_dte.numero_documento} generada.',
+                'dte_id': nuevo_dte.id,
+                'dte_numero': nuevo_dte.numero_documento
+            })
+            
+    except Productos_Recepcionados.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Recepción no encontrada'
+        }, status=404)
+    except Producto_Talla.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Producto de cambio no encontrado'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al procesar cambio de producto: {str(e)}'
+        }, status=500)
+
+
+@login_required
 @require_GET
 def obtener_solicitudes_recibidas(request):
     """
@@ -1818,7 +2069,7 @@ def regularizar_producto_api(request):
                     # Generar archivo TXT para Acepta
                     archivo_txt_url = None
                     try:
-                        from .views_modulo_documentos import generar_txt_dte_acepta
+                        from .views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
                         import os
                         from django.conf import settings
                         
@@ -1830,6 +2081,7 @@ def regularizar_producto_api(request):
                         if mov_destino:
                             sucursal_destino_nc = mov_destino.sucursal_destino
                         
+                        # ✅ Aplicar limpiar_texto para eliminar acentos y caracteres especiales
                         datos_txt = {
                             'documento': {
                                 'tipo_documento': '61',
@@ -1842,25 +2094,25 @@ def regularizar_producto_api(request):
                             },
                             'emisor': {
                                 'rut': nota_credito.emisor.rut if nota_credito.emisor else '',
-                                'razon_social': nota_credito.emisor.razon_social if nota_credito.emisor else '',
-                                'giro': nota_credito.emisor.giro if nota_credito.emisor else '',
+                                'razon_social': limpiar_texto(nota_credito.emisor.razon_social if nota_credito.emisor else ''),
+                                'giro': limpiar_texto(nota_credito.emisor.giro if nota_credito.emisor else ''),
                                 'acteco': nota_credito.emisor.acteco if nota_credito.emisor else '',
-                                # ✅ CORREGIDO: Usar dirección de la SUCURSAL EMISORA
-                                'direccion': nota_credito.sucursal.direccion if nota_credito.sucursal else (nota_credito.emisor.direccion if nota_credito.emisor else ''),
-                                'comuna': nota_credito.emisor.comuna if nota_credito.emisor else '',
-                                'ciudad': nota_credito.emisor.ciudad if nota_credito.emisor else '',
-                                'codigo_vendedor': usuario
+                                'direccion': limpiar_texto(nota_credito.sucursal.direccion if nota_credito.sucursal else (nota_credito.emisor.direccion if nota_credito.emisor else '')),
+                                'comuna': limpiar_texto(nota_credito.emisor.comuna if nota_credito.emisor else ''),
+                                'ciudad': limpiar_texto(nota_credito.emisor.ciudad if nota_credito.emisor else ''),
+                                'codigo_vendedor': limpiar_texto(usuario),
+                                'nombre_impresora_boleta': getattr(nota_credito.sucursal, 'nombre_impresora_boleta', 'boleta') if nota_credito.sucursal else 'boleta',
+                                'nombre_impresora_factura': getattr(nota_credito.sucursal, 'nombre_impresora_factura', 'factura') if nota_credito.sucursal else 'factura',
                             },
                             'receptor': {
                                 'rut': nota_credito.receptor.rut if nota_credito.receptor else '',
                                 'codigo_interno': nota_credito.receptor.codigo if nota_credito.receptor else '',
-                                'razon_social': nota_credito.receptor.razon_social if nota_credito.receptor else '',
-                                'giro': nota_credito.receptor.giro if nota_credito.receptor else '',
-                                'contacto': nota_credito.receptor.contacto if nota_credito.receptor else '',
-                                # ✅ CORREGIDO: Usar dirección de la SUCURSAL_DESTINO si existe
-                                'direccion': sucursal_destino_nc.direccion if sucursal_destino_nc else (nota_credito.receptor.direccion if nota_credito.receptor else ''),
-                                'comuna': nota_credito.receptor.comuna if nota_credito.receptor else '',
-                                'ciudad': nota_credito.receptor.ciudad if nota_credito.receptor else ''
+                                'razon_social': limpiar_texto(nota_credito.receptor.razon_social if nota_credito.receptor else ''),
+                                'giro': limpiar_texto(nota_credito.receptor.giro if nota_credito.receptor else ''),
+                                'contacto': limpiar_texto(nota_credito.receptor.contacto if nota_credito.receptor else ''),
+                                'direccion': limpiar_texto(sucursal_destino_nc.direccion if sucursal_destino_nc else (nota_credito.receptor.direccion if nota_credito.receptor else '')),
+                                'comuna': limpiar_texto(nota_credito.receptor.comuna if nota_credito.receptor else ''),
+                                'ciudad': limpiar_texto(nota_credito.receptor.ciudad if nota_credito.receptor else '')
                             },
                             'totales': {
                                 'monto_neto': int(total_neto),
@@ -1869,10 +2121,10 @@ def regularizar_producto_api(request):
                                 'monto_total': int(total_con_iva)
                             },
                             'detalle': [{
-                                'codigo': str(recepcion.producto_talla.sku) if recepcion.producto_talla else '',
-                                'sku': str(recepcion.producto_talla.sku) if recepcion.producto_talla else '',
-                                'nombre': recepcion.producto_talla.producto.articulo if recepcion.producto_talla else '',
-                                'descripcion': recepcion.dte_producto.descripcion if recepcion.dte_producto else '',
+                                'codigo': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
+                                'sku': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
+                                'nombre': limpiar_texto(recepcion.producto_talla.producto.articulo if recepcion.producto_talla else ''),
+                                'descripcion': limpiar_texto(recepcion.dte_producto.descripcion if recepcion.dte_producto else ''),
                                 'cantidad': cantidad_nc,
                                 'unidad': 'UN',
                                 'precio_unitario': int(precio_unitario),
@@ -2506,9 +2758,9 @@ def regularizar_dte_masivo(request):
             archivo_txt_url = None
             error_txt = None
             try:
-                from .views_modulo_documentos import generar_txt_dte_acepta
+                from .views_modulo_documentos import generar_txt_dte_acepta, limpiar_texto
                 
-                # Preparar datos para generar TXT
+                # Preparar datos para generar TXT - ✅ Aplicar limpiar_texto para eliminar acentos y Ñ
                 datos_txt = {
                     'documento': {
                         'tipo_documento': '61',  # Nota de Crédito
@@ -2521,25 +2773,26 @@ def regularizar_dte_masivo(request):
                     },
                     'emisor': {
                         'rut': nota_credito.emisor.rut if nota_credito.emisor else '',
-                        'razon_social': nota_credito.emisor.razon_social if nota_credito.emisor else 'SIN RAZON SOCIAL',
-                        'giro': nota_credito.emisor.giro if (nota_credito.emisor and nota_credito.emisor.giro) else 'COMERCIALIZADORA',
+                        'razon_social': limpiar_texto(nota_credito.emisor.razon_social if nota_credito.emisor else 'SIN RAZON SOCIAL'),
+                        'giro': limpiar_texto(nota_credito.emisor.giro if (nota_credito.emisor and nota_credito.emisor.giro) else 'COMERCIALIZADORA'),
                         'acteco': nota_credito.emisor.acteco if nota_credito.emisor else '',
-                        # ✅ CORREGIDO: Usar dirección de la SUCURSAL
-                        'direccion': nota_credito.sucursal.direccion if nota_credito.sucursal else (nota_credito.emisor.direccion if nota_credito.emisor else ''),
-                        'comuna': nota_credito.emisor.comuna if nota_credito.emisor else '',
-                        'ciudad': nota_credito.emisor.ciudad if nota_credito.emisor else '',
-                        'sucursal': nota_credito.sucursal.alias if nota_credito.sucursal else '',
-                        'codigo_vendedor': usuario
+                        'direccion': limpiar_texto(nota_credito.sucursal.direccion if nota_credito.sucursal else (nota_credito.emisor.direccion if nota_credito.emisor else '')),
+                        'comuna': limpiar_texto(nota_credito.emisor.comuna if nota_credito.emisor else ''),
+                        'ciudad': limpiar_texto(nota_credito.emisor.ciudad if nota_credito.emisor else ''),
+                        'sucursal': limpiar_texto(nota_credito.sucursal.alias if nota_credito.sucursal else ''),
+                        'codigo_vendedor': limpiar_texto(usuario),
+                        'nombre_impresora_boleta': getattr(nota_credito.sucursal, 'nombre_impresora_boleta', 'boleta') if nota_credito.sucursal else 'boleta',
+                        'nombre_impresora_factura': getattr(nota_credito.sucursal, 'nombre_impresora_factura', 'factura') if nota_credito.sucursal else 'factura',
                     },
                     'receptor': {
                         'rut': nota_credito.receptor.rut if nota_credito.receptor else '',
                         'codigo_interno': str(nota_credito.receptor.id) if nota_credito.receptor else '',
-                        'razon_social': nota_credito.receptor.razon_social if nota_credito.receptor else 'SIN RAZON SOCIAL',
-                        'giro': nota_credito.receptor.giro if (nota_credito.receptor and nota_credito.receptor.giro) else 'COMERCIALIZADORA',
-                        'contacto': nota_credito.receptor.contacto1 if (nota_credito.receptor and nota_credito.receptor.contacto1) else '',
-                        'direccion': nota_credito.receptor.direccion if nota_credito.receptor else '',
-                        'comuna': nota_credito.receptor.comuna if nota_credito.receptor else '',
-                        'ciudad': nota_credito.receptor.ciudad if nota_credito.receptor else ''
+                        'razon_social': limpiar_texto(nota_credito.receptor.razon_social if nota_credito.receptor else 'SIN RAZON SOCIAL'),
+                        'giro': limpiar_texto(nota_credito.receptor.giro if (nota_credito.receptor and nota_credito.receptor.giro) else 'COMERCIALIZADORA'),
+                        'contacto': limpiar_texto(nota_credito.receptor.contacto1 if (nota_credito.receptor and nota_credito.receptor.contacto1) else ''),
+                        'direccion': limpiar_texto(nota_credito.receptor.direccion if nota_credito.receptor else ''),
+                        'comuna': limpiar_texto(nota_credito.receptor.comuna if nota_credito.receptor else ''),
+                        'ciudad': limpiar_texto(nota_credito.receptor.ciudad if nota_credito.receptor else '')
                     },
                     'totales': {
                         'monto_neto': int(monto_neto_total),
@@ -2556,17 +2809,17 @@ def regularizar_dte_masivo(request):
                     }]
                 }
                 
-                # Agregar detalle de productos
+                # Agregar detalle de productos - ✅ Aplicar limpiar_texto
                 for prod_nc in productos_nc:
                     recepcion = prod_nc['recepcion']
                     cantidad = prod_nc['cantidad']
                     precio_unitario = int(prod_nc['precio_unitario'])
                     
                     datos_txt['detalle'].append({
-                        'codigo': str(recepcion.producto_talla.sku) if recepcion.producto_talla else '',
-                        'sku': str(recepcion.producto_talla.sku) if recepcion.producto_talla else '',
-                        'nombre': recepcion.producto_talla.producto.articulo if recepcion.producto_talla else '',
-                        'descripcion': recepcion.dte_producto.descripcion if recepcion.dte_producto else '',
+                        'codigo': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
+                        'sku': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
+                        'nombre': limpiar_texto(recepcion.producto_talla.producto.articulo if recepcion.producto_talla else ''),
+                        'descripcion': limpiar_texto(recepcion.dte_producto.descripcion if recepcion.dte_producto else ''),
                         'cantidad': cantidad,
                         'unidad': 'UN',
                         'precio_unitario': precio_unitario,
@@ -5849,6 +6102,7 @@ def cargarDteCompra(request):
             data = json.loads(request.body)
             fecha_inicio = parse_date(data.get('fecha_inicio'))
             fecha_fin = parse_date(data.get('fecha_fin'))
+            tipo_fecha = data.get('tipo_fecha', 'recepcion')  # 'recepcion' o 'emision'
             page = data.get('page', 1)
             page_size = data.get('page_size', 20)  # 20 registros por página
             search = data.get('search', '').strip()
@@ -5873,12 +6127,22 @@ def cargarDteCompra(request):
             # Parámetro para incluir descartados (por defecto NO se muestran)
             incluir_descartados = data.get('incluir_descartados', False)
 
-            # Query base optimizada
+            # Query base optimizada - filtrar por tipo de fecha seleccionado
             # Para DTEs de COMPRA: emisor = proveedor, receptor = nosotros (opcional)
-            dtes_query = Dte.objects.filter(
-                tipo_transaccion='COMPRA',
-                fecha_emision__range=(fecha_inicio, fecha_fin)
-            ).filter(
+            dtes_query = Dte.objects.filter(tipo_transaccion='COMPRA')
+            
+            # Aplicar filtro de fecha según el tipo seleccionado
+            if tipo_fecha == 'emision':
+                dtes_query = dtes_query.filter(fecha_emision__range=(fecha_inicio, fecha_fin))
+            else:  # Por defecto: fecha_recepcion
+                # Filtrar por DTEs que tienen fecha_recepcion en el rango especificado
+                # Si fecha_recepcion es null, también los incluimos si cumplen con otros criterios
+                dtes_query = dtes_query.filter(
+                    Q(fecha_recepcion__range=(fecha_inicio, fecha_fin)) |
+                    (Q(fecha_recepcion__isnull=True) & Q(fecha_emision__range=(fecha_inicio, fecha_fin)))
+                )
+            
+            dtes_query = dtes_query.filter(
                 Q(receptor_id=empresa_id) | Q(receptor__isnull=True)  # Mostrar con o sin receptor
             ).select_related('emisor', 'receptor')  # El proveedor es el emisor
             
@@ -5902,8 +6166,17 @@ def cargarDteCompra(request):
                     Q(dte_asociado__voucher__icontains=search)
                 ).distinct()
 
-            # Ordenar por fecha de emisión descendente (más nuevo primero)
-            dtes_query = dtes_query.order_by('-fecha_emision', '-id')
+            # Ordenar según el tipo de fecha seleccionado
+            if tipo_fecha == 'emision':
+                dtes_query = dtes_query.order_by('-fecha_emision', '-id')
+            else:  # fecha_recepcion
+                # Ordenar por fecha_recepcion (nulls last), luego por fecha_emision
+                from django.db.models import F
+                dtes_query = dtes_query.order_by(
+                    F('fecha_recepcion').desc(nulls_last=True), 
+                    '-fecha_emision', 
+                    '-id'
+                )
 
             # Aplicar filtro de vencimiento si se especifica
             if filtro_vencimiento:
@@ -10077,8 +10350,7 @@ def crear_producto_manual(request):
                     producto=producto,
                     talla=talla_limpia,
                     stock=0,  # ✅ Iniciar en 0, el movimiento sumará el stock
-                    sku=sku_final,
-                    guia_talla_id=guia_talla_manual_id if guia_talla_manual_id else None
+                    sku=sku_final
                 )
                 tallas_nuevas += 1
                 print(f"🆕 Talla nueva creada: {talla_limpia} (SKU: {sku_final})")
@@ -10557,7 +10829,7 @@ def tallas_producto(request, producto_id):
         producto = get_object_or_404(Producto, id=producto_id)
         
         # Obtener todas las tallas del producto
-        tallas = Producto_Talla.objects.filter(producto=producto).select_related('guia_talla')
+        tallas = Producto_Talla.objects.filter(producto=producto)
         
         # Preparar datos del producto
         datos_producto = {
@@ -10574,13 +10846,13 @@ def tallas_producto(request, producto_id):
         # Preparar datos de las tallas
         datos_tallas = []
         for talla in tallas:
-            # Obtener equivalencias de la guía de talla si existe
+            # Obtener equivalencias de la guía de talla si existe (guia_talla está en Producto, no en Producto_Talla)
             equivalencias = ''
-            if talla.guia_talla:
+            if producto.guia_talla:
                 # Buscar la equivalencia en la guía
                 from .models import Guia_Talla_Item
                 item_guia = Guia_Talla_Item.objects.filter(
-                    guia_talla=talla.guia_talla,
+                    guia_talla=producto.guia_talla,
                     cl=talla.talla
                 ).first()
                 
@@ -16233,6 +16505,7 @@ def construir_ticket_data(ticket):
             'costo_fifo': tp.costo_fifo,
             'lotes_utilizados': tp.lotes_utilizados,
             'stock_actual': producto_talla.stock if producto_talla else None,
+            'stock': producto_talla.stock if producto_talla else 0,  # Alias para compatibilidad con frontend POS
         })
 
     sucursal = ticket.sucursal

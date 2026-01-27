@@ -76,16 +76,51 @@ def validar_rut_chileno(rut):
     except Exception as e:
         return False, f"Error al validar RUT: {str(e)}"
 
-def validar_campos_usuario(data):
+def generar_username_desde_email(email):
+    """
+    Genera un nombre de usuario único a partir del correo electrónico.
+    Si el username ya existe, agrega un número al final.
+    Ejemplo: jperez@empresa.cl -> jperez, jperez1, jperez2, etc.
+    """
+    if not email:
+        return None
+    
+    # Extraer la parte antes del @
+    base_username = email.split('@')[0].lower()
+    
+    # Limpiar caracteres especiales, mantener solo letras, números y puntos
+    base_username = re.sub(r'[^a-z0-9.]', '', base_username)
+    
+    # Si está vacío después de limpiar, usar 'usuario'
+    if not base_username:
+        base_username = 'usuario'
+    
+    # Verificar si el username ya existe
+    username = base_username
+    contador = 1
+    
+    while Usuario.objects.filter(username=username).exists():
+        username = f"{base_username}{contador}"
+        contador += 1
+        
+        # Seguridad: evitar bucle infinito
+        if contador > 1000:
+            username = f"{base_username}{get_random_string(4)}"
+            break
+    
+    return username
+
+
+def validar_campos_usuario(data, es_edicion=False, usuario_id=None):
     """
     Valida los campos de un usuario
     Retorna: (es_valido, errores)
     """
     errores = []
     
-    # Campos obligatorios
+    # Campos obligatorios (username ya no es obligatorio, se genera automáticamente)
     campos_obligatorios = [
-        'username', 'first_name', 'last_name', 'email'
+        'first_name', 'last_name', 'email'
     ]
     
     for campo in campos_obligatorios:
@@ -104,16 +139,22 @@ def validar_campos_usuario(data):
         if not rut_valido:
             errores.append(f"RUT inválido: {mensaje_rut}")
     
-    # Validar username único
+    # Validar username único (solo si se proporciona manualmente)
     if data.get('username'):
         username = data['username'].strip()
-        if Usuario.objects.filter(username=username).exists():
+        query = Usuario.objects.filter(username=username)
+        if es_edicion and usuario_id:
+            query = query.exclude(id=usuario_id)
+        if query.exists():
             errores.append("El nombre de usuario ya existe")
     
     # Validar email único
     if data.get('email'):
         email = data['email'].strip()
-        if Usuario.objects.filter(email=email).exists():
+        query = Usuario.objects.filter(email=email)
+        if es_edicion and usuario_id:
+            query = query.exclude(id=usuario_id)
+        if query.exists():
             errores.append("El correo electrónico ya está registrado")
     
     return len(errores) == 0, errores
@@ -280,6 +321,11 @@ def crear_usuario(request):
         
         data = json.loads(request.body)
         
+        # ✅ GENERAR USERNAME AUTOMÁTICAMENTE DESDE EL EMAIL
+        email = data.get('email', '').strip()
+        if email and not data.get('username'):
+            data['username'] = generar_username_desde_email(email)
+        
         # Validar campos
         es_valido, errores = validar_campos_usuario(data)
         if not es_valido:
@@ -291,21 +337,29 @@ def crear_usuario(request):
         # Crear contraseña temporal y forzar cambio al primer acceso
         password_temp = get_random_string(12)
         
+        # ✅ Usar el username generado o el proporcionado
+        username = data.get('username', '').strip() or generar_username_desde_email(email)
+        
         # Crear usuario
+        # IMPORTANTE: Convertir RUT vacío a None para evitar conflictos de unicidad
+        rut_valor = data.get('rut', '').strip()
+        if not rut_valor:
+            rut_valor = None  # None permite múltiples usuarios sin RUT (unique=True ignora NULL)
+        
         usuario = Usuario.objects.create_user(
-            username=data['username'].strip(),
-            email=data['email'].strip(),
+            username=username,
+            email=email,
             password=password_temp,
             first_name=data['first_name'].strip(),
             last_name=data['last_name'].strip(),
-            rut=data.get('rut', '').strip(),
-            telefono=data.get('telefono', '').strip(),
-            direccion=data.get('direccion', '').strip(),
-            empresa=data.get('empresa', '').strip(),
-            cargo=data.get('cargo', '').strip(),
-            departamento=data.get('departamento', '').strip(),
+            rut=rut_valor,
+            telefono=data.get('telefono', '').strip() or None,
+            direccion=data.get('direccion', '').strip() or None,
+            empresa=data.get('empresa', '').strip() or None,
+            cargo=data.get('cargo', '').strip() or None,
+            departamento=data.get('departamento', '').strip() or None,
             rol=data.get('rol', 'vendedor'),
-            fecha_nacimiento=data.get('fecha_nacimiento'),
+            fecha_nacimiento=data.get('fecha_nacimiento') or None,
             es_activo=data.get('es_activo', True),
             requiere_2fa=data.get('requiere_2fa', False),
             puede_crear_usuarios=data.get('puede_crear_usuarios', False),
@@ -339,6 +393,56 @@ def crear_usuario(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@require_GET
+@login_required
+def verificar_username(request):
+    """
+    Verifica si un username está disponible y sugiere uno alternativo si no lo está.
+    Se usa para auto-generar username desde email.
+    """
+    try:
+        username_base = request.GET.get('username', '').strip().lower()
+        
+        if not username_base:
+            return JsonResponse({
+                'success': False,
+                'error': 'Username no proporcionado'
+            }, status=400)
+        
+        # Limpiar caracteres especiales
+        username_base = re.sub(r'[^a-z0-9.]', '', username_base)
+        
+        if not username_base:
+            username_base = 'usuario'
+        
+        # Buscar un username disponible
+        username_disponible = username_base
+        contador = 1
+        
+        while Usuario.objects.filter(username=username_disponible).exists():
+            username_disponible = f"{username_base}{contador}"
+            contador += 1
+            
+            # Seguridad: evitar bucle infinito
+            if contador > 100:
+                username_disponible = f"{username_base}{get_random_string(4)}"
+                break
+        
+        return JsonResponse({
+            'success': True,
+            'username_base': username_base,
+            'username_disponible': username_disponible,
+            'modificado': username_disponible != username_base
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
 
 @require_POST
 @login_required
@@ -395,7 +499,11 @@ def editar_usuario(request, usuario_id):
         usuario.email = data.get('email', usuario.email).strip()
         usuario.first_name = data.get('first_name', usuario.first_name).strip()
         usuario.last_name = data.get('last_name', usuario.last_name).strip()
-        usuario.rut = data.get('rut', usuario.rut).strip() if data.get('rut') else usuario.rut
+        
+        # IMPORTANTE: Convertir RUT vacío a None para evitar conflictos de unicidad
+        rut_valor = data.get('rut', '').strip() if data.get('rut') else ''
+        usuario.rut = rut_valor if rut_valor else None  # None permite múltiples sin RUT
+        
         usuario.telefono = data.get('telefono', usuario.telefono).strip() if data.get('telefono') else usuario.telefono
         usuario.direccion = data.get('direccion', usuario.direccion).strip() if data.get('direccion') else usuario.direccion
         usuario.empresa = data.get('empresa', usuario.empresa).strip() if data.get('empresa') else usuario.empresa
@@ -591,6 +699,10 @@ def resetear_password(request, usuario_id):
     """
     Resetear contraseña de un usuario y enviar por correo
     RESTRINGIDO: Solo administradores
+    
+    Acepta:
+    - Sin body: genera contraseña automática segura
+    - Con body JSON { "password_personalizada": "clave" }: usa contraseña especificada
     """
     try:
         # Verificar si es administrador
@@ -603,8 +715,26 @@ def resetear_password(request, usuario_id):
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
         
-        # Generar nueva contraseña
-        nueva_password = get_random_string(12)
+        # Verificar si se envió una contraseña personalizada
+        password_personalizada = None
+        es_password_personalizada = False
+        
+        if request.body:
+            try:
+                data = json.loads(request.body)
+                password_personalizada = data.get('password_personalizada', '').strip()
+            except json.JSONDecodeError:
+                pass
+        
+        # Generar o usar contraseña
+        if password_personalizada:
+            nueva_password = password_personalizada
+            es_password_personalizada = True
+            tipo_password = "personalizada"
+        else:
+            nueva_password = get_random_string(12)
+            tipo_password = "automática"
+        
         usuario.set_password(nueva_password)
         usuario.save()
         
@@ -622,9 +752,10 @@ def resetear_password(request, usuario_id):
         
         return JsonResponse({
             'success': True,
-            'message': f"Contraseña reseteada exitosamente {mensaje_email}",
+            'message': f"Contraseña {tipo_password} establecida exitosamente {mensaje_email}",
             'email_enviado': email_enviado,
-            'nueva_password': nueva_password if not email_enviado else None,  # ⭐ Mostrar si no se envió
+            'nueva_password': nueva_password if not email_enviado else None,  # Mostrar si no se envió
+            'es_personalizada': es_password_personalizada,
             'usuario': {
                 'nombre': usuario.get_full_name(),
                 'email': usuario.email,
@@ -706,6 +837,295 @@ def exportar_usuarios(request):
             ])
         
         return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_GET
+@login_required
+def descargar_plantilla_importacion(request):
+    """
+    Descargar plantilla CSV para importación de usuarios
+    RESTRINGIDO: Solo administradores
+    """
+    try:
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({
+                'success': False,
+                'error': 'Acceso restringido. Solo los administradores pueden descargar la plantilla.'
+            }, status=403)
+        
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="plantilla_importacion_usuarios.csv"'
+        
+        # Escribir BOM para UTF-8
+        response.write('\ufeff')
+        
+        writer = csv.writer(response)
+        # Encabezados de la plantilla
+        writer.writerow([
+            'email', 'nombre', 'apellido', 'rut', 'telefono', 
+            'empresa', 'cargo', 'departamento', 'rol'
+        ])
+        
+        # Fila de ejemplo
+        writer.writerow([
+            'ejemplo@empresa.cl', 'Juan', 'Pérez', '12.345.678-9', '+56912345678',
+            'Mi Empresa', 'Vendedor', 'Ventas', 'vendedor'
+        ])
+        
+        # Segunda fila de ejemplo
+        writer.writerow([
+            'maria@empresa.cl', 'María', 'González', '11.222.333-4', '+56987654321',
+            'Mi Empresa', 'Cajera', 'Caja', 'cajero'
+        ])
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_POST
+@login_required
+@csrf_exempt
+@transaction.atomic
+def importar_usuarios(request):
+    """
+    Importar usuarios desde archivo CSV
+    RESTRINGIDO: Solo administradores
+    
+    Formato CSV esperado (con encabezados):
+    email, nombre, apellido, rut, telefono, empresa, cargo, departamento, rol
+    
+    - email: Obligatorio, se usa para generar username
+    - nombre: Obligatorio
+    - apellido: Obligatorio
+    - rol: Opcional (por defecto: vendedor). Valores: vendedor, cajero, jefe_local, administracion, administrador
+    - Los demás campos son opcionales
+    """
+    try:
+        # Verificar si es administrador
+        es_admin = request.user.is_superuser or getattr(request.user, 'rol', None) == 'administrador'
+        if not es_admin:
+            return JsonResponse({
+                'success': False,
+                'error': 'Acceso restringido. Solo los administradores pueden importar usuarios.'
+            }, status=403)
+        
+        if 'archivo' not in request.FILES:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se ha proporcionado ningún archivo'
+            }, status=400)
+        
+        archivo = request.FILES['archivo']
+        
+        # Validar extensión
+        if not archivo.name.lower().endswith('.csv'):
+            return JsonResponse({
+                'success': False,
+                'error': 'El archivo debe ser un CSV'
+            }, status=400)
+        
+        # Validar tamaño (máximo 5MB)
+        if archivo.size > 5 * 1024 * 1024:
+            return JsonResponse({
+                'success': False,
+                'error': 'El archivo es muy grande. Máximo 5MB'
+            }, status=400)
+        
+        # Leer el archivo CSV
+        try:
+            # Intentar decodificar con diferentes encodings
+            try:
+                contenido = archivo.read().decode('utf-8-sig')  # utf-8 con BOM
+            except UnicodeDecodeError:
+                archivo.seek(0)
+                contenido = archivo.read().decode('latin-1')
+            
+            # Usar StringIO para leer como CSV
+            csv_file = io.StringIO(contenido)
+            reader = csv.DictReader(csv_file)
+            
+            # Normalizar nombres de columnas (minúsculas, sin espacios)
+            if reader.fieldnames:
+                reader.fieldnames = [f.lower().strip() for f in reader.fieldnames]
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error al leer el archivo CSV: {str(e)}'
+            }, status=400)
+        
+        # Mapeo de nombres de columnas alternativos
+        columnas_map = {
+            'email': ['email', 'correo', 'mail', 'e-mail'],
+            'nombre': ['nombre', 'first_name', 'nombres', 'name'],
+            'apellido': ['apellido', 'last_name', 'apellidos', 'surname'],
+            'rut': ['rut', 'dni', 'documento'],
+            'telefono': ['telefono', 'phone', 'tel', 'celular', 'movil'],
+            'empresa': ['empresa', 'company', 'compania'],
+            'cargo': ['cargo', 'position', 'puesto'],
+            'departamento': ['departamento', 'department', 'area'],
+            'rol': ['rol', 'role', 'perfil', 'tipo']
+        }
+        
+        def obtener_valor(row, campo):
+            """Obtiene el valor de una columna, probando nombres alternativos"""
+            for nombre in columnas_map.get(campo, [campo]):
+                if nombre in row and row[nombre]:
+                    return row[nombre].strip()
+            return ''
+        
+        # Mapeo de roles (para aceptar diferentes formatos)
+        roles_map = {
+            'vendedor': 'vendedor',
+            'cajero': 'cajero',
+            'cajera': 'cajero',
+            'jefe local': 'jefe_local',
+            'jefe_local': 'jefe_local',
+            'jefelocal': 'jefe_local',
+            'administracion': 'administracion',
+            'administración': 'administracion',
+            'admin': 'administrador',
+            'administrador': 'administrador',
+            'bodeguero': 'bodeguero',
+            'contador': 'contador'
+        }
+        
+        # Procesar filas
+        usuarios_creados = []
+        usuarios_actualizados = []
+        errores = []
+        fila_num = 1  # Empezamos en 1 (el encabezado es fila 0)
+        
+        for row in reader:
+            fila_num += 1
+            
+            try:
+                # Obtener valores
+                email = obtener_valor(row, 'email')
+                nombre = obtener_valor(row, 'nombre')
+                apellido = obtener_valor(row, 'apellido')
+                rut = obtener_valor(row, 'rut')
+                telefono = obtener_valor(row, 'telefono')
+                empresa = obtener_valor(row, 'empresa')
+                cargo = obtener_valor(row, 'cargo')
+                departamento = obtener_valor(row, 'departamento')
+                rol_input = obtener_valor(row, 'rol').lower()
+                
+                # Validar campos obligatorios
+                if not email:
+                    errores.append(f"Fila {fila_num}: Email es obligatorio")
+                    continue
+                
+                if not nombre:
+                    errores.append(f"Fila {fila_num}: Nombre es obligatorio")
+                    continue
+                
+                if not apellido:
+                    errores.append(f"Fila {fila_num}: Apellido es obligatorio")
+                    continue
+                
+                # Validar formato de email
+                email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_regex, email):
+                    errores.append(f"Fila {fila_num}: Email '{email}' no tiene formato válido")
+                    continue
+                
+                # Determinar rol
+                rol = roles_map.get(rol_input, 'vendedor')
+                
+                # Validar RUT si se proporciona
+                if rut:
+                    rut_valido, msg_rut = validar_rut_chileno(rut)
+                    if not rut_valido:
+                        # No es error crítico, solo advertencia
+                        rut = None  # Ignorar RUT inválido
+                
+                # Verificar si el usuario ya existe (por email)
+                usuario_existente = Usuario.objects.filter(email=email).first()
+                
+                if usuario_existente:
+                    # Actualizar usuario existente
+                    usuario_existente.first_name = nombre
+                    usuario_existente.last_name = apellido
+                    if rut:
+                        usuario_existente.rut = rut
+                    if telefono:
+                        usuario_existente.telefono = telefono
+                    if empresa:
+                        usuario_existente.empresa = empresa
+                    if cargo:
+                        usuario_existente.cargo = cargo
+                    if departamento:
+                        usuario_existente.departamento = departamento
+                    usuario_existente.rol = rol
+                    usuario_existente.save()
+                    
+                    usuarios_actualizados.append({
+                        'email': email,
+                        'nombre': f"{nombre} {apellido}"
+                    })
+                else:
+                    # Crear nuevo usuario
+                    username = generar_username_desde_email(email)
+                    password_temp = get_random_string(12)
+                    
+                    nuevo_usuario = Usuario.objects.create_user(
+                        username=username,
+                        email=email,
+                        password=password_temp,
+                        first_name=nombre,
+                        last_name=apellido,
+                        rut=rut if rut else None,
+                        telefono=telefono if telefono else None,
+                        empresa=empresa if empresa else None,
+                        cargo=cargo if cargo else None,
+                        departamento=departamento if departamento else None,
+                        rol=rol,
+                        es_activo=True
+                    )
+                    
+                    # Generar contraseña temporal
+                    password_temp = nuevo_usuario.generar_password_temporal()
+                    
+                    usuarios_creados.append({
+                        'email': email,
+                        'nombre': f"{nombre} {apellido}",
+                        'username': username,
+                        'password': password_temp
+                    })
+                    
+            except Exception as e:
+                errores.append(f"Fila {fila_num}: Error al procesar - {str(e)}")
+                continue
+        
+        # Preparar respuesta
+        resultado = {
+            'success': True,
+            'message': f'Importación completada',
+            'creados': len(usuarios_creados),
+            'actualizados': len(usuarios_actualizados),
+            'errores': len(errores),
+            'usuarios_creados': usuarios_creados,
+            'usuarios_actualizados': usuarios_actualizados,
+            'detalle_errores': errores[:20] if errores else []  # Limitar a 20 errores
+        }
+        
+        if len(errores) > 20:
+            resultado['detalle_errores'].append(f"... y {len(errores) - 20} errores más")
+        
+        return JsonResponse(resultado)
         
     except Exception as e:
         return JsonResponse({

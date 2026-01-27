@@ -695,19 +695,28 @@
                 <div class="card mb-4" style="border: none; border-radius: 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
                     <div class="card-body p-3">
                         <form id="formBuscarDTE" class="row g-3 align-items-end">
-                            <div class="col-md-4 col-lg-3">
+                            <div class="col-md-3 col-lg-2">
+                                <label for="tipoFecha" class="form-label small">
+                                    <i class="bi bi-calendar-range me-1"></i>Buscar por
+                                </label>
+                                <select class="form-select" id="tipoFecha" name="tipo_fecha">
+                                    <option value="recepcion" selected>Fecha Recepción</option>
+                                    <option value="emision">Fecha Emisión</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 col-lg-2">
                                 <label for="fechaInicio" class="form-label small">
                                     <i class="bi bi-calendar-event me-1"></i>Fecha de Inicio
                                 </label>
                                 <input type="date" class="form-control" id="fechaInicio" name="fecha_inicio">
                             </div>
-                            <div class="col-md-4 col-lg-3">
+                            <div class="col-md-3 col-lg-2">
                                 <label for="fechaFin" class="form-label small">
                                     <i class="bi bi-calendar-check me-1"></i>Fecha de Término
                                 </label>
                                 <input type="date" class="form-control" id="fechaFin" name="fecha_fin">
                             </div>
-                            <div class="col-md-4 col-lg-3">
+                            <div class="col-md-3 col-lg-2">
                                 <button type="submit" class="btn btn-success w-100" style="height: 46px;">
                                     <i class="bi bi-search me-1"></i>Buscar DTEs
                                 </button>
@@ -1885,13 +1894,15 @@
     // Al cargar la página
     $(document).ready(function () {
         const hoy = new Date();
-        const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);  // Primer día del mes actual
+        // Establecer fecha_fin como hoy
+        // Establecer fecha_inicio como 2 meses atrás
+        const dosMesesAtras = new Date(hoy.getFullYear(), hoy.getMonth() - 2, hoy.getDate());
         const formato = date => date.toISOString().split('T')[0];
 
-        $('#fechaInicio').val(formato(primerDiaMes));  // Desde inicio del mes actual
+        $('#fechaInicio').val(formato(dosMesesAtras));  // Desde 2 meses atrás
         $('#fechaFin').val(formato(hoy));
         
-        console.log(`📅 Filtro: Desde ${formato(primerDiaMes)} hasta ${formato(hoy)}`);
+        console.log(`📅 Filtro inicial: Desde ${formato(dosMesesAtras)} hasta ${formato(hoy)} (últimos 2 meses)`);
 
         // Verificar que DataTables esté disponible
         if (typeof $.fn.DataTable === 'undefined') {
@@ -1900,7 +1911,7 @@
             return;
         }
 
-        // Cargar DTEs del mes actual al iniciar con timeout
+        // Cargar DTEs de los últimos 2 meses al iniciar con timeout
         setTimeout(function () {
             filtroVencimientoActual = '';
             cargarDTEs(1, '', '');
@@ -2129,6 +2140,7 @@
 
         const fecha_inicio = $('#fechaInicio').val();
         const fecha_fin = $('#fechaFin').val();
+        const tipo_fecha = $('#tipoFecha').val() || 'recepcion';  // Por defecto: fecha de recepción
         
         // Usar filtro de vencimiento si se proporciona, sino mantener el actual
         if (filtroVencimiento) {
@@ -2146,6 +2158,7 @@
             data: JSON.stringify({
                 fecha_inicio,
                 fecha_fin,
+                tipo_fecha,  // Nuevo parámetro
                 page: page,
                 page_size: 20,
                 search: search,

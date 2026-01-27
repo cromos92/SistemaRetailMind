@@ -1795,21 +1795,25 @@
                                 <h6 class="mb-0"><i class="ri-global-line me-1"></i>Venta Internet</h6>
                             </div>
                             <div class="card-body">
-                                <div class="form-group mb-3">
-                                    <label class="form-label small">WEBPAY</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="webpay" readonly>
+                                <div class="form-group mb-2">
+                                    <label class="form-label small">FALABELLA</label>
+                                    <input type="text" class="form-control text-end" id="falabella" readonly>
                                 </div>
-                                <div class="form-group mb-3">
+                                <div class="form-group mb-2">
                                     <label class="form-label small">PARIS</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="paris" readonly>
+                                    <input type="text" class="form-control text-end" id="paris" readonly>
                                 </div>
-                                <div class="form-group mb-3">
+                                <div class="form-group mb-2">
                                     <label class="form-label small">RIPLEY</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="ripley" readonly>
+                                    <input type="text" class="form-control text-end" id="ripley" readonly>
+                                </div>
+                                <div class="form-group mb-2">
+                                    <label class="form-label small">MERCADOPAGO</label>
+                                    <input type="text" class="form-control text-end" id="mercadopago" readonly>
                                 </div>
                                 <div class="form-group mb-0">
-                                    <label class="form-label small">TRANSFERENCIA INTERNET</label>
-                                    <input type="text" class="form-control form-control-lg text-end" id="transferenciaInternet" readonly>
+                                    <label class="form-label small">KLAP</label>
+                                    <input type="text" class="form-control text-end" id="klap" readonly>
                                 </div>
                             </div>
                         </div>
@@ -3963,7 +3967,7 @@ function limpiarCamposCuadratura() {
         'visa', 'debito', 'presto', 'hites',
         'efectivo', 'transferencia', 'nota_credito', 'convenio',
         'credito_trabajador', 'credito_externo',
-        'webpay', 'paris', 'ripley', 'transferenciaInternet',
+        'falabella', 'paris', 'ripley', 'mercadopago', 'klap',
         'totalboletaelectronica', 'totalfactura', 'totalnotascredito',
         'ventatotal', 'totalefectivo', 'totaltbk', 'totalcomercial', 'totalinternet'
     ];
@@ -4050,10 +4054,11 @@ function cargarDatosCuadratura(cuadratura) {
     $('#credito_externo').val(formatearMoneda(cuadratura.total_credito_externo || 0));
     
     // Venta Internet
-    $('#webpay').val(formatearMoneda(cuadratura.total_webpay || 0));
+    $('#falabella').val(formatearMoneda(cuadratura.total_falabella || 0));
     $('#paris').val(formatearMoneda(cuadratura.total_paris || 0));
     $('#ripley').val(formatearMoneda(cuadratura.total_ripley || 0));
-    $('#transferenciaInternet').val(formatearMoneda(cuadratura.total_transferencia_internet || 0));
+    $('#mercadopago').val(formatearMoneda(cuadratura.total_mercadopago || 0));
+    $('#klap').val(formatearMoneda(cuadratura.total_klap || 0));
     
     // Documentos
     $('#totalboletaelectronica').val(formatearMoneda(cuadratura.total_boletas_electronicas || 0));
@@ -4108,9 +4113,12 @@ function imprimirResumenTermica() {
         debito: $('#debito').val(),
         presto: $('#presto').val(),
         hites: $('#hites').val(),
+        // Venta Internet detalle
+        falabella: $('#falabella').val(),
         paris: $('#paris').val(),
         ripley: $('#ripley').val(),
-        webpay: $('#webpay').val(),
+        mercadopago: $('#mercadopago').val(),
+        klap: $('#klap').val(),
         transferencia: $('#transferencia').val(),
         // Documentos
         boletas_electronicas: $('#totalboletaelectronica').val(),
@@ -4299,8 +4307,6 @@ function generarContenidoTermica(datos) {
                     ${datos.debito !== '$0' ? `<tr><td class="metodo">REDCOMPRA DEBITO:</td><td class="monto">${datos.debito}</td></tr>` : ''}
                     ${datos.presto !== '$0' ? `<tr><td class="metodo">PRESTO:</td><td class="monto">${datos.presto}</td></tr>` : ''}
                     ${datos.hites !== '$0' ? `<tr><td class="metodo">HITES:</td><td class="monto">${datos.hites}</td></tr>` : ''}
-                    ${datos.paris !== '$0' ? `<tr><td class="metodo">PARIS:</td><td class="monto">${datos.paris}</td></tr>` : ''}
-                    ${datos.ripley !== '$0' ? `<tr><td class="metodo">RIPLEY:</td><td class="monto">${datos.ripley}</td></tr>` : ''}
                 </table>
             </div>
             <div class="linea"></div>
@@ -4308,7 +4314,11 @@ function generarContenidoTermica(datos) {
             <div class="seccion">
                 <div class="subtitulo">VENTA INTERNET</div>
                 <table>
-                    ${datos.webpay !== '$0' ? `<tr><td class="metodo">WEBPAY:</td><td class="monto">${datos.webpay}</td></tr>` : ''}
+                    ${datos.falabella !== '$0' ? `<tr><td class="metodo">FALABELLA:</td><td class="monto">${datos.falabella}</td></tr>` : ''}
+                    ${datos.paris !== '$0' ? `<tr><td class="metodo">PARIS:</td><td class="monto">${datos.paris}</td></tr>` : ''}
+                    ${datos.ripley !== '$0' ? `<tr><td class="metodo">RIPLEY:</td><td class="monto">${datos.ripley}</td></tr>` : ''}
+                    ${datos.mercadopago !== '$0' ? `<tr><td class="metodo">MERCADOPAGO:</td><td class="monto">${datos.mercadopago}</td></tr>` : ''}
+                    ${datos.klap !== '$0' ? `<tr><td class="metodo">KLAP:</td><td class="monto">${datos.klap}</td></tr>` : ''}
                     ${datos.transferencia !== '$0' ? `<tr><td class="metodo">TRANSFERENCIA:</td><td class="monto">${datos.transferencia}</td></tr>` : ''}
                 </table>
             </div>
@@ -4337,11 +4347,20 @@ function generarContenidoTermica(datos) {
             </div>
             
             <scr${''}ipt>
-                // Auto-imprimir al cargar
+                // Auto-imprimir al cargar y cerrar después
                 window.onload = function() {
                     setTimeout(function() {
                         window.print();
-                    }, 500);
+                        // Cerrar ventana después de imprimir (o cancelar)
+                        setTimeout(function() {
+                            window.close();
+                        }, 500);
+                    }, 300);
+                };
+                
+                // También cerrar si se detecta el evento afterprint
+                window.onafterprint = function() {
+                    window.close();
                 };
             <\/script>
         </body>

@@ -215,6 +215,8 @@ def crear_sucursal(request):
                 empresa=empresa_user.empresa,
                 alias=data.get('alias'),
                 direccion=data.get('direccion'),
+                nombre_impresora_boleta=data.get('nombre_impresora_boleta', 'boleta') or 'boleta',
+                nombre_impresora_factura=data.get('nombre_impresora_factura', 'factura') or 'factura',
             )
             
             logger.info(f"Sucursal creada: {sucursal.alias} (ID: {sucursal.id}) por usuario {request.user.username}")
@@ -253,6 +255,8 @@ def obtener_sucursal(request, sucursal_id):
                 'direccion': sucursal.direccion,
                 'empresa_id': sucursal.empresa_id,
                 'empresa_nombre': sucursal.empresa.nombre if sucursal.empresa else 'N/A',
+                'nombre_impresora_boleta': getattr(sucursal, 'nombre_impresora_boleta', 'boleta') or 'boleta',
+                'nombre_impresora_factura': getattr(sucursal, 'nombre_impresora_factura', 'factura') or 'factura',
             }
         })
         
@@ -317,6 +321,8 @@ def editar_sucursal(request, sucursal_id):
             sucursal.alias = nuevo_alias
             sucursal.direccion = data.get('direccion')
             sucursal.empresa = nueva_empresa
+            sucursal.nombre_impresora_boleta = data.get('nombre_impresora_boleta', 'boleta') or 'boleta'
+            sucursal.nombre_impresora_factura = data.get('nombre_impresora_factura', 'factura') or 'factura'
             sucursal.save()
             
             logger.info(f"Sucursal actualizada: {sucursal.alias} (ID: {sucursal.id}) por usuario {request.user.username}")

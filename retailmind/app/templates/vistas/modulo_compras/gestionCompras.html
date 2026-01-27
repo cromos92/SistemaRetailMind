@@ -3783,7 +3783,10 @@ const GestionCompras = (function() {
         const request = $.ajax({
             url: '/app/facturas_pendientes/',
             method: 'GET',
-            data: { proveedor_id: currentProveedorId },
+            data: { 
+                proveedor_id: currentProveedorId,
+                meses: 2  // Mostrar facturas de los últimos 2 meses
+            },
             success: function(response) {
                 const facturas = Array.isArray(response) ? response : [];
                 actualizarDatalistsFacturas(facturas);
@@ -5202,7 +5205,9 @@ function resetCSVUpload() {
     });
 
     function cargarDtesDisponiblesManual() {
-        $.get('/app/facturas_pendientes/', function(data) {
+        $.get('/app/facturas_pendientes/', {
+            meses: 2  // Mostrar facturas de los últimos 2 meses
+        }, function(data) {
             const select = $('#selectDteManual');
             select.empty().append('<option value="">Seleccione un DTE</option>');
             data.forEach(function(dte) {

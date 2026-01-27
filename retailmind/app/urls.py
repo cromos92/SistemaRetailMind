@@ -244,6 +244,12 @@ from .views_permisos import (
     copiar_permisos_sucursal,
     aplicar_plantilla_tipo_sucursal,
     restablecer_permisos_sucursal,
+    # Exportar/Importar permisos
+    exportar_permisos_rol,
+    exportar_todos_permisos,
+    importar_permisos,
+    exportar_permisos_sucursal,
+    importar_permisos_sucursal,
 )
 from .views_transbank_sdk import (
     # Vistas
@@ -489,6 +495,8 @@ urlpatterns = [
     path('dte/obtener_productos_regularizar/', views.obtener_productos_regularizar, name='obtener_productos_regularizar'),
     path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),
     path('dte/documento-regularizacion/<int:recepcion_id>/', views.documento_regularizacion, name='documento_regularizacion'),
+    path('dte/ajuste_interno_individual/', views.procesar_ajuste_interno_individual, name='procesar_ajuste_interno_individual'),
+    path('dte/cambio_producto_individual/', views.procesar_cambio_producto_individual, name='procesar_cambio_producto_individual'),
     path('dte/obtener_solicitud_producto/<int:producto_id>/', views.obtener_solicitud_producto, name='obtener_solicitud_producto'),
     path('dte/decidir_solicitud/', views.decidir_solicitud_api, name='decidir_solicitud_api'),
     path('dte/buscar_productos_emisor/', views.buscar_productos_emisor, name='buscar_productos_emisor'),
@@ -906,6 +914,15 @@ urlpatterns = [
     
     # Estadísticas
     path('permisos/estadisticas/', estadisticas_permisos, name='estadisticas_permisos'),
+    
+    # Exportar/Importar permisos por rol
+    path('permisos/exportar-rol/', exportar_permisos_rol, name='exportar_permisos_rol'),
+    path('permisos/exportar-todos/', exportar_todos_permisos, name='exportar_todos_permisos'),
+    path('permisos/importar/', importar_permisos, name='importar_permisos'),
+    
+    # Exportar/Importar permisos por sucursal
+    path('permisos/exportar-sucursal/', exportar_permisos_sucursal, name='exportar_permisos_sucursal'),
+    path('permisos/importar-sucursal/', importar_permisos_sucursal, name='importar_permisos_sucursal'),
 
     # ========== DASHBOARD INTEGRAL MEJORADO ==========
     # Vista principal del dashboard integral

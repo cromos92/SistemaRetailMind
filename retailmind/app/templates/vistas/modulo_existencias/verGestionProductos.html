@@ -3486,7 +3486,11 @@ function showError(msg) {
         $('#formGuiaTalla')[0].reset();
         $('#tablaItemsGuia tbody').empty();
         agregarFilaTalla(); // inicia con una fila
-        cargarMarcasEnGuiaTalla();
+        
+        // ✅ Obtener la marca ya seleccionada en el modal de crear producto desde recepción
+        const marcaSeleccionada = $('#modalCrearProductoDesdeRecepcion select[name="atributo1"]').val();
+        cargarMarcasEnGuiaTalla(marcaSeleccionada || null);
+        
         $('#modalGuiaTalla').modal('show');
     });
 
@@ -6922,7 +6926,11 @@ $(document).on('click', '#btnConfigGuiaTallaManual', function() {
     $('#formGuiaTalla')[0].reset();
     $('#tablaItemsGuia tbody').empty();
     agregarFilaTalla();
-    cargarMarcasEnGuiaTalla();
+    
+    // ✅ Obtener la marca ya seleccionada en el modal de crear producto manual
+    const marcaSeleccionada = $('#modalCrearProductoManual select[name="atributo1"]').val();
+    cargarMarcasEnGuiaTalla(marcaSeleccionada || null);
+    
     $('#modalGuiaTalla').modal('show');
 });
 

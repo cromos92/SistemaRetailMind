@@ -12,6 +12,7 @@ urlpatterns = [
     path('crear/', views.crear_usuario, name='crear_usuario'),
     path('editar/<int:usuario_id>/', views.editar_usuario, name='editar_usuario'),
     path('obtener/<int:usuario_id>/', views.obtener_usuario, name='obtener_usuario'),
+    path('verificar-username/', views.verificar_username, name='verificar_username'),
     
     # Acciones específicas
     path('resetear-password/<int:usuario_id>/', views.resetear_password, name='resetear_password'),
@@ -25,8 +26,10 @@ urlpatterns = [
     path('eliminar-asignacion/<int:usuario_id>/<int:empresa_user_id>/', views.eliminar_asignacion_usuario, name='eliminar_asignacion_usuario'),
     path('cambiar-activa/<int:usuario_id>/', views.cambiar_sucursal_activa_usuario, name='cambiar_sucursal_activa_usuario'),
     
-    # Exportación
+    # Exportación e Importación
     path('exportar/', views.exportar_usuarios, name='exportar_usuarios'),
+    path('importar/', views.importar_usuarios, name='importar_usuarios'),
+    path('plantilla-importacion/', views.descargar_plantilla_importacion, name='descargar_plantilla_importacion'),
     
     # Perfil de usuario
     path('mi-perfil/', views.mi_perfil, name='mi_perfil'),

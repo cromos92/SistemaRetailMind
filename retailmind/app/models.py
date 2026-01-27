@@ -61,6 +61,20 @@ class Sucursal(models.Model):
         help_text='Porcentaje de sobreprecio que aplica al despachar a otras sucursales'
     )
     
+    # === CONFIGURACIÓN DE IMPRESORAS ACEPTA ===
+    nombre_impresora_boleta = models.CharField(
+        max_length=100,
+        default='boleta',
+        verbose_name='Impresora Boleta Electrónica',
+        help_text='Nombre de la impresora en Acepta para Boletas Electrónicas'
+    )
+    nombre_impresora_factura = models.CharField(
+        max_length=100,
+        default='factura',
+        verbose_name='Impresora Factura Electrónica',
+        help_text='Nombre de la impresora en Acepta para Facturas Electrónicas'
+    )
+    
     # CAMPOS ADICIONALES - Descomenta después de ejecutar: python manage.py migrate app
     # nombre = models.CharField(max_length=200, verbose_name="Nombre Completo", blank=True, null=True)
     # comuna = models.CharField(max_length=100, verbose_name="Comuna", blank=True, null=True)
@@ -277,16 +291,20 @@ ESTADO_SOLICITUD_CHOICES = [
 ]
 METODO_PAGO_TICKET_CHOICES = [
     ('EFECTIVO', 'Efectivo'),
+    # ⚠️ TARJETA_DEBITO y TARJETA_CREDITO son genéricos (datos históricos/migrados)
+    # Para nuevas transacciones usar TBK_DEBITO_POS y TBK_CREDITO_POS
     ('TARJETA_DEBITO', 'Tarjeta Débito'),
     ('TARJETA_CREDITO', 'Tarjeta Crédito'),
     ('TRANSFERENCIA', 'Transferencia'),
     ('CHEQUE', 'Cheque'),
     ('OTRO', 'Otro'),
+    # Métodos Transbank (usar estos para nuevas transacciones)
     ('TBK_POS_INTEGRADO', 'Transbank POS Integrado'),
     ('TBK_MANUAL', 'Transbank Manual'),
     ('TBK_DEBITO_POS', 'Transbank Débito POS'),
     ('TBK_CREDITO_POS', 'Transbank Crédito POS'),
     ('TBK_PREPAGO_POS', 'Transbank Prepago POS'),
+    # Otros métodos de pago
     ('TARJETA_COMERCIAL', 'Tarjeta Comercial'),
     ('VENTA_INTERNET', 'Venta por Internet'),
     ('ORDEN_COMPRA', 'Orden de Compra'),
@@ -1466,8 +1484,8 @@ class Movimientos_Producto(models.Model):
     costo = models.IntegerField(default=0)
     sobreprecio = models.IntegerField(default=0)
     precio = models.IntegerField(default=0)
-    fecha = models.DateField(auto_now=True)
-    hora = models.TimeField(auto_now=True)
+    fecha = models.DateField(null=True, blank=True)  # Sin auto_now para permitir migración con fechas originales
+    hora = models.TimeField(null=True, blank=True)  # Sin auto_now para permitir migración con fechas originales
     
     # === CONCEPTOS Y ESTADOS ===
     concepto = models.CharField(max_length=50, choices=CONCEPTO_MOVIMIENTO_CHOICES, default='INGRESO_INICIAL')

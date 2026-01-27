@@ -862,6 +862,18 @@
                                     <button class="btn btn-nexo-outline" id="btnCopiarPermisos" disabled>
                                         <i class="ri-file-copy-line me-1"></i> Copiar de Otro Rol
                                     </button>
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-nexo-outline dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" id="btnExportarPermisos">
+                                            <i class="ri-download-2-line me-1"></i> Exportar
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item" href="#" onclick="exportarPermisosRol()"><i class="ri-file-download-line me-2"></i>Exportar Rol Actual</a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="exportarTodosPermisos()"><i class="ri-folder-download-line me-2"></i>Exportar Todos los Roles</a></li>
+                                        </ul>
+                                    </div>
+                                    <button class="btn btn-nexo-outline" id="btnImportarPermisos" onclick="abrirModalImportar()">
+                                        <i class="ri-upload-2-line me-1"></i> Importar
+                                    </button>
                                     <button class="btn btn-nexo-outline" id="btnVerUsuarios" disabled>
                                         <i class="ri-team-line me-1"></i> Ver Usuarios
                                     </button>
@@ -928,6 +940,9 @@
                             <!-- Quick Actions -->
                             <div class="quick-actions mt-4">
                                 <span class="text-muted small me-2">Acciones rápidas:</span>
+                                <button type="button" class="quick-action-btn btn-seleccionar-todo" onclick="seleccionarTodosPermisos()" style="background: linear-gradient(135deg, var(--nexo-success) 0%, #00B090 100%); color: white; border-color: var(--nexo-success);">
+                                    <i class="ri-checkbox-multiple-line me-1"></i> SELECCIONAR TODO
+                                </button>
                                 <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_ver', true)">
                                     <i class="ri-eye-line me-1"></i> Marcar todos Ver
                                 </button>
@@ -937,7 +952,16 @@
                                 <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_editar', true)">
                                     <i class="ri-edit-line me-1"></i> Marcar todos Editar
                                 </button>
-                                <button type="button" class="quick-action-btn" onclick="desmarcarTodos()">
+                                <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_eliminar', true)">
+                                    <i class="ri-delete-bin-line me-1"></i> Marcar todos Eliminar
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_exportar', true)">
+                                    <i class="ri-download-line me-1"></i> Marcar todos Exportar
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="marcarTodos('puede_aprobar', true)">
+                                    <i class="ri-check-double-line me-1"></i> Marcar todos Aprobar
+                                </button>
+                                <button type="button" class="quick-action-btn" onclick="desmarcarTodos()" style="background: #FF4D4D; color: white; border-color: #FF4D4D;">
                                     <i class="ri-close-line me-1"></i> Desmarcar todos
                                 </button>
                             </div>
@@ -981,6 +1005,12 @@
                                     </button>
                                     <button class="btn btn-nexo-outline" id="btnCopiarPermisosSucursal" disabled>
                                         <i class="ri-file-copy-line me-1"></i> Copiar de Otra
+                                    </button>
+                                    <button class="btn btn-nexo-outline" id="btnExportarSucursal" disabled onclick="exportarPermisosSucursal()">
+                                        <i class="ri-download-2-line me-1"></i> Exportar
+                                    </button>
+                                    <button class="btn btn-nexo-outline" id="btnImportarSucursal" disabled onclick="abrirModalImportarSucursal()">
+                                        <i class="ri-upload-2-line me-1"></i> Importar
                                     </button>
                                     <button class="btn btn-outline-danger" id="btnRestablecerSucursal" disabled>
                                         <i class="ri-refresh-line me-1"></i> Restablecer
@@ -1254,6 +1284,155 @@
     </div>
 </div>
 
+<!-- Modal: Importar Permisos por Rol -->
+<div class="modal fade" id="modalImportarPermisos" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-upload-2-line me-2"></i>
+                    Importar Permisos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Formato del archivo:</strong> Solo se aceptan archivos JSON exportados desde este sistema.
+                </div>
+                
+                <form id="formImportarPermisos" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Seleccionar archivo JSON:</label>
+                        <input type="file" class="form-control" id="archivoImportarRol" accept=".json" required>
+                        <small class="text-muted">Archivo .json con la configuración de permisos exportada.</small>
+                    </div>
+                    
+                    <div class="mb-3" id="infoArchivoImportar" style="display: none;">
+                        <div class="card" style="background: var(--nexo-gray-100);">
+                            <div class="card-body">
+                                <h6 class="mb-2"><i class="ri-file-info-line me-2"></i>Información del archivo:</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Tipo:</small>
+                                        <p class="mb-1 fw-semibold" id="infoArchivoTipo">-</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Fecha exportación:</small>
+                                        <p class="mb-1 fw-semibold" id="infoArchivoFecha">-</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Rol origen:</small>
+                                        <p class="mb-1 fw-semibold" id="infoArchivoRol">-</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Total permisos:</small>
+                                        <p class="mb-1 fw-semibold" id="infoArchivoTotal">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3" id="selectorRolDestino" style="display: none;">
+                        <label class="form-label fw-semibold">Importar permisos hacia el rol:</label>
+                        <select id="rolDestinoImportar" class="form-select">
+                            {% for rol_codigo, rol_nombre in roles %}
+                            <option value="{{ rol_codigo }}">{{ rol_nombre }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Los permisos se aplicarán a este rol.</small>
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="sobrescribirPermisoImport" checked>
+                        <label class="form-check-label" for="sobrescribirPermisoImport">
+                            Sobrescribir permisos existentes
+                        </label>
+                        <small class="text-muted d-block">Si está desmarcado, solo se crearán nuevos permisos sin modificar los existentes.</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-nexo-primary" id="btnConfirmarImportarRol" disabled>
+                    <i class="ri-upload-2-line me-1"></i> Importar Permisos
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Importar Permisos por Sucursal -->
+<div class="modal fade" id="modalImportarPermisosSucursal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="ri-upload-2-line me-2"></i>
+                    Importar Permisos de Sucursal
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Formato del archivo:</strong> Solo se aceptan archivos JSON exportados desde permisos de sucursal.
+                </div>
+                
+                <form id="formImportarPermisosSucursal" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Seleccionar archivo JSON:</label>
+                        <input type="file" class="form-control" id="archivoImportarSucursal" accept=".json" required>
+                        <small class="text-muted">Archivo .json con la configuración de permisos de sucursal.</small>
+                    </div>
+                    
+                    <div class="mb-3" id="infoArchivoImportarSucursal" style="display: none;">
+                        <div class="card" style="background: var(--nexo-gray-100);">
+                            <div class="card-body">
+                                <h6 class="mb-2"><i class="ri-file-info-line me-2"></i>Información del archivo:</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Sucursal origen:</small>
+                                        <p class="mb-1 fw-semibold" id="infoArchivoSucursalOrigen">-</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Fecha exportación:</small>
+                                        <p class="mb-1 fw-semibold" id="infoArchivoSucursalFecha">-</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">Total permisos:</small>
+                                        <p class="mb-1 fw-semibold" id="infoArchivoSucursalTotal">-</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Sucursal destino:</label>
+                        <p class="fw-semibold text-primary" id="sucursalDestinoImportarNombre">-</p>
+                        <input type="hidden" id="sucursalDestinoImportar" value="">
+                    </div>
+                    
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="sobrescribirPermisoSucursalImport" checked>
+                        <label class="form-check-label" for="sobrescribirPermisoSucursalImport">
+                            Sobrescribir permisos existentes
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-nexo-primary" id="btnConfirmarImportarSucursal" disabled>
+                    <i class="ri-upload-2-line me-1"></i> Importar Permisos
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     .plantilla-opcion {
         transition: all 0.2s ease;
@@ -1501,6 +1680,34 @@ function renderizarPermisos(modulos) {
             </div>
             <div class="collapse show" id="modulo-${modulo.id}">
                 <div class="modulo-body">
+                    <!-- Acciones rápidas del módulo -->
+                    <div class="modulo-quick-actions mb-3 pb-2 border-bottom d-flex flex-wrap gap-1 align-items-center">
+                        <span class="text-muted small me-2"><i class="ri-flashlight-line"></i></span>
+                        <button type="button" class="btn btn-sm btn-success" onclick="seleccionarTodoModulo(${modulo.id})" title="Seleccionar todos los permisos de este módulo">
+                            <i class="ri-checkbox-multiple-line me-1"></i> Todo
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_ver', true)" title="Marcar Ver">
+                            <i class="ri-eye-line"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_crear', true)" title="Marcar Crear">
+                            <i class="ri-add-line"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_editar', true)" title="Marcar Editar">
+                            <i class="ri-edit-line"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_eliminar', true)" title="Marcar Eliminar">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_exportar', true)" title="Marcar Exportar">
+                            <i class="ri-download-line"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="marcarModulo(${modulo.id}, 'puede_aprobar', true)" title="Marcar Aprobar">
+                            <i class="ri-check-double-line"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="desmarcarModulo(${modulo.id})" title="Desmarcar todo">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
                     ${opcionesHtml}
                 </div>
             </div>
@@ -1604,6 +1811,106 @@ function marcarCambio(event) {
         permisosModificados[opcionId] = {};
     }
     permisosModificados[opcionId][permiso] = valor;
+}
+
+// Quick action: SELECCIONAR TODOS los permisos de TODA la página
+function seleccionarTodosPermisos() {
+    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    
+    tiposPermisos.forEach(tipo => {
+        document.querySelectorAll(`[data-permiso="${tipo}"]`).forEach(checkbox => {
+            checkbox.checked = true;
+            const parent = checkbox.closest('.permiso-item');
+            parent.classList.add('active');
+            
+            // Track change
+            const opcionId = checkbox.dataset.opcionId;
+            if (!permisosModificados[opcionId]) {
+                permisosModificados[opcionId] = {};
+            }
+            permisosModificados[opcionId][tipo] = true;
+        });
+    });
+    
+    toastr.success('Se seleccionaron TODOS los permisos (Ver, Crear, Editar, Eliminar, Exportar, Aprobar)', 'Permisos Completos', {timeOut: 3000});
+}
+
+// ========== FUNCIONES POR MÓDULO ==========
+
+// Seleccionar TODOS los permisos de un módulo específico
+function seleccionarTodoModulo(moduloId) {
+    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    const moduloContainer = document.getElementById(`modulo-${moduloId}`);
+    
+    if (!moduloContainer) return;
+    
+    tiposPermisos.forEach(tipo => {
+        moduloContainer.querySelectorAll(`[data-permiso="${tipo}"]`).forEach(checkbox => {
+            checkbox.checked = true;
+            const parent = checkbox.closest('.permiso-item');
+            parent.classList.add('active');
+            
+            // Track change
+            const opcionId = checkbox.dataset.opcionId;
+            if (!permisosModificados[opcionId]) {
+                permisosModificados[opcionId] = {};
+            }
+            permisosModificados[opcionId][tipo] = true;
+        });
+    });
+    
+    toastr.success('Todos los permisos del módulo seleccionados', '', {timeOut: 2000});
+}
+
+// Marcar un tipo de permiso específico en un módulo
+function marcarModulo(moduloId, tipo, valor) {
+    const moduloContainer = document.getElementById(`modulo-${moduloId}`);
+    
+    if (!moduloContainer) return;
+    
+    moduloContainer.querySelectorAll(`[data-permiso="${tipo}"]`).forEach(checkbox => {
+        checkbox.checked = valor;
+        const parent = checkbox.closest('.permiso-item');
+        if (valor) {
+            parent.classList.add('active');
+        } else {
+            parent.classList.remove('active');
+        }
+        
+        // Track change
+        const opcionId = checkbox.dataset.opcionId;
+        if (!permisosModificados[opcionId]) {
+            permisosModificados[opcionId] = {};
+        }
+        permisosModificados[opcionId][tipo] = valor;
+    });
+    
+    const nombreTipo = tipo.replace('puede_', '');
+    toastr.info(`${valor ? 'Marcados' : 'Desmarcados'} "${nombreTipo}" del módulo`, '', {timeOut: 1500});
+}
+
+// Desmarcar TODOS los permisos de un módulo específico
+function desmarcarModulo(moduloId) {
+    const tiposPermisos = ['puede_ver', 'puede_crear', 'puede_editar', 'puede_eliminar', 'puede_exportar', 'puede_aprobar'];
+    const moduloContainer = document.getElementById(`modulo-${moduloId}`);
+    
+    if (!moduloContainer) return;
+    
+    tiposPermisos.forEach(tipo => {
+        moduloContainer.querySelectorAll(`[data-permiso="${tipo}"]`).forEach(checkbox => {
+            checkbox.checked = false;
+            checkbox.closest('.permiso-item').classList.remove('active');
+            
+            // Track change
+            const opcionId = checkbox.dataset.opcionId;
+            if (!permisosModificados[opcionId]) {
+                permisosModificados[opcionId] = {};
+            }
+            permisosModificados[opcionId][tipo] = false;
+        });
+    });
+    
+    toastr.warning('Todos los permisos del módulo desmarcados', '', {timeOut: 2000});
 }
 
 // Quick action: mark all
@@ -1917,6 +2224,8 @@ document.getElementById('sucursalSelector').addEventListener('change', function(
         document.getElementById('btnGuardarSucursal').disabled = false;
         document.getElementById('btnAplicarPlantilla').disabled = false;
         document.getElementById('btnCopiarPermisosSucursal').disabled = false;
+        document.getElementById('btnExportarSucursal').disabled = false;
+        document.getElementById('btnImportarSucursal').disabled = false;
         document.getElementById('btnRestablecerSucursal').disabled = false;
     } else {
         document.getElementById('mensajeInicialSucursal').style.display = 'block';
@@ -1925,6 +2234,8 @@ document.getElementById('sucursalSelector').addEventListener('change', function(
         document.getElementById('btnGuardarSucursal').disabled = true;
         document.getElementById('btnAplicarPlantilla').disabled = true;
         document.getElementById('btnCopiarPermisosSucursal').disabled = true;
+        document.getElementById('btnExportarSucursal').disabled = true;
+        document.getElementById('btnImportarSucursal').disabled = true;
         document.getElementById('btnRestablecerSucursal').disabled = true;
     }
 });
@@ -2407,6 +2718,348 @@ document.getElementById('btnRestablecerSucursal').addEventListener('click', func
                 Swal.fire('Error', 'Error al restablecer permisos', 'error');
             });
         }
+    });
+});
+
+// ========== FUNCIONES DE EXPORTAR/IMPORTAR PERMISOS ==========
+
+// Variables para almacenar datos del archivo a importar
+let datosArchivoImportar = null;
+let datosArchivoImportarSucursal = null;
+
+// Exportar permisos del rol actual
+function exportarPermisosRol() {
+    if (!rolActual) {
+        Swal.fire('Atención', 'Primero selecciona un rol para exportar sus permisos', 'warning');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Exportando permisos...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    // Abrir en nueva ventana para descargar
+    window.location.href = `/app/permisos/exportar-rol/?rol=${rolActual}`;
+    
+    setTimeout(() => {
+        Swal.close();
+        toastr.success('Archivo de permisos descargado', 'Exportación exitosa');
+    }, 1000);
+}
+
+// Exportar todos los permisos de todos los roles
+function exportarTodosPermisos() {
+    Swal.fire({
+        title: '¿Exportar todos los permisos?',
+        text: 'Se generará un archivo con los permisos de todos los roles del sistema.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: 'var(--nexo-primary)',
+        confirmButtonText: 'Sí, exportar todos',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Exportando todos los permisos...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+            
+            window.location.href = '/app/permisos/exportar-todos/';
+            
+            setTimeout(() => {
+                Swal.close();
+                toastr.success('Archivo de permisos completo descargado', 'Exportación exitosa');
+            }, 1000);
+        }
+    });
+}
+
+// Abrir modal de importar permisos
+function abrirModalImportar() {
+    // Resetear el formulario
+    document.getElementById('formImportarPermisos').reset();
+    document.getElementById('infoArchivoImportar').style.display = 'none';
+    document.getElementById('selectorRolDestino').style.display = 'none';
+    document.getElementById('btnConfirmarImportarRol').disabled = true;
+    datosArchivoImportar = null;
+    
+    new bootstrap.Modal(document.getElementById('modalImportarPermisos')).show();
+}
+
+// Leer archivo de importación de rol
+document.getElementById('archivoImportarRol').addEventListener('change', function(e) {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            datosArchivoImportar = JSON.parse(event.target.result);
+            
+            // Validar estructura
+            if (!datosArchivoImportar.version || !datosArchivoImportar.tipo) {
+                throw new Error('Archivo inválido: falta información de versión o tipo');
+            }
+            
+            // Mostrar información del archivo
+            document.getElementById('infoArchivoImportar').style.display = 'block';
+            
+            const fecha = new Date(datosArchivoImportar.fecha_exportacion);
+            document.getElementById('infoArchivoFecha').textContent = fecha.toLocaleString('es-CL');
+            
+            if (datosArchivoImportar.tipo === 'permisos_rol') {
+                document.getElementById('infoArchivoTipo').textContent = 'Permisos de un Rol';
+                document.getElementById('infoArchivoRol').textContent = datosArchivoImportar.rol_nombre || datosArchivoImportar.rol;
+                document.getElementById('infoArchivoTotal').textContent = datosArchivoImportar.total_permisos;
+                
+                // Mostrar selector de rol destino
+                document.getElementById('selectorRolDestino').style.display = 'block';
+                document.getElementById('rolDestinoImportar').value = datosArchivoImportar.rol;
+            } else if (datosArchivoImportar.tipo === 'permisos_completos') {
+                document.getElementById('infoArchivoTipo').textContent = 'Permisos Completos (Todos los Roles)';
+                document.getElementById('infoArchivoRol').textContent = `${datosArchivoImportar.total_roles} roles`;
+                let totalPermisos = 0;
+                datosArchivoImportar.roles.forEach(r => totalPermisos += r.total_permisos);
+                document.getElementById('infoArchivoTotal').textContent = totalPermisos;
+                
+                // Ocultar selector de rol destino (se importan todos)
+                document.getElementById('selectorRolDestino').style.display = 'none';
+            } else {
+                throw new Error(`Tipo de archivo no soportado: ${datosArchivoImportar.tipo}`);
+            }
+            
+            document.getElementById('btnConfirmarImportarRol').disabled = false;
+            
+        } catch (error) {
+            console.error('Error al leer archivo:', error);
+            Swal.fire('Error', `Error al leer el archivo: ${error.message}`, 'error');
+            datosArchivoImportar = null;
+            document.getElementById('infoArchivoImportar').style.display = 'none';
+            document.getElementById('selectorRolDestino').style.display = 'none';
+            document.getElementById('btnConfirmarImportarRol').disabled = true;
+        }
+    };
+    reader.readAsText(archivo);
+});
+
+// Confirmar importación de permisos de rol
+document.getElementById('btnConfirmarImportarRol').addEventListener('click', function() {
+    if (!datosArchivoImportar) {
+        Swal.fire('Error', 'No hay datos para importar', 'error');
+        return;
+    }
+    
+    const sobrescribir = document.getElementById('sobrescribirPermisoImport').checked;
+    
+    // Preparar datos para enviar
+    let datosEnviar = { ...datosArchivoImportar, sobrescribir: sobrescribir };
+    
+    // Si es un solo rol, agregar rol destino
+    if (datosArchivoImportar.tipo === 'permisos_rol') {
+        datosEnviar.rol_destino = document.getElementById('rolDestinoImportar').value;
+    }
+    
+    Swal.fire({
+        title: 'Importando permisos...',
+        text: 'Por favor espere...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    fetch('/app/permisos/importar/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(datosEnviar)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const resultados = data.resultados;
+            let detalles = `<ul class="text-start">
+                <li>Roles procesados: ${resultados.roles_procesados}</li>
+                <li>Permisos creados: ${resultados.permisos_creados}</li>
+                <li>Permisos actualizados: ${resultados.permisos_actualizados}</li>
+                <li>Permisos omitidos: ${resultados.permisos_omitidos}</li>
+            </ul>`;
+            
+            if (resultados.errores && resultados.errores.length > 0) {
+                detalles += `<p class="text-warning mt-2">Advertencias: ${resultados.errores.length}</p>`;
+            }
+            
+            Swal.fire({
+                icon: 'success',
+                title: '¡Importación Completada!',
+                html: detalles,
+                confirmButtonText: 'Aceptar'
+            });
+            
+            bootstrap.Modal.getInstance(document.getElementById('modalImportarPermisos')).hide();
+            
+            // Recargar permisos si hay un rol seleccionado
+            if (rolActual) {
+                cargarPermisosRol(rolActual);
+            }
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al importar permisos', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error de conexión al importar permisos', 'error');
+    });
+});
+
+// ========== EXPORTAR/IMPORTAR PERMISOS SUCURSAL ==========
+
+// Exportar permisos de la sucursal actual
+function exportarPermisosSucursal() {
+    if (!sucursalActual) {
+        Swal.fire('Atención', 'Primero selecciona una sucursal para exportar sus permisos', 'warning');
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Exportando permisos de sucursal...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    window.location.href = `/app/permisos/exportar-sucursal/?sucursal_id=${sucursalActual}`;
+    
+    setTimeout(() => {
+        Swal.close();
+        toastr.success('Archivo de permisos de sucursal descargado', 'Exportación exitosa');
+    }, 1000);
+}
+
+// Abrir modal de importar permisos de sucursal
+function abrirModalImportarSucursal() {
+    if (!sucursalActual) {
+        Swal.fire('Atención', 'Primero selecciona una sucursal destino', 'warning');
+        return;
+    }
+    
+    // Resetear el formulario
+    document.getElementById('formImportarPermisosSucursal').reset();
+    document.getElementById('infoArchivoImportarSucursal').style.display = 'none';
+    document.getElementById('btnConfirmarImportarSucursal').disabled = true;
+    datosArchivoImportarSucursal = null;
+    
+    // Mostrar nombre de sucursal destino
+    const sucursalInfo = sucursalesDisponibles.find(s => s.id == sucursalActual);
+    document.getElementById('sucursalDestinoImportarNombre').textContent = sucursalInfo ? sucursalInfo.alias : '-';
+    document.getElementById('sucursalDestinoImportar').value = sucursalActual;
+    
+    new bootstrap.Modal(document.getElementById('modalImportarPermisosSucursal')).show();
+}
+
+// Leer archivo de importación de sucursal
+document.getElementById('archivoImportarSucursal').addEventListener('change', function(e) {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            datosArchivoImportarSucursal = JSON.parse(event.target.result);
+            
+            // Validar estructura
+            if (datosArchivoImportarSucursal.tipo !== 'permisos_sucursal') {
+                throw new Error('El archivo no contiene permisos de sucursal válidos');
+            }
+            
+            // Mostrar información del archivo
+            document.getElementById('infoArchivoImportarSucursal').style.display = 'block';
+            
+            const fecha = new Date(datosArchivoImportarSucursal.fecha_exportacion);
+            document.getElementById('infoArchivoSucursalFecha').textContent = fecha.toLocaleString('es-CL');
+            document.getElementById('infoArchivoSucursalOrigen').textContent = datosArchivoImportarSucursal.sucursal.alias;
+            document.getElementById('infoArchivoSucursalTotal').textContent = datosArchivoImportarSucursal.total_permisos;
+            
+            document.getElementById('btnConfirmarImportarSucursal').disabled = false;
+            
+        } catch (error) {
+            console.error('Error al leer archivo:', error);
+            Swal.fire('Error', `Error al leer el archivo: ${error.message}`, 'error');
+            datosArchivoImportarSucursal = null;
+            document.getElementById('infoArchivoImportarSucursal').style.display = 'none';
+            document.getElementById('btnConfirmarImportarSucursal').disabled = true;
+        }
+    };
+    reader.readAsText(archivo);
+});
+
+// Confirmar importación de permisos de sucursal
+document.getElementById('btnConfirmarImportarSucursal').addEventListener('click', function() {
+    if (!datosArchivoImportarSucursal) {
+        Swal.fire('Error', 'No hay datos para importar', 'error');
+        return;
+    }
+    
+    const sobrescribir = document.getElementById('sobrescribirPermisoSucursalImport').checked;
+    const sucursalDestino = document.getElementById('sucursalDestinoImportar').value;
+    
+    // Preparar datos para enviar
+    let datosEnviar = { ...datosArchivoImportarSucursal, sobrescribir: sobrescribir };
+    
+    Swal.fire({
+        title: 'Importando permisos de sucursal...',
+        text: 'Por favor espere...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    fetch(`/app/permisos/importar-sucursal/?sucursal_id=${sucursalDestino}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(datosEnviar)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const resultados = data.resultados;
+            let detalles = `<ul class="text-start">
+                <li>Permisos creados: ${resultados.creados}</li>
+                <li>Permisos actualizados: ${resultados.actualizados}</li>
+                <li>Permisos omitidos: ${resultados.omitidos}</li>
+            </ul>`;
+            
+            if (resultados.errores && resultados.errores.length > 0) {
+                detalles += `<p class="text-warning mt-2">Advertencias: ${resultados.errores.length}</p>`;
+            }
+            
+            Swal.fire({
+                icon: 'success',
+                title: '¡Importación Completada!',
+                html: detalles,
+                confirmButtonText: 'Aceptar'
+            });
+            
+            bootstrap.Modal.getInstance(document.getElementById('modalImportarPermisosSucursal')).hide();
+            
+            // Recargar permisos de la sucursal
+            if (sucursalActual) {
+                cargarPermisosSucursal(sucursalActual);
+                cargarSucursales();
+            }
+        } else {
+            Swal.fire('Error', data.mensaje || 'Error al importar permisos', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error de conexión al importar permisos', 'error');
     });
 });
 </script>

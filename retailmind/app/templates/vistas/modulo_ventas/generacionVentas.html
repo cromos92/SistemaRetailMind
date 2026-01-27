@@ -629,15 +629,17 @@
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-primary w-100 py-3" onclick="agregarPago('TARJETA_DEBITO')">
+                                                <button class="btn btn-outline-primary w-100 py-3" onclick="agregarPago('TBK_DEBITO_POS')">
                                                     <i class="ri-bank-card-line fs-4 d-block mb-1"></i>
                                                     <span class="fw-bold">Débito</span>
+                                                    <small class="d-block text-muted" style="font-size: 0.7rem;">Transbank</small>
                                                 </button>
                                             </div>
                                             <div class="col-6">
-                                                <button class="btn btn-outline-info w-100 py-3" onclick="agregarPago('TARJETA_CREDITO')">
+                                                <button class="btn btn-outline-info w-100 py-3" onclick="agregarPago('TBK_CREDITO_POS')">
                                                     <i class="ri-bank-card-2-line fs-4 d-block mb-1"></i>
                                                     <span class="fw-bold">Crédito</span>
+                                                    <small class="d-block text-muted" style="font-size: 0.7rem;">Transbank</small>
                                                 </button>
                                             </div>
                                             <div class="col-6">
@@ -4053,47 +4055,58 @@ document.addEventListener('DOMContentLoaded', function() {
         const campoVuelto = document.getElementById('campoVuelto');
         const campoOrdenCompra = document.getElementById('campoOrdenCompra');
         
-        // ✅ Mostrar campos de tarjeta y voucher para TARJETA_CREDITO, TARJETA_DEBITO y VENTA_INTERNET
-        if (metodo.includes('TARJETA') || metodo === 'VENTA_INTERNET') {
+        // Referencias para labels
+        const labelTarjeta = document.querySelector('#campoTarjeta label');
+        const labelVoucher = document.querySelector('#campoVoucher label');
+        const selectTipoTarjeta = document.getElementById('pagoTipoTarjeta');
+        
+        // ✅ Mostrar campos según el método
+        if (metodo === 'VENTA_INTERNET') {
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
             campoVuelto.style.display = 'none';
             campoOrdenCompra.style.display = 'none';
             
-            // ✅ Cambiar labels y opciones según el método
-            const labelTarjeta = document.querySelector('#campoTarjeta label');
-            const labelVoucher = document.querySelector('#campoVoucher label');
-            const selectTipoTarjeta = document.getElementById('pagoTipoTarjeta');
+            labelTarjeta.textContent = 'Plataforma';
+            labelVoucher.textContent = 'Número de Pedido';
+            document.getElementById('pagoVoucher').placeholder = 'Ej: ORD-123456';
             
-            if (metodo === 'VENTA_INTERNET') {
-                labelTarjeta.textContent = 'Plataforma';
-                labelVoucher.textContent = 'Número de Pedido';
-                document.getElementById('pagoVoucher').placeholder = 'Ej: ORD-123456';
-                
-                // ✅ Cambiar opciones del select a plataformas
-                selectTipoTarjeta.innerHTML = `
-                    <option value="">Seleccione plataforma...</option>
-                    <option value="Paris">Paris</option>
-                    <option value="Ripley">Ripley</option>
-                    <option value="Mercado Pago">Mercado Pago</option>
-                    <option value="Shopify">Shopify</option>
-                    <option value="Walmart">Walmart</option>
-                    <option value="Falabella">Falabella</option>
-                `;
-            } else {
-                labelTarjeta.textContent = 'Tipo de Tarjeta';
-                labelVoucher.textContent = 'N° Voucher/Autorización';
-                document.getElementById('pagoVoucher').placeholder = 'Opcional';
-                
-                // ✅ Restaurar opciones del select a tipos de tarjeta
-                selectTipoTarjeta.innerHTML = `
-                    <option value="">Seleccionar...</option>
-                    <option value="VISA">Visa</option>
-                    <option value="MASTERCARD">Mastercard</option>
-                    <option value="AMEX">American Express</option>
-                    <option value="DINERS">Diners Club</option>
-                `;
-            }
+            selectTipoTarjeta.innerHTML = `
+                <option value="">Seleccione plataforma...</option>
+                <option value="Paris">Paris</option>
+                <option value="Ripley">Ripley</option>
+                <option value="Mercado Pago">Mercado Pago</option>
+                <option value="Shopify">Shopify</option>
+                <option value="Walmart">Walmart</option>
+                <option value="Falabella">Falabella</option>
+            `;
+        } else if (metodo.includes('TBK_')) {
+            // ✅ Para métodos Transbank: NO mostrar tipo_tarjeta, solo voucher
+            campoTarjeta.style.display = 'none';
+            campoVoucher.style.display = 'block';
+            campoVuelto.style.display = 'none';
+            campoOrdenCompra.style.display = 'none';
+            
+            labelVoucher.textContent = 'N° Voucher/Autorización';
+            document.getElementById('pagoVoucher').placeholder = 'Ej: 123456';
+        } else if (metodo.includes('TARJETA')) {
+            // ✅ Para tarjetas genéricas: mostrar tipo y voucher
+            campoTarjeta.style.display = 'block';
+            campoVoucher.style.display = 'block';
+            campoVuelto.style.display = 'none';
+            campoOrdenCompra.style.display = 'none';
+            
+            labelTarjeta.textContent = 'Tipo de Tarjeta';
+            labelVoucher.textContent = 'N° Voucher/Autorización';
+            document.getElementById('pagoVoucher').placeholder = 'Opcional';
+            
+            selectTipoTarjeta.innerHTML = `
+                <option value="">Seleccionar...</option>
+                <option value="VISA">Visa</option>
+                <option value="MASTERCARD">Mastercard</option>
+                <option value="AMEX">American Express</option>
+                <option value="DINERS">Diners Club</option>
+            `;
         } else if (metodo === 'ORDEN_COMPRA') {
             // ✅ Mostrar campo de orden de compra
             campoTarjeta.style.display = 'none';
@@ -4176,7 +4189,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // ✅ VALIDAR TIPO DE TARJETA para TARJETA_CREDITO y TARJETA_DEBITO
+        // ✅ VALIDAR TIPO DE TARJETA solo para tarjetas genéricas (NO para TBK)
         if (metodo === 'TARJETA_CREDITO' || metodo === 'TARJETA_DEBITO') {
             if (!tipoTarjeta) {
                 mostrarNotificacion('Debe seleccionar el tipo de tarjeta', 'warning');
@@ -6799,17 +6812,21 @@ td {
     function obtenerNombreMetodoPago(metodo) {
         const nombres = {
             'EFECTIVO': 'Efectivo',
-            'TARJETA_DEBITO': 'Tarjeta Débito',
-            'TARJETA_CREDITO': 'Tarjeta Crédito',
+            'TARJETA_DEBITO': 'Tarjeta Débito',  // Datos migrados/históricos
+            'TARJETA_CREDITO': 'Tarjeta Crédito',  // Datos migrados/históricos
             'TRANSFERENCIA': 'Transferencia',
             'CREDITO_TRABAJADOR': 'Crédito Trabajador',
             'CREDITO_EXTERNO': 'Crédito Externo',
             'TBK_POS_INTEGRADO': 'POS Transbank',
-            'TBK_DEBITO_POS': 'POS Transbank Débito',
-            'TBK_CREDITO_POS': 'POS Transbank Crédito',
-            'TBK_PREPAGO_POS': 'POS Transbank Prepago',
+            'TBK_DEBITO_POS': 'Débito Transbank',
+            'TBK_CREDITO_POS': 'Crédito Transbank',
+            'TBK_PREPAGO_POS': 'Prepago Transbank',
             'VENTA_INTERNET': 'Venta Internet',
-            'ORDEN_COMPRA': 'Orden de Compra'
+            'ORDEN_COMPRA': 'Orden de Compra',
+            'TARJETA_COMERCIAL': 'Tarjeta Comercial',
+            'CONVENIO': 'Convenio',
+            'CHEQUE': 'Cheque',
+            'OTRO': 'Otro'
         };
         return nombres[metodo] || metodo;
     }
@@ -7824,7 +7841,7 @@ td {
         mostrarNotificacion(mensaje, 'success');
     };
     
-    // ========== INTEGRACIÓN POS TRANSBANK ==========
+    // ========== INTEGRACIÓN POS TRANSBANK (WEB SERIAL API) ==========
     
     window.pagarConPOSTransbank = async function() {
         // Verificar que haya un ticket activo
@@ -7849,20 +7866,38 @@ td {
             return;
         }
         
-        // Verificar que el SDK esté disponible
-        if (typeof Transbank === 'undefined' || !Transbank.POS) {
+        // Verificar soporte Web Serial API
+        if (!('serial' in navigator)) {
             Swal.fire({
                 icon: 'error',
-                title: 'SDK No Disponible',
+                title: 'Navegador No Compatible',
                 html: `
-                    <p>El SDK de Transbank no está cargado.</p>
-                    <p class="small">Esto puede deberse a:</p>
+                    <p>Tu navegador no soporta Web Serial API.</p>
+                    <p class="small mt-2">Por favor usa:</p>
                     <ul class="text-start small">
-                        <li>Falta de conexión a internet</li>
-                        <li>Bloqueador de scripts activo</li>
+                        <li><strong>Chrome</strong> versión 89 o superior</li>
+                        <li><strong>Edge</strong> versión 89 o superior</li>
                     </ul>
                 `,
-                footer: '<a href="/app/pos/transbank/" target="_blank">Abrir configuración POS Transbank</a>'
+                footer: '<a href="https://www.google.com/chrome/" target="_blank">Descargar Chrome</a>'
+            });
+            return;
+        }
+        
+        // Verificar que el SDK Web Serial esté cargado
+        if (typeof Transbank === 'undefined' || !Transbank.POS || !Transbank.POS.Integrado) {
+            Swal.fire({
+                icon: 'error',
+                title: 'SDK No Cargado',
+                html: `
+                    <p>El SDK de Transbank Web Serial no está cargado.</p>
+                    <p class="small">Por favor recargue la página.</p>
+                `,
+                confirmButtonText: 'Recargar Página'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.reload();
+                }
             });
             return;
         }
@@ -7886,27 +7921,208 @@ td {
                     <i class="ri-information-line"></i> 
                     Mínimo: $50 | Máximo: ${formatearMoneda(saldoPendiente)}
                 </p>
-                <div class="alert alert-warning mt-3 small">
-                    <strong>⚠️ IMPORTANTE:</strong> El cliente debe:
-                    <ol class="mb-0 mt-2 text-start">
-                        <li>Pasar la tarjeta</li>
-                        <li><strong>Seleccionar rápido</strong> Débito/Crédito</li>
-                        <li>Ingresar cuotas si aplica</li>
-                    </ol>
-                    <p class="mb-0 mt-2"><i class="ri-timer-line"></i> <strong>Debe hacerlo en menos de 60 segundos</strong></p>
-                </div>
             `,
             showCancelButton: true,
-            confirmButtonText: '✅ Cliente listo - Continuar',
+            confirmButtonText: '💳 Continuar al POS',
             cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#28a745',
-            width: '600px',
+            confirmButtonColor: '#0066FF',
+            width: '500px',
             preConfirm: () => {
                 const monto = parseInt(document.getElementById('monto-pos-input').value);
                 if (!monto || monto < 50) {
                     Swal.showValidationMessage('El monto mínimo es $50');
                     return false;
                 }
+                if (monto > saldoPendiente) {
+                    Swal.showValidationMessage('El monto no puede ser mayor al saldo pendiente');
+                    return false;
+                }
+                return monto;
+            }
+        });
+        
+        // Si canceló, salir
+        if (!montoCobrar) {
+            return;
+        }
+        
+        try {
+            // Verificar si ya está conectado
+            if (!Transbank.POS.Integrado.isConnected) {
+                // Mostrar modal de conexión
+                Swal.fire({
+                    title: 'Conectando al POS',
+                    html: '<div class="spinner-border text-primary" role="status"></div><p class="mt-3">Conectando al POS Transbank...</p>',
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+                
+                // Intentar auto-conectar
+                const resultadoConexion = await Transbank.POS.autoConnect();
+                
+                if (!resultadoConexion.success) {
+                    throw new Error('No se pudo conectar al POS');
+                }
+                
+                // Guardar configuración en el backend
+                try {
+                    await fetch('/app/pos/transbank/autoconectar/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            port: resultadoConexion.port,
+                            baudrate: resultadoConexion.baudrate,
+                            descripcion: 'Auto-conectado desde módulo de ventas'
+                        })
+                    });
+                } catch (e) {
+                    console.warn('No se pudo guardar configuración:', e);
+                }
+            }
+            
+            // Generar ticket ID único
+            const ticketIdPOS = `TKT${ticketActual.ticket_id}`;
+            
+            // Mostrar modal de procesamiento
+            Swal.fire({
+                title: 'Procesando Pago',
+                html: `
+                    <div class="text-center">
+                        <div class="spinner-border text-success mb-3" style="width: 3rem; height: 3rem;"></div>
+                        <h5>💳 Pase la tarjeta en el POS</h5>
+                        <p class="text-muted">Monto: <strong>${formatearMoneda(montoCobrar)}</strong></p>
+                        <hr>
+                        <div class="alert alert-info">
+                            <ol class="text-start mb-0">
+                                <li>Pase la tarjeta</li>
+                                <li>Seleccione Débito/Crédito</li>
+                                <li>Ingrese PIN si es necesario</li>
+                            </ol>
+                        </div>
+                    </div>
+                `,
+                allowOutsideClick: false,
+                showConfirmButton: false
+            });
+            
+            // Ejecutar venta
+            const resultadoVenta = await Transbank.POS.sale(montoCobrar, ticketIdPOS);
+            
+            // Procesar resultado
+            if (resultadoVenta.successful) {
+                // VENTA APROBADA
+                
+                // Determinar método de pago
+                let metodoPago = 'TBK_POS_INTEGRADO';
+                if (resultadoVenta.cardType === 'DB') {
+                    metodoPago = 'TBK_DEBITO_POS';
+                } else if (resultadoVenta.cardType === 'CR') {
+                    metodoPago = 'TBK_CREDITO_POS';
+                }
+                
+                // Agregar pago
+                const pago = {
+                    metodo_pago: metodoPago,
+                    monto: resultadoVenta.amount,
+                    tipo_tarjeta: resultadoVenta.cardBrand,
+                    voucher: resultadoVenta.authorizationCode,
+                    notas: `Terminal: ${resultadoVenta.terminalId} | Op: ${resultadoVenta.operationNumber}`
+                };
+                
+                pagosActuales.push(pago);
+                actualizarListaPagos();
+                actualizarResumenVenta();
+                
+                // Guardar en BD
+                try {
+                    await fetch('/app/pos/transbank/venta/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            amount: resultadoVenta.amount,
+                            ticket: ticketIdPOS,
+                            ticket_id: ticketActual.ticket_id,
+                            successful: resultadoVenta.successful,
+                            authorizationCode: resultadoVenta.authorizationCode,
+                            responseCode: resultadoVenta.responseCode,
+                            operationNumber: resultadoVenta.operationNumber,
+                            cardType: resultadoVenta.cardType,
+                            last4Digits: resultadoVenta.last4Digits,
+                            cardBrand: resultadoVenta.cardBrand,
+                            sharesNumber: resultadoVenta.sharesNumber,
+                            commerceCode: resultadoVenta.commerceCode,
+                            terminalId: resultadoVenta.terminalId,
+                            accountingDate: resultadoVenta.accountingDate,
+                            realDate: resultadoVenta.realDate,
+                            realTime: resultadoVenta.realTime
+                        })
+                    });
+                    console.log('✅ Transacción guardada en BD');
+                } catch (e) {
+                    console.error('❌ Error guardando transacción:', e);
+                }
+                
+                // Calcular nuevo saldo
+                const nuevoSaldo = calcularSaldoPendiente();
+                const ticketCompletado = nuevoSaldo <= 0;
+                
+                // Mostrar éxito
+                Swal.fire({
+                    icon: 'success',
+                    title: '🎉 Venta Aprobada',
+                    html: `
+                        <div class="text-start">
+                            <h5 class="text-center mb-3 text-success">
+                                ${ticketCompletado ? '✅ Ticket Pagado' : `⚠️ Saldo: ${formatearMoneda(nuevoSaldo)}`}
+                            </h5>
+                            <hr>
+                            <p><strong>Monto:</strong> ${formatearMoneda(resultadoVenta.amount)}</p>
+                            <p><strong>Tarjeta:</strong> ${resultadoVenta.cardBrand} (${resultadoVenta.cardType === 'DB' ? 'Débito' : 'Crédito'})</p>
+                            <p><strong>Últimos 4:</strong> ${resultadoVenta.last4Digits}</p>
+                            <p><strong>Autorización:</strong> ${resultadoVenta.authorizationCode}</p>
+                            <p><strong>Operación:</strong> ${resultadoVenta.operationNumber}</p>
+                        </div>
+                    `,
+                    confirmButtonText: 'OK'
+                });
+                
+                mostrarNotificacion(
+                    ticketCompletado ? 'Ticket completamente pagado' : `Pago parcial - Saldo: ${formatearMoneda(nuevoSaldo)}`,
+                    'success'
+                );
+                
+            } else {
+                // VENTA RECHAZADA
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Venta Rechazada',
+                    html: `
+                        <p><strong>Motivo:</strong> ${resultadoVenta.responseMessage}</p>
+                        <p class="small text-muted">Código: ${resultadoVenta.responseCode}</p>
+                    `,
+                    confirmButtonText: 'OK'
+                });
+            }
+            
+        } catch (error) {
+            console.error('Error en POS:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error en POS',
+                text: error.message || 'No se pudo procesar el pago',
+                confirmButtonText: 'OK'
+            });
+        }
+    };
                 if (monto > saldoPendiente) {
                     Swal.showValidationMessage('El monto no puede ser mayor al saldo pendiente');
                     return false;
@@ -8297,27 +8513,16 @@ td {
 });
 </script>
 
-<!-- SDK Transbank POS Web v3 -->
-<script src="https://unpkg.com/transbank-pos-sdk-web@3/dist/pos.js"></script>
+<!-- Scripts Transbank Web Serial API (Local) -->
+<script src="{% static 'js/transbank-webserial.js' %}"></script>
+<script src="{% static 'js/transbank-helpers.js' %}"></script>
 
 <script>
-// Configuración global del SDK Transbank al cargar
+// Verificar que el SDK Web Serial esté cargado
 if (typeof Transbank !== 'undefined' && Transbank.POS) {
-    // Intentar configurar timeouts más largos
-    if (Transbank.POS.autoconnect) {
-        Transbank.POS.autoconnect = false; // Desactivar autoconexión
-    }
-    
-    // Configurar timeout de ACK (acknowledgment) - CRÍTICO
-    if (Transbank.POS.setTimeout) {
-        Transbank.POS.setTimeout(90000); // 90 segundos
-    }
-    
-    // Configurar timeout de transacción
-    if (Transbank.POS.setTransactionTimeout) {
-        Transbank.POS.setTransactionTimeout(90000); // 90 segundos
-    }
-    
-    console.log('✅ SDK Transbank configurado con timeouts extendidos');
+    console.log('✅ Transbank Web Serial API cargado correctamente');
+} else {
+    console.error('❌ Error: Transbank Web Serial API no se cargó');
 }
 </script>
+

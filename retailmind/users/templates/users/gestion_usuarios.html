@@ -612,6 +612,9 @@
                     <p class="mb-0">Administra los usuarios del sistema, sus roles y permisos</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-light" onclick="mostrarModalImportar()" title="Importar desde CSV">
+                        <i class="ri-upload-line me-1"></i> Importar
+                    </button>
                     <button type="button" class="btn btn-light" onclick="exportarUsuarios()" title="Exportar a CSV">
                         <i class="ri-download-line me-1"></i> Exportar
                     </button>
@@ -697,20 +700,21 @@
             <div class="modal-body">
                 <div class="alert alert-info">
                     <i class="ri-information-line me-2"></i> 
-                    <strong>Nota:</strong> El usuario recibirá sus credenciales por correo electrónico. El campo "Empresa" es información textual de referencia.
+                    <strong>Nota:</strong> El usuario recibirá sus credenciales por correo electrónico. El nombre de usuario se genera automáticamente desde el email.
                 </div>
                 <form id="formCrearUsuario">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label><i class="ri-user-line me-1"></i>Nombre de Usuario *</label>
-                                <input type="text" class="form-control" name="username" required placeholder="Ej: jperez">
+                                <label><i class="ri-mail-line me-1"></i>Email * <small class="text-muted">(se usa para iniciar sesión)</small></label>
+                                <input type="email" class="form-control" name="email" id="crearEmail" required placeholder="correo@empresa.cl">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label><i class="ri-mail-line me-1"></i>Email *</label>
-                                <input type="email" class="form-control" name="email" required placeholder="correo@empresa.cl">
+                                <label><i class="ri-user-line me-1"></i>Nombre de Usuario <small class="text-success">(auto-generado)</small></label>
+                                <input type="text" class="form-control bg-light" name="username" id="crearUsername" readonly placeholder="Se genera del email">
+                                <small class="text-muted">Se genera automáticamente a partir del email</small>
                             </div>
                         </div>
                     </div>
@@ -766,35 +770,22 @@
                             <option value="administrador">Administrador</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label><i class="ri-lock-unlock-line me-1"></i>Permisos Adicionales</label>
-                        <div class="row mt-2">
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input type="checkbox" class="form-check-input" name="puede_crear_usuarios" id="crearPuedeCrear">
-                                    <label class="form-check-label" for="crearPuedeCrear">Crear Usuarios</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input type="checkbox" class="form-check-input" name="puede_editar_usuarios" id="crearPuedeEditar">
-                                    <label class="form-check-label" for="crearPuedeEditar">Editar Usuarios</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input type="checkbox" class="form-check-input" name="is_staff" id="crearIsStaff">
-                                    <label class="form-check-label" for="crearIsStaff">Acceso Admin</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- ✅ Permisos adicionales ocultos - se configuran al EDITAR el usuario -->
+                    <input type="hidden" name="puede_crear_usuarios" value="false">
+                    <input type="hidden" name="puede_editar_usuarios" value="false">
+                    <input type="hidden" name="is_staff" value="false">
+                    
                     <div class="form-group">
                         <label><i class="ri-shield-check-line me-1"></i>Seguridad</label>
                         <div class="form-check mt-2">
                             <input type="checkbox" class="form-check-input" name="requiere_2fa" id="crearRequiere2fa">
                             <label class="form-check-label" for="crearRequiere2fa">Requiere PIN por correo</label>
                         </div>
+                    </div>
+                    
+                    <div class="alert alert-light border mt-3">
+                        <i class="ri-information-line me-2 text-primary"></i>
+                        <small class="text-muted">Los permisos adicionales (crear/editar usuarios, acceso admin) se pueden configurar después de crear el usuario, desde la opción <strong>Editar</strong>.</small>
                     </div>
                 </form>
             </div>
@@ -1060,6 +1051,170 @@
     </div>
 </div>
 
+<!-- Modal Importar Usuarios -->
+<div class="modal fade" id="modalImportarUsuarios" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #00D4AA 0%, #00B090 100%);">
+                <h5 class="modal-title text-white">
+                    <i class="ri-upload-cloud-line me-2"></i>Importar Usuarios desde CSV
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Instrucciones -->
+                <div class="alert alert-info mb-4">
+                    <h6 class="alert-heading"><i class="ri-information-line me-2"></i>Instrucciones</h6>
+                    <p class="mb-2">El archivo CSV debe tener las siguientes columnas:</p>
+                    <ul class="mb-2">
+                        <li><strong>email</strong> - Obligatorio (se usa para el login)</li>
+                        <li><strong>nombre</strong> - Obligatorio</li>
+                        <li><strong>apellido</strong> - Obligatorio</li>
+                        <li><strong>rol</strong> - Opcional (vendedor, cajero, jefe_local, administracion, administrador)</li>
+                        <li><strong>rut, telefono, empresa, cargo, departamento</strong> - Opcionales</li>
+                    </ul>
+                    <p class="mb-0">
+                        <a href="{% url 'users:descargar_plantilla_importacion' %}" class="alert-link">
+                            <i class="ri-download-line me-1"></i>Descargar plantilla de ejemplo
+                        </a>
+                    </p>
+                </div>
+                
+                <!-- Zona de subida de archivo -->
+                <div class="upload-zone mb-4" id="uploadZone">
+                    <div class="upload-zone-content text-center py-5">
+                        <i class="ri-file-excel-2-line" style="font-size: 48px; color: var(--nexo-success);"></i>
+                        <h5 class="mt-3">Arrastra tu archivo CSV aquí</h5>
+                        <p class="text-muted mb-3">o haz clic para seleccionar</p>
+                        <input type="file" id="archivoCSV" accept=".csv" style="display: none;">
+                        <button type="button" class="btn btn-outline-primary" onclick="$('#archivoCSV').click()">
+                            <i class="ri-folder-open-line me-1"></i>Seleccionar archivo
+                        </button>
+                    </div>
+                    <div class="file-selected text-center py-4" style="display: none;">
+                        <i class="ri-file-check-line" style="font-size: 48px; color: var(--nexo-success);"></i>
+                        <h5 class="mt-3" id="nombreArchivoSeleccionado"></h5>
+                        <p class="text-muted mb-0" id="infoArchivoSeleccionado"></p>
+                        <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="limpiarArchivoSeleccionado()">
+                            <i class="ri-close-line me-1"></i>Quitar archivo
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Opciones de importación -->
+                <div class="card border mb-3">
+                    <div class="card-header bg-light py-2">
+                        <h6 class="mb-0"><i class="ri-settings-3-line me-2"></i>Opciones de importación</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="checkActualizarExistentes" checked>
+                            <label class="form-check-label" for="checkActualizarExistentes">
+                                Actualizar usuarios existentes (si el email ya existe)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="checkEnviarCredenciales">
+                            <label class="form-check-label" for="checkEnviarCredenciales">
+                                Enviar credenciales por correo a los nuevos usuarios
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Resultado de la importación -->
+                <div id="resultadoImportacion" style="display: none;">
+                    <div class="card border-success">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="ri-check-double-line me-2"></i>Resultado de la importación</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center mb-3">
+                                <div class="col-4">
+                                    <div class="border rounded p-3 bg-success bg-opacity-10">
+                                        <h3 class="text-success mb-0" id="resCreados">0</h3>
+                                        <small class="text-muted">Creados</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="border rounded p-3 bg-info bg-opacity-10">
+                                        <h3 class="text-info mb-0" id="resActualizados">0</h3>
+                                        <small class="text-muted">Actualizados</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="border rounded p-3 bg-danger bg-opacity-10">
+                                        <h3 class="text-danger mb-0" id="resErrores">0</h3>
+                                        <small class="text-muted">Errores</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Lista de usuarios creados con credenciales -->
+                            <div id="listaUsuariosCreados" style="display: none;">
+                                <h6><i class="ri-user-add-line me-2"></i>Usuarios creados:</h6>
+                                <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Nombre</th>
+                                                <th>Email</th>
+                                                <th>Usuario</th>
+                                                <th>Contraseña temporal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyUsuariosCreados"></tbody>
+                                    </table>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="copiarCredencialesCSV()">
+                                    <i class="ri-clipboard-line me-1"></i>Copiar credenciales como CSV
+                                </button>
+                            </div>
+                            
+                            <!-- Errores -->
+                            <div id="listaErroresImportacion" style="display: none;" class="mt-3">
+                                <h6 class="text-danger"><i class="ri-error-warning-line me-2"></i>Errores encontrados:</h6>
+                                <ul class="list-group list-group-flush" id="ulErroresImportacion" style="max-height: 150px; overflow-y: auto;"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="ri-close-line me-1"></i>Cerrar
+                </button>
+                <button type="button" class="btn btn-success" id="btnProcesarImportacion" onclick="procesarImportacion()" disabled>
+                    <i class="ri-upload-cloud-2-line me-1"></i>Importar Usuarios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Estilos para zona de upload */
+    .upload-zone {
+        border: 2px dashed var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-lg);
+        background: var(--nexo-gray-100);
+        transition: var(--nexo-transition-normal);
+        cursor: pointer;
+    }
+    
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+        border-color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+    
+    .upload-zone.has-file {
+        border-color: var(--nexo-success);
+        border-style: solid;
+        background: rgba(0, 212, 170, 0.05);
+    }
+</style>
+
 <!-- Toastr CSS -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
 
@@ -1121,6 +1276,17 @@ $.ajaxSetup({
 
 $(document).ready(function() {
     cargarUsuarios();
+    
+    // ========== LIMPIAR MODALES AL CERRAR ==========
+    // Limpiar modal de crear usuario cuando se cierra
+    $('#modalCrearUsuario').on('hidden.bs.modal', function() {
+        limpiarModalCrear();
+    });
+    
+    // Limpiar modal de editar usuario cuando se cierra
+    $('#modalEditarUsuario').on('hidden.bs.modal', function() {
+        limpiarModalEditar();
+    });
     
     // Manejador para asignar sucursal a sesión
     $(document).on('click', '#btnAsignarSucursal', function() {
@@ -1275,10 +1441,127 @@ function animarNumero(selector, valor) {
     });
 }
 
+// ========== FUNCIONES DE LIMPIEZA DE MODALES ==========
+function limpiarModalCrear() {
+    // Resetear formulario completo
+    const form = $('#formCrearUsuario')[0];
+    if (form) form.reset();
+    
+    // Limpiar TODOS los campos explícitamente
+    $('#crearUsername').val('');
+    $('#crearEmail').val('');
+    $('input[name="first_name"]', '#formCrearUsuario').val('');
+    $('input[name="last_name"]', '#formCrearUsuario').val('');
+    $('input[name="rut"]', '#formCrearUsuario').val('');
+    $('input[name="telefono"]', '#formCrearUsuario').val('');
+    $('input[name="empresa"]', '#formCrearUsuario').val('');  // Campo empresa
+    $('input[name="cargo"]', '#formCrearUsuario').val('');
+    $('input[name="direccion"]', '#formCrearUsuario').val('');
+    $('input[name="departamento"]', '#formCrearUsuario').val('');
+    
+    // Resetear checkboxes
+    $('#crearRequiere2fa').prop('checked', false);
+    $('#crearIsStaff').prop('checked', false);
+    
+    // Resetear select de rol al valor por defecto
+    $('#formCrearUsuario select[name="rol"]').val('vendedor');
+    
+    // Remover clases de validación
+    $('#formCrearUsuario .is-invalid').removeClass('is-invalid');
+    $('#formCrearUsuario .is-valid').removeClass('is-valid');
+    $('#crearUsername').removeClass('border-warning');
+    
+    console.log('✅ Modal crear usuario limpiado');
+}
+
+function limpiarModalEditar() {
+    // Resetear formulario completo
+    const form = $('#formEditarUsuario')[0];
+    if (form) form.reset();
+    
+    // Limpiar campos específicos
+    $('#editUsuarioId').val('');
+    $('#editUsername').val('');
+    $('#editEmail').val('');
+    $('#editFirstName').val('');
+    $('#editLastName').val('');
+    $('#editRut').val('');
+    $('#editTelefono').val('');
+    $('#editEmpresa').val('');  // Campo empresa
+    $('#editCargo').val('');
+    $('#editDireccion').val('');
+    $('#editDepartamento').val('');
+    
+    // Resetear checkboxes
+    $('#editRequiere2fa').prop('checked', false);
+    $('#editPuedeCrear').prop('checked', false);
+    $('#editPuedeEditar').prop('checked', false);
+    $('#editIsStaff').prop('checked', false);
+    
+    // Resetear select de rol
+    $('#editRol').val('vendedor');
+    
+    // Limpiar lista de asignaciones
+    $('#listaAsignaciones').empty();
+    $('#sinAsignaciones').hide();
+    
+    // Remover clases de validación
+    $('#formEditarUsuario .is-invalid').removeClass('is-invalid');
+    $('#formEditarUsuario .is-valid').removeClass('is-valid');
+    
+    console.log('✅ Modal editar usuario limpiado');
+}
+
 function mostrarModalCrearUsuario() {
-    $('#formCrearUsuario')[0].reset();
+    // Limpiar todo antes de mostrar
+    limpiarModalCrear();
+    
     const modal = new bootstrap.Modal(document.getElementById('modalCrearUsuario'));
     modal.show();
+}
+
+// ✅ AUTO-GENERAR USERNAME DESDE EMAIL
+$('#crearEmail').on('input blur', function() {
+    const email = $(this).val().trim();
+    if (email && email.includes('@')) {
+        // Extraer parte antes del @
+        let username = email.split('@')[0].toLowerCase();
+        // Limpiar caracteres especiales
+        username = username.replace(/[^a-z0-9.]/g, '');
+        
+        if (username) {
+            // Verificar si ya existe
+            verificarUsernameDisponible(username);
+        } else {
+            $('#crearUsername').val('');
+        }
+    } else {
+        $('#crearUsername').val('');
+    }
+});
+
+// ✅ VERIFICAR SI EL USERNAME YA EXISTE Y SUGERIR UNO DISPONIBLE
+function verificarUsernameDisponible(baseUsername) {
+    $.ajax({
+        url: '{% url "users:verificar_username" %}',
+        method: 'GET',
+        data: { username: baseUsername },
+        success: function(response) {
+            if (response.success) {
+                $('#crearUsername').val(response.username_disponible);
+                if (response.username_disponible !== baseUsername) {
+                    // Mostrar que se modificó porque ya existía
+                    $('#crearUsername').addClass('border-warning');
+                } else {
+                    $('#crearUsername').removeClass('border-warning');
+                }
+            }
+        },
+        error: function() {
+            // En caso de error, usar el username base
+            $('#crearUsername').val(baseUsername);
+        }
+    });
 }
 
 function crearUsuario() {
@@ -1289,17 +1572,23 @@ function crearUsuario() {
         data[key] = value;
     });
     
-    // Checkboxes
-    data.puede_crear_usuarios = $('#crearPuedeCrear').is(':checked');
-    data.puede_editar_usuarios = $('#crearPuedeEditar').is(':checked');
-    data.is_staff = $('#crearIsStaff').is(':checked');
+    // Checkboxes - permisos desactivados por defecto al crear
+    data.puede_crear_usuarios = false;
+    data.puede_editar_usuarios = false;
+    data.is_staff = false;
     data.requiere_2fa = $('#crearRequiere2fa').is(':checked');
     data.rol = $('#formCrearUsuario select[name="rol"]').val();
     
-    // Validación básica del lado cliente
-    if (!data.username || !data.email || !data.first_name || !data.last_name) {
-        mostrarError('Por favor complete todos los campos obligatorios');
+    // ✅ Validación básica - el username ya no es obligatorio (se genera automáticamente)
+    if (!data.email || !data.first_name || !data.last_name) {
+        mostrarError('Por favor complete todos los campos obligatorios (Email, Nombre y Apellido)');
         return;
+    }
+    
+    // ✅ Incluir el username generado si existe
+    const usernameGenerado = $('#crearUsername').val();
+    if (usernameGenerado) {
+        data.username = usernameGenerado;
     }
     
     // Mostrar loading
@@ -1345,6 +1634,9 @@ function crearUsuario() {
 let empresasSucursalesCache = null;
 
 function editarUsuario(usuarioId) {
+    // ✅ LIMPIAR modal de edición ANTES de cargar datos nuevos
+    limpiarModalEditar();
+    
     $.ajax({
         url: '{% url "users:obtener_usuario" 0 %}'.replace('0', usuarioId),
         method: 'GET',
@@ -1359,7 +1651,7 @@ function editarUsuario(usuarioId) {
                 $('#editLastName').val(usuario.last_name);
                 $('#editRut').val(usuario.rut || '');
                 $('#editTelefono').val(usuario.telefono || '');
-                $('#editEmpresa').val(usuario.empresa || '');
+                $('#editEmpresa').val(usuario.empresa || '');  // ✅ Se limpia con limpiarModalEditar()
                 $('#editCargo').val(usuario.cargo || '');
                 $('#editDireccion').val(usuario.direccion || '');
                 $('#editDepartamento').val(usuario.departamento || '');
@@ -1388,6 +1680,33 @@ function editarUsuario(usuarioId) {
             mostrarError('Error de conexión al cargar datos del usuario');
         }
     });
+}
+
+// ========== LIMPIEZA DE MODALES ==========
+
+function limpiarModalEditar() {
+    // Limpiar todos los campos del formulario de edición
+    $('#formEditarUsuario')[0].reset();
+    $('#editUsuarioId').val('');
+    $('#editUsername').val('');
+    $('#editEmail').val('');
+    $('#editFirstName').val('');
+    $('#editLastName').val('');
+    $('#editRut').val('');
+    $('#editTelefono').val('');
+    $('#editEmpresa').val('');  // ✅ LIMPIAR EMPRESA EXPLÍCITAMENTE
+    $('#editCargo').val('');
+    $('#editDireccion').val('');
+    $('#editDepartamento').val('');
+    $('#editRol').val('vendedor');
+    $('#editPuedeCrear').prop('checked', false);
+    $('#editPuedeEditar').prop('checked', false);
+    $('#editIsStaff').prop('checked', false);
+    $('#editRequiere2fa').prop('checked', false);
+    
+    // Limpiar asignaciones
+    $('#listaAsignaciones').html('<div class="text-center text-muted py-3"><i class="ri-loader-4-line ri-spin"></i> Cargando...</div>');
+    $('#sinAsignaciones').hide();
 }
 
 // ========== GESTIÓN DE ASIGNACIONES EMPRESA/SUCURSAL ==========
@@ -1447,7 +1766,7 @@ function renderizarAsignaciones(asignaciones, usuarioId) {
             const esActiva = suc.active;
             const badgeActiva = esActiva ? '<span class="badge bg-success ms-2"><i class="ri-checkbox-circle-fill"></i> ACTIVA</span>' : '';
             const btnActivar = !esActiva ? `
-                <button class="btn btn-sm btn-outline-success me-1" onclick="cambiarSucursalActiva(${usuarioId}, ${suc.empresa_user_id})" title="Marcar como activa">
+                <button type="button" class="btn btn-sm btn-outline-success me-1" onclick="cambiarSucursalActiva(${usuarioId}, ${suc.empresa_user_id})" title="Marcar como activa">
                     <i class="ri-checkbox-circle-line"></i>
                 </button>
             ` : '';
@@ -1462,7 +1781,7 @@ function renderizarAsignaciones(asignaciones, usuarioId) {
                     </div>
                     <div>
                         ${btnActivar}
-                        <button class="btn btn-sm btn-outline-danger" onclick="eliminarAsignacion(${usuarioId}, ${suc.empresa_user_id}, '${empresa.nombre}', '${suc.alias}')" title="Eliminar asignación">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarAsignacion(${usuarioId}, ${suc.empresa_user_id}, '${empresa.nombre}', '${suc.alias}')" title="Eliminar asignación">
                             <i class="ri-delete-bin-line"></i>
                         </button>
                     </div>
@@ -1496,6 +1815,7 @@ function cambiarSucursalActiva(usuarioId, empresaUserId) {
                     if (response.success) {
                         mostrarExito(response.message);
                         cargarAsignacionesUsuario(usuarioId);
+                        cargarUsuarios();  // ✅ Recargar tabla principal para actualizar empresa/sucursal
                     } else {
                         mostrarError(response.error);
                     }
@@ -1509,6 +1829,9 @@ function cambiarSucursalActiva(usuarioId, empresaUserId) {
 }
 
 function eliminarAsignacion(usuarioId, empresaUserId, empresaNombre, sucursalAlias) {
+    // ✅ Prevenir cualquier submit de formulario
+    event && event.preventDefault && event.preventDefault();
+    
     Swal.fire({
         title: '¿Eliminar asignación?',
         html: `Se eliminará el acceso a:<br><strong>${empresaNombre} - ${sucursalAlias}</strong>`,
@@ -1521,22 +1844,29 @@ function eliminarAsignacion(usuarioId, empresaUserId, empresaNombre, sucursalAli
     }).then((result) => {
         if (result.isConfirmed) {
             $.ajax({
-                url: `/users/eliminar-asignacion/${usuarioId}/${empresaUserId}/`,
+                url: '{% url "users:eliminar_asignacion_usuario" 0 0 %}'.replace('/0/', `/${usuarioId}/`).replace('/0/', `/${empresaUserId}/`),
                 method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken  // ✅ Asegurar CSRF token
+                },
                 success: function(response) {
                     if (response.success) {
                         mostrarExito(response.message);
                         cargarAsignacionesUsuario(usuarioId);
+                        cargarUsuarios();  // ✅ Recargar tabla principal para actualizar empresa/sucursal
                     } else {
                         mostrarError(response.error);
                     }
                 },
-                error: function() {
-                    mostrarError('Error de conexión');
+                error: function(xhr) {
+                    console.error('Error eliminando asignación:', xhr);
+                    mostrarError('Error de conexión al eliminar');
                 }
             });
         }
     });
+    
+    return false;  // ✅ Prevenir propagación
 }
 
 // ========== MODAL AGREGAR ASIGNACIÓN ==========
@@ -1702,6 +2032,7 @@ function agregarAsignacion() {
                 mostrarExito(mensaje);
                 bootstrap.Modal.getInstance(document.getElementById('modalAgregarAsignacion')).hide();
                 cargarAsignacionesUsuario(usuarioId);
+                cargarUsuarios();  // ✅ Recargar tabla principal para actualizar empresa/sucursal
             } else {
                 mostrarError(response.error);
             }
@@ -1796,8 +2127,38 @@ function resetearPassword(usuarioId) {
     Swal.fire({
         title: '¿Resetear contraseña?',
         html: `
-            <p>Se generará una nueva contraseña temporal para este usuario.</p>
-            <div class="alert alert-info text-start">
+            <p class="mb-3">Seleccione el tipo de contraseña:</p>
+            
+            <div class="text-start mb-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="tipoPassword" id="passwordAuto" value="auto" checked>
+                    <label class="form-check-label" for="passwordAuto">
+                        <i class="ri-shield-keyhole-line me-1"></i> Generar contraseña segura automática
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipoPassword" id="passwordManual" value="manual">
+                    <label class="form-check-label" for="passwordManual">
+                        <i class="ri-edit-line me-1"></i> Especificar contraseña manualmente
+                    </label>
+                </div>
+            </div>
+            
+            <div id="campoPasswordManual" class="text-start mb-3" style="display: none;">
+                <label class="form-label"><strong>Nueva contraseña:</strong></label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="inputPasswordManual" placeholder="Ej: clave123">
+                    <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('inputPasswordManual').value='clave'">
+                        clave
+                    </button>
+                    <button class="btn btn-outline-secondary" type="button" onclick="document.getElementById('inputPasswordManual').value='123456'">
+                        123456
+                    </button>
+                </div>
+                <small class="text-muted">Contraseña simple para perfiles básicos</small>
+            </div>
+            
+            <div class="alert alert-info text-start mb-0">
                 <i class="ri-mail-line me-2"></i>
                 Si el email está configurado, las credenciales se enviarán automáticamente.
             </div>
@@ -1807,7 +2168,33 @@ function resetearPassword(usuarioId) {
         confirmButtonColor: '#0066FF',
         cancelButtonColor: '#8A8A9A',
         confirmButtonText: 'Sí, resetear',
-        cancelButtonText: 'Cancelar'
+        cancelButtonText: 'Cancelar',
+        didOpen: () => {
+            // Mostrar/ocultar campo de contraseña manual
+            document.querySelectorAll('input[name="tipoPassword"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const campoManual = document.getElementById('campoPasswordManual');
+                    campoManual.style.display = this.value === 'manual' ? 'block' : 'none';
+                    if (this.value === 'manual') {
+                        document.getElementById('inputPasswordManual').focus();
+                    }
+                });
+            });
+        },
+        preConfirm: () => {
+            const tipoPassword = document.querySelector('input[name="tipoPassword"]:checked').value;
+            const passwordManual = document.getElementById('inputPasswordManual').value.trim();
+            
+            if (tipoPassword === 'manual' && !passwordManual) {
+                Swal.showValidationMessage('Debe ingresar una contraseña');
+                return false;
+            }
+            
+            return {
+                tipoPassword: tipoPassword,
+                passwordManual: passwordManual
+            };
+        }
     }).then((result) => {
         if (result.isConfirmed) {
             Swal.fire({
@@ -1816,9 +2203,17 @@ function resetearPassword(usuarioId) {
                 didOpen: () => Swal.showLoading()
             });
             
+            // Preparar datos
+            const datos = {};
+            if (result.value.tipoPassword === 'manual') {
+                datos.password_personalizada = result.value.passwordManual;
+            }
+            
             $.ajax({
                 url: '{% url "users:resetear_password" 0 %}'.replace('0', usuarioId),
                 method: 'POST',
+                data: JSON.stringify(datos),
+                contentType: 'application/json',
                 success: function(response) {
                     Swal.close();
                     if (response.success) {
@@ -1919,5 +2314,231 @@ function mostrarExito(mensaje) {
 
 function mostrarError(mensaje) {
     toastr.error(mensaje);
+}
+
+// ========== IMPORTAR USUARIOS ==========
+
+let archivoSeleccionado = null;
+
+function mostrarModalImportar() {
+    // Limpiar estado anterior
+    limpiarArchivoSeleccionado();
+    $('#resultadoImportacion').hide();
+    $('#checkActualizarExistentes').prop('checked', true);
+    $('#checkEnviarCredenciales').prop('checked', false);
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalImportarUsuarios'));
+    modal.show();
+}
+
+// Configurar zona de drag & drop
+$(document).ready(function() {
+    const uploadZone = $('#uploadZone');
+    const inputFile = $('#archivoCSV');
+    
+    // Click en la zona
+    uploadZone.on('click', function(e) {
+        if (!$(e.target).is('button') && !$(e.target).closest('button').length) {
+            inputFile.click();
+        }
+    });
+    
+    // Drag events
+    uploadZone.on('dragover dragenter', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).addClass('drag-over');
+    });
+    
+    uploadZone.on('dragleave dragend drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('drag-over');
+    });
+    
+    // Drop
+    uploadZone.on('drop', function(e) {
+        e.preventDefault();
+        const files = e.originalEvent.dataTransfer.files;
+        if (files.length > 0) {
+            manejarArchivoSeleccionado(files[0]);
+        }
+    });
+    
+    // Input file change
+    inputFile.on('change', function() {
+        if (this.files.length > 0) {
+            manejarArchivoSeleccionado(this.files[0]);
+        }
+    });
+});
+
+function manejarArchivoSeleccionado(archivo) {
+    // Validar que sea CSV
+    if (!archivo.name.toLowerCase().endsWith('.csv')) {
+        mostrarError('Por favor selecciona un archivo CSV');
+        return;
+    }
+    
+    // Validar tamaño (máximo 5MB)
+    if (archivo.size > 5 * 1024 * 1024) {
+        mostrarError('El archivo es muy grande. Máximo 5MB');
+        return;
+    }
+    
+    archivoSeleccionado = archivo;
+    
+    // Mostrar información del archivo
+    const tamano = (archivo.size / 1024).toFixed(1);
+    $('#nombreArchivoSeleccionado').text(archivo.name);
+    $('#infoArchivoSeleccionado').text(`${tamano} KB`);
+    
+    // Cambiar vista
+    $('#uploadZone .upload-zone-content').hide();
+    $('#uploadZone .file-selected').show();
+    $('#uploadZone').addClass('has-file');
+    
+    // Habilitar botón
+    $('#btnProcesarImportacion').prop('disabled', false);
+    
+    // Ocultar resultados anteriores
+    $('#resultadoImportacion').hide();
+}
+
+function limpiarArchivoSeleccionado() {
+    archivoSeleccionado = null;
+    $('#archivoCSV').val('');
+    $('#uploadZone .upload-zone-content').show();
+    $('#uploadZone .file-selected').hide();
+    $('#uploadZone').removeClass('has-file');
+    $('#btnProcesarImportacion').prop('disabled', true);
+}
+
+function procesarImportacion() {
+    if (!archivoSeleccionado) {
+        mostrarError('Por favor selecciona un archivo CSV');
+        return;
+    }
+    
+    // Crear FormData
+    const formData = new FormData();
+    formData.append('archivo', archivoSeleccionado);
+    formData.append('actualizar_existentes', $('#checkActualizarExistentes').is(':checked'));
+    formData.append('enviar_credenciales', $('#checkEnviarCredenciales').is(':checked'));
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Procesando importación...',
+        html: 'Por favor espere mientras se procesan los usuarios',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+    
+    $.ajax({
+        url: '{% url "users:importar_usuarios" %}',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+            'X-CSRFToken': csrftoken
+        },
+        success: function(response) {
+            Swal.close();
+            
+            if (response.success) {
+                mostrarResultadoImportacion(response);
+                cargarUsuarios();  // Recargar tabla
+            } else {
+                mostrarError(response.error || 'Error al importar usuarios');
+            }
+        },
+        error: function(xhr) {
+            Swal.close();
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Error de conexión';
+            mostrarError(error);
+        }
+    });
+}
+
+function mostrarResultadoImportacion(response) {
+    // Mostrar números
+    $('#resCreados').text(response.creados || 0);
+    $('#resActualizados').text(response.actualizados || 0);
+    $('#resErrores').text(response.errores || 0);
+    
+    // Mostrar usuarios creados si hay
+    if (response.usuarios_creados && response.usuarios_creados.length > 0) {
+        const tbody = $('#tbodyUsuariosCreados');
+        tbody.empty();
+        
+        response.usuarios_creados.forEach(function(u) {
+            tbody.append(`
+                <tr>
+                    <td>${u.nombre}</td>
+                    <td>${u.email}</td>
+                    <td><code>${u.username}</code></td>
+                    <td><code class="text-success">${u.password}</code></td>
+                </tr>
+            `);
+        });
+        
+        $('#listaUsuariosCreados').show();
+    } else {
+        $('#listaUsuariosCreados').hide();
+    }
+    
+    // Mostrar errores si hay
+    if (response.detalle_errores && response.detalle_errores.length > 0) {
+        const ul = $('#ulErroresImportacion');
+        ul.empty();
+        
+        response.detalle_errores.forEach(function(err) {
+            ul.append(`<li class="list-group-item list-group-item-danger py-1">${err}</li>`);
+        });
+        
+        $('#listaErroresImportacion').show();
+    } else {
+        $('#listaErroresImportacion').hide();
+    }
+    
+    // Mostrar sección de resultados
+    $('#resultadoImportacion').show();
+    
+    // Scroll a los resultados
+    $('#resultadoImportacion')[0].scrollIntoView({ behavior: 'smooth' });
+    
+    // Notificación
+    if (response.creados > 0 || response.actualizados > 0) {
+        mostrarExito(`Importación completada: ${response.creados} creados, ${response.actualizados} actualizados`);
+    }
+}
+
+function copiarCredencialesCSV() {
+    // Obtener datos de la tabla
+    let csv = 'Nombre,Email,Usuario,Contraseña\n';
+    
+    $('#tbodyUsuariosCreados tr').each(function() {
+        const cols = $(this).find('td');
+        const nombre = $(cols[0]).text();
+        const email = $(cols[1]).text();
+        const username = $(cols[2]).text();
+        const password = $(cols[3]).text();
+        csv += `"${nombre}","${email}","${username}","${password}"\n`;
+    });
+    
+    // Copiar al portapapeles
+    navigator.clipboard.writeText(csv).then(function() {
+        toastr.success('Credenciales copiadas al portapapeles');
+    }).catch(function() {
+        // Fallback
+        const textarea = document.createElement('textarea');
+        textarea.value = csv;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        toastr.success('Credenciales copiadas al portapapeles');
+    });
 }
 </script>

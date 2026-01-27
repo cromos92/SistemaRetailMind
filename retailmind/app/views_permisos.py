@@ -4,13 +4,14 @@ Vistas para el módulo de gestión de permisos
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.db.models import Count, Q, Max
 from django.views.decorators.http import require_http_methods
 from .models import ModuloSistema, OpcionMenu, PermisoRol, ConfiguracionPermisoGlobal, PermisoSucursal, Sucursal
 from users.models import Usuario
 from .decorators import solo_administrador
 from decimal import Decimal, InvalidOperation
+from datetime import datetime
 import json
 
 
@@ -937,5 +938,473 @@ def restablecer_permisos_sucursal(request):
         return JsonResponse({
             'error': True,
             'mensaje': f'Error al restablecer permisos: {str(e)}'
+        }, status=500)
+
+
+# ========== EXPORTAR / IMPORTAR PERMISOS ==========
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def exportar_permisos_rol(request):
+    """
+    API para exportar todos los permisos de un rol en formato JSON
+    """
+    rol = request.GET.get('rol')
+    
+    if not rol:
+        return JsonResponse({'error': 'Rol no especificado'}, status=400)
+    
+    try:
+        # Obtener todos los permisos del rol
+        permisos = PermisoRol.objects.filter(rol=rol).select_related('opcion_menu', 'opcion_menu__modulo')
+        
+        # Obtener el límite de descuento
+        resultado = permisos.aggregate(max_limite=Max('limite_descuento_porcentaje'))
+        limite_descuento = float(resultado['max_limite']) if resultado['max_limite'] is not None else 0
+        
+        # Construir la estructura de exportación
+        permisos_data = []
+        for permiso in permisos:
+            permisos_data.append({
+                'opcion_codigo': permiso.opcion_menu.codigo,
+                'opcion_nombre': permiso.opcion_menu.nombre,
+                'modulo_codigo': permiso.opcion_menu.modulo.codigo if permiso.opcion_menu.modulo else None,
+                'permisos': {
+                    'puede_ver': permiso.puede_ver,
+                    'puede_crear': permiso.puede_crear,
+                    'puede_editar': permiso.puede_editar,
+                    'puede_eliminar': permiso.puede_eliminar,
+                    'puede_exportar': permiso.puede_exportar,
+                    'puede_aprobar': permiso.puede_aprobar,
+                }
+            })
+        
+        # Estructura del archivo de exportación
+        export_data = {
+            'version': '1.0',
+            'tipo': 'permisos_rol',
+            'fecha_exportacion': datetime.now().isoformat(),
+            'rol': rol,
+            'rol_nombre': dict(PermisoRol.ROLES_CHOICES).get(rol, rol),
+            'limite_descuento': limite_descuento,
+            'total_permisos': len(permisos_data),
+            'permisos': permisos_data
+        }
+        
+        # Crear respuesta como archivo descargable
+        response = HttpResponse(
+            json.dumps(export_data, indent=2, ensure_ascii=False),
+            content_type='application/json'
+        )
+        filename = f'permisos_{rol}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': True,
+            'mensaje': f'Error al exportar permisos: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def exportar_todos_permisos(request):
+    """
+    API para exportar todos los permisos de todos los roles en formato JSON
+    """
+    try:
+        roles_data = []
+        
+        for rol_codigo, rol_nombre in PermisoRol.ROLES_CHOICES:
+            permisos = PermisoRol.objects.filter(rol=rol_codigo).select_related('opcion_menu', 'opcion_menu__modulo')
+            
+            # Obtener el límite de descuento del rol
+            resultado = permisos.aggregate(max_limite=Max('limite_descuento_porcentaje'))
+            limite_descuento = float(resultado['max_limite']) if resultado['max_limite'] is not None else 0
+            
+            permisos_data = []
+            for permiso in permisos:
+                permisos_data.append({
+                    'opcion_codigo': permiso.opcion_menu.codigo,
+                    'opcion_nombre': permiso.opcion_menu.nombre,
+                    'modulo_codigo': permiso.opcion_menu.modulo.codigo if permiso.opcion_menu.modulo else None,
+                    'permisos': {
+                        'puede_ver': permiso.puede_ver,
+                        'puede_crear': permiso.puede_crear,
+                        'puede_editar': permiso.puede_editar,
+                        'puede_eliminar': permiso.puede_eliminar,
+                        'puede_exportar': permiso.puede_exportar,
+                        'puede_aprobar': permiso.puede_aprobar,
+                    }
+                })
+            
+            roles_data.append({
+                'rol': rol_codigo,
+                'rol_nombre': rol_nombre,
+                'limite_descuento': limite_descuento,
+                'total_permisos': len(permisos_data),
+                'permisos': permisos_data
+            })
+        
+        # Estructura del archivo de exportación completo
+        export_data = {
+            'version': '1.0',
+            'tipo': 'permisos_completos',
+            'fecha_exportacion': datetime.now().isoformat(),
+            'total_roles': len(roles_data),
+            'roles': roles_data
+        }
+        
+        # Crear respuesta como archivo descargable
+        response = HttpResponse(
+            json.dumps(export_data, indent=2, ensure_ascii=False),
+            content_type='application/json'
+        )
+        filename = f'permisos_completos_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': True,
+            'mensaje': f'Error al exportar permisos: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["POST"])
+def importar_permisos(request):
+    """
+    API para importar permisos desde un archivo JSON
+    Soporta importación de un solo rol o de todos los roles
+    """
+    try:
+        # Verificar si hay archivo subido o datos JSON directos
+        if request.FILES.get('archivo'):
+            archivo = request.FILES['archivo']
+            contenido = archivo.read().decode('utf-8')
+            data = json.loads(contenido)
+        else:
+            data = json.loads(request.body)
+        
+        # Validar estructura del archivo
+        version = data.get('version')
+        tipo = data.get('tipo')
+        
+        if not version or not tipo:
+            return JsonResponse({
+                'error': True,
+                'mensaje': 'Archivo de importación inválido: falta versión o tipo'
+            }, status=400)
+        
+        sobrescribir = data.get('sobrescribir', True)
+        resultados = {
+            'roles_procesados': 0,
+            'permisos_creados': 0,
+            'permisos_actualizados': 0,
+            'permisos_omitidos': 0,
+            'errores': []
+        }
+        
+        if tipo == 'permisos_rol':
+            # Importar permisos de un solo rol
+            rol = data.get('rol')
+            rol_destino = request.POST.get('rol_destino') or data.get('rol_destino') or rol
+            
+            if not rol:
+                return JsonResponse({
+                    'error': True,
+                    'mensaje': 'No se especificó el rol en el archivo'
+                }, status=400)
+            
+            # Validar que el rol destino sea válido
+            roles_validos = [r[0] for r in PermisoRol.ROLES_CHOICES]
+            if rol_destino not in roles_validos:
+                return JsonResponse({
+                    'error': True,
+                    'mensaje': f'Rol destino inválido: {rol_destino}'
+                }, status=400)
+            
+            limite_descuento = Decimal(str(data.get('limite_descuento', 0)))
+            permisos_data = data.get('permisos', [])
+            
+            resultado_rol = _importar_permisos_rol(rol_destino, permisos_data, limite_descuento, sobrescribir)
+            resultados['roles_procesados'] = 1
+            resultados['permisos_creados'] = resultado_rol['creados']
+            resultados['permisos_actualizados'] = resultado_rol['actualizados']
+            resultados['permisos_omitidos'] = resultado_rol['omitidos']
+            resultados['errores'] = resultado_rol['errores']
+            
+        elif tipo == 'permisos_completos':
+            # Importar permisos de todos los roles
+            roles_data = data.get('roles', [])
+            
+            for rol_data in roles_data:
+                rol = rol_data.get('rol')
+                limite_descuento = Decimal(str(rol_data.get('limite_descuento', 0)))
+                permisos_data = rol_data.get('permisos', [])
+                
+                resultado_rol = _importar_permisos_rol(rol, permisos_data, limite_descuento, sobrescribir)
+                resultados['roles_procesados'] += 1
+                resultados['permisos_creados'] += resultado_rol['creados']
+                resultados['permisos_actualizados'] += resultado_rol['actualizados']
+                resultados['permisos_omitidos'] += resultado_rol['omitidos']
+                resultados['errores'].extend(resultado_rol['errores'])
+        else:
+            return JsonResponse({
+                'error': True,
+                'mensaje': f'Tipo de archivo no soportado: {tipo}'
+            }, status=400)
+        
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'Importación completada: {resultados["roles_procesados"]} rol(es) procesado(s)',
+            'resultados': resultados
+        })
+        
+    except json.JSONDecodeError as e:
+        return JsonResponse({
+            'error': True,
+            'mensaje': f'Error al leer el archivo JSON: {str(e)}'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'error': True,
+            'mensaje': f'Error al importar permisos: {str(e)}'
+        }, status=500)
+
+
+def _importar_permisos_rol(rol, permisos_data, limite_descuento, sobrescribir):
+    """
+    Función auxiliar para importar permisos de un rol específico
+    """
+    resultado = {
+        'creados': 0,
+        'actualizados': 0,
+        'omitidos': 0,
+        'errores': []
+    }
+    
+    # Actualizar límite de descuento en permisos existentes si sobrescribir está activo
+    if sobrescribir:
+        PermisoRol.objects.filter(rol=rol).update(limite_descuento_porcentaje=limite_descuento)
+    
+    for permiso_item in permisos_data:
+        opcion_codigo = permiso_item.get('opcion_codigo')
+        permisos_valores = permiso_item.get('permisos', {})
+        
+        # Buscar la opción por código
+        opcion = OpcionMenu.objects.filter(codigo=opcion_codigo, activo=True).first()
+        
+        if not opcion:
+            resultado['errores'].append(f'Opción no encontrada: {opcion_codigo}')
+            continue
+        
+        try:
+            permiso, created = PermisoRol.objects.get_or_create(
+                rol=rol,
+                opcion_menu=opcion,
+                defaults={
+                    'limite_descuento_porcentaje': limite_descuento
+                }
+            )
+            
+            if created or sobrescribir:
+                permiso.puede_ver = permisos_valores.get('puede_ver', False)
+                permiso.puede_crear = permisos_valores.get('puede_crear', False)
+                permiso.puede_editar = permisos_valores.get('puede_editar', False)
+                permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
+                permiso.puede_exportar = permisos_valores.get('puede_exportar', False)
+                permiso.puede_aprobar = permisos_valores.get('puede_aprobar', False)
+                permiso.limite_descuento_porcentaje = limite_descuento
+                permiso.save()
+                
+                if created:
+                    resultado['creados'] += 1
+                else:
+                    resultado['actualizados'] += 1
+            else:
+                resultado['omitidos'] += 1
+                
+        except Exception as e:
+            resultado['errores'].append(f'Error en opción {opcion_codigo}: {str(e)}')
+    
+    return resultado
+
+
+# ========== EXPORTAR / IMPORTAR PERMISOS SUCURSAL ==========
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def exportar_permisos_sucursal(request):
+    """
+    API para exportar permisos de una sucursal en formato JSON
+    """
+    sucursal_id = request.GET.get('sucursal_id')
+    
+    if not sucursal_id:
+        return JsonResponse({'error': 'Sucursal no especificada'}, status=400)
+    
+    try:
+        sucursal = Sucursal.objects.get(id=sucursal_id)
+        permisos = PermisoSucursal.objects.filter(sucursal=sucursal).select_related('opcion_menu', 'opcion_menu__modulo')
+        
+        permisos_data = []
+        for permiso in permisos:
+            permisos_data.append({
+                'opcion_codigo': permiso.opcion_menu.codigo,
+                'opcion_nombre': permiso.opcion_menu.nombre,
+                'modulo_codigo': permiso.opcion_menu.modulo.codigo if permiso.opcion_menu.modulo else None,
+                'permisos': {
+                    'habilitado': permiso.habilitado,
+                    'puede_crear': permiso.puede_crear,
+                    'puede_editar': permiso.puede_editar,
+                    'puede_eliminar': permiso.puede_eliminar,
+                    'puede_exportar': permiso.puede_exportar,
+                    'puede_aprobar': permiso.puede_aprobar,
+                },
+                'notas': permiso.notas
+            })
+        
+        export_data = {
+            'version': '1.0',
+            'tipo': 'permisos_sucursal',
+            'fecha_exportacion': datetime.now().isoformat(),
+            'sucursal': {
+                'id': sucursal.id,
+                'alias': sucursal.alias,
+                'direccion': sucursal.direccion,
+                'tipo_sucursal': sucursal.tipo_sucursal if hasattr(sucursal, 'tipo_sucursal') else None,
+            },
+            'total_permisos': len(permisos_data),
+            'permisos': permisos_data
+        }
+        
+        response = HttpResponse(
+            json.dumps(export_data, indent=2, ensure_ascii=False),
+            content_type='application/json'
+        )
+        filename = f'permisos_sucursal_{sucursal.alias.replace(" ", "_")}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
+        
+    except Sucursal.DoesNotExist:
+        return JsonResponse({'error': 'Sucursal no encontrada'}, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'error': True,
+            'mensaje': f'Error al exportar permisos de sucursal: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["POST"])
+def importar_permisos_sucursal(request):
+    """
+    API para importar permisos de sucursal desde un archivo JSON
+    """
+    try:
+        sucursal_destino_id = request.POST.get('sucursal_id') or request.GET.get('sucursal_id')
+        
+        if not sucursal_destino_id:
+            return JsonResponse({
+                'error': True,
+                'mensaje': 'Debe especificar la sucursal destino'
+            }, status=400)
+        
+        try:
+            sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
+        except Sucursal.DoesNotExist:
+            return JsonResponse({
+                'error': True,
+                'mensaje': 'Sucursal destino no encontrada'
+            }, status=404)
+        
+        # Leer archivo o datos JSON
+        if request.FILES.get('archivo'):
+            archivo = request.FILES['archivo']
+            contenido = archivo.read().decode('utf-8')
+            data = json.loads(contenido)
+        else:
+            data = json.loads(request.body)
+        
+        # Validar estructura
+        if data.get('tipo') != 'permisos_sucursal':
+            return JsonResponse({
+                'error': True,
+                'mensaje': 'Tipo de archivo no compatible con permisos de sucursal'
+            }, status=400)
+        
+        sobrescribir = data.get('sobrescribir', True)
+        permisos_data = data.get('permisos', [])
+        
+        resultados = {
+            'creados': 0,
+            'actualizados': 0,
+            'omitidos': 0,
+            'errores': []
+        }
+        
+        for permiso_item in permisos_data:
+            opcion_codigo = permiso_item.get('opcion_codigo')
+            permisos_valores = permiso_item.get('permisos', {})
+            notas = permiso_item.get('notas', '')
+            
+            opcion = OpcionMenu.objects.filter(codigo=opcion_codigo, activo=True).first()
+            
+            if not opcion:
+                resultados['errores'].append(f'Opción no encontrada: {opcion_codigo}')
+                continue
+            
+            try:
+                permiso, created = PermisoSucursal.objects.get_or_create(
+                    sucursal=sucursal_destino,
+                    opcion_menu=opcion
+                )
+                
+                if created or sobrescribir:
+                    permiso.habilitado = permisos_valores.get('habilitado', True)
+                    permiso.puede_crear = permisos_valores.get('puede_crear', True)
+                    permiso.puede_editar = permisos_valores.get('puede_editar', True)
+                    permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
+                    permiso.puede_exportar = permisos_valores.get('puede_exportar', True)
+                    permiso.puede_aprobar = permisos_valores.get('puede_aprobar', False)
+                    permiso.notas = f"Importado: {notas}" if notas else "Importado desde archivo"
+                    permiso.save()
+                    
+                    if created:
+                        resultados['creados'] += 1
+                    else:
+                        resultados['actualizados'] += 1
+                else:
+                    resultados['omitidos'] += 1
+                    
+            except Exception as e:
+                resultados['errores'].append(f'Error en opción {opcion_codigo}: {str(e)}')
+        
+        return JsonResponse({
+            'success': True,
+            'mensaje': f'Permisos importados a {sucursal_destino.alias}',
+            'resultados': resultados
+        })
+        
+    except json.JSONDecodeError as e:
+        return JsonResponse({
+            'error': True,
+            'mensaje': f'Error al leer el archivo JSON: {str(e)}'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'error': True,
+            'mensaje': f'Error al importar permisos: {str(e)}'
         }, status=500)
 

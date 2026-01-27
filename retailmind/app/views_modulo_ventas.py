@@ -1867,6 +1867,7 @@ def construir_ticket_data(ticket):
             'costo_fifo': tp.costo_fifo,
             'lotes_utilizados': tp.lotes_utilizados,
             'stock_actual': producto_talla.stock if producto_talla else None,
+            'stock': producto_talla.stock if producto_talla else 0,  # Alias para compatibilidad con frontend POS
         })
 
     sucursal = ticket.sucursal
@@ -2240,7 +2241,10 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                         'total': total_linea
                     })
             
-            # Datos del documento
+            # Importar función de limpieza para eliminar acentos y caracteres especiales
+            from .views_modulo_documentos import limpiar_texto
+            
+            # Datos del documento - ✅ Aplicar limpiar_texto para eliminar acentos y Ñ
             datos_txt = {
                 'documento': {
                     'tipo_documento': 39 if es_boleta else 33,  # 39=Boleta, 33=Factura
@@ -2252,25 +2256,28 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
                 },
                 'emisor': {
                     'rut': empresa.rut,
-                    'razon_social': empresa.razon_social or empresa.nombre,
-                    'giro': empresa.giro or 'Sin giro',
+                    'razon_social': limpiar_texto(empresa.razon_social or empresa.nombre),
+                    'giro': limpiar_texto(empresa.giro or 'Sin giro'),
                     'acteco': empresa.acteco or '',
-                    'direccion': empresa.direccion or '',
-                    'comuna': empresa.comuna or '',
-                    'ciudad': empresa.ciudad or '',
-                    'codigo_vendedor': ticket.vendedor.codigo_vendedor if ticket.vendedor else 'VENDEDOR',
-                    'nombre_vendedor': ticket.vendedor.nombre if ticket.vendedor else 'Sin vendedor',
-                    'metodos_pago': metodos_pago_texto,
+                    'direccion': limpiar_texto(empresa.direccion or ''),
+                    'comuna': limpiar_texto(empresa.comuna or ''),
+                    'ciudad': limpiar_texto(empresa.ciudad or ''),
+                    'codigo_vendedor': limpiar_texto(ticket.vendedor.codigo_vendedor if ticket.vendedor else 'VENDEDOR'),
+                    'nombre_vendedor': limpiar_texto(ticket.vendedor.nombre if ticket.vendedor else 'Sin vendedor'),
+                    'metodos_pago': limpiar_texto(metodos_pago_texto),
                     'correlativo_ticket': ticket.correlativo,
-                    'telefono': empresa.contacto1 or ''
+                    'telefono': empresa.contacto1 or '',
+                    'nombre_impresora_boleta': getattr(ticket.sucursal, 'nombre_impresora_boleta', 'boleta') or 'boleta',
+                    'nombre_impresora_factura': getattr(ticket.sucursal, 'nombre_impresora_factura', 'factura') or 'factura',
+                    'sucursal': limpiar_texto(ticket.sucursal.alias if ticket.sucursal else ''),
                 },
                 'receptor': {
                     'rut': receptor.rut if receptor and not es_boleta else '66666666-6',  # Consumidor final para boletas
-                    'razon_social': receptor.razon_social if receptor and not es_boleta else 'CONSUMIDOR FINAL',
-                    'giro': receptor.giro if receptor and not es_boleta else '',
-                    'direccion': receptor.direccion if receptor and not es_boleta else '',
-                    'comuna': receptor.comuna if receptor and not es_boleta else '',
-                    'ciudad': receptor.ciudad if receptor and not es_boleta else ''
+                    'razon_social': limpiar_texto(receptor.razon_social if receptor and not es_boleta else 'CONSUMIDOR FINAL'),
+                    'giro': limpiar_texto(receptor.giro if receptor and not es_boleta else ''),
+                    'direccion': limpiar_texto(receptor.direccion if receptor and not es_boleta else ''),
+                    'comuna': limpiar_texto(receptor.comuna if receptor and not es_boleta else ''),
+                    'ciudad': limpiar_texto(receptor.ciudad if receptor and not es_boleta else '')
                 },
                 'totales': {
                     'monto_neto': int(neto),
@@ -2285,14 +2292,15 @@ def generar_dte_desde_ticket(ticket, tipo_documento, usuario, cotizacion=None):
             }
             
             # ✅ Agregar productos al detalle (usar productos_txt preparados arriba)
+            # ✅ Aplicar limpiar_texto para eliminar acentos y Ñ en nombres de productos
             for prod_txt in productos_txt:
                 # Asegurar que SKU sea string para poder hacer slicing
                 sku_str = str(prod_txt.get('sku', ''))
                 datos_txt['detalle'].append({
-                    'codigo': sku_str[:35],  # SKU como código (máx 35 chars)
-                    'sku': sku_str,
-                    'nombre': prod_txt['nombre'],  # Nombre/descripción del producto
-                    'descripcion': prod_txt.get('descripcion', ''),  # Vacío para evitar duplicados
+                    'codigo': limpiar_texto(sku_str[:35]),  # SKU como código (máx 35 chars)
+                    'sku': limpiar_texto(sku_str),
+                    'nombre': limpiar_texto(prod_txt['nombre']),  # Nombre/descripción del producto (sin acentos ni Ñ)
+                    'descripcion': limpiar_texto(prod_txt.get('descripcion', '')),
                     'cantidad': prod_txt['cantidad'],
                     'unidad': 'UN',
                     'precio_unitario': prod_txt['precio_unitario'],
@@ -4137,17 +4145,33 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         # Procesar pagos del ticket
         for pago in ticket.pagos.all():
             metodo = pago.metodo_pago
+            tipo_tarjeta = (pago.tipo_tarjeta or '').upper()
             monto = pago.monto or 0
             
             if metodo == 'EFECTIVO':
                 cuadratura_data['total_efectivo'] += monto
             elif metodo == 'TARJETA_DEBITO':
+                # ✅ TARJETA_DEBITO se considera Transbank (datos migrados y genéricos)
                 cuadratura_data['total_tarjeta_debito'] += monto
                 cuadratura_data['total_transbank'] += monto
             elif metodo == 'TARJETA_CREDITO':
+                # ✅ TARJETA_CREDITO se considera Transbank (datos migrados y genéricos)
                 cuadratura_data['total_tarjeta_credito'] += monto
                 cuadratura_data['total_transbank'] += monto
+            elif metodo == 'TBK_DEBITO_POS':
+                # ✅ Transbank POS Débito
+                cuadratura_data['total_tarjeta_debito'] += monto
+                cuadratura_data['total_transbank'] += monto
+            elif metodo == 'TBK_CREDITO_POS':
+                # ✅ Transbank POS Crédito
+                cuadratura_data['total_tarjeta_credito'] += monto
+                cuadratura_data['total_transbank'] += monto
+            elif metodo == 'TBK_PREPAGO_POS':
+                # ✅ Transbank POS Prepago (va a débito por convención)
+                cuadratura_data['total_tarjeta_debito'] += monto
+                cuadratura_data['total_transbank'] += monto
             elif metodo == 'TBK_POS_INTEGRADO' or metodo == 'TBK_MANUAL':
+                # ✅ Transbank genérico (datos históricos)
                 cuadratura_data['total_transbank'] += monto
             elif metodo == 'TRANSFERENCIA':
                 cuadratura_data['total_transferencia'] += monto
@@ -4162,12 +4186,26 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             elif metodo == 'ORDEN_COMPRA':
                 cuadratura_data['total_orden_compra'] += monto
             elif metodo == 'TARJETA_COMERCIAL':
-                # Por defecto va a Hites (única tarjeta comercial)
-                cuadratura_data['total_hites'] += monto
+                # Clasificar por tipo_tarjeta
+                cuadratura_data['total_tarjetas_comerciales'] += monto
+                if 'HITES' in tipo_tarjeta:
+                    cuadratura_data['total_hites'] += monto
             elif metodo == 'VENTA_INTERNET':
                 cuadratura_data['total_venta_internet'] += monto
-                # Por defecto va a MercadoPago
-                cuadratura_data['total_mercadopago'] += monto
+                # ✅ Clasificar por tipo_tarjeta (igual que con DTEs)
+                if 'FALABELLA' in tipo_tarjeta:
+                    cuadratura_data['total_falabella'] += monto
+                elif 'PARIS' in tipo_tarjeta:
+                    cuadratura_data['total_paris'] += monto
+                elif 'RIPLEY' in tipo_tarjeta:
+                    cuadratura_data['total_ripley'] += monto
+                elif 'MERCADO' in tipo_tarjeta or 'MERCADOPAGO' in tipo_tarjeta:
+                    cuadratura_data['total_mercadopago'] += monto
+                elif 'KLAP' in tipo_tarjeta:
+                    cuadratura_data['total_klap'] += monto
+                else:
+                    # Si no tiene tipo_tarjeta específico, va a MercadoPago por defecto
+                    cuadratura_data['total_mercadopago'] += monto
     
     # ========== PROCESAR DTEs (FACTURAS/BOLETAS ELECTRÓNICAS) ==========
     # Obtener folios de DTEs que ya tienen ticket asociado para evitar duplicar pagos
@@ -4231,14 +4269,19 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 if metodo_upper == 'EFECTIVO':
                     cuadratura_data['total_efectivo'] += monto
                 
-                # Transbank Débito
-                elif metodo_upper == 'TBK_DEBITO_POS' or 'DEBITO' in metodo_upper or 'REDCOMPRA' in tarjeta_upper:
+                # Transbank Débito (solo por método, tipo_tarjeta no importa)
+                elif metodo_upper in ['TBK_DEBITO_POS', 'TARJETA_DEBITO']:
                     cuadratura_data['total_tarjeta_debito'] += monto
                     cuadratura_data['total_transbank'] += monto
                 
-                # Transbank Crédito
-                elif metodo_upper == 'TBK_CREDITO_POS' or 'VISA' in tarjeta_upper or 'AMEX' in tarjeta_upper or 'DINER' in tarjeta_upper:
+                # Transbank Crédito (solo por método, tipo_tarjeta no importa)
+                elif metodo_upper in ['TBK_CREDITO_POS', 'TARJETA_CREDITO']:
                     cuadratura_data['total_tarjeta_credito'] += monto
+                    cuadratura_data['total_transbank'] += monto
+                
+                # Transbank Prepago
+                elif metodo_upper == 'TBK_PREPAGO_POS':
+                    cuadratura_data['total_tarjeta_debito'] += monto
                     cuadratura_data['total_transbank'] += monto
                 
                 # Transbank genérico
@@ -4853,7 +4896,17 @@ def obtener_detalle_arqueo(request, arqueo_id):
                     total_tarjeta_debito_teorico += monto
                     total_transbank_teorico += monto
                 elif metodo == 'TARJETA_CREDITO':
+                    # ✅ TARJETA_CREDITO se considera Transbank (datos migrados y genéricos)
                     total_tarjeta_credito_teorico += monto
+                elif metodo == 'TBK_DEBITO_POS':
+                    # ✅ Transbank POS Débito
+                    total_tarjeta_debito_teorico += monto
+                elif metodo == 'TBK_CREDITO_POS':
+                    # ✅ Transbank POS Crédito
+                    total_tarjeta_credito_teorico += monto
+                elif metodo == 'TBK_PREPAGO_POS':
+                    # ✅ Transbank POS Prepago (va a débito por convención)
+                    total_tarjeta_debito_teorico += monto
                     total_transbank_teorico += monto
                 elif metodo == 'TBK_POS_INTEGRADO' or metodo == 'TBK_MANUAL':
                     total_transbank_teorico += monto
@@ -4904,14 +4957,19 @@ def obtener_detalle_arqueo(request, arqueo_id):
                 if metodo_upper == 'EFECTIVO' or 'EFECTIVO' in metodo_upper:
                     total_efectivo_teorico += monto
                 
-                # Transbank Débito
-                elif metodo_upper == 'TBK_DEBITO_POS' or 'DEBITO' in metodo_upper or 'REDCOMPRA' in tarjeta_upper:
+                # Transbank Débito (solo por método, tipo_tarjeta no importa)
+                elif metodo_upper in ['TBK_DEBITO_POS', 'TARJETA_DEBITO']:
                     total_tarjeta_debito_teorico += monto
                     total_transbank_teorico += monto
                 
-                # Transbank Crédito
-                elif metodo_upper == 'TBK_CREDITO_POS' or 'CREDITO' in metodo_upper or 'VISA' in tarjeta_upper or 'MASTERCARD' in tarjeta_upper or 'AMEX' in tarjeta_upper or 'DINER' in tarjeta_upper:
+                # Transbank Crédito (solo por método, tipo_tarjeta no importa)
+                elif metodo_upper in ['TBK_CREDITO_POS', 'TARJETA_CREDITO']:
                     total_tarjeta_credito_teorico += monto
+                    total_transbank_teorico += monto
+                
+                # Transbank Prepago
+                elif metodo_upper == 'TBK_PREPAGO_POS':
+                    total_tarjeta_debito_teorico += monto
                     total_transbank_teorico += monto
                 
                 # Transbank genérico
@@ -6642,10 +6700,27 @@ def reabrir_arqueo(request):
                 if metodo == 'EFECTIVO':
                     arqueo.total_efectivo_teorico += monto
                 elif metodo == 'TARJETA_DEBITO':
+                    # ✅ TARJETA_DEBITO se considera Transbank (datos migrados y genéricos)
                     arqueo.total_tarjeta_debito_teorico += monto
                     arqueo.total_transbank_teorico += monto
                 elif metodo == 'TARJETA_CREDITO':
+                    # ✅ TARJETA_CREDITO se considera Transbank (datos migrados y genéricos)
                     arqueo.total_tarjeta_credito_teorico += monto
+                    arqueo.total_transbank_teorico += monto
+                elif metodo == 'TBK_DEBITO_POS':
+                    # ✅ Transbank POS Débito
+                    arqueo.total_tarjeta_debito_teorico += monto
+                    arqueo.total_transbank_teorico += monto
+                elif metodo == 'TBK_CREDITO_POS':
+                    # ✅ Transbank POS Crédito
+                    arqueo.total_tarjeta_credito_teorico += monto
+                    arqueo.total_transbank_teorico += monto
+                elif metodo == 'TBK_PREPAGO_POS':
+                    # ✅ Transbank POS Prepago (va a débito por convención)
+                    arqueo.total_tarjeta_debito_teorico += monto
+                    arqueo.total_transbank_teorico += monto
+                elif metodo in ['TBK_POS_INTEGRADO', 'TBK_MANUAL']:
+                    # ✅ Transbank genérico (datos históricos)
                     arqueo.total_transbank_teorico += monto
                 elif metodo == 'TRANSFERENCIA':
                     arqueo.total_transferencia_teorico += monto

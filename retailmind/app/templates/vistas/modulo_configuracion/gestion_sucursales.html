@@ -859,6 +859,31 @@
                         </select>
                         <div class="nexo-input-hint">Empresa a la que pertenece esta sucursal</div>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label" for="inputImpresoraBoleta">
+                                    <i class="ri-printer-line"></i>
+                                    Impresora Boleta Electrónica
+                                </label>
+                                <input type="text" class="nexo-input" id="inputImpresoraBoleta"
+                                       placeholder="Ej: boleta, termica1" value="boleta">
+                                <div class="nexo-input-hint">Para Boletas en Acepta</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="nexo-form-group">
+                                <label class="nexo-label" for="inputImpresoraFactura">
+                                    <i class="ri-printer-line"></i>
+                                    Impresora Factura Electrónica
+                                </label>
+                                <input type="text" class="nexo-input" id="inputImpresoraFactura"
+                                       placeholder="Ej: factura, laser1" value="factura">
+                                <div class="nexo-input-hint">Para Facturas en Acepta</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
@@ -961,6 +986,8 @@ $(document).ready(function() {
         $('#modalSucursalLabel').html('<i class="ri-store-2-line"></i> Nueva Sucursal');
         $('#formSucursal')[0].reset();
         $('#sucursalId').val('');
+        $('#inputImpresoraBoleta').val('boleta');  // Valor por defecto
+        $('#inputImpresoraFactura').val('factura');  // Valor por defecto
         // Mostrar modal primero (Select2 se inicializará en el evento shown.bs.modal)
         $('#modalSucursal').modal('show');
         // Seleccionar empresa actual del usuario por defecto después de que Select2 esté listo
@@ -1154,6 +1181,8 @@ $(document).ready(function() {
             alias: $('#inputAlias').val(),
             direccion: $('#inputDireccion').val(),
             empresa_id: $('#inputEmpresa').val(),
+            nombre_impresora_boleta: $('#inputImpresoraBoleta').val() || 'boleta',
+            nombre_impresora_factura: $('#inputImpresoraFactura').val() || 'factura',
         };
 
         $.ajax({
@@ -1230,6 +1259,8 @@ $(document).ready(function() {
                     $('#sucursalId').val(sucursal.id);
                     $('#inputAlias').val(sucursal.alias);
                     $('#inputDireccion').val(sucursal.direccion);
+                    $('#inputImpresoraBoleta').val(sucursal.nombre_impresora_boleta || 'boleta');
+                    $('#inputImpresoraFactura').val(sucursal.nombre_impresora_factura || 'factura');
                     
                     // Mostrar modal primero
                     $('#modalSucursal').modal('show');

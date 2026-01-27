@@ -1,0 +1,491 @@
+# Documentación Completa: Transbank POS Integrado
+
+## Tabla de Contenidos
+1. [Resumen General](#resumen-general)
+2. [Arquitectura del Sistema](#arquitectura-del-sistema)
+3. [Librerías y Dependencias](#librerías-y-dependencias)
+4. [Métodos y Comandos del Protocolo POS](#métodos-y-comandos-del-protocolo-pos)
+5. [Flujo de Cobro en `/venta_con_boleta`](#flujo-de-cobro-en-venta_con_boleta)
+6. [Mapeo de Datos - Respuesta del POS](#mapeo-de-datos---respuesta-del-pos)
+7. [Archivos del Sistema](#archivos-del-sistema)
+8. [Configuración](#configuración)
+9. [Endpoints API](#endpoints-api)
+
+---
+
+## Resumen General
+
+El sistema utiliza **Web Serial API** para comunicación directa entre el navegador y el POS Transbank. El procesamiento de pagos ocurre completamente en el frontend (JavaScript), mientras que el backend (PHP/Laravel) solo se encarga de persistir las transacciones en la base de datos.
+
+### Dispositivos Soportados
+- **Verifone**: VX520, VX675, VX680, VX810, VX820
+- **Ingenico**: iCT220, DESK/3500, iWL220, iWL250, iWL280, DESK/5000, LANE/3000, LANE/5000, Move/2500, Move/5000
+
+---
+
+## Arquitectura del Sistema
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           NAVEGADOR (Chrome/Edge)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────┐  │
+│  │  transbank-webserial│    │ transbank-pos-      │    │   transbank.js  │  │
+│  │         .js         │◄──►│    coordinator.js   │    │    (legacy)     │  │
+│  │  (SDK Principal)    │    │ (Control pestañas)  │    │                 │  │
+│  └──────────┬──────────┘    └─────────────────────┘    └─────────────────┘  │
+│             │                                                                │
+│             │ Web Serial API                                                 │
+│             ▼                                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                           PUERTO SERIAL USB                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                        POS TRANSBANK (Verifone/Ingenico)                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                                     │
+                                     │ POST /api/transbank/pos/venta
+                                     │ (Solo para guardar en BD)
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            BACKEND LARAVEL                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  TransbankPOSController.php  ──►  TransbankPOSService.php  ──►  Transbank   │
+│                                                                    Model    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Librerías y Dependencias
+
+### PHP (Backend)
+
+| Librería | Uso | Instalación |
+|----------|-----|-------------|
+| `transbank/transbank-sdk` | SDK oficial Transbank POS | `composer require transbank/transbank-sdk` |
+| `Transbank\POS\POS` | Clase principal para operaciones POS | Incluida en SDK |
+| `Transbank\POS\Exceptions\TransbankException` | Manejo de errores | Incluida en SDK |
+| `Illuminate\Support\Facades\Log` | Logging de operaciones | Laravel Core |
+
+### JavaScript (Frontend)
+
+| Archivo | Descripción | Dependencias |
+|---------|-------------|--------------|
+| `transbank-webserial.js` | SDK principal Web Serial | Nativo (Web Serial API) |
+| `transbank-pos-coordinator.js` | Coordinador entre pestañas | BroadcastChannel API |
+| `transbank.js` | Versión legacy (deprecated) | jQuery |
+
+### Dependencias UI
+- **jQuery** - Manipulación DOM
+- **SweetAlert2** - Alertas y modales
+- **Bootstrap Icons** - Iconografía
+
+---
+
+## Métodos y Comandos del Protocolo POS
+
+### Constantes del Protocolo
+
+```javascript
+const STX = 0x02;  // Start of Text
+const ETX = 0x03;  // End of Text
+const ACK = 0x06;  // Acknowledge
+const NAK = 0x15;  // Negative Acknowledge
+const ENQ = 0x05;  // Enquiry
+const TBKPOS_DEFAULT_BAUD = 115200;  // Baudrate por defecto
+```
+
+### Comandos Disponibles
+
+| Comando | Código | Parámetros | Descripción |
+|---------|--------|------------|-------------|
+| **POLL** | `0100` | Ninguno | Verificar conexión con el POS |
+| **VENTA** | `0200` | `MONTO\|TICKET\|EMPLEADO\|OPERACION\|CUOTAS\|PROPINA\|` | Procesar venta |
+| **ÚLTIMA VENTA** | `0250` | Ninguno | Consultar última transacción |
+| **DETALLE VENTAS** | `0260` | `IMPRIMIR` (0/1) | Obtener detalle de transacciones |
+| **CIERRE DÍA** | `0500` | Ninguno | Cierre de jornada |
+| **TOTALES** | `0700` | Ninguno | Consultar totales del día |
+| **CARGA LLAVES** | `0800` | Ninguno | Cargar llaves criptográficas (30-60s) |
+| **ANULACIÓN** | `1200` | `OPERATION_ID` | Anular transacción |
+
+### Respuestas del POS
+
+| Respuesta | Código | Descripción |
+|-----------|--------|-------------|
+| Respuesta Venta | `0210` | Resultado de transacción de venta |
+| Mensaje Intermedio | `0900` | Estado de procesamiento |
+
+### Códigos de Respuesta Comunes
+
+| Código | Significado |
+|--------|-------------|
+| `0` | APROBADA |
+| `5` | TRANSACCIÓN RECHAZADA |
+| `7` | RETENER TARJETA |
+| `12` | TRANSACCIÓN INVÁLIDA |
+| `13` | MONTO INVÁLIDO |
+| `51` | FONDOS INSUFICIENTES |
+| `54` | TARJETA VENCIDA |
+| `61` | EXCEDE LÍMITE |
+| `65` | EXCEDE LÍMITE TRANSACCIONES |
+| `70` | ERROR INICIALIZACIÓN |
+| `88` | SIN CONEXIÓN TRANSBANK |
+| `91` | EMISOR NO DISPONIBLE |
+| `99` | CANCELADA POR USUARIO |
+
+---
+
+## Flujo de Cobro en `/venta_con_boleta`
+
+### Ruta y Controlador
+
+```php
+// routes/web.php
+Route::get('venta_con_boleta', [TicketController::class, 'view_boleta'])
+    ->name('venta con boleta')
+    ->middleware('PermisoMiddleware:2.3');
+```
+
+### Flujo Paso a Paso
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 1. CARGA DE PÁGINA                                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│   • Se cargan scripts: transbank-pos-coordinator.js + transbank-webserial.js│
+│   • Auto-conexión silenciosa al POS (si está configurado)                   │
+│   • Verificación de configuración guardada en localStorage                  │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 2. CONSULTA DE TICKET                                                       │
+├────────────────────────────────────────────────────────────────────────────┤
+│   • Usuario ingresa N° de ticket                                            │
+│   • POST /busqueda_ticket_para_venta → TicketController::ConsultaTicket()   │
+│   • Se valida: existencia, estado, stock, folios disponibles                │
+│   • Se muestra información del ticket con productos                         │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 3. SELECCIÓN MÉTODO DE PAGO                                                 │
+├────────────────────────────────────────────────────────────────────────────┤
+│   • Usuario selecciona "Tarjeta TBK Pos Integrado"                          │
+│   • Se agrega fila a tabla de métodos de pago                               │
+│   • Voucher queda como "pendiente"                                          │
+│   • Aparece botón "Pagar" para procesar en POS                              │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 4. PROCESAMIENTO EN POS (Frontend)                                          │
+├────────────────────────────────────────────────────────────────────────────┤
+│   • Click en "Pagar" → Cobrar_pos_integrado(idMonto)                        │
+│   • Transbank.POS.Integrado.sale(monto, ticket)                             │
+│   • Comando: 0200|MONTO|TICKET|||||                                         │
+│   • POS solicita tarjeta al cliente                                         │
+│   • Espera respuesta (timeout 180s para ventas)                             │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 5. RESPUESTA DEL POS                                                        │
+├────────────────────────────────────────────────────────────────────────────┤
+│   • Respuesta: 0210|CODE|COMMERCE|TERMINAL|TICKET|AUTH|AMOUNT|SHARES|...    │
+│   • Se parsea la respuesta en parseResponse()                               │
+│   • Si CODE=0 → APROBADA                                                    │
+│   • Se actualiza voucher y tipo de tarjeta en la tabla                      │
+└────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ 6. GENERACIÓN DE TRANSACCIÓN                                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│   • Click en "Aceptar" → generarTransaccion()                               │
+│   • Validación: voucher != "pendiente"                                      │
+│   • POST /CrearBoleta → VentasController::CrearBoleta()                     │
+│   • Se guarda venta en tabla `ventas`                                       │
+│   • Se guarda transacción Transbank en tabla `transbank`                    │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Código JavaScript de Auto-conexión
+
+```javascript
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(async function() {
+        try {
+            // Verificar configuración
+            const config = window.verificarConfiguracionPOS();
+            
+            if (!config.configured) {
+                $('#estado_pos').text('No Configurado').css('background-color', 'orange');
+                return;
+            }
+            
+            // Auto-conectar
+            const resultado = await window.autoconectarPOSPre();
+            
+            if (resultado && resultado.connected) {
+                $('#estado_pos').text('Conectado').css('background-color', 'green');
+                $('#puerto').text(resultado.port || 'USB');
+            }
+        } catch (e) {
+            console.log('POS no conectado:', e.message);
+        }
+    }, 1500);
+});
+```
+
+---
+
+## Mapeo de Datos - Respuesta del POS
+
+### Estructura de Respuesta de Venta (0210)
+
+| Campo | Índice | Tipo | Descripción | Ejemplo |
+|-------|--------|------|-------------|---------|
+| `command` | 0 | string | Identificador mensaje | `"0210"` |
+| `responseCode` | 1 | int | Código respuesta | `0` |
+| `commerceCode` | 2 | string | Código comercio | `"597055555530"` |
+| `terminalId` | 3 | string | ID terminal POS | `"12345678"` |
+| `ticket` | 4 | string | Número ticket | `"TKT001"` |
+| `authorizationCode` | 5 | string | Código autorización/Voucher | `"123456"` |
+| `amount` | 6 | int | Monto en pesos | `15000` |
+| `sharesNumber` | 7 | int | Número de cuotas | `0` |
+| `last4Digits` | 8 | string | Últimos 4 dígitos tarjeta | `"1234"` |
+| `cardType` | 9 | string | Tipo tarjeta (DB/CR) | `"DB"` |
+| `accountingDate` | 10 | string | Fecha contable | `"20260127"` |
+| `accountNumber` | 11 | string | Número cuenta | `""` |
+| `cardBrand` | 12 | string | Marca tarjeta | `"VISA"` |
+| `realDate` | 13 | string | Fecha real | `"2026-01-27"` |
+| `realTime` | 14 | string | Hora real | `"15:30:45"` |
+| `employeeId` | 15 | string | ID empleado | `""` |
+| `tip` | 16 | int | Propina | `0` |
+
+### Objeto saleResponse para Guardar en BD
+
+```javascript
+// Datos que se envían al backend para guardar
+const saleResponse = {
+    amount: resultado.amount,           // Monto de la transacción
+    commerceCode: resultado.commerceCode || '',  // Código de comercio
+    cardBrand: resultado.cardBrand || '',        // Marca tarjeta (VISA, MC, etc)
+    cardType: resultado.cardType || '',          // DB = Débito, CR = Crédito
+    last4Digits: resultado.last4Digits || '',    // Últimos 4 dígitos
+    responseMessage: resultado.responseMessage || 'APROBADA',
+    terminalId: resultado.terminalId || '',      // ID del terminal
+    authorizationCode: resultado.authorizationCode || '', // VOUCHER
+    operationNumber: resultado.operationNumber || '',
+    realDate: resultado.realDate || '',
+    realTime: resultado.realTime || '',
+    successful: resultado.success || (resultado.responseCode === 0),
+    ticket: ticketStr  // Número de ticket del sistema
+};
+```
+
+### Tabla `transbank` - Estructura BD
+
+```sql
+CREATE TABLE transbank (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    amount INT,                      -- Monto
+    commerceCode VARCHAR(20),        -- Código comercio
+    cardBrand VARCHAR(20),           -- Marca tarjeta
+    cardType VARCHAR(10),            -- Tipo (débito/crédito)
+    last4Digits VARCHAR(4),          -- Últimos 4 dígitos
+    responseMessage VARCHAR(100),    -- Mensaje respuesta
+    terminalID VARCHAR(20),          -- ID terminal
+    authorizationCode VARCHAR(10),   -- Código autorización (VOUCHER)
+    operationNumber VARCHAR(20),     -- Número operación
+    realdate DATE,                   -- Fecha transacción
+    realTime TIME,                   -- Hora transacción
+    successfull BOOLEAN,             -- Estado exitoso
+    descripcion VARCHAR(50),         -- Descripción/Ticket
+    ID_Ticket VARCHAR(20),           -- Correlativo ticket sistema
+    sucursal VARCHAR(20),            -- Sucursal
+    fecha DATE,                      -- Fecha registro
+    monto_pagado INT                 -- Monto pagado
+);
+```
+
+---
+
+## Archivos del Sistema
+
+### Backend (PHP/Laravel)
+
+| Archivo | Ubicación | Descripción |
+|---------|-----------|-------------|
+| `TransbankPOSController.php` | `app/Http/Controllers/` | Controlador principal POS |
+| `TransbankPOSService.php` | `app/Services/` | Servicio con lógica de negocio |
+| `TransbankController.php` | `app/Http/Controllers/` | Controlador legacy |
+| `Transbank.php` | `app/Models/` | Modelo Eloquent |
+| `transbank.php` | `config/` | Configuración |
+| `TicketController.php` | `app/Http/Controllers/` | Controlador venta boleta |
+
+### Frontend (JavaScript)
+
+| Archivo | Ubicación | Descripción |
+|---------|-----------|-------------|
+| `transbank-webserial.js` | `public/js/` | SDK principal Web Serial (1305 líneas) |
+| `transbank-pos-coordinator.js` | `public/js/` | Coordinador pestañas (122 líneas) |
+| `transbank.js` | `public/js/` | SDK legacy (deprecated) |
+
+### Vistas (Blade)
+
+| Archivo | Ubicación | Descripción |
+|---------|-----------|-------------|
+| `transbank_pos_moderno.blade.php` | `resources/views/gestion_ventas/` | Panel administración POS |
+| `venta_con_boleta_.blade.php` | `resources/views/gestion_ventas/` | Módulo de venta |
+| `modulo_transbank.blade.php` | `resources/views/gestion_ventas/` | Módulo legacy |
+
+---
+
+## Configuración
+
+### Archivo `config/transbank.php`
+
+```php
+return [
+    'pos' => [
+        // Timeout para operaciones (segundos)
+        'timeout' => env('TRANSBANK_POS_TIMEOUT', 150),
+
+        // Baudrate por defecto
+        'default_baudrate' => env('TRANSBANK_POS_BAUDRATE', 115200),
+
+        // Baudrates a probar en auto-conexión
+        'baudrates' => [115200, 9600, 19200, 38400, 57600],
+
+        // Habilitar logs detallados
+        'debug' => env('TRANSBANK_POS_DEBUG', false),
+
+        // Puerto por defecto (opcional)
+        'default_port' => env('TRANSBANK_POS_PORT', null),
+    ],
+];
+```
+
+### Variables de Entorno (.env)
+
+```env
+TRANSBANK_POS_TIMEOUT=150
+TRANSBANK_POS_BAUDRATE=115200
+TRANSBANK_POS_DEBUG=false
+TRANSBANK_POS_PORT=
+```
+
+### LocalStorage (Frontend)
+
+```javascript
+// Puerto preferido
+localStorage.getItem('tbk_preferred_port')  
+// { vid: 0x11CA, pid: 0x0215 }
+
+// Información del dispositivo
+localStorage.getItem('tbk_device_info')
+// { brand: 'Verifone', model: 'VX520', vidHex: '0x11ca', pidHex: '0x0215' }
+
+// Protocolo detectado
+localStorage.getItem('tbk_protocol')
+// 'verifone' | 'ingenico' | 'standard'
+```
+
+---
+
+## Endpoints API
+
+### Rutas POS
+
+| Método | Ruta | Controlador | Descripción |
+|--------|------|-------------|-------------|
+| GET | `/transbank/pos` | `TransbankPOSController@index` | Vista panel POS |
+| GET | `/api/transbank/pos/diagnostico` | `TransbankPOSController@diagnostico` | Diagnóstico SDK |
+| GET | `/api/transbank/pos/puertos` | `TransbankPOSController@listarPuertos` | Listar puertos |
+| POST | `/api/transbank/pos/autoconectar` | `TransbankPOSController@autoconectar` | Auto-conectar |
+| POST | `/api/transbank/pos/conectar` | `TransbankPOSController@conectar` | Conectar puerto |
+| POST | `/api/transbank/pos/desconectar` | `TransbankPOSController@desconectar` | Desconectar |
+| GET | `/api/transbank/pos/verificar` | `TransbankPOSController@verificar` | Verificar (POLL) |
+| POST | `/api/transbank/pos/cargar-llaves` | `TransbankPOSController@cargarLlaves` | Cargar llaves |
+| POST | `/api/transbank/pos/venta` | `TransbankPOSController@venta` | **Guardar venta en BD** |
+| GET | `/api/transbank/pos/ultima-venta` | `TransbankPOSController@ultimaVenta` | Última venta |
+| POST | `/api/transbank/pos/anular` | `TransbankPOSController@anular` | Anular |
+| GET | `/api/transbank/pos/totales` | `TransbankPOSController@totales` | Totales día |
+| POST | `/api/transbank/pos/cerrar-dia` | `TransbankPOSController@cerrarDia` | Cierre día |
+
+### Rutas Legacy
+
+| Método | Ruta | Controlador | Descripción |
+|--------|------|-------------|-------------|
+| POST | `/transbank_pos_send` | `TransbankController@Crear_Registro_Pos` | Guardar transacción (legacy) |
+| GET | `/ver_menu_tbk` | `TransbankController@ver_opciones_tbk` | Menú antiguo |
+
+---
+
+## API JavaScript Global
+
+### Objeto `Transbank.POS.Integrado`
+
+```javascript
+// Conexión
+Transbank.POS.Integrado.autoConnect(baudrate)         // Conectar automático
+Transbank.POS.Integrado.autoConnectPreauthorized()    // Conectar puerto guardado
+Transbank.POS.Integrado.disconnect()                  // Desconectar
+
+// Operaciones
+Transbank.POS.Integrado.poll()                        // Verificar conexión
+Transbank.POS.Integrado.loadKeys()                    // Cargar llaves
+Transbank.POS.Integrado.sale(monto, ticket)           // Procesar venta
+Transbank.POS.Integrado.lastSale()                    // Última venta
+Transbank.POS.Integrado.getTotals()                   // Totales del día
+Transbank.POS.Integrado.refund(operationId)           // Anular
+Transbank.POS.Integrado.closeDay()                    // Cierre de día
+Transbank.POS.Integrado.getSalesDetail(printOnPos)    // Detalle ventas
+
+// Fix especial
+Transbank.POS.Integrado.fixError70()                  // Solucionar error 70
+```
+
+### Funciones Globales
+
+```javascript
+// Conexión
+autoconectarPOS()          // Conectar con diálogo
+autoconectarPOSPre()       // Conectar silencioso
+liberarPuertoPOS()         // Liberar puerto
+verificarConfiguracionPOS() // Verificar configuración
+
+// Venta
+ejecutarVentaPOS(monto, ticket)  // Ejecutar venta
+```
+
+---
+
+## Notas Importantes
+
+### Error 70 - Solución
+
+El error 70 indica problemas de inicialización. Soluciones:
+1. Ejecutar "Cierre de Día"
+2. Esperar 30 segundos
+3. Ejecutar "Cargar Llaves"
+4. Reintentar venta
+5. Si persiste, reiniciar POS físicamente
+
+### Requisitos del Navegador
+
+- **Chrome 89+** o **Edge 89+** (soporte Web Serial API)
+- HTTPS obligatorio en producción
+- Permisos de acceso al puerto serial
+
+### Coordinación entre Pestañas
+
+El archivo `transbank-pos-coordinator.js` usa `BroadcastChannel` para evitar conflictos cuando múltiples pestañas intentan acceder al POS.
+
+---
+
+*Documentación generada el 27/01/2026*
+*Sistema Vicent Software 2022*

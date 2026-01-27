@@ -171,10 +171,105 @@ class Command(BaseCommand):
         
         self.start_time = datetime.now()
         
+        # =====================================================================
+        # CONFIRMACIÓN DE BASES DE DATOS
+        # =====================================================================
+        pg_db = settings.DATABASES['default']
+        pg_name = pg_db.get('NAME', 'desconocida')
+        pg_host = pg_db.get('HOST', 'localhost')
+        pg_user = pg_db.get('USER', 'postgres')
+        
+        self.stdout.write('\n' + '='*70)
+        self.stdout.write(self.style.WARNING('  🔄 MIGRACIÓN MySQL → PostgreSQL'))
+        self.stdout.write('='*70)
+        
+        self.stdout.write(self.style.HTTP_INFO('\n  📤 ORIGEN (MySQL - Laravel):'))
+        self.stdout.write(f'     Host: {MYSQL_HOST}:{MYSQL_PORT}')
+        self.stdout.write(f'     Base de datos: {MYSQL_DATABASE}')
+        self.stdout.write(f'     Usuario: {MYSQL_USER}')
+        
+        self.stdout.write(self.style.SUCCESS('\n  📥 DESTINO (PostgreSQL - Django):'))
+        self.stdout.write(f'     Host: {pg_host}')
+        self.stdout.write(f'     Base de datos: {self.style.WARNING(pg_name)}')
+        self.stdout.write(f'     Usuario: {pg_user}')
+        
+        self.stdout.write('\n' + '-'*70)
+        
+        # Verificar si la DB tiene datos
+        from app.models import Producto, Dte
+        productos_count = Producto.objects.count()
+        dtes_count = Dte.objects.count()
+        
+        if productos_count > 0 or dtes_count > 0:
+            self.stdout.write(self.style.WARNING(f'  ⚠️  La DB destino tiene datos:'))
+            self.stdout.write(f'     - Productos: {productos_count:,}')
+            self.stdout.write(f'     - DTEs: {dtes_count:,}')
+            self.stdout.write(self.style.HTTP_INFO('     (Se saltarán registros duplicados)'))
+        else:
+            self.stdout.write(self.style.SUCCESS('  ✓ La DB destino está vacía (migración rápida)'))
+        
+        self.stdout.write('\n' + '-'*70)
+        
+        # Pedir confirmación o cambiar DB
+        self.stdout.write(self.style.HTTP_INFO('\n  Opciones:'))
+        self.stdout.write(f'    [ENTER] = Continuar con "{pg_name}"')
+        self.stdout.write(f'    [nombre] = Usar otra base de datos')
+        self.stdout.write(f'    [N] = Cancelar')
+        
+        respuesta = input(f'\n  Tu elección: ').strip()
+        
+        if respuesta.upper() in ['N', 'NO', 'CANCELAR']:
+            self.stdout.write(self.style.ERROR('\n  ❌ Migración cancelada por el usuario.'))
+            return
+        
+        # Si ingresó un nombre de DB diferente, cambiar la conexión
+        if respuesta and respuesta.upper() not in ['S', 'SI', 'Y', 'YES', '']:
+            nueva_db = respuesta
+            self.stdout.write(self.style.WARNING(f'\n  🔄 Cambiando base de datos a: {nueva_db}'))
+            
+            # Actualizar la configuración de la DB en tiempo de ejecución
+            from django.db import connections
+            settings.DATABASES['default']['NAME'] = nueva_db
+            
+            # Cerrar conexiones existentes para forzar reconexión
+            connections['default'].close()
+            
+            # Verificar conexión a la nueva DB
+            try:
+                from django.db import connection
+                connection.ensure_connection()
+                self.stdout.write(self.style.SUCCESS(f'  ✓ Conectado a "{nueva_db}"'))
+                
+                # Actualizar contadores
+                productos_count = Producto.objects.count()
+                dtes_count = Dte.objects.count()
+                
+                if productos_count > 0 or dtes_count > 0:
+                    self.stdout.write(self.style.WARNING(f'  ⚠️  Esta DB tiene datos:'))
+                    self.stdout.write(f'     - Productos: {productos_count:,}')
+                    self.stdout.write(f'     - DTEs: {dtes_count:,}')
+                else:
+                    self.stdout.write(self.style.SUCCESS('  ✓ La DB está vacía (migración rápida)'))
+                
+                pg_name = nueva_db
+                
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f'  ❌ Error al conectar a "{nueva_db}": {e}'))
+                self.stdout.write(self.style.HTTP_INFO('  Asegúrate de que la base de datos existe.'))
+                self.stdout.write(self.style.HTTP_INFO('  Puedes crearla con: CREATE DATABASE nombre_db;'))
+                return
+        
+        self.stdout.write(self.style.SUCCESS(f'\n  ✓ Iniciando migración a "{pg_name}"...\n'))
+        
+        # =====================================================================
+        # CONTINÚA LA MIGRACIÓN
+        # =====================================================================
+        
         # Abrir archivo de errores
         self.error_file = open(ERROR_LOG_FILE, 'w', encoding='utf-8')
         self.error_file.write(f'=== LOG DE ERRORES - MIGRACIÓN OPTIMIZADA ===\n')
         self.error_file.write(f'Fecha: {self.start_time}\n')
+        self.error_file.write(f'DB Destino: {pg_name}\n')
         self.error_file.write(f'{"="*70}\n\n')
 
         if self.dry_run:
@@ -455,6 +550,32 @@ class Command(BaseCommand):
             return timezone.make_aware(value) if timezone.is_naive(value) else value
         except:
             return timezone.now()
+
+    def safe_date_only(self, value):
+        """Extrae solo la fecha (date) de un datetime"""
+        if value is None:
+            return timezone.now().date()
+        if isinstance(value, datetime):
+            return value.date()
+        if hasattr(value, 'date'):
+            return value.date() if callable(getattr(value, 'date')) else value.date
+        try:
+            return value
+        except:
+            return timezone.now().date()
+
+    def safe_time_only(self, value):
+        """Extrae solo la hora (time) de un datetime"""
+        if value is None:
+            return timezone.now().time()
+        if isinstance(value, datetime):
+            return value.time()
+        if hasattr(value, 'time'):
+            return value.time() if callable(getattr(value, 'time')) else value.time
+        try:
+            return value
+        except:
+            return timezone.now().time()
 
     def log_error(self, message, log_every=100):
         """Registra error (throttled)"""
@@ -1176,6 +1297,9 @@ class Command(BaseCommand):
                 # ✅ Buscar sucursal por alias
                 sucursal_origen = self.cache_sucursales.get(alias) if alias else None
                 
+                # ✅ Extraer fecha y hora por separado del datetime de MySQL
+                fecha_mysql = row['fecha']
+                
                 movimiento = Movimientos_Producto(
                     ProductoTalla=producto_talla,
                     tipo_movimiento=tipo_movimiento,
@@ -1183,7 +1307,8 @@ class Command(BaseCommand):
                     cantidad=self.safe_int(row['cantidad']),
                     costo=self.safe_int(row['costo']),
                     precio=self.safe_int(row['precio_salida']),
-                    fecha=self.safe_date(row['fecha']),
+                    fecha=self.safe_date_only(fecha_mysql),
+                    hora=self.safe_time_only(fecha_mysql),
                     responsable=row['responsable'] or 'Sistema',
                     referencia_externa=ref_externa,  # ✅ Guardar ID de MySQL
                     estado='COMPLETADO',
@@ -1579,53 +1704,38 @@ class Command(BaseCommand):
         self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count} DTE productos migrados ({skipped} omitidos, {duplicados} duplicados)'))
 
     def migrate_ventas_pagos(self):
-        """Migra pagos de ventas para cuadratura desde MySQL"""
-        self.stdout.write('💳 Migrando pagos de ventas (para cuadratura)...')
+        """⚡ VERSIÓN ULTRA-OPTIMIZADA - Migra pagos de ventas para cuadratura desde MySQL"""
+        self.stdout.write('💳 Migrando pagos de ventas (OPTIMIZADO)...')
 
-        # ✅ Crear caché de sucursales por DIRECCIÓN (no por alias)
-        cache_sucursales_direccion = {}
-        for sucursal in Sucursal.objects.all():
-            if sucursal.direccion:
-                cache_sucursales_direccion[sucursal.direccion] = sucursal
-        self.stdout.write(f'  ✓ {len(cache_sucursales_direccion)} sucursales por dirección en caché')
+        # =====================================================================
+        # PASO 1: CARGAR TODO EN MEMORIA DE POSTGRESQL
+        # =====================================================================
+        self.stdout.write('  ⏳ Cargando cachés de PostgreSQL...')
+        
+        # Cache de DTEs por múltiples claves
+        cache_dtes_by_num = {}  # {numero_documento: dte_id}
+        cache_dtes_by_num_monto = {}  # {(numero, monto): dte_id}
+        
+        for dte_id, numero, monto in Dte.objects.values_list('id', 'numero_documento', 'monto_con_iva'):
+            monto_int = int(monto or 0)
+            if numero not in cache_dtes_by_num:
+                cache_dtes_by_num[numero] = dte_id
+            cache_dtes_by_num_monto[(numero, monto_int)] = dte_id
+        
+        self.stdout.write(f'  ✓ {len(cache_dtes_by_num):,} DTEs en caché')
 
-        # ✅ Pre-cargar DTEs existentes para búsqueda rápida
-        cache_dtes = {}  # Por (numero, tipo)
-        cache_dtes_by_num = {}  # Solo por número (para ID_dte)
-        cache_dtes_by_num_sucursal = {}  # Por (numero, sucursal_dir)
-        cache_dtes_by_num_tipo_sucursal = {}  # Por (numero, tipo, sucursal_dir)
-        cache_dtes_by_num_monto = {}  # Por (numero, monto)
-        cache_dtes_by_num_monto_sucursal = {}  # Por (numero, monto, sucursal_dir)
-        for dte in Dte.objects.select_related('sucursal').all():
-            # Clave por numero + tipo
-            key = (dte.numero_documento, dte.tipo_documento)
-            cache_dtes[key] = dte
-            suc_dir = dte.sucursal.direccion if dte.sucursal else ''
-            if suc_dir:
-                cache_dtes_by_num_sucursal[(dte.numero_documento, suc_dir)] = dte
-                cache_dtes_by_num_tipo_sucursal[(dte.numero_documento, dte.tipo_documento, suc_dir)] = dte
-            monto_dte = int(dte.monto_con_iva or 0)
-            cache_dtes_by_num_monto[(dte.numero_documento, monto_dte)] = dte
-            if suc_dir:
-                cache_dtes_by_num_monto_sucursal[(dte.numero_documento, monto_dte, suc_dir)] = dte
-            # Índice por número solo (ID_dte de MySQL = n_documento)
-            if dte.numero_documento not in cache_dtes_by_num:
-                cache_dtes_by_num[dte.numero_documento] = dte
-        self.stdout.write(f'  ✓ {len(cache_dtes)} DTEs en caché ({len(cache_dtes_by_num)} únicos por número)')
-
-        # ✅ Pre-cargar pagos existentes para evitar duplicados
+        # Pagos existentes - solo claves para verificación rápida
         pagos_existentes = set(
             Dte_Detalle_Pago.objects.values_list('dte_id', 'voucher', 'monto')
         )
-        self.stdout.write(f'  ✓ {len(pagos_existentes)} pagos existentes')
+        self.stdout.write(f'  ✓ {len(pagos_existentes):,} pagos existentes')
 
-        cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
-        cursor.execute('SELECT COUNT(*) as total FROM ventas')
-        total = cursor.fetchone()['total']
+        # =====================================================================
+        # PASO 2: CARGAR TODOS LOS DATOS DE MySQL EN MEMORIA DE UNA VEZ
+        # =====================================================================
+        self.stdout.write('  ⏳ Descargando datos de MySQL (puede tardar)...')
         
-        if self.limit and self.limit < total:
-            total = self.limit
-
+        cursor = self.mysql_conn.cursor(dictionary=True)
         cursor.execute(f'''
             SELECT 
                 ID, tipo_documento, metodo_pago, n_documento, tarjeta,
@@ -1633,23 +1743,20 @@ class Command(BaseCommand):
                 voucher, n_convenio, correlativo_ticket, responsable,
                 nombre_vendedor, hora, rut_convenio, descuento_tbk, estado, ID_dte
             FROM ventas
-            ORDER BY fecha, ID
+            ORDER BY ID
             {f"LIMIT {self.limit}" if self.limit else ""}
         ''')
+        
+        # ⚡ CARGAR TODO EN MEMORIA DE UNA VEZ
+        ventas_mysql = cursor.fetchall()
+        cursor.close()
+        
+        total = len(ventas_mysql)
+        self.stdout.write(f'  ✓ {total:,} ventas descargadas de MySQL')
 
-        count = 0
-        skipped = 0
-        duplicados = 0
-        dte_no_encontrado = 0
-        batch = []
-
-        # =============================================================================
-        # MAPEO DE MÉTODOS DE PAGO MySQL → Django
-        # Valores válidos: EFECTIVO, TARJETA_DEBITO, TARJETA_CREDITO, TRANSFERENCIA,
-        #   CHEQUE, OTRO, TBK_POS_INTEGRADO, TBK_MANUAL, TBK_DEBITO_POS, TBK_CREDITO_POS,
-        #   TBK_PREPAGO_POS, TARJETA_COMERCIAL, VENTA_INTERNET, ORDEN_COMPRA,
-        #   CREDITO_TRABAJADOR, CREDITO_EXTERNO, CONVENIO, MULTIPLE
-        # =============================================================================
+        # =====================================================================
+        # PASO 3: MAPEOS DE MÉTODOS DE PAGO
+        # =====================================================================
         metodo_pago_map = {
             'Efectivo': 'EFECTIVO',
             'Tarjeta TBK': 'TBK_MANUAL',
@@ -1664,7 +1771,6 @@ class Command(BaseCommand):
             'Venta Internet': 'VENTA_INTERNET',
         }
         
-        # Mapeo de tarjetas → método específico
         tarjeta_metodo_map = {
             'REDCOMPRA DEBITO': 'TBK_DEBITO_POS',
             'VISA-MC-AMEX-DINER': 'TBK_CREDITO_POS',
@@ -1683,60 +1789,62 @@ class Command(BaseCommand):
             'Credito': 'CREDITO_EXTERNO',
         }
 
-        for idx, row in enumerate(cursor, 1):
-            # Buscar DTE asociado
-            dte = None
+        # =====================================================================
+        # PASO 4: PROCESAR EN MEMORIA (SIN CONEXIÓN A MySQL)
+        # =====================================================================
+        self.stdout.write('  ⏳ Procesando en memoria...')
+        
+        count = 0
+        duplicados = 0
+        dte_no_encontrado = 0
+        batch = []
+        batch_size = 5000  # ⚡ Batch grande para inserción masiva
+
+        for idx, row in enumerate(ventas_mysql, 1):
+            # Buscar DTE - primero por número + monto, luego solo por número
+            dte_id = None
+            n_doc = row['n_documento']
             
-            # Primero por n_documento + monto + sucursal (más preciso)
-            if row['n_documento']:
-                sucursal_dir = row['sucursal'] or ''
+            if n_doc:
                 sub_total = int(row['sub_total'] or 0)
                 descuento = int(row['descuento'] or 0)
                 total_doc = max(0, sub_total - descuento)
-                if sucursal_dir:
-                    dte = cache_dtes_by_num_monto_sucursal.get((row['n_documento'], total_doc, sucursal_dir))
-                if not dte:
-                    dte = cache_dtes_by_num_monto.get((row['n_documento'], total_doc))
-                if not dte:
-                    tipo_doc = self._mapear_tipo_documento(row['tipo_documento'] or '')
-                    if sucursal_dir:
-                        dte = cache_dtes_by_num_tipo_sucursal.get((row['n_documento'], tipo_doc, sucursal_dir))
-                    if not dte:
-                        dte = cache_dtes.get((row['n_documento'], tipo_doc))
+                
+                # Buscar por número + monto (más preciso)
+                dte_id = cache_dtes_by_num_monto.get((n_doc, total_doc))
+                
+                # Fallback: solo por número
+                if not dte_id:
+                    dte_id = cache_dtes_by_num.get(n_doc)
             
-            # Si no, buscar por ID_dte (que es n_documento en MySQL)
-            if not dte and row['ID_dte']:
-                dte = cache_dtes_by_num.get(row['ID_dte'])
-                if not dte and row['sucursal']:
-                    dte = cache_dtes_by_num_sucursal.get((row['ID_dte'], row['sucursal']))
+            # Intentar por ID_dte
+            if not dte_id and row['ID_dte']:
+                dte_id = cache_dtes_by_num.get(row['ID_dte'])
 
-            if not dte:
+            if not dte_id:
                 dte_no_encontrado += 1
-                if dte_no_encontrado <= 10:
-                    self.log_error(f'DTE no encontrado para venta ID={row["ID"]}, n_doc={row["n_documento"]}, tipo={row["tipo_documento"]}')
                 continue
 
             # Mapear método de pago
             metodo_mysql = row['metodo_pago'] or 'Efectivo'
             metodo_pago = metodo_pago_map.get(metodo_mysql, 'EFECTIVO')
             
-            # Ajustar según tipo de tarjeta
             tarjeta = (row['tarjeta'] or '').strip()
             if tarjeta in tarjeta_metodo_map:
                 metodo_pago = tarjeta_metodo_map[tarjeta]
             elif tarjeta.startswith('OrdenCompra'):
                 metodo_pago = 'ORDEN_COMPRA'
 
-            # Verificar duplicado - clave más robusta incluyendo metodo_pago
+            # Verificar duplicado
             voucher = str(row['voucher']) if row['voucher'] else f"MIG-{row['ID']}"
             monto = self.safe_int(row['monto_pagado']) or 0
-            dup_key = (dte.id, voucher, monto)
+            dup_key = (dte_id, voucher, monto)
             
             if dup_key in pagos_existentes:
                 duplicados += 1
                 continue
 
-            # Crear notas con información adicional
+            # Crear notas
             notas_partes = []
             if row['n_convenio']:
                 notas_partes.append(f"Convenio: {row['n_convenio']}")
@@ -1744,15 +1852,11 @@ class Command(BaseCommand):
                 notas_partes.append(f"RUT Conv: {row['rut_convenio']}")
             if row['nombre_vendedor']:
                 notas_partes.append(f"Vendedor: {row['nombre_vendedor']}")
-            if row['descuento_tbk']:
-                notas_partes.append(f"Desc TBK: {row['descuento_tbk']}")
-            if row['correlativo_ticket']:
-                notas_partes.append(f"Ticket: {row['correlativo_ticket']}")
             notas = ' | '.join(notas_partes) if notas_partes else None
 
             if not self.dry_run:
                 batch.append(Dte_Detalle_Pago(
-                    dte=dte,
+                    dte_id=dte_id,  # ⚡ Usar ID directo, no objeto
                     metodo_pago=metodo_pago,
                     tipo_tarjeta=row['tarjeta'] or None,
                     voucher=voucher,
@@ -1761,26 +1865,31 @@ class Command(BaseCommand):
                 ))
                 pagos_existentes.add(dup_key)
 
-                if len(batch) >= self.batch_size:
+                # ⚡ Insertar en batches grandes
+                if len(batch) >= batch_size:
                     Dte_Detalle_Pago.objects.bulk_create(batch, ignore_conflicts=True)
                     count += len(batch)
                     batch = []
+                    self.show_progress(idx, total, f'│ {count:,} insertados')
             else:
                 count += 1
 
-            if idx % 500 == 0:
-                self.show_progress(idx, total, f'│ {count} OK, {skipped} skip, {duplicados} dup')
+            # Mostrar progreso cada 10000 registros
+            if idx % 10000 == 0:
+                self.show_progress(idx, total, f'│ {count:,} OK, {duplicados:,} dup')
 
+        # Insertar batch final
         if batch and not self.dry_run:
             Dte_Detalle_Pago.objects.bulk_create(batch, ignore_conflicts=True)
             count += len(batch)
 
-        cursor.close()
+        # Liberar memoria
+        del ventas_mysql
+
         self.stats['ventas_pagos'] = count
-        self.stats['ventas_pagos_skipped'] = skipped
         self.stats['ventas_pagos_duplicados'] = duplicados
         self.stats['ventas_pagos_dte_no_encontrado'] = dte_no_encontrado
-        self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count} pagos migrados ({dte_no_encontrado} DTE no encontrado, {duplicados} duplicados)'))
+        self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count:,} pagos migrados ({dte_no_encontrado:,} DTE no encontrado, {duplicados:,} duplicados)'))
 
     def asignar_vendedores_a_dtes(self):
         """Asigna vendedores a DTEs usando codigo_vendedor de ventas MySQL"""

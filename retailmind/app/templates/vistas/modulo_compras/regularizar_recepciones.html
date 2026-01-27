@@ -619,6 +619,173 @@
                     </div>
                 </div>
                 
+                <!-- ========== PANELES PARA GUÍAS (Sin NC) ========== -->
+                
+                <!-- Panel Ajuste Interno (Solo para Guías) -->
+                <div id="panelAjusteInterno" class="regularizacion-panel" style="display:none;">
+                    <div class="card bg-info bg-opacity-10 border-info">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="ri-arrow-go-back-line"></i> Ajuste Interno - Devolución de Stock
+                            </h6>
+                            <div class="alert alert-info mb-3">
+                                <i class="ri-information-line me-2"></i>
+                                <strong>Solo devuelve el stock al emisor.</strong><br>
+                                No se genera Nota de Crédito (las guías no tienen valor monetario).
+                            </div>
+                            
+                            <!-- Información del producto -->
+                            <div class="card mb-3">
+                                <div class="card-body py-2">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="small text-muted">Producto:</label>
+                                            <p class="mb-0"><strong id="ajusteInternoProducto">-</strong></p>
+                                            <small class="text-muted">SKU: <span id="ajusteInternoSKU">-</span></small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small text-muted">Cantidad con Problema:</label>
+                                            <p class="mb-0"><strong class="text-danger" id="ajusteInternoCantidad">0</strong> unidades</p>
+                                            <small class="text-muted">Tipo: <span id="ajusteInternoTipo">-</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Cantidad a devolver -->
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="ri-arrow-left-line"></i> Cantidad a Devolver al Stock <span class="text-danger">*</span>
+                                </label>
+                                <input type="number" class="form-control" id="cantidadAjusteInterno" 
+                                       min="1" value="1" step="1">
+                                <small class="text-muted">Máximo: <span id="maxCantidadAjuste">0</span> unidades</small>
+                            </div>
+                            
+                            <!-- Observaciones -->
+                            <div class="mb-3">
+                                <label for="observacionesAjusteInterno" class="form-label">
+                                    <i class="ri-message-2-line"></i> Observaciones <span class="text-danger">*</span>
+                                </label>
+                                <textarea class="form-control" id="observacionesAjusteInterno" rows="2" 
+                                          placeholder="Describe el motivo del ajuste (ej: Productos no llegaron, productos dañados...)" required></textarea>
+                            </div>
+                            
+                            <!-- Preview del ajuste -->
+                            <div class="alert alert-light border">
+                                <h6 class="alert-heading">
+                                    <i class="ri-eye-line"></i> Vista Previa del Ajuste
+                                </h6>
+                                <ul class="mb-0 small">
+                                    <li>✅ Se devolverán <strong><span id="previewCantidadAjuste">0</span></strong> unidades al stock del emisor</li>
+                                    <li>✅ El estado del producto se marcará como "Regularizado"</li>
+                                    <li>ℹ️ No se genera Nota de Crédito (guías sin valor monetario)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Panel Cambio de Producto (Solo para Guías) -->
+                <div id="panelCambioProductoGuia" class="regularizacion-panel" style="display:none;">
+                    <div class="card bg-primary bg-opacity-10 border-primary">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="ri-exchange-line"></i> Cambio de Producto
+                            </h6>
+                            <div class="alert alert-primary mb-3">
+                                <i class="ri-information-line me-2"></i>
+                                <strong>Envía un producto de reemplazo.</strong><br>
+                                Se generará una nueva Guía de Despacho con el producto correcto.
+                            </div>
+                            
+                            <!-- Producto original con problema -->
+                            <div class="card mb-3 border-danger">
+                                <div class="card-header bg-danger bg-opacity-10">
+                                    <h6 class="mb-0"><i class="ri-close-circle-line"></i> Producto con Problema</h6>
+                                </div>
+                                <div class="card-body py-2">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="small text-muted">Producto:</label>
+                                            <p class="mb-0"><strong id="cambioGuiaProductoOriginal">-</strong></p>
+                                            <small class="text-muted">SKU: <span id="cambioGuiaSKUOriginal">-</span></small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small text-muted">Cantidad Problema:</label>
+                                            <p class="mb-0"><strong class="text-danger" id="cambioGuiaCantidadProblema">0</strong> unidades</p>
+                                            <small class="text-muted">Tipo: <span id="cambioGuiaTipoProblema">-</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Buscador de productos de reemplazo -->
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="ri-search-line"></i> Buscar Producto de Reemplazo
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="buscarProductoCambioGuia" 
+                                           placeholder="SKU, nombre del producto..."
+                                           onkeyup="if(event.key === 'Enter') buscarProductosParaCambioGuia()">
+                                    <button class="btn btn-primary" type="button" onclick="buscarProductosParaCambioGuia()">
+                                        <i class="ri-search-line"></i> Buscar
+                                    </button>
+                                </div>
+                                <small class="text-muted">
+                                    <i class="ri-lightbulb-line"></i> Solo se mostrarán productos con stock disponible
+                                </small>
+                            </div>
+                            
+                            <!-- Resultados de búsqueda -->
+                            <div id="resultadosProductosCambioGuia" class="border rounded p-2 mb-3" 
+                                 style="max-height: 250px; overflow-y: auto; min-height: 100px; background: white;">
+                                <p class="text-muted text-center my-3">
+                                    <i class="ri-search-line"></i><br>
+                                    Escribe para buscar productos en tu inventario...
+                                </p>
+                            </div>
+                            
+                            <!-- Producto seleccionado -->
+                            <input type="hidden" id="productoCambioGuiaId">
+                            <div id="productoCambioGuiaSeleccionado" class="mb-3"></div>
+                            
+                            <!-- Cantidad a enviar -->
+                            <div class="mb-3" id="contenedorCantidadCambioGuia" style="display:none;">
+                                <label class="form-label">
+                                    <i class="ri-inbox-line"></i> Cantidad a Enviar <span class="text-danger">*</span>
+                                </label>
+                                <input type="number" class="form-control" id="cantidadCambioGuia" 
+                                       min="1" value="1" step="1">
+                                <small class="text-muted">Máximo: <span id="stockDisponibleCambioGuia">0</span> unidades disponibles</small>
+                            </div>
+                            
+                            <!-- Observaciones -->
+                            <div class="mb-3">
+                                <label for="observacionesCambioGuia" class="form-label">
+                                    <i class="ri-message-2-line"></i> Observaciones del Cambio <span class="text-danger">*</span>
+                                </label>
+                                <textarea class="form-control" id="observacionesCambioGuia" rows="2" 
+                                          placeholder="Ej: Producto de cambio por daños en recepción..." required></textarea>
+                            </div>
+                            
+                            <!-- Preview del cambio -->
+                            <div class="alert alert-light border" id="previewCambioGuia" style="display:none;">
+                                <h6 class="alert-heading">
+                                    <i class="ri-eye-line"></i> Vista Previa del Cambio
+                                </h6>
+                                <ul class="mb-0 small">
+                                    <li>✅ Se generará nueva Guía de Despacho con el producto de reemplazo</li>
+                                    <li>✅ Se descontará <strong><span id="previewCantidadCambioGuia">0</span></strong> unidades de tu stock</li>
+                                    <li>✅ El producto original se marcará como "Regularizado"</li>
+                                    <li>ℹ️ La nueva guía no tiene valor monetario</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Panel Ajustar Cantidad -->
                 <div id="panelAjustar" class="regularizacion-panel" style="display:none;">
                     <div class="card bg-light">
@@ -1585,9 +1752,16 @@ function actualizarTabla() {
                         </div>
                         <span class="status-tag waiting"><i class="ri-time-line"></i> Esperando</span>
                     </div>` :
-                    `<button class="action-btn success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')">
-                        <i class="ri-tools-line me-1"></i> Regularizar
-                    </button>`
+                    `<div class="d-flex gap-1 justify-content-end">
+                        ${!dte.requiere_nc ? 
+                            `<button class="action-btn primary" onclick="mostrarOpcionesRegularizacionGuia('${dte.dte_numero}')" title="Regularizar Individual">
+                                <i class="ri-settings-3-line me-1"></i> Regularizar
+                            </button>` :
+                            `<button class="action-btn success" onclick="abrirModalRegularizarDTE('${dte.dte_numero}')">
+                                <i class="ri-tools-line me-1"></i> Regularizar
+                            </button>`
+                        }
+                    </div>`
                 }
             </td>
         </tr>
@@ -3443,6 +3617,432 @@ function actualizarListado() {
 
 function mostrarError(mensaje) {
     Swal.fire('Error', mensaje, 'error');
+}
+
+// ========== FUNCIONES PARA REGULARIZACIÓN DE GUÍAS ==========
+
+/**
+ * Muestra opciones de regularización para guías (sin NC)
+ */
+function mostrarOpcionesRegularizacionGuia(dteNumero) {
+    const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
+    
+    if (!productosDTE.length) {
+        Swal.fire('Error', 'No se encontraron productos para esta guía', 'error');
+        return;
+    }
+    
+    // Construir lista de productos con problemas
+    let htmlProductos = '<div class="list-group mb-3">';
+    productosDTE.forEach(prod => {
+        const cantidadProblema = (prod.cantidad_faltante || 0) + (prod.cantidad_danada || 0);
+        htmlProductos += `
+            <div class="list-group-item" style="cursor: pointer;" onclick="abrirModalRegularizacionIndividualGuia(${prod.id})">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">${prod.producto_nombre}</h6>
+                        <small class="text-muted">SKU: ${prod.sku} | Talla: ${prod.talla}</small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-danger">${cantidadProblema} unidades</span><br>
+                        <small class="text-muted">${prod.estado}</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    htmlProductos += '</div>';
+    
+    Swal.fire({
+        title: `Regularizar Guía #${dteNumero}`,
+        html: `
+            <div class="text-start">
+                <div class="alert alert-info">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Regularización por producto</strong><br>
+                    Selecciona el producto que deseas regularizar:
+                </div>
+                ${htmlProductos}
+            </div>
+        `,
+        showConfirmButton: false,
+        showCancelButton: true,
+        cancelButtonText: 'Cerrar',
+        width: '700px',
+        customClass: {
+            container: 'swal-on-top'
+        }
+    });
+}
+
+/**
+ * Abre el modal de regularización individual para un producto de guía
+ */
+function abrirModalRegularizacionIndividualGuia(recepcionId) {
+    const producto = productosProblemas.find(p => p.id === recepcionId);
+    
+    if (!producto) {
+        Swal.fire('Error', 'Producto no encontrado', 'error');
+        return;
+    }
+    
+    // Cerrar SweetAlert
+    Swal.close();
+    
+    // Guardar producto seleccionado
+    productoSeleccionado = producto;
+    
+    // Calcular cantidad problema
+    const cantidadProblema = (producto.cantidad_faltante || 0) + (producto.cantidad_danada || 0);
+    
+    // Llenar información del modal
+    $('#modalRegularizar').find('.modal-title').html('<i class="ri-settings-3-line me-2"></i> Regularizar Producto (Guía)');
+    $('#regProductoNombre').text(producto.producto_nombre);
+    $('#regProductoSKU').text(producto.sku);
+    $('#regProductoTalla').text(producto.talla);
+    $('#regPrecioUnitario').text('0'); // Guías sin precio
+    $('#regDTE').text(producto.dte_numero);
+    $('#regEsperado').text(producto.cantidad_esperada);
+    $('#regRecibido').text(producto.cantidad_recibida);
+    $('#regFaltante').text(producto.cantidad_faltante || 0);
+    
+    // Mostrar alerta específica para guías
+    $('#alertTipoRegularizacion')
+        .removeClass('alert-info alert-warning')
+        .addClass('alert-info');
+    $('#iconoTipoReg').html('<i class="ri-guide-line"></i>');
+    $('#tituloTipoReg').text('Guía de Despacho (Sin valor monetario)');
+    $('#descripcionTipoReg').text('No se genera Nota de Crédito. Puedes devolver stock o enviar producto de reemplazo.');
+    
+    // Mostrar botones de regularización para guías
+    $('#botonesRegularizacion').html(`
+        <button type="button" class="btn btn-outline-info" onclick="mostrarPanelAjusteInterno()">
+            <i class="ri-arrow-go-back-line me-1"></i> Ajuste Interno
+        </button>
+        <button type="button" class="btn btn-outline-primary" onclick="mostrarPanelCambioProductoGuia()">
+            <i class="ri-exchange-line me-1"></i> Cambio de Producto
+        </button>
+    `);
+    
+    // Ocultar todos los paneles
+    $('.regularizacion-panel').hide();
+    
+    // Abrir modal
+    $('#modalRegularizar').modal('show');
+}
+
+/**
+ * Muestra el panel de ajuste interno
+ */
+function mostrarPanelAjusteInterno() {
+    // Ocultar todos los paneles
+    $('.regularizacion-panel').hide();
+    
+    // Mostrar panel de ajuste interno
+    $('#panelAjusteInterno').show();
+    
+    // Llenar datos
+    const cantidadProblema = (productoSeleccionado.cantidad_faltante || 0) + (productoSeleccionado.cantidad_danada || 0);
+    $('#ajusteInternoProducto').text(productoSeleccionado.producto_nombre);
+    $('#ajusteInternoSKU').text(productoSeleccionado.sku);
+    $('#ajusteInternoCantidad').text(cantidadProblema);
+    $('#ajusteInternoTipo').text(productoSeleccionado.estado);
+    $('#cantidadAjusteInterno').attr('max', cantidadProblema).val(cantidadProblema);
+    $('#maxCantidadAjuste').text(cantidadProblema);
+    $('#previewCantidadAjuste').text(cantidadProblema);
+    
+    // Actualizar botón de guardar
+    $('#modalRegularizar .modal-footer').html(`
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="ri-close-line"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-info" onclick="procesarAjusteInterno()">
+            <i class="ri-check-line"></i> Procesar Ajuste
+        </button>
+    `);
+    
+    // Actualizar preview cuando cambie cantidad
+    $('#cantidadAjusteInterno').off('input').on('input', function() {
+        $('#previewCantidadAjuste').text($(this).val());
+    });
+}
+
+/**
+ * Procesa el ajuste interno (devolución de stock)
+ */
+function procesarAjusteInterno() {
+    const cantidad = parseInt($('#cantidadAjusteInterno').val());
+    const observaciones = $('#observacionesAjusteInterno').val().trim();
+    
+    // Validaciones
+    if (!observaciones) {
+        Swal.fire('Error', 'Debes ingresar observaciones', 'error');
+        return;
+    }
+    
+    if (cantidad <= 0 || cantidad > parseInt($('#maxCantidadAjuste').text())) {
+        Swal.fire('Error', 'Cantidad inválida', 'error');
+        return;
+    }
+    
+    // Confirmar
+    Swal.fire({
+        title: '¿Confirmar ajuste interno?',
+        html: `
+            <div class="text-start">
+                <p><strong>Se devolverán ${cantidad} unidades al stock del emisor</strong></p>
+                <ul>
+                    <li>Producto: ${productoSeleccionado.producto_nombre}</li>
+                    <li>Observaciones: ${observaciones}</li>
+                </ul>
+                <div class="alert alert-info">
+                    No se genera Nota de Crédito (guía sin valor monetario)
+                </div>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, procesar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#17a2b8'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        
+        // Mostrar loader
+        const btnProcesar = $('#modalRegularizar .btn-info');
+        btnProcesar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
+        
+        // Enviar petición
+        fetch('{% url "procesar_ajuste_interno_individual" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                recepcion_id: productoSeleccionado.id,
+                cantidad: cantidad,
+                observaciones: observaciones
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                $('#modalRegularizar').modal('hide');
+                Swal.fire('¡Éxito!', data.message, 'success');
+                cargarProductosProblemas(); // Recargar lista
+            } else {
+                Swal.fire('Error', data.error, 'error');
+                btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Procesar Ajuste');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error de conexión', 'error');
+            btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Procesar Ajuste');
+        });
+    });
+}
+
+/**
+ * Muestra el panel de cambio de producto para guías
+ */
+function mostrarPanelCambioProductoGuia() {
+    // Ocultar todos los paneles
+    $('.regularizacion-panel').hide();
+    
+    // Mostrar panel de cambio
+    $('#panelCambioProductoGuia').show();
+    
+    // Llenar datos del producto original
+    const cantidadProblema = (productoSeleccionado.cantidad_faltante || 0) + (productoSeleccionado.cantidad_danada || 0);
+    $('#cambioGuiaProductoOriginal').text(productoSeleccionado.producto_nombre);
+    $('#cambioGuiaSKUOriginal').text(productoSeleccionado.sku);
+    $('#cambioGuiaCantidadProblema').text(cantidadProblema);
+    $('#cambioGuiaTipoProblema').text(productoSeleccionado.estado);
+    
+    // Limpiar selección previa
+    $('#productoCambioGuiaId').val('');
+    $('#productoCambioGuiaSeleccionado').empty();
+    $('#contenedorCantidadCambioGuia').hide();
+    $('#previewCambioGuia').hide();
+    $('#resultadosProductosCambioGuia').html(`
+        <p class="text-muted text-center my-3">
+            <i class="ri-search-line"></i><br>
+            Escribe para buscar productos en tu inventario...
+        </p>
+    `);
+    
+    // Actualizar botón de guardar
+    $('#modalRegularizar .modal-footer').html(`
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="ri-close-line"></i> Cancelar
+        </button>
+        <button type="button" class="btn btn-primary" onclick="procesarCambioProductoGuia()" id="btnProcesarCambioGuia" disabled>
+            <i class="ri-check-line"></i> Enviar Producto de Cambio
+        </button>
+    `);
+}
+
+/**
+ * Busca productos para cambio en guías
+ */
+function buscarProductosParaCambioGuia() {
+    const busqueda = $('#buscarProductoCambioGuia').val().trim();
+    
+    if (busqueda.length < 2) {
+        Swal.fire('Aviso', 'Ingresa al menos 2 caracteres', 'info');
+        return;
+    }
+    
+    $('#resultadosProductosCambioGuia').html('<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Buscando...</div>');
+    
+    fetch(`{% url "buscar_productos_emisor" %}?buscar=${busqueda}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.productos.length > 0) {
+                let html = '';
+                data.productos.forEach(prod => {
+                    html += `
+                        <div class="border-bottom p-2" style="cursor: pointer;" onclick="seleccionarProductoCambioGuia(${prod.id}, '${prod.sku}', '${prod.nombre}', '${prod.talla}', ${prod.stock})">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>${prod.nombre}</strong><br>
+                                    <small class="text-muted">SKU: ${prod.sku} | Talla: ${prod.talla}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-success">${prod.stock} unid.</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                $('#resultadosProductosCambioGuia').html(html);
+            } else {
+                $('#resultadosProductosCambioGuia').html('<p class="text-center text-muted py-3">No se encontraron productos</p>');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            $('#resultadosProductosCambioGuia').html('<p class="text-center text-danger py-3">Error al buscar</p>');
+        });
+}
+
+/**
+ * Selecciona un producto de cambio para guía
+ */
+function seleccionarProductoCambioGuia(id, sku, nombre, talla, stock) {
+    $('#productoCambioGuiaId').val(id);
+    $('#stockDisponibleCambioGuia').text(stock);
+    $('#cantidadCambioGuia').attr('max', stock).val(Math.min(stock, (productoSeleccionado.cantidad_faltante || 0) + (productoSeleccionado.cantidad_danada || 0)));
+    
+    $('#productoCambioGuiaSeleccionado').html(`
+        <div class="card border-success">
+            <div class="card-header bg-success bg-opacity-10">
+                <h6 class="mb-0"><i class="ri-check-circle-line"></i> Producto Seleccionado</h6>
+            </div>
+            <div class="card-body py-2">
+                <strong>${nombre}</strong><br>
+                <small class="text-muted">SKU: ${sku} | Talla: ${talla}</small><br>
+                <span class="badge bg-success">${stock} unidades disponibles</span>
+            </div>
+        </div>
+    `);
+    
+    $('#contenedorCantidadCambioGuia').show();
+    $('#previewCambioGuia').show();
+    $('#btnProcesarCambioGuia').prop('disabled', false);
+    
+    // Actualizar preview cuando cambie cantidad
+    $('#cantidadCambioGuia').off('input').on('input', function() {
+        $('#previewCantidadCambioGuia').text($(this).val());
+    });
+    
+    $('#previewCantidadCambioGuia').text($('#cantidadCambioGuia').val());
+}
+
+/**
+ * Procesa el cambio de producto para guía
+ */
+function procesarCambioProductoGuia() {
+    const productoCambioId = $('#productoCambioGuiaId').val();
+    const cantidad = parseInt($('#cantidadCambioGuia').val());
+    const observaciones = $('#observacionesCambioGuia').val().trim();
+    
+    // Validaciones
+    if (!productoCambioId) {
+        Swal.fire('Error', 'Debes seleccionar un producto de cambio', 'error');
+        return;
+    }
+    
+    if (!observaciones) {
+        Swal.fire('Error', 'Debes ingresar observaciones', 'error');
+        return;
+    }
+    
+    if (cantidad <= 0 || cantidad > parseInt($('#stockDisponibleCambioGuia').text())) {
+        Swal.fire('Error', 'Cantidad inválida', 'error');
+        return;
+    }
+    
+    // Confirmar
+    Swal.fire({
+        title: '¿Confirmar cambio de producto?',
+        html: `
+            <div class="text-start">
+                <p><strong>Se generará una nueva Guía de Despacho</strong></p>
+                <ul>
+                    <li>Cantidad: ${cantidad} unidades</li>
+                    <li>Observaciones: ${observaciones}</li>
+                </ul>
+                <div class="alert alert-info">
+                    Se descontará el stock de tu sucursal
+                </div>
+            </div>
+        `,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0d6efd'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        
+        // Mostrar loader
+        const btnProcesar = $('#btnProcesarCambioGuia');
+        btnProcesar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
+        
+        // Enviar petición
+        fetch('{% url "procesar_cambio_producto_individual" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                recepcion_id: productoSeleccionado.id,
+                producto_cambio_id: productoCambioId,
+                cantidad: cantidad,
+                observaciones: observaciones
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                $('#modalRegularizar').modal('hide');
+                Swal.fire('¡Éxito!', data.message, 'success');
+                cargarProductosProblemas(); // Recargar lista
+            } else {
+                Swal.fire('Error', data.error, 'error');
+                btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Enviar Producto de Cambio');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error de conexión', 'error');
+            btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Enviar Producto de Cambio');
+        });
+    });
 }
 </script>
 
