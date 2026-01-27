@@ -48,6 +48,22 @@
         // ==================== MÉTODOS DE CONEXIÓN ====================
         
         /**
+         * Enviar ACK al POS (confirmar recepción de trama)
+         */
+        async sendAck() {
+            try {
+                if (!this.writer) {
+                    console.warn('⚠️ No hay writer disponible para enviar ACK');
+                    return;
+                }
+                await this.writer.write(new Uint8Array([ACK]));
+                console.log('📤 ACK enviado');
+            } catch (error) {
+                console.warn('⚠️ Error enviando ACK:', error.message);
+            }
+        }
+        
+        /**
          * Auto-conectar al POS buscando en puertos disponibles
          * Prueba múltiples baudrates para compatibilidad Verifone/Ingenico
          */
@@ -292,10 +308,10 @@
                         // Agregar bytes al buffer
                         buffer.push(...value);
 
-                        // Verificar si es ACK simple
+                        // Verificar si es ACK simple (byte único 0x06)
                         if (buffer.length === 1 && buffer[0] === ACK) {
                             clearTimeout(timeout);
-                            console.log('✅ ACK recibido');
+                            console.log('✅ ACK recibido del POS');
                             resolve({ type: 'ACK' });
                             return;
                         }
@@ -305,7 +321,7 @@
                         if (stxIndex >= 0) {
                             const etxIndex = buffer.indexOf(ETX, stxIndex);
                             if (etxIndex >= 0 && buffer.length >= etxIndex + 2) {
-                                // Trama completa
+                                // Trama completa recibida
                                 const frame = buffer.slice(stxIndex, etxIndex + 2);
                                 const data = frame.slice(1, frame.length - 2); // Sin STX, ETX, LRC
                                 
@@ -314,6 +330,9 @@
                                 const decoder = new TextDecoder();
                                 const response = decoder.decode(new Uint8Array(data));
                                 console.log(`📥 Respuesta: ${response}`);
+                                
+                                // ✅ ENVIAR ACK AL POS (confirmar recepción)
+                                this.sendAck().catch(err => console.warn('Error enviando ACK:', err));
                                 
                                 resolve({ type: 'DATA', data: response });
                                 return;
@@ -361,8 +380,29 @@
             try {
                 console.log('🔑 Cargando llaves... (puede tardar 30-60 segundos)');
                 
-                // Usar timeout extendido de 120 segundos para carga de llaves
-                const response = await this.sendCommand('0800', 120000);
+                // Construir y enviar comando manualmente para manejar las dos respuestas
+                const encoder = new TextEncoder();
+                const commandBytes = encoder.encode('0800');
+                
+                let lrc = 0;
+                for (let byte of commandBytes) {
+                    lrc ^= byte;
+                }
+                lrc ^= ETX;
+                
+                const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
+                console.log('📤 Enviando: 0800');
+                await this.writer.write(frame);
+                
+                // 1. Esperar ACK inicial (POS confirma que recibió el comando)
+                const ack = await this.readResponse(10000); // 10 segundos para ACK
+                if (ack.type !== 'ACK') {
+                    throw new Error('No se recibió ACK del POS');
+                }
+                console.log('⏳ POS procesando carga de llaves (30-60 segundos)...');
+                
+                // 2. Esperar respuesta con datos (puede tardar 30-60 segundos)
+                const response = await this.readResponse(120000); // 120 segundos para datos
                 
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
@@ -374,7 +414,7 @@
                         success: parseInt(parts[1]) === 0
                     };
                     
-                    console.log(result.success ? '✅ Llaves cargadas' : '❌ Error cargando llaves');
+                    console.log(result.success ? '✅ Llaves cargadas exitosamente' : '❌ Error cargando llaves');
                     return result;
                 }
                 

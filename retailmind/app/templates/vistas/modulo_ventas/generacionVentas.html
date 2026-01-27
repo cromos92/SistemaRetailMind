@@ -7885,7 +7885,7 @@ td {
         }
         
         // Verificar que el SDK Web Serial esté cargado
-        if (typeof Transbank === 'undefined' || !Transbank.POS || !Transbank.POS.Integrado) {
+        if (typeof Transbank === 'undefined' || !Transbank.POS) {
             Swal.fire({
                 icon: 'error',
                 title: 'SDK No Cargado',
@@ -7948,7 +7948,7 @@ td {
         
         try {
             // Verificar si ya está conectado
-            if (!Transbank.POS.Integrado.isConnected) {
+            if (!Transbank.POS.isConnected) {
                 // Mostrar modal de conexión
                 Swal.fire({
                     title: 'Conectando al POS',
