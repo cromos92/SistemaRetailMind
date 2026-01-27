@@ -162,11 +162,17 @@ class Command(BaseCommand):
             type=int,
             help='Limitar cantidad de registros por tabla'
         )
+        parser.add_argument(
+            '--fast-mode',
+            action='store_true',
+            help='⚡ Modo ultra-rápido: deshabilita triggers y constraints temporalmente'
+        )
 
     def handle(self, *args, **options):
         self.dry_run = options.get('dry_run', False)
         self.batch_size = options.get('batch_size', 2000)
         self.limit = options.get('limit', None)
+        self.fast_mode = options.get('fast_mode', False)
         specific_tables = options.get('tables', None)
         
         self.start_time = datetime.now()
@@ -576,6 +582,44 @@ class Command(BaseCommand):
             return value
         except:
             return timezone.now().time()
+
+    # ========================================================================
+    # FAST MODE - Optimizaciones PostgreSQL
+    # ========================================================================
+    
+    def enable_fast_mode(self, tables):
+        """⚡ Deshabilita triggers y constraints para inserción masiva"""
+        if not self.fast_mode:
+            return
+        
+        from django.db import connection
+        self.stdout.write(self.style.WARNING('  ⚡ FAST MODE: Deshabilitando triggers...'))
+        
+        with connection.cursor() as cursor:
+            for table in tables:
+                try:
+                    cursor.execute(f'ALTER TABLE {table} DISABLE TRIGGER ALL;')
+                except Exception as e:
+                    self.stdout.write(f'    ⚠️ No se pudo deshabilitar triggers en {table}: {e}')
+        
+        self.stdout.write(self.style.SUCCESS('  ✓ Triggers deshabilitados'))
+    
+    def disable_fast_mode(self, tables):
+        """⚡ Re-habilita triggers y constraints después de inserción"""
+        if not self.fast_mode:
+            return
+        
+        from django.db import connection
+        self.stdout.write(self.style.WARNING('  ⚡ FAST MODE: Re-habilitando triggers...'))
+        
+        with connection.cursor() as cursor:
+            for table in tables:
+                try:
+                    cursor.execute(f'ALTER TABLE {table} ENABLE TRIGGER ALL;')
+                except Exception as e:
+                    self.stdout.write(f'    ⚠️ No se pudo habilitar triggers en {table}: {e}')
+        
+        self.stdout.write(self.style.SUCCESS('  ✓ Triggers re-habilitados'))
 
     def log_error(self, message, log_every=100):
         """Registra error (throttled)"""
@@ -1227,6 +1271,9 @@ class Command(BaseCommand):
     def migrate_movimientos(self):
         """⚡ Migra movimientos (ULTRA-OPTIMIZADO con caché en memoria y protección contra duplicados)"""
         self.stdout.write('📊 Migrando movimientos...')
+        
+        # ⚡ FAST MODE: Deshabilitar triggers para inserción masiva
+        self.enable_fast_mode(['app_movimientos_producto'])
 
         # ✅ CRÍTICO: Recargar caché de producto_talla porque se crearon nuevos en esta sesión
         self.stdout.write('  ⏳ Recargando caché de productos_talla...')
@@ -1269,7 +1316,8 @@ class Command(BaseCommand):
         skipped = 0
         duplicados = 0
         batch = []
-        error_log_interval = 500
+        batch_size = 5000  # ⚡ Batch grande para movimientos
+        error_log_interval = 1000
 
         for idx, row in enumerate(cursor, 1):
             # ✅ Verificar si ya fue migrado (por ID de MySQL)
@@ -1317,18 +1365,20 @@ class Command(BaseCommand):
                 batch.append(movimiento)
                 movimientos_existentes.add(ref_externa)  # ✅ Agregar al set para esta sesión
                 
-                if len(batch) >= self.batch_size:
-                    Movimientos_Producto.objects.bulk_create(batch)
+                # ⚡ Insertar en batches grandes
+                if len(batch) >= batch_size:
+                    Movimientos_Producto.objects.bulk_create(batch, ignore_conflicts=True)
                     count += len(batch)
                     batch = []
             else:
                 count += 1
 
-            if idx % 100 == 0:
-                self.show_progress(idx, total, f'│ {count} OK, {skipped} skip, {duplicados} dup')
+            # ⚡ Reducir frecuencia de actualizaciones de progreso
+            if idx % 500 == 0:
+                self.show_progress(idx, total, f'│ {count:,} OK, {skipped} skip, {duplicados} dup')
 
         if batch and not self.dry_run:
-            Movimientos_Producto.objects.bulk_create(batch)
+            Movimientos_Producto.objects.bulk_create(batch, ignore_conflicts=True)
             count += len(batch)
 
         cursor.close()
@@ -1336,10 +1386,23 @@ class Command(BaseCommand):
         self.stats['movimientos_skipped'] = skipped
         self.stats['movimientos_duplicados'] = duplicados
         self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count} movimientos migrados ({skipped} omitidos, {duplicados} duplicados)'))
+        
+        # ⚡ FAST MODE: Re-habilitar triggers
+        self.disable_fast_mode(['app_movimientos_producto'])
 
     def migrate_dtes(self):
-        """Migra DTEs desde MySQL"""
+        """⚡ Migra DTEs desde MySQL (OPTIMIZADO con bulk_create)"""
         self.stdout.write('📄 Migrando DTEs...')
+        
+        # ⚡ FAST MODE: Deshabilitar triggers para inserción masiva
+        self.enable_fast_mode(['app_dte'])
+
+        # ✅ PASO 1: Pre-cargar DTEs existentes para evitar duplicados
+        self.stdout.write('  ⏳ Cargando DTEs existentes...')
+        dtes_existentes = set(
+            Dte.objects.values_list('numero_documento', 'tipo_documento', 'emisor_id')
+        )
+        self.stdout.write(f'  ✓ {len(dtes_existentes):,} DTEs ya en BD')
 
         cursor = self.mysql_conn.cursor(dictionary=True, buffered=True)
         cursor.execute('SELECT COUNT(*) as total FROM dte')
@@ -1361,6 +1424,9 @@ class Command(BaseCommand):
 
         count = 0
         skipped = 0
+        duplicados = 0
+        batch = []
+        batch_size = 5000  # ⚡ Batch grande para DTEs
 
         for idx, row in enumerate(cursor, 1):
             # ✅ Determinar sucursal - bodega_inicio es la sucursal principal del DTE
@@ -1386,6 +1452,13 @@ class Command(BaseCommand):
             # Mapear tipo de documento
             tipo_doc_mysql = row['tipo_documento'] or ''
             tipo_documento = self._mapear_tipo_documento(tipo_doc_mysql)
+            
+            # ✅ Verificar duplicado ANTES de crear objeto
+            n_documento = self.safe_int(row['n_documento'])
+            dte_key = (n_documento, tipo_documento, emisor.id)
+            if dte_key in dtes_existentes:
+                duplicados += 1
+                continue
             
             # Mapear estado
             estado_dte = ESTADO_DTE_MAP.get(row['estado'], 'EMITIDO')
@@ -1413,46 +1486,52 @@ class Command(BaseCommand):
                 tipo_transaccion = 'COMPRA'
 
             if not self.dry_run:
-                try:
-                    dte, created = Dte.objects.get_or_create(
-                        numero_documento=self.safe_int(row['n_documento']),
-                        tipo_documento=tipo_documento,
-                        emisor=emisor,
-                        defaults={
-                            'receptor': receptor,
-                            'monto_con_iva': self.safe_decimal(row['monto_total']),
-                            'monto_neto': self.safe_decimal(row['neto']),
-                            'estado_pago': estado_pago,
-                            'estado_dte': estado_dte,
-                            'responsable': row['responsable'] or 'Sistema',
-                            'fecha_emision': fecha_emision,
-                            'fecha_vencimiento': fecha_vence or fecha_emision,
-                            'diasCredito': dias_credito,
-                            'bultos': 0,
-                            'unidades_productos': 0,
-                            'descuento': self.safe_decimal(row['descuento'] or 0),
-                            'sucursal': sucursal,
-                            'tipo_transaccion': tipo_transaccion,
-                            'referencias': row['referencia'] or '',
-                        }
-                    )
-                    if created:
-                        count += 1
-                    else:
-                        skipped += 1
-                except Exception as e:
-                    self.log_error(f'Error DTE {row["n_documento"]}: {str(e)}', log_every=100)
-                    skipped += 1
+                batch.append(Dte(
+                    numero_documento=n_documento,
+                    tipo_documento=tipo_documento,
+                    emisor=emisor,
+                    receptor=receptor,
+                    monto_con_iva=self.safe_decimal(row['monto_total']),
+                    monto_neto=self.safe_decimal(row['neto']),
+                    estado_pago=estado_pago,
+                    estado_dte=estado_dte,
+                    responsable=row['responsable'] or 'Sistema',
+                    fecha_emision=fecha_emision,
+                    fecha_vencimiento=fecha_vence or fecha_emision,
+                    diasCredito=dias_credito,
+                    bultos=0,
+                    unidades_productos=0,
+                    descuento=self.safe_decimal(row['descuento'] or 0),
+                    sucursal=sucursal,
+                    tipo_transaccion=tipo_transaccion,
+                    referencias=row['referencia'] or '',
+                ))
+                dtes_existentes.add(dte_key)  # ✅ Agregar al set para esta sesión
+                
+                # ⚡ Insertar en batches grandes
+                if len(batch) >= batch_size:
+                    Dte.objects.bulk_create(batch, ignore_conflicts=True)
+                    count += len(batch)
+                    batch = []
             else:
                 count += 1
 
-            if idx % 100 == 0:
-                self.show_progress(idx, total, f'│ {count} OK, {skipped} skip')
+            if idx % 500 == 0:
+                self.show_progress(idx, total, f'│ {count:,} OK, {skipped} skip, {duplicados} dup')
+
+        # ⚡ Insertar batch final
+        if batch and not self.dry_run:
+            Dte.objects.bulk_create(batch, ignore_conflicts=True)
+            count += len(batch)
 
         cursor.close()
         self.stats['dtes'] = count
         self.stats['dtes_skipped'] = skipped
-        self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count} DTEs migrados ({skipped} omitidos)'))
+        self.stats['dtes_duplicados'] = duplicados
+        self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count:,} DTEs migrados ({skipped} omitidos, {duplicados} duplicados)'))
+        
+        # ⚡ FAST MODE: Re-habilitar triggers
+        self.disable_fast_mode(['app_dte'])
 
     def _mapear_tipo_documento(self, tipo_mysql):
         """Mapea tipo de documento de MySQL a Django"""
@@ -1507,8 +1586,11 @@ class Command(BaseCommand):
             return 'PENDIENTE'  # Default
 
     def migrate_dte_productos(self):
-        """Migra detalle de productos de DTEs desde MySQL (con protección duplicados)"""
+        """⚡ Migra detalle de productos de DTEs desde MySQL (OPTIMIZADO)"""
         self.stdout.write('📦 Migrando DTE Productos...')
+        
+        # ⚡ FAST MODE: Deshabilitar triggers para inserción masiva
+        self.enable_fast_mode(['app_dte_productos'])
 
         def normalize_date(value):
             if value is None:
@@ -1702,6 +1784,9 @@ class Command(BaseCommand):
         self.stats['dte_productos_skipped'] = skipped
         self.stats['dte_productos_duplicados'] = duplicados
         self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count} DTE productos migrados ({skipped} omitidos, {duplicados} duplicados)'))
+        
+        # ⚡ FAST MODE: Re-habilitar triggers
+        self.disable_fast_mode(['app_dte_productos'])
 
     def migrate_ventas_pagos(self):
         """⚡ VERSIÓN ULTRA-OPTIMIZADA - Migra pagos de ventas para cuadratura desde MySQL"""

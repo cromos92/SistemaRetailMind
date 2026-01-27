@@ -8481,31 +8481,46 @@ td {
         }
     };
     
-    // Función auxiliar para guardar en backend
+    // Función auxiliar para guardar transacción en backend
     async function guardarVentaPOSEnBackend(saleResponse, ticketId, monto) {
         try {
-            const response = await fetch('/app/pos/guardar-venta/', {
+            const response = await fetch('/app/pos/transbank/venta/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                 },
                 body: JSON.stringify({
-                    sale_response: saleResponse,
+                    amount: saleResponse.amount || monto,
+                    ticket: saleResponse.ticket || `TKT${ticketId}`,
                     ticket_id: ticketId,
-                    monto: monto
+                    successful: saleResponse.successful || (saleResponse.responseCode === 0),
+                    authorizationCode: saleResponse.authorizationCode || '',
+                    responseCode: saleResponse.responseCode,
+                    operationNumber: saleResponse.operationNumber || '',
+                    cardType: saleResponse.cardType || '',
+                    last4Digits: saleResponse.last4Digits || '',
+                    cardBrand: saleResponse.cardBrand || '',
+                    sharesNumber: saleResponse.sharesNumber || 0,
+                    commerceCode: saleResponse.commerceCode || '',
+                    terminalId: saleResponse.terminalId || '',
+                    accountingDate: saleResponse.accountingDate || '',
+                    realDate: saleResponse.realDate || '',
+                    realTime: saleResponse.realTime || ''
                 })
             });
             
             const data = await response.json();
             
-            if (!data.success) {
-                console.error('Error guardando en BD:', data.error);
+            if (data.success) {
+                console.log('✅ Transacción guardada en BD:', data.transaccion_id);
+            } else {
+                console.error('❌ Error guardando en BD:', data.error);
             }
             
             return data;
         } catch (error) {
-            console.error('Error al guardar:', error);
+            console.error('❌ Error al guardar transacción:', error);
             return { success: false, error: error.message };
         }
     }
