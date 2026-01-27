@@ -1530,6 +1530,15 @@ class Movimientos_Producto(models.Model):
             elif self.concepto.startswith('TRASPASO_'):
                 self.tipo_movimiento = 'TRASPASO'
         
+        # Auto-asignar fecha y hora si no están presentes
+        if not self.fecha:
+            from django.utils import timezone
+            self.fecha = timezone.now().date()
+        
+        if not self.hora:
+            from django.utils import timezone
+            self.hora = timezone.now().time()
+        
         super().save(*args, **kwargs)
 
 # ========== MODELO PARA LOTES FIFO ==========

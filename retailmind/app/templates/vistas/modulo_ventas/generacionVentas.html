@@ -5149,6 +5149,23 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // 🛡️ PREVENIR DOBLE CLIC - Deshabilitar botones
+        const btnFinalizarVerde = document.querySelector('.btn-success.btn-lg.w-100.py-4');
+        const btnSiguiente = document.getElementById('btnSiguiente');
+        
+        if (btnFinalizarVerde) {
+            if (btnFinalizarVerde.disabled) {
+                console.log('⚠️ Botón ya está procesando, ignorando clic');
+                return; // Ya está procesando
+            }
+            btnFinalizarVerde.disabled = true;
+            btnFinalizarVerde.innerHTML = '<i class="ri-loader-4-line"></i> PROCESANDO...';
+        }
+        
+        if (btnSiguiente) {
+            btnSiguiente.disabled = true;
+        }
+
         // Obtener el tipo de documento seleccionado en el paso 2
         const tipoDocumento = document.querySelector('input[name="tipoDocumento"]:checked')?.value || 'BOLETA_ELECTRONICA';
 
@@ -5376,11 +5393,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } else {
                 mostrarNotificacion(data.error || 'Error al finalizar la venta', 'error');
+                
+                // 🛡️ RE-HABILITAR BOTONES cuando hay error en la respuesta
+                const btnFinalizarVerde = document.querySelector('.btn-success.btn-lg.w-100.py-4');
+                const btnSiguiente = document.getElementById('btnSiguiente');
+                
+                if (btnFinalizarVerde) {
+                    btnFinalizarVerde.disabled = false;
+                    btnFinalizarVerde.innerHTML = '<i class="ri-check-line"></i> FINALIZAR VENTA';
+                }
+                
+                if (btnSiguiente) {
+                    btnSiguiente.disabled = false;
+                }
             }
         })
         .catch(error => {
             console.error('Error:', error);
             mostrarNotificacion('Error al finalizar la venta', 'error');
+            
+            // 🛡️ RE-HABILITAR BOTONES en caso de error
+            const btnFinalizarVerde = document.querySelector('.btn-success.btn-lg.w-100.py-4');
+            const btnSiguiente = document.getElementById('btnSiguiente');
+            
+            if (btnFinalizarVerde) {
+                btnFinalizarVerde.disabled = false;
+                btnFinalizarVerde.innerHTML = '<i class="ri-check-line"></i> FINALIZAR VENTA';
+            }
+            
+            if (btnSiguiente) {
+                btnSiguiente.disabled = false;
+            }
         });
     }
 
