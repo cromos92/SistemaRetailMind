@@ -635,8 +635,10 @@
         refund: (operationId) => pos.refund(operationId),
         getSalesDetail: (printOnPOS) => pos.getSalesDetail(printOnPOS),
         
-        // Estado
-        isConnected: () => pos.isConnected
+        // Estado (propiedad, no función)
+        get isConnected() {
+            return pos.isConnected;
+        }
     };
 
     console.log('✅ Transbank Web Serial API cargada');

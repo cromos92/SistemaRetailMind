@@ -81,7 +81,7 @@ async function liberarPuertoPOS() {
 async function ejecutarVentaPOS(monto, ticket) {
     try {
         // Verificar conexión
-        if (!Transbank.POS.isConnected()) {
+        if (!Transbank.POS.isConnected) {
             throw new Error('POS no está conectado. Por favor conecte primero.');
         }
 
