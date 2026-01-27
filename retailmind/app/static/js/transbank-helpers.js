@@ -6,20 +6,32 @@
 
 /**
  * Auto-conectar al POS (solicita permisos si es necesario)
+ * Prueba múltiples baudrates automáticamente
  */
 async function autoconectarPOS() {
     try {
         showLoading('Conectando al POS...');
         
-        const resultado = await Transbank.POS.autoConnect(115200);
+        // Intentar primero con baudrate por defecto
+        let resultado = await Transbank.POS.autoConnect(false);
+        
+        // Si falla, probar todos los baudrates
+        if (!resultado.success) {
+            showLoading('Probando otras velocidades...');
+            resultado = await Transbank.POS.autoConnect(true);
+        }
         
         if (resultado.success) {
             // Guardar configuración en el backend
             await guardarConfiguracionPOS(resultado);
             
             hideLoading();
-            showSuccess('POS conectado correctamente');
-            actualizarEstadoPOS(true, resultado.port);
+            
+            const deviceInfo = resultado.deviceType || 'POS Transbank';
+            const baudInfo = resultado.baudrate ? ` (${resultado.baudrate} bps)` : '';
+            
+            showSuccess(`${deviceInfo} conectado${baudInfo}`);
+            actualizarEstadoPOS(true, resultado.port, resultado.deviceType);
             return resultado;
         } else {
             throw new Error('No se pudo conectar');
@@ -37,9 +49,9 @@ async function autoconectarPOS() {
  */
 async function autoconectarPOSPre() {
     try {
-        const resultado = await Transbank.POS.autoConnect(115200);
+        const resultado = await Transbank.POS.autoConnect(false);
         if (resultado.success) {
-            actualizarEstadoPOS(true, resultado.port);
+            actualizarEstadoPOS(true, resultado.port, resultado.deviceType);
         }
         return resultado;
     } catch (error) {
@@ -182,13 +194,14 @@ async function guardarConfiguracionPOS(resultado) {
 /**
  * Actualizar estado visual del POS
  */
-function actualizarEstadoPOS(conectado, puerto = '') {
+function actualizarEstadoPOS(conectado, puerto = '', deviceType = '') {
     const estadoElement = document.getElementById('estado_pos');
     const puertoElement = document.getElementById('puerto');
     
     if (estadoElement) {
         if (conectado) {
-            estadoElement.textContent = 'Conectado';
+            const tipo = deviceType ? ` (${deviceType})` : '';
+            estadoElement.textContent = `Conectado${tipo}`;
             estadoElement.style.backgroundColor = '#00D4AA';
             estadoElement.style.color = 'white';
         } else {
@@ -197,7 +210,7 @@ function actualizarEstadoPOS(conectado, puerto = '') {
             estadoElement.style.color = 'white';
         }
     }
-    
+
     if (puertoElement) {
         puertoElement.textContent = puerto || '-';
     }

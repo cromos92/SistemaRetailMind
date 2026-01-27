@@ -259,9 +259,19 @@
                     </h1>
                 </div>
                 <div class="nexo-header-actions">
-                    <button class="nexo-btn nexo-btn-outline" onclick="exportarEmpresas()">
-                        <i class="ri-download-2-line"></i>
-                        Exportar
+                    <div class="dropdown">
+                        <button class="nexo-btn nexo-btn-outline dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="ri-download-2-line"></i>
+                            Exportar
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="exportarEmpresas()"><i class="ri-file-list-line me-2"></i>Exportar Empresas</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportarEmpresasConSucursales()"><i class="ri-building-2-line me-2"></i>Exportar con Sucursales</a></li>
+                        </ul>
+                    </div>
+                    <button class="nexo-btn nexo-btn-outline" onclick="abrirModalImportar()">
+                        <i class="ri-upload-2-line"></i>
+                        Importar
                     </button>
                     <button class="nexo-btn nexo-btn-success" onclick="abrirModalCrear()">
                         <i class="ri-add-line"></i>
@@ -646,6 +656,45 @@
     </div>
 </div>
 
+<!-- Modal Importar Empresas con Sucursales -->
+<div class="modal fade nexo-modal" id="modalImportar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="ri-upload-2-line"></i> Importar Empresas con Sucursales</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <i class="ri-information-line me-2"></i>
+                    <strong>Formato CSV requerido:</strong>
+                    <br>Descarga primero una plantilla usando "Exportar con Sucursales" para ver el formato correcto.
+                </div>
+                
+                <form id="formImportar" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Archivo CSV</label>
+                        <input type="file" class="form-control" id="archivoImportar" name="archivo" accept=".csv" required>
+                        <div class="form-text">Solo archivos .csv - Una fila por cada sucursal</div>
+                    </div>
+                </form>
+                
+                <div id="resultadoImportacion" class="d-none">
+                    <hr>
+                    <h6><i class="ri-check-double-line me-2"></i>Resultado de importación:</h6>
+                    <div id="detalleImportacion"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="nexo-btn nexo-btn-primary" onclick="procesarImportacion()" id="btnImportar">
+                    <i class="ri-upload-2-line"></i> Importar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // Variables globales
 let empresas = [];
@@ -684,6 +733,9 @@ $(document).ready(function() {
     window.editarSucursal = editarSucursal;
     window.eliminarSucursal = eliminarSucursal;
     window.guardarSucursal = guardarSucursal;
+    window.exportarEmpresasConSucursales = exportarEmpresasConSucursales;
+    window.abrirModalImportar = abrirModalImportar;
+    window.procesarImportacion = procesarImportacion;
     
     console.log('✅ Gestión de Empresas NEXO inicializada');
 });
@@ -1017,6 +1069,115 @@ function exportarEmpresas() {
         tipo: $('#filtroTipo').val()
     });
     window.open(`/empresa_management/exportar_empresas/?${params}`, '_blank');
+}
+
+function exportarEmpresasConSucursales() {
+    window.open('/empresa_management/exportar_empresas_sucursales/', '_blank');
+    Swal.fire({
+        icon: 'success',
+        title: 'Exportación iniciada',
+        text: 'Se está descargando el archivo CSV con empresas y sus sucursales',
+        timer: 2000,
+        showConfirmButton: false
+    });
+}
+
+function abrirModalImportar() {
+    $('#formImportar')[0].reset();
+    $('#resultadoImportacion').addClass('d-none');
+    $('#btnImportar').prop('disabled', false).html('<i class="ri-upload-2-line"></i> Importar');
+    $('#modalImportar').modal('show');
+}
+
+function procesarImportacion() {
+    const archivo = $('#archivoImportar')[0].files[0];
+    
+    if (!archivo) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Archivo requerido',
+            text: 'Selecciona un archivo CSV para importar'
+        });
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    
+    $('#btnImportar').prop('disabled', true).html('<i class="ri-loader-4-line ri-spin"></i> Procesando...');
+    
+    $.ajax({
+        url: '/empresa_management/importar_empresas_sucursales/',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: { 'X-CSRFToken': getCSRFToken() },
+        success: function(response) {
+            if (response.success) {
+                const detalle = response.detalle;
+                let html = `
+                    <div class="alert alert-success">
+                        <strong>Importación exitosa</strong>
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Empresas creadas:</span>
+                            <strong class="text-success">${detalle.empresas_creadas}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Empresas actualizadas:</span>
+                            <strong class="text-info">${detalle.empresas_actualizadas}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Sucursales creadas:</span>
+                            <strong class="text-success">${detalle.sucursales_creadas}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>Sucursales actualizadas:</span>
+                            <strong class="text-info">${detalle.sucursales_actualizadas}</strong>
+                        </li>
+                    </ul>
+                `;
+                
+                if (detalle.errores && detalle.errores.length > 0) {
+                    html += `
+                        <div class="alert alert-warning mt-3">
+                            <strong>Errores (${detalle.errores.length}):</strong>
+                            <ul class="mb-0 mt-2">
+                                ${detalle.errores.slice(0, 10).map(e => `<li class="small">${e}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                $('#detalleImportacion').html(html);
+                $('#resultadoImportacion').removeClass('d-none');
+                $('#btnImportar').html('<i class="ri-check-line"></i> Completado');
+                
+                // Recargar lista de empresas
+                cargarEmpresas();
+                cargarMetricas();
+                
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: response.error || 'Error al importar archivo'
+                });
+                $('#btnImportar').prop('disabled', false).html('<i class="ri-upload-2-line"></i> Importar');
+            }
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON?.error || 'Error al procesar el archivo';
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: error
+            });
+            $('#btnImportar').prop('disabled', false).html('<i class="ri-upload-2-line"></i> Importar');
+        }
+    });
 }
 
 function mostrarErrores(errores) {

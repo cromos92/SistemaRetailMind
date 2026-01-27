@@ -63,17 +63,47 @@ MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
 # MAPEOS HARDCODED
 # ============================================================================
 
+# ============================================================================
+# MAPEO FIJO DE SUCURSALES -> EMPRESAS (NO USAR MYSQL)
+# ============================================================================
 EMPRESA_RUT_MAP = {
-    'PAO0': '78503140-7',  # Paola
-    'PAO1': '78503140-7',  # Paola
-    'PAO2': '78503140-7',  # Paola
-    'PAO3': '78503140-7',  # Paola
-    'PAO4': '78503140-7',  # Paola
-    'EDEL': '78503140-7',  # Edelmira Tebes y cia
-    'GILD': '7397811-4',   # Edelmira Gilda Tebes
-    'NICK1': '76104936-4', # Importadora
-    'NICK2': '76104936-4', # Importadora
-    'IMP': '76104936-4',   # Importadora
+    # Vicent Paola - RUT 78503140-7
+    'PA00': '78503140-7',
+    'PAO0': '78503140-7',  # Alias alternativo
+    'PAO1': '78503140-7',
+    'PAO2': '78503140-7',
+    'PAO3': '78503140-7',
+    'PAO4': '78503140-7',
+    
+    # Edelmira Tebes y Cia Ltda - RUT 76337843-8
+    'EDEL': '76337843-8',
+    'EDEL FALLADOS': '76337843-8',
+    
+    # Edelmira Gilda Tebes - RUT 7397811-4
+    'GILD': '7397811-4',
+    
+    # Importadora Nicolas - RUT 76104936-4
+    'IMP': '76104936-4',
+    'NICK1': '76104936-4',
+    'NICK2': '76104936-4',
+    'NICK3': '76104936-4',
+}
+
+# Direcciones fijas para sucursales
+SUCURSAL_DIRECCION_MAP = {
+    'PA00': 'Maipu 676',
+    'PAO0': 'Maipu 676',
+    'PAO1': 'Maipu 668',
+    'PAO2': 'Matta 2422',
+    'PAO3': 'Matta 2432',
+    'PAO4': 'Matta 2458',
+    'EDEL': 'Maipu 676',
+    'EDEL FALLADOS': 'Maipu 676',
+    'GILD': 'Maipu 676',
+    'IMP': 'Maipu 676',
+    'NICK1': 'Matta 2479',
+    'NICK2': 'Matta 2438',
+    'NICK3': 'Matta 2418',
 }
 
 TIPO_MOVIMIENTO_MAP = {
@@ -346,6 +376,9 @@ class Command(BaseCommand):
 
             self.stdout.write(f'\n{"="*70}')
             self.show_statistics()
+            
+            # Inicializar permisos del menú
+            self.inicializar_permisos_menu()
 
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'[ERROR CRÍTICO] {e}'))
@@ -561,25 +594,52 @@ class Command(BaseCommand):
         """Extrae solo la fecha (date) de un datetime"""
         if value is None:
             return timezone.now().date()
+        # Si ya es un date, devolverlo
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return value
+        # Si es datetime, extraer date
         if isinstance(value, datetime):
             return value.date()
-        if hasattr(value, 'date'):
-            return value.date() if callable(getattr(value, 'date')) else value.date
-        try:
-            return value
-        except:
-            return timezone.now().date()
+        # Intentar convertir string
+        if isinstance(value, str):
+            try:
+                from django.utils.dateparse import parse_date
+                parsed = parse_date(value)
+                return parsed if parsed else timezone.now().date()
+            except:
+                return timezone.now().date()
+        return timezone.now().date()
 
     def safe_time_only(self, value):
         """Extrae solo la hora (time) de un datetime"""
+        from datetime import timedelta
+        
         if value is None:
             return timezone.now().time()
+        # Si ya es un time, devolverlo
+        if isinstance(value, time) and not isinstance(value, datetime):
+            return value
+        # Si es datetime, extraer time
         if isinstance(value, datetime):
             return value.time()
-        if hasattr(value, 'time'):
-            return value.time() if callable(getattr(value, 'time')) else value.time
+        # Si es timedelta (MySQL a veces devuelve esto), convertir a time
+        if isinstance(value, timedelta):
+            total_seconds = int(value.total_seconds())
+            hours = (total_seconds // 3600) % 24
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            return time(hours, minutes, seconds)
+        # Intentar convertir string
+        if isinstance(value, str):
+            try:
+                from django.utils.dateparse import parse_time
+                parsed = parse_time(value)
+                return parsed if parsed else timezone.now().time()
+            except:
+                return timezone.now().time()
+        # Último intento: convertir a string y parsear
         try:
-            return value
+            return time.fromisoformat(str(value))
         except:
             return timezone.now().time()
 
@@ -770,41 +830,48 @@ class Command(BaseCommand):
         self.stdout.write('\n' + self.style.SUCCESS(f'  ✓ {count} clientes migrados'))
 
     def migrate_sucursales(self):
-        """Migra sucursales"""
-        self.stdout.write('🏪 Migrando sucursales...')
-
-        cursor = self.mysql_conn.cursor(dictionary=True)
-        cursor.execute('SELECT bodega, sucursal, rut_empresa FROM bodegas ORDER BY ID')
+        """Migra sucursales usando MAPEO FIJO (no MySQL) para evitar errores"""
+        self.stdout.write('🏪 Migrando sucursales (mapeo fijo)...')
 
         count = 0
-        for row in cursor:
-            alias = row['bodega']  # bodega = alias de la sucursal
-            direccion = row['sucursal'] or alias  # sucursal = dirección
-            
-            if not alias:
-                continue
-
-            rut_empresa = EMPRESA_RUT_MAP.get(alias, '78503140-7')
+        
+        # Usar el mapeo hardcoded en lugar de MySQL
+        for alias, rut_empresa in EMPRESA_RUT_MAP.items():
             empresa = self.cache_empresas_rut.get(rut_empresa)
             
             if not empresa:
+                self.stdout.write(self.style.WARNING(f'  ⚠️ Empresa no encontrada para {alias}: {rut_empresa}'))
                 continue
+            
+            # Obtener dirección del mapeo o usar alias como default
+            direccion = SUCURSAL_DIRECCION_MAP.get(alias, alias)
 
             if not self.dry_run:
                 sucursal, created = Sucursal.objects.get_or_create(
                     alias=alias,
-                    empresa=empresa,
-                    defaults={'direccion': direccion}
+                    defaults={
+                        'empresa': empresa,
+                        'direccion': direccion
+                    }
                 )
+                
+                # Si ya existe pero tiene empresa incorrecta, corregir
+                if not created and sucursal.empresa_id != empresa.id:
+                    sucursal.empresa = empresa
+                    sucursal.direccion = direccion
+                    sucursal.save()
+                    self.stdout.write(f'  🔄 Corregida: {alias} -> {rut_empresa}')
+                
                 if created:
                     count += 1
-                    self.cache_sucursales[alias] = sucursal
+                    self.stdout.write(f'  ✓ Creada: {alias} -> {empresa.nombre} ({rut_empresa})')
+                
+                self.cache_sucursales[alias] = sucursal
             else:
                 count += 1
 
-        cursor.close()
         self.stats['sucursales'] = count
-        self.stdout.write(self.style.SUCCESS(f'  ✓ {count} sucursales creadas'))
+        self.stdout.write(self.style.SUCCESS(f'  ✓ {count} sucursales creadas/verificadas'))
 
     def migrate_vendedores(self):
         """Migra vendedores desde MySQL (tabla: vendedores)"""
@@ -2382,3 +2449,17 @@ class Command(BaseCommand):
         self.stdout.write(f'\n⏱️  Tiempo total: {elapsed}')
         self.stdout.write(f'⚡ Velocidad promedio: {avg_speed:.0f} registros/segundo')
         self.stdout.write('='*70)
+
+    def inicializar_permisos_menu(self):
+        """Inicializa módulos, opciones de menú y permisos por rol"""
+        from django.core.management import call_command
+        
+        self.stdout.write(f'\n{"="*70}')
+        self.stdout.write('🔐 Inicializando permisos del menú...')
+        
+        try:
+            call_command('inicializar_permisos')
+            self.stdout.write(self.style.SUCCESS('  ✓ Permisos del menú inicializados correctamente'))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'  ⚠️ Error al inicializar permisos: {e}'))
+            self.log_error('inicializar_permisos', 0, str(e))

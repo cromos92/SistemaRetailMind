@@ -12,7 +12,10 @@
     const ETX = 0x03;  // End of Text
     const ACK = 0x06;  // Acknowledge
     const NAK = 0x15;  // Negative Acknowledge
-    const TBKPOS_DEFAULT_BAUD = 115200;
+    
+    // Baudrates soportados (Verifone e Ingenico)
+    const BAUDRATES = [115200, 9600, 19200, 38400, 57600];
+    const TBKPOS_DEFAULT_BAUD = 115200;  // Preferido por defecto
 
     // Códigos de respuesta
     const RESPONSE_CODES = {
@@ -38,6 +41,7 @@
             this.writer = null;
             this.isConnected = false;
             this.timeout = 180000; // 3 minutos para ventas
+            this.currentBaudrate = null;
             this.readBuffer = [];
         }
 
@@ -45,10 +49,24 @@
         
         /**
          * Auto-conectar al POS buscando en puertos disponibles
+         * Prueba múltiples baudrates para compatibilidad Verifone/Ingenico
          */
-        async autoConnect(baudRate = TBKPOS_DEFAULT_BAUD) {
+        async autoConnect(tryAllBaudrates = false) {
             try {
                 console.log('🔍 Buscando puertos autorizados...');
+                
+                // Si ya está conectado, no reconectar
+                if (this.isConnected && this.port) {
+                    console.log('✅ POS ya está conectado');
+                    const info = this.port.getInfo();
+                    return {
+                        success: true,
+                        connected: true,
+                        port: `VID:${info.usbVendorId} PID:${info.usbProductId}`,
+                        baudrate: this.currentBaudrate || TBKPOS_DEFAULT_BAUD,
+                        info: info
+                    };
+                }
                 
                 const ports = await navigator.serial.getPorts();
                 
@@ -56,48 +74,88 @@
                     throw new Error('No hay puertos autorizados. Por favor, conecte manualmente.');
                 }
 
+                // Baudrates a probar
+                const baudratesToTry = tryAllBaudrates ? BAUDRATES : [TBKPOS_DEFAULT_BAUD];
+                
                 for (const port of ports) {
-                    try {
-                        console.log(`🔌 Intentando conectar en baudrate ${baudRate}...`);
-                        
-                        await port.open({ baudRate });
-                        this.port = port;
-                        this.reader = port.readable.getReader();
-                        this.writer = port.writable.getWriter();
-                        this.isConnected = true;
-                        
-                        // Verificar con POLL
-                        const pollResult = await this.poll();
-                        if (pollResult) {
-                            console.log('✅ POS conectado y verificado');
+                    for (const baudRate of baudratesToTry) {
+                        try {
+                            console.log(`🔌 Probando baudrate ${baudRate}...`);
                             
-                            // Obtener info del puerto
-                            const info = port.getInfo();
-                            return {
-                                success: true,
-                                connected: true,
-                                port: `VID:${info.usbVendorId} PID:${info.usbProductId}`,
-                                baudrate: baudRate,
-                                info: info
-                            };
+                            // Verificar si el puerto ya está abierto
+                            if (port.readable && port.writable) {
+                                console.log('⚠️ Puerto abierto, cerrando...');
+                                try {
+                                    await port.close();
+                                    await new Promise(resolve => setTimeout(resolve, 500));
+                                } catch (e) {
+                                    console.warn('No se pudo cerrar puerto:', e.message);
+                                }
+                            }
+                            
+                            await port.open({ baudRate });
+                            this.port = port;
+                            this.reader = port.readable.getReader();
+                            this.writer = port.writable.getWriter();
+                            this.isConnected = true;
+                            this.currentBaudrate = baudRate;
+                            
+                            // Verificar con POLL
+                            const pollResult = await this.poll();
+                            if (pollResult) {
+                                const info = port.getInfo();
+                                const deviceType = this.detectDeviceType(info);
+                                
+                                console.log(`✅ POS conectado y verificado en ${baudRate} bps`);
+                                console.log(`📱 Dispositivo detectado: ${deviceType}`);
+                                
+                                return {
+                                    success: true,
+                                    connected: true,
+                                    port: `VID:${info.usbVendorId} PID:${info.usbProductId}`,
+                                    baudrate: baudRate,
+                                    deviceType: deviceType,
+                                    info: info
+                                };
+                            }
+                        } catch (err) {
+                            console.log(`❌ Fallo con baudrate ${baudRate}: ${err.message}`);
+                            if (this.port) {
+                                try {
+                                    await this.disconnect();
+                                } catch (e) {}
+                            }
+                            continue;
                         }
-                    } catch (err) {
-                        console.log(`❌ Fallo en puerto: ${err.message}`);
-                        if (this.port) {
-                            try {
-                                await this.disconnect();
-                            } catch (e) {}
-                        }
-                        continue;
                     }
                 }
                 
-                throw new Error('No se pudo conectar al POS en ningún puerto');
+                throw new Error('No se pudo conectar al POS en ningún puerto/baudrate');
                 
             } catch (error) {
                 console.error('❌ Error en autoConnect:', error);
                 throw error;
             }
+        }
+        
+        /**
+         * Detectar tipo de dispositivo por VID/PID
+         */
+        detectDeviceType(info) {
+            const vid = info.usbVendorId;
+            const pid = info.usbProductId;
+            
+            // Verifone VIDs comunes
+            if (vid === 0x11CA || vid === 0x079B) {
+                return 'Verifone';
+            }
+            
+            // Ingenico VIDs comunes
+            if (vid === 0x0B00 || vid === 0x15D1) {
+                return 'Ingenico';
+            }
+            
+            return 'Transbank POS';
         }
 
         /**
@@ -176,8 +234,10 @@
         
         /**
          * Enviar comando al POS
+         * @param {string} command - Comando a enviar
+         * @param {number} customTimeout - Timeout personalizado en ms (opcional)
          */
-        async sendCommand(command) {
+        async sendCommand(command, customTimeout = null) {
             if (!this.isConnected) {
                 throw new Error('POS no está conectado');
             }
@@ -200,8 +260,8 @@
                 console.log(`📤 Enviando: ${command}`);
                 await this.writer.write(frame);
                 
-                // Leer respuesta
-                const response = await this.readResponse();
+                // Leer respuesta con timeout personalizado si se especifica
+                const response = await this.readResponse(customTimeout);
                 return response;
                 
             } catch (error) {
@@ -212,11 +272,13 @@
 
         /**
          * Leer respuesta del POS
+         * @param {number} customTimeout - Timeout personalizado (opcional)
          */
-        async readResponse() {
+        async readResponse(customTimeout = null) {
             return new Promise((resolve, reject) => {
                 let buffer = [];
                 let timeout;
+                const timeoutMs = customTimeout || this.timeout;
 
                 const read = async () => {
                     try {
@@ -233,6 +295,7 @@
                         // Verificar si es ACK simple
                         if (buffer.length === 1 && buffer[0] === ACK) {
                             clearTimeout(timeout);
+                            console.log('✅ ACK recibido');
                             resolve({ type: 'ACK' });
                             return;
                         }
@@ -271,8 +334,8 @@
 
                 // Timeout
                 timeout = setTimeout(() => {
-                    reject(new Error('Timeout esperando respuesta del POS'));
-                }, this.timeout);
+                    reject(new Error(`Timeout (${timeoutMs}ms) esperando respuesta del POS`));
+                }, timeoutMs);
             });
         }
 
@@ -292,27 +355,22 @@
         }
 
         /**
-         * Cargar llaves criptográficas
+         * Cargar llaves criptográficas (tarda 30-60 segundos)
          */
         async loadKeys() {
             try {
                 console.log('🔑 Cargando llaves... (puede tardar 30-60 segundos)');
                 
-                // Aumentar timeout temporalmente
-                const originalTimeout = this.timeout;
-                this.timeout = 90000; // 90 segundos
-                
-                const response = await this.sendCommand('0800');
-                
-                this.timeout = originalTimeout;
+                // Usar timeout extendido de 120 segundos para carga de llaves
+                const response = await this.sendCommand('0800', 120000);
                 
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
                     const result = {
                         functionCode: parseInt(parts[0]),
                         responseCode: parseInt(parts[1]),
-                        commerceCode: parts[2],
-                        terminalId: parts[3],
+                        commerceCode: parts[2] || '',
+                        terminalId: parts[3] || '',
                         success: parseInt(parts[1]) === 0
                     };
                     
@@ -320,7 +378,7 @@
                     return result;
                 }
                 
-                throw new Error('Respuesta inválida');
+                throw new Error('Respuesta inválida de carga de llaves');
                 
             } catch (error) {
                 console.error('❌ Error cargando llaves:', error);
@@ -474,12 +532,41 @@
                         terminalId: parts[3],
                         authorizationCode: parts[4],
                         operationId: parts[5],
-                        successful: parseInt(parts[1]) === 0
+                        successful: parseInt(parts[1]) === 0,
+                        responseMessage: RESPONSE_CODES[parseInt(parts[1])] || `Código ${parts[1]}`
                     };
                 }
                 throw new Error('Respuesta inválida');
             } catch (error) {
                 console.error('❌ Error en anulación:', error);
+                throw error;
+            }
+        }
+        
+        /**
+         * Obtener detalle de ventas del día
+         * @param {boolean} printOnPOS - Si debe imprimir en el POS (0=no, 1=sí)
+         */
+        async getSalesDetail(printOnPOS = false) {
+            try {
+                console.log('📋 Obteniendo detalle de ventas...');
+                const print = printOnPOS ? '1' : '0';
+                const response = await this.sendCommand(`0260|${print}|`);
+                
+                if (response.type === 'DATA') {
+                    const parts = response.data.split('|');
+                    return {
+                        functionCode: parseInt(parts[0]),
+                        responseCode: parseInt(parts[1]),
+                        txCount: parseInt(parts[2]) || 0,
+                        txTotal: parseInt(parts[3]) || 0,
+                        successful: parseInt(parts[1]) === 0,
+                        responseMessage: RESPONSE_CODES[parseInt(parts[1])] || `Código ${parts[1]}`
+                    };
+                }
+                throw new Error('Respuesta inválida');
+            } catch (error) {
+                console.error('❌ Error obteniendo detalle:', error);
                 throw error;
             }
         }
@@ -506,6 +593,7 @@
         getTotals: () => pos.getTotals(),
         closeDay: () => pos.closeDay(),
         refund: (operationId) => pos.refund(operationId),
+        getSalesDetail: (printOnPOS) => pos.getSalesDetail(printOnPOS),
         
         // Estado
         isConnected: () => pos.isConnected

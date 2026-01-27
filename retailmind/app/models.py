@@ -4609,8 +4609,10 @@ class PermisoRol(models.Model):
         Returns:
             bool: True si tiene permiso (por rol Y por sucursal), False en caso contrario
         """
-        # Todos los usuarios respetan los permisos configurados por rol
-        # (is_superuser ya no da acceso automático, se usa el campo 'rol')
+        # ✅ Superusuarios tienen TODOS los permisos
+        if usuario.is_superuser:
+            return True
+        
         try:
             opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
             permiso = cls.objects.filter(

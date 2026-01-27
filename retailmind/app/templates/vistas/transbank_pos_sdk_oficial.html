@@ -81,6 +81,7 @@
 <div class="tbk-hero text-center">
     <h2><i class="bi bi-credit-card-2-front"></i> Transbank POS Integrado</h2>
     <p>Gestión de Terminal POS con Web Serial API</p>
+    <p class="small mb-0">Soporte Verifone & Ingenico</p>
     <div class="mt-3">
         <span class="tbk-badge tbk-badge-error" id="estado_pos">Desconectado</span>
         <span class="tbk-badge tbk-badge-success ms-2">
@@ -138,8 +139,16 @@
                     <i class="bi bi-calculator"></i> Totales del Día
                 </button>
                 
+                <button class="tbk-btn btn-info" onclick="consultarDetalleVentas()">
+                    <i class="bi bi-list-check"></i> Detalle de Ventas
+                </button>
+                
                 <button class="tbk-btn btn-danger" onclick="cerrarDia()">
                     <i class="bi bi-lock"></i> Cierre de Día
+                </button>
+                
+                <button class="tbk-btn btn-warning" onclick="anularVenta()">
+                    <i class="bi bi-x-circle-fill"></i> Anular Venta
                 </button>
             </div>
         </div>
@@ -198,8 +207,11 @@
                     <ul class="mt-2">
                         <li>0100 - POLL (Verificar)</li>
                         <li>0200 - VENTA</li>
-                        <li>0800 - CARGAR LLAVES</li>
+                        <li>0250 - ÚLTIMA VENTA</li>
+                        <li>0260 - DETALLE VENTAS</li>
                         <li>0500 - CIERRE DÍA</li>
+                        <li>0700 - TOTALES</li>
+                        <li>0800 - CARGAR LLAVES</li>
                         <li>1200 - ANULACIÓN</li>
                     </ul>
                 </div>
@@ -338,6 +350,123 @@ async function cerrarDia() {
             } else {
                 showError('Error en cierre de día');
             }
+        }
+    } catch (error) {
+        hideLoading();
+        showError('Error: ' + error.message);
+    }
+}
+
+async function consultarDetalleVentas() {
+    try {
+        const { value: imprimir } = await Swal.fire({
+            title: 'Detalle de Ventas',
+            text: '¿Desea imprimir el detalle en el POS?',
+            icon: 'question',
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: 'Solo Consultar',
+            denyButtonText: 'Imprimir en POS',
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (value === undefined) return; // Canceló
+        
+        const printOnPOS = value === false; // Si presionó "Imprimir" (deny button)
+        
+        showLoading('Obteniendo detalle de ventas...');
+        const resultado = await Transbank.POS.getSalesDetail(printOnPOS);
+        hideLoading();
+        
+        if (resultado.successful) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Detalle de Ventas',
+                html: `
+                    <div class="text-start">
+                        <p><strong>Transacciones:</strong> ${resultado.txCount}</p>
+                        <p><strong>Total:</strong> $${resultado.txTotal.toLocaleString()}</p>
+                        ${printOnPOS ? '<p class="text-success"><i class="bi bi-printer"></i> Imprimiendo en el POS...</p>' : ''}
+                    </div>
+                `,
+                width: 500
+            });
+        } else {
+            showError('Error obteniendo detalle: ' + resultado.responseMessage);
+        }
+    } catch (error) {
+        hideLoading();
+        showError('Error: ' + error.message);
+    }
+}
+
+async function anularVenta() {
+    try {
+        const { value: operationId } = await Swal.fire({
+            title: 'Anular Venta',
+            html: `
+                <p class="text-start mb-3">Ingrese el número de operación a anular:</p>
+                <input type="text" id="operation-id-input" class="swal2-input" 
+                       placeholder="Ej: 123456" 
+                       pattern="[0-9]{1,6}"
+                       maxlength="6">
+                <p class="small text-muted text-start mt-2">
+                    <i class="bi bi-info-circle"></i> 
+                    Puede encontrar el número de operación en el voucher
+                </p>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Anular',
+            confirmButtonColor: '#dc3545',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const value = document.getElementById('operation-id-input').value;
+                if (!value || value.length === 0) {
+                    Swal.showValidationMessage('Debe ingresar un número de operación');
+                    return false;
+                }
+                return value;
+            }
+        });
+        
+        if (!operationId) return;
+        
+        const confirmAnular = await Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Confirmar Anulación',
+            html: `
+                <p><strong>¿Está seguro de anular la operación ${operationId}?</strong></p>
+                <p class="text-danger small">Esta acción NO se puede deshacer</p>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, anular',
+            confirmButtonColor: '#dc3545',
+            cancelButtonText: 'Cancelar'
+        });
+        
+        if (!confirmAnular.isConfirmed) return;
+        
+        showLoading('Anulando operación...');
+        const resultado = await Transbank.POS.refund(operationId);
+        hideLoading();
+        
+        if (resultado.successful) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Anulación Exitosa',
+                html: `
+                    <div class="text-start">
+                        <p><strong>Operación anulada:</strong> ${operationId}</p>
+                        <p><strong>Código autorización:</strong> ${resultado.authorizationCode}</p>
+                        <p class="text-success mt-3">
+                            <i class="bi bi-check-circle"></i> 
+                            La transacción ha sido anulada correctamente
+                        </p>
+                    </div>
+                `
+            });
+        } else {
+            showError('Error en anulación: ' + resultado.responseMessage);
         }
     } catch (error) {
         hideLoading();

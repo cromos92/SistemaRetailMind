@@ -122,20 +122,27 @@ def mostrar_modulo(context, modulo_codigo):
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
         
         if user and user.is_authenticated:
-            # Obtener opciones que el usuario puede ver según su rol
-            opciones_permitidas = PermisoRol.objects.filter(
-                rol=user.rol,
-                puede_ver=True,
-                opcion_menu__modulo=modulo,
-                opcion_menu__activo=True,
-                opcion_menu__padre__isnull=True
-            ).values_list('opcion_menu_id', flat=True)
-            
-            opciones = modulo.opciones.filter(
-                id__in=opciones_permitidas,
-                activo=True,
-                padre__isnull=True
-            )
+            # ✅ Superusuarios ven TODAS las opciones
+            if user.is_superuser:
+                opciones = modulo.opciones.filter(
+                    activo=True,
+                    padre__isnull=True
+                )
+            else:
+                # Obtener opciones que el usuario puede ver según su rol
+                opciones_permitidas = PermisoRol.objects.filter(
+                    rol=user.rol,
+                    puede_ver=True,
+                    opcion_menu__modulo=modulo,
+                    opcion_menu__activo=True,
+                    opcion_menu__padre__isnull=True
+                ).values_list('opcion_menu_id', flat=True)
+                
+                opciones = modulo.opciones.filter(
+                    id__in=opciones_permitidas,
+                    activo=True,
+                    padre__isnull=True
+                )
         else:
             opciones = []
         
@@ -171,6 +178,10 @@ def obtener_modulos_usuario(context):
     if not user or not user.is_authenticated:
         return []
     
+    # ✅ Superusuarios ven TODOS los módulos
+    if user.is_superuser:
+        return ModuloSistema.objects.filter(activo=True).order_by('orden')
+    
     # Obtener módulos que tienen al menos una opción visible para el usuario según su rol
     modulos_ids = PermisoRol.objects.filter(
         rol=user.rol,
@@ -201,6 +212,13 @@ def obtener_opciones_modulo(context, modulo_codigo):
     
     try:
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
+        
+        # ✅ Superusuarios ven TODAS las opciones
+        if user.is_superuser:
+            return OpcionMenu.objects.filter(
+                modulo=modulo,
+                activo=True
+            ).order_by('orden')
         
         # Filtrar por permisos del rol del usuario
         opciones_ids = PermisoRol.objects.filter(
@@ -284,6 +302,13 @@ def obtener_subopciones(context, opcion_codigo):
     try:
         opcion_padre = OpcionMenu.objects.get(codigo=opcion_codigo, activo=True)
         
+        # ✅ Superusuarios ven TODAS las subopciones
+        if user.is_superuser:
+            return OpcionMenu.objects.filter(
+                padre=opcion_padre,
+                activo=True
+            ).order_by('orden')
+        
         # Filtrar subopciones por permisos del rol
         subopciones_ids = PermisoRol.objects.filter(
             rol=user.rol,
@@ -317,6 +342,13 @@ def contar_opciones_disponibles(user, modulo_codigo):
     
     try:
         modulo = ModuloSistema.objects.get(codigo=modulo_codigo, activo=True)
+        
+        # ✅ Superusuarios tienen acceso a todas las opciones
+        if user.is_superuser:
+            return OpcionMenu.objects.filter(
+                modulo=modulo,
+                activo=True
+            ).count()
         
         # Contar por permisos del rol
         return PermisoRol.objects.filter(

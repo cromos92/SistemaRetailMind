@@ -769,6 +769,208 @@ def exportar_empresas(request):
     return response
 
 @login_required
+def exportar_empresas_con_sucursales(request):
+    """Exportar empresas CON sucursales a CSV (una fila por sucursal)"""
+    
+    # Solo empresas que tienen sucursales
+    empresas = Empresa.objects.filter(sucursales_app__isnull=False).distinct().prefetch_related('sucursales_app')
+    
+    # Crear respuesta CSV
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = f'attachment; filename="empresas_con_sucursales_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    writer = csv.writer(response)
+    
+    # Encabezados
+    writer.writerow([
+        'empresa_rut', 'empresa_nombre', 'empresa_nombre_fantasia', 'empresa_razon_social', 
+        'empresa_giro', 'empresa_direccion', 'empresa_comuna', 'empresa_ciudad',
+        'empresa_tipo', 'empresa_acteco', 'empresa_contacto1', 'empresa_contacto2',
+        'empresa_correo_vendedor', 'empresa_correo_intercambio', 'empresa_correo_administrador',
+        'sucursal_alias', 'sucursal_direccion', 'sucursal_tipo', 'sucursal_es_centro_distribucion',
+        'sucursal_margen_sobreprecio'
+    ])
+    
+    # Datos - una fila por cada sucursal
+    for empresa in empresas:
+        tipo_empresa = 'proveedor' if empresa.esProveedor else 'cliente'
+        
+        for sucursal in empresa.sucursales_app.all():
+            writer.writerow([
+                empresa.rut or '',
+                empresa.nombre or '',
+                empresa.nombre_fantasia or '',
+                empresa.razon_social or '',
+                empresa.giro or '',
+                empresa.direccion or '',
+                empresa.comuna or '',
+                empresa.ciudad or '',
+                tipo_empresa,
+                empresa.acteco or '',
+                empresa.contacto1 or '',
+                empresa.contacto2 or '',
+                empresa.correoVendedor or '',
+                empresa.correoIntercambio or '',
+                empresa.correoAdministrador or '',
+                sucursal.alias or '',
+                sucursal.direccion or '',
+                sucursal.tipo_sucursal or 'VENDEDORA',
+                '1' if sucursal.es_centro_distribucion else '0',
+                str(sucursal.margen_sobreprecio_default or 0)
+            ])
+    
+    return response
+
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def importar_empresas_con_sucursales(request):
+    """Importar empresas con sucursales desde CSV"""
+    
+    try:
+        if 'archivo' not in request.FILES:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se proporcionó archivo CSV'
+            }, status=400)
+        
+        archivo = request.FILES['archivo']
+        
+        # Verificar extensión
+        if not archivo.name.endswith('.csv'):
+            return JsonResponse({
+                'success': False,
+                'error': 'El archivo debe ser CSV'
+            }, status=400)
+        
+        # Leer CSV
+        try:
+            contenido = archivo.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            contenido = archivo.read().decode('latin-1')
+        
+        reader = csv.DictReader(contenido.splitlines())
+        
+        empresas_creadas = 0
+        empresas_actualizadas = 0
+        sucursales_creadas = 0
+        sucursales_actualizadas = 0
+        errores = []
+        
+        # Agrupar por empresa (RUT)
+        empresas_dict = {}
+        
+        for idx, row in enumerate(reader, start=2):
+            try:
+                rut = row.get('empresa_rut', '').strip()
+                if not rut:
+                    errores.append(f'Fila {idx}: RUT de empresa vacío')
+                    continue
+                
+                # Si no hemos procesado esta empresa, guardarla
+                if rut not in empresas_dict:
+                    empresas_dict[rut] = {
+                        'datos': row,
+                        'sucursales': []
+                    }
+                
+                # Agregar sucursal si tiene alias
+                alias_sucursal = row.get('sucursal_alias', '').strip()
+                if alias_sucursal:
+                    empresas_dict[rut]['sucursales'].append({
+                        'alias': alias_sucursal,
+                        'direccion': row.get('sucursal_direccion', '').strip(),
+                        'tipo_sucursal': row.get('sucursal_tipo', 'VENDEDORA').strip(),
+                        'es_centro_distribucion': row.get('sucursal_es_centro_distribucion', '0').strip() == '1',
+                        'margen_sobreprecio': row.get('sucursal_margen_sobreprecio', '0').strip()
+                    })
+                    
+            except Exception as e:
+                errores.append(f'Fila {idx}: {str(e)}')
+        
+        # Crear/actualizar empresas y sucursales
+        with transaction.atomic():
+            for rut, data in empresas_dict.items():
+                row = data['datos']
+                
+                # Buscar o crear empresa
+                empresa, created = Empresa.objects.get_or_create(
+                    rut=rut,
+                    defaults={
+                        'nombre': row.get('empresa_nombre', row.get('empresa_razon_social', '')),
+                        'nombre_fantasia': row.get('empresa_nombre_fantasia', ''),
+                        'razon_social': row.get('empresa_razon_social', ''),
+                        'giro': row.get('empresa_giro', ''),
+                        'direccion': row.get('empresa_direccion', ''),
+                        'comuna': row.get('empresa_comuna', ''),
+                        'ciudad': row.get('empresa_ciudad', ''),
+                        'esProveedor': row.get('empresa_tipo', 'cliente').lower() == 'proveedor',
+                        'acteco': row.get('empresa_acteco', ''),
+                        'contacto1': row.get('empresa_contacto1', ''),
+                        'contacto2': row.get('empresa_contacto2', ''),
+                        'correoVendedor': row.get('empresa_correo_vendedor', ''),
+                        'correoIntercambio': row.get('empresa_correo_intercambio', ''),
+                        'correoAdministrador': row.get('empresa_correo_administrador', ''),
+                    }
+                )
+                
+                if created:
+                    empresas_creadas += 1
+                else:
+                    empresas_actualizadas += 1
+                
+                # Crear/actualizar sucursales
+                for suc_data in data['sucursales']:
+                    try:
+                        margen = float(suc_data['margen_sobreprecio'] or 0)
+                    except:
+                        margen = 0
+                    
+                    sucursal, suc_created = Sucursal.objects.get_or_create(
+                        empresa=empresa,
+                        alias=suc_data['alias'],
+                        defaults={
+                            'direccion': suc_data['direccion'],
+                            'tipo_sucursal': suc_data['tipo_sucursal'],
+                            'es_centro_distribucion': suc_data['es_centro_distribucion'],
+                            'margen_sobreprecio_default': margen
+                        }
+                    )
+                    
+                    if suc_created:
+                        sucursales_creadas += 1
+                    else:
+                        # Actualizar datos de sucursal existente
+                        sucursal.direccion = suc_data['direccion']
+                        sucursal.tipo_sucursal = suc_data['tipo_sucursal']
+                        sucursal.es_centro_distribucion = suc_data['es_centro_distribucion']
+                        sucursal.margen_sobreprecio_default = margen
+                        sucursal.save()
+                        sucursales_actualizadas += 1
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Importación completada',
+            'detalle': {
+                'empresas_creadas': empresas_creadas,
+                'empresas_actualizadas': empresas_actualizadas,
+                'sucursales_creadas': sucursales_creadas,
+                'sucursales_actualizadas': sucursales_actualizadas,
+                'errores': errores[:20]  # Limitar errores mostrados
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            'success': False,
+            'error': f'Error al importar: {str(e)}'
+        }, status=500)
+
+
+@login_required
 def dashboard_empresas(request):
     """Dashboard con estadísticas de empresas"""
     

@@ -10,6 +10,8 @@ urlpatterns = [
     path('lista_empresas/', views.lista_empresas, name='lista_empresas'),
     path('dashboard/', views.dashboard_empresas, name='dashboard_empresas'),
     path('exportar_empresas/', views.exportar_empresas, name='exportar_empresas'),
+    path('exportar_empresas_sucursales/', views.exportar_empresas_con_sucursales, name='exportar_empresas_sucursales'),
+    path('importar_empresas_sucursales/', views.importar_empresas_con_sucursales, name='importar_empresas_sucursales'),
     
     # CRUD empresas
     path('crear_empresa/', views.crear_empresa, name='crear_empresa'),
