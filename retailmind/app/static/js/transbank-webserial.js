@@ -440,7 +440,29 @@
                 // Comando: 0200|MONTO|TICKET|||||
                 const command = `0200|${amountStr}|${ticketStr}|||||`;
                 
-                const response = await this.sendCommand(command);
+                // Construir trama manualmente para manejar ACK + respuesta
+                const encoder = new TextEncoder();
+                const commandBytes = encoder.encode(command);
+                
+                let lrc = 0;
+                for (let byte of commandBytes) {
+                    lrc ^= byte;
+                }
+                lrc ^= ETX;
+                
+                const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
+                console.log(`📤 Enviando: ${command}`);
+                await this.writer.write(frame);
+                
+                // 1. Esperar ACK inicial (POS confirma que recibió el comando)
+                const ack = await this.readResponse(10000); // 10 segundos para ACK
+                if (ack.type !== 'ACK') {
+                    throw new Error('No se recibió ACK del POS');
+                }
+                console.log('⏳ POS procesando venta (puede tardar hasta 3 minutos)...');
+                
+                // 2. Esperar respuesta con datos (puede tardar varios minutos)
+                const response = await this.readResponse(180000); // 180 segundos (3 minutos) para venta
                 
                 if (response.type === 'DATA') {
                     return this.parseSaleResponse(response.data);
@@ -496,7 +518,32 @@
          */
         async lastSale() {
             try {
-                const response = await this.sendCommand('0250|');
+                console.log('📋 Consultando última venta...');
+                
+                // Construir y enviar comando manualmente
+                const command = '0250|';
+                const encoder = new TextEncoder();
+                const commandBytes = encoder.encode(command);
+                
+                let lrc = 0;
+                for (let byte of commandBytes) {
+                    lrc ^= byte;
+                }
+                lrc ^= ETX;
+                
+                const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
+                console.log(`📤 Enviando: ${command}`);
+                await this.writer.write(frame);
+                
+                // 1. Esperar ACK
+                const ack = await this.readResponse(5000);
+                if (ack.type !== 'ACK') {
+                    throw new Error('No se recibió ACK del POS');
+                }
+                
+                // 2. Esperar datos
+                const response = await this.readResponse(10000);
+                
                 if (response.type === 'DATA') {
                     return this.parseSaleResponse(response.data);
                 }
@@ -536,7 +583,32 @@
         async closeDay() {
             try {
                 console.log('🔒 Ejecutando cierre de día...');
-                const response = await this.sendCommand('0500||');
+                
+                // Construir y enviar comando manualmente
+                const command = '0500||';
+                const encoder = new TextEncoder();
+                const commandBytes = encoder.encode(command);
+                
+                let lrc = 0;
+                for (let byte of commandBytes) {
+                    lrc ^= byte;
+                }
+                lrc ^= ETX;
+                
+                const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
+                console.log(`📤 Enviando: ${command}`);
+                await this.writer.write(frame);
+                
+                // 1. Esperar ACK
+                const ack = await this.readResponse(10000);
+                if (ack.type !== 'ACK') {
+                    throw new Error('No se recibió ACK del POS');
+                }
+                console.log('⏳ POS procesando cierre (puede tardar 30-60 segundos)...');
+                
+                // 2. Esperar datos (60 segundos)
+                const response = await this.readResponse(60000);
+                
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
                     return {
@@ -560,8 +632,32 @@
         async refund(operationId) {
             try {
                 console.log(`↩️ Anulando operación ${operationId}...`);
+                
+                // Construir y enviar comando manualmente
                 const opId = operationId.toString().padStart(6, '0');
-                const response = await this.sendCommand(`1200|${opId}|`);
+                const command = `1200|${opId}|`;
+                const encoder = new TextEncoder();
+                const commandBytes = encoder.encode(command);
+                
+                let lrc = 0;
+                for (let byte of commandBytes) {
+                    lrc ^= byte;
+                }
+                lrc ^= ETX;
+                
+                const frame = new Uint8Array([STX, ...commandBytes, ETX, lrc]);
+                console.log(`📤 Enviando: ${command}`);
+                await this.writer.write(frame);
+                
+                // 1. Esperar ACK
+                const ack = await this.readResponse(10000);
+                if (ack.type !== 'ACK') {
+                    throw new Error('No se recibió ACK del POS');
+                }
+                console.log('⏳ POS procesando anulación (puede tardar 30 segundos)...');
+                
+                // 2. Esperar datos (30 segundos)
+                const response = await this.readResponse(30000);
                 
                 if (response.type === 'DATA') {
                     const parts = response.data.split('|');
