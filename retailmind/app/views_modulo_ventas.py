@@ -2778,56 +2778,57 @@ def registrar_pagos_ticket(request, correlativo):
     pagos = payload.get('pagos') or []
     ids_existentes = list(ticket.pagos.values_list('id', flat=True))
 
-    with transaction.atomic():
-        for pago in pagos:
-            pago_id = pago.get('id')
-            try:
-                monto = int(pago.get('monto', 0))
-            except (TypeError, ValueError):
-                continue
-            if monto <= 0:
-                continue
+    # Procesar pagos (sin transaction.atomic anidado para evitar TransactionManagementError)
+    for pago in pagos:
+        pago_id = pago.get('id')
+        try:
+            monto = int(pago.get('monto', 0))
+        except (TypeError, ValueError):
+            continue
+        if monto <= 0:
+            continue
 
-            metodo_pago = pago.get('metodo_pago', 'OTRO')
-            if metodo_pago not in dict(METODO_PAGO_TICKET_CHOICES):
-                metodo_pago = 'OTRO'
+        metodo_pago = pago.get('metodo_pago', 'OTRO')
+        if metodo_pago not in dict(METODO_PAGO_TICKET_CHOICES):
+            metodo_pago = 'OTRO'
 
-            if pago_id and pago_id in ids_existentes:
-                TicketDetallePago.objects.filter(id=pago_id, ticket=ticket).update(
-                    metodo_pago=metodo_pago,
-                    tipo_tarjeta=pago.get('tipo_tarjeta'),
-                    voucher=pago.get('voucher'),
-                    numero_orden_compra=pago.get('numero_orden_compra'),
-                    monto=monto,
-                    notas=pago.get('notas', ''),
-                )
-                ids_existentes.remove(pago_id)
-            else:
-                TicketDetallePago.objects.create(
-                    ticket=ticket,
-                    metodo_pago=metodo_pago,
-                    tipo_tarjeta=pago.get('tipo_tarjeta'),
-                    voucher=pago.get('voucher'),
-                    numero_orden_compra=pago.get('numero_orden_compra'),
-                    monto=monto,
-                    notas=pago.get('notas', ''),
-                )
+        if pago_id and pago_id in ids_existentes:
+            TicketDetallePago.objects.filter(id=pago_id, ticket=ticket).update(
+                metodo_pago=metodo_pago,
+                tipo_tarjeta=pago.get('tipo_tarjeta'),
+                voucher=pago.get('voucher'),
+                numero_orden_compra=pago.get('numero_orden_compra'),
+                monto=monto,
+                notas=pago.get('notas', ''),
+            )
+            ids_existentes.remove(pago_id)
+        else:
+            TicketDetallePago.objects.create(
+                ticket=ticket,
+                metodo_pago=metodo_pago,
+                tipo_tarjeta=pago.get('tipo_tarjeta'),
+                voucher=pago.get('voucher'),
+                numero_orden_compra=pago.get('numero_orden_compra'),
+                monto=monto,
+                notas=pago.get('notas', ''),
+            )
 
-        if ids_existentes:
-            TicketDetallePago.objects.filter(id__in=ids_existentes, ticket=ticket).delete()
-        
-        # Verificar si el ticket cambió de PENDIENTE a PAGADO
-        estado_anterior = Ticket.objects.get(id=ticket.id).estado
-        ticket_se_pago = (estado_anterior == 'PENDIENTE' and ticket.estado == 'PAGADO')
+    if ids_existentes:
+        TicketDetallePago.objects.filter(id__in=ids_existentes, ticket=ticket).delete()
+    
+    # Verificar si el ticket cambió de PENDIENTE a PAGADO
+    estado_anterior_obj = Ticket.objects.get(id=ticket.id)
+    estado_anterior = estado_anterior_obj.estado
+    ticket_se_pago = (estado_anterior == 'PENDIENTE' and ticket.estado == 'PAGADO')
 
-        ticket.save()
+    ticket.save()
 
-        # Si el ticket se acaba de pagar, consumir stock FIFO y crear movimientos
-        # ⚠️ IMPORTANTE: NO descontar stock si el ticket viene de CAMBIO_DEVOLUCION
-        # porque el stock ya se ajustó al aprobar el cambio
-        print(f"🔍 DEBUG PAGO: Ticket #{ticket.correlativo}, modulo_origen='{ticket.modulo_origen}', ticket_se_pago={ticket_se_pago}")
-        
-        if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
+    # Si el ticket se acaba de pagar, consumir stock FIFO y crear movimientos
+    # ⚠️ IMPORTANTE: NO descontar stock si el ticket viene de CAMBIO_DEVOLUCION
+    # porque el stock ya se ajustó al aprobar el cambio
+    print(f"🔍 DEBUG PAGO: Ticket #{ticket.correlativo}, modulo_origen='{ticket.modulo_origen}', ticket_se_pago={ticket_se_pago}")
+    
+    if ticket_se_pago and ticket.modulo_origen != 'CAMBIO_DEVOLUCION':
             print(f"🔍 DEBUG: Iniciando descuento de stock para ticket #{ticket.correlativo}")
             for tp in ticket.ticket_productos.all():
                 # Usar stock_sucursal para obtener el stock real de la sucursal
