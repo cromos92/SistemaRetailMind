@@ -8123,52 +8123,22 @@ td {
             });
         }
     };
-                if (monto > saldoPendiente) {
-                    Swal.showValidationMessage('El monto no puede ser mayor al saldo pendiente');
-                    return false;
-                }
-                return monto;
-            }
-        });
-        
-        // Si canceló, salir
-        if (!montoCobrar) {
-            return;
-        }
-        
-        // Mostrar modal de procesamiento
-        Swal.fire({
-            title: 'Procesando Pago con POS',
-            html: `
-                <div class="text-center">
-                    <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
-                        <span class="visually-hidden">Cargando...</span>
-                    </div>
-                    <h5>Conectando al POS Transbank...</h5>
-                    <p class="text-muted">Monto a cobrar: <strong>${formatearMoneda(montoCobrar)}</strong></p>
-                    <p class="text-muted small">Espere mientras se establece la conexión...</p>
-                </div>
-            `,
-            allowOutsideClick: false,
-            showConfirmButton: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
-        
-        try {
-            // 1. Conectar al agente Transbank con timeout extendido
-            // IMPORTANTE: Configurar timeout antes de conectar
-            if (Transbank.POS.setConnectionTimeout) {
-                Transbank.POS.setConnectionTimeout(90000); // 90 segundos
-            }
-            
-            await Transbank.POS.connect();
-            
-            // Actualizar mensaje
-            Swal.update({
-                html: `
-                    <div class="text-center">
+
+});
+</script>
+
+<!-- Scripts Transbank Web Serial API (Local) -->
+<script src="{% static 'js/transbank-webserial.js' %}"></script>
+<script src="{% static 'js/transbank-helpers.js' %}"></script>
+
+<script>
+// Verificar que el SDK Web Serial esté cargado
+if (typeof Transbank !== 'undefined' && Transbank.POS) {
+    console.log('✅ Transbank Web Serial API cargado correctamente');
+} else {
+    console.error('❌ Error: Transbank Web Serial API no se cargó');
+}
+</script>
                         <div class="spinner-border text-success mb-3" role="status" style="width: 3rem; height: 3rem;">
                             <span class="visually-hidden">Cargando...</span>
                         </div>
