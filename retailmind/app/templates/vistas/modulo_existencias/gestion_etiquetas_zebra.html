@@ -725,8 +725,7 @@
                                     <div style="font-size: 10px;">
                                         <div class="d-flex justify-content-between">
                                             <span id="prevSucursal">SUCURSAL</span>
-                                            <span id="prevDesc">DESCRIPCIÓN</span>
-                                            <span id="prevMarca">MARCA</span>
+                                            <span id="prevDesc">DESCRIPCIÓN COMPLETA</span>
                                         </div>
                                         <div class="text-center my-2">
                                             <div style="border: 1px solid #000; height: 40px; display: flex; align-items: center; justify-content: center;">
@@ -741,9 +740,12 @@
                                         <div class="d-flex justify-content-between mt-1">
                                             <span>G/F <span id="prevFactura">00000</span></span>
                                             <strong style="font-size: 16px;" id="prevTalla">00</strong>
+                                            <span id="prevMarca">MARCA</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between" style="font-size: 9px;">
+                                            <span id="prevFecha">01-01-2026</span>
                                             <span id="prevColor">COLOR</span>
                                         </div>
-                                        <div style="font-size: 9px;" id="prevFecha">01-01-2026</div>
                                     </div>
                                 </div>
                             </div>
@@ -875,8 +877,7 @@ function generarZPL(etiquetas) {
         
         // Línea 1: Sucursal + Descripción + Marca
         zpl += `^FO25,${5 + OFFSET_Y}^A0N,24,24^FD${e1.sucursal}^FS\n`;
-        zpl += `^FO110,${5 + OFFSET_Y}^A0N,24,24^FD${e1.desc}^FS\n`;
-        zpl += `^FO260,${5 + OFFSET_Y}^A0N,24,24^FB140,1,0,R^FD${e1.marca}^FS\n`;
+        zpl += `^FO110,${5 + OFFSET_Y}^A0N,24,24^FB290,1,0,L^FD${e1.desc}^FS\n`;
         
         // Línea 2: Código de barras CENTRADO dinámicamente
         zpl += `^FO${barcodeX_A},${32 + OFFSET_Y}^BY2,3,75^BCN,75,N,N,N^FD${e1.sku}^FS\n`;
@@ -891,10 +892,11 @@ function generarZPL(etiquetas) {
         zpl += `^FO25,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
         zpl += `^FO62,${180 + OFFSET_Y}^A0N,22,22^FD${e1.factura}^FS\n`;
         zpl += `^FO165,${175 + OFFSET_Y}^A0N,36,36^FD${e1.talla}^FS\n`;
-        zpl += `^FO260,${180 + OFFSET_Y}^A0N,22,22^FB140,1,0,R^FD${e1.color}^FS\n`;
+        zpl += `^FO260,${180 + OFFSET_Y}^A0N,22,22^FB140,1,0,R^FD${e1.marca}^FS\n`;
         
         // Línea 5: Fecha
         zpl += `^FO25,${215 + OFFSET_Y}^A0N,20,20^FD${e1.fecha}^FS\n`;
+        zpl += `^FO260,${215 + OFFSET_Y}^A0N,20,20^FB140,1,0,R^FD${e1.color}^FS\n`;
 
         // ========== ETIQUETA B - DERECHA ==========
         if (e2) {
@@ -904,8 +906,7 @@ function generarZPL(etiquetas) {
             
             // Línea 1: Sucursal + Descripción + Marca
             zpl += `^FO456,${5 + OFFSET_Y}^A0N,24,24^FD${e2.sucursal}^FS\n`;
-            zpl += `^FO541,${5 + OFFSET_Y}^A0N,24,24^FD${e2.desc}^FS\n`;
-            zpl += `^FO691,${5 + OFFSET_Y}^A0N,24,24^FB140,1,0,R^FD${e2.marca}^FS\n`;
+            zpl += `^FO541,${5 + OFFSET_Y}^A0N,24,24^FB290,1,0,L^FD${e2.desc}^FS\n`;
             
             // Línea 2: Código de barras CENTRADO dinámicamente
             zpl += `^FO${barcodeX_B},${32 + OFFSET_Y}^BY2,3,75^BCN,75,N,N,N^FD${e2.sku}^FS\n`;
@@ -920,10 +921,11 @@ function generarZPL(etiquetas) {
             zpl += `^FO456,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
             zpl += `^FO493,${180 + OFFSET_Y}^A0N,22,22^FD${e2.factura}^FS\n`;
             zpl += `^FO611,${175 + OFFSET_Y}^A0N,36,36^FD${e2.talla}^FS\n`;
-            zpl += `^FO691,${180 + OFFSET_Y}^A0N,22,22^FB140,1,0,R^FD${e2.color}^FS\n`;
+            zpl += `^FO691,${180 + OFFSET_Y}^A0N,22,22^FB140,1,0,R^FD${e2.marca}^FS\n`;
             
             // Línea 5: Fecha
             zpl += `^FO456,${215 + OFFSET_Y}^A0N,20,20^FD${e2.fecha}^FS\n`;
+            zpl += `^FO691,${215 + OFFSET_Y}^A0N,20,20^FB140,1,0,R^FD${e2.color}^FS\n`;
         }
 
         zpl += '^XZ\n';
@@ -1396,7 +1398,7 @@ function actualizarPreview(producto) {
     const sucursal = document.getElementById('sucursalEtiqueta').value || producto.sucursal || '';
     
     document.getElementById('prevSucursal').textContent = sucursal.substring(0, 8);
-    document.getElementById('prevDesc').textContent = (producto.descripcion || producto.articulo).substring(0, 15);
+    document.getElementById('prevDesc').textContent = (producto.descripcion || producto.articulo).substring(0, 28);
     document.getElementById('prevMarca').textContent = (producto.marca || '').substring(0, 10);
     document.getElementById('prevSku').textContent = producto.sku;
     document.getElementById('prevArt').textContent = producto.articulo.substring(0, 8);
