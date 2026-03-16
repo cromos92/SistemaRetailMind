@@ -14,12 +14,8 @@ nothing more than "reportlab.whatever..."
 
 import sys, os, fnmatch, re, functools
 from configparser import ConfigParser
-import unittest, random
+import unittest
 from reportlab.lib.utils import isCompactDistro, __rl_loader__, rl_isdir, asUnicode
-from reportlab.rl_config import invariant as rl_invariant
-
-def invariantSeed(n):
-    if rl_invariant: random.seed(n)
 
 def haveRenderPM():
     from reportlab.graphics.renderPM import _getPMBackend, RenderPMError

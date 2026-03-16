@@ -548,6 +548,13 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label">Fuente Datos</label>
+                                <select id="filtroFuente" class="form-select" onchange="cargarDocumentos()">
+                                    <option value="postgres">PostgreSQL (RetailMind)</option>
+                                    <option value="mysql">MySQL (HoldingTebes)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label">Tipo Documento</label>
                                 <select id="filtroTipo" class="form-select" onchange="cargarDocumentos()">
                                     <option value="todos">Todos</option>
@@ -938,6 +945,7 @@ async function cargarDocumentos() {
     
     const params = new URLSearchParams({
         sucursal_id: document.getElementById('filtroSucursal').value,
+        fuente: obtenerFuenteActual(),
         tipo_documento: document.getElementById('filtroTipo').value,
         fecha_inicio: document.getElementById('filtroFechaInicio').value,
         fecha_fin: document.getElementById('filtroFechaFin').value,
@@ -1036,6 +1044,10 @@ function cambiarPagina(direccion) {
     cargarDocumentos();
 }
 
+function obtenerFuenteActual() {
+    return document.getElementById('filtroFuente')?.value || 'postgres';
+}
+
 function debounceSearch() {
     if (searchTimeout) clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
@@ -1074,7 +1086,8 @@ async function buscarSkuRapido() {
     try {
         const params = new URLSearchParams({
             termino: termino,
-            sucursal_id: sucursalId
+            sucursal_id: sucursalId,
+            fuente: obtenerFuenteActual()
         });
         
         const response = await fetch(`/app/etiquetas/buscar-producto/?${params}`);
@@ -1236,7 +1249,8 @@ async function seleccionarDocumento(tipo, id) {
     event?.target?.closest('tr')?.classList.add('selected');
     
     try {
-        const response = await fetch(`/app/etiquetas/productos-documento/${tipo}/${id}/`);
+        const params = new URLSearchParams({ fuente: obtenerFuenteActual() });
+        const response = await fetch(`/app/etiquetas/productos-documento/${tipo}/${id}/?${params}`);
         const data = await response.json();
         
         if (data.success) {

@@ -14,11 +14,13 @@ import dj_database_url
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Cargar variables de entorno desde archivo .env
+# Cargar variables de entorno desde archivo .env (ruta por defecto)
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Cargar .env desde el directorio del proyecto (funciona aunque se ejecute desde otra ruta)
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -28,8 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-u6k00%6(jlc5r(j2l34j7d=1mn8&_xaam4^t_*c3=oa7%_e-_7')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
-DEBUG = True  # Temporalmente activado para ver errores
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 # ALLOWED_HOSTS configuration
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
