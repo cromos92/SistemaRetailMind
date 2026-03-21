@@ -851,6 +851,20 @@ function calcularPosicionTextoSku(sku, areaInicio, areaAncho, fontSize) {
     return Math.max(areaInicio, posX);
 }
 
+// Ajusta tamaño de fuente del precio para evitar cortes en montos grandes.
+function obtenerFormatoPrecio(precio) {
+    const texto = String(precio || '');
+    const largo = texto.length;
+
+    if (largo <= 6) {
+        return { alto: 32, ancho: 32, y: 140 };
+    }
+    if (largo <= 8) {
+        return { alto: 28, ancho: 28, y: 142 };
+    }
+    return { alto: 24, ancho: 24, y: 145 };
+}
+
 function generarZPL(etiquetas) {
     let zpl = '';
     
@@ -865,6 +879,8 @@ function generarZPL(etiquetas) {
     for (let i = 0; i < etiquetas.length; i += 2) {
         const e1 = etiquetas[i];      // Etiqueta A (izquierda)
         const e2 = etiquetas[i + 1];  // Etiqueta B (derecha)
+        const precioFmtA = obtenerFormatoPrecio(e1?.precio);
+        const precioFmtB = e2 ? obtenerFormatoPrecio(e2?.precio) : null;
 
         zpl += '^XA\n';
         zpl += '^PW856\n';  // Ancho total: 10.7cm = 856 dots
@@ -885,8 +901,8 @@ function generarZPL(etiquetas) {
         zpl += `^FO${textoSkuX_A},${112 + OFFSET_Y}^A0N,28,28^FD${e1.sku}^FS\n`;
         
         // Línea 3: Artículo + Precio
-        zpl += `^FO25,${145 + OFFSET_Y}^A0N,28,28^FD${e1.art}^FS\n`;
-        zpl += `^FO240,${140 + OFFSET_Y}^A0N,32,32^FB160,1,0,R^FD${e1.precio}^FS\n`;
+        zpl += `^FO25,${145 + OFFSET_Y}^A0N,28,28^FB205,1,0,L^FD${e1.art}^FS\n`;
+        zpl += `^FO238,${precioFmtA.y + OFFSET_Y}^A0N,${precioFmtA.alto},${precioFmtA.ancho}^FB160,1,0,R^FD${e1.precio}^FS\n`;
         
         // Línea 4: G/F Factura + Talla + Color
         zpl += `^FO25,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
@@ -914,8 +930,8 @@ function generarZPL(etiquetas) {
             zpl += `^FO${textoSkuX_B},${112 + OFFSET_Y}^A0N,28,28^FD${e2.sku}^FS\n`;
             
             // Línea 3: Artículo + Precio
-            zpl += `^FO456,${145 + OFFSET_Y}^A0N,28,28^FD${e2.art}^FS\n`;
-            zpl += `^FO671,${140 + OFFSET_Y}^A0N,32,32^FB160,1,0,R^FD${e2.precio}^FS\n`;
+            zpl += `^FO456,${145 + OFFSET_Y}^A0N,28,28^FB205,1,0,L^FD${e2.art}^FS\n`;
+            zpl += `^FO669,${precioFmtB.y + OFFSET_Y}^A0N,${precioFmtB.alto},${precioFmtB.ancho}^FB160,1,0,R^FD${e2.precio}^FS\n`;
             
             // Línea 4: G/F Factura + Talla + Color
             zpl += `^FO456,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
@@ -1401,7 +1417,7 @@ function actualizarPreview(producto) {
     document.getElementById('prevDesc').textContent = (producto.descripcion || producto.articulo).substring(0, 28);
     document.getElementById('prevMarca').textContent = (producto.marca || '').substring(0, 10);
     document.getElementById('prevSku').textContent = producto.sku;
-    document.getElementById('prevArt').textContent = producto.articulo.substring(0, 8);
+    document.getElementById('prevArt').textContent = producto.articulo.substring(0, 14);
     document.getElementById('prevPrecio').textContent = '$' + formatearPrecio(producto.precio);
     document.getElementById('prevFactura').textContent = producto.factura || documentoSeleccionado?.id || '';
     document.getElementById('prevTalla').textContent = producto.talla;

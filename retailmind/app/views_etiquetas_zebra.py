@@ -911,7 +911,7 @@ def generar_datos_etiquetas(request):
                     'desc': (item.get('descripcion', item.get('articulo', '')) or '')[:28],
                     'marca': (item.get('marca', '') or '')[:10],
                     'sku': str(item.get('sku', ''))[:10],
-                    'art': (item.get('articulo', '') or '')[:8],
+                    'art': (item.get('articulo', '') or '')[:14],
                     'precio': precio_formateado[:10],
                     'factura': str(numero_documento)[:8],
                     'talla': str(item.get('talla', ''))[:4],
